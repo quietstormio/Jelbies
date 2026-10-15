@@ -28,6 +28,14 @@ struct Attractor {
     var damping: Float = 0.55
 }
 
+/// Soft pull of one particle toward a world position (animation hook: wave arm, lifted foot). `stiffness` is in 1/s^2
+/// like `Attractor.strength`. Solved after the attractor so it wins over the rigid pose; empty list = no effect.
+struct ParticleTarget {
+    var index: Int
+    var pos: SIMD3<Float>
+    var stiffness: Float
+}
+
 /// Whole-body rigid fit (mass-weighted shape matching).
 struct BodyPose {
     var centroid: SIMD3<Float>
@@ -74,6 +82,13 @@ final class SoftBody {
     private let tetQ: UnsafeMutablePointer<Float>      // rest positions relative to tet centroid (4 x xyz)
     private let tetRot: UnsafeMutablePointer<Float>    // warm-started quaternion (x, y, z, w)
     private let tetFirm: UnsafeMutablePointer<Float>
+    private let tetVolScale: UnsafeMutablePointer<Float>   // per-tet volume-compliance multiplier (1 = normal)
+    private let tetFirm0: [Float]                          // tetFirm as built (restored by restoreStiffness)
+
+    /// Arm / foot particle chains from the sim mesh (empty for legacy meshes). Read-only animation handles.
+    let appendages: [SimAppendage]
+    /// Per-particle animation targets (see `ParticleTarget`); the caller refreshes them every fixed step.
+    var targets: [ParticleTarget] = []
 
     // rigid-pose attractor
     var attractor = Attractor()
@@ -113,6 +128,8 @@ final class SoftBody {
         rest = alloc(rest0.count, 0); prev = alloc(rest0.count, 0)
         invMass = alloc(n, 0); mass = alloc(n, 0); restVol = alloc(nT, 0)
         tetIdx = alloc(nT * 4, 0); tetQ = alloc(nT * 12, 0); tetRot = alloc(nT * 4, 0); tetFirm = alloc(nT, 0)
+        tetVolScale = alloc(nT, 1)
+        appendages = mesh.appendages
         grabIdx = alloc(n, 0); grabW = alloc(n, 0); grabOff = alloc(n * 3, 0)
         restOff = alloc(n * 3, 0); attT = alloc(n * 3, 0); attV = alloc(n * 3, 0)
         for i in 0..<rest0.count { rest[i] = rest0[i] }
@@ -198,13 +215,16 @@ final class SoftBody {
             for vtx in id { rg += Int(region[vtx]) }
             tetFirm[t] = rg >= 6 ? 0.3 : rg >= 3 ? 0.5 : rg >= 1 ? 0.75 : 1.0
         }
+        let tf0 = tetFirm
+        tetFirm0 = (0..<nT).map { tf0[$0] }
+        targets = []
         reset(drop: 0)
     }
 
     deinit {
         rest.deallocate(); prev.deallocate(); invMass.deallocate(); mass.deallocate(); restVol.deallocate()
         restLen.deallocate(); tetIdx.deallocate(); edgeIdx.deallocate(); tetQ.deallocate(); tetRot.deallocate()
-        tetFirm.deallocate(); grabIdx.deallocate(); grabW.deallocate(); grabOff.deallocate()
+        tetFirm.deallocate(); tetVolScale.deallocate(); grabIdx.deallocate(); grabW.deallocate(); grabOff.deallocate()
         restOff.deallocate(); attT.deallocate(); attV.deallocate()
     }
 
@@ -264,6 +284,28 @@ final class SoftBody {
             }
         }
         return SIMD3(sx / m, sy / m, sz / m)
+    }
+
+    // MARK: animation hooks (temporary per-region softness)
+
+    /// Rest position of particle `i` (body frame, floor at y = 0).
+    func restPosition(_ i: Int) -> SIMD3<Float> { SIMD3(rest[3 * i], rest[3 * i + 1], rest[3 * i + 2]) }
+
+    /// Temporarily loosen every tet that touches one of `particles` (shape compliance x `shapeScale`, volume compliance
+    /// x `volScale`) so an animation can stretch that region (the wave arm). Replaces any previous setting.
+    func setSoftRegion(particles: [Int], shapeScale: Float, volScale: Float) {
+        restoreStiffness()
+        let set = Set(particles)
+        for t in 0..<nT {
+            var touches = false
+            for k in 0..<4 where set.contains(Int(tetIdx[4 * t + k])) { touches = true }
+            if touches { tetFirm[t] = tetFirm0[t] * shapeScale; tetVolScale[t] = volScale }
+        }
+    }
+
+    /// Put every tet back to its built stiffness (firmness itself is never touched).
+    func restoreStiffness() {
+        for t in 0..<nT { tetFirm[t] = tetFirm0[t]; tetVolScale[t] = 1 }
     }
 
     // MARK: grabbing
@@ -381,6 +423,7 @@ final class SoftBody {
         solveVolumes(dt, x)
         let attOn = att.strength > 0
         if attOn { solveAttractor(dt, x, att) }
+        if !targets.isEmpty { solveTargets(dt, x) }
         solveFloor(x)
         if arenaRadius.isFinite { solveArena(x) }
         let inv = 1 / dt, vmax = maxSpeed
@@ -424,6 +467,13 @@ final class SoftBody {
                 attT[k] = T.x; attT[k + 1] = T.y; attT[k + 2] = T.z
             }
             x[k] += (T.x - x[k]) * f; x[k + 1] += (T.y - x[k + 1]) * f; x[k + 2] += (T.z - x[k + 2]) * f
+        }
+    }
+
+    private func solveTargets(_ dt: Float, _ x: UnsafeMutablePointer<Float>) {
+        for tg in targets {
+            let kdt = tg.stiffness * dt * dt, f = kdt / (1 + kdt), k = 3 * tg.index
+            x[k] += (tg.pos.x - x[k]) * f; x[k + 1] += (tg.pos.y - x[k + 1]) * f; x[k + 2] += (tg.pos.z - x[k + 2]) * f
         }
     }
 
@@ -615,7 +665,7 @@ final class SoftBody {
             if wsum < 1e-12 { continue }
             let r0 = restVol[t]
             // anti-inversion: elements far below rest volume get a rigid (compliance-free) correction
-            let alpha: Float = V < 0.25 * r0 ? 0 : alpha0
+            let alpha: Float = V < 0.25 * r0 ? 0 : alpha0 * tetVolScale[t]
             let C = 6 * (V - r0)
             let s = -C / (wsum + alpha)
             x[A] += gax * s * wa; x[A + 1] += gay * s * wa; x[A + 2] += gaz * s * wa

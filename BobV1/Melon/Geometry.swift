@@ -5,6 +5,10 @@
 //  and the barycentric embedding that ties every render vertex to a tetrahedron.
 //  Construction runs in Double, results are stored as Float.
 //
+//  LOCKED BASE BODY — do not change; see docs/BaseBody.md; guarded by BaseBodyLockTests
+//  (the rest sim mesh, the rest render mesh and the eye rig built for the base Blob; appendages added for animation must stay
+//  hidden inside the rest body.)
+//
 
 import Foundation
 import simd
@@ -980,6 +984,20 @@ private func buildRenderMeshBob() -> RenderMesh {
         add(P[v], n, Float(0.4 * BobForm.occlusion(P[v], n)))      // body: baked crease occlusion in `mat` (0...0.4)
     }
     idx = net.tri
+
+    // wave arm capsules (one per side, appended to the body range): hidden inside the rest skin until a wave runs
+    // (see ArmPath.swift / ArmKeyframes.swift). `rest` holds the hidden position (used for the sim embedding); the renderer's
+    // static `rest` stream (crinkle texture) is replaced by the matching point on the REST cone (ArmCapsule.restStream).
+    var capFirst: [Int] = []
+    let capIndexFirst = idx.count
+    for sigma in [-1.0, 1.0] {
+        let first = pos.count / 3
+        capFirst.append(first)
+        let inactive = ArmCapsule.inactive(sigma: sigma)
+        let restPts = ArmCapsule.points(.rest, inflate: 0, sigma: sigma)
+        for i in 0..<ArmCapsule.vertexCount { add(inactive[i], restPts.nrm[i], 0) }
+        idx += ArmCapsule.triangles(firstVertex: first)
+    }
     let bodyIndexCount = idx.count
 
     // decals: footprints in the x-y plane, projected onto the front surface
@@ -1074,7 +1092,8 @@ private func buildRenderMeshBob() -> RenderMesh {
     }
     return RenderMesh(
         rest: pos.map { Float($0) }, restNormal: nrm.map { Float($0) }, mat: mat, index: idx,
-        body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [])
+        body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
+        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst))
 }
 
 private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {

@@ -291,6 +291,8 @@ struct JellyOut {
     float mat;
 };
 
+// LOCKED BASE BODY — do not change; see docs/BaseBody.md; guarded by BaseBodyLockTests
+// (body functions: vsJelly, fsSoftMatte (matte look + crinkle; the mouth block only draws while mouthOpen > 0), fsEyesMatte, vsMesh, postFS and their helpers)
 vertex JellyOut vsJelly(MeshIn v [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
     JellyOut o;
     o.pos = u.viewProj * float4(v.p, 1.0);
@@ -470,6 +472,24 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (matteCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    // Mouth (rest space, follows the body): only exists while u.stripe.w (mouthOpen) > 0, so a closed mouth is pixel-identical to none.
+    float mo = u.stripe.w;
+    if (mo > 0.002 && Q.z > 0.15) {
+        float o = clamp(mo, 0.0, 1.0);
+        float2 p = float2(Q.x, Q.y - 0.665);
+        float hw = mix(0.030, 0.088, smoothstep(0.0, 1.0, o));
+        float hh = mix(0.0045, 0.066, o * o * (3.0 - 2.0 * o));
+        float2 q = p / float2(hw, hh);
+        q.y *= (q.y > 0.0) ? 1.45 : 0.9;                     // flatter top, rounder bottom: a soft D
+        float dd = length(q) - 1.0;
+        float aa = max(fwidth(dd) * 1.2, 0.04);
+        float cover = 1.0 - smoothstep(-aa, aa, dd);
+        float3 eyeC = float3(0.0423, 0.0194, 0.0144);
+        float3 tongue = float3(0.13, 0.045, 0.040);
+        float tg = smoothstep(-0.05, -0.75, q.y) * smoothstep(1.0, 0.35, abs(q.x)) * smoothstep(0.35, 0.8, o);
+        float3 mc = mix(eyeC, tongue, tg * 0.85);
+        col = mix(col, mc, cover);
+    }
     return float4(col / max(u.misc.x, 1e-3), 0.0);
 }
 

@@ -26,6 +26,7 @@ final class BobV1UITests: XCTestCase {
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        app.launchArguments += ["-MelonStudio", "1"]
         app.launch()
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
@@ -36,6 +37,7 @@ final class BobV1UITests: XCTestCase {
     func testStageDragDoesNotScrollPage() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPhone-layout only")
         let app = XCUIApplication()
+        app.launchArguments += ["-MelonStudio", "1"]
         app.launch()
         let stage = app.otherElements["melon-stage"].firstMatch
         XCTAssertTrue(stage.waitForExistence(timeout: 10))
@@ -63,6 +65,7 @@ final class BobV1UITests: XCTestCase {
     @MainActor
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments += ["-MelonStudio", "1"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["status-chip"].firstMatch.waitForExistence(timeout: 10))
         return app
@@ -129,8 +132,9 @@ final class BobV1UITests: XCTestCase {
         // Measured in an optimised harness (firmness 0.33): the readout last exceeds 0.5 uJ at ~4.4 s of sim time
         // (Bob is softer and bigger than the old melon slice, and the energy sloshes back and forth before it dies).
         // The unoptimised Debug sim in the UI-test simulator runs ~3x slower than real time (readout still
-        // ~12 uJ after 14 s wall), so allow 30 s wall.
-        waitForExpectations(timeout: 30)
+        // ~12 uJ after 14 s wall), so allow 30 s wall. The sim now runs at most 2 fixed steps per frame (was 3), which slows this
+        // Debug-only case further (~16% of real time), so the wall timeout is 60 s.
+        waitForExpectations(timeout: 60)
     }
 
     @MainActor
@@ -213,5 +217,55 @@ final class BobV1UITests: XCTestCase {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
+    }
+
+    /// Game mode: the care button expands into Feed / Water / Call and collapses after choosing. Feed and Water are
+    /// independent: each is disabled only while its own bowl is out. All waits are condition based (no fixed timings).
+    @MainActor
+    func testCareMenuFeedWaterCall() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let menu = app.buttons["care-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        let feed = app.buttons["care-feed"], water = app.buttons["care-water"], call = app.buttons["care-call"]
+        XCTAssertFalse(feed.exists, "collapsed menu hides its actions")
+
+        func waitFor(_ format: String, _ element: XCUIElement, _ timeout: TimeInterval = 20, _ message: String) {
+            let e = expectation(for: NSPredicate(format: format), evaluatedWith: element)
+            XCTAssertEqual(XCTWaiter().wait(for: [e], timeout: timeout), .completed, message)
+        }
+        func open() {
+            menu.tap()
+            XCTAssertTrue(feed.waitForExistence(timeout: 10), "menu expands")
+            XCTAssertTrue(water.exists)
+            XCTAssertTrue(call.exists)
+        }
+        func choose(_ b: XCUIElement) {
+            b.tap()
+            waitFor("exists == false", b, 10, "menu collapses after choosing")
+        }
+
+        open()
+        XCTAssertTrue(feed.isEnabled && water.isEnabled && call.isEnabled)
+        choose(feed)
+
+        // food bowl is out: Feed is disabled, Water and Call are not
+        open()
+        waitFor("isEnabled == false", feed, 10, "Feed is disabled while the food bowl is out")
+        XCTAssertTrue(water.isEnabled, "Water is independent of the food bowl")
+        XCTAssertTrue(call.isEnabled)
+        choose(water)
+
+        // both bowls are out: call him over; he comes, waves, then goes back to the bowls
+        open()
+        waitFor("isEnabled == false", water, 10, "Water is disabled while the water bowl is out")
+        XCTAssertFalse(feed.isEnabled)
+        choose(call)
+
+        // every bowl retires eventually (finished or the 45 s timeout): both buttons come back
+        open()
+        waitFor("isEnabled == true", feed, 180, "Feed is available again once the food bowl is gone")
+        waitFor("isEnabled == true", water, 180, "Water is available again once the water bowl is gone")
+        choose(water)
     }
 }

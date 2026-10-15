@@ -2,13 +2,17 @@
 
 Every species has one **signature silhouette feature**, so you can tell it apart even as a shadow. Each individual Blob in the kennel varies that feature (size, count, curl, etc.) along with shade, size, marking and personality.
 
+**Every Blob shares one LOCKED base body.** See [BaseBody.md](BaseBody.md). Breeds only add a feature and colour on top of it.
+
 ## Shipping in v1
 
 | Species | Colour | Signature feature | Per-individual variation |
 |---|---|---|---|
-| **Berry** | Deep raspberry jelly (#D3155A) | None (the classic Blob) | Shade, marking, size, personality |
-| **Mint** | Teal/mint jelly (#2FB8A0) | Soft gummy spikes down the centre of the head and back | Spike size (0.8–1.25×), 5–7 spikes, spacing |
-| **Honey** | Amber jelly (#F2A325) | Springy curly antenna with a round bobble on top | Length/bobble size, 1–2 antennae, curl direction/tightness |
+| **Berry** | Pastel berry-pink (#F2B6CC) | None (the classic Blob) | Shade, marking, size, personality |
+| **Mint** | Pastel mint (#BDEBDD) | Soft gummy spikes down the centre of the head and back | Spike size (0.8–1.25×), 5–7 spikes, spacing |
+| **Honey** | Pastel honey/butter (#FBE0A0) | Springy curly antenna with a round bobble on top | Length/bobble size, 1–2 antennae, curl direction/tightness |
+
+All Blobs use pastel colours in the matte soft-vinyl finish; no neon/saturated jelly (user, 2026-10-14).
 
 Shared markings: none, spot on head, star on head, heart on cheek, freckles, spot on back, white belly.
 

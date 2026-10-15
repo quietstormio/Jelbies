@@ -18,6 +18,7 @@ struct RoomUniforms {
     float4 bounds;      // minX, maxX, minZ, maxZ
     float4 fog;         // start, end, max, unused
     float4 pal0; float4 pal1; float4 pal2; float4 pal3; float4 pal4;
+    float4x4 topVP;     // Bob's top-down height map (contact AO)
 };
 
 struct RoomVertexIn {
@@ -62,12 +63,38 @@ static float roomShadow(constant RoomUniforms& u, depth2d<float> sm, float3 P, f
     float z = lp.z - 0.0015;
     float s = 0.0;
     float2 texel = float2(1.0 / float(sm.get_width()), 1.0 / float(sm.get_height()));
-    for (int j = -1; j <= 1; j++) {
-        for (int i = -1; i <= 1; i++) {
-            s += sm.sample_compare(roomCmp, uv + float2(i, j) * texel * 2.5, z);
+    // wide, soft penumbra (Nintendogs-style blob rather than a cut-out): 5x5 taps, 4.5 texels apart, then only a partial darkening
+    for (int j = -2; j <= 2; j++) {
+        for (int i = -2; i <= 2; i++) {
+            s += sm.sample_compare(roomCmp, uv + float2(i, j) * texel * 4.5, z);
         }
     }
-    return s / 9.0;
+    return mix(1.0, s / 25.0, 0.62);
+}
+
+/// Soft contact occlusion from Bob's top-down height map (same sampling as the studio floor, scaled to the room).
+static float roomContactAO(constant RoomUniforms& u, depth2d<float> heightMap, float3 P) {
+    float4 tp = u.topVP * float4(P, 1.0);
+    float2 uv = float2(tp.x * 0.5 + 0.5, 0.5 - tp.y * 0.5);
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return 0.0; }
+    uint2 idim = uint2(heightMap.get_width(), heightMap.get_height());
+    float2 dims = float2(idim);
+    float occ = 0.0;
+    for (int ring = 0; ring < 3; ring++) {
+        float rad = 0.010 + float(ring) * 0.022;
+        for (int i = 0; i < 8; i++) {
+            float a = float(i) * 0.785398 + float(ring) * 0.39;
+            float2 s = uv + float2(cos(a), sin(a)) * rad;
+            if (s.x < 0.0 || s.x > 1.0 || s.y < 0.0 || s.y > 1.0) { continue; }
+            float d = heightMap.read(min(uint2(s * dims), idim - 1));
+            float h = d * 5.0 - 1.0;
+            if (d < 0.9999) {
+                float dist = float(ring) * 0.022 * 5.2 + 0.05;
+                occ += (1.0 - smoothstep(0.0, 0.32 + dist, h)) * (1.0 - float(ring) * 0.22);
+            }
+        }
+    }
+    return clamp(occ / 16.0, 0.0, 1.0);
 }
 
 /// Chevron plank floor. Returns albedo; `seam` out = 1 inside a plank, 0 on a seam.
@@ -92,7 +119,8 @@ static float3 roomFloor(constant RoomUniforms& u, float2 xz, float3 base, float3
 
 fragment float4 roomFS(RoomVOut in [[stage_in]],
                        constant RoomUniforms& u [[buffer(0)]],
-                       depth2d<float> shadowMap [[texture(0)]]) {
+                       depth2d<float> shadowMap [[texture(0)]],
+                       depth2d<float> heightMap [[texture(1)]]) {
     float3 N = normalize(in.normal);
     float3 P = in.world;
     float3 camVec = u.camPos.xyz - P;
@@ -149,6 +177,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     float spec = pow(saturate(dot(N, H)), 40.0) * gloss * sh * 0.22;
     float fres = pow(1.0 - saturate(dot(N, V)), 4.0) * gloss * 0.08;
     col += (keyCol * spec + u.pal4.rgb * fres) * ao;
+    if ((m == 1 || m == 3) && u.camPos.w > 0.5) { col *= 1.0 - 0.62 * roomContactAO(u, heightMap, P); }
 
     // fog toward the background swatch
     float f = saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;

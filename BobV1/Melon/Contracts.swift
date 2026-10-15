@@ -50,6 +50,8 @@ struct RenderMesh {
     var bubbles: (first: Int, count: Int)
     var seedCount: Int
     var antennae: [AntennaInfo] = []
+    /// The wave-arm capsules (Bob only); their triangles are inside the `body` index range.
+    var armCapsule: ArmCapsuleInfo?
     var vertexCount: Int { rest.count / 3 }
 }
 
@@ -92,7 +94,7 @@ enum PaletteKey: String, CaseIterable, Identifiable {
         p.skin = d * 0.82
         p.stripe = clampT(f + (SIMD3<Float>(repeating: 1) - f) * 0.62)                // milky: light absorption
         p.extra = d + (SIMD3<Float>(repeating: 1) - d) * 0.68
-        if self == .blush {
+        do {
             // Bob's reference colour: a soft pastel blush. The lava-lamp tones stay within a hair of each other so the
             // body reads as one gently shaded pink (no saturated core).
             p.pale = clampT(f * 0.985)
@@ -111,17 +113,17 @@ enum PaletteKey: String, CaseIterable, Identifiable {
                            pale: unused, skin: unused, stripe: unused, seed: Self.eye,
                            shadowTint: [0.80, 0.62, 0.60], uiFlesh: [0.95, 0.66, 0.63])
         case .pink:
-            return Palette(name: "Pink", flesh: [0.97, 0.36, 0.56], fleshDeep: [0.80, 0.20, 0.36],
+            return Palette(name: "Pink", flesh: [0.922, 0.565, 0.701], fleshDeep: [0.740, 0.306, 0.452],
                            pale: unused, skin: unused, stripe: unused, seed: Self.eye,
-                           shadowTint: [0.78, 0.50, 0.62], uiFlesh: [0.95, 0.42, 0.60])
+                           shadowTint: [0.746, 0.492, 0.592], uiFlesh: [0.879, 0.489, 0.633])
         case .yellow:
-            return Palette(name: "Yellow", flesh: [0.99, 0.78, 0.16], fleshDeep: [0.86, 0.58, 0.05],
+            return Palette(name: "Yellow", flesh: [0.965, 0.799, 0.381], fleshDeep: [0.803, 0.572, 0.151],
                            pale: unused, skin: unused, stripe: unused, seed: Self.eye,
-                           shadowTint: [0.80, 0.66, 0.36], uiFlesh: [0.98, 0.74, 0.16])
+                           shadowTint: [0.776, 0.661, 0.353], uiFlesh: [0.929, 0.741, 0.305])
         case .blue:
-            return Palette(name: "Light blue", flesh: [0.38, 0.70, 1.0], fleshDeep: [0.18, 0.46, 0.88],
+            return Palette(name: "Baby blue", flesh: [0.521, 0.723, 0.922], fleshDeep: [0.265, 0.478, 0.740],
                            pale: unused, skin: unused, stripe: unused, seed: Self.eye,
-                           shadowTint: [0.46, 0.60, 0.80], uiFlesh: [0.30, 0.58, 0.95])
+                           shadowTint: [0.460, 0.607, 0.746], uiFlesh: [0.444, 0.657, 0.879])
         }
     }
 }
@@ -451,6 +453,9 @@ enum BlobShape {
 typealias BobShape = BlobShape
 
 // MARK: - Bob's body form (matches the reference model)
+
+// LOCKED BASE BODY — do not change; see docs/BaseBody.md; guarded by BaseBodyLockTests
+// (BobForm below, the BlobProportions / palettes above, and the rest meshes built from them.)
 
 /// Bob's rest form: a soft egg whose front profile (half-width) and side profile (half-depth) differ, two teardrop
 /// arms hanging down the sides, two small feet that lift the body off the floor. Defined as a signed distance field

@@ -78,6 +78,12 @@ final class MelonRenderer {
     private let pEyes: MTLRenderPipelineState
     /// Soft matte look (Bob / blush palette) instead of the glossy translucent jelly.
     private(set) var useMatte = false
+    /// The living room (game screen). When set, it replaces the studio backdrop and Bob is drawn into the same pass.
+    private(set) var room: RoomRenderer?
+    /// 0...1: Bob's mouth (matte body shader). 0 = no mouth at all. The brain sets this each frame.
+    var mouthOpen: Float = 0
+    /// DEBUG/screenshot override: launch argument -MelonMouth <0...1>.
+    private let forcedMouth: Float? = UserDefaults.standard.object(forKey: "MelonMouth") != nil ? Float(UserDefaults.standard.double(forKey: "MelonMouth")) : nil
     private let pLines: MTLRenderPipelineState
     private let pPost: MTLRenderPipelineState
 
@@ -96,9 +102,14 @@ final class MelonRenderer {
     private var hdrTex: MTLTexture?
 
     private let inflight = DispatchSemaphore(value: 1)
+    /// GPU time per frame (from MTLCommandBuffer gpuStart/EndTime), accumulated off-thread; read via `takeGPUStats()`.
+    private let gpuTimes = GPUTimeAccumulator()
+
+    /// Returns (average GPU ms per frame, frames) since the last call, then resets. (0, 0) if none completed.
+    func takeGPUStats() -> (avgMs: Double, frames: Int) { gpuTimes.take() }
     private var frameOwned = false
 
-    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int) {
+    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int, game: Bool = false) {
         guard MemoryLayout<MelonUniforms>.size == 544, MemoryLayout<MelonUniforms>.stride == 544 else {
             print("MelonRenderer: MelonUniforms layout is \(MemoryLayout<MelonUniforms>.size) bytes, expected 544")
             return nil
@@ -125,6 +136,17 @@ final class MelonRenderer {
         for i in 0..<nV {
             st[4 * i] = mesh.rest[3 * i]; st[4 * i + 1] = mesh.rest[3 * i + 1]; st[4 * i + 2] = mesh.rest[3 * i + 2]
             st[4 * i + 3] = mesh.mat[i]
+        }
+        // wave-arm capsules: the crinkle texture coordinate is the matching point on the REST arm cone (the position stream
+        // holds their hidden shape), so the texture rides with the arm.
+        if let cap = mesh.armCapsule {
+            for (si, sigma) in [-1.0, 1.0].enumerated() {
+                let pts = ArmCapsule.restStream(sigma: sigma)
+                for (i, p) in pts.enumerated() {
+                    let v = cap.firstVertex[si] + i
+                    st[4 * v] = Float(p.x); st[4 * v + 1] = Float(p.y); st[4 * v + 2] = Float(p.z)
+                }
+            }
         }
         guard let sb = device.makeBuffer(bytes: st, length: max(st.count * 4, 16), options: .storageModeShared),
               let ib = device.makeBuffer(bytes: mesh.index, length: max(mesh.index.count * 4, 16), options: .storageModeShared)
@@ -221,7 +243,15 @@ final class MelonRenderer {
         }
         guard let s1 = ds(.less, true), let s2 = ds(.always, false), let s3 = ds(.greater, true) else { return nil }
         dsLessWrite = s1; dsAlwaysNoWrite = s2; dsGreaterWrite = s3
+        if game {
+            room = RoomRenderer(device: device, library: library, colorFormat: Self.hdrFormat, depthFormat: Self.depthFormat, sampleCount: Self.msaa)
+            if room == nil { print("MelonRenderer: room renderer failed; falling back to the studio backdrop") }
+        }
     }
+
+    // Not isolated: with default MainActor isolation Swift 6.2 makes deinit an isolated deinit (swift_task_deinitOnExecutor), which
+    // aborts on the iOS 26.2 runtime ("pointer being freed was not allocated") when the last release is outside a task.
+    nonisolated deinit {}
 
     // MARK: resize
 
@@ -289,6 +319,18 @@ final class MelonRenderer {
         memcpy(particleBuf.contents(), p, particleBytes)
     }
 
+    /// Writes (or, with `values == nil`, restores the baked) mat channel of the given render vertices in the static stream.
+    /// Call after `beginFrame()` (the buffer is shared with the GPU).
+    func writeMat(_ vertices: [Int32], values: [Float]?) {
+        waitIfNeeded()
+        let p = staticBuf.contents().bindMemory(to: Float.self, capacity: vertexCount * 4)
+        if let values {
+            for (k, v) in vertices.enumerated() { p[4 * Int(v) + 3] = values[k] }
+        } else {
+            for v in vertices { p[4 * Int(v) + 3] = mesh.mat[Int(v)] }
+        }
+    }
+
     /// Blocks until the previous frame's GPU work finished, so `dynPointer`, uniforms and particles are safe to
     /// write. Call once per frame before writing `dynPointer`. setUniforms / uploadParticles / draw call it
     /// implicitly if you did not (the dynPointer writes then race with the GPU).
@@ -322,7 +364,11 @@ final class MelonRenderer {
 
     private func commit(_ cmd: MTLCommandBuffer) {
         let sem = inflight
-        cmd.addCompletedHandler { _ in sem.signal() }
+        let gt = gpuTimes
+        cmd.addCompletedHandler { c in
+            gt.add(c.gpuEndTime - c.gpuStartTime)
+            sem.signal()
+        }
         frameOwned = false
         cmd.commit()
     }
@@ -330,6 +376,8 @@ final class MelonRenderer {
     private func encodeFrame(_ cmd: MTLCommandBuffer, target: MTLTexture, showMesh: Bool) -> Bool {
         guard let msScene, let msDepth, let sceneTex, let backTex, let backDepth, let msHdr, let hdrTex else { return false }
         waitIfNeeded()
+        // mouthOpen rides in `stripe.w` (byte 460 of MelonUniforms); written here so it is always current for this frame.
+        uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
         let m = mesh
         let bodyAndSeeds = m.body.count + m.seeds.count
         let tri = MTLPrimitiveType.triangle
@@ -351,6 +399,40 @@ final class MelonRenderer {
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)
             e.drawIndexedPrimitives(type: tri, indexCount: bodyAndSeeds, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: 0)
             e.endEncoding()
+        }
+
+        // Game: the room and Bob share one MSAA pass that resolves straight to hdrTex (matte Bob needs no scene copy / back faces).
+        if let room {
+            let rp = MTLRenderPassDescriptor()
+            let ca = rp.colorAttachments[0]!
+            ca.texture = msScene; ca.resolveTexture = hdrTex
+            ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+            ca.storeAction = .multisampleResolve
+            rp.depthAttachment.texture = msDepth
+            rp.depthAttachment.loadAction = .clear; rp.depthAttachment.clearDepth = 1
+            rp.depthAttachment.storeAction = .dontCare
+            guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
+            e.label = "room + bob"
+            room.fog = SIMD3(14, 32, 0.3)
+            room.keyDir = SIMD3(uniforms.keyDir.x, uniforms.keyDir.y, uniforms.keyDir.z)
+            room.encode(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
+                        topViewProj: uniforms.topVP, heightTex: topTex)
+            e.setFrontFacing(.counterClockwise)
+            e.setVertexBuffer(uboBuf, offset: 0, index: 0)
+            e.setFragmentBuffer(uboBuf, offset: 0, index: 0)
+            e.setDepthStencilState(dsLessWrite)
+            e.setCullMode(.back)
+            e.setVertexBuffer(dynBuf, offset: 0, index: 1)
+            e.setVertexBuffer(staticBuf, offset: 0, index: 2)
+            e.setRenderPipelineState(pMatte)
+            e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+            if m.seeds.count > 0 {
+                e.setRenderPipelineState(pEyes)
+                e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
+            }
+            e.endEncoding()
+            encodePost(cmd, target: target, hdrTex: hdrTex)
+            return true
         }
 
         // scene: floor + seeds + bubbles (MSAA, resolved to sceneTex)
@@ -447,20 +529,41 @@ final class MelonRenderer {
             e.endEncoding()
         }
 
+        encodePost(cmd, target: target, hdrTex: hdrTex)
+        return true
+    }
+
+    private func encodePost(_ cmd: MTLCommandBuffer, target: MTLTexture, hdrTex: MTLTexture) {
         // tone map
         do {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
             ca.texture = target; ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
             ca.storeAction = .store
-            guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
+            guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
             e.label = "post"
             e.setRenderPipelineState(pPost)
             e.setFragmentBuffer(uboBuf, offset: 0, index: 0)
             e.setFragmentTexture(hdrTex, index: 0)
-            e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
+            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             e.endEncoding()
         }
-        return true
+    }
+}
+
+/// Thread-safe sum of GPU frame times (written from the Metal completion handler, read on the main thread).
+nonisolated final class GPUTimeAccumulator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var total = 0.0
+    private var count = 0
+    func add(_ seconds: Double) {
+        guard seconds > 0 else { return }
+        lock.lock(); total += seconds; count += 1; lock.unlock()
+    }
+    func take() -> (avgMs: Double, frames: Int) {
+        lock.lock(); defer { lock.unlock() }
+        let r = count > 0 ? (total / Double(count) * 1000, count) : (0, 0)
+        total = 0; count = 0
+        return r
     }
 }

@@ -16,6 +16,11 @@ enum MelonStatus: Equatable {
 @MainActor
 @Observable
 final class MelonModel {
+    /// Game screen (living room, fixed camera) instead of the studio. Fixed for the lifetime of the stage.
+    var gameMode: Bool = false
+    /// Care actions of the game screen (feed / water / call); ticked by the stage controller.
+    let care = GameCare()
+
     // Controls
     var palette: PaletteKey = .blush
     /// The individual shown on the stage (breed, colours, markings, size). Read once when the stage is created.
@@ -65,7 +70,14 @@ final class MelonModel {
     var nudgeTick: Int = 0
     var resetTick: Int = 0
 
-    init() {}
+    init() {
+        // `-MelonPalette <rawValue>` launch argument (screenshots / tests).
+        if let raw = UserDefaults.standard.string(forKey: "MelonPalette"), let key = PaletteKey(rawValue: raw) { palette = key }
+    }
+
+    // Not isolated: with default MainActor isolation Swift 6.2 makes deinit an isolated deinit (swift_task_deinitOnExecutor), which
+    // aborts on the iOS 26.2 runtime ("pointer being freed was not allocated") when the last release is outside a task.
+    nonisolated deinit {}
 
     func nudge() { nudgeTick &+= 1 }
     func reset() { resetTick &+= 1 }

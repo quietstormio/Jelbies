@@ -156,6 +156,8 @@ private enum DragMode { case none, grab, orbit }
 final class MelonController: NSObject, MTKViewDelegate {
     let model: MelonModel
     let device: MTLDevice?
+    /// Game screen: living room backdrop, fixed camera, no orbit / zoom.
+    let game: Bool
 
     private let simMesh: SimMesh
     private let renderMesh: RenderMesh
@@ -188,12 +190,17 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var second: (id: ObjectIdentifier, p: CGPoint)?
     private var last = CGPoint.zero
 
-    #if DEBUG
+    // perf counters (all configurations; logged once per second)
     private var dbgFrames = 0
     private var dbgStart: CFTimeInterval = 0
+    private var matCost = 0.0, matN = 0
     private var dbgCPU: Double = 0
     private var dbgSim: Double = 0
     private var dbgSteps = 0
+    private var gpuSumMs: Double = 0
+    private var gpuSamples = 0
+
+    #if DEBUG
     private var autoDrag = false
     private var autoT0: CFTimeInterval = 0
     private var autoStart = CGPoint.zero
@@ -213,12 +220,30 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var hopper = GaitDriver()
     private var wasHopping = false
 
+    // BEGIN brain hook
+    /// Bob's autonomous brain (BlobBrain.swift). nil = the old hop-around. The game screen sets it (or flips `brain.enabled`);
+    /// launching with `-BlobDemo wave|walk|idle|play|eat|drink|come|step|look` creates one with that scripted demo.
+    var brain: BlobBrain? = BlobBrain.fromLaunchArguments()
+
     /// Called once before each fixed sim step.
     private func hopTick(reduce: Bool) {
+        if game && brain == nil { brain = BlobBrain.forGame() }
+        if let brain, brain.enabled {
+            wasHopping = false
+            if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
+            brain.amplitude = reduce ? 0.55 : 1
+            if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
+            brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: mode == .grab || sim.grabbing)
+            renderer?.mouthOpen = brain.mouthOpen
+            if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt) }
+            return
+        }
+        renderer?.mouthOpen = 0
         if !model.hopping { wasHopping = false; hopper.cancel(sim); return }
         if !wasHopping { wasHopping = true; hopper.wander = true; hopper.start(sim) }
         hopper.tick(sim, held: mode == .grab || sim.grabbing, reduce: reduce)
     }
+    // END brain hook
 
     #if DEBUG
     /// Launch arguments for viewing individuals: -MelonBreed berry|mint|honey, -MelonMarking 0...6, -MelonFeatureScale 0.8...1.25,
@@ -239,8 +264,12 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
     #endif
 
+    // Not isolated: Swift 6.2's implicit isolated deinit (swift_task_deinitOnExecutor) aborts on the iOS 26.2 runtime; see MelonModel.
+    nonisolated deinit {}
+
     init(model: MelonModel) {
         self.model = model
+        self.game = model.gameMode
         #if DEBUG
         model.appearance = MelonController.debugAppearance(model.appearance)
         #endif
@@ -260,6 +289,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         lastReset = model.resetTick
         device = MTLCreateSystemDefaultDevice()
         super.init()
+        if game {
+            sim.arenaCenter = GameCamera.arenaCenter
+            sim.arenaRadius = GameCamera.arenaRadius
+        }
         sim.reset(drop: model.reduceMotion ? 0 : 0.35)
         model.particles = body.n
         model.tets = body.nT
@@ -277,7 +310,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         view.controller = self
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
         guard let r = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: renderMesh,
-                                    simEdges: sim.edges, particleCount: sim.n) else {
+                                    simEdges: sim.edges, particleCount: sim.n, game: game) else {
             fail("The Metal renderer could not be created (shader library or pipeline failure).")
             return
         }
@@ -301,17 +334,20 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     private func adaptScale(_ stage: UIView, now: CFTimeInterval, dt: Double) {
         guard !adaptDone, stage.contentScaleFactor > 2 else { adaptDone = true; return }
-        if dt >= 0.1 { adaptStart = 0; adaptFrames = 0; return }   // ignore stalls (first frames, backgrounding)
-        if adaptStart == 0 { adaptStart = now; adaptFrames = 0; return }
+        if dt >= 0.1 { adaptStart = 0; adaptFrames = 0; gpuSumMs = 0; gpuSamples = 0; return }   // ignore stalls (first frames, backgrounding)
+        if adaptStart == 0 { adaptStart = now; adaptFrames = 0; gpuSumMs = 0; gpuSamples = 0; return }
         adaptFrames += 1
         let el = now - adaptStart
         guard el >= 2 else { return }
         let avgMs = el / Double(adaptFrames) * 1000
-        if avgMs > 18 {
+        // Lower the resolution only if the frames are slow AND the GPU is a real part of it (a CPU-bound or
+        // Debug-build slowdown is not helped by fewer pixels).
+        let g = (avgMs: gpuSamples > 0 ? gpuSumMs / Double(gpuSamples) : 0, frames: gpuSamples)   // from the 1 Hz perf log
+        if avgMs > 18 && g.avgMs > 7 {
             stage.contentScaleFactor = 2
-            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame at %.0fx -> dropping to 2x", avgMs, Double(stage.window?.screen.scale ?? 3)))
+            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame at %.0fx (gpu %.1f ms) -> dropping to 2x", avgMs, Double(stage.window?.screen.scale ?? 3), g.avgMs))
         } else {
-            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame -> keeping native %.0fx", avgMs, Double(stage.contentScaleFactor)))
+            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame -> keeping native %.0fx (gpu %.1f ms)", avgMs, Double(stage.contentScaleFactor), g.avgMs))
         }
         adaptDone = true
     }
@@ -354,27 +390,31 @@ final class MelonController: NSObject, MTKViewDelegate {
         #endif
 
         // fixed-step simulation
-        #if DEBUG
         let s0 = CACurrentMediaTime()
-        #endif
         if !paused {
             acc += dt * (m.slow ? 0.25 : 1)
+            // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
+            let maxSteps = 2
             var steps = 0
-            while acc >= sim.stepDt && steps < 3 { hopTick(reduce: reduce); sim.step(); acc -= sim.stepDt; steps += 1 }
-            if steps == 3 { acc = min(acc, sim.stepDt) }
+            while acc >= sim.stepDt && steps < maxSteps { hopTick(reduce: reduce); sim.step(); acc -= sim.stepDt; steps += 1 }
+            if steps == maxSteps { acc = min(acc, sim.stepDt) }
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
-            #if DEBUG
             dbgSteps += steps
-            #endif
         }
-        #if DEBUG
         dbgSim += CACurrentMediaTime() - s0
-        #endif
 
         skinner.tickBlink(dt: dt)
         skinner.update(x: sim.x, index: renderMesh.index, into: renderer.dynPointer)
+        if let w = skinner.takeMatWrites() {
+            let t0 = CACurrentMediaTime()
+            renderer.writeMat(w.vertices, values: w.values)
+            matCost += CACurrentMediaTime() - t0; matN += 1
+        } else if matN > 0 {
+            NSLog("%@", String(format: "[melon] wave arm mat writes: %.1f us per frame (%d frames)", matCost / Double(matN) * 1e6, matN))
+            matCost = 0; matN = 0
+        }
         let c = sim.centroid()
-        rig.follow(centroid: c, dt: dt, grabbing: mode == .grab)
+        if !game { rig.follow(centroid: c, dt: dt, grabbing: mode == .grab) }
 
         // camera + light
         let pts = stage.bounds.size
@@ -384,10 +424,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         } else {
             safe = CameraRig.fullSafeRect(pts)
         }
-        let cam = rig.camera(viewSize: pts, safeRect: safe)
+        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1))) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
-        let light = rig.light(centroid: c)
+        let light = game ? GameCamera.light(centroid: c) : rig.light(centroid: c)
 
         renderer.resize(width: Int(view.drawableSize.width), height: Int(view.drawableSize.height))
         var fp = FrameParams()
@@ -412,20 +452,20 @@ final class MelonController: NSObject, MTKViewDelegate {
             publishReadouts()
         }
 
-        #if DEBUG
         dbgCPU += CACurrentMediaTime() - cpu0
         dbgFrames += 1
         if dbgStart == 0 { dbgStart = now }
-        if now - dbgStart >= 2 {
+        if now - dbgStart >= 1 {
             let el = now - dbgStart
             let f = Double(dbgFrames)
-            NSLog("%@", String(format: "[melon] %.1f fps | frame interval %.2f ms | cpu/frame %.2f ms | sim %.2f ms/frame (%.2f ms/step, %d steps)",
-                         f / el, el / f * 1000, dbgCPU / f * 1000, dbgSim / f * 1000,
-                         dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps))
+            let g = renderer.takeGPUStats()
+            gpuSumMs += g.avgMs * Double(g.frames); gpuSamples += g.frames
+            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms, gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps) | %.1f fps, interval %.2f ms",
+                         dbgCPU / f * 1000, g.avgMs, dbgSim / f * 1000,
+                         dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, f / el, el / f * 1000))
             dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgSim = 0; dbgSteps = 0
             fflush(stdout)
         }
-        #endif
     }
 
     private func publishReadouts() {
@@ -438,11 +478,11 @@ final class MelonController: NSObject, MTKViewDelegate {
     // MARK: Camera
 
     func pinch(scale: Float) {
-        guard mode != .grab, scale > 0 else { return }
+        guard !game, mode != .grab, scale > 0 else { return }
         rig.applyZoom(factor: 1 / scale)
     }
 
-    func resetCamera() { rig.reset() }
+    func resetCamera() { if !game { rig.reset() } }
 
     // MARK: Pointer handling (shared by touches and the DEBUG auto-drag)
 
@@ -468,6 +508,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let dl = (dx * dx + dz * dz).squareRoot()
         if dl > lim { q.x = rig.target.x + dx / dl * lim; q.z = rig.target.z + dz / dl * lim }
         q.y = min(max(q.y, 0.02), 3.2)
+        if game {
+            // keep the held patch over the visible floor (and off the sofa / props)
+            let k = GameCamera.constrain(SIMD3<Float>(q.x, 0, q.z), radius: 0.35)
+            q.x = k.x; q.z = k.z
+        }
         return q
     }
 
@@ -524,7 +569,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         last = p
         if mode == .grab {
             applyGrab(p, size)
-        } else {
+        } else if !game {
             rig.orbit(dAzimuth: -dx * 0.006, dElevation: dy * 0.005)
         }
     }

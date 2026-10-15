@@ -159,7 +159,7 @@ final class MelonPhysicsTests: XCTestCase {
         for i in 0..<m.vertexCount { parent[i] = i }
         func find(_ a: Int) -> Int { var a = a; while parent[a] != a { parent[a] = parent[parent[a]]; a = parent[a] }; return a }
         var verts = Set<Int>()
-        for t in stride(from: 0, to: m.body.count, by: 3) {
+        for t in stride(from: 0, to: m.body.count - (m.armCapsule?.indexCount ?? 0), by: 3) {   // the wave-arm capsules are separate closed shells
             let v = [Int(m.index[t]), Int(m.index[t + 1]), Int(m.index[t + 2])]
             for k in 0..<3 {
                 let a = v[k], b = v[(k + 1) % 3]

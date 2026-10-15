@@ -38,6 +38,27 @@ nonisolated final class Skinner {
     private(set) var eyeHeight: (left: Float, right: Float) = (1, 1)
     private var blinkOpen: Float = 1
 
+    /// Animation hook (BlobBrain arm paths): additive world-space displacement of some render vertices, plus the AO value
+    /// written to those vertices' mat channel (see `takeMatWrites`). Empty = off.
+    var overrideVertices: [Int32] = []
+    var overrideDelta: [SIMD3<Float>] = []
+    var overrideMat: [Float] = []
+    private var pendingRestore: [Int32] = []
+
+    /// Switch the override off; the mat values written so far are restored by the next `takeMatWrites`.
+    func clearOverride() {
+        if !overrideVertices.isEmpty { pendingRestore = overrideVertices }
+        overrideVertices = []; overrideDelta = []; overrideMat = []
+    }
+
+    /// What the renderer must write into its static mat channel now: the current AO values while an override runs, then
+    /// (once) `values == nil` = restore the baked values of the vertices just released. nil = nothing to do.
+    func takeMatWrites() -> (vertices: [Int32], values: [Float]?)? {
+        if !overrideVertices.isEmpty { return (overrideVertices, overrideMat) }
+        if !pendingRestore.isEmpty { let v = pendingRestore; pendingRestore = []; return (v, nil) }
+        return nil
+    }
+
     // antennae (Honey): rigid crown frame + spring-follow wobble
     private struct Antenna {
         var first: Int, count: Int
@@ -170,6 +191,12 @@ nonisolated final class Skinner {
                 }
             }
         }
+        if !overrideVertices.isEmpty {
+            for (k, vi) in overrideVertices.enumerated() {
+                let o = 6 * Int(vi), t = overrideDelta[k]
+                dyn[o] += t.x; dyn[o + 1] += t.y; dyn[o + 2] += t.z
+            }
+        }
         if hasEyes { applyEyes(x, dyn) }
         if !antennae.isEmpty { applyAntennae(x, dyn) }
         index.withUnsafeBufferPointer { ix in
@@ -198,17 +225,17 @@ nonisolated final class Skinner {
     /// Carry each antenna rigidly with its crown frame, then add a damped spring-follow lag that grows toward the bobble.
     private func applyAntennae(_ x: UnsafePointer<Float>, _ dyn: UnsafeMutablePointer<Float>) {
         for k in 0..<antennae.count {
-            var pts = [SIMD3<Float>](repeating: .zero, count: 3)
+            var pts = (SIMD3<Float>.zero, SIMD3<Float>.zero, SIMD3<Float>.zero)   // no per-frame heap allocation
             for p in 0..<3 {
                 var q = SIMD3<Float>(0, 0, 0)
                 for j in 0..<4 {
                     let i = 3 * Int(antennae[k].anchorIdx[4 * p + j]), w = antennae[k].anchorW[4 * p + j]
                     q += SIMD3(x[i], x[i + 1], x[i + 2]) * w
                 }
-                pts[p] = q
+                if p == 0 { pts.0 = q } else if p == 1 { pts.1 = q } else { pts.2 = q }
             }
-            let fr = Self.frame(pts[0], pts[1], pts[2])
-            let tip = pts[0] + fr.x * antennae[k].tipLocal.x + fr.y * antennae[k].tipLocal.y + fr.z * antennae[k].tipLocal.z
+            let fr = Self.frame(pts.0, pts.1, pts.2)
+            let tip = pts.0 + fr.x * antennae[k].tipLocal.x + fr.y * antennae[k].tipLocal.y + fr.z * antennae[k].tipLocal.z
             // spring (semi-implicit, substepped): the bobble mass chases the rigidly carried tip
             if !antennae[k].started { antennae[k].p = tip; antennae[k].v = .zero; antennae[k].started = true }
             let sub = 4, h = frameDt / Float(sub), kS: Float = 380, cD: Float = 7
@@ -224,7 +251,7 @@ nonisolated final class Skinner {
             for i in 0..<a.count {
                 let o = 6 * (a.first + i)
                 let l = SIMD3(a.local[3 * i], a.local[3 * i + 1], a.local[3 * i + 2])
-                let p = pts[0] + fr.x * l.x + fr.y * l.y + fr.z * l.z + D * a.weights[i]
+                let p = pts.0 + fr.x * l.x + fr.y * l.y + fr.z * l.z + D * a.weights[i]
                 dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
             }
         }

@@ -1,22 +1,26 @@
 //
 //  ContentView.swift
-//  BobV1
-//
-//  Hosts the editorial Bob screen with the Metal stage.
+//  App root: the game screen by default; the studio (launch argument -MelonStudio 1) starts directly in MelonScreen.
 //
 
 import SwiftUI
 
 struct ContentView: View {
-    @State private var model = ContentView.makeModel()
+    @State private var studioModel = ContentView.makeStudioModel()
+    private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
     var body: some View {
-        MelonScreen(model: model) {
-            MelonStage(model: model)
+        if startInStudio {
+            MelonScreen(model: studioModel) {
+                MelonStage(model: studioModel)
+            }
+        } else {
+            GameScreen()
         }
     }
 
-    private static func makeModel() -> MelonModel {
+    /// The studio's model, with the DEBUG launch-argument overrides (-MelonPalette, -MelonMesh, ...).
+    static func makeStudioModel() -> MelonModel {
         let m = MelonModel()
         #if DEBUG
         let d = UserDefaults.standard
