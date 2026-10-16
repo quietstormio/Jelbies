@@ -20,6 +20,8 @@ final class MelonModel {
     var gameMode: Bool = false
     /// Care actions of the game screen (feed / water / call); ticked by the stage controller.
     let care = GameCare()
+    /// Touch play of focus mode (pet / pick up / bounce / cheeks reactions, hearts, haptics). See BlobBrain+Touch.swift.
+    let touch = TouchPlay()
 
     // Controls
     var palette: PaletteKey = .blush

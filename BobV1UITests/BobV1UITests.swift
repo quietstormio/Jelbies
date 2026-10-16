@@ -219,8 +219,8 @@ final class BobV1UITests: XCTestCase {
         }
     }
 
-    /// Game mode: the care button expands into Feed / Water / Call and collapses after choosing. Feed and Water are
-    /// independent: each is disabled only while its own bowl is out. All waits are condition based (no fixed timings).
+    /// Game mode: the care button expands into Feed / Drink / Call and collapses after choosing. Feed and Drink share one
+    /// meal tray: both are disabled while it is out. All waits are condition based (no fixed timings).
     @MainActor
     func testCareMenuFeedWaterCall() throws {
         let app = XCUIApplication()
@@ -244,28 +244,44 @@ final class BobV1UITests: XCTestCase {
             b.tap()
             waitFor("exists == false", b, 10, "menu collapses after choosing")
         }
+        /// With 2+ drinks, Water unfolds a drink picker (water, soda); choosing one starts it and collapses the menu.
+        func chooseWater() {
+            water.tap()
+            let waterPick = app.buttons["care-drink-water"], sodaPick = app.buttons["care-drink-soda"]
+            XCTAssertTrue(waterPick.waitForExistence(timeout: 10), "Water unfolds the drink picker once there are 2+ drinks")
+            XCTAssertTrue(sodaPick.exists)
+            choose(waterPick)
+            waitFor("exists == false", water, 10, "menu collapses after choosing a drink")
+        }
 
         open()
         XCTAssertTrue(feed.isEnabled && water.isEnabled && call.isEnabled)
-        choose(feed)
+        // Feed opens a tiny picker of the catalogue's foods; choosing one starts it and collapses the menu
+        feed.tap()
+        let berries = app.buttons["care-food-berries"], cake = app.buttons["care-food-cake"]
+        XCTAssertTrue(berries.waitForExistence(timeout: 10), "Feed unfolds the food picker")
+        XCTAssertTrue(cake.exists)
+        choose(berries)
+        waitFor("exists == false", feed, 10, "menu collapses after choosing a food")
 
-        // food bowl is out: Feed is disabled, Water and Call are not
+        // the tray is out (one tray at a time): Feed and Drink are disabled, Call is not
         open()
-        waitFor("isEnabled == false", feed, 10, "Feed is disabled while the food bowl is out")
-        XCTAssertTrue(water.isEnabled, "Water is independent of the food bowl")
+        waitFor("isEnabled == false", feed, 10, "Feed is disabled while the tray is out")
+        XCTAssertFalse(water.isEnabled, "Drink waits for the tray too (one tray at a time)")
         XCTAssertTrue(call.isEnabled)
-        choose(water)
-
-        // both bowls are out: call him over; he comes, waves, then goes back to the bowls
-        open()
-        waitFor("isEnabled == false", water, 10, "Water is disabled while the water bowl is out")
-        XCTAssertFalse(feed.isEnabled)
+        // calling him over drops the meal: the tray poofs away and the buttons come back
         choose(call)
+        // Come here starts focus mode (the care menu hides); "Let Bob go" is the only way out
+        let release = app.buttons["focus-release"]
+        XCTAssertTrue(release.waitForExistence(timeout: 60), "Come here ends in focus mode with the release button")
+        XCTAssertFalse(menu.exists, "the care menu hides in focus mode")
+        XCTAssertFalse(app.buttons["studio-button"].exists, "the settings gear hides in focus mode")
+        release.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 20), "the care menu is back after the release")
 
-        // every bowl retires eventually (finished or the 45 s timeout): both buttons come back
         open()
-        waitFor("isEnabled == true", feed, 180, "Feed is available again once the food bowl is gone")
-        waitFor("isEnabled == true", water, 180, "Water is available again once the water bowl is gone")
-        choose(water)
+        waitFor("isEnabled == true", feed, 180, "Feed is available again once the tray is gone")
+        waitFor("isEnabled == true", water, 180, "Drink is available again once the tray is gone")
+        chooseWater()
     }
 }

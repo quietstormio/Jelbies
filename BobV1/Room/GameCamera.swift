@@ -16,15 +16,44 @@ enum GameCamera {
     /// Default portrait aspect (iPhone 17 Pro Max); the stage updates this from its real size.
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
-    static func camera(aspect: Float) -> CameraState {
+    /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
+    static func camera(aspect: Float, focus: Float = 0) -> CameraState {
         self.aspect = aspect
+        var e = eye, t = target
+        if focus != 0 {
+            let p = focusPose(aspect: aspect)
+            e += (p.eye - e) * focus
+            t += (p.target - t) * focus
+        }
         var c = CameraState()
-        c.view = M4.lookAt(eye: eye, at: target, up: SIMD3(0, 1, 0))
+        c.view = M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0))
         c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: 60), c.view)
         c.invViewProj = M4.invert(c.viewProj)
-        c.pos = eye
-        c.fwd = simd_normalize(target - eye)
+        c.pos = e
+        c.fwd = simd_normalize(t - e)
         return c
+    }
+
+    // MARK: Focus close-up
+
+    /// Share of the screen width Bob's body (2R wide) fills in the close-up. A portrait phone is about as tall as Bob is wide, so the
+    /// width, not the height, limits the zoom: ~36% of the screen height at 0.86 of the width.
+    static let focusWidthFill: Float = 0.86
+    /// Where Bob's middle sits on screen (0 top ... 1 bottom): a little above centre, the actions dock takes the bottom.
+    static let focusBodyScreenY: Float = 0.44
+    /// Camera elevation in the close-up (rad): low, like the room camera, so the room stays softly visible behind him.
+    static let focusElevation: Float = 0.17
+
+    /// Eye / target of the close-up: centred on the front spot, facing him.
+    static func focusPose(aspect: Float, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let visW = 2 * BobShape.R / focusWidthFill
+        let visH = visW / max(aspect, 0.2)
+        let dist = visH / (2 * tanf(fovY / 2))
+        let mid = 0.5 * BobShape.H
+        let ty = mid - (0.5 - focusBodyScreenY) * visH           // below his middle -> he sits above the screen centre
+        let t = SIMD3<Float>(spot.x, ty, spot.y)
+        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
+        return (e, t)
     }
 
     /// Key light + shadow / height maps centred on Bob (same extents the studio uses).
@@ -69,8 +98,8 @@ enum GameCamera {
     static let bodyHalfExtent: Float = 0.8, screenFill: Float = 0.9
 
     /// Clamps a floor position (centroid) so a body of `radius` stays on the visible floor, off the sofa and props.
-    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius) -> SIMD3<Float> {
-        var q = RoomLayout.resolve(position: p, radius: radius)
+    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1) -> SIMD3<Float> {
+        var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale)
         q.z = min(max(q.z, walkMinZ), walkMaxZ)
         let hw = max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)

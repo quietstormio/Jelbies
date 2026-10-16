@@ -52,6 +52,24 @@ nonisolated struct ArmPose: Sendable {
         let th = thetaDeg * .pi / 180, ti = tiltDeg * .pi / 180
         return simd_normalize(SIMD3(sin(th) * cos(ti), cos(th) * cos(ti), sin(ti)))
     }
+    /// The rest nub (root `armTop`, tip `armTip`, rest radii) swung about its shoulder so the tip moves `tiltDeg` toward +z, as a posed
+    /// arm: the surface point S on the egg is solved so the root stays exactly at `armTop`.
+    static func nubSwing(tiltDeg: Double) -> ArmPose {
+        let A = BobForm.armTop, d0 = BobForm.armTip - BobForm.armTop
+        let L = simd_length(d0), u0 = d0 / L
+        let t = tiltDeg * .pi / 180
+        let D = simd_normalize(SIMD3(u0.x, u0.y * cos(t), -u0.y * sin(t)))
+        // S = A + D * inset must lie on the egg surface (A itself is inside the body)
+        var lo = 0.0, hi = 0.8
+        for _ in 0..<50 {
+            let m = 0.5 * (lo + hi), S = A + D * m
+            if eggX(y: S.y, z: S.z) - S.x > 0 { lo = m } else { hi = m }
+        }
+        let inset = 0.5 * (lo + hi), S = A + D * inset
+        return ArmPose(yS: S.y, zS: S.z, axis: D, inset: inset, prot: BobForm.armTipR + L - inset, r1: BobForm.armTopR, r2: BobForm.armTipR,
+                       flatten: BobForm.armFlatten, k: 0.03)
+    }
+
     static func posed(yS: Double, thetaDeg: Double, tiltDeg: Double = 0, inset: Double, prot: Double, r1: Double, r2: Double,
                       flatten: Double = 1, k: Double, zS: Double = 0.06) -> ArmPose {
         ArmPose(yS: yS, zS: zS, axis: axis(thetaDeg: thetaDeg, tiltDeg: tiltDeg), inset: inset, prot: prot, r1: r1, r2: r2,
@@ -143,6 +161,52 @@ nonisolated struct ArmPath: Sendable {
         Knot(s: 0.7, pose: .posed(yS: 0.80, thetaDeg: 52, inset: 0.10, prot: 0.28, r1: 0.125, r2: 0.12, k: 0.12)),
         Knot(s: 1.0, pose: .posed(yS: 0.88, thetaDeg: 30, inset: 0.08, prot: 0.31, r1: 0.125, r2: 0.115, k: 0.13)),
     ])
+
+    /// The resting teardrop swung about its shoulder like a pendulum: `nubForward` (tip swings toward +z, the way he faces) and `nubBack`
+    /// (toward -z) are each one knot away from the exact rest pose (s = 0), so a swing is s = |phase| on the path of its sign and the two
+    /// meet exactly at rest. Built through the same keyframe builder as the wave, with the rest radii (a posed teardrop, not a thumb).
+    static let nubForward = ArmPath(name: "nubForward", knots: [Knot(s: 0, pose: .rest), Knot(s: 1, pose: .nubSwing(tiltDeg: nubTiltDeg))])
+    static let nubBack = ArmPath(name: "nubBack", knots: [Knot(s: 0, pose: .rest), Knot(s: 1, pose: .nubSwing(tiltDeg: -nubTiltDeg))])
+    /// The stubby nub raised to the mouth (dining): the arm keeps its stub length but its root slides from the side of the belly around to the
+    /// front, pointing forward-up-inward so the tip ends up beside the mouth (rest nub -> mid -> beside the mouth). The skin is built by the same
+    /// keyframe builder as the wave; nothing is stretched (tip centre only ~0.18 from the root, the wave's own length).
+    static let nubToMouth = ArmPath(name: "nubToMouth", knots: [
+        Knot(s: 0, pose: .rest),
+        Knot(s: Self.nubGrabS, pose: .nubSwing(tiltDeg: nubTiltDeg)),             // the grab: the nub swings forward (the nubForward pose)
+        Knot(s: 0.65, pose: .posed(yS: 0.50, thetaDeg: 50, tiltDeg: 25, inset: 0.10, prot: 0.29, r1: 0.125, r2: 0.12, k: 0.20, zS: 0.08)),
+        Knot(s: 1.0, pose: .posed(yS: 0.50, thetaDeg: -15, tiltDeg: 50, inset: 0.10, prot: 0.27, r1: 0.125, r2: 0.12, k: 0.32, zS: 0.30)),
+    ])
+    /// WALKING ARM (W1b): not a skin path. The brain poses the closed ArmCapsule directly (see BlobBrain.driveArms); these are its data.
+    /// Sweep S (deg) about a near-vertical shoulder axis, -35 .. +85, hold-snap-hold from the stride phase; elevation el(S) as in REF2.
+    static let armWalkRoot = (x: 0.48, y: 0.51, z: 0.15, length: 0.225, r1: 0.13, r2: 0.115)
+    /// Phase shift of the forward-hold centre in the STRIDE gait (x gaitW); 0 = the waddle's phase in both gaits. Pending the arms analyst's measurement (W1c).
+    static let armStridePhaseShift: Float = 0.18
+    /// One step of the arms' gait-weight copy (`shiftW`, 0 waddle ... 1 stride): it only moves while BOTH arms are deep in a hold (|cos| > 0.95 of the right arm's phase), where
+    /// the sweep is flat, so a waddle <-> stride blend can shift the hold centres without whipping an arm (<= 0.3 gaitW per second).
+    static func armShiftStep(shiftW: Float, target: Float, phase ph: Float, dt: Float) -> Float {
+        let c = cosf(2 * .pi * (ph - (0.79 + armStridePhaseShift * shiftW)))
+        guard abs(c) > 0.95 else { return shiftW }
+        return shiftW + max(-dt * 0.3, min(dt * 0.3, target - shiftW))
+    }
+    static func armWalkSweepDeg(phase ph: Float, side: Int, gaitW: Float = 0) -> Float {
+        let fwd: Float = (side > 0 ? 0.79 : 0.29) + armStridePhaseShift * gaitW
+        let x = 1.8 * cosf(2 * .pi * (ph - fwd))
+        let d: Float = 0.4                                    // corner half width (REF2's crossing takes 2-2.5 frames)
+        let ax = abs(x)
+        var v = x
+        if ax > 1 + d { v = x > 0 ? 1 : -1 }
+        else if ax > 1 - d { let t = (ax - (1 - d)) / (2 * d); let m = (1 - d) + 2 * d * (t * t * (3 - 2 * t) * 0.5 + 0.5 * t); v = (x > 0 ? 1 : -1) * min(1, m) }
+        return armWalkCentreDeg + 33 * v                      // W1d: 55 % of the W1c sweep (-35..85): -11..55
+    }
+    static let armWalkCentreDeg: Float = 22
+    /// Elevation (rad) of the arm axis at sweep S (deg).
+    static func armWalkElevation(_ S: Float) -> Float {
+        (S >= 0 ? -8 + 18 * (S / 55) * (S / 55) : -8 + 4 * (S / 11) * (S / 11)) * .pi / 180
+    }
+    /// Path parameter of the grab pose (the nub swung forward) on `nubToMouth`.
+    static let nubGrabS: Double = 0.30
+    /// Peak pendulum angle of the nub (REF2: std 12.8 deg front / 20 deg profile; a sine of this peak has std peak / sqrt 2).
+    static let nubTiltDeg: Double = 24
 }
 
 // MARK: - Posed field
@@ -308,4 +372,61 @@ nonisolated struct ArmCapsuleInfo: Sendable {
     var firstVertex: [Int]
     var indexFirst: Int, indexCount: Int
     func first(side: Int) -> Int { side < 0 ? firstVertex[0] : firstVertex[1] }
+    /// First vertex of the foot bean of a side: it follows the arm capsule inside the same block.
+    func beanFirst(side: Int) -> Int { first(side: side) + ArmCapsule.vertexCount }
+}
+
+// MARK: - Fast capsule fill (walking arm, per tick)
+
+extension ArmCapsule {
+    private static let thCos: [Float] = (0..<around).map { cosf(2 * .pi * Float($0) / Float(around)) }
+    private static let thSin: [Float] = (0..<around).map { sinf(2 * .pi * Float($0) / Float(around)) }
+
+    /// Same revolve as `points` in Float with cached angle tables (no trig per vertex): body-frame (+x arm convention) cone `a` (root) -> `b` (tip), radii
+    /// `r1` / `r2`, z-flatten `F`, mirrored by `sigma`, grown by `inflate`.
+    static func fill(a a0: SIMD3<Float>, b b0: SIMD3<Float>, r1: Float, r2: Float, flatten F: Float, sigma: Float, inflate: Float = 0, into out: inout [SIMD3<Float>]) {
+        if out.count != vertexCount { out = [SIMD3<Float>](repeating: .zero, count: vertexCount) }
+        let sF = F.squareRoot()
+        let a = SIMD3(a0.x, a0.y, a0.z * F), b = SIMD3(b0.x, b0.y, b0.z * F)
+        let ba = b - a, L = simd_length(ba), u = ba / max(L, 1e-6)
+        let R1 = r1 + inflate * sF, R2 = r2 + inflate * sF
+        let alpha = acosf(min(max((R1 - R2) / max(L, 1e-6), -1), 1))
+        var e1 = SIMD3<Float>(0, 0, 1) - u * u.z
+        if simd_length(e1) < 1e-4 { e1 = SIMD3(1, 0, 0) - u * u.x }
+        e1 = simd_normalize(e1)
+        let e2 = simd_cross(u, e1)
+        var k = 0
+        @inline(__always) func put(_ p: SIMD3<Float>) { out[k] = SIMD3(p.x * sigma, p.y, p.z / F); k += 1 }
+        put(b + u * R2)
+        for i in 1...tipRings {
+            let phi = alpha * Float(i) / Float(tipRings), c = cosf(phi), s = sinf(phi)
+            for j in 0..<around { put(b + (u * c + (e1 * thCos[j] + e2 * thSin[j]) * s) * R2) }
+        }
+        for i in 0..<rootRings {
+            let phi = alpha + (.pi - alpha) * Float(i) / Float(rootRings), c = cosf(phi), s = sinf(phi)
+            for j in 0..<around { put(a + (u * c + (e1 * thCos[j] + e2 * thSin[j]) * s) * R1) }
+        }
+        put(a - u * R1)
+    }
+
+    /// Baked crease occlusion (0...0.38) of the walking capsule's vertices: darker toward the buried root, so the junction reads as a soft clay crease.
+    static let creaseAO: [Float] = {
+        var m = [Float](repeating: 0, count: vertexCount)
+        // W1c: the capsule reads pale and flat without occlusion at its base. The shaft is one long strip between ring `tipRings - 1` (tip equator)
+        // and ring `tipRings` (root, buried), so the AO runs along it: ~0.30 at the buried root ring (about 0.16 where the shaft leaves the skin) and 0 at
+        // the tip, plus the egg's occlusion on the shaft's UNDERSIDE (ring angle 90 deg = down), strongest near the root.
+        for r in 0..<ringCount {
+            for j in 0..<around {
+                let th = 2 * Float.pi * Float(j) / Float(around)
+                var v: Float = 0
+                if r >= tipRings {                                  // root rings: 0.28 at the strip's buried end rising to 0.38 at the pole
+                    v = 0.28 + 0.10 * Float(r - tipRings) / Float(rootRings - 1)
+                    v += 0.10 * max(0, sinf(th))                    // underside (ring angle 90 deg = down)
+                }
+                m[1 + around * r + j] = min(0.4, v)
+            }
+        }
+        m[vertexCount - 1] = 0.38
+        return m
+    }()
 }

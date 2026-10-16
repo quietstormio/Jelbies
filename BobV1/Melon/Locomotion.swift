@@ -22,9 +22,9 @@ struct GaitDriver {
     enum Move { case hop, roll }
 
     // tuning
-    var hopDuration: Float = 0.5      // fixed airtime
-    var hopApex: Float = 0.6          // fixed apex height of the centroid above its ground pose
-    var crouchTime: Float = 0.14
+    var hopDuration: Float = 0.26     // fixed airtime (small and cute: motion table section 5)
+    var hopApex: Float = 0.10         // fixed apex height of the centroid above its ground pose (0.075 H)
+    var crouchTime: Float = 0.13
     var maxHop: Float = 1.6           // longest single hop
     var rollTravel: Float = 1.1       // distance covered by one roll
     var rollAngle: Float = 1.7        // radians tipped over before he rights himself
@@ -44,6 +44,12 @@ struct GaitDriver {
 
     // state
     private(set) var phase: Phase = .idle
+    /// How far the feet are tucked up toward the belly right now (world units): the sim soles only follow a few centimetres of it (the slab
+    /// under a foot is 0.1 u tall); the brain draws the full tuck with the rigid render feet.
+    private(set) var tuck: Float = 0
+    var tuckHeight: Float = 0.05
+    /// How far the SIM soles may follow the tuck (the slab is 0.1 u tall); kept public so a test can show what an unclamped tuck does.
+    var simTuckCap: Float = 0.03
     private var move: Move = .hop
     private var t: Float = 0           // time in the current phase
     private var tMove: Float = 0       // time since the move began (crouch + air)
@@ -74,7 +80,13 @@ struct GaitDriver {
         while d < -.pi { d += 2 * .pi }
         return d
     }
-    private func yawQ(_ y: Float) -> simd_quatf { simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0)) }
+    /// Tip-back (rad, about his x axis, applied inside the heading) the brain asks for while he hops: the hop used to flatten the game's idle
+    /// tip-back to upright, which makes the brows read angry from the camera.
+    var basePitch: Float = 0
+    private func yawQ(_ y: Float) -> simd_quatf {
+        let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
+        return basePitch == 0 ? q : q * simd_quatf(angle: basePitch, axis: SIMD3<Float>(1, 0, 0))
+    }
     private func yawEase(_ u: Float) -> Float { yaw0 + wrap(yaw1 - yaw0) * smooth(u) }
 
     // MARK: control
@@ -85,8 +97,9 @@ struct GaitDriver {
     }
 
     mutating func cancel(_ sim: SoftBody) {
-        phase = .idle; chained = false
+        phase = .idle; chained = false; tuck = 0
         sim.attractor.strength = 0
+        if !sim.targets.isEmpty { sim.targets = [] }
     }
 
     /// One scripted hop to the ground point `target` (x, z). Ignored while a move is running.
@@ -170,7 +183,7 @@ struct GaitDriver {
             tMove = t
             let tc = chained ? crouchTime * 0.4 : crouchTime * (move == .roll ? 1.3 : 1)
             let u = t / tc
-            let sy = 1 - 0.22 * amp * smooth(u)
+            let sy = 1 - 0.18 * amp * smooth(u)
             let k = kHop * min(1, t / 0.06)
             let yawNow = yawEase(t / (tc + 0.3))
             setUpright(sim, xz: from, yaw: yawNow, squash: sy, lift: 0, strength: k)
@@ -182,20 +195,19 @@ struct GaitDriver {
             let u = min(1, t / T)
             let h = apex * 4 * u * (1 - u)
             let vy = 4 * apex * (1 - 2 * u) / T, vy0 = 4 * apex / T
-            let stretch = 1 + 0.2 * amp * min(1, abs(vy) / max(vy0, 1e-3))
-            let crouchSy = 1 - 0.22 * amp
+            let stretch = 1 + 0.12 * amp * min(1, abs(vy) / max(vy0, 1e-3))
+            let crouchSy = 1 - 0.18 * amp
             let sy = crouchSy + (stretch - crouchSy) * smooth(t / 0.08)
             let xz = from + (to - from) * u
             let yawNow = yawEase(tMove / (crouchTime + 0.3))
             setUpright(sim, xz: xz, yaw: yawNow, squash: sy, lift: h, strength: kHop)
-            if t >= T { phase = .land; t = 0 }
+            tuckFeet(sim, u: u, amp: amp)
+            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0 }
 
         case .land:
             let amp2 = amp
-            // squash on impact (1.2 -> 0.8 over 70 ms), then ease back to 1
-            let sy: Float
-            if t < 0.07 { sy = 1 + 0.2 * amp2 - 0.4 * amp2 * smooth(t / 0.07) }
-            else { sy = 1 - 0.2 * amp2 * (1 - smooth((t - 0.07) / 0.33)) }
+            // squash on impact (0.80), then a decaying 5 Hz jiggle (1.06 -> 0.97 -> 1.0)
+            let sy = 1 - 0.2 * amp2 * expf(-t / 0.08) * cosf(2 * .pi * 5 * t)
             let faceT = chained ? 0 : smooth((t - 0.1) / 0.4)
             let yawNow = yaw1 + wrap(facingYaw - yaw1) * faceT
             let k = kHop * (1 - smooth((t - 0.4) / 0.25))
@@ -206,7 +218,7 @@ struct GaitDriver {
                 if simd_length(rem) > 0.1 { hop(sim, to: home, reduceMotion: reduce, chained: true); return }
                 chained = false
             }
-            if t >= 0.65 { endMove(sim) }
+            if t >= 0.55 { endMove(sim) }
 
         case .roll:
             let T: Float = 0.75
@@ -268,9 +280,27 @@ struct GaitDriver {
     }
 
     private mutating func endMove(_ sim: SoftBody) {
-        phase = .idle; chained = false
+        phase = .idle; chained = false; tuck = 0
         sim.attractor.strength = 0
+        sim.targets = []
         waitTimer = (0.25 + 0.45 * rand()) * (reduce ? 1.4 : 1)
+    }
+
+    /// Feet tucked up toward the belly while he is in the air (the only time both feet may leave the floor).
+    private mutating func tuckFeet(_ sim: SoftBody, u: Float, amp: Float) {
+        tuck = tuckHeight * amp * sinf(.pi * min(1, max(0, u)))
+        let simTuck = min(tuck, simTuckCap)
+        let q = sim.attractor.rotation, sy = sim.attractor.squash, sxz = 1 / sy.squareRoot()
+        let R = simd_float3x3(q), c0 = sim.restCentroid
+        var list: [ParticleTarget] = []
+        for a in sim.appendages where a.kind == .foot {
+            for p in a.particles {
+                let o = sim.restPosition(p) - c0
+                let w = sim.attractor.anchor + R * SIMD3<Float>(o.x * sxz, o.y * sy, o.z * sxz) + SIMD3<Float>(0, simTuck, 0)
+                list.append(ParticleTarget(index: p, pos: w, stiffness: 60000))
+            }
+        }
+        sim.targets = list
     }
 
     private func setUpright(_ sim: SoftBody, xz: SIMD2<Float>, yaw: Float, squash sy: Float, lift: Float, strength: Float) {

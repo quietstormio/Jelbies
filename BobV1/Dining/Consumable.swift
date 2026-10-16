@@ -1,0 +1,125 @@
+//
+//  Consumable.swift
+//  The food / drink catalogue (data only) and the ONE shared eating timing.
+//  Adding a new food = one new entry here + one serving builder in DiningModels. No animation code changes.
+//
+//  Servings are SHARED and scaled for N Blobs (N = 1...3): one plate / cake / drink on a little tray, with 3 bites per Blob
+//  (berries: 3 berries each, cake: one fork each) or one bendy straw per Blob (drinks).
+//
+
+import simd
+import Foundation
+
+nonisolated enum ConsumableKind: String { case food, drink }
+
+/// How it reaches his mouth: `finger` (the piece sticks to the nub), `fork` (a fork carries the bite), `sip` (his own bendy straw).
+nonisolated enum EatStyle: String { case finger, fork, sip }
+
+nonisolated enum BenefitKey: String, CaseIterable { case hunger, thirst, happy, energy }
+
+/// Shared timing for EVERY food and drink (the user wants one consumption rate). These are global constants, not per-item fields.
+nonisolated enum DiningTiming {
+    static let bitesPerServing = 3                  // per Blob
+    static let gulpsPerDrink = 3                    // per Blob
+    /// Style guide: beats run at about 1.5 per second.
+    static let beatsPerSecond: Float = 1.5
+    static var beatPeriod: Float { 1 / beatsPerSecond }
+    /// One bite = grab/lift beat + chew beat.
+    static let beatsPerBite = 2
+    static var biteDuration: Float { Float(beatsPerBite) * beatPeriod }
+    /// One gulp = one beat (a tip back and a squash pulse).
+    static let beatsPerGulp = 1
+    static var gulpDuration: Float { Float(beatsPerGulp) * beatPeriod }
+    static var servingDuration: Float { Float(bitesPerServing) * biteDuration }
+    static var drinkDuration: Float { Float(gulpsPerDrink) * gulpDuration }
+    /// The serving grows a little with every extra Blob ("the bottle is a little bigger").
+    static let servingScales: [Float] = [1.0, 1.15, 1.3]
+    static func servingScale(n: Int) -> Float { servingScales[min(max(n, 1), 3) - 1] }
+}
+
+/// Everything a model builder needs. Colours are linear RGB.
+nonisolated struct ConsumablePalette {
+    var primary: SIMD3<Float>
+    var secondary: SIMD3<Float>
+    var accent: SIMD3<Float>
+    var detail: SIMD3<Float>
+}
+
+/// What a food builder is asked to draw: N Blobs, bites left per Blob, pieces in hands (global index = place * 3 + j).
+nonisolated struct ServingState {
+    var n: Int
+    var bitesLeft: [Int]
+    var skipped: Set<Int> = []
+    var scale: Float { DiningTiming.servingScale(n: n) }
+    var totalLeft: Int { bitesLeft.reduce(0, +) }
+}
+
+/// Builds the shared food serving in TRAY-LOCAL coordinates (origin on the floor under the tray centre, tray top at DiningDims.trayTop).
+typealias FoodServingBuilder = @Sendable (_ b: RoomMeshBuilder, _ state: ServingState, _ palette: ConsumablePalette, _ layout: TrayLayout) -> Void
+
+/// A drink's container, in model space (origin at the bottom centre), plus where its opening is.
+nonisolated struct ContainerModel {
+    var opaque: RoomMesh
+    var translucent: RoomMesh = RoomMesh()
+    var openingY: Float                    // height of the opening above the container base
+    var openingRadius: Float               // how far from the axis a straw can stand
+}
+/// `fill`: 1 = full ... 0 = empty (the drink level; the group passes bites left / (gulps x n)).
+typealias ContainerBuilder = @Sendable (_ n: Int, _ palette: ConsumablePalette, _ fill: Float) -> ContainerModel
+
+nonisolated struct Consumable {
+    let id: String
+    let name: String
+    let kind: ConsumableKind
+    let eatStyle: EatStyle
+    /// SF Symbol for the menu.
+    let symbol: String
+    let palette: ConsumablePalette
+    /// Stored but unused until stats exist.
+    let benefits: [BenefitKey: Float]
+    /// Foods: the shared serving builder (N, bites left).
+    var serving: FoodServingBuilder? = nil
+    /// Drinks: the container builder (N) and the straw's stripe colours.
+    var container: ContainerBuilder? = nil
+    var strawColors: (SIMD3<Float>, SIMD3<Float>)? = nil
+}
+
+nonisolated enum Consumables {
+    static func srgb(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { OKLab.srgbToLinear(SIMD3(r, g, b)) }
+
+    static let berries = Consumable(
+        id: "berries", name: "Berries", kind: .food, eatStyle: .finger, symbol: "circle.hexagongrid.fill",
+        palette: ConsumablePalette(primary: srgb(0.96, 0.58, 0.66), secondary: srgb(0.74, 0.62, 0.92), accent: srgb(0.60, 0.74, 0.96),
+                                   detail: srgb(0.62, 0.84, 0.62)),
+        benefits: [.hunger: 0.3, .happy: 0.1],
+        serving: { b, st, pal, lay in DiningModels.berries(b, state: st, palette: pal, layout: lay) })
+
+    static let cake = Consumable(
+        id: "cake", name: "Cake", kind: .food, eatStyle: .fork, symbol: "birthday.cake.fill",
+        palette: ConsumablePalette(primary: srgb(1.0, 0.92, 0.74), secondary: srgb(1.0, 0.76, 0.82), accent: srgb(0.98, 0.52, 0.60),
+                                   detail: srgb(1.0, 0.97, 0.92)),
+        benefits: [.hunger: 0.2, .happy: 0.35],
+        serving: { b, st, pal, lay in DiningModels.cake(b, state: st, palette: pal, layout: lay) })
+
+    static let water = Consumable(
+        id: "water", name: "Water", kind: .drink, eatStyle: .sip, symbol: "waterbottle.fill",
+        palette: ConsumablePalette(primary: srgb(0.52, 0.76, 0.96), secondary: srgb(0.86, 0.94, 1.0), accent: srgb(0.70, 0.88, 1.0),
+                                   detail: srgb(1.0, 1.0, 1.0)),
+        benefits: [.thirst: 0.4],
+        container: { n, pal, fill in DiningModels.waterBottle(n: n, palette: pal, fill: fill) },
+        strawColors: (srgb(0.98, 0.70, 0.78), srgb(1.0, 1.0, 1.0)))
+
+    static let soda = Consumable(
+        id: "soda", name: "Soda", kind: .drink, eatStyle: .sip, symbol: "bubbles.and.sparkles.fill",
+        palette: ConsumablePalette(primary: srgb(0.96, 0.60, 0.74), secondary: srgb(1.0, 0.84, 0.90), accent: srgb(0.86, 0.42, 0.62),
+                                   detail: srgb(1.0, 0.97, 0.94)),
+        benefits: [.thirst: 0.25, .happy: 0.3, .energy: 0.2],
+        container: { n, pal, fill in DiningModels.sodaBottle(n: n, palette: pal, fill: fill) },
+        strawColors: (srgb(0.62, 0.84, 0.96), srgb(1.0, 1.0, 1.0)))
+
+    /// Menu order.
+    static let all: [Consumable] = [berries, cake, water, soda]
+    static var foods: [Consumable] { all.filter { $0.kind == .food } }
+    static var drinks: [Consumable] { all.filter { $0.kind == .drink } }
+    static func with(id: String) -> Consumable? { all.first { $0.id == id } }
+}

@@ -997,12 +997,17 @@ private func buildRenderMeshBob() -> RenderMesh {
         let restPts = ArmCapsule.points(.rest, inflate: 0, sigma: sigma)
         for i in 0..<ArmCapsule.vertexCount { add(inactive[i], restPts.nrm[i], 0) }
         idx += ArmCapsule.triangles(firstVertex: first)
+        // the foot bean of the same side, in the same block: [arm capsule, bean] (hidden deep inside the belly until he moves his feet)
+        let beanFirst = pos.count / 3
+        let hidden = FootBean.inactive(sigma: sigma)
+        for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], FootBean.mat[i]) }
+        idx += FootBean.triangles(firstVertex: beanFirst)
     }
     let bodyIndexCount = idx.count
 
     // decals: footprints in the x-y plane, projected onto the front surface
     func decal(cx: Double, cy: Double, a: Double, b: Double, pw: Double, du: Double = 0, dv: Double = 0,
-               lift: Double, bump: Double, m: Float, capsule: Bool = false) {
+               lift: Double, bump: Double, m: Float, capsule: Bool = false, tilt: Double = 0) {
         let nR = 6, nA = 40
         func height(_ rho: Double) -> Double { lift + bump * sqrt(max(0, 1 - rho * rho)) }
         func point(_ rho: Double, _ ang: Double, _ hh: Double) -> (SIMD3<Double>, SIMD3<Double>) {
@@ -1032,6 +1037,7 @@ private func buildRenderMeshBob() -> RenderMesh {
                 if hh > 0 { hh = lift + bump * sqrt(max(0, 1 - rr * rr)) }      // (hh < 0 marks the skirt ring)
                 gu = dist > 1e-9 ? ex / dist * dist / (b * b) : 0; gv = dist > 1e-9 ? ey / dist * dist / (b * b) : 0
             }
+            if tilt != 0 { v += tilt * (cx > 0 ? -(u - du) : (u - du)) }          // inner end up by atan(tilt)
             let sp = BobForm.frontSurface(x: cx + u, y: cy + v)
             let ns = BobForm.normal(sp)
             // dome normal of the raised bead: tilt the surface normal away from the footprint centre
@@ -1075,7 +1081,7 @@ private func buildRenderMeshBob() -> RenderMesh {
     }
     for sgn in [-1.0, 1.0] {
         decal(cx: sgn * BobForm.eyeX, cy: BobForm.browY, a: BobForm.browHalfLen, b: BobForm.browHalfThick, pw: 4.5,
-              lift: 0.002, bump: 0.011, m: 4, capsule: true)
+              lift: 0.002, bump: 0.011, m: 4, capsule: true, tilt: BobForm.browTilt)
     }
     let seedCount = idx.count - seedStart
 

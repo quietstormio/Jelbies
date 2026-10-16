@@ -146,6 +146,11 @@ final class MelonRenderer {
                     let v = cap.firstVertex[si] + i
                     st[4 * v] = Float(p.x); st[4 * v + 1] = Float(p.y); st[4 * v + 2] = Float(p.z)
                 }
+                // the foot bean of the same side follows the arm capsule inside the block
+                for (i, p) in FootBean.restStream(sigma: sigma).enumerated() {
+                    let v = cap.beanFirst(side: si == 0 ? -1 : 1) + i
+                    st[4 * v] = Float(p.x); st[4 * v + 1] = Float(p.y); st[4 * v + 2] = Float(p.z)
+                }
             }
         }
         guard let sb = device.makeBuffer(bytes: st, length: max(st.count * 4, 16), options: .storageModeShared),
@@ -430,6 +435,9 @@ final class MelonRenderer {
                 e.setRenderPipelineState(pEyes)
                 e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
             }
+            // translucent room pieces (dining puffs, contact shadows) blend over Bob; sets its own state (not part of the body path)
+            room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,
+                               shadowTex: shadowTex, topViewProj: uniforms.topVP, heightTex: topTex)
             e.endEncoding()
             encodePost(cmd, target: target, hdrTex: hdrTex)
             return true

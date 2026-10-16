@@ -615,11 +615,15 @@ enum BobForm {
     }
 
     // face: measured against the reference silhouette (positions relative to the body, camera-independent where possible)
+    // W1d (user-approved face change, neutral eyes only): eyes sized to REF2 A f001 measured the same way (long axis 0.288, short axis 0.220 of
+    // the eye spacing; BEFORE was 0.280 and 0.202). Brows unchanged: already a constant-height latitude (every point at the same body y).
     static let eyeX = 0.215
     static let eyeY = 0.82
-    static let eyeHalfW = 0.0488
-    static let eyeHalfH = 0.0605
+    static let eyeHalfW = 0.0532
+    static let eyeHalfH = 0.0623
     static let browY = 0.945
     static let browHalfLen = 0.069
     static let browHalfThick = 0.0115
+    // brows keep their latitude, but the inner end is raised by atan(browTilt) so the far brow does not droop toward the middle in the 3/4
+    static let browTilt = 0.085
 }

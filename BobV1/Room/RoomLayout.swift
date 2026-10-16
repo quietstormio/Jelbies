@@ -38,6 +38,36 @@ enum RoomLayout {
     static let plant = Cylinder(centre: SIMD2(-4.2, -4.2), radius: 0.4, height: 0.5)
     static var cylinders: [Cylinder] { [table, plant] }
 
+    /// Temporary floor obstacles (the dining tray while it exists): axis-aligned rounded rectangles in xz, `height` tall.
+    struct FlatBox: Equatable { var centre: SIMD2<Float>; var half: SIMD2<Float>; var height: Float; var radius: Float = 0.04 }
+    /// Set by DiningSet; empty when no meal set is out, so nothing is left behind.
+    nonisolated(unsafe) static var dynamicBoxes: [FlatBox] = []
+    /// The meal tray is only 0.3 high: his round belly goes over it, so only his base (about 0.6 of his footprint radius) has to keep off its box. Without this
+    /// the visible floor beside the tray (|x| <= ~1.0 there) is too narrow to pass it, and he was stuck in front of it.
+    static let lowPropRadiusScale: Float = 0.5
+
+    /// Signed distance in the xz plane to a FlatBox (negative inside).
+    static func boxDistanceXZ(_ p: SIMD2<Float>, _ b: FlatBox) -> Float {
+        let inner = simd_max(b.half - SIMD2(repeating: b.radius), .zero)
+        let q = simd_abs(p - b.centre) - inner
+        return simd_length(simd_max(q, .zero)) + min(max(q.x, q.y), 0) - b.radius
+    }
+
+    /// Pushes a sphere out of one FlatBox (no-op when clearly above it).
+    static func pushOut(_ p: inout SIMD3<Float>, radius: Float, box b: FlatBox) {
+        guard p.y - radius < floorY + b.height else { return }
+        let xz = SIMD2(p.x, p.z)
+        let sd = boxDistanceXZ(xz, b)
+        guard sd < radius else { return }
+        let e: Float = 1e-3
+        var g = SIMD2(boxDistanceXZ(xz + SIMD2(e, 0), b) - boxDistanceXZ(xz - SIMD2(e, 0), b),
+                      boxDistanceXZ(xz + SIMD2(0, e), b) - boxDistanceXZ(xz - SIMD2(0, e), b))
+        if simd_length(g) < 1e-6 { g = xz - b.centre }
+        g = simd_length(g) > 1e-6 ? simd_normalize(g) : SIMD2(0, 1)
+        let push = g * (radius - sd)
+        p.x += push.x; p.z += push.y
+    }
+
     /// Signed distance in the xz plane to the sofa's rounded footprint (negative inside).
     static func sofaDistanceXZ(_ p: SIMD2<Float>) -> Float {
         let b = sofa, inner = SIMD2(b.halfExtents.x, b.halfExtents.z) - SIMD2(repeating: b.radius)
@@ -46,7 +76,7 @@ enum RoomLayout {
     }
 
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
-    static func resolve(position p0: SIMD3<Float>, radius: Float) -> SIMD3<Float> {
+    static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1) -> SIMD3<Float> {
         var p = p0
         for _ in 0..<2 {
             for w in walls {
@@ -74,6 +104,7 @@ enum RoomLayout {
                     p.x = c.centre.x + dir.x * need; p.z = c.centre.y + dir.y * need
                 }
             }
+            for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
         }
         return p
     }

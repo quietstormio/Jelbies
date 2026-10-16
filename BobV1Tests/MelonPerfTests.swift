@@ -49,6 +49,7 @@ final class MelonPerfTests: XCTestCase {
                           body.n, body.nT, stepMs, skinMs, frameMs)
         print(line)
         NSLog("%@", line)
+        MotionLog.write(line)
         XCTAssertLessThan(frameMs, 200)   // sanity only
     }
 }

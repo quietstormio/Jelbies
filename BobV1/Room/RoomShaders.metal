@@ -33,6 +33,7 @@ struct RoomVOut {
     float3 normal;
     float3 color;
     float ao;
+    float alpha;
     float mat [[flat]];
 };
 
@@ -43,6 +44,7 @@ vertex RoomVOut roomVS(RoomVertexIn v [[stage_in]], constant RoomUniforms& u [[b
     o.normal = v.normal.xyz;
     o.ao = v.normal.w;
     o.color = v.color.rgb;
+    o.alpha = v.color.a;
     o.mat = v.pos.w;
     return o;
 }
@@ -182,7 +184,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     // fog toward the background swatch
     float f = saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;
     col = mix(col, u.pal3.rgb * 0.62, f);
-    return float4(col, 1.0);
+    return float4(col, in.alpha);   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
 }
 
 /// Optional final-composite helper: darken screen corners. uv in 0..1.

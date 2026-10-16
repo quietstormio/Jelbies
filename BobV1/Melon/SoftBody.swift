@@ -238,7 +238,7 @@ final class SoftBody {
         for t in 0..<nT { tetRot[4 * t] = 0; tetRot[4 * t + 1] = 0; tetRot[4 * t + 2] = 0; tetRot[4 * t + 3] = 1 }
         fitQ = SIMD4<Float>(0, 0, 0, 1)
         attractor = Attractor(); attPrev = Attractor(); attFresh = true
-        endGrab()
+        endGrab(); endPress()
     }
 
     // stiffness mapping: firmness 0..1 -> edge compliance (log scale)
@@ -355,6 +355,77 @@ final class SoftBody {
 
     func endGrab() { grabbing = false; grabN = 0 }
 
+    // MARK: press contact (fingertip spheres that dent him and slide; unlike the grab they never hold on, so they never pull)
+
+    /// True while a fingertip sphere is set. With none set the step is exactly the plain step.
+    private(set) var pressing = false
+    private var pressC = [SIMD3<Float>](repeating: .zero, count: 2)
+    private var pressR = [Float](repeating: 0, count: 2)
+    private var pressOn = [false, false]
+    private var pressList: [Int32] = []
+    private var pressDeepest: Float = 0
+    /// Deepest push of the spheres during the last step (sim units): how hard the fingertip works on him.
+    private(set) var pressDepth: Float = 0
+
+    /// Fingertip sphere (slot 0 = the pet finger, slots 0 and 1 = the two cheek fingers) at `center` with `radius`:
+    /// every particle inside is moved out to its surface (collision only, no attachment).
+    func setPress(center: SIMD3<Float>, radius: Float, slot: Int = 0) {
+        pressC[slot] = center; pressR[slot] = radius; pressOn[slot] = true; pressing = true
+    }
+
+    func endPress(slot: Int) {
+        pressOn[slot] = false
+        if !pressOn[0] && !pressOn[1] { endPress() }
+    }
+
+    func endPress() {
+        pressing = false; pressDepth = 0; pressDeepest = 0
+        pressOn[0] = false; pressOn[1] = false
+        pressList.removeAll(keepingCapacity: true)
+    }
+
+    private func buildPressList() {
+        pressList.removeAll(keepingCapacity: true)
+        for i in 0..<n {
+            var near = false
+            for s in 0..<2 where pressOn[s] {
+                let r = pressR[s] + 0.12
+                let dx = x[3 * i] - pressC[s].x, dy = x[3 * i + 1] - pressC[s].y, dz = x[3 * i + 2] - pressC[s].z
+                if dx * dx + dy * dy + dz * dz < r * r { near = true }
+            }
+            if near { pressList.append(Int32(i)) }
+        }
+    }
+
+    private func solvePress(_ x: UnsafeMutablePointer<Float>) {
+        var deepest: Float = 0
+        var sx: Float = 0, sy: Float = 0, sz: Float = 0
+        for s in 0..<2 where pressOn[s] {
+            let c = pressC[s], R = pressR[s], R2 = R * R
+            for k in pressList {
+                let i = 3 * Int(k)
+                let dx = x[i] - c.x, dy = x[i + 1] - c.y, dz = x[i + 2] - c.z
+                let d2 = dx * dx + dy * dy + dz * dz
+                if d2 >= R2 { continue }
+                let ox = x[i], oy = x[i + 1], oz = x[i + 2]
+                let d = d2.squareRoot()
+                let push = min(R - d, 0.04)
+                if d > 1e-6 { let f = push / d; x[i] += dx * f; x[i + 1] += dy * f; x[i + 2] += dz * f } else { x[i + 2] += push }
+                deepest = max(deepest, R - d)
+                let m = mass[Int(k)]
+                sx += m * (x[i] - ox); sy += m * (x[i + 1] - oy); sz += m * (x[i + 2] - oz)
+            }
+        }
+        pressDeepest = max(pressDeepest, deepest)
+        // zero net pull: the contact is an internal exchange, so the whole body gives back the mass-weighted mean of what it pushed
+        // (the centroid is not shoved; only the dent moves)
+        let inv = 1 / totalMass
+        let gx = sx * inv, gy = sy * inv, gz = sz * inv
+        if abs(gx) + abs(gy) + abs(gz) > 0 {
+            for j in 0..<n { x[3 * j] -= gx; x[3 * j + 1] -= gy; x[3 * j + 2] -= gz }
+        }
+    }
+
     // MARK: simulation
 
     func step() {
@@ -364,6 +435,7 @@ final class SoftBody {
         let isGrabbing = grabbing
         var bad = false
         // attractor state for this step (off while held); interpolated across the substeps
+        if pressing { buildPressList(); pressDeepest = 0 }
         var a1 = attractor
         if isGrabbing { a1.strength = 0 }
         var a0 = attPrev
@@ -403,6 +475,7 @@ final class SoftBody {
             }
         }
         attPrev = a1
+        if pressing { pressDepth = pressDeepest }
         if bad { reset(drop: 0.2) }
     }
 
@@ -424,6 +497,7 @@ final class SoftBody {
         let attOn = att.strength > 0
         if attOn { solveAttractor(dt, x, att) }
         if !targets.isEmpty { solveTargets(dt, x) }
+        if pressing { solvePress(x) }
         solveFloor(x)
         if arenaRadius.isFinite { solveArena(x) }
         let inv = 1 / dt, vmax = maxSpeed
@@ -532,6 +606,14 @@ final class SoftBody {
             lo = min(lo, (R * o).y)
         }
         return floorY - lo
+    }
+
+    /// Anchor for a pose (rotation q, squash sy) that keeps the rest-frame point `m` (e.g. a foot's sole) exactly at world point `world`.
+    /// Rolling / pitching / yawing the target about that point makes him pivot on his feet instead of his centre.
+    func pivotAnchor(rotation q: simd_quatf, squash sy: Float = 1, pivot m: SIMD3<Float>, world: SIMD3<Float>) -> SIMD3<Float> {
+        let R = simd_float3x3(q), sxz = 1 / sy.squareRoot()
+        let o = m - restCentroid
+        return world - R * SIMD3<Float>(o.x * sxz, o.y * sy, o.z * sxz)
     }
 
     /// Mean velocity of the body (mass weighted).

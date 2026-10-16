@@ -63,6 +63,13 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         dbl.delaysTouchesEnded = false
         dbl.delegate = self
         addGestureRecognizer(dbl)
+        let single = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))     // game: a tap on the floor cancels a pending Blob selection
+        single.cancelsTouchesInView = false
+        single.delaysTouchesBegan = false
+        single.delaysTouchesEnded = false
+        single.delegate = self
+        single.require(toFail: dbl)
+        addGestureRecognizer(single)
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -138,7 +145,13 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     }
 
     @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
-        if g.state == .ended { controller?.resetCamera() }
+        guard g.state == .ended else { return }
+        if controller?.game == true { controller?.gameDoubleTap(g.location(in: self)) }     // game: a double tap on a Blob selects it (no camera reset)
+        else { controller?.resetCamera() }
+    }
+
+    @objc private func tapped(_ g: UITapGestureRecognizer) {
+        if g.state == .ended, controller?.game == true { controller?.gameSingleTap(g.location(in: self)) }
     }
 
     func gestureRecognizer(_ a: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith b: UIGestureRecognizer) -> Bool { true }
@@ -151,7 +164,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
 // MARK: - Controller
 
-private enum DragMode { case none, grab, orbit }
+private enum DragMode { case none, grab, orbit, pet, pending, cheeks }
 
 final class MelonController: NSObject, MTKViewDelegate {
     let model: MelonModel
@@ -199,6 +212,19 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgSteps = 0
     private var gpuSumMs: Double = 0
     private var gpuSamples = 0
+    private var dbgBrain: Double = 0, dbgStepOnly: Double = 0, dbgTouch: Double = 0, dbgHaptic: Double = 0
+    // touch play (focus mode): the pet finger
+    private var petPoint = CGPoint.zero
+    private var restSurface: RestSurface?
+    // the gesture decides the action (TouchGesture.swift): pet / tap / pick up / throw / cheeks pinch
+    private var gesture = TouchGesture()
+    private var gestureHit: SIMD3<Float>?
+    private var cheekFingers: [(id: ObjectIdentifier, p: CGPoint)] = []
+    private var tapUntil: CFTimeInterval = 0
+    private var grabSamples: [(t: CFTimeInterval, q: SIMD3<Float>)] = []
+    private var liftHeight: Float = 0
+    private var throwHold: Float = 0
+    private var touchSize = CGSize.zero
 
     #if DEBUG
     private var autoDrag = false
@@ -221,6 +247,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var wasHopping = false
 
     // BEGIN brain hook
+    /// Capture aid: -BlobIdleMood happy|okay|grumpy pins the mood the idle behaviours read.
+    private static let idleMoodOverride: BlobMood? = UserDefaults.standard.string(forKey: "BlobIdleMood").flatMap(BlobMood.init(rawValue:))
     /// Bob's autonomous brain (BlobBrain.swift). nil = the old hop-around. The game screen sets it (or flips `brain.enabled`);
     /// launching with `-BlobDemo wave|walk|idle|play|eat|drink|come|step|look` creates one with that scripted demo.
     var brain: BlobBrain? = BlobBrain.fromLaunchArguments()
@@ -232,10 +260,17 @@ final class MelonController: NSObject, MTKViewDelegate {
             wasHopping = false
             if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
             brain.amplitude = reduce ? 0.55 : 1
+            if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
+                brain.idleMood = Self.idleMoodOverride ?? model.care.mood
+                brain.idleBlocked = model.care.focus.isActive || model.care.trayOut
+            }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
-            brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: mode == .grab || sim.grabbing)
+            let b0 = CACurrentMediaTime()
+            throwHold = max(0, throwHold - sim.stepDt)
+            brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: mode == .grab || sim.grabbing || throwHold > 0 || model.touch.holdsBrain)
+            dbgBrain += CACurrentMediaTime() - b0
             renderer?.mouthOpen = brain.mouthOpen
-            if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt) }
+            if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt, sim: sim) }
             return
         }
         renderer?.mouthOpen = 0
@@ -389,6 +424,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         if demo { runDemo(now: now, stage: stage) }
         #endif
 
+        let tt0 = CACurrentMediaTime()
+        touchDemo(now: now)
+        touchTick(dt: dt, now: now)
+        dbgTouch += CACurrentMediaTime() - tt0
+
         // fixed-step simulation
         let s0 = CACurrentMediaTime()
         if !paused {
@@ -396,8 +436,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
             let maxSteps = 2
             var steps = 0
-            while acc >= sim.stepDt && steps < maxSteps { hopTick(reduce: reduce); sim.step(); acc -= sim.stepDt; steps += 1 }
+            while acc >= sim.stepDt && steps < maxSteps { hopTick(reduce: reduce); let st0 = CACurrentMediaTime(); sim.step(); dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1 }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
+            if game, steps > 0, let brain, brain.enabled { model.care.refreshHeld(brain: brain, sim: sim, renderer: renderer) }
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps
         }
@@ -424,9 +465,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         } else {
             safe = CameraRig.fullSafeRect(pts)
         }
-        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1))) : rig.camera(viewSize: pts, safeRect: safe)
+        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
+        if game, model.care.select.count > 1 || model.care.select.isSelecting { model.care.select.publish(viewProj: cam.viewProj, size: pts) { bobScreenPoints(pts, cam.viewProj) } }   // also with 1 Blob while a highlight is up: his real outline
         let light = game ? GameCamera.light(centroid: c) : rig.light(centroid: c)
 
         renderer.resize(width: Int(view.drawableSize.width), height: Int(view.drawableSize.height))
@@ -463,6 +505,13 @@ final class MelonController: NSObject, MTKViewDelegate {
             NSLog("%@", String(format: "[melon] perf: cpu %.2f ms, gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps) | %.1f fps, interval %.2f ms",
                          dbgCPU / f * 1000, g.avgMs, dbgSim / f * 1000,
                          dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, f / el, el / f * 1000))
+            if game {
+                let hc = model.touch.haptics.takeCost()
+                NSLog("%@", String(format: "[touch] perf: sim step %.3f ms, brain %.3f ms/step, touch frame %.3f ms (haptics update %.4f ms) per frame",
+                                   dbgSteps > 0 ? dbgStepOnly / Double(dbgSteps) * 1000 : 0, dbgSteps > 0 ? dbgBrain / Double(dbgSteps) * 1000 : 0,
+                                   dbgTouch / f * 1000, hc.ms))
+            }
+            dbgBrain = 0; dbgStepOnly = 0; dbgTouch = 0
             dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgSim = 0; dbgSteps = 0
             fflush(stdout)
         }
@@ -484,6 +533,34 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func resetCamera() { if !game { rig.reset() } }
 
+    // MARK: Multi-Blob select (the highlight itself is BlobSelect / SelectionOverlay)
+
+    /// Double tap in the game: select the Blob under the finger (roaming only; with one Blob there is no select step).
+    func gameDoubleTap(_ p: CGPoint) {
+        guard game, !model.care.focus.isActive, let id = model.care.select.hit(p) else { return }
+        model.care.select.doubleTap(id)
+    }
+
+    /// A tap on the floor (not on a Blob) cancels a pending selection.
+    func gameSingleTap(_ p: CGPoint) {
+        let sel = model.care.select
+        if game, sel.isSelecting, sel.hit(p) == nil { sel.cancel() }
+    }
+
+    /// The real Blob's render vertices projected to screen points (for his outline).
+    private func bobScreenPoints(_ size: CGSize, _ vp: simd_float4x4) -> [CGPoint] {
+        guard let renderer else { return [] }
+        let d = renderer.dynPointer
+        var out: [CGPoint] = []
+        out.reserveCapacity(renderMesh.vertexCount)
+        for i in 0..<renderMesh.vertexCount {
+            let o = 6 * i
+            let q = vp * SIMD4<Float>(d[o], d[o + 1], d[o + 2], 1)
+            if q.w > 1e-4 { out.append(CGPoint(x: CGFloat(q.x / q.w * 0.5 + 0.5) * size.width, y: CGFloat(1 - (q.y / q.w * 0.5 + 0.5)) * size.height)) }
+        }
+        return out
+    }
+
     // MARK: Pointer handling (shared by touches and the DEBUG auto-drag)
 
     private func ndc(_ p: CGPoint, _ size: CGSize) -> SIMD2<Float> {
@@ -498,7 +575,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 t * x * z - s * y, t * y * z + s * x, t * z * z + c]
     }
 
-    private func dragTarget(_ p: CGPoint, _ size: CGSize) -> SIMD3<Float>? {
+    private func dragTarget(_ p: CGPoint, _ size: CGSize, limited: Bool = true) -> SIMD3<Float>? {
         let ray = unproject(ndc: ndc(p, size), invViewProj: lastCam.invViewProj)
         let den = simd_dot(ray.d, planeN)
         if abs(den) < 1e-5 { return nil }
@@ -507,7 +584,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         let dx = q.x - rig.target.x, dz = q.z - rig.target.z, lim: Float = 3.4
         let dl = (dx * dx + dz * dz).squareRoot()
         if dl > lim { q.x = rig.target.x + dx / dl * lim; q.z = rig.target.z + dz / dl * lim }
+        if !limited { return q }                        // the raw point under the finger (the throw speed is measured on it)
         q.y = min(max(q.y, 0.02), 3.2)
+        if game, model.care.focus.isFocused {
+            // he stays near the close-up's spot while lifted
+            let sx = GameCamera.callSpot.x, sz = GameCamera.callSpot.y
+            q.x = min(max(q.x, sx - 0.5), sx + 0.5); q.z = min(max(q.z, sz - 0.5), sz + 0.5)
+            q.y = min(q.y, planeP.y + 0.4)            // lifted a hand's width: feet clear of the floor, still whole in the close-up frame
+        }
         if game {
             // keep the held patch over the visible floor (and off the sofa / props)
             let k = GameCamera.constrain(SIMD3<Float>(q.x, 0, q.z), radius: 0.35)
@@ -517,15 +601,204 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     private func applyGrab(_ p: CGPoint, _ size: CGSize) {
-        if let q = dragTarget(p, size) { sim.moveGrab(target: q, rot: rotMat(lastCam.fwd, twist)) }
+        if let q = dragTarget(p, size) {
+            sim.moveGrab(target: q, rot: rotMat(lastCam.fwd, twist))
+            liftHeight = q.y - planeP.y
+        }
+        if let raw = dragTarget(p, size, limited: false) {
+            grabSamples.append((CACurrentMediaTime(), raw)); if grabSamples.count > 8 { grabSamples.removeFirst() }
+        }
     }
 
     private func cancelGrab() {
         if mode == .grab { sim.endGrab(); mode = .none; dragID = nil; second = nil }
     }
 
+    /// The point on his body under a screen point (the rendered mesh first, then the nearest particle within a fingertip).
+    private func pickBody(_ p: CGPoint, _ size: CGSize) -> SIMD3<Float>? {
+        guard let renderer else { return nil }
+        let ray = unproject(ndc: ndc(p, size), invViewProj: lastCam.invViewProj)
+        return pickRay(origin: ray.o, dir: ray.d, dyn: renderer.dynPointer, index: renderMesh.index,
+                       bodyIndexCount: renderMesh.body.first + renderMesh.body.count)
+            ?? pickNear(screenPoint: SIMD2<Float>(Float(p.x), Float(p.y)), viewProj: lastCam.viewProj,
+                        viewSize: SIMD2<Float>(Float(size.width), Float(size.height)), x: sim.x, maxPx: 34)
+    }
+
+    // Capture aid (not DEBUG-only so the Release sim build can film it): -TouchDemo pet strokes him on a 14 s loop once he is in focus mode.
+    private let touchDemoName = UserDefaults.standard.string(forKey: "TouchDemo")
+    private var tdT0: CFTimeInterval = 0
+    private var tdDown = false
+
+    private func screenPoint(_ w: SIMD3<Float>, _ size: CGSize) -> CGPoint {
+        let c = lastCam.viewProj * SIMD4<Float>(w.x, w.y, w.z, 1)
+        return CGPoint(x: CGFloat(c.x / c.w * 0.5 + 0.5) * size.width, y: CGFloat(0.5 - c.y / c.w * 0.5) * size.height)
+    }
+
+    private func touchDemo(now: CFTimeInterval) {
+        guard game, let name = touchDemoName, haveCam, let stage = stageView else { return }
+        let A = ObjectIdentifier(self), B = ObjectIdentifier(stage)
+        guard model.care.focus.isFocused else {
+            if tdDown { pointerUp(id: A); pointerUp(id: B); tdDown = false }
+            return
+        }
+        if tdT0 == 0 { tdT0 = now }
+        guard now - tdT0 > 1.5 else { return }
+        let size = stage.bounds.size
+        let c = sim.centroid()
+        let right = SIMD3<Float>(lastCam.view.columns.0.x, lastCam.view.columns.1.x, lastCam.view.columns.2.x)
+        let up = SIMD3<Float>(lastCam.view.columns.0.y, lastCam.view.columns.1.y, lastCam.view.columns.2.y)
+        func at(_ x: Float, _ y: Float) -> CGPoint { screenPoint(c + right * x + up * y, size) }
+        func sm(_ v: Double) -> Float { let k = Float(min(1, max(0, v))); return k * k * (3 - 2 * k) }
+        let el = now - tdT0 - 1.5
+        switch name {
+        case "pet":
+            let t = el.truncatingRemainder(dividingBy: 14)
+            if t < 9 {
+                let k = Float(min(1, t / 0.6)), ph = Float(t)
+                let pt = at(0.4 * sinf(2 * .pi * 0.8 * ph) * k, 0.25 * sinf(2 * .pi * 0.4 * ph) * k)
+                if !tdDown { tdDown = true; pointerDown(id: A, point: pt, size: size) } else { pointerMove(id: A, point: pt, size: size) }
+            } else if tdDown { pointerUp(id: A); tdDown = false }
+        case "pickup":      // press and hold on the crown, drag up, hang there wiggling, let go (14 s loop)
+            let t = el.truncatingRemainder(dividingBy: 14)
+            if t < 6 {
+                let lift = 0.45 * sm((t - 0.5) / 1.2)
+                let sway: Float = 0
+                if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
+                else { pointerMove(id: A, point: at(sway, 0.62 + lift), size: size) }
+            } else if tdDown { pointerUp(id: A); tdDown = false }
+        case "throw":       // lift, then a fast flick up and to the side on release; he gets back up on his own (28 s loop)
+            let t = el.truncatingRemainder(dividingBy: 28)
+            if t < 2.15 {
+                let lift = 0.4 * sm((t - 0.5) / 0.8)
+                if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
+                else if t < 1.9 { pointerMove(id: A, point: at(0, 0.62 + lift), size: size) }
+                else { let k = Float(min(1, (t - 1.9) / 0.25)); pointerMove(id: A, point: at(1.1 * k, 0.62 + lift + 1.0 * k), size: size) }   // ~1.5 u in 0.2 s: a flick
+            } else if tdDown { pointerUp(id: A); tdDown = false }
+        case "cheeks":      // two fingers on the cheeks pinch together, hold, let go (9 s loop)
+            let t = el.truncatingRemainder(dividingBy: 9)
+            if t < 4 {
+                let g = 0.5 - 0.3 * sm((t - 0.5) / 1.0)
+                if !tdDown { tdDown = true; pointerDown(id: A, point: at(-0.5, 0.16), size: size); pointerDown(id: B, point: at(0.5, 0.16), size: size) }
+                else { pointerMove(id: A, point: at(-g, 0.16), size: size); pointerMove(id: B, point: at(g, 0.16), size: size) }
+            } else if tdDown { pointerUp(id: A); pointerUp(id: B); tdDown = false }
+        default: break
+        }
+    }
+
+    /// Once per frame, before the fixed steps: the touch play of focus mode (the pet finger's dent, his reactions, the haptics).
+    private func touchTick(dt: Float, now: CFTimeInterval) {
+        guard game, let brain, brain.enabled else { return }
+        let f = model.care.focus
+        let play = model.touch
+        play.haptics.setWarm(f.phase == .approaching || f.phase == .focused)
+        play.mood = model.care.mood; play.attentionWanted = model.care.wantedNeed == .attention      // a grumpy Blob is touched with an annoyed reaction
+        // getting back up: after a throw (or if he is left lying) he rights himself and walks back to the spot
+        let held = mode == .grab || sim.grabbing || mode == .pet || mode == .pending || mode == .cheeks
+        play.holdsBrain = play.getUpFrame(dt: dt, now: now, held: held, focusSpot: f.isFocused ? GameCamera.callSpot : nil, sim: sim, brain: brain)
+        if !f.isFocused || model.paused {
+            if mode == .pet || mode == .pending || mode == .cheeks { mode = .none }
+            cheekFingers = []; gesture.cancel()
+            DeviceMotionFeed.shared.setRunning(false)
+            if !play.holdsBrain { play.cancel(sim: sim, brain: brain, skinner: skinner) }
+            return
+        }
+        if restSurface == nil { restSurface = RestSurface(mesh: renderMesh) }
+        // phone tilt / shake (the -TouchDemo tilt capture aid feeds a scripted tilt and shakes instead of the sensors)
+        var gx: Float, shk: Float
+        if touchDemoName == "tilt" {
+            if tdT0 == 0 { tdT0 = now }
+            let t = Float(now - tdT0)
+            gx = max(-1, min(1, 0.9 * sinf(t * 1.3))) * (t > 2 ? 1 : 0)
+            shk = (t > 8 && t < 10.5 && Int(t * 4) % 2 == 0) ? 2.6 : 0
+        } else {
+            let feed = DeviceMotionFeed.shared
+            feed.setRunning(true)
+            gx = feed.gravityX; shk = feed.shake
+        }
+        if gx != 0 || shk != 0 || play.isActive {
+            play.motionFrame(dt: dt, now: now, gravityX: gx, shake: shk, sim: sim, brain: brain, skinner: skinner)
+        }
+        gesture.tick(t: now)
+        // the fingertip dent: a stroke, a press that has not decided yet, or the last moment of a tap
+        var ray: (o: SIMD3<Float>, d: SIMD3<Float>)?
+        var scr: SIMD2<Float>?
+        if (mode == .pet || mode == .pending || now < tapUntil), touchSize.width > 0 {
+            let r = unproject(ndc: ndc(petPoint, touchSize), invViewProj: lastCam.invViewProj)
+            ray = (r.o, r.d)
+            scr = SIMD2(Float(petPoint.x / touchSize.width), Float(petPoint.y / touchSize.height))
+        }
+        if mode == .cheeks || play.pinch > 0 || play.visPinch != 0 {
+            var rays: [(o: SIMD3<Float>, d: SIMD3<Float>)]?
+            var gap: Float = 0
+            if mode == .cheeks, cheekFingers.count == 2, touchSize.width > 0 {
+                rays = cheekFingers.map { let r = unproject(ndc: ndc($0.p, touchSize), invViewProj: lastCam.invViewProj); return (r.o, r.d) }
+                gap = Float(hypot(cheekFingers[0].p.x - cheekFingers[1].p.x, cheekFingers[0].p.y - cheekFingers[1].p.y))
+            }
+            play.cheeksFrame(dt: dt, now: now, rays: rays, gap: gap, sim: sim, brain: brain, skinner: skinner, surface: restSurface)
+        } else if mode != .grab, !sim.grabbing {
+            play.petFrame(dt: dt, now: now, ray: ray, screen: scr, sim: sim, brain: brain, skinner: skinner, surface: restSurface)
+        }
+        // pick up / throw: the stretch he is under, the excitement while he is held up, the landing thump
+        play.trackImpacts(now: now, sim: sim)
+        if sim.grabbing {
+            play.squishDepth = min(0.5, sim.deformation() * TouchPlay.liftDepthGain)
+            play.petFrameIdle(dt: dt, now: now)
+        } else if play.squishDepth > 0 {
+            play.squishDepth = 0; play.petFrameIdle(dt: dt, now: now)
+        }
+        play.heldFrame(dt: dt, now: now, grabbing: sim.grabbing, liftHeight: liftHeight, sim: sim, brain: brain, skinner: skinner)
+    }
+
+    private func beginPickUp(_ p: CGPoint, _ size: CGSize) {
+        guard let hit = gestureHit else { return }
+        model.touch.releaseContact(sim: sim)
+        mode = .grab
+        twist = 0
+        planeP = hit
+        planeN = lastCam.fwd
+        liftHeight = 0
+        grabSamples = []
+        sim.beginGrab(hit: hit, radius: 0.4)
+        applyGrab(p, size)
+    }
+
+    /// Let go of a held Bob: a fast flick throws him, anything else drops him.
+    private func releaseGrab(_ r: TouchGesture.Release) {
+        sim.endGrab()
+        mode = .none
+        if case .throwIt = r, grabSamples.count >= 2, let a = grabSamples.first(where: { grabSamples.last!.t - $0.t < 0.1 }), let b = grabSamples.last, b.t - a.t > 0.01 {
+            var v = (b.q - a.q) / Float(b.t - a.t)
+            v.x *= 0.35; v.z *= 0.35
+            v.y = max(v.y, 2.5)
+            let sp = simd_length(v)
+            if sp > 6 { v *= 6 / sp }
+            sim.launch(velocity: v, spin: SIMD3<Float>(0, 0, v.x > 0 ? -3.5 : 3.5))
+            throwHold = 1.0
+            model.touch.thrown = true
+            model.touch.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.5)       // the release
+        }
+        grabSamples = []; liftHeight = 0
+    }
+
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
+        if game {
+            // touch play only acts inside focus mode (Come here): a roaming Bob is not grabbed, and nothing orbits or zooms.
+            // The GESTURE decides the action (pet / tap / pick up / throw / cheeks), never switching mid-gesture.
+            let f = model.care.focus
+            guard f.isFocused, !model.paused else { return }
+            let now = CACurrentMediaTime()
+            if mode == .none {
+                guard model.touch.getUpPhase == .off, let hit = pickBody(p, size) else { return }
+                mode = .pending; dragID = id; last = p; petPoint = p; touchSize = size; gestureHit = hit
+                gesture.down(t: now, p: p)
+            } else if mode == .pending, id != dragID, pickBody(p, size) != nil, gesture.secondDown(t: now) {
+                mode = .cheeks; touchSize = size
+                model.touch.releaseContact(sim: sim)
+                cheekFingers = [(dragID!, petPoint), (id, p)]
+            }
+            return
+        }
         if mode == .grab, id != dragID {
             if second == nil {
                 second = (id, p)
@@ -534,14 +807,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             return
         }
         if mode != .none { return }
-        var hit: SIMD3<Float>? = nil
-        if !model.paused, let renderer {
-            let ray = unproject(ndc: ndc(p, size), invViewProj: lastCam.invViewProj)
-            hit = pickRay(origin: ray.o, dir: ray.d, dyn: renderer.dynPointer, index: renderMesh.index,
-                          bodyIndexCount: renderMesh.body.first + renderMesh.body.count)
-                ?? pickNear(screenPoint: SIMD2<Float>(Float(p.x), Float(p.y)), viewProj: lastCam.viewProj,
-                            viewSize: SIMD2<Float>(Float(size.width), Float(size.height)), x: sim.x, maxPx: 34)
-        }
+        let hit: SIMD3<Float>? = model.paused ? nil : pickBody(p, size)
         dragID = id
         last = p
         if let hit {
@@ -557,6 +823,22 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerMove(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam else { return }
+        if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
+        if game, id == dragID {
+            let now = CACurrentMediaTime()
+            touchSize = size; last = p
+            switch mode {
+            case .pending:
+                petPoint = p
+                gesture.move(t: now, p: p)
+                if gesture.kind == .pet { mode = .pet }
+                else if gesture.kind == .pickUp { beginPickUp(p, size) }
+            case .pet: petPoint = p; gesture.move(t: now, p: p)
+            case .grab: gesture.move(t: now, p: p); applyGrab(p, size)
+            default: break
+            }
+            return
+        }
         if let s = second, s.id == id {
             second = (id, p)
             twist = twist0 + Float(atan2(p.y - last.y, p.x - last.x))
@@ -575,6 +857,24 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     func pointerUp(id: ObjectIdentifier) {
+        if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
+            cheekFingers.remove(at: k)
+            if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
+            return
+        }
+        if game, id == dragID {
+            let now = CACurrentMediaTime()
+            let r = gesture.up(t: now)
+            switch mode {
+            case .pending:
+                if r == .tap { model.touch.tap(now: now); tapUntil = now + 0.22 }
+                mode = .none
+            case .grab: releaseGrab(r)
+            default: mode = .none
+            }
+            dragID = nil
+            return
+        }
         if let s = second, s.id == id { second = nil; return }
         guard id == dragID else { return }
         if mode == .grab { sim.endGrab() }

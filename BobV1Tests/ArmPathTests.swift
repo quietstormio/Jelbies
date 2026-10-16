@@ -11,17 +11,22 @@ nonisolated final class ArmPathFixture: @unchecked Sendable {
     let sim = buildSimMesh()
     let render = buildRenderMesh()
     let kf: ArmKeyframes
-    init() {
+    let path: ArmPath
+    init(path: ArmPath = .wave) {
         let rm = render
-        kf = ArmKeyframeBuilder.build(path: .wave, rest: rm.rest, mat: rm.mat, capsule: rm.armCapsule!, index: rm.index)
+        self.path = path
+        kf = ArmKeyframeBuilder.build(path: path, rest: rm.rest, mat: rm.mat, capsule: rm.armCapsule!, index: rm.index)
         print("ARM keyframes built in \(kf.seconds * 1000) ms, vertices per side \(kf.sides.map { $0.vertices.count })")
     }
     static let shared = ArmPathFixture()
+    static let nubForward = ArmPathFixture(path: .nubForward)
+    static let nubBack = ArmPathFixture(path: .nubBack)
+    static let nubToMouth = ArmPathFixture(path: .nubToMouth)
 }
 
 @MainActor
 final class ArmPathTests: XCTestCase {
-    private var fx: ArmPathFixture { ArmPathFixture.shared }
+    private var fx: ArmPathFixture = .shared
 
     private func rest(_ v: Int) -> SIMD3<Double> {
         SIMD3(Double(fx.render.rest[3 * v]), Double(fx.render.rest[3 * v + 1]), Double(fx.render.rest[3 * v + 2]))
@@ -68,7 +73,25 @@ final class ArmPathTests: XCTestCase {
         return out
     }
 
-    func testEveryKeyframeInvariantsAndNoWeb() {
+    func testEveryKeyframeInvariantsAndNoWeb() { checkKeyframeInvariants() }
+    /// The pendulum nub paths are held to exactly the same ceilings as the wave (webs, folds, class invariants).
+    func testNubForwardKeyframeInvariantsAndNoWeb() { fx = .nubForward; checkKeyframeInvariants() }
+    func testNubBackKeyframeInvariantsAndNoWeb() { fx = .nubBack; checkKeyframeInvariants() }
+    func testNubToMouthKeyframeInvariantsAndNoWeb() { fx = .nubToMouth; checkKeyframeInvariants() }
+    func testNubPathsStartExactlyAtRestAndMeetThere() {
+        for f in [ArmPathFixture.nubForward, ArmPathFixture.nubBack] {
+            for sd in f.kf.sides { for i in 0..<(3 * sd.vertices.count) { XCTAssertEqual(sd.delta[i], 0) } }
+        }
+        let g0 = ArmPath.nubForward.geom(at: 0), g1 = ArmPath.nubBack.geom(at: 0)
+        XCTAssertEqual(simd_length(g0.A - g1.A), 0, accuracy: 1e-12); XCTAssertEqual(simd_length(g0.B - g1.B), 0, accuracy: 1e-12)
+        // the swung nub keeps its root and length, and tilts forward / back about the shoulder
+        let f = ArmPath.nubForward.geom(at: 1), b = ArmPath.nubBack.geom(at: 1)
+        XCTAssertEqual(simd_length(f.A - BobForm.armTop), 0, accuracy: 1e-6)
+        XCTAssertEqual(simd_length(f.B - f.A), simd_length(BobForm.armTip - BobForm.armTop), accuracy: 1e-6)
+        XCTAssertGreaterThan(f.B.z, BobForm.armTip.z + 0.03); XCTAssertLessThan(b.B.z, BobForm.armTip.z - 0.03)
+    }
+
+    private func checkKeyframeInvariants() {
         let K = fx.kf.intervals
         let rm = fx.render
         let cap = rm.armCapsule!
@@ -88,7 +111,7 @@ final class ArmPathTests: XCTestCase {
                 t += 3
             }
             for k in 1...K {
-                let g = ArmPath.wave.geom(at: Double(k) / Double(K))
+                let g = fx.path.geom(at: Double(k) / Double(K))
                 let F = PosedArmField(g)
                 let pos = posed(side, k)
                 func P(_ v: Int) -> SIMD3<Double> {

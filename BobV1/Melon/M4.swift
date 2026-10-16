@@ -47,25 +47,23 @@ enum M4 {
 /// Orbit camera + key light rig, framed for Bob (a dome of radius BobShape.R and height BobShape.H on y = 0).
 struct CameraRig {
     /// Front-on, near eye level (Bob's reference view). DEBUG launch argument -MelonCamYaw <radians> overrides the yaw
-    /// (+pi/2 / -pi/2 look at his sides) and -MelonCamElev <radians> the elevation.
+    /// (+pi/2 / -pi/2 look at his sides) and -MelonCamElev <radians> the elevation. These camera arguments work in Release too (3/4 captures).
     static var defaultAzimuth: Float {
-        #if DEBUG
         if UserDefaults.standard.object(forKey: "MelonCamYaw") != nil { return Float(UserDefaults.standard.double(forKey: "MelonCamYaw")) }
-        #endif
         return 0.056      // front reference: ~3 deg toward his left (fitted)
     }
     static var defaultElevation: Float {
-        #if DEBUG
         if UserDefaults.standard.object(forKey: "MelonCamElev") != nil {
             let e = Float(UserDefaults.standard.double(forKey: "MelonCamElev"))
             return UserDefaults.standard.integer(forKey: "MelonCamElevNeg") != 0 ? -e : e      // iOS reads a leading "-" in a value as a flag
         }
-        #endif
         return 0.123      // front reference elevation ~7 deg (fitted)
     }
     var azimuth: Float = CameraRig.defaultAzimuth
     var elevation: Float = CameraRig.defaultElevation
-    var zoom: Float = 1
+    /// -MelonCamZoom <x> (Release too): < 1 pulls the studio camera back (captures of long walks that must stay in frame).
+    static var defaultZoom: Float { UserDefaults.standard.object(forKey: "MelonCamZoom") != nil ? Float(UserDefaults.standard.double(forKey: "MelonCamZoom")) : 1 }
+    var zoom: Float = CameraRig.defaultZoom
     var target = CameraRig.home
 
     /// Look-at point: slightly above the middle of the dome so the face sits a touch above screen centre.
@@ -73,9 +71,8 @@ struct CameraRig {
     /// Bob's rest centroid (follow() eases the target towards it).
     static let restCentroid = SIMD3<Float>(0, 0.5 * BobShape.H, 0)
     static var fov: Float {
-        #if DEBUG
+        // -MelonCamFov <degrees> (Release too, capture aid; the framing distance scales with it, so the silhouette size stays about the same)
         if UserDefaults.standard.object(forKey: "MelonCamFov") != nil { return Float(UserDefaults.standard.double(forKey: "MelonCamFov")) * Float.pi / 180 }
-        #endif
         return 18 * Float.pi / 180
     }
     /// DEBUG: explicit pinhole camera for reference matching (-MelonCamDist <world units> -MelonCamTargetY <y>, plus yaw / elev / fov).
@@ -91,7 +88,7 @@ struct CameraRig {
     static let referenceAzimuth: Float = 0.056
     static let keyDir: SIMD3<Float> = simd_normalize(SIMD3<Float>(-0.5, 0.8, 0.55))
 
-    mutating func reset() { azimuth = Self.defaultAzimuth; elevation = Self.defaultElevation; zoom = 1; target = Self.home }
+    mutating func reset() { azimuth = Self.defaultAzimuth; elevation = Self.defaultElevation; target = Self.home; zoom = Self.defaultZoom }
 
     /// Wheel / pinch zoom clamp.
     mutating func applyZoom(factor: Float) { zoom = max(0.65, min(1.6, zoom * factor)) }
@@ -124,6 +121,7 @@ struct CameraRig {
         let t2 = tanf(Self.fov / 2)
         let dist = max(Rv / (t2 * 0.9 * hf), Rh / (t2 * 0.92 * aspect * wf)) * zoom
         let ce = cosf(elevation)
+        if UserDefaults.standard.integer(forKey: "MelonCamLog") != 0 { print("MELONCAM fov_deg=\(Self.fov * 180 / Float.pi) dist=\(dist) zoom=\(zoom) azimuth=\(azimuth) elevation=\(elevation) target=\(target) view=\(W)x\(H) safe=\(r)") }
         if let ex = Self.debugExplicit {
             let tgt = SIMD3<Float>(0, ex.targetY, 0)
             let e2 = tgt + SIMD3<Float>(ex.dist * sinf(azimuth) * ce, ex.dist * sinf(elevation), ex.dist * cosf(azimuth) * ce)
