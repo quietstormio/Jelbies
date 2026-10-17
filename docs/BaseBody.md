@@ -26,7 +26,10 @@ This applies to every Blob, on every screen, in every future version. It changes
 - **Rest pose:** how he stands when nothing is happening.
 - **Material:** the matte soft-vinyl look with its fine crinkle texture. It is not glossy.
 - **Colours:** the pastel palettes Blush, Pink, Butter and Baby blue, exactly as they are now.
+  - **Game colour (2026-10-16):** the game now uses the existing **Baby blue** palette for Bob (`GameScreen.makeGameModel` sets `.blue`). The palettes themselves and the model default (`.blush`) are unchanged, so the lock tests and goldens are untouched. Reason (user): "pink is too close to Kirby".
+  - **Starter colours:** blue, yellow, green and purple. Blue and yellow (Butter) already exist; green and purple are to be added later as new pastel options under the rule below (add new palettes, never edit the existing ones).
 - **Feel:** 95% firmness and the same soft-body squish.
+- **Feet change (2026-10-17):** 2026-10-17: foot shape (planted boot, lifted ball) and lower step lift changed on explicit user request; goldens re-recorded (BaseBodyDumpTests with `TEST_RUNNER_BOB_GOLDEN_DIR`, then `base_lock.json` blocks, full-res hashes and the half-res PNGs updated).
 
 In code, the locked body is the `BobForm` constants and the rest shape (`Contracts.swift`), the rest sim mesh and render mesh built from them (`Geometry.swift`), the matte body shader (`Shaders.metal`), the palettes, and the firmness setting.
 

@@ -512,7 +512,7 @@ enum BobForm {
     static let footExp = 2.6                      // 2 = ellipsoid; higher = boxier (flat sole, straight sides)
 
     static let bellyRise = 0.0306
-    static let armBlend = 0.04, armTipBlend = 0.02, footBlend = 0.02
+    static let armBlend = 0.04, armTipBlend = 0.02, footBlend = 0.045
 
     @inline(__always) static func smin(_ a: Double, _ b: Double, _ k: Double) -> Double {
         let h = max(k - abs(a - b), 0) / k
@@ -552,16 +552,34 @@ enum BobForm {
         let h = min(max(simd_dot(qq - a, ba) / simd_dot(ba, ba), 0), 1)
         return (roundCone(qq, a, b, armTopR, armTipR) / armFlatten.squareRoot(), h)
     }
+    // FEET (2026-10-16/17, user request: short cute shoe feet like the reference side view). Same x width and heel as before (footX / footZ /
+    // footRadii.x, .z: the sim picks its sole particles from them, so the sim mesh is unchanged); the toe runs `footToeLen` ahead of the centre
+    // (longer than the old foot), the sole is flat on the floor with a ROUNDED edge, and the top is an arch that is high at the heel (buried in
+    // the belly) and slopes DOWN toward the toe, blending into the belly through footBlend (a fillet, no nub, no curled toe).
+    static let footToeLen = 0.185                            // half length ahead of footZ (behind it the old footRadii.z)
+    static let footToeSpring = 0.006                         // sole rise at the toe tip (a hair, no curl)
+    static let footToeFrom = 0.45                            // fraction of the toe length where that hair starts
+    static let footHeelTop = 0.260, footToeTop = 0.104        // crown height above the sole at the heel / at the toe tip
+    static let footExpXZ = 2.1, footExpY = 2.6
+    static let footEdge = 0.02                               // smooth-intersection radius of the sole edge (rounded boot edge, also while lifted)
+    @inline(__always) static func smooth01(_ t: Double) -> Double { let u = min(max(t, 0), 1); return u * u * (3 - 2 * u) }
+    @inline(__always) static func footV(_ z: Double) -> Double { (z - footZ) / (z >= footZ ? footToeLen : footRadii.z) }   // -1 heel ... +1 toe tip
+    static func footSole(_ z: Double) -> Double {
+        let t = min(max((footV(z) - footToeFrom) / (1 - footToeFrom), 0), 1.3)
+        return footToeSpring * t * t
+    }
     static func footSDF(_ q: SIMD3<Double>) -> Double {
-        let p = q - SIMD3(footX, footCY, footZ)
-        if footExp != 2 {
-            // superellipsoid (flatter sole, straighter sides): scaled-norm distance estimate, exact sign
-            let e = simd_abs(p / footRadii)
-            let kn = pow(pow(e.x, footExp) + pow(e.y, footExp) + pow(e.z, footExp), 1 / footExp)
-            return max((kn - 1) * footRadii.min(), -q.y)      // flat sole on the floor plane
-        }
-        let k0 = simd_length(p / footRadii), k1 = simd_length(p / (footRadii * footRadii))
-        return k1 > 1e-12 ? k0 * (k0 - 1) / k1 : -footRadii.min()
+        let yy = q.y - footSole(q.z)                          // height above the sole
+        let v = footV(q.z)
+        let taper = (1 - 0.20 * smooth01(yy / 0.13)) * (1 - 0.08 * smooth01((v - 0.1) / 0.9))   // walls lean in toward the top (an arch) and toward the toe
+        let u = (q.x - footX) / (footRadii.x * taper)
+        let arch = smooth01((v + 0.1) / 1.1)                  // 0 at the heel side ... 1 at the toe
+        let top = footHeelTop + (footToeTop - footHeelTop) * arch
+        let hh = top / 2, cy = hh * 0.80
+        let w = (yy - cy) / hh
+        let kxz = pow(pow(abs(u), footExpXZ) + pow(abs(v), footExpXZ), 1 / footExpXZ)
+        let kn = pow(pow(kxz, footExpY) + pow(abs(w), footExpY), 1 / footExpY)
+        return -smin(-(kn - 1) * 0.10, yy, footEdge)          // flat sole, rounded edge: smooth max of the shape and the floor plane
     }
 
     /// Whole body: egg smooth-unioned with both arms and both feet.

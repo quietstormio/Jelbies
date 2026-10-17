@@ -1,7 +1,7 @@
 //
 //  DiningPreview.swift
 //  DEBUG-only launch arg `-DiningPreview 1`: loops pop-in -> hold -> poof-out of the serving tray for N = 1, then 2, then 3 Blobs,
-//  each with berries, cake (a fork per Blob), water (a straw per Blob) and soda (a straw per Blob), 4 s per set.
+//  each with berries, pizza (3 slices each), water (a straw per Blob) and soda (a straw per Blob), 4 s per set.
 //  Bob stands at place 0 (the tray is positioned from his spot, nudged only if that would leave the screen); the other places show
 //  only through their straws, forks and servings. `-DiningClockStart <s>` jumps into the loop, `-DiningTimeScale 0.2` slows it,
 //  `-BlobNoWander 1` keeps Bob parked, `-DiningThree 1` draws the other Blobs of N >= 2 (rest mesh stand-ins), `-DiningHold 1` freezes each set at 1.0 s (tray up, no bite) for stills.
@@ -18,7 +18,7 @@ final class DiningPreview {
     nonisolated deinit {}
 
     static let setSeconds: Float = 4
-    static let sets: [(Consumable, Int)] = (1...3).flatMap { n in [Consumables.berries, Consumables.cake, Consumables.water, Consumables.soda].map { ($0, n) } }
+    static let sets: [(Consumable, Int)] = (1...3).flatMap { n in [Consumables.berries, Consumables.pizza, Consumables.water, Consumables.soda].map { ($0, n) } }
     static var loop: Float { setSeconds * Float(sets.count) }
 
     static func fromLaunchArguments() -> DiningPreview? {

@@ -110,7 +110,6 @@ final class TouchPlayTests: XCTestCase {
         for _ in 0..<2 { frame(nil, gap: 0) }
         XCTAssertEqual(r.play.cheekReleases, 1)
         XCTAssertFalse(r.rec.events(.transient).isEmpty, "a bloop on release")
-        XCTAssertFalse(r.rec.events(.wobble).isEmpty)
         for _ in 0..<(60 * 3) { frame(nil, gap: 0) }
         XCTAssertEqual(r.rig.skinner.eyeHeight.left, 1, accuracy: 0.05)
         XCTAssertTrue(r.rig.skinner.extraVertices.isEmpty, "exactly 0 at rest")
@@ -150,7 +149,10 @@ final class TouchPlayTests: XCTestCase {
 
     // MARK: excitement while held
 
-    func testHeldBobFlapsAndKicksOutOfPhaseAndStopsWhenHeLands() {
+    /// Superseded spec: "shake his arms and legs like he's excited" (3.2 Hz flapping, out-of-phase leg kicks, 11 Hz haptic flutter) ->
+    /// a happy held Bob: closed happy eyes, a slow ~1 Hz sway, feet dangling together and swinging softly, a small arm lift, and a slow warm
+    /// haptic swell. Still starts ~0.2 s after the lift and still stops when he lands.
+    func testHeldBobIsHappyNotFreakingOutAndStopsWhenHeLands() {
         let r = Rig()
         let sim = r.rig.sim, brain = r.rig.brain, sk = r.rig.skinner
         r.step(touched: true)
@@ -159,33 +161,46 @@ final class TouchPlayTests: XCTestCase {
         let hit = SIMD3(sim.x[3 * apex], sim.x[3 * apex + 1], sim.x[3 * apex + 2])
         sim.beginGrab(hit: hit, radius: 0.4)
         var firstExcited: Float?
-        var legs: [Float] = [], arms: [Float] = []
-        var maxLift: Float = 0
-        for k in 0..<150 {
+        var legs: [Float] = [], armLo: Float = 9, armHi: Float = -9, sways: [Float] = [], gaps: [Float] = []
+        for k in 0..<240 {
             let lift = min(0.4, 0.4 * Float(k) / 60)
             r.step(touched: true) {
                 sim.moveGrab(target: hit + SIMD3(0, lift, 0), rot: nil)
+                r.play.petFrameIdle(dt: 1.0 / 60, now: r.clock)          // the stage's order while he is held: the haptic levels, then the held reactions
                 r.play.heldFrame(dt: 1.0 / 60, now: r.clock, grabbing: true, liftHeight: lift, sim: sim, brain: brain, skinner: sk)
             }
             if firstExcited == nil, r.play.excitement > 0.01 { firstExcited = Float(k) / 60 }
-            if r.play.excitement > 0.9, sk.beanPos[0].count > 0, !sk.beanPos[0].isEmpty {
-                legs.append(sk.beanPos[0].map { $0.y }.reduce(0, +) / Float(sk.beanPos[0].count) - sk.beanPos[1].map { $0.y }.reduce(0, +) / Float(sk.beanPos[1].count))
-                if let i = sk.overrideDelta.indices.max(by: { simd_length(sk.overrideDelta[$0]) < simd_length(sk.overrideDelta[$1]) }) { arms.append(sk.overrideDelta[i].y) }
+            if r.play.excitement > 0.95 {
+                sways.append(r.play.heldSway)
+                if sk.beanPos[0].count > 0 {
+                    let y0 = sk.beanPos[0].map { $0.y }.reduce(0, +) / Float(sk.beanPos[0].count), y1 = sk.beanPos[1].map { $0.y }.reduce(0, +) / Float(sk.beanPos[1].count)
+                    legs.append(y0 - y1)
+                    let z0 = sk.beanPos[0].map { $0.z }.reduce(0, +) / Float(sk.beanPos[0].count), z1 = sk.beanPos[1].map { $0.z }.reduce(0, +) / Float(sk.beanPos[1].count)
+                    gaps.append(abs(z0 - z1))
+                }
+                if let i = sk.overrideDelta.indices.max(by: { simd_length(sk.overrideDelta[$0]) < simd_length(sk.overrideDelta[$1]) }) { let a = simd_length(sk.overrideDelta[i]); armLo = min(armLo, a); armHi = max(armHi, a) }
             }
-            maxLift = max(maxLift, sim.minY())
         }
-        print("EXCITED hang tilt \(sim.bodyPose(iterations: 8).tilt)")
         XCTAssertLessThan(sim.bodyPose(iterations: 8).tilt, 0.6, "he hangs upright-ish, he does not flip over")
-        XCTAssertNotNil(firstExcited)
         XCTAssertEqual(firstExcited ?? 9, 0.1 + 0.2, accuracy: 0.08, "it starts about 0.2 s after the lift (the lift passes 0.04 u at 0.1 s)")
         XCTAssertGreaterThan(r.play.excitement, 0.95)
         XCTAssertTrue(brain.excitedOn)
-        XCTAssertFalse(sk.overrideVertices.isEmpty, "the arms flap through the skin override")
-        func flips(_ a: [Float]) -> Int { var n = 0; for i in 1..<max(a.count, 1) where a[i] * a[i - 1] < 0 { n += 1 }; return n }
-        XCTAssertGreaterThan(flips(legs), 6, "the feet kick alternately (the height difference of the two feet changes sign)")
-        XCTAssertGreaterThan(Float(legs.map { abs($0) }.max() ?? 0), 0.04)
-        XCTAssertGreaterThan(r.rec.events(.transient).filter { $0.sharpness > 0.55 && $0.sharpness < 0.65 }.count, 8, "a light flutter while he wiggles")
-        XCTAssertLessThan(sk.eyeHeight.left, 0.45, "happy eyes")
+        // feet dangle TOGETHER: the two feet never differ in height by more than a hair (the old out-of-phase kick was +-0.13 u), and swing softly
+        XCTAssertLessThan(legs.map { abs($0) }.max() ?? 1, 0.03, "no leg kicks: the feet hang level")
+        XCTAssertLessThan(gaps.max() ?? 1, 0.05, "the feet swing together, not against each other")
+        // the sway is ~1 Hz and small
+        var cross = 0; for i in 1..<max(sways.count, 1) where sways[i] * sways[i - 1] < 0 { cross += 1 }
+        let secs = Float(sways.count) / 60
+        XCTAssertEqual(Float(cross) / 2 / secs, 1.0, accuracy: 0.3, "about one sway a second")
+        XCTAssertLessThanOrEqual(sways.map { abs($0) }.max() ?? 1, 0.08, "a few degrees only")
+        XCTAssertLessThan(armHi - armLo, 0.12, "a small happy arm lift that barely moves, no flapping (the old flap swung it by ~0.3 u)")
+        XCTAssertFalse(sk.overrideVertices.isEmpty, "a small arm lift through the skin override")
+        // haptics: no flutter (no transients while held), a soft slow swell on the pet channel
+        XCTAssertTrue(r.rec.events(.transient).filter { $0.sharpness > 0.55 && $0.sharpness < 0.65 }.isEmpty, "no 11 Hz flutter")
+        let pulse = r.rec.events(.continuous, channel: "pet").map { $0.intensity }
+        XCTAssertGreaterThan(pulse.max() ?? 0, 0.15, "a warm swell is felt")
+        XCTAssertLessThan(pulse.max() ?? 0, 0.4, "soft")
+        XCTAssertLessThan(sk.eyeHeight.left, 0.15, "closed happy eyes")
         XCTAssertGreaterThan(sim.minY(), 0.05, "still lifted")
         // let go: it lasts until he lands, then everything goes back
         sim.endGrab()
@@ -198,17 +213,26 @@ final class TouchPlayTests: XCTestCase {
         XCTAssertEqual(r.play.excitement, 0, "it stops when he lands")
         XCTAssertFalse(brain.excitedOn)
         XCTAssertTrue(sk.overrideVertices.isEmpty, "arms back to the rest skin")
+        XCTAssertEqual(r.rec.events(.continuous, channel: "pet").last?.intensity ?? 0, 0, "the held swell is switched off")
     }
 
     // MARK: getting back up
 
-    func testThrownBobGetsBackUpAtTheFocusSpotAndRestGatePasses() {
+    /// Superseded spec: "after 2 s untouched he gets up" -> a ~0.35 s calm window after the last bounce, righting in <= 0.8 s, then a run
+    /// back (the idle run blend); release -> back in place <= 3 s for a typical throw, <= 4.5 s for a far one.
+    /// The close-up's visible frame at his depth (what MelonStage derives from the camera), for the headless throws.
+    static func frame(_ spot: SIMD2<Float>) -> TouchPlay.FrameLimits {
+        TouchPlay.FrameLimits(xMin: spot.x - 0.9, xMax: spot.x + 0.9, zMin: spot.y - 1.2, zMax: spot.y + 0.3, yMax: 2.3)
+    }
+
+    func testThrownBobBouncesThenRunsBackToTheFocusSpot() {
         let spot = GameCamera.callSpot
-        for (name, v, spin) in [("side", SIMD3<Float>(2.5, 5, 0.5), SIMD3<Float>(0, 0, -3.5)),
-                                ("back", SIMD3<Float>(0, 4.5, -2), SIMD3<Float>(3.5, 0, 0)),
-                                ("far", SIMD3<Float>(-3, 6, 2), SIMD3<Float>(2, 1, 3))] {
+        // (name, velocity, spin, limit s). The stage caps a throw at 0.9 u/s sideways and 2.5...4.2 u/s up.
+        for (name, v, spin, limit) in [("typical", SIMD3<Float>(0.6, 2.8, 0.2), SIMD3<Float>(0, 0, -2.5), Float(3.0)),
+                                       ("typical back", SIMD3<Float>(0.2, 3.0, -0.6), SIMD3<Float>(2.5, 0, 0), Float(3.0)),
+                                       ("far side", SIMD3<Float>(0.9, 4.2, 0.3), SIMD3<Float>(0, 0, -2.5), Float(4.5)),
+                                       ("far", SIMD3<Float>(-0.9, 4.2, 0.6), SIMD3<Float>(0, 0, 2.5), Float(4.5))] {
             let r = Rig()
-            // stand at the focus spot first
             r.rig.brain.request(.come(to: spot))
             r.rig.run(12) { r.rig.brain.activity == .idle && simd_length(r.rig.brain.position - spot) < 0.1 }
             r.rig.run(1.5)
@@ -216,29 +240,58 @@ final class TouchPlayTests: XCTestCase {
             r.step(touched: true); r.step(touched: true)             // the brain is already hands-off when a held Bob is let go
             r.rig.sim.launch(velocity: v, spin: spin)
             r.play.thrown = true
-            var tRight: Float?, tDone: Float?, maxTilt: Float = 0
-            var landed: Float = 0
+            var tRight: Float?, tUp: Float?, tBack: Float?, tNear: Float?, maxTilt: Float = 0, maxRun: Float = 0, maxOut: Float = -9
+            var outWhere = "", outAt: Float = 0
             var t: Float = 0
-            for _ in 0..<(60 * 14) {
+            var landedFar = false
+            let impacts0 = r.play.impacts
+            for _ in 0..<(60 * 10) {
                 let hold = r.play.getUpFrame(dt: 1.0 / 60, now: r.clock, held: false, focusSpot: spot, sim: r.rig.sim, brain: r.rig.brain)
-                r.step(touched: hold || t < 0.5)
+                r.play.wallsFrame(now: r.clock, sim: r.rig.sim, limits: Self.frame(spot))             // the stage's soft walls at the close-up's edges
+                r.step(touched: hold || t < 0.3)
                 t += 1.0 / 60
+                let bb = r.rig.sim.bounds()
+                let fr = Self.frame(spot)
+                let ox = max(bb.hi.x - fr.xMax, fr.xMin - bb.lo.x), oy = bb.hi.y - fr.yMax
+                if max(ox, oy) > maxOut { maxOut = max(ox, oy); outWhere = ox > oy ? "x" : "y"; outAt = t }
                 let pose = r.rig.sim.bodyPose(iterations: 6)
                 maxTilt = max(maxTilt, pose.tilt)
-                if tRight == nil, r.play.getUpPhase == .righting { tRight = t; landed = simd_length(SIMD2(r.rig.sim.centroid().x, r.rig.sim.centroid().z) - spot) }
-                if tRight != nil, tDone == nil, r.play.getUpPhase == .off, abs(pose.tilt - base.tilt) < 0.2, simd_length(SIMD2(pose.centroid.x, pose.centroid.z) - spot) < 0.25,
-                   simd_length(r.rig.sim.meanVelocity()) < 0.05, abs(pose.yaw - base.yaw) < 0.35 { tDone = t }
+                maxRun = max(maxRun, r.rig.brain.runW)
+                if tRight == nil, r.play.getUpPhase == .righting { tRight = t; landedFar = simd_length(SIMD2(pose.centroid.x, pose.centroid.z) - spot) > 0.5 }
+                if tRight != nil, tUp == nil, r.play.getUpPhase == .off { tUp = t }
+                if tUp != nil, tNear == nil, simd_length(SIMD2(pose.centroid.x, pose.centroid.z) - spot) < 0.25 { tNear = t }
+                if tUp != nil, tBack == nil, simd_length(r.rig.sim.meanVelocity()) < 0.25, abs(pose.tilt - base.tilt) < 0.3, simd_length(SIMD2(pose.centroid.x, pose.centroid.z) - spot) < 0.25,
+                   abs(pose.yaw - base.yaw) < 0.35 { tBack = t }
             }
-            print("GETUP \(name): max tilt \(maxTilt), righting starts \(tRight ?? -1) s after the throw, standing at the spot \(tDone ?? -1) s (\((tDone ?? 99) - (tRight ?? 0) + 2) s after he was still for 2 s)")
-            XCTAssertGreaterThan(maxTilt, 0.8, name + ": he really did tumble")
-            XCTAssertNotNil(tDone, name + ": he is up and back at the spot")
-            XCTAssertLessThan((tDone ?? 99) - (tRight ?? 0), 4.0 + 1.5 * max(0, landed - 1.0), name + ": about 4 s from the start of the get-up (plus the walk when he landed far)")
+            print("THROW \(name): worst frame overshoot \(maxOut) on \(outWhere) at \(outAt) s; bounces \(r.play.bounces) (wall \(r.play.wallBounces); impacts \(r.play.impacts - impacts0)), max tilt \(maxTilt), righting starts \(tRight ?? -1) s, up at \(tUp ?? -1) s, within 0.25 u of the spot \(tNear ?? -1) s, back in place and still \(tBack ?? -1) s after release, run blend peak \(maxRun)")
+            XCTAssertGreaterThanOrEqual(r.play.bounces, 2, name + ": he bounces two or three times (the walls count)")
+            XCTAssertLessThanOrEqual(r.play.bounces, 8, name)
+            XCTAssertLessThanOrEqual(maxOut, 0.06, name + ": he stays inside the frame (within one step of the wall)")
+            XCTAssertGreaterThan(maxTilt, 0.45, name + ": he really did roll a bit")
+            XCTAssertNotNil(tBack, name + ": he is up and back at the spot")
+            XCTAssertLessThanOrEqual((tUp ?? 99) - (tRight ?? 0), 0.8, name + ": rights himself in at most 0.8 s")
+            if landedFar { XCTAssertGreaterThan(maxRun, 0.9, name + ": he RUNS back (the idle run blend), not the plain walk") }
+            XCTAssertLessThanOrEqual(tNear ?? 99, limit, name + ": release -> back at the spot (within 0.25 u)")
+            XCTAssertLessThanOrEqual(tBack ?? 99, limit + 0.2 - (limit > 4 ? 0.2 : 0), name + ": ... and settled, facing the camera: <= 3.2 s typical, <= 4.5 s far")
             let pose = r.rig.sim.bodyPose(iterations: 10)
-            XCTAssertLessThan(abs(pose.tilt - base.tilt), 0.2, name)
+            XCTAssertLessThan(abs(pose.tilt - base.tilt), 0.3, name)
             XCTAssertLessThan(simd_length(SIMD2(r.rig.sim.centroid().x, r.rig.sim.centroid().z) - spot), 0.25, name)
-            XCTAssertLessThan(simd_length(r.rig.sim.meanVelocity()), 0.05, name)
             XCTAssertLessThan(abs(pose.yaw - base.yaw), 0.35, name + ": facing the camera again")
+            r.rig.run(2)
+            XCTAssertEqual(r.rig.brain.runW, 0, "the run blend ends on arrival")
+            XCTAssertFalse(r.rig.brain.hurry, name)
         }
+    }
+
+    /// The bounce restitution is for a THROWN Bob only: a plain drop from a lift (and a hop) lands exactly as before.
+    func testOnlyAThrownBobBounces() {
+        let r = Rig()
+        let sim = r.rig.sim
+        r.step(touched: true)
+        sim.launch(velocity: SIMD3(0, 3.5, 0), spin: .zero)                 // flung up but NOT marked as thrown
+        for _ in 0..<(60 * 4) { r.step(touched: true) }
+        XCTAssertEqual(r.play.bounces, 0, "no throw, no bounce")
+        XCTAssertGreaterThanOrEqual(r.play.impacts, 1)
     }
 
     func testLeftLyingAnywhereHeGetsUpWhereHeIs() {

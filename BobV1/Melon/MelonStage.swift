@@ -33,14 +33,14 @@ let bobDensity: Float = 1.1    // gummy, g/cm^3
 
 final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     weak var controller: MelonController?
-    private var activeTouches = 0
+    private(set) var activeTouches = 0
     private weak var heldScrollView: UIScrollView?
 
     override init(frame: CGRect, device: MTLDevice?) {
         super.init(frame: frame, device: device)
         colorPixelFormat = .bgra8Unorm
         framebufferOnly = true
-        preferredFramesPerSecond = 60
+        preferredFramesPerSecond = 60      // RateGovernor raises this to 120 on ProMotion when the GPU has headroom
         isMultipleTouchEnabled = true
         isOpaque = true
         backgroundColor = UIColor(red: 0xE2 / 255, green: 0xDF / 255, blue: 0xDA / 255, alpha: 1)
@@ -76,7 +76,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        // Start at the screen's native scale; draw(in:) drops to 2x if the frame interval stays > ~18 ms.
+        // Start at the screen's native scale; adaptScale (RenderScaler) steps it down under GPU load.
         let s = window?.screen.scale ?? traitCollection.displayScale
         contentScaleFactor = s
         // Deliver touches immediately even inside a ScrollView.
@@ -114,6 +114,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     // MARK: Touches (UITouch identity = pointer id)
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        controller?.gfxWake()          // leave the 30 fps idle rest at once (the next draw may be 33 ms away)
         claim()
         activeTouches += touches.count
         for t in touches {
@@ -196,6 +197,10 @@ final class MelonController: NSObject, MTKViewDelegate {
     // drag state
     private var mode: DragMode = .none
     private var dragID: ObjectIdentifier?
+    // Voice v1: double-tap then hold on empty space = listen while the finger stays (VoiceGesture.swift)
+    private var voiceGesture = VoiceGesture()
+    private var voiceTouch: ObjectIdentifier?
+    private var emptyDown: (id: ObjectIdentifier, t: Double, p: CGPoint)?
     private var planeP = SIMD3<Float>(0, 0, 0)
     private var planeN = SIMD3<Float>(0, 0, -1)
     private var twist: Float = 0
@@ -210,14 +215,13 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgCPU: Double = 0
     private var dbgSim: Double = 0
     private var dbgSteps = 0
-    private var gpuSumMs: Double = 0
-    private var gpuSamples = 0
     private var dbgBrain: Double = 0, dbgStepOnly: Double = 0, dbgTouch: Double = 0, dbgHaptic: Double = 0
     // touch play (focus mode): the pet finger
     private var petPoint = CGPoint.zero
     private var restSurface: RestSurface?
     // the gesture decides the action (TouchGesture.swift): pet / tap / pick up / throw / cheeks pinch
     private var gesture = TouchGesture()
+    private var pickArm = PickUpArm()          // double-tap-then-hold ON him = pick up
     private var gestureHit: SIMD3<Float>?
     private var cheekFingers: [(id: ObjectIdentifier, p: CGPoint)] = []
     private var tapUntil: CFTimeInterval = 0
@@ -262,13 +266,14 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.amplitude = reduce ? 0.55 : 1
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
-                brain.idleBlocked = model.care.focus.isActive || model.care.trayOut
+                brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut) && !brain.commanded
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
             let b0 = CACurrentMediaTime()
             throwHold = max(0, throwHold - sim.stepDt)
             brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: mode == .grab || sim.grabbing || throwHold > 0 || model.touch.holdsBrain)
             dbgBrain += CACurrentMediaTime() - b0
+            skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt)   // jelly follow-through (JellyJiggle.swift)
             renderer?.mouthOpen = brain.mouthOpen
             if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt, sim: sim) }
             return
@@ -325,6 +330,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         device = MTLCreateSystemDefaultDevice()
         super.init()
         if game {
+            model.care.voice.wake = { [weak self] in self?.gfxWake() }          // a mic-button press (not a Metal-view touch) leaves the idle rest too
             sim.arenaCenter = GameCamera.arenaCenter
             sim.arenaRadius = GameCamera.arenaRadius
         }
@@ -362,29 +368,97 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-    // Adaptive drawable scale: native first, 2x if the average frame interval over 2 s exceeds 18 ms.
-    private var adaptStart: CFTimeInterval = 0
-    private var adaptFrames = 0
-    private var adaptDone = false
+    // Adaptive render resolution + frame-rate request (RenderScaler.swift). Only the drawable size changes: never the sim.
+    // Off in the simulator and under XCTest (render goldens are full scale) unless launched with -AdaptiveScale 1; -AdaptiveScale 0 forces it off.
+    private static let adaptiveEnabled: Bool = {
+        let d = UserDefaults.standard
+        if d.object(forKey: "AdaptiveScale") != nil { return d.bool(forKey: "AdaptiveScale") }
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        #endif
+    }()
+    private var scaler: RenderScaler?
+    private var rateGov: RateGovernor?
+    private var lastAppliedFPS = 60
+    private var scaleChanges = 0
 
-    private func adaptScale(_ stage: UIView, now: CFTimeInterval, dt: Double) {
-        guard !adaptDone, stage.contentScaleFactor > 2 else { adaptDone = true; return }
-        if dt >= 0.1 { adaptStart = 0; adaptFrames = 0; gpuSumMs = 0; gpuSamples = 0; return }   // ignore stalls (first frames, backgrounding)
-        if adaptStart == 0 { adaptStart = now; adaptFrames = 0; gpuSumMs = 0; gpuSamples = 0; return }
-        adaptFrames += 1
-        let el = now - adaptStart
-        guard el >= 2 else { return }
-        let avgMs = el / Double(adaptFrames) * 1000
-        // Lower the resolution only if the frames are slow AND the GPU is a real part of it (a CPU-bound or
-        // Debug-build slowdown is not helped by fewer pixels).
-        let g = (avgMs: gpuSamples > 0 ? gpuSumMs / Double(gpuSamples) : 0, frames: gpuSamples)   // from the 1 Hz perf log
-        if avgMs > 18 && g.avgMs > 7 {
-            stage.contentScaleFactor = 2
-            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame at %.0fx (gpu %.1f ms) -> dropping to 2x", avgMs, Double(stage.window?.screen.scale ?? 3), g.avgMs))
-        } else {
-            NSLog("%@", String(format: "[melon] scale: %.1f ms/frame -> keeping native %.0fx (gpu %.1f ms)", avgMs, Double(stage.contentScaleFactor), g.avgMs))
+    // MetalFX (GfxUpscaler.swift): the drawable stays native, the 3D scene renders at `fxScale` x and is upscaled. Off unless -MetalFX 1.
+    private static let metalFXFlag = GfxFlags.metalFX && GfxUpscaler.compiledIn
+    private var fxScale = 0.0                       // render scale in native multiples (0 = not set yet)
+    // Idle rest (IdleRestGovernor): 30 fps once everything has been still for 2 s.
+    private static let idleRestFlag = GfxFlags.idleRest
+    private var idleRest = IdleRestGovernor()
+    private var restFrames = 0, activeFrames = 0, restWakes = 0, lastEnergy: Float = 0
+    private static let roomCacheFlag = GfxFlags.roomCache
+
+    private func adaptScale(_ stage: MelonStageView, dt: Double) {
+        guard Self.adaptiveEnabled else { return }
+        if scaler == nil {
+            let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
+            // with MetalFX the ladder starts at the MetalFX render scale (never above native); without it, at native
+            scaler = RenderScaler(native: Self.metalFXFlag ? min(GfxFlags.metalFXScale, native) : native)
+            rateGov = RateGovernor(maxFPS: stage.window?.screen.maximumFramesPerSecond ?? 60)
         }
-        adaptDone = true
+        let gpu = renderer?.lastGPUMs
+        let thermal = ProcessInfo.processInfo.thermalState
+        if let s = scaler?.update(dt: dt, gpuMs: gpu, thermal: thermal) {
+            if Self.metalFXFlag { fxScale = s } else { stage.contentScaleFactor = CGFloat(s) }
+            scaleChanges += 1
+            NSLog("%@", String(format: "[melon] scale: -> %.2fx (gpu %.1f ms, budget %.1f ms, thermal %d%@)", s, gpu ?? 0, scaler?.budgetMs ?? 0, thermal.rawValue, Self.metalFXFlag ? ", MetalFX" : ""))
+        }
+        let atNative = (scaler?.level ?? 0) == 0
+        if let f = rateGov?.update(dt: dt, gpuMs: gpu, thermal: thermal, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled, atNative: atNative), f != lastAppliedFPS {
+            lastAppliedFPS = f
+            applyFrameRate(stage)
+            NSLog("[melon] frame rate request -> %d Hz", f)
+        }
+    }
+
+    /// One-second gfx report for the `[melon] env:` line: room cache hit rate / misses / room pixels shaded, MetalFX state, idle rest share.
+    private func gfxSummary(_ r: MelonRenderer, frames: Double, rw: Int, rh: Int) -> String {
+        let shaded = r.roomPixelsBaseline > 0 ? r.roomPixelsShaded / r.roomPixelsBaseline * 100 : 100
+        let tot = Double(max(restFrames + activeFrames, 1))
+        let out = String(format: "room cache %@ %@, room px shaded %.0f%% of old path, render %dx%d, MetalFX %@, idle rest %@ (%.0f%% of frames at 30 fps, %d wakes, KE %.5f)",
+                         Self.roomCacheFlag ? "on" : "off", r.roomCacheSummary, shaded, rw, rh, r.metalFXState,
+                         Self.idleRestFlag ? (idleRest.resting ? "RESTING" : "awake") : "off", Double(restFrames) / tot * 100, restWakes, Double(lastEnergy))
+        r.resetRoomCacheCounters(); restFrames = 0; activeFrames = 0
+        return out
+    }
+
+    /// preferredFramesPerSecond = the governor's 60 / 120, or 30 while resting.
+    private func applyFrameRate(_ stage: MelonStageView) {
+        let want = idleRest.resting ? 30 : lastAppliedFPS
+        if stage.preferredFramesPerSecond != want { stage.preferredFramesPerSecond = want }
+    }
+
+    /// Called from touchesBegan (and any other instant wake source): back to full rate without waiting for the next draw.
+    func gfxWake() {
+        if idleRest.wake() {
+            restWakes += 1
+            if let stage = stageView { applyFrameRate(stage) }
+            NSLog("[melon] idle rest: woken by touch")
+        }
+    }
+
+    /// Feeds the idle-rest governor: Bob counts as still with no touch, script, walk, request, focus blend, tray or selection, and low kinetic energy.
+    private func updateIdleRest(_ stage: MelonStageView, dt: Double) {
+        guard Self.idleRestFlag, Self.adaptiveEnabled || UserDefaults.standard.bool(forKey: "IdleRest") else { return }
+        var active = stage.activeTouches > 0 || mode != .none || sim.grabbing || throwHold > 0 || model.touch.holdsBrain
+        if let brain, brain.enabled {
+            active = active || brain.activity != .idle || brain.commanded || brain.pending != nil
+            if case .none = brain.script {} else { active = true }
+        }
+        if game {
+            let b = model.care.focus.blend
+            active = active || (b > 0.001 && b < 0.999) || model.care.trayOut || model.care.select.isSelecting
+        }
+        let e: Float? = sim.totalMass > 0 ? sim.kineticEnergy() / sim.totalMass : nil
+        lastEnergy = e ?? -1
+        let flipped = idleRest.update(dt: dt, active: active, energy: e)
+        if idleRest.resting { restFrames += 1 } else { activeFrames += 1 }
+        if flipped { applyFrameRate(stage); NSLog("[melon] idle rest: %@ (KE %.5f)", idleRest.resting ? "30 fps" : "back to full rate", Double(e ?? -1)) }
     }
 
     func draw(in view: MTKView) {
@@ -394,7 +468,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let now = cpu0
         let dt = lastTime == 0 ? Float(1.0 / 60) : min(Float(now - lastTime), 0.1)
         lastTime = now
-        adaptScale(stage, now: now, dt: Double(dt))
+        adaptScale(stage, dt: Double(dt))
 
         renderer.beginFrame()
         let m = model
@@ -444,6 +518,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         dbgSim += CACurrentMediaTime() - s0
 
+        updateIdleRest(stage, dt: Double(dt))
         skinner.tickBlink(dt: dt)
         skinner.update(x: sim.x, index: renderMesh.index, into: renderer.dynPointer)
         if let w = skinner.takeMatWrites() {
@@ -471,7 +546,17 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, model.care.select.count > 1 || model.care.select.isSelecting { model.care.select.publish(viewProj: cam.viewProj, size: pts) { bobScreenPoints(pts, cam.viewProj) } }   // also with 1 Blob while a highlight is up: his real outline
         let light = game ? GameCamera.light(centroid: c) : rig.light(centroid: c)
 
-        renderer.resize(width: Int(view.drawableSize.width), height: Int(view.drawableSize.height))
+        // MetalFX: the drawable stays native; the scene renders smaller and is upscaled. Otherwise render size == drawable size.
+        var rw = Int(view.drawableSize.width), rh = Int(view.drawableSize.height)
+        renderer.metalFXEnabled = Self.metalFXFlag
+        if Self.metalFXFlag {
+            let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
+            if fxScale == 0 { fxScale = min(GfxFlags.metalFXScale, native) }
+            let k = min(1, fxScale / max(native, 1))
+            rw = max(2, Int((Double(rw) * k).rounded())); rh = max(2, Int((Double(rh) * k).rounded()))
+        }
+        renderer.roomCacheEnabled = Self.roomCacheFlag
+        renderer.resize(width: rw, height: rh)
         var fp = FrameParams()
         fp.time = simTime
         fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
@@ -479,7 +564,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         fp.meshAlpha = m.showMesh ? 0.32 : 0
         fp.bg = m.palette.palette.matte ? melonCreamLinear : melonBackgroundLinear
         renderer.setUniforms(camera: cam, light: light, palette: m.palette.palette, params: fp,
-                             viewSize: SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height)))
+                             viewSize: SIMD2<Float>(Float(rw), Float(rh)))
         if m.showMesh { sim.x.withUnsafeBufferPointer { renderer.uploadParticles($0.baseAddress!) } }
         renderer.draw(drawable: drawable, showMesh: m.showMesh)
 
@@ -501,10 +586,16 @@ final class MelonController: NSObject, MTKViewDelegate {
             let el = now - dbgStart
             let f = Double(dbgFrames)
             let g = renderer.takeGPUStats()
-            gpuSumMs += g.avgMs * Double(g.frames); gpuSamples += g.frames
             NSLog("%@", String(format: "[melon] perf: cpu %.2f ms, gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps) | %.1f fps, interval %.2f ms",
                          dbgCPU / f * 1000, g.avgMs, dbgSim / f * 1000,
                          dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, f / el, el / f * 1000))
+            NSLog("%@", String(format: "[melon] env: thermal %@, lowPower %@, drawable %dx%d @ %.2fx (native %.0fx), fps pref %d (display max %d, measured %.1f), focus %@, adaptive %@ (%d changes), gpu mem %.1f MB, target rebuilds %d | gfx: %@%@",
+                               Self.thermalName(ProcessInfo.processInfo.thermalState), ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off",
+                               Int(view.drawableSize.width), Int(view.drawableSize.height), Double(stage.contentScaleFactor), Double(stage.window?.screen.scale ?? 0),
+                               stage.preferredFramesPerSecond, stage.window?.screen.maximumFramesPerSecond ?? 0, f / el,
+                               model.care.focus.isActive ? "ON" : "off", Self.adaptiveEnabled ? "on" : "off", scaleChanges,
+                               Double(renderer.device.currentAllocatedSize) / 1_048_576, renderer.targetRebuilds, gfxSummary(renderer, frames: f, rw: rw, rh: rh),
+                               renderer.perfPasses ? " | passes ms: " + renderer.takePassStats() : ""))
             if game {
                 let hc = model.touch.haptics.takeCost()
                 NSLog("%@", String(format: "[touch] perf: sim step %.3f ms, brain %.3f ms/step, touch frame %.3f ms (haptics update %.4f ms) per frame",
@@ -515,6 +606,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgSim = 0; dbgSteps = 0
             fflush(stdout)
         }
+    }
+
+    private static func thermalName(_ t: ProcessInfo.ThermalState) -> String {
+        switch t { case .nominal: return "nominal"; case .fair: return "fair"; case .serious: return "SERIOUS"; case .critical: return "CRITICAL"; @unknown default: return "?" }
     }
 
     private func publishReadouts() {
@@ -589,7 +684,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, model.care.focus.isFocused {
             // he stays near the close-up's spot while lifted
             let sx = GameCamera.callSpot.x, sz = GameCamera.callSpot.y
-            q.x = min(max(q.x, sx - 0.5), sx + 0.5); q.z = min(max(q.z, sz - 0.5), sz + 0.5)
+            q.x = min(max(q.x, sx - 0.18), sx + 0.18); q.z = min(max(q.z, sz - 0.5), sz + 0.5)       // held: his whole body stays in the close-up (it is nearly as wide as the frame)
             q.y = min(q.y, planeP.y + 0.4)            // lifted a hand's width: feet clear of the floor, still whole in the close-up frame
         }
         if game {
@@ -602,13 +697,17 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     private func applyGrab(_ p: CGPoint, _ size: CGSize) {
         if let q = dragTarget(p, size) {
-            sim.moveGrab(target: q, rot: rotMat(lastCam.fwd, twist))
+            grabGoal = q
+            sim.moveGrab(target: q, rot: rotMat(lastCam.fwd, twist + model.touch.heldSway))
             liftHeight = q.y - planeP.y
         }
         if let raw = dragTarget(p, size, limited: false) {
             grabSamples.append((CACurrentMediaTime(), raw)); if grabSamples.count > 8 { grabSamples.removeFirst() }
         }
     }
+
+    /// Where the held patch is headed (kept so the happy sway can turn the patch every frame, not only when the finger moves).
+    private var grabGoal: SIMD3<Float>?
 
     private func cancelGrab() {
         if mode == .grab { sim.endGrab(); mode = .none; dragID = nil; second = nil }
@@ -628,6 +727,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     private let touchDemoName = UserDefaults.standard.string(forKey: "TouchDemo")
     private var tdT0: CFTimeInterval = 0
     private var tdDown = false
+    private var tdHeartT: CFTimeInterval = 0
+    private var tdAnchor: SIMD3<Float>?
 
     private func screenPoint(_ w: SIMD3<Float>, _ size: CGSize) -> CGPoint {
         let c = lastCam.viewProj * SIMD4<Float>(w.x, w.y, w.z, 1)
@@ -653,26 +754,47 @@ final class MelonController: NSObject, MTKViewDelegate {
         switch name {
         case "pet":
             let t = el.truncatingRemainder(dividingBy: 14)
+            if t < 9, now - tdHeartT > 0.8 { tdHeartT = now; model.touch.spawnHeart(now: now) }       // capture aid: hearts show even before he is happy enough
             if t < 9 {
                 let k = Float(min(1, t / 0.6)), ph = Float(t)
                 let pt = at(0.4 * sinf(2 * .pi * 0.8 * ph) * k, 0.25 * sinf(2 * .pi * 0.4 * ph) * k)
                 if !tdDown { tdDown = true; pointerDown(id: A, point: pt, size: size) } else { pointerMove(id: A, point: pt, size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
-        case "pickup":      // press and hold on the crown, drag up, hang there wiggling, let go (14 s loop)
+        case "pickup":      // double-tap and hold on the crown, lift, hang there wiggling, let go (14 s loop)
             let t = el.truncatingRemainder(dividingBy: 14)
-            if t < 6 {
-                let lift = 0.45 * sm((t - 0.5) / 1.2)
-                let sway: Float = 0
-                if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
-                else { pointerMove(id: A, point: at(sway, 0.62 + lift), size: size) }
+            let lift = 0.45 * sm((t - 0.9) / 1.2)
+            let crown = at(0, 0.62)
+            if t < 0.12 { if !tdDown { tdDown = true; pointerDown(id: A, point: crown, size: size) } }              // tap 1
+            else if t < 0.30 { if tdDown { pointerUp(id: A); tdDown = false } }
+            else if t < 6 {                                                                                         // tap 2, held, then lifted
+                if !tdDown { tdDown = true; pointerDown(id: A, point: crown, size: size) }
+                else { pointerMove(id: A, point: at(0, 0.62 + lift), size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
         case "throw":       // lift, then a fast flick up and to the side on release; he gets back up on his own (28 s loop)
             let t = el.truncatingRemainder(dividingBy: 28)
-            if t < 2.15 {
-                let lift = 0.4 * sm((t - 0.5) / 0.8)
+            if t < 0.12 { if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) } }       // tap 1
+            else if t < 0.30 { if tdDown { pointerUp(id: A); tdDown = false } }
+            else if t < 2.15 {
+                let lift = 0.4 * sm((t - 0.9) / 0.7)
                 if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
                 else if t < 1.9 { pointerMove(id: A, point: at(0, 0.62 + lift), size: size) }
                 else { let k = Float(min(1, (t - 1.9) / 0.25)); pointerMove(id: A, point: at(1.1 * k, 0.62 + lift + 1.0 * k), size: size) }   // ~1.5 u in 0.2 s: a flick
+            } else if tdDown { pointerUp(id: A); tdDown = false }
+        case "drag":        // hold, drag along the floor, lift and swing him around, set him down gently (18 s loop; anchored to where he started)
+            let t = el.truncatingRemainder(dividingBy: 18)
+            if tdAnchor == nil || t < 0.05 { tdAnchor = c }
+            let a0 = tdAnchor ?? c
+            func atA(_ x: Float, _ y: Float) -> CGPoint { screenPoint(a0 + right * x + up * y, size) }
+            if t < 0.12 { if !tdDown { tdDown = true; pointerDown(id: A, point: atA(0, 0.62), size: size) } }       // tap 1 of the double tap
+            else if t < 0.30 { if tdDown { pointerUp(id: A); tdDown = false } }
+            else if t < 14 {
+                var x: Float = 0, y: Float = 0.62
+                if t > 0.5 && t < 1.2 { y = 0.62 + 0.14 * sm((t - 0.5) / 0.5) }                                     // hold, then a little up: that is the pick up
+                else if t >= 1.2 && t < 4 { x = 0.55 * sinf(Float(t - 1.2) * 1.9) * sm((t - 1.2) / 0.4); y = 0.62 + 0.14 }   // dragged along the floor (just clear of it)
+                else if t >= 4 && t < 10 { let k = sm((t - 4) / 0.8); x = 0.6 * sinf(Float(t - 4) * 2.4) * k; y = 0.76 + 0.30 * k + 0.12 * sinf(Float(t - 4) * 3.1) * k }
+                else if t >= 10 { let k = 1 - sm((t - 10) / 1.5); x = 0.4 * k * sinf(Float(t - 10) * 2.4); y = 0.76 + 0.30 * k }
+                if !tdDown { tdDown = true; pointerDown(id: A, point: atA(0, 0.62), size: size) }
+                else { pointerMove(id: A, point: atA(x, y), size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
         case "cheeks":      // two fingers on the cheeks pinch together, hold, let go (9 s loop)
             let t = el.truncatingRemainder(dividingBy: 9)
@@ -697,7 +819,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         play.holdsBrain = play.getUpFrame(dt: dt, now: now, held: held, focusSpot: f.isFocused ? GameCamera.callSpot : nil, sim: sim, brain: brain)
         if !f.isFocused || model.paused {
             if mode == .pet || mode == .pending || mode == .cheeks { mode = .none }
-            cheekFingers = []; gesture.cancel()
+            cheekFingers = []; gesture.cancel(); pickArm.reset()
             DeviceMotionFeed.shared.setRunning(false)
             if !play.holdsBrain { play.cancel(sim: sim, brain: brain, skinner: skinner) }
             return
@@ -719,6 +841,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             play.motionFrame(dt: dt, now: now, gravityX: gx, shake: shk, sim: sim, brain: brain, skinner: skinner)
         }
         gesture.tick(t: now)
+        if mode == .pending {
+            if gesture.kind == .pickUp { beginPickUp(last, touchSize) }       // double-tap and hold: he lifts without needing to drag
+            else if gesture.kind == .hold { mode = .pet }                      // a single press-hold is petting
+        }
         // the fingertip dent: a stroke, a press that has not decided yet, or the last moment of a tap
         var ray: (o: SIMD3<Float>, d: SIMD3<Float>)?
         var scr: SIMD2<Float>?
@@ -740,6 +866,22 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         // pick up / throw: the stretch he is under, the excitement while he is held up, the landing thump
         play.trackImpacts(now: now, sim: sim)
+        if play.thrown, haveCam {
+            // soft walls at the visible edges of the close-up (at his depth, with a margin): a throw bounces off them, he stays whole in the picture
+            let c = sim.centroid()
+            func onPlane(_ ndc: SIMD2<Float>, z: Float) -> SIMD3<Float> {
+                let r = unproject(ndc: ndc, invViewProj: lastCam.invViewProj)
+                let t = abs(r.d.z) > 1e-4 ? (z - r.o.z) / r.d.z : 0
+                return r.o + r.d * t
+            }
+            let zf = c.z + 0.5                                   // the front of the body is the widest on screen
+            let l = onPlane(SIMD2(-0.90, 0), z: zf), rr = onPlane(SIMD2(0.90, 0), z: zf), tp = onPlane(SIMD2(0, 0.78), z: c.z)
+            let spot = GameCamera.callSpot
+            play.wallsFrame(now: now, sim: sim, limits: TouchPlay.FrameLimits(xMin: min(l.x, rr.x), xMax: max(l.x, rr.x), zMin: spot.y - 1.2, zMax: spot.y + 0.3, yMax: tp.y))
+        }
+        if sim.grabbing, let g = grabGoal, play.heldSway != 0 {
+            sim.moveGrab(target: g, rot: rotMat(lastCam.fwd, twist + play.heldSway))        // the happy ~1 Hz sway, even with the finger still
+        }
         if sim.grabbing {
             play.squishDepth = min(0.5, sim.deformation() * TouchPlay.liftDepthGain)
             play.petFrameIdle(dt: dt, now: now)
@@ -769,20 +911,33 @@ final class MelonController: NSObject, MTKViewDelegate {
         if case .throwIt = r, grabSamples.count >= 2, let a = grabSamples.first(where: { grabSamples.last!.t - $0.t < 0.1 }), let b = grabSamples.last, b.t - a.t > 0.01 {
             var v = (b.q - a.q) / Float(b.t - a.t)
             v.x *= 0.35; v.z *= 0.35
-            v.y = max(v.y, 2.5)
+            let hs = simd_length(SIMD2(v.x, v.z)); if hs > 0.9 { v.x *= 0.9 / hs; v.z *= 0.9 / hs }          // a throw bounces around the room, it does not leave it
+            v.y = min(max(v.y, 2.5), 4.2)
             let sp = simd_length(v)
             if sp > 6 { v *= 6 / sp }
-            sim.launch(velocity: v, spin: SIMD3<Float>(0, 0, v.x > 0 ? -3.5 : 3.5))
+            sim.launch(velocity: v, spin: SIMD3<Float>(0, 0, v.x > 0 ? -2.5 : 2.5))
             throwHold = 1.0
             model.touch.thrown = true
-            model.touch.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.5)       // the release
-        }
+            model.touch.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.3)       // the release
+        } else { model.touch.jellyLetGo(now: CACurrentMediaTime()) }       // dropped: the jelly snaps back and settles, the haptic follows its wobble
         grabSamples = []; liftHeight = 0
     }
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
         if game {
+            // Voice: the second down of a double-tap on EMPTY space (no Blob under it) opens listen mode, in roaming and in focus
+            if voiceTouch == nil, !model.paused {
+                let vnow = CACurrentMediaTime()
+                let onBlob = pickBody(p, size) != nil || model.care.select.hit(p) != nil
+                if voiceGesture.touchDown(time: vnow, point: p, hitBlob: onBlob) == .beginVoice, mode == .none {
+                    voiceTouch = id; emptyDown = nil
+                    model.care.voice.begin()
+                    return
+                }
+                emptyDown = onBlob ? nil : (id, vnow, p)
+                if !onBlob { model.care.voice.warmUp() }        // maybe the first tap of a double-tap: bring the mic up early (self-cancels)
+            }
             // touch play only acts inside focus mode (Come here): a roaming Bob is not grabbed, and nothing orbits or zooms.
             // The GESTURE decides the action (pet / tap / pick up / throw / cheeks), never switching mid-gesture.
             let f = model.care.focus
@@ -791,8 +946,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             if mode == .none {
                 guard model.touch.getUpPhase == .off, let hit = pickBody(p, size) else { return }
                 mode = .pending; dragID = id; last = p; petPoint = p; touchSize = size; gestureHit = hit
-                gesture.down(t: now, p: p)
-            } else if mode == .pending, id != dragID, pickBody(p, size) != nil, gesture.secondDown(t: now) {
+                gesture.down(t: now, p: p, armed: pickArm.touchDown(time: now, point: p))
+            } else if mode == .pending, id != dragID, pickBody(p, size) != nil, !gesture.armed, gesture.secondDown(t: now) {
                 mode = .cheeks; touchSize = size
                 model.touch.releaseContact(sim: sim)
                 cheekFingers = [(dragID!, petPoint), (id, p)]
@@ -823,6 +978,8 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerMove(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam else { return }
+        if id == voiceTouch { return }
+        if let e = emptyDown, e.id == id, hypot(p.x - e.p.x, p.y - e.p.y) > 20 { emptyDown = nil }       // a drag is not a tap
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
         if game, id == dragID {
             let now = CACurrentMediaTime()
@@ -857,6 +1014,12 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     func pointerUp(id: ObjectIdentifier) {
+        if id == voiceTouch { voiceTouch = nil; model.care.voice.release(); return }
+        if let e = emptyDown, e.id == id {
+            emptyDown = nil
+            let vnow = CACurrentMediaTime()
+            if vnow - e.t < 0.3 { voiceGesture.tapUp(time: vnow, point: e.p, hitBlob: false) }        // a short tap on empty space arms the gesture
+        }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
@@ -867,7 +1030,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let r = gesture.up(t: now)
             switch mode {
             case .pending:
-                if r == .tap { model.touch.tap(now: now); tapUntil = now + 0.22 }
+                if r == .tap { model.touch.tap(now: now); tapUntil = now + 0.22; pickArm.tapUp(time: now, point: last) }
                 mode = .none
             case .grab: releaseGrab(r)
             default: mode = .none

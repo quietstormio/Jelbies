@@ -28,6 +28,22 @@ nonisolated final class Skinner {
     private(set) var openness: (left: Float, right: Float) = (1, 1)
     /// Automatic blinking (random 2-6 s apart, ~120 ms, sometimes a double blink). Turn off for scripted expressions.
     var autoBlink = true
+    let jelly = JellyJiggle()
+    var dbgJellyOff = UserDefaults.standard.integer(forKey: "JellyOff") != 0
+    /// Touch play: 0...1, blurs the skin normals over their neighbours while a finger dents him, so the dent reads as a soft dimple and the steep
+    /// walls of the coarse sim mesh never shade as dark brown blotches. 0 = exactly the plain normals (the default, the cost is zero).
+    var normalSmoothing: Float = 0
+    /// Touch play: where the dent is (world) and how far it reaches. While `normalSmoothing` > 0 only the skin around this point is relaxed
+    /// (positions: Taubin lambda|mu, so the folds the coarse sim mesh makes beside the sphere melt into a dimple; then the normals).
+    var smoothCenter = SIMD3<Float>(0, 0, 0)
+    static let dentInner: Float = 0.40, dentOuter: Float = 0.70
+    static let normalPasses = 2, dentPasses = 4, eyeNormalPasses = 6
+    private var eyeFixK: [Float] = [1, 1], eyeFixU: [SIMD3<Float>] = [.zero, .zero]
+    private var eyeNbStart: [Int32] = [], eyeNb: [Int32] = [], eyeOwner: [Int8] = []
+    static let normalInner: Float = 0.5, normalOuter: Float = 0.8
+    private var bodyList: [Int32] = [], bodyW: [Float] = [], dentFrame = 0, dentBuiltAt = SIMD3<Float>(1e9, 0, 0)
+    private var dentList: [Int32] = [], dentW: [Float] = [], dentTmp: [SIMD3<Float>] = []
+    private var adjStart: [Int32] = [], adjList: [Int32] = [], smoothMask: [Bool] = [], smoothTmp: [Float] = []
     private var blinking = false
     private var blinkT: Float = 0             // seconds into the current blink
     private var gap: Float = 0                // pause between the two blinks of a double blink
@@ -82,7 +98,11 @@ nonisolated final class Skinner {
     var armRetractRest: [SIMD3<Float>] = []
     var armRetractWeight: [Float] = []
     var armRetractMatrix = matrix_identity_float3x3
-    func clearArmCapsules() { armBlend = 0; armPos = [[], []]; armStart = [[], []] }
+    /// Fillet collar (ArmCap.collar): the skin ring around each capsule arm's base, pushed outward along the egg normal (world delta per vertex, scaled by
+    /// `armBlend`) so the base melts into the body like the wave's SDF fillet instead of showing a joint line.
+    var armCollarVertices: [Int32] = []
+    var armCollarDelta: [SIMD3<Float>] = []
+    func clearArmCapsules() { armBlend = 0; armPos = [[], []]; armStart = [[], []]; armCollarDelta = [] }
     // W1d: render-side skin offsets (the physics version of the shear was eaten by the tets). `skinVerts` = body skin + face decals (not the capsules / beans);
     // `shearW` = (1 - y/Htop)^2 of the rest height, `lobeW[s]` = the lobe weight of leg s (Gaussian in the xz distance to that leg's rest footprint x a height falloff).
     // Per frame the brain sets `shearVec` (world offset at the floor) and `lobeD[s]` (world offset of the skin over foot s: the body 'picks up' with the foot).
@@ -335,12 +355,19 @@ nonisolated final class Skinner {
                     dyn[o] = a.x + (t.x - a.x) * bl; dyn[o + 1] = a.y + (t.y - a.y) * bl; dyn[o + 2] = a.z + (t.z - a.z) * bl
                 }
             }
+            if armCollarDelta.count == armCollarVertices.count {
+                for (k, vi) in armCollarVertices.enumerated() {
+                    let o = 6 * Int(vi), d = armCollarDelta[k] * bl
+                    dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
+                }
+            }
             let M = armRetractMatrix
             for (k, vi) in armRetractVertices.enumerated() where !Skinner.dbgNoArmRetract {
                 let d = M * armRetractRest[k], o = 6 * Int(vi), w = armRetractWeight[k] * bl
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
             }
         }
+        eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
         if !antennae.isEmpty { applyAntennae(x, dyn) }
         let hasShear = shearVec.x != 0 || shearVec.y != 0 || shearVec.z != 0, hasLobe = lobeD[0] != .zero || lobeD[1] != .zero
@@ -353,6 +380,8 @@ nonisolated final class Skinner {
                 dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
             }
         }
+        if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
+        if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
         index.withUnsafeBufferPointer { ix in
             var t = 0
             while t < ix.count {
@@ -373,6 +402,170 @@ nonisolated final class Skinner {
             if l == 0 { l = 1 }
             dyn[o + 3] /= l; dyn[o + 4] /= l; dyn[o + 5] /= l
             o += 6
+        }
+        if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
+        if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
+    }
+
+    /// Eye-only neighbours (built once from the triangle list).
+    private func buildEyeAdjacency(_ index: [UInt32]) {
+        eyeOwner = [Int8](repeating: -1, count: vertexCount)
+        for e in 0..<2 { for v in eyeIdx[e] { eyeOwner[Int(v)] = Int8(e) } }
+        var nb = [Int32: Set<Int32>]()
+        var t = 0
+        while t + 2 < index.count {
+            let q = [index[t], index[t + 1], index[t + 2]]
+            for a in 0..<3 { for b in 0..<3 where a != b {
+                let va = Int(q[a]), vb = Int(q[b])
+                if eyeOwner[va] >= 0 && eyeOwner[va] == eyeOwner[vb] { nb[Int32(va), default: []].insert(Int32(vb)) }
+            } }
+            t += 3
+        }
+        eyeNbStart = [Int32](repeating: 0, count: vertexCount + 1); eyeNb = []
+        for v in 0..<vertexCount {
+            let l = (nb[Int32(v)] ?? []).sorted()
+            eyeNb.append(contentsOf: l); eyeNbStart[v + 1] = eyeNbStart[v] + Int32(l.count)
+        }
+    }
+
+    /// A squashed eye's normals are the unsquashed (open) normals pushed through the squash (n' ~ n + (1/k - 1)(n.u)u), so the small per-vertex
+    /// noise of the eye mesh's apex fan (the open eye has 0.07 mean / 0.19 worst between neighbours; it is hidden by the bead shading) is multiplied
+    /// by ~1/k and one eye showed a radial star. Undo the squash on the normals, blur them over the eye's own neighbours, squash them again.
+    private func smoothEyeNormals(_ dyn: UnsafeMutablePointer<Float>, index: [UInt32]) {
+        if eyeNbStart.isEmpty { buildEyeAdjacency(index) }
+        if smoothTmp.count < vertexCount * 3 { smoothTmp = [Float](repeating: 0, count: vertexCount * 3) }
+        for e in 0..<2 where eyeFixK[e] < 0.999 {
+            let k = max(eyeFixK[e], 0.02), u = eyeFixU[e]
+            let t = min(1, (1 - k) / 0.08), w = 0.85 * t * t * (3 - 2 * t)
+            let back = 1 - k, fwd = 1 / k - 1
+            for v32 in eyeIdx[e] {                                  // un-squash
+                let o = 6 * Int(v32)
+                var n = SIMD3(dyn[o + 3], dyn[o + 4], dyn[o + 5])
+                n -= u * (simd_dot(n, u) * back)
+                n /= max(simd_length(n), 1e-9)
+                dyn[o + 3] = n.x; dyn[o + 4] = n.y; dyn[o + 5] = n.z
+            }
+            for _ in 0..<Self.eyeNormalPasses {
+                for v32 in eyeIdx[e] {
+                    let v = Int(v32), o = 6 * v
+                    var sx: Float = 0, sy: Float = 0, sz: Float = 0
+                    let a = Int(eyeNbStart[v]), b = Int(eyeNbStart[v + 1])
+                    for j in a..<b { let q = 6 * Int(eyeNb[j]); sx += dyn[q + 3]; sy += dyn[q + 4]; sz += dyn[q + 5] }
+                    let inv = 1 / Float(max(b - a, 1))
+                    var x = dyn[o + 3] + (sx * inv - dyn[o + 3]) * w, y = dyn[o + 4] + (sy * inv - dyn[o + 4]) * w, z = dyn[o + 5] + (sz * inv - dyn[o + 5]) * w
+                    let l = (x * x + y * y + z * z).squareRoot()
+                    if l > 1e-6 { x /= l; y /= l; z /= l }
+                    smoothTmp[3 * v] = x; smoothTmp[3 * v + 1] = y; smoothTmp[3 * v + 2] = z
+                }
+                for v32 in eyeIdx[e] { let v = Int(v32); dyn[6 * v + 3] = smoothTmp[3 * v]; dyn[6 * v + 4] = smoothTmp[3 * v + 1]; dyn[6 * v + 5] = smoothTmp[3 * v + 2] }
+            }
+            for v32 in eyeIdx[e] {                                  // re-squash
+                let o = 6 * Int(v32)
+                var n = SIMD3(dyn[o + 3], dyn[o + 4], dyn[o + 5])
+                n += u * (simd_dot(n, u) * fwd)
+                n /= max(simd_length(n), 1e-9)
+                dyn[o + 3] = n.x; dyn[o + 4] = n.y; dyn[o + 5] = n.z
+            }
+        }
+    }
+
+    private func buildAdjacency(_ index: [UInt32]) {
+        var nb = [Set<Int32>](repeating: [], count: vertexCount)
+        var t = 0
+        while t + 2 < index.count {
+            let a = Int(index[t]), b = Int(index[t + 1]), c = Int(index[t + 2])
+            nb[a].insert(Int32(b)); nb[a].insert(Int32(c)); nb[b].insert(Int32(a)); nb[b].insert(Int32(c)); nb[c].insert(Int32(a)); nb[c].insert(Int32(b))
+            t += 3
+        }
+        adjStart = [Int32](repeating: 0, count: vertexCount + 1)
+        adjList = []
+        for v in 0..<vertexCount { adjStart[v + 1] = adjStart[v] + Int32(nb[v].count); adjList.append(contentsOf: nb[v].sorted()) }
+        smoothMask = [Bool](repeating: skinVerts.isEmpty, count: vertexCount)
+        for v in skinVerts { smoothMask[Int(v)] = true }
+        for v in faceFeatureVertices { smoothMask[Int(v)] = false }
+        smoothTmp = [Float](repeating: 0, count: vertexCount * 3)
+    }
+
+    /// Relax the skin around the dent (before the normals are built): the region list + falloff weights, then Taubin passes on the positions.
+    private func smoothDentPositions(_ dyn: UnsafeMutablePointer<Float>, index: [UInt32]) {
+        if adjStart.isEmpty { buildAdjacency(index) }
+        // the region lists are rebuilt only when the dent moved (or every 8th frame): the weights are shape-only, the ramp multiplies at use
+        dentFrame += 1
+        if dentList.isEmpty || dentFrame % 8 == 0 || simd_length(smoothCenter - dentBuiltAt) > 0.03 {
+            dentBuiltAt = smoothCenter
+            dentList.removeAll(keepingCapacity: true); dentW.removeAll(keepingCapacity: true)
+            bodyList.removeAll(keepingCapacity: true); bodyW.removeAll(keepingCapacity: true)
+            let r0 = Self.dentInner, r1 = Self.dentOuter, n0 = Self.normalInner, n1 = Self.normalOuter
+            let c = smoothCenter, n1sq = n1 * n1
+            for v in 0..<vertexCount where smoothMask[v] {
+                let o = 6 * v
+                let dx = dyn[o] - c.x, dy = dyn[o + 1] - c.y, dz = dyn[o + 2] - c.z
+                let d2 = dx * dx + dy * dy + dz * dz
+                if d2 >= n1sq { continue }
+                let d = d2.squareRoot()
+                let g = d <= n0 ? 1 : 1 - (d - n0) / (n1 - n0)
+                bodyList.append(Int32(v)); bodyW.append(g * g * (3 - 2 * g))
+                if d >= r1 { continue }
+                let f = d <= r0 ? 1 : 1 - (d - r0) / (r1 - r0)
+                dentList.append(Int32(v)); dentW.append(f * f * (3 - 2 * f))
+            }
+        }
+        let k = min(1, normalSmoothing)
+        if dentList.isEmpty { return }
+        if dentTmp.count < dentList.count { dentTmp = [SIMD3<Float>](repeating: .zero, count: dentList.count) }
+        dentTmp.withUnsafeMutableBufferPointer { tmp in
+            adjStart.withUnsafeBufferPointer { st in
+                adjList.withUnsafeBufferPointer { adj in
+                    dentList.withUnsafeBufferPointer { list in
+                        dentW.withUnsafeBufferPointer { dw in
+                            for pass in 0..<Self.dentPasses {
+                                let lam: Float = pass % 2 == 0 ? 0.55 : -0.58        // Taubin: smooth, then inflate back: folds go, the dimple volume stays
+                                for n in 0..<list.count {
+                                    let v = Int(list[n]), o = 6 * v
+                                    let a = Int(st[v]), b = Int(st[v + 1])
+                                    var sx: Float = 0, sy: Float = 0, sz: Float = 0
+                                    for j in a..<b { let q = 6 * Int(adj[j]); sx += dyn[q]; sy += dyn[q + 1]; sz += dyn[q + 2] }
+                                    let inv = 1 / Float(max(b - a, 1)), w = lam * dw[n] * k
+                                    tmp[n] = SIMD3(dyn[o] + (sx * inv - dyn[o]) * w, dyn[o + 1] + (sy * inv - dyn[o + 1]) * w, dyn[o + 2] + (sz * inv - dyn[o + 2]) * w)
+                                }
+                                for n in 0..<list.count { let o = 6 * Int(list[n]); let t = tmp[n]; dyn[o] = t.x; dyn[o + 1] = t.y; dyn[o + 2] = t.z }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Blur the unit normals of the whole body skin (not the face features) over their mesh neighbours. The coarse sim mesh makes the skin normals
+    /// jump along its tet boundaries as soon as the body is pushed (a faint dark vertical line), not only under the finger, so this is global.
+    private func smoothNormals(_ dyn: UnsafeMutablePointer<Float>, index: [UInt32]) {
+        if adjStart.isEmpty || bodyList.isEmpty { return }
+        let kn = min(1, normalSmoothing)
+        smoothTmp.withUnsafeMutableBufferPointer { tmp in
+            adjStart.withUnsafeBufferPointer { st in
+                adjList.withUnsafeBufferPointer { adj in
+                    bodyList.withUnsafeBufferPointer { list in
+                        bodyW.withUnsafeBufferPointer { bw in
+                            for _ in 0..<Self.normalPasses {
+                                for n in 0..<list.count {
+                                    let v = Int(list[n]), o = 6 * v
+                                    var x = dyn[o + 3], y = dyn[o + 4], z = dyn[o + 5]
+                                    var sx: Float = 0, sy: Float = 0, sz: Float = 0
+                                    let a = Int(st[v]), b = Int(st[v + 1])
+                                    for j in a..<b { let q = 6 * Int(adj[j]); sx += dyn[q + 3]; sy += dyn[q + 4]; sz += dyn[q + 5] }
+                                    let inv = 1 / Float(max(b - a, 1)), w = 0.95 * bw[n] * kn
+                                    x += (sx * inv - x) * w; y += (sy * inv - y) * w; z += (sz * inv - z) * w
+                                    let l = (x * x + y * y + z * z).squareRoot()
+                                    if l > 1e-6 { x /= l; y /= l; z /= l }
+                                    tmp[3 * v] = x; tmp[3 * v + 1] = y; tmp[3 * v + 2] = z
+                                }
+                                for n in 0..<list.count { let v = Int(list[n]); dyn[6 * v + 3] = tmp[3 * v]; dyn[6 * v + 4] = tmp[3 * v + 1]; dyn[6 * v + 5] = tmp[3 * v + 2] }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -484,14 +677,26 @@ nonisolated final class Skinner {
                 for e in 0..<2 {
                     let k = e == 0 ? eyeHeight.left : eyeHeight.right
                     if k >= 0.999 { continue }
-                    let c = point(2 * e), u = point(2 * e + 1)
-                    var ux = u.0 - c.0, uy = u.1 - c.1, uz = u.2 - c.2
+                    // The anchor points sit on the (extrapolated) body surface, so under a lean / dent / jiggle the skinned anchor drifts off the eye's
+                    // own centre by a different amount per side; squashing toward it slid and crinkled one eye. The squash is about the eye's own
+                    // skinned vertex centroid (at rest the centroid IS the anchor, so the rest face and the blink are unchanged); the anchors only
+                    // give the up axis.
+                    let cu = point(2 * e), u = point(2 * e + 1)
+                    var c = cu
+                    if !eyeIdx[e].isEmpty {
+                        var mx: Float = 0, my: Float = 0, mz: Float = 0
+                        for vi in eyeIdx[e] { let o = 6 * Int(vi); mx += dyn[o]; my += dyn[o + 1]; mz += dyn[o + 2] }
+                        let inv = 1 / Float(eyeIdx[e].count)
+                        c = (mx * inv, my * inv, mz * inv)
+                    }
+                    var ux = u.0 - cu.0, uy = u.1 - cu.1, uz = u.2 - cu.2
                     let ul = (ux * ux + uy * uy + uz * uz).squareRoot()
                     if ul < 1e-6 { continue }
                     ux /= ul; uy /= ul; uz /= ul
                     let squash = 1 - k
                     // glints vanish as the eye closes (scaled into the eyeball, behind its front surface)
                     let gt = min(1, max(0, (k - 0.3) / 0.25)), g = gt * gt * (3 - 2 * gt)
+                    eyeFixK[e] = k; eyeFixU[e] = SIMD3(ux, uy, uz)
                     eyeIdx[e].withUnsafeBufferPointer { vs in
                         for vi in vs {
                             let o = 6 * Int(vi)

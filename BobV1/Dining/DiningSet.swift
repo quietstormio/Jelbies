@@ -181,7 +181,7 @@ final class DiningSet {
 
     /// World position of berry `j` of place `i` resting on the plate.
     func pieceAnchorWorld(place i: Int, index j: Int) -> SIMD3<Float> {
-        let a = DiningModels.berryAnchor(layout: layout, place: i, index: j)
+        let a = serving.id == Consumables.pizza.id ? DiningModels.pizzaAnchor(layout: layout, place: i, index: j) : DiningModels.berryAnchor(layout: layout, place: i, index: j)
         return SIMD3(origin.x + a.x, a.y, origin.y + a.z)
     }
     /// Where place `i`'s fork lies on the tray (world position + yaw; tines point along (sin yaw, cos yaw)).
@@ -189,9 +189,9 @@ final class DiningSet {
         let r = DiningModels.forkRest(layout: layout, place: i)
         return (SIMD3(origin.x + r.pos.x, r.pos.y, origin.y + r.pos.z), r.yaw)
     }
-    /// World point the fork stabs at for place `i`'s next forkful: the near part of the cake wedge (the apex side toward the stands), on its top.
-    /// It follows the cake as it shrinks (DiningModels.cake: R = 0.3 s k, apex offset -0.14 s, top layer 0.152 s).
-    func cakeBitePoint(place i: Int) -> SIMD3<Float> {
+    /// World point the fork stabs at for place `i`'s next forkful: the near part of a wedge-shaped fork food (the apex side toward the stands), on its top.
+    /// (Dormant: no fork food in the catalogue now; was the cake: R = 0.3 s k, apex offset -0.14 s, top layer 0.152 s).
+    func forkBitePoint(place i: Int) -> SIMD3<Float> {
         let s = layout.scale
         let frac = Float(max(totalBitesLeft, 1)) / Float(DiningTiming.bitesPerServing * n)
         let R = 0.3 * s * (0.4 + 0.6 * frac)
@@ -269,7 +269,7 @@ final class DiningSet {
     // MARK: Bites (shared by every food: 3 per Blob)
 
     /// Starts place `i`'s next bite. Finger foods: that Blob's next berry lifts off the plate and is drawn at the piece pose. Fork foods:
-    /// his fork takes a forkful (the cake shrinks, the bite sits on the tines). False when nothing is left for him.
+    /// his fork takes a forkful (the food shrinks, the bite sits on the tines). False when nothing is left for him.
     @discardableResult
     func beginBite(place i: Int) -> Bool {
         guard i >= 0, i < n, bitesLeft[i] > 0, phase == .present || phase == .popping else { return false }
@@ -456,12 +456,14 @@ final class DiningSet {
     private func biteMesh() -> RoomMesh {
         if let m = biteChunk { return m }
         let b = RoomMeshBuilder(); b.material = .plain
-        DiningModels.cakeBite(b, centre: .zero)
+        DiningModels.forkBiteChunk(b, centre: .zero)
         biteChunk = b.mesh; return b.mesh
     }
     private func heldBerryMesh(_ gi: Int) -> RoomMesh {
-        let key = gi * 10 + n
+        let key = gi * 10 + n + (serving.id == Consumables.pizza.id ? 1000 : 0)
         if let m = heldBerry[key] { return m }
-        let m = DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale); heldBerry[key] = m; return m
+        let m = serving.id == Consumables.pizza.id ? DiningModels.heldSlice(scale: layout.scale)
+            : DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale)
+        heldBerry[key] = m; return m
     }
 }

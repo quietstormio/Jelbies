@@ -83,6 +83,7 @@ final class BlobNeeds {
         if persists {
             if defaults.bool(forKey: "NeedsReset") { defaults.removeObject(forKey: key) }       // capture aid: -NeedsReset 1 re-seeds
             load()
+            if defaults.bool(forKey: "NeedsHappy") { raw = [1, 1, 1]; publish(force: true) }       // capture aid: -NeedsHappy 1 starts every need full
         } else {
             raw = [NeedsTuning.seedOthers, NeedsTuning.seedOthers, NeedsTuning.seedOthers]
         }
@@ -223,6 +224,13 @@ struct BubbleSchedule {
             out.append(want ? .appeared(n) : .disappeared(n))
         }
         return out
+    }
+
+    /// Voice v1: show the bubble now for a normal stay (a grumpy Bob that ignored an order). No-op without a wanted need or while it is up.
+    mutating func showNow() -> [Event] {
+        guard let n = need, !visible else { return [] }
+        visible = true; t = 0
+        return [.appeared(n)]
     }
 
     /// The player tapped the bubble: it goes away until the next cycle.

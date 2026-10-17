@@ -1,0 +1,175 @@
+//
+//  FeetAttachTests.swift
+//  Short cute feet that stay under him (user, 2026-10-17: "cute short feet not balls ... lean into his short arms and feet and his body moves"):
+//  over every scripted move, in every frame where the foot beans are out, in the fitted body frame (rest coordinates, sole = 0):
+//    LOW     the lowest point of each foot (sole) never rises more than `maxSoleRise` and the foot centre never above 0.2 H (a lifted foot
+//            never rides up onto or in front of the belly: it stays in the bottom band of the silhouette);
+//    UNDER   the foot centre stays within `maxRadius` of the body axis (roughly under the body footprint);
+//    ATTACHED  part of the foot is well inside the egg (overlap, no gap between foot and belly).
+//  Also: the bean IS the rest foot when planted (same shape, no swap pop), it morphs smoothly to a ball when lifted, and the mesh-build winding fix
+//  leaves the bean triangles intact.
+//
+
+import XCTest
+import simd
+@testable import BobV1
+
+@MainActor
+final class FeetAttachTests: XCTestCase {
+    nonisolated(unsafe) static var keep: [AnyObject] = []
+    static let maxSoleRise: Float = 0.12                 // body-frame sole height (0.09 H); the hop / jacks tuck is the largest
+    static let maxCentreHeight: Float = 0.2 * Float(BobForm.top)
+    static let maxRadius: Float = 0.52                  // foot centre from the body axis (the underside radius is ~0.4 at the rim, the arm-free footprint ~0.5)
+    static let minOverlap: Float = -0.02                // the deepest foot vertex is at least this far inside the egg
+
+    struct FootFrame { var soleRise: Float, centreHeight: Float, radius: Float, overlap: Float }
+    /// Worst of both feet this frame; nil while the beans are not out.
+    static func footFrame(_ r: MotionRig) -> FootFrame? {
+        guard r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return nil }
+        r.render()
+        let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
+        var f = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity)
+        for s in 0..<2 {
+            var lo = Float.infinity, cx: Float = 0, cy: Float = 0, cz: Float = 0, deepest = Float.infinity
+            for id in r.bean[s] {
+                let o = 6 * Int(id)
+                let q = c0 + pose.rotation.inverse.act(SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]) - pose.centroid)
+                lo = min(lo, q.y); cx += q.x; cy += q.y; cz += q.z
+                deepest = min(deepest, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z)))))
+            }
+            let n = Float(r.bean[s].count)
+            f.soleRise = max(f.soleRise, lo); f.centreHeight = max(f.centreHeight, cy / n)
+            f.radius = max(f.radius, hypotf(cx / n, cz / n)); f.overlap = max(f.overlap, deepest)
+        }
+        return f
+    }
+    static func accumulate(_ w: inout FootFrame, _ f: FootFrame) {
+        w.soleRise = max(w.soleRise, f.soleRise); w.centreHeight = max(w.centreHeight, f.centreHeight)
+        w.radius = max(w.radius, f.radius); w.overlap = max(w.overlap, f.overlap)
+    }
+    static func check(_ name: String, _ w: FootFrame, frames: Int, throwing: Bool = false) {
+        MotionLog.write(String(format: "FEETATTACH %@: %d bean frames, max sole rise %.3f, max foot-centre height %.3f (limit %.3f), max radius %.3f, worst overlap %.3f", name, frames, w.soleRise, w.centreHeight, maxCentreHeight, w.radius, w.overlap))
+        guard frames > 0 else { return }
+        XCTAssertLessThanOrEqual(w.soleRise, maxSoleRise, "\(name): a foot is lifted too high")
+        XCTAssertLessThanOrEqual(w.centreHeight, maxCentreHeight, "\(name): a foot rides up onto the belly")
+        XCTAssertLessThanOrEqual(w.radius, throwing ? 0.7 : maxRadius, "\(name): a foot is not under the body")
+        XCTAssertLessThanOrEqual(w.overlap, minOverlap, "\(name): a foot is not fused to the body (gap)")
+    }
+
+    struct Move {
+        let name: String, game: Bool, seconds: Float, expectBeans: Bool
+        let start: (MotionRig) -> Void
+    }
+    static let moves: [Move] = [
+        Move(name: "walk", game: false, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo($0.root + SIMD2(0, 2.4))) }),
+        Move(name: "walk (game)", game: true, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }),
+        Move(name: "run", game: true, seconds: 6, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.run, $0.sim) }),
+        Move(name: "zoomies", game: true, seconds: 8, expectBeans: true, start: { $0.brain.seed = 11; $0.brain.idleForced = true; _ = $0.brain.idleStart(.zoomies, $0.sim) }),
+        Move(name: "belly slide", game: true, seconds: 9, expectBeans: true, start: { $0.brain.seed = 11; $0.brain.idleForced = true; _ = $0.brain.idleStart(.slide, $0.sim) }),
+        Move(name: "hop-scoot", game: true, seconds: 5, expectBeans: true, start: { $0.brain.seed = 11; $0.brain.idleForced = true; _ = $0.brain.idleStart(.scoot, $0.sim) }),
+        Move(name: "jumping jacks", game: true, seconds: 8, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.jacks, $0.sim) }),
+        Move(name: "sit", game: true, seconds: 5, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sit, $0.sim) }),
+        Move(name: "march", game: false, seconds: 5, expectBeans: true, start: { $0.brain.startStepping(seconds: 3, sim: $0.sim) }),
+        Move(name: "turn", game: false, seconds: 3.5, expectBeans: true, start: { $0.brain.startTurn(to: $0.poseYaw + 2.4, sim: $0.sim) }),
+        Move(name: "wave", game: true, seconds: 4, expectBeans: true, start: { $0.brain.request(.wave) }),
+        Move(name: "hop", game: false, seconds: 3, expectBeans: true, start: { $0.brain.startHopPlay(sim: $0.sim) }),
+        Move(name: "call", game: true, seconds: 12, expectBeans: true, start: { $0.brain.requestNow(.come(to: SIMD2(0, 1.4))) }),
+        Move(name: "flip", game: true, seconds: 3, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim) }),
+        Move(name: "faceplant", game: true, seconds: 4, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim, fail: true) }),
+    ]
+
+    func testFeetStayLowUnderAndAttachedInEveryScriptedMove() {
+        for m in Self.moves {
+            let r = MotionRig(game: m.game)
+            Self.keep.append(r)
+            r.renderSamples = false
+            m.start(r)
+            var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
+            r.run(m.seconds) { if let f = Self.footFrame(r) { Self.accumulate(&w, f); frames += 1 } }
+            if m.expectBeans { XCTAssertGreaterThan(frames, 20, "\(m.name): the beans were out") }
+            Self.check(m.name, w, frames: frames)
+        }
+    }
+
+    func testFeetStayAttachedWhileHeldDanglingAndThrown() {
+        let r = TouchPlayTests.Rig()
+        Self.keep.append(r)
+        let sim = r.rig.sim
+        r.step(touched: true)
+        let hit = sim.centroid() + SIMD3(0, 0.1, 0.5)
+        sim.beginGrab(hit: hit, radius: 0.4)
+        var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
+        func held(_ target: SIMD3<Float>, lift: Float) {
+            r.step(touched: true) {
+                sim.moveGrab(target: target, rot: nil)
+                r.play.heldFrame(dt: 1.0 / 60, now: r.clock, grabbing: true, liftHeight: lift, sim: sim, brain: r.rig.brain, skinner: r.rig.skinner)
+            }
+            if let f = Self.footFrame(r.rig) { Self.accumulate(&w, f); frames += 1 }
+        }
+        for _ in 0..<30 { held(hit, lift: 0) }
+        for k in 0..<360 {
+            let t = Float(k) / 60, e = min(1, t / 0.8)
+            let lift = 0.4 * e * e * (3 - 2 * e)
+            held(hit + SIMD3(0.6 * sinf(2.4 * t) * e, lift + 0.1 * sinf(3.1 * t) * e, 0.3 * sinf(1.7 * t) * e), lift: lift)
+        }
+        XCTAssertGreaterThan(frames, 20)
+        // held in the air the feet dangle: allowed up to the dangle's own amplitude (a fraction of the body height), still under him
+        Self.check("pick-up dangling", w, frames: frames)
+        sim.endGrab()
+        r.play.thrown = true
+        sim.launch(velocity: SIMD3(2.5, 3.5, 0), spin: SIMD3(0, 0, -2.0))
+        var wT = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), framesT = 0
+        for _ in 0..<(60 * 4) {
+            r.step(touched: true) { r.play.heldFrame(dt: 1.0 / 60, now: r.clock, grabbing: false, liftHeight: 0, sim: sim, brain: r.rig.brain, skinner: r.rig.skinner) }
+            if let f = Self.footFrame(r.rig) { Self.accumulate(&wT, f); framesT += 1 }
+        }
+        Self.check("thrown / landing", wT, frames: framesT, throwing: true)
+    }
+
+    /// A planted foot is the boot; a lifted one is a rounded ball; in between it morphs smoothly (no pop).
+    func testPlantedBootLiftedBallMorph() {
+        XCTAssertEqual(BlobBrain.beanMorph(clearance: 0), 0)
+        XCTAssertEqual(BlobBrain.beanMorph(clearance: 0.05), 1)
+        var prev: Float = 0
+        for k in 0...100 { let m = BlobBrain.beanMorph(clearance: Float(k) * 0.0005); XCTAssertGreaterThanOrEqual(m, prev); XCTAssertLessThan(m - prev, 0.12); prev = m }
+        // the ball sits on the sole plane and is smaller than the boot's footprint
+        XCTAssertEqual(FootBean.ballF.map { $0.y }.min()!, 0, accuracy: 1e-5)
+        XCTAssertLessThanOrEqual(FootBean.ballF.map { $0.x }.max()!, Float(BobForm.footRadii.x))
+        // the morph is a plain vertex blend: same layout
+        XCTAssertEqual(FootBean.ballF.count, FootBean.vertexCount)
+    }
+
+    /// The bean is the rest foot: its footprint equals the rest foot's (no size pop at the swap), sole flat on the floor, toe curled up.
+    func testBeanIsTheRestFoot() {
+        var minX = 9.0, maxX = -9.0, minZ = 9.0, maxZ = -9.0
+        for p in FootBean.local.pos where p.y < 0.02 { minX = min(minX, p.x); maxX = max(maxX, p.x); minZ = min(minZ, p.z); maxZ = max(maxZ, p.z) }
+        for p in FootBean.local.pos {
+            let f = BobForm.footSDF(SIMD3(BobForm.footX + p.x, p.y, BobForm.footZ + p.z))
+            XCTAssertEqual(f, 0, accuracy: 0.002, "every bean vertex lies on the rest foot surface")
+        }
+        XCTAssertLessThanOrEqual(FootBean.local.pos.map { $0.x }.max()!, BobForm.footRadii.x + 1e-6)
+        XCTAssertLessThanOrEqual(FootBean.local.pos.map { $0.z }.max()!, BobForm.footToeLen + 1e-6)
+        XCTAssertGreaterThanOrEqual(FootBean.local.pos.map { $0.z }.min()!, -BobForm.footRadii.z - 1e-6)
+        // the toe slopes DOWN (no curled-up toe): the crown is lower at the toe tip than at the heel, the sole rise is a hair
+        XCTAssertLessThan(BobForm.footSole(BobForm.footZ + BobForm.footToeLen), 0.012)
+        XCTAssertLessThan(BobForm.footToeTop, BobForm.footHeelTop * 0.5)
+    }
+
+    /// The mesh-build winding fix (Geometry: flips a triangle whose normal disagrees with the hidden shape's vertex normals) must leave the
+    /// bean triangles exactly as `FootBean.triangles` writes them: the hidden ball must not collapse.
+    func testBeanTrianglesSurviveTheMeshBuild() {
+        let rm = MotionRig.renderMesh
+        guard let cap = rm.armCapsule else { return }
+        for side in [-1, 1] {
+            let want = FootBean.triangles(firstVertex: cap.beanFirst(side: side))
+            var pos = -1
+            var t = cap.indexFirst
+            while t + want.count <= cap.indexFirst + cap.indexCount {
+                if rm.index[t] == want[0] && rm.index[t + 1] == want[1] && rm.index[t + 2] == want[2] { pos = t; break }
+                t += 3
+            }
+            XCTAssertGreaterThanOrEqual(pos, 0, "bean block found (side \(side))")
+            if pos >= 0 { for k in 0..<want.count { XCTAssertEqual(rm.index[pos + k], want[k], "bean triangle entry \(k) flipped by the mesh build") } }
+        }
+    }
+}

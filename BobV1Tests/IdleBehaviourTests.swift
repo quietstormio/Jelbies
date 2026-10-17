@@ -173,8 +173,9 @@ final class IdleBehaviourTests: XCTestCase {
         let w = steady(run: false), n = steady(run: true)
         MotionLog.write(String(format: "IDLE run vs walk: speed %.3f -> %.3f u/s (x%.3f), stride %.3f -> %.3f (x%.3f), lean %.2f -> %.2f deg (+%.2f), arm sweep %.2f -> %.2f (x%.2f)",
                                w.speed, n.speed, n.speed / w.speed, w.stride, n.stride, n.stride / w.stride, w.lean * 57.3, n.lean * 57.3, (n.lean - w.lean) * 57.3, w.sweep, n.sweep, n.sweep / w.sweep))
-        XCTAssertEqual(n.speed / w.speed, 1.35, accuracy: 0.07)
-        XCTAssertEqual(n.stride / w.stride, 1.2, accuracy: 0.05)
+        // Build B (walk cadence 3.5 -> 3.75, ground speed in whole frames): run / walk speed 1.35 -> 1.25, stride ratio 1.2 -> 1.15 (the run is still +25 % over the walk)
+        XCTAssertEqual(n.speed / w.speed, 1.25, accuracy: 0.07)
+        XCTAssertEqual(n.stride / w.stride, 1.15, accuracy: 0.05)
         XCTAssertEqual((n.lean - w.lean) * 57.3, 5.5, accuracy: 1.6)
         XCTAssertGreaterThan(n.sweep / w.sweep, 1.1)
     }
@@ -242,8 +243,8 @@ final class IdleBehaviourTests: XCTestCase {
     // MARK: mood and scheduler
 
     func testMoodWeightsSelectTheRightSet() {
-        XCTAssertEqual(IdleTable.set(.happy), [.run, .jacks, .look])
-        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn])
+        XCTAssertEqual(IdleTable.set(.happy), [.run, .jacks, .look, .zoomies, .slide, .scoot])      // Build B: + the body-led running actions
+        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn, .scoot])
         XCTAssertEqual(IdleTable.set(.grumpy), [.slump])
         for m in [IdleMood.happy, .okay, .grumpy] {
             var seen: Set<IdleKind> = []

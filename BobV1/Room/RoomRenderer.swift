@@ -104,6 +104,7 @@ nonisolated final class RoomRenderer {
     var props: [RoomProp] = [] {
         didSet {
             guard props != oldValue else { return }
+            staticVersion &+= 1
             let m = RoomPropGeometry.build(props: props, theme: theme)
             propIndexCount = m.indices.count
             guard propIndexCount > 0 else { return }
@@ -129,6 +130,10 @@ nonisolated final class RoomRenderer {
     }
     private var diningOpaque = DynMesh(), diningTranslucent = DynMesh()
     private(set) var diningVertexCount = 0
+    /// Bumped whenever the static room pixels can change (geometry rebuild, props). Part of the room cache key.
+    private(set) var staticVersion = 0
+    /// World AABB of the dining meshes (opaque + translucent), nil when there are none. The room cache re-shades this area every frame.
+    private(set) var diningBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
 
     private func upload(_ m: RoomMesh, into d: inout DynMesh) {
         d.slot = (d.slot + 1) % 3
@@ -152,9 +157,16 @@ nonisolated final class RoomRenderer {
         upload(f.opaque, into: &diningOpaque)
         upload(f.translucent, into: &diningTranslucent)
         diningVertexCount = f.opaque.vertices.count + f.translucent.vertices.count
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for mesh in [f.opaque, f.translucent] { for v in mesh.vertices {
+            let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
+            lo = simd_min(lo, p); hi = simd_max(hi, p)
+        } }
+        diningBounds = diningVertexCount > 0 ? (lo, hi) : nil
     }
 
     private func rebuild() {
+        staticVersion &+= 1
         let m = RoomGeometry.build(theme: theme)
         indexCount = m.indices.count
         vertexBuffer = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
@@ -178,9 +190,12 @@ nonisolated final class RoomRenderer {
         return u
     }
 
+    /// Which opaque parts `encode` draws: the static room (+ care props) can be cached, the dining tray is per-frame.
+    enum Parts { case all, staticOnly, diningOnly }
+
     func encode(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                 lightViewProj: simd_float4x4?, shadowTex: MTLTexture?,
-                topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil) {
+                topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil, parts: Parts = .all) {
         guard let vb = vertexBuffer, let ib = indexBuffer, indexCount > 0 else { return }
         var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
         enc.pushDebugGroup("room")
@@ -193,12 +208,14 @@ nonisolated final class RoomRenderer {
         enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
         enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
         enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
+        if parts != .diningOnly {
         enc.drawIndexedPrimitives(type: .triangle, indexCount: indexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
         if propIndexCount > 0, let pv = propVB, let pi = propIB {
             enc.setVertexBuffer(pv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: propIndexCount, indexType: .uint32, indexBuffer: pi, indexBufferOffset: 0)
         }
-        if diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {
+        }
+        if parts != .staticOnly, diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {
             enc.pushDebugGroup("dining")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: diningOpaque.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)

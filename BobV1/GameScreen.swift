@@ -12,6 +12,7 @@ struct GameScreen: View {
     @State private var studioModel = ContentView.makeStudioModel()
     @State private var menuOpen = UserDefaults.standard.integer(forKey: "GameMenuOpen") != 0
     @State private var rosterOpen = false
+    @State private var bookOpen = false                       // Voice v1 trick book
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     private var focus: BlobFocus { model.care.focus }
@@ -21,6 +22,12 @@ struct GameScreen: View {
         let light = UIImpactFeedbackGenerator(style: .light), crisp = UIImpactFeedbackGenerator(style: .rigid)
         sel.onDrawStart = { light.impactOccurred(intensity: 0.6) }      // a light tick as the outline starts
         sel.onMeet = { crisp.impactOccurred(intensity: 0.9) }          // a crisp tap when the halves meet
+        // Voice: a light tick as he starts and stops listening (works roaming; HapticDriver is only warm in focus mode)
+        let voiceTick = UIImpactFeedbackGenerator(style: .light)
+        voiceTick.prepare()                                  // warm, so the tick lands on the touch-down frame
+        model.care.voice.mode.onOpen = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }
+        model.care.voice.mode.onClose = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }
+        model.care.voice.prewarm()
     }
 
     var body: some View {
@@ -36,9 +43,12 @@ struct GameScreen: View {
                 .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false } }
                 .animation(.easeInOut(duration: 0.25), value: menuOpen)
 
-            TouchHeartsView(play: model.touch)
+            TouchHeartsView(play: model.touch, care: model.care)
 
             SelectionOverlay(select: model.care.select)
+
+            VoiceGlow(voice: model.care.voice, care: model.care)
+            VoiceFeedbackView(voice: model.care.voice, care: model.care)
 
             ThoughtBubbleView(care: model.care) { action in
                 switch action {
@@ -75,7 +85,13 @@ struct GameScreen: View {
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
-                    HStack {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
+                            .overlay(alignment: .topLeading) {
+                                VoiceTip(voice: model.care.voice).fixedSize().offset(y: -42)
+                            }
+                        VoiceBookButton { bookOpen = true }
+                            .padding(.bottom, 4)
                         Spacer()
                         if !focus.isActive, model.care.select.actionVisible { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
                     }
@@ -85,16 +101,28 @@ struct GameScreen: View {
                 .padding(.vertical, 8)
             }
 
+            // (the come-here tutorial card is retired: he knows "come here" from the start)
+
             RosterPanel(care: model.care, open: $rosterOpen) { id in model.care.rosterPick(id) }
                 .padding(.top, 8)
         }
         .background(Color.black)
         .onAppear { setUpSelect(); model.care.touchPlay = model.touch }
-        .onChange(of: scenePhase) { _, p in if p != .active { model.care.needs.save() } }
+        .onChange(of: scenePhase) { _, p in
+            if p != .active { model.care.needs.save(); model.care.voice.training.save(); model.care.voice.cancel() }
+        }
+        .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
+        .onChange(of: bookOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen }
+        .onChange(of: bookOpen) { _, on in if !on, model.care.voice.tutorial.phase == .book { model.care.voice.tutorial.finish() } }      // tutorial: the book was read
+        .sheet(isPresented: $bookOpen) {
+            VoiceTrickBook(voice: model.care.voice) { bookOpen = false }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(FocusStyle.cream)
+        }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
-        .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on }
+        .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onAppear { model.care.select.gateDraw = true }
-        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker) }   // on the root: the HUD's pieces come and go with focus mode
+        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
             ZStack(alignment: .topTrailing) {
                 MelonScreen(model: studioModel) {
@@ -116,8 +144,8 @@ struct GameScreen: View {
 
     }
 
-    /// Harmless launch args for captures: -GameAction feed|feed:cake|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
-    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>) async {
+    /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
+    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false)) async {
         let d = UserDefaults.standard
         let care = model.care
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
@@ -150,12 +178,25 @@ struct GameScreen: View {
                 care.rosterPick(0)
             }
         }
+        // perf capture aid: -FocusCycles <n> enters focus (call) and lets Bob go n times (3 s each way); logs show GPU time / memory per cycle
+        if d.integer(forKey: "FocusCycles") > 0 {
+            await sleep(4)
+            for i in 1...d.integer(forKey: "FocusCycles") {
+                NSLog("[melon] focus cycle %d: enter", i)
+                care.call()
+                for _ in 0..<100 where !care.focus.isFocused { await sleep(0.1) }
+                await sleep(3)
+                NSLog("[melon] focus cycle %d: release", i)
+                withAnimation(CareMenu.spring) { care.release() }
+                await sleep(3)
+            }
+        }
         if let a = d.string(forKey: "GameAction") {
             await sleep(d.double(forKey: "GameActionDelay") > 0 ? d.double(forKey: "GameActionDelay") : 4)
             switch a {
             case "feed": care.feed()
             case "water": care.water()
-            case "feed:cake": care.feed("cake")
+            case "feed:pizza": care.feed("pizza")
             case "drink:soda": care.drink("soda")
             case "feed:berries": care.feed("berries")
             case "drink:water": care.drink("water")
@@ -168,6 +209,19 @@ struct GameScreen: View {
                 await sleep(d.double(forKey: "GameReleaseAfter"))
                 withAnimation(CareMenu.spring) { care.release() }
             }
+        }
+        // capture aid: -VoiceLearned 1 pre-learns his name and every trick; -VoiceSay "<words>" [-VoiceTeach <trick id>] simulates one hold after
+        // ~2 s (the teach move starts first and runs for a second); -VoiceBook 1 opens the trick book after 2 s
+        if d.integer(forKey: "VoiceLearned") != 0 { care.voice.debugLearnAll() }
+        if d.object(forKey: "VoiceTutorialReps") != nil { care.voice.training.debugReps(.come, word: "come here", reps: d.integer(forKey: "VoiceTutorialReps")) }     // tutorial dots
+        if let spec = d.string(forKey: "VoiceReps") {                       // -VoiceReps sit:3 = a half-learned "sit" with 3 reps
+            let parts = spec.split(separator: ":")
+            if parts.count == 2, let t = VoiceTrick(rawValue: String(parts[0])), let n = Int(parts[1]) { care.voice.training.debugReps(t, word: t.suggestion, reps: n) }
+        }
+        if d.integer(forKey: "VoiceBook") != 0 { await sleep(2); book.wrappedValue = true }
+        if let words = d.string(forKey: "VoiceSay") {
+            await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
+            await care.voice.simulate(words, teach: d.string(forKey: "VoiceTeach").flatMap(VoiceTrick.init(rawValue:)))
         }
         #if DEBUG || SELECT_PREVIEW
         // capture aid: -BlobSelectPreview 3 -BlobSelectScript 1 double-taps Pip, switches to Moss, switches mid-draw back to Pip, then confirms
@@ -200,7 +254,7 @@ struct GameScreen: View {
     static func makeGameModel() -> MelonModel {
         let m = MelonModel()
         m.gameMode = true
-        m.palette = .blush
+        m.palette = .blue   // user 2026-10-16: pink is too close to Kirby; model default stays .blush (BaseBody lock)
         return m
     }
 }
@@ -248,7 +302,7 @@ struct CareMenu: View {
                          Item(id: "care-water", title: "Drink", symbol: CareMenu.waterSymbol),
                          Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill")]
 
-    /// Which picker is unfolded under its row: Feed (berries, cake) and Drink (water, soda), each as two chips.
+    /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
 
     var body: some View {
@@ -413,7 +467,7 @@ struct ReleaseButton: View {
     }
 }
 
-/// The first-time hint in focus mode: "Pet · Pinch cheeks · Hold to pick up". Shown for the first few visits only, fades after 4 s.
+/// The first-time hint in focus mode: "Rub to pet · double-tap & hold to pick up · flick to throw". Shown for the first few visits only, fades after 4 s.
 struct FocusHint: View {
     static let key = "FocusHintSeen"
     @State private var shown = UserDefaults.standard.integer(forKey: FocusHint.key) < 3
@@ -421,7 +475,7 @@ struct FocusHint: View {
 
     var body: some View {
         if shown {
-            Text("Pet · Pinch cheeks · Hold to pick up")
+            Text("Rub to pet · double-tap & hold to pick up · flick to throw")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.horizontal, 18).padding(.vertical, 10)

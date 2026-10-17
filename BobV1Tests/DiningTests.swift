@@ -2,6 +2,12 @@ import XCTest
 import simd
 @testable import BobV1
 
+/// Test-only fork food: DEAD, unreachable code path (the user retired forks: every food is tossed from the nub). Kept only so the dormant machinery still compiles/passes.
+enum TestFoods {
+    static let fork = Consumable(id: "testfork", name: "Fork food", kind: .food, eatStyle: .fork, symbol: "fork.knife",
+                                 palette: Consumables.pizza.palette, benefits: [.hunger: 0.1], serving: Consumables.pizza.serving)
+}
+
 @MainActor
 final class DiningTests: XCTestCase {
     let aspects: [Float] = [440.0 / 956.0, 0.5]
@@ -14,9 +20,11 @@ final class DiningTests: XCTestCase {
         let ids = Consumables.all.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "ids are unique")
         XCTAssertEqual(Consumables.berries.eatStyle, .finger)
-        XCTAssertEqual(Consumables.cake.eatStyle, .fork)
+        XCTAssertEqual(Consumables.pizza.eatStyle, .finger, "pizza is finger food like the berries: the slice sticks to the nub and is tossed")
+        XCTAssertNil(Consumables.with(id: "cake"), "cake is gone from the menu")
+        XCTAssertTrue(Consumables.foods.allSatisfy { $0.eatStyle == .finger }, "every food is tossed from the nub: no fork food in the catalogue")
         XCTAssertEqual(Consumables.water.eatStyle, .sip)
-        XCTAssertEqual(Consumables.foods.map(\.id), ["berries", "cake"])
+        XCTAssertEqual(Consumables.foods.map(\.id), ["berries", "pizza"])
         XCTAssertEqual(Consumables.drinks.map(\.id), ["water", "soda"], "2+ drinks: the picker appears automatically")
         for c in Consumables.all { XCTAssertFalse(c.benefits.isEmpty, c.id); XCTAssertEqual(Consumables.with(id: c.id)?.id, c.id) }
         for f in Consumables.foods { XCTAssertNotNil(f.serving, f.id); XCTAssertNil(f.container) }
@@ -189,39 +197,83 @@ final class DiningTests: XCTestCase {
         }
     }
 
-    func testCakeIsBiggerForMoreBlobsWithAForkEach() {
+    func testPizzaThreeSlicesPerBlobAndScalesWithBlobs() {
         let theme = RoomTheme()
         var widths: [Float] = []
         for n in 1...3 {
             let L = DiningLayout.make(n: n)
             let b = RoomMeshBuilder(); b.material = .plain
-            Consumables.cake.serving!(b, ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), Consumables.cake.palette, L)
+            Consumables.pizza.serving!(b, ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), Consumables.pizza.palette, L)
             widths.append((b.mesh.vertices.map { $0.pos.x }.max() ?? 0) - (b.mesh.vertices.map { $0.pos.x }.min() ?? 0))
-            // fork foods: NO fork on the tray (it poofs into his hand): the group is the tray + plate + cake only, whatever is asked
-            let st = ServingState(n: n, bitesLeft: Array(repeating: 3, count: n))
-            let g = DiningModels.trayGroup(layout: L, serving: Consumables.cake, state: st, forksResting: Set(0..<n), theme: theme)
-            let g0 = DiningModels.trayGroup(layout: L, serving: Consumables.cake, state: st, forksResting: [], theme: theme)
-            XCTAssertEqual(g.opaque.vertices.count, g0.opaque.vertices.count, "no fork on the tray (n=\(n))")
-            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + DiningModels.plate(layout: L, theme: theme).vertices.count + b.mesh.vertices.count, "tray + plate + cake only (n=\(n))")
+            // each slice is the same mesh: 3n slices => vertex count is a multiple of one slice
+            let one = RoomMeshBuilder(); one.material = .plain
+            DiningModels.pizzaSlice(one, centre: .zero, yaw: 0, palette: Consumables.pizza.palette, scale: L.scale)
+            XCTAssertEqual(b.mesh.vertices.count, one.mesh.vertices.count * 3 * n, "3 slices per Blob (n=\(n))")
+            // finger food: nothing but tray + plate + slices on the tray
+            let g = DiningModels.trayGroup(layout: L, serving: Consumables.pizza, state: ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), theme: theme)
+            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + DiningModels.plate(layout: L, theme: theme).vertices.count + b.mesh.vertices.count)
+            // slices lie on the plate, inside the tray, never below the plate floor
+            let ys = b.mesh.vertices.map { $0.pos.y }
+            XCTAssertGreaterThan(ys.min() ?? 0, DiningDims.plateFloorY - 0.01)
+            XCTAssertLessThan(ys.max() ?? 9, DiningDims.plateFloorY + 0.09 * L.scale)
+            XCTAssertLessThan(b.mesh.vertices.map { abs($0.pos.x) }.max() ?? 9, L.half.x - 0.05)
         }
-        // a standalone held fork mesh exists (grip at the origin, tines 0.27 ahead, a bite on the tines when loaded)
+        XCTAssertGreaterThan(widths[1], widths[0]); XCTAssertGreaterThan(widths[2], widths[0])
+        // the pie (one Blob): three DISTINCT slices fanned around one centre, tips toward the centre, crusts outward, all on the plate and within the nub's reach
+        let L1 = DiningLayout.make(n: 1)
+        let pie = DiningModels.pizzaPie(layout: L1, place: 0), plate = DiningModels.pizzaPlate(L1)
+        var mids: [SIMD2<Float>] = []
+        for j in 0..<3 {
+            let a = DiningModels.pizzaAnchor(layout: L1, place: 0, index: j), y = DiningModels.sliceYaw(layout: L1, place: 0, index: j)
+            let tip = SIMD2(sinf(y), cosf(y)), toCentre = pie.centre - SIMD2(a.x, a.z)
+            XCTAssertGreaterThan(simd_dot(tip, simd_normalize(toCentre)), 0.99, "tip toward the pie centre (slice \(j))")
+            XCTAssertLessThan(simd_length(SIMD2(a.x, a.z) - L1.places[0].rel), 0.60, "slice \(j) is within the nub's reach")
+            mids.append(SIMD2(a.x, a.z))
+            let one = RoomMeshBuilder(); one.material = .plain
+            DiningModels.pizzaSlice(one, centre: a, yaw: y, palette: Consumables.pizza.palette, scale: 1)
+            for v in one.mesh.vertices {
+                XCTAssertLessThan(simd_length(SIMD2(v.pos.x, v.pos.z) - SIMD2(0, plate.cz)), plate.r + 0.005, "slice \(j) lies on the plate")
+            }
+        }
+        for (a, c) in [(0, 1), (1, 2), (0, 2)] { XCTAssertGreaterThan(simd_length(mids[a] - mids[c]), 0.09, "slices \(a) and \(c) are distinct") }
+        // bigger than the first version (0.176 x 0.116): about 0.26 long and 0.16 wide, a wedge about the size of his nub
+        XCTAssertEqual(2 * DiningModels.sliceHalfLength, 0.26, accuracy: 0.01)
+        XCTAssertEqual(2 * DiningModels.sliceHalfWidth, 0.16, accuracy: 0.01)
+        // slices of neighbouring fan positions do not overlap at the crust: chord between crust middles > slice width
+        XCTAssertGreaterThan(2 * (DiningModels.sliceMid + DiningModels.sliceHalfLength) * sinf(DiningModels.sliceFan / 2), 2 * DiningModels.sliceHalfWidth - 0.001)
+        // a standalone held fork mesh exists (kept for the dormant fork machinery)
         let fm = DiningModels.fork(withBite: false), fb = DiningModels.fork(withBite: true)
         XCTAssertGreaterThan(fm.vertices.count, 100); XCTAssertGreaterThan(fb.vertices.count, fm.vertices.count)
         XCTAssertEqual(fm.vertices.map { $0.pos.z }.max() ?? 0, 0.335, accuracy: 0.01)
         XCTAssertEqual(DiningModels.forkTip.z, 0.27, accuracy: 1e-6)
-        XCTAssertGreaterThan(widths[1], widths[0] * 1.15); XCTAssertGreaterThan(widths[2], widths[1] * 1.1)
-        // shrinks per forkful (3 per Blob), gone when everybody is done
+        // slices leave the plate one by one, gone when everybody is done
         let L = DiningLayout.make(n: 2)
-        var last = Float.infinity
-        for left in stride(from: 6, through: 1, by: -1) {
+        var last = Int.max
+        for left in stride(from: 6, through: 0, by: -1) {
             let b = RoomMeshBuilder(); b.material = .plain
-            Consumables.cake.serving!(b, ServingState(n: 2, bitesLeft: [left / 2 + left % 2, left / 2]), Consumables.cake.palette, L)
-            let z = b.mesh.vertices.map { $0.pos.z }.max() ?? 0
-            XCTAssertLessThan(z, last + 1e-6); last = z
+            Consumables.pizza.serving!(b, ServingState(n: 2, bitesLeft: [left / 2 + left % 2, left / 2]), Consumables.pizza.palette, L)
+            XCTAssertLessThan(b.mesh.vertices.count, last); last = b.mesh.vertices.count
         }
-        let b = RoomMeshBuilder(); b.material = .plain
-        Consumables.cake.serving!(b, ServingState(n: 2, bitesLeft: [0, 0]), Consumables.cake.palette, L)
-        XCTAssertEqual(b.mesh.vertices.count, 0)
+        XCTAssertEqual(last, 0)
+    }
+
+    func testPizzaSlicesLeaveThePlateOneByOne() {
+        let d = DiningSet(); defer { d.reset() }
+        d.spawn(serving: Consumables.pizza, n: 1, bobAt: SIMD2(-2, -2.2))
+        d.update(dt: 3)
+        let theme = RoomTheme()
+        let full = d.frame(theme: theme)!.opaque.vertices.count
+        var one = RoomMeshBuilder(); one.material = .plain
+        DiningModels.pizzaSlice(one, centre: .zero, yaw: 0, palette: Consumables.pizza.palette, scale: 1)
+        let slice = one.mesh.vertices.count
+        for k in 1...3 {
+            XCTAssertTrue(d.beginBite(place: 0))
+            XCTAssertEqual(d.frame(theme: theme)!.opaque.vertices.count, full - (k - 1) * slice, "in hand: leaves the plate, drawn in his hand")
+            d.finishBite(place: 0)
+            XCTAssertEqual(d.frame(theme: theme)!.opaque.vertices.count, full - k * slice, "swallowed: gone (\(k) of 3)")
+        }
+        XCTAssertEqual(d.bitesLeft, [0])
+        one = RoomMeshBuilder()
     }
 
     func testDrinkIsBiggerForMoreBlobs() {
@@ -505,7 +557,7 @@ final class DiningTests: XCTestCase {
             defer { d.reset() }
             XCTAssertTrue(RoomLayout.dynamicBoxes.isEmpty)
             XCTAssertTrue(d.spawn(serving: Consumables.berries, n: n, bobAt: SIMD2(-2, -2.2)))
-            XCTAssertFalse(d.spawn(serving: Consumables.cake, n: n, bobAt: SIMD2(-2, -2.2)), "one tray at a time")
+            XCTAssertFalse(d.spawn(serving: Consumables.pizza, n: n, bobAt: SIMD2(-2, -2.2)), "one tray at a time")
             XCTAssertEqual(RoomLayout.dynamicBoxes.count, 1)
             var peak: Float = 0, t: Float = 0, presentAt: Float?
             var midHalf: Float?
@@ -555,7 +607,7 @@ final class DiningTests: XCTestCase {
 
     func testPuffAndShadowInTheFrameWhileAnimating() {
         let d = DiningSet(); defer { d.reset() }
-        d.spawn(serving: Consumables.cake, n: 2, bobAt: SIMD2(-2, -2.2))
+        d.spawn(serving: Consumables.pizza, n: 2, bobAt: SIMD2(-2, -2.2))
         d.update(dt: 0.05)
         let f = d.frame(theme: RoomTheme())
         XCTAssertGreaterThan(f?.translucent.vertices.count ?? 0, 200)
@@ -596,7 +648,7 @@ final class DiningTests: XCTestCase {
         _ = count()
         // fork foods: no fork on the tray; the held fork is drawn only while a pose is supplied
         let e = DiningSet(); defer { e.reset() }
-        e.spawn(serving: Consumables.cake, n: 3, bobAt: SIMD2(-2, -2.2)); e.update(dt: 0.4)
+        e.spawn(serving: TestFoods.fork, n: 3, bobAt: SIMD2(-2, -2.2)); e.update(dt: 0.4)
         let base = e.frame(theme: RoomTheme())!.opaque.vertices.count
         var fm = matrix_identity_float4x4; fm.columns.3 = SIMD4(5, 1, 5, 1)
         e.hold(.fork, place: 2, transform: fm)

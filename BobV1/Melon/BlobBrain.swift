@@ -93,6 +93,7 @@ final class BlobBrain {
         case spin(t: Float)
         case hopPlay
         case rollPlay
+        case flipPlay                  // the voice backflip (BlobBrain+Flip.swift)
         case eat(t: Float, bowl: SIMD2<Float>, dur: Float, drink: Bool)
         case dine
         case idle                      // an idle behaviour (BlobBrain+Idle.swift): sit, look, yawn, stumble
@@ -107,13 +108,50 @@ final class BlobBrain {
     var idleBlocked = false
     /// Tests / captures: run idle behaviours although `autonomy` is off.
     var idleForced = false
+    /// Voice v1: the running idle behaviour was ASKED for by the player. It runs although `autonomy` is off (focus mode) or the stage holds idle back,
+    /// and clears itself when the behaviour ends (`idleEnd`).
+    var commanded = false
+    /// Voice v1: a trick to start on the next tick (the brain owns the skinner, so GameCare only queues it; see `startCommanded`).
+    var commandedIdle: IdleKind?
+    /// Voice v1: the backflip trick, queued for the next tick. `flipCompact` = focus mode (lower apex so he stays in frame).
+    var commandedFlip = false
+    var flipCompact = false
+    var commandedNameHop = false
+    var nameHopping = false
+    var flipArmA: Float = 0
+    /// The flip's smoothed arm angles (rad). `commandedFlipFail` = the queued commanded flip is the funny faceplant.
+    var commandedFlipFail = false
+    var flipEl: Float = 0, flipSa: Float = 0, flipOut: Float = 0
+    private(set) var flipFaceplants = 0
+    /// One-shot extra landing impulse for the jelly wobble (JellyJiggle.tick consumes it): the faceplant's thud.
+    var jellyKick: Float = 0
+    /// True while the flip script owns him (the touch get-up must not treat the faceplant as being knocked over).
+    var isFlipping: Bool { if case .flipPlay = script { return true }; return false }
+    func noteFaceplant() { flipFaceplants += 1 }
+    var flipRoot = SIMD3<Float>(0, 0, 0)
+    /// Flip beats for haptics (GameCare compares them with its last seen value): take-off count, landing count.
+    private(set) var flipTakeoffs = 0
+    private(set) var flipLandings = 0
+    var flipPhaseSeen: GaitDriver.Phase = .idle
+    func noteFlipBeats(_ takeoff: Bool, _ landing: Bool) { if takeoff { flipTakeoffs += 1 }; if landing { flipLandings += 1 } }
+    /// Voice v1: one blink on the next tick (the listening pose).
+    var blinkRequested = false
     /// Run blend 0...1 (the third gait point built from the walk: stride x1.2, step rate x1.125, 5.5 deg lean, bigger arm sweep). Exactly 0 = the locked walk.
     var runW: Float = 0
+    /// Zoomies blend 0...1 on top of the run (a faster dash: cadence +20 % on top of the run; extra bob or sway pulls the planted feet off the belly, so the wobble is all in the stop and the jelly). 0 = the plain run.
+    var zoomW: Float = 0
+    var slideKicks = 0
+    /// Capture aid (`-RunMove zoomies|slide|scoot`): the scheduler always picks this move, with a short cooldown.
+    var runMoveDemo: IdleKind?
+    /// Touch play: he runs (the run blend) back to the focus spot after a throw; cleared on arrival (BlobBrain+Touch `hurryUpdate`).
+    var hurry = false
     /// Idle arm override (render only): per side elevation / sweep (rad) blended in by `armDirW`; 0 = the walking arm untouched.
     var armDirW: Float = 0
     var armDirEl: [Float] = [0, 0]
     var armDirSa: [Float] = [0, 0]
     var armDirOut: Float = 0
+    /// Body-led weight 0...1: while a body-led move (jacks, flip, any arm override) runs, the arms stay at or below the rest nub even between their flaps (ArmCap).
+    var armShortW: Float = 0
     var job: BlobRequest?           // the request being served (for onFinished)
     var pending: BlobRequest?
     var restTimer: Float = 1.2
@@ -148,6 +186,8 @@ final class BlobBrain {
     var beanFirstIdx: [Int] = []
     var retractReady = false
     var beanScratch: [[SIMD3<Float>]] = [[], []]
+    /// Planted boot (0) ... lifted ball (1) morph of each foot bean as last drawn (tests / captures).
+    private(set) var beanMorphLast: [Float] = [0, 0]
     var beanStartScratch: [[SIMD3<Float>]] = [[], []]
     var footShift: [SIMD3<Float>] = [.zero, .zero]     // sim foot slab minus body-rigid foot, world (set where the sim soles are targeted)
     var beanSwaps = 0                    // number of grow starts (tests: one swap per action, never per step)
@@ -175,15 +215,15 @@ final class BlobBrain {
     /// The arm sweep follows the stride phase of the step clock (see `stridePhase`); one gait point (the march / stride of the phone build).
     let gaitW: Float = 1
     /// Gait tuning (motion table, REF2 walk): steps/s, single-step length (world units; speed = stride * rate), swing lift arc (0.11 H).
-    var stepRate: Float = 3.2
-    var stride: Float = 0.27
-    var stepLift: Float = 0.115
-    var turnLift: Float = 0.20
+    var stepRate: Float = 3.75     // 3.5 -> 3.75 (Build B, user: a little faster: walk 1.016 -> 1.144 u/s, run 1.350 -> 1.435; the ground speed steps in whole frames of step time); was 3.2 before the 20 % speed-up
+    var stride: Float = 0.305      // was 0.27 (measured ground speed 0.853 -> 1.021 u/s)
+    var stepLift: Float = 0.035          // was 0.115: a shuffle, the foot stays in the bottom band under the belly (feet-lab 2026-10-17)
+    var turnLift: Float = 0.06           // was 0.20
     /// Swing foot sideways swing (world units) and toe-up tilt (rad) at mid swing; waddle roll toward the stance foot (rad), bob lift
     /// (world units), forward / back rock (rad), arm-nub counter-swing (rad).
-    var stepOut: Float = 0.04
-    var stepTilt: Float = 0.25
-    var stepFwd: Float = 0.30          // swing foot comes this far forward of its rest spot at mid swing (one foot length: in front of the belly)
+    var stepOut: Float = 0.02            // was 0.04
+    var stepTilt: Float = 0.05           // was 0.25: no wedge, the sole barely shows
+    var stepFwd: Float = 0.06          // was 0.30 (a foot length in front of the belly): the swing foot stays under the body. Step length x rate (ground speed) is unchanged
     var waddleRoll: Float = 0.125
     var bobLift: Float = 0.0
     var hopTipBack: Float = 0.5        // fraction of the idle tip-back kept during a hop (the hop test limits the tilt to 12 deg)
@@ -191,10 +231,10 @@ final class BlobBrain {
     var bobScale: Float = 1.9
     /// Wave tuning: rigid roll about the far foot (0.30 rad = 17 deg puts the centre over that foot), arm-side foot swing out / up (0.17 H).
     var waveRoll: Float = 0.45
-    var waveFootOut: Float = 0.05
-    var waveFootLift: Float = 0.165
-    var waveFootFwd: Float = 0.15
-    var waveFootTilt: Float = 0.25
+    var waveFootOut: Float = 0.03
+    var waveFootLift: Float = 0.05          // was 0.165 (the arm-side foot rose up on the belly)
+    var waveFootFwd: Float = 0.06
+    var waveFootTilt: Float = 0.08
     var pivotEdge: Float = 0.15          // outer-edge offset of the wave's pivot on the far foot
     /// Precomputed arm-path keyframes by path name (built in the background by `attach(renderMesh:)`).
     private(set) var armKeyframes: [String: ArmKeyframes] = [:]
@@ -238,6 +278,7 @@ final class BlobBrain {
         if d.object(forKey: "BlobPitch") != nil { b.attentionPitch = Float(d.double(forKey: "BlobPitch")) }
         if d.integer(forKey: "BlobNoWander") != 0 { b.autonomy = false }
         // capture aid: -BlobGameDemo gwalk|gturn|ghop|gcome|gwave|gstep runs a scripted loop in the game without the care menu
+        if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
         return b
     }
@@ -289,6 +330,9 @@ final class BlobBrain {
         case "irun": idleStart(.run, sim)
         case "istumble": if idleStart(.run, sim) { idleState.stumbleAt = 1.9 }
         case "ijacks": idleStart(.jacks, sim)
+        case "izoomies": idleStart(.zoomies, sim)
+        case "islide": idleStart(.slide, sim)
+        case "iscoot": idleStart(.scoot, sim)
         case "isit": idleStart(.sit, sim)
         case "islump": idleStart(.slump, sim)
         case "ilook": idleStart(.look, sim)
@@ -385,14 +429,24 @@ final class BlobBrain {
             if activity != .touched { abortAll(sim, skinner) }
             activity = .touched
             calmT = 0; recoverT = 0
+            // hands-off (held, thrown, tumbling): foot beans that are still out must follow the body (they are drawn from world positions, so
+            // frozen they would hang in the air where he was picked up); they fold back into the embedded feet. The held dangle (driveExcited,
+            // from the touch play) drives them while it runs.
+            if !excitedOn && (beanG > 0 || beanHold > 0) { driveBeansRigid(sim, skinner, dt) }
             return
         }
         if activity == .touched { activity = .recovering; gaitRecover = false; calmT = 0; recoverT = 0 }
         if activity == .recovering { recover(sim, skinner, dt); return }
 
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
+        if blinkRequested { blinkRequested = false; skinner.blinkNow() }
+        if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }
+        if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
+        if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
+        if flipTick(sim, skinner, dt) { return }
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }
+        if idleBodyMoveTick(sim, skinner, dt) { return }
 
         // gait-driven tricks (hop / roll) own the attractor while they run
         switch script {
@@ -433,7 +487,7 @@ final class BlobBrain {
         case .look: activity = .lookingAround
         case .stepInPlace: activity = .steppingInPlace
         case .wave: activity = isCome ? .coming : .waving
-        case .spin, .hopPlay, .rollPlay: activity = .playing
+        case .spin, .hopPlay, .rollPlay, .flipPlay: activity = .playing
         case .eat(_, _, _, let drink): activity = drink ? .drinking : .eating
         case .dine: activity = dine.mode == .sip ? .drinking : .eating
         case .idle: activity = idleActivity
@@ -664,7 +718,7 @@ final class BlobBrain {
         squash = 1 + bob * bobScale * a * w
         lift = bobLift * a * w * (bob / 0.12)
         pitch += rockPitch * a * rock * cosf(2 * .pi * feet.stepU)     // forward at contact, back at mid swing
-        pitch += Self.runLean * runW                                   // the run's forward lean (0 = the locked walk)
+        pitch += Self.runLean * runW                                  // the run's forward lean (0 = the locked walk)
         pivotSide = 1 - feet.side; pivotNominal = true
         nubTarget = a
     }
@@ -724,7 +778,8 @@ final class BlobBrain {
             var off0: Float = 0.02
             while off0 < 3.0 && intrusion(pb + perp * (off0 * side), margin: m) > 0.004 { off0 += 0.02 }
             guard off0 < 3.0 else { continue }
-            for extra: Float in [0.015, 0.05, 0.12, 0.25, 0.5] {
+            // (a fine set: beside the tray the floor he can use is a ~0.25 wide lane, and a coarse set can miss it from one start point while finding it from the next)
+            for extra: Float in [0.015, 0.03, 0.05, 0.075, 0.1, 0.12, 0.15, 0.2, 0.25, 0.35, 0.5] {
                 let c = pb + perp * ((off0 + extra) * side)
                 guard intrusion(c, margin: m) < 0.01, legClear(a, c, margin: m) else { continue }
                 guard let rest = planRoute(c, b, depth: depth - 1) else { continue }
@@ -816,7 +871,7 @@ final class BlobBrain {
         let dp = goal - pitchBase
         pitchBase += max(-1.2 * dt, min(1.2 * dt, dp))
         switch script {
-        case .hopPlay, .rollPlay:
+        case .hopPlay, .rollPlay, .flipPlay:
             break
 
         case .none:
@@ -845,7 +900,11 @@ final class BlobBrain {
 
         case .turn(let to, let then):
             poseOn = true; ensureFeet(sim)
-            let turning = turnSteps(goal: to, tol: 0.05)
+            // squaring up to the tray is exact: the last turn step is sized to the remaining angle, so he never settles up to 0.05 rad off (the lean's brow
+            // slant and the arm reach to the tray both read that residual); every other turn keeps the loose tolerance
+            var tol: Float = 0.05
+            if case .dineGo = then { tol = 0.004 }
+            let turning = turnSteps(goal: to, tol: tol)
             gaitPose(sway: 0.6 * waddleRoll, bob: 0.03, rock: 0.5)
             armWalkWant = turning ? 0.5 : 0
             if !turning && !feet.active { step(after: then, sim) }
@@ -865,7 +924,7 @@ final class BlobBrain {
         case .stepInPlace(let t, let dur):
             poseOn = true; ensureFeet(sim)
             if t < dur && !feet.active {
-                startStep(peak: (t < 0.01 ? 0.13 : 0.075) * amplitude, rate: 2.0, swingFrac: 0.8, inPlace: true)
+                startStep(peak: (t < 0.01 ? 0.05 : 0.04) * amplitude, rate: 2.0, swingFrac: 0.8, inPlace: true)
             }
             gaitPose(sway: 0.04, bob: 0.02, rock: 0.3)
             script = .stepInPlace(t: t + dt, dur: dur)
@@ -1018,10 +1077,13 @@ final class BlobBrain {
             var vs: [Int32] = [], ds: [SIMD3<Float>] = [], ws: [Float] = [], sd: [Int8] = []
             for s in 0..<2 {
                 for (i, v) in footSkin.verts[s].enumerated() {
+                    // never the walking arm capsules / foot beans themselves (they sit in the render mesh too, hidden inside the belly)
+                    if beanFirstIdx.count == 2, armFirstIdx.count == 2, (0..<2).contains(where: { Int(v) >= armFirstIdx[$0] && Int(v) < beanFirstIdx[$0] + FootBean.vertexCount }) { continue }
                     let f = footSkin.sdf[s][i]
-                    if f >= Self.retractBand { continue }
+                    if f >= Self.retractBand && i >= footSkin.coreCount[s] { continue }
                     let r = footSkin.rest[s][i]
-                    let w = f <= 0 ? Float(1) : 1 - smooth01(f / Self.retractBand)
+                    // the embedded foot's own vertices (the slab skin) always retract fully; the belly skin around it fades with its distance to the foot
+                    let w = (f <= 0 || i < footSkin.coreCount[s]) ? Float(1) : 1 - smooth01(f / Self.retractBand)
                     // along the segment from the vertex to a point deep inside the egg, to where the egg's signed distance is -retractSink
                     // (bisection: robust at the rim where the egg's sdf has a ridge, unlike Newton)
                     let q = SIMD3<Double>(Double(abs(r.x)), Double(r.y), Double(r.z))
@@ -1105,15 +1167,33 @@ final class BlobBrain {
     }
 
     /// Bean vertices at the body-rigid foot pose (plus `tuck` up): used while the feet are not world-driven (hop, spin, idle shrink-back).
+    /// 0 = planted (the boot), 1 = lifted (a rounded ball): by how far the sole is off the floor.
+    static func beanMorph(clearance c: Float) -> Float { smooth01((c - 0.004) / 0.030) }
+
     func fillBeansRigid(_ sim: SoftBody, into dst: inout [[SIMD3<Float>]], tuck: Float, scale: Float = 1) {
         let pv = SIMD3<Float>(0, Float(FootBean.pivotLocal.y), 0)
+        // The attractor is only the body's pose while the brain drives him. Thrown / launched / held far from it (a bean that lingers 0.7 s after
+        // a release) it is stale: the feet would stay where he was. Then the feet follow the body's fitted pose.
+        let fitted: BodyPose? = (activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - sim.centroid()) > 0.1) ? sim.bodyPose(iterations: 3) : nil
         for s in 0..<2 {
             let c = geom.contact[s]
+            func place(_ i: Int, _ m: Float) -> SIMD3<Float> {
+                let l = pv + (FootBean.morphed(i, m) - pv) * scale
+                let r = SIMD3(c.x + l.x, c.y + l.y, c.z + l.z)
+                return fitted.map { $0.centroid + $0.rotation.act(r - sim.restCentroid) } ?? bodyRigid(sim, r)
+            }
+            var lo = Float.infinity
             for i in 0..<FootBean.vertexCount {
-                let l = pv + (FootBean.localF[i] - pv) * scale
-                var w = bodyRigid(sim, SIMD3(c.x + l.x, c.y + l.y, c.z + l.z))
+                var w = place(i, 0)
+                lo = min(lo, w.y + tuck)
                 w.y = max(w.y + tuck, sim.floorY)
                 dst[s][i] = w
+            }
+            // off the floor (hop, jacks, flip, held in the air): the foot rounds into the ball
+            let mo = scale == 1 ? Self.beanMorph(clearance: lo - sim.floorY) : 0
+            if scale == 1 { beanMorphLast[s] = mo }
+            if mo > 0 {
+                for i in 0..<FootBean.vertexCount { var w = place(i, mo); w.y = max(w.y + tuck, sim.floorY); dst[s][i] = w }
             }
         }
     }
@@ -1210,17 +1290,19 @@ final class BlobBrain {
                 // spots for beanHoldTime lets the beans go (one swap per action, never per step)
                 if (feet.active || simd_length(offFull) > 0.012 || h > 0.006 || waveLift > 0.02) { want = true }
                 let ct = cosf(tilt), st = sinf(tilt), hz = geom.heelZ[s] - c.z
-                let ys: Float = 1                  // rigid: the bean never changes shape
+                let ys: Float = 1
                 let wy = sim.floorY + c.y + h
                 var bv = beanScratch[s]
+                let mo = Self.beanMorph(clearance: h); beanMorphLast[s] = mo           // planted = the boot, lifted = a rounded ball (user 2026-10-17), smoothly in between
                 for i in 0..<FootBean.vertexCount {
-                    let l = FootBean.localF[i]
+                    let l = FootBean.morphed(i, mo)
                     let ly = l.y * ys, zr = l.z - hz           // tilt about the heel
                     let ty = ly * ct + zr * st, tz = -ly * st + zr * ct
                     let w = wanted + rotXZ(SIMD2(l.x, hz + tz), fyaw)
                     bv[i] = SIMD3(w.x, wy + ty, w.y)
                 }
                 attachBean(sim, fitted, lifted: h > 0.02, &bv)
+                for i in bv.indices { bv[i].y = max(bv[i].y, sim.floorY) }       // a foot never sinks through the floor (the attach shift can only move it in / up)
                 beanScratch[s] = bv
             }
             commitBeans(sim, skinner, dt, want: want)
@@ -1235,10 +1317,16 @@ final class BlobBrain {
     var armG: Float = 0, armHold: Float = 0           // swap blend (capsule out / skin nub retracted) and its 0.7 s hold
     /// The gait weight the arm sweep's phase shift follows: moves only while both arms are in a hold (ArmPath.armShiftStep) so a waddle <-> stride blend does not whip the arms (MotionArmTests).
     var armGaitW: Float = 1
+    /// Body-frame capsule drawn last tick (after the cap), +x arm convention, and the tip it asked for before the cap (diagnostics / tests).
+    var armLastGeom: [(a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float)] = [(.zero, .zero, 0, 0, 1), (.zero, .zero, 0, 0, 1)]
+    var armLastRawTip: [SIMD3<Float>] = [.zero, .zero]
+    private var armRawTip: SIMD3<Float> = .zero
     var armLastS: [Float] = [25, 25]                   // each arm's sweep (deg) frozen at the release
     var armScratch: [[SIMD3<Float>]] = [[], []], armStartScratch: [[SIMD3<Float>]] = [[], []]
     var armFirstIdx: [Int] = []
     var armRetractReady = false
+    var armCollar = ArmCollar.Set()
+    var armCollarTick = 0
     var armWasOut = false
     var armAOBaked: [Float] = [], armAOEgg: [Float] = []
     private(set) var armSwapCount = 0
@@ -1295,29 +1383,42 @@ final class BlobBrain {
         }
         armAOBaked = aoB; armAOEgg = aoE
         skinner.armRetractVertices = vs; skinner.armRetractRest = ds; skinner.armRetractWeight = ws
+        let skipR = [armFirstIdx[0]..<(beanFirstIdx[0] + FootBean.vertexCount), armFirstIdx[1]..<(beanFirstIdx[1] + FootBean.vertexCount)]
+        armCollar = ArmCollar.build(rest: renderRest, skip: skipR)
+        skinner.armCollarVertices = armCollar.ids
         armRetractReady = true
     }
 
     /// Body-frame (+x convention) capsule geometry of an arm at sweep `S` (deg) and lift axis value `lift` (0 = the rest nub station line, 1 = the walk pose).
-    func armGeometry(S: Float, lift: Float) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
-        armGeometry(el: ArmPath.armWalkElevation(S), sa: S * .pi / 180, lift: lift, xShift: 0)
+    func armGeometry(S: Float, lift: Float, capped: Bool = true) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
+        armGeometry(el: ArmPath.armWalkElevation(S), sa: S * .pi / 180, lift: lift, xShift: 0, bodyLed: 0, capped: capped)
     }
 
     /// The idle override: the arm axis turned `w` of the way from the walk direction toward (`dirEl`, `dirSa`) (rad), the whole stub nudged `out` outward.
     func armGeometry(S: Float, lift: Float, dirEl: Float, dirSa: Float, w: Float, out: Float) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
         let el0 = ArmPath.armWalkElevation(S), sa0 = S * .pi / 180
-        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w)
+        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w, bodyLed: w)
     }
 
-    func armGeometry(el: Float, sa: Float, lift: Float, xShift: Float) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
+    func armGeometry(el: Float, sa: Float, lift: Float, xShift: Float, bodyLed: Float = 0, capped: Bool = true) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
         let W = ArmPath.armWalkRoot
         let d = SIMD3<Float>(cosf(el) * cosf(sa), sinf(el), cosf(el) * sinf(sa))
         let aw = SIMD3<Float>(Float(W.x) + xShift, Float(W.y), Float(W.z)), bw = aw + d * Float(W.length)      // the shoulder is a fixed interior point of the body (W1c): only the direction turns
         let ar = SIMD3<Float>(Float(BobForm.armTop.x), Float(BobForm.armTop.y), Float(BobForm.armTop.z))
         let br = SIMD3<Float>(Float(BobForm.armTip.x), Float(BobForm.armTip.y), Float(BobForm.armTip.z))
         let l = lift
-        return (ar + (aw - ar) * l, br + (bw - br) * l, Float(BobForm.armTopR) + (Float(W.r1) - Float(BobForm.armTopR)) * l,
-                Float(BobForm.armTipR) + (Float(W.r2) - Float(BobForm.armTipR)) * l, Float(BobForm.armFlatten) + (1 - Float(BobForm.armFlatten)) * l)
+        var aF = ar + (aw - ar) * l, bF = br + (bw - br) * l
+        let r2F = Float(BobForm.armTipR) + (Float(W.r2) - Float(BobForm.armTipR)) * l
+        armRawTip = bF
+        // THE global arm cap (ArmCap): whatever a move asks for, the arm never stands out further than the wave's thumb
+        var bC = bF
+        if ArmCap.enabled && capped {
+            let f = ArmCap.fuse(a: SIMD3<Double>(aF), b: SIMD3<Double>(bF))
+            aF = SIMD3<Float>(f.a)
+            bC = SIMD3<Float>(ArmCap.clampTip(a: f.a, b: f.b, r2: Double(r2F), limit: ArmCap.limit(bodyLed: Double(max(bodyLed, armShortW)))))
+        }
+        return (aF, bC, Float(BobForm.armTopR) + (Float(W.r1) - Float(BobForm.armTopR)) * l,
+                r2F, Float(BobForm.armFlatten) + (1 - Float(BobForm.armFlatten)) * l)
     }
 
     func driveArms(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
@@ -1339,6 +1440,8 @@ final class BlobBrain {
             return
         }
         guard geom.valid else { return }
+        let shortGoal: Float = (idleState.kind == .jacks || idleState.kind == .zoomies || idleState.kind == .slide || idleState.kind == .scoot || isFlipping || armDirW > 0) ? 1 : 0
+        armShortW += max(-dt / 0.25, min(dt / 0.15, shortGoal - armShortW))
         prepareArms(skinner)
         let ph = stridePhase
         armGaitW = ArmPath.armShiftStep(shiftW: armGaitW, target: gaitW, phase: ph, dt: dt)
@@ -1358,14 +1461,19 @@ final class BlobBrain {
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
             let g = armDirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: armDirEl[si], dirSa: armDirSa[si], w: armDirW, out: armDirOut) : armGeometry(S: armLastS[si], lift: armLift)
+            armLastGeom[si] = g; armLastRawTip[si] = armRawTip
             ArmCapsule.fill(a: g.a, b: g.b, r1: g.r1, r2: g.r2, flatten: g.f, sigma: sg, into: &armScratch[si])
-            let r = armGeometry(S: 25, lift: 0)
+            let r = armGeometry(S: 25, lift: 0, capped: false)
             ArmCapsule.fill(a: r.a, b: r.b, r1: r.r1, r2: r.r2, flatten: r.f, sigma: sg, inflate: -0.002, into: &armStartScratch[si])
             for i in 0..<ArmCapsule.vertexCount { armScratch[si][i] = org + RS * armScratch[si][i]; armStartScratch[si][i] = org + RS * armStartScratch[si][i] }
         }
         skinner.armPos = armScratch; skinner.armStart = armStartScratch
         skinner.armBlend = armBlendNow
         skinner.armRetractMatrix = RS
+        if ArmCap.enabled && ArmCap.collar && !armCollar.ids.isEmpty {
+            armCollarTick &+= 1       // one side per tick (each side refreshes at 30 Hz): the bump moves a few mm per step
+            ArmCollar.fill(armCollar, geoms: armLastGeom, M: RS, side: armCollarTick & 1, into: &skinner.armCollarDelta)
+        } else { skinner.armCollarDelta = [] }
         if !armWasOut {
             // crease occlusion on the capsules' vertices (the mat channel, through the same override the wave uses; positions are not moved by it)
             var verts: [Int32] = []
@@ -1391,7 +1499,7 @@ final class BlobBrain {
 
     /// Callbacks into the tray (DiningSet) for one meal; set by GameCare. Everything is in world space.
     struct DineHooks {
-        var piece: (Int) -> SIMD3<Float>           // world point bite `k` reaches for: the berry it takes (finger) / the cake the fork stabs (fork)
+        var piece: (Int) -> SIMD3<Float>           // world point bite `k` reaches for: the berry it takes (finger) / the food the fork stabs (fork)
         var begin: () -> Bool                      // the next piece leaves the plate / the fork takes a forkful
         var finish: () -> Void                     // swallowed: the piece / forkful is gone
         var cancel: () -> Void                     // dropped (grabbed mid-bite): the piece goes back on the plate
@@ -1650,7 +1758,10 @@ final class BlobBrain {
             p = bodyPointWorld(nubHoldRest(s: dine.armS), sim: sim, pose: bpp)
             if dine.phase == .grab { let q = h.piece(dine.k); p = q + (p - q) * smooth01(dine.t / Self.tGrab) }
         }
-        let m = simd_float4x4(columns: (SIMD4(1, 0, 0, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(p.x, p.y, p.z, 1)))
+        // the flying piece shrinks over the last 20% of the arc: it goes INTO his mouth instead of covering his face
+        var k: Float = 1
+        if dine.flying { let u = min(1, max(0, (dine.t - Self.tossFlick) / (Self.tossLand - Self.tossFlick))); k = 1 - 0.6 * smooth01((u - 0.8) / 0.2) }
+        let m = simd_float4x4(columns: (SIMD4(k, 0, 0, 0), SIMD4(0, k, 0, 0), SIMD4(0, 0, k, 0), SIMD4(p.x, p.y, p.z, 1)))
         if dine.mode == .fork { h.holdBite(m) } else { h.hold(m) }
     }
 
@@ -1745,9 +1856,10 @@ final class BlobBrain {
     var excitedAO: [[Float]] = [[], []]
     private(set) var excitedOn = false
 
-    /// While he is held up he flaps his arms (the wave-path arm override, both sides out of phase) and kicks his legs (the foot beans, alternately).
-    /// Render overrides only: no sim targets, the walk itself is untouched. `level` 0...1, `phase` in radians. The body-rigid helpers
-    /// the beans use follow the hanging body (the attractor is off while he is held, only its pose fields are kept current).
+    /// While he is held he is happy: his feet dangle and swing softly (both together, a hair out of step, like legs hanging from one hip) and
+    /// his arms lift a little (the wave-path arm override at a low, slowly swaying amount). Render overrides only: no sim targets, the walk
+    /// itself is untouched. `level` 0...1, `phase` in radians (about 1 Hz). The feet are the body-rigid beans, so they cannot be left behind
+    /// or pulled apart.
     func driveExcited(sim: SoftBody, skinner: Skinner, dt: Float, level L: Float, phase ph: Float) {
         guard attached, beanFirstIdx.count == 2 else { return }
         let pose = sim.bodyPose(iterations: 3)
@@ -1760,8 +1872,8 @@ final class BlobBrain {
         }
         fillBeansRigid(sim, into: &beanScratch, tuck: 0)
         for s in 0..<2 {
-            let a = ph + (s == 0 ? 0 : Float.pi)
-            let d = pose.rotation.act(SIMD3<Float>(0, 0.13 * L * max(0, sinf(a)), 0.10 * L * sinf(a)))
+            let w = sinf(ph - (s == 0 ? 0 : 0.5))
+            let d = pose.rotation.act(SIMD3<Float>(0, 0.012 * L * w * w, 0.05 * L * w))
             for i in 0..<FootBean.vertexCount { beanScratch[s][i] += d }
         }
         footShift = [.zero, .zero]
@@ -1769,7 +1881,7 @@ final class BlobBrain {
         if let kf = armKeyframes[ArmPath.wave.name] {
             var verts: [Int32] = [], dl: [SIMD3<Float>] = [], mat: [Float] = []
             for (i, side) in [-1, 1].enumerated() {
-                let s = L * (0.40 + 0.22 * sinf(1.3 * ph + (i == 0 ? 0 : Float.pi)))
+                let s = L * (0.20 + 0.025 * sinf(ph + (i == 0 ? 0 : 0.6)))
                 kf.evaluate(side: side, s: s, rotation: pose.rotation, delta: &excitedScratch[i], ao: &excitedAO[i])
                 verts += kf.side(side).vertices; dl += excitedScratch[i]; mat += excitedAO[i]
             }

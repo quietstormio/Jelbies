@@ -62,18 +62,24 @@ enum HapticMap {
     /// Squish / stretch / cheeks press: grows monotonically with the live deformation depth; 0 below a hair.
     static func squishIntensity(depth d: Float) -> Float {
         let s = clamp01(d / squishFullDepth)
-        return d < 0.004 ? 0 : 0.12 + 0.78 * (s * s * (3 - 2 * s))
+        return d < 0.004 ? 0 : 0.12 + 0.66 * (s * s * (3 - 2 * s))
     }
 
     /// The sharpness falls as it deepens: a surface touch is crisp, a deep squish is dull and heavy.
     static func squishSharpness(depth d: Float) -> Float {
         let s = clamp01(d / squishFullDepth)
-        return 0.55 - 0.40 * s
+        return 0.30 - 0.20 * s          // jelly: always soft and round, deeper = duller (no crisp edge)
+    }
+
+    /// One soft pulse of the settling jelly after he is let go (`amp` = how far the squash swung past his resting height, sim units):
+    /// it fades as the wobble does, low sharpness, never above a warm 0.55.
+    static func jellyPulse(amplitude a: Float) -> (intensity: Float, sharpness: Float) {
+        (min(0.55, 0.10 + 4.0 * max(0, a)), 0.12)
     }
 
     /// Bounce / landing transient from the impact speed (world units per second).
     static func impactIntensity(speed v: Float) -> Float { clamp01(0.22 + 0.78 * clamp01(v / 6)) }
-    static func impactSharpness(speed v: Float) -> Float { 0.35 + 0.30 * clamp01(v / 6) }
+    static func impactSharpness(speed v: Float) -> Float { 0.20 + 0.25 * clamp01(v / 6) }
 
     /// Wobble: a continuous buzz whose intensity decays like the measured wobble (time constant `tau`, seconds).
     /// Control points (relative time, 0...1 multiplier) of the intensity curve; at most 16 points.

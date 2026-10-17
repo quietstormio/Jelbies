@@ -158,7 +158,7 @@ struct FootGait {
     private(set) var active = false
     private(set) var side = 0
     private(set) var t: Float = 0
-    private(set) var rate: Float = 3.2
+    private(set) var rate: Float = 3.5
     private(set) var swingFrac: Float = 0.85
     private var from = SIMD2<Float>.zero, to = SIMD2<Float>.zero
     private var fromYaw: Float = 0, toYaw: Float = 0

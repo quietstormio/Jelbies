@@ -4,7 +4,7 @@
 //  the stage controller calls tick() once per fixed sim step, which talks to Bob's brain and pops the meal TRAY in and out.
 //
 //  A meal: Feed / Drink -> a short little tray pops in (puff) at the front spot with the chosen food or bottle -> he walks to his place,
-//  turns, eats (berries by hand, cake with a fork) or sips (his own straw), a happy finish -> the tray poofs away. One tray at a time.
+//  turns, eats (berries or pizza by hand) or sips (his own straw), a happy finish -> the tray poofs away. One tray at a time.
 //
 
 import Foundation
@@ -34,6 +34,13 @@ final class GameCare {
     @ObservationIgnored private var idleT: Float = 0
     @ObservationIgnored private var retries = 0
     @ObservationIgnored private var mealRequested = false
+    /// The walk to the stand before the tray pops in (see `serveWanted`).
+    @ObservationIgnored private var standRequested = false
+    @ObservationIgnored private var standIdle: Float = 0
+    @ObservationIgnored private var standSettle: Float = 0
+    @ObservationIgnored private var standRetries = 0
+    @ObservationIgnored private var wantedAge: Float = 0
+    @ObservationIgnored private var wantedOrigin: SIMD2<Float>?
 
     /// The meal tray (one shared serving scaled for N Blobs; drinks come with a straw per Blob).
     let dining = DiningSet()
@@ -80,8 +87,20 @@ final class GameCare {
     /// A meal that gets nowhere (he keeps being picked up) is cleared away after this long.
     static let mealTimeout: Float = 60
 
+    /// Voice v1: his name, tricks, listen mode and the reaction queue (VoiceCoordinator.swift). Run from `tick`.
+    let voice: VoiceCoordinator
+
+    init(voice: VoiceCoordinator? = nil) {
+        let v = voice ?? VoiceCoordinator()
+        self.voice = v
+        v.care = self
+    }
+
     // Not isolated: Swift 6.2's implicit isolated deinit (swift_task_deinitOnExecutor) aborts on the iOS 26.2 runtime; see MelonModel.
     nonisolated deinit {}
+
+    /// A grumpy Bob ignored an order: the thought bubble of the need he is wanting comes up now (nothing if none).
+    func showNeedBubble() { if !focus.isActive { applyBubble(schedule.showNow()) } }
 
     func feed() { feed(selectedFoodID) }
     func water() { drink(selectedDrinkID) }
@@ -164,7 +183,10 @@ final class GameCare {
         }
         guard wanted == nil, meal == nil, dining.phase == .absent else { return }
         wanted = c; servingKind = c.kind; trayOut = true
+        retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
+        resetStandWalk()
     }
+    private func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil }
 
     /// Floor obstacle for the brain's resolver: pushes a point out of the tray.
     /// Sipping stands `sipCloser` nearer the tray (his mouth only reaches a straw tip that close); his belly may overlap the tray's rim by that much.
@@ -176,41 +198,43 @@ final class GameCare {
     private func footprint(_ r: Float) -> Float { r - (servingKind == .drink ? Self.sipCloser * 1.5 : 0) }
 
     /// The brain's dining hooks wired to a tray (the same wiring the tests use).
-    static func hooks(for c: Consumable, tray d: DiningSet) -> BlobBrain.DineHooks {
+    static func hooks(for c: Consumable, tray d: DiningSet, place i: Int = 0) -> BlobBrain.DineHooks {
         var h = BlobBrain.DineHooks(
-            piece: { _ in d.pieceAnchorWorld(place: 0, index: d.nextPiece(place: 0)) },
-            begin: { d.beginBite(place: 0) },
-            finish: { d.finishBite(place: 0) },
-            cancel: { d.cancelBite(place: 0); d.release(.piece, place: 0) },
-            hold: { m in d.hold(.piece, place: 0, transform: m) })
+            piece: { _ in d.pieceAnchorWorld(place: i, index: d.nextPiece(place: i)) },
+            begin: { d.beginBite(place: i) },
+            finish: { d.finishBite(place: i) },
+            cancel: { d.cancelBite(place: i); d.release(.piece, place: i) },
+            hold: { m in d.hold(.piece, place: i, transform: m) })
         switch c.eatStyle {
         case .finger: break
         case .fork:
             h.fork = true
-            h.piece = { _ in d.cakeBitePoint(place: 0) }
-            h.cancel = { d.cancelBite(place: 0); d.poofFork(place: 0) }
-            h.forkAppear = { p in d.appearFork(place: 0, at: p) }
-            h.holdFork = { m in d.hold(.fork, place: 0, transform: m) }
-            h.releaseFork = { d.poofFork(place: 0) }
-            h.launch = { d.launchBite(place: 0) }
-            h.holdBite = { m in d.hold(.bite, place: 0, transform: m) }
+            h.piece = { _ in d.forkBitePoint(place: i) }
+            h.cancel = { d.cancelBite(place: i); d.poofFork(place: i) }
+            h.forkAppear = { p in d.appearFork(place: i, at: p) }
+            h.holdFork = { m in d.hold(.fork, place: i, transform: m) }
+            h.releaseFork = { d.poofFork(place: i) }
+            h.launch = { d.launchBite(place: i) }
+            h.holdBite = { m in d.hold(.bite, place: i, transform: m) }
         case .sip:
-            h.straw = { d.strawTip(place: 0) ?? .zero }
-            h.level = { f in d.setDrunk(place: 0, f) }
+            h.straw = { d.strawTip(place: i) ?? .zero }
+            h.level = { f in d.setDrunk(place: i, f) }
         }
         return h
     }
 
-    private func mealRequest(_ c: Consumable) -> BlobRequest {
-        var place = dining.places[0]
+    private func mealRequest(_ c: Consumable) -> BlobRequest { Self.mealRequest(c, tray: dining, place: 0) }
+    /// The brain request for place `i` of tray `d` (sip stands a little closer, eating a little farther back).
+    static func mealRequest(_ c: Consumable, tray dining: DiningSet, place i: Int) -> BlobRequest {
+        var place = dining.places[i]
         switch c.eatStyle {
         case .sip:
-            place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * Self.sipCloser
-            let left = Int(((1 - dining.drunk[0]) * Float(DiningTiming.gulpsPerDrink)).rounded(.up))
+            place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * sipCloser
+            let left = Int(((1 - dining.drunk[i]) * Float(DiningTiming.gulpsPerDrink)).rounded(.up))
             return .sip(place: place, gulps: max(left, 1))
         default:
-            place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * Self.eatCloser
-            return .dine(place: place, bites: max(dining.bitesLeft[0] + (dining.forkBite[0] ? 1 : 0), 1))
+            place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * eatCloser
+            return .dine(place: place, bites: max(dining.bitesLeft[i] + (dining.forkBite[i] ? 1 : 0), 1))
         }
     }
 
@@ -249,16 +273,72 @@ final class GameCare {
         }
     }
 
+    /// Clears the meal. Does NOT touch `retries`: a re-serve goes endMeal -> wanted -> serveWanted -> spawn, and the count has to survive that
+    /// round trip or the loop is never bounded. `retries` restarts only on a fresh tap (`order`), a finished meal, or a dropped one (Come here).
     private func endMeal() {
         dining.despawn()
-        meal = nil; mealRequested = false; retries = 0; idleT = 0
+        meal = nil; mealRequested = false; idleT = 0
     }
+    /// A meal that fails (he is displaced / his request keeps being cancelled) is served again at most this many times, then given up on.
+    static let maxReserves = 2
 
     /// After the frame's last sim step: what he holds goes back onto his nub for the pose the body has now, and the tray mesh is refreshed.
     func refreshHeld(brain: BlobBrain, sim: SoftBody, renderer: MelonRenderer?) {
         guard meal != nil else { return }
         brain.refreshHeld(sim: sim)
         if let room = renderer?.room, let f = dining.frame(theme: room.theme) { room.setDining(f) }
+    }
+
+    /// Where he is on the floor now: the body's centroid when it is free (just put down after a grab: the brain's own position is stale until it
+    /// starts its next job), else the brain's root.
+    static func floorPos(_ brain: BlobBrain, _ sim: SoftBody?) -> SIMD2<Float> {
+        guard let sim, brain.poseW <= 0 else { return brain.position }
+        let c = sim.centroid(); return SIMD2(c.x, c.z)
+    }
+    /// How far past his stand line (toward the camera) he may be for the tray to pop in at once: his belly already hangs that far over the
+    /// tray's back edge at the stand itself (by design), so this is "he is at, or behind, his place".
+    static let popTolerance: Float = 0.03
+    /// The walk-to-stand target sits this far behind the stand, so the final step forward to the stand happens with the tray already out.
+    static let approachBack: Float = 0.25
+    /// After a walk to the stand he stands still this long before the tray pops in.
+    static let popSettle: Float = 0.45
+
+    /// The tray never pops in where he would have to cross it. The visible floor beside the 1.56-wide tray is only ~0.2 u wide, so there is NO
+    /// on-screen way around it for a body 1.4 wide: instead the tray waits until he is at (or behind) his stand line. If he is in front of
+    /// it (or on the spot where it pops in) he first walks to his place with no tray out, then it pops in front of him.
+    private func serveWanted(_ c: Consumable, brain: BlobBrain, here: SIMD2<Float>, act: BlobActivity, dt: Float) {
+        let layout = DiningLayout.make(n: 1)
+        if wantedOrigin == nil { wantedOrigin = DiningSpot.choose(bob: SIMD2(99, 99), layout: layout) }
+        let origin = wantedOrigin ?? DiningSpot.preferred
+        var stand = origin + layout.places[0].rel
+        stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
+        wantedAge += dt
+        if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
+        if here.y <= stand.y + Self.popTolerance {
+            // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
+            if standRequested {
+                if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }
+                guard standSettle >= Self.popSettle else { return }
+            }
+            if dining.phase == .absent, dining.spawn(serving: c, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
+                wanted = nil; meal = c; mealAge = 0; idleT = 0; resetStandWalk()
+                brain.dineHooks = Self.hooks(for: c, tray: dining)
+                brain.requestNow(mealRequest(c)); mealRequested = true
+            }
+            return
+        }
+        // in front of his place: walk there first (the tray is not out yet, so nothing is in the way)
+        let approach = SIMD2(stand.x, stand.y - Self.approachBack)
+        if !standRequested {
+            standRequested = true; standIdle = 0
+            brain.requestNow(.goTo(approach))
+        } else if act == .idle || act == .lookingAround || act == .steppingInPlace {
+            standIdle += dt
+            if standIdle > 0.8 {
+                standIdle = 0
+                if standRetries < 3 { standRetries += 1; brain.requestNow(.goTo(approach)) } else { wanted = nil; resetStandWalk() }
+            }
+        } else { standIdle = 0 }
     }
 
     func tick(brain: BlobBrain, renderer: MelonRenderer?, dt: Float, sim: SoftBody? = nil) {
@@ -286,10 +366,12 @@ final class GameCare {
                 callRunning = false; retries = 0
                 if UserDefaults.standard.integer(forKey: "GameFeedAfterCall") != 0 { feed() }          // capture aid: serve a meal once he has come
                 if focus.phase == .approaching { enterFocus(brain: brain) }
+            case .goTo:
+                voice.goFinished()                  // a voice walk ends facing the camera
             case .dine, .sip:
                 if let m = meal {                    // a finished meal (not a dropped one) restores the need
                     needs.restore(m.kind == .food ? .hunger : .thirst)
-                    endMeal()
+                    endMeal(); retries = 0
                 }
             default: break
             }
@@ -298,32 +380,37 @@ final class GameCare {
 
         // one-shot requests (a Call drops the meal first so the tray poofs and the held piece goes with it)
         if let r = queued.first {
-            queued.removeFirst()
-            if case .come = r, meal != nil { endMeal() }
-            brain.requestNow(r)
-            if case .come = r { callRunning = true }
-        }
-
-        // pop the tray in (beside Bob if he stands on the front spot) and send him to his place
-        if let c = wanted, !callRunning, queued.isEmpty {
-            if dining.spawn(serving: c, n: 1, bobAt: brain.position) {
-                wanted = nil; meal = c; mealAge = 0; idleT = 0; retries = 0
-                brain.dineHooks = Self.hooks(for: c, tray: dining)
-                brain.requestNow(mealRequest(c)); mealRequested = true
+            var isCome = false
+            if case .come = r { isCome = true }
+            if isCome, meal != nil { endMeal(); retries = 0 }
+            if isCome, wanted != nil { wanted = nil; retries = 0; resetStandWalk() }        // a pending tray (he is still walking to his place) is dropped too
+            if isCome, dining.isPresent {
+                // the tray is poofing (its collider is already gone): he starts walking once it has gone, so he never walks through it
+            } else {
+                queued.removeFirst()
+                brain.requestNow(r)
+                if isCome { callRunning = true }
             }
         }
 
+        // pop the tray in once he is at (or behind) his place; in front of it he walks there first
+        if let c = wanted, !callRunning, queued.isEmpty { serveWanted(c, brain: brain, here: Self.floorPos(brain, sim), act: act, dt: dt) }
+
         if let c = meal {
             mealAge += dt
-            if mealAge > Self.mealTimeout { endMeal() }
+            if mealAge > Self.mealTimeout { endMeal(); retries = 0 }
             else if !callRunning, queued.isEmpty, mealRequested {
                 // the request was cancelled (for example he was grabbed): ask again a couple of times, then give up
                 if act == .idle || act == .lookingAround || act == .steppingInPlace {
                     idleT += dt
                     if idleT > 0.8 {
                         idleT = 0
-                        if retries < 2 { retries += 1; brain.dineHooks = Self.hooks(for: c, tray: dining); brain.requestNow(mealRequest(c)) }
-                        else { endMeal() }
+                        if retries < Self.maxReserves, let st = dining.places.first?.stand, Self.floorPos(brain, sim).y > st.y + Self.popTolerance + 0.05 {
+                            // dropped in front of his place (the tray is between him and it): the tray poofs, he walks back, it pops in again
+                            retries += 1; endMeal(); wanted = c; resetStandWalk()
+                        }
+                        else if retries < Self.maxReserves { retries += 1; brain.dineHooks = Self.hooks(for: c, tray: dining); brain.requestNow(mealRequest(c)) }
+                        else { endMeal(); retries = 0 }          // out of re-serves: the tray poofs, he is left at rest
                     }
                 } else { idleT = 0 }
             }
@@ -337,5 +424,6 @@ final class GameCare {
         let out = wanted != nil || meal != nil || dining.isPresent
         if out != trayOut { trayOut = out }
         if !out, servingKind != nil { servingKind = nil }
+        voice.tick(care: self, brain: brain, sim: sim, dt: dt)
     }
 }

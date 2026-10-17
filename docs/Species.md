@@ -1,8 +1,12 @@
 # Blob Species
 
+**Naming (2026-10-16):** the app is called **Jelbies**, and that is the species name. Babies are **Jelbies**; grown-ups are **Jellies**. "Blob" in these docs and the code is the old working name.
+
 Every species has one **signature silhouette feature**, so you can tell it apart even as a shadow. Each individual Blob in the kennel varies that feature (size, count, curl, etc.) along with shade, size, marking and personality.
 
 **Every Blob shares one LOCKED base body.** See [BaseBody.md](BaseBody.md). Breeds only add a feature and colour on top of it.
+
+**Colour note (2026-10-16):** the game's Bob is now **Baby blue** (existing palette) instead of blush pink, because pink read too close to Kirby. Starter colours are blue, yellow, green and purple; green and purple are still to be added as new pastel palettes. The species colours in the table below are the older kennel concept and are not what the game renders.
 
 ## Shipping in v1
 

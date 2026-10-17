@@ -92,6 +92,7 @@ final class MotionFootRenderTests: XCTestCase {
                 guard r.skinner.beansActive, r.skinner.beanBlend > 0.999 else { return }
                 r.render()
                 for s in 0..<2 {
+                    guard r.brain.beanMorphLast[s] == 0 else { continue }        // rigid while PLANTED (the boot); a lifted foot morphs to a ball
                     for p in pairs[s] {
                         let a = SIMD3(r.dyn[6 * p.0], r.dyn[6 * p.0 + 1], r.dyn[6 * p.0 + 2]), b = SIMD3(r.dyn[6 * p.1], r.dyn[6 * p.1 + 1], r.dyn[6 * p.1 + 2])
                         worst = max(worst, abs(simd_distance(a, b) - p.2))

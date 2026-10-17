@@ -4,7 +4,8 @@
 //    one finger sliding on him                      PET
 //    one quick tap                                  a ZONE TAP (head pat, cheek boop, belly poke)
 //    two fingers that both start on him, together   CHEEKS (pinch)
-//    press, hold ~0.25 s, then drag up              PICK UP
+//    double-tap, then hold ~0.15 s or drag, on him   PICK UP (second down within 0.30 s / 40 pt of a tap-up on him; see PickUpArm)
+//    a single press-hold                            PET (a still finger is petting; it never picks him up)
 //    a fast flick when letting go of a pick up      THROW
 //  The decision is made from movement and hold time in the first ~150-250 ms and is never switched mid-gesture.
 //  Pure value type (times in seconds, points in screen points) so it is unit tested without a view.
@@ -22,18 +23,21 @@ nonisolated struct TouchGesture: Sendable {
     static let tapTime = 0.30                 // a tap is shorter than this
     static let pinchWindow = 0.20             // the second finger must land this soon after the first
     static let throwSpeed: CGFloat = 900      // points per second at release
+    static let pickHold = 0.15                // an armed (double-tap) press held this long, or dragged, picks him up
 
     private(set) var kind: Kind = .none
     private(set) var t0 = 0.0
     private(set) var p0 = CGPoint.zero
     private(set) var last = CGPoint.zero
+    private(set) var armed = false           // this press is the second touch of a double tap on him
     private var samples: [(t: Double, p: CGPoint)] = []
 
     var isActive: Bool { kind != .none }
     /// The action is decided (it never changes again until the finger lifts).
     var decided: Bool { kind == .pet || kind == .pickUp || kind == .cheeks }
 
-    mutating func down(t: Double, p: CGPoint) {
+    mutating func down(t: Double, p: CGPoint, armed: Bool = false) {
+        self.armed = armed
         kind = .undecided; t0 = t; p0 = p; last = p; samples = [(t, p)]
     }
 
@@ -53,15 +57,14 @@ nonisolated struct TouchGesture: Sendable {
         guard kind == .undecided || kind == .hold else { return }
         let moved = dist(p, p0)
         guard moved > Self.slop else { return }
-        if kind == .undecided && t - t0 < Self.holdTime { kind = .pet; return }
-        // after a hold: dragging up picks him up, anything else is a stroke
-        let dx = p.x - p0.x, dy = p0.y - p.y           // dy > 0 = up the screen
-        kind = (dy > Self.slop && dy >= abs(dx) * 0.7) ? .pickUp : .pet
+        kind = armed ? .pickUp : .pet                    // double-tap-and-drag lifts him; any other slide is a stroke
     }
 
-    /// Time passing with the finger still: ~0.25 s makes it a hold.
+    /// Time passing with the finger still: an armed press held 0.15 s picks him up; otherwise ~0.25 s makes it a hold (petting).
     mutating func tick(t: Double) {
-        if kind == .undecided, t - t0 >= Self.holdTime { kind = .hold }
+        guard kind == .undecided else { return }
+        if armed { if t - t0 >= Self.pickHold { kind = .pickUp } }
+        else if t - t0 >= Self.holdTime { kind = .hold }
     }
 
     mutating func up(t: Double) -> Release {
@@ -78,4 +81,24 @@ nonisolated struct TouchGesture: Sendable {
     }
 
     mutating func cancel() { kind = .none; samples = [] }
+}
+
+/// Pure double-tap detector for the pick-up: a finished tap ON him arms it; the next down within 0.30 s and 40 pt of that tap-up is the
+/// second touch of a double tap (the host passes `armed: true` to `TouchGesture.down`). Every down consumes the pending tap.
+nonisolated struct PickUpArm: Sendable {
+    static let window = 0.30
+    static let radius: CGFloat = 40
+    private var lastUp: (time: Double, point: CGPoint)?
+
+    mutating func tapUp(time: Double, point: CGPoint) { lastUp = (time, point) }
+
+    /// A finger went down on him: true when it completes a double tap.
+    mutating func touchDown(time: Double, point: CGPoint) -> Bool {
+        defer { lastUp = nil }
+        guard let up = lastUp else { return false }
+        let dt = time - up.time
+        return dt >= 0 && dt <= Self.window + 1e-9 && hypot(point.x - up.point.x, point.y - up.point.y) <= Self.radius
+    }
+
+    mutating func reset() { lastUp = nil }
 }

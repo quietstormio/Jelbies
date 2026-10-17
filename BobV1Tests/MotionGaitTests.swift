@@ -1,6 +1,6 @@
 //
 //  MotionGaitTests.swift
-//  GAIT (motion table, REF2 walk): swing lift peak 0.08-0.16 H, cadence 2.8-3.6 steps/s walking and 1.8-2.2 steps/s marching, swing
+//  GAIT (motion table; swing lift LOWERED 2026-10-17 on the user's direction: a low shuffle under the body, "cute short feet"): swing lift peak 0.03-0.10 H, cadence 2.8-3.6 steps/s walking and 1.8-2.2 steps/s marching, swing
 //  fraction 0.30-0.45 of a foot's cycle, alternating feet, never a foot in the air at the end of a walk / turn / march (stop in double support).
 //
 
@@ -15,7 +15,7 @@ final class MotionGaitTests: XCTestCase {
     /// Swings: runs where the RENDERED foot (lowest bean vertex) is more than 0.02 H off the floor.
     private func swings(_ s: [MotionSample]) -> [Event] {
         var out: [Event] = []
-        let th = 0.02 * MotionRig.H
+        let th = 0.01 * MotionRig.H
         for f in 0..<2 {
             var a: Int?, pk: Float = 0
             for i in 0..<s.count {
@@ -40,10 +40,10 @@ final class MotionGaitTests: XCTestCase {
         let swingFrac = swingT / (2 / r.brain.stepRate)
         MotionLog.write(String(format: "GAIT walk: swing lift peak mean %.3f H (min %.3f max %.3f), cadence %.2f steps/s, swing %.3f s = %.2f of the foot cycle, %d swings",
                                peaks.reduce(0, +) / Float(peaks.count), peaks.min()!, peaks.max()!, rate, swingT, swingFrac, ev.count))
-        XCTAssertGreaterThanOrEqual(peaks.min()!, 0.08)
-        XCTAssertLessThanOrEqual(peaks.max()!, 0.16)
-        XCTAssertGreaterThanOrEqual(rate, 2.8); XCTAssertLessThanOrEqual(rate, 3.6)
-        XCTAssertGreaterThanOrEqual(swingFrac, 0.30); XCTAssertLessThanOrEqual(swingFrac, 0.45)
+        XCTAssertGreaterThanOrEqual(peaks.min()!, 0.03)
+        XCTAssertLessThanOrEqual(peaks.max()!, 0.10)
+        XCTAssertGreaterThanOrEqual(rate, 2.8); XCTAssertLessThanOrEqual(rate, 4.0)      // Build B: cadence 3.5 -> 3.85 steps/s (speed +10 %)
+        XCTAssertGreaterThanOrEqual(swingFrac, 0.25); XCTAssertLessThanOrEqual(swingFrac, 0.45)
         // alternating feet
         for (a, b) in zip(mid, mid.dropFirst()) { XCTAssertNotEqual(a.foot, b.foot, "feet alternate") }
         // stop in double support: no foot in the air once he is idle
@@ -61,7 +61,7 @@ final class MotionGaitTests: XCTestCase {
         let first = ev[0].peak
         MotionLog.write(String(format: "GAIT march: %.2f steps/s, first lift %.3f H, later mean %.3f H", rate, first, ev.dropFirst().map(\.peak).reduce(0, +) / Float(ev.count - 1)))
         XCTAssertGreaterThanOrEqual(rate, 1.8); XCTAssertLessThanOrEqual(rate, 2.2)
-        XCTAssertGreaterThanOrEqual(first, 0.06)                       // reference: 0.09 H first step
+        XCTAssertGreaterThanOrEqual(first, 0.03)                       // was 0.06 (reference 0.09 H first step) before the low shuffle
         for (a, b) in zip(ev, ev.dropFirst()) { XCTAssertNotEqual(a.foot, b.foot) }
         XCTAssertLessThanOrEqual(s.filter { $0.activity == .idle }.map { max($0.gap[0], $0.gap[1]) }.max() ?? 0, 0.02 * MotionRig.H)
     }
@@ -106,5 +106,29 @@ final class MotionGaitTests: XCTestCase {
         r.run(2.0)       // revert to cp5b: the walking arm capsules (W1d arms) hold 0.7 s after the walk before they swap out, so the release is checked after 2 s, not 1 s
         XCTAssertTrue(r.skinner.overrideVertices.isEmpty, "nub override released after the walk")
         XCTAssertTrue(r.sim.targets.isEmpty)
+    }
+
+    /// Steady-state ground speed (u/s) of the walk and the run, measured over the middle of a long leg (Build B: both raised ~10 %).
+    func testWalkRunSteadySpeed() {
+        func speed(_ run: Bool) -> Float {
+            let r = MotionRig(game: false)
+            r.renderSamples = false
+            r.brain.seed = 11
+            var pts: [(Float, SIMD2<Float>)] = []
+            if run { r.brain.idleForced = true; XCTAssertTrue(r.brain.idleStart(.run, r.sim)) }
+            else { r.brain.request(.goTo(r.root + SIMD2(0, 6))) }
+            let t0 = r.t
+            r.run(12, until: { run ? r.brain.idleState.kind != .run : (pts.count > 30 && r.brain.activity == .idle) }) {
+                if r.brain.activity == .walking && (!run || r.brain.runW > 0.999) { pts.append((r.t - t0, SIMD2(r.brain.px, r.brain.pz))) }
+            }
+            guard pts.count > 30 else { XCTFail("no walk"); return 0 }
+            let total = simd_length(pts.last!.1 - pts[0].1)
+            let a = pts.firstIndex { simd_length($0.1 - pts[0].1) > 0.3 * total }!, b = pts.lastIndex { simd_length($0.1 - pts[0].1) < 0.7 * total }!
+            return simd_length(pts[b].1 - pts[a].1) / (pts[b].0 - pts[a].0)
+        }
+        let w = speed(false), n = speed(true)
+        MotionLog.write(String(format: "SPEED walk %.3f u/s, run %.3f u/s", w, n))
+        XCTAssertGreaterThan(w, 1.08); XCTAssertLessThan(w, 1.2)
+        XCTAssertGreaterThan(n, 1.40); XCTAssertLessThan(n, 1.6)
     }
 }

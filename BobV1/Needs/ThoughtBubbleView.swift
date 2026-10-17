@@ -90,7 +90,7 @@ struct ThoughtBubbleView: View {
             let s = CGFloat(max(0, 1 - exp(-7 * u) * cos(14 * u)))                       // springy pop, overshoots and settles
             var g = ctx
             drawCloud(&g, need: n, center: CGPoint(x: c.x, y: c.y + bob(now)), head: head, scale: s, ctx: ctx)
-            if u < Self.popTime { puff(&ctx, at: c, u: u / Self.popTime) }
+            if u < Self.popTime { Self.puff(&ctx, at: c, u: u / Self.popTime) }
         }
         if let l = leaving {
             let u = now.timeIntervalSince(l.start)
@@ -101,9 +101,9 @@ struct ThoughtBubbleView: View {
                     var g = ctx
                     drawCloud(&g, need: l.need, center: CGPoint(x: c.x, y: c.y + bob(now)), head: head, scale: s, ctx: ctx)
                 }
-                if u < Self.popTime { puff(&ctx, at: c, u: u / Self.popTime) }
+                if u < Self.popTime { Self.puff(&ctx, at: c, u: u / Self.popTime) }
             }
-            if l.fixed, u < 1.0 { sparkle(&ctx, around: CGPoint(x: head.x, y: head.y - 50), u: u / 1.0) }
+            if l.fixed, u < 1.0 { Self.sparkle(&ctx, around: CGPoint(x: head.x, y: head.y - 50), u: u / 1.0) }
         }
     }
 
@@ -134,7 +134,7 @@ struct ThoughtBubbleView: View {
     }
 
     /// The same idea as the room's Puff: a handful of soft cream spheres that swell, drift apart and fade.
-    private func puff(_ ctx: inout GraphicsContext, at c: CGPoint, u: Double) {
+    static func puff(_ ctx: inout GraphicsContext, at c: CGPoint, u: Double) {
         let u = min(max(u, 0), 1)
         let ease = CGFloat(1 - (1 - u) * (1 - u))
         let a = 0.95 * pow(max(1 - u, 0), 1.1)
@@ -148,7 +148,7 @@ struct ThoughtBubbleView: View {
     }
 
     /// A little happy sparkle: four-point stars burst out and rise.
-    private func sparkle(_ ctx: inout GraphicsContext, around c: CGPoint, u: Double) {
+    static func sparkle(_ ctx: inout GraphicsContext, around c: CGPoint, u: Double) {
         let u = min(max(u, 0), 1)
         let a = 1 - u * u
         let colors: [Color] = [Color(red: 1.0, green: 0.84, blue: 0.35), NeedStyle.heart, .white, Color(red: 1.0, green: 0.84, blue: 0.35), NeedStyle.heart, .white, Color(red: 1.0, green: 0.84, blue: 0.35)]

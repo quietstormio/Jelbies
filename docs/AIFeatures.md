@@ -33,6 +33,46 @@ The mic is **never always-on**. The player opens it on purpose:
 
   A hands-free "listening mode" could be an opt-in setting later.
 
+### Voice v1: what is built (2026-10-16)
+Code in `BobV1/Voice/`. Real recognition and haptics while recording are **not yet verified on a phone**.
+- **Opening it:** double-tap then hold on empty space, or press and hold the mic button (bottom-left). A hold under 0.25 s cancels. A one-time "Hold to talk" tip sits by the mic. Ticks play on open and close. A flat edge glow in Bob's blue pulses with your voice.
+- **While listening:** Bob stops, turns to face you, tips up a little more and blinks. If he is already doing a teachable move, he keeps doing it so the word can bind. The face is unchanged (no wider eyes, no brow lift).
+- **Recognition:** `DictationTranscriber` (preset `.phrase`), on device, with his name and the trained words as contextual strings. Only microphone permission is asked, and only on the first hold. If recognition is unavailable, the mic shows a slash and opens the trick book instead.
+- **Name first:** saying "Bob" (also "Bobby" or "Bobbie") once per listen, 3 listens, teaches it. Before that he tilts, puzzled. Once learned, his name makes him hop and walk about 1 unit toward you. He does **not** enter focus mode.
+- **Tricks:** sit, jumping jacks, run, flip, look, come. All reuse existing moves except the flip (new, see Animations.md). The yawn is an idle behaviour only, not a trick; an old stored "yawn" lesson is dropped on load.
+  - The flip is not an idle move, so it can only be taught by tapping its trick book row (he flips), then saying the word during the flip. There is no timing meter (the shot-meter bar game was removed 2026-10-17 on user request): the flip just plays, crouch, backflip, land. While the word is not yet learned, about 1 time in 3 he faceplants instead (the funny faceplant and get-up), never on the first try and never twice in a row; a faceplant still counts as doing the move for a teaching rep. Once learned, a failed reliability roll is sometimes a faceplant instead of the generic miss.
+  - Teach a trick by saying any word while he is doing the move. It is learned after 3 reps, one per listen (saying it again and again in one listen counts once). The count is `VoiceTuning.repsToLearn`; the dots, name lesson and tests all read it.
+  - Reliability starts at 35% and grows with use, up to 95% (come starts at 92%, see below).
+  - A miss is either a wrong trick or ignoring you, 50/50.
+  - Grumpy: he refuses with a slump and shows his need bubble.
+  - Commands are ignored while the tray is out.
+  - In focus, "run" becomes a hop so he doesn't leave the spot; "come" is also a hop there (he is already close).
+- **Trick book** (book button next to the mic): it has a name row and one row per trick, each showing the word, 3 progress dots and reliability. Tapping a row makes him do the trick now, so it doubles as the no-voice command palette. Each row has a Forget button.
+- **Saved:** UserDefaults `BlobWords.v1`. `-VoiceReset 1` clears it.
+- **Capture and test aids:**
+  - `-VoiceFakeMic 1` (with `-VoiceFakeText`) replaces the mic.
+  - `-VoiceSay "<words>"` (with optional `-VoiceTeach <trick>` and `-VoiceDelay`) plays a voice turn.
+  - `-VoiceLearned 1` pre-learns everything.
+  - `-VoiceBook 1` opens the book.
+- **Later:** new moves come from trick pages bought with Drops (see the Feature Bible).
+
+#### Come here is innate (2026-10-17, replaces the come-here tutorial)
+- He knows "come here" from the first launch (fresh install, after `-VoiceReset`, and old saves where come was not learned are completed on load). Reliability 92% (a miss is about 1 in 12; success still nudges it up to 95%). Also matched: "come", "come on", "here boy", "come to me", and "come here <name>". A word the player taught for come themselves is kept. "Forget" on come puts "come here" back.
+- **Voice or trick-book "come" = the game's Come here:** if he obeys (reliability roll, not grumpy, no tray out) he walks to the front and focus / cuddle mode starts with the usual zoom (`GameCare.comeHere`). Already in focus, it is a happy hop. Grumpy refuses and never enters focus.
+- The tutorial card is retired (not mounted; `VoiceTutorial.isDone` starts true; the code and debug flags remain, its tests are gone).
+
+#### Feedback: he heard you and is learning (2026-10-17)
+`Voice/VoiceFeedback.swift` (overlay `VoiceFeedbackView`, events from `VoiceCoordinator.emitFeedback`; no text from Bob himself).
+- **Heard pill** above the mic, about 2 s: the player's own words in quotes (`voice-heard`); nothing recognised shows an ellipsis.
+- **Bob's bubble** beside his head (icons only, anchored with `ThoughtBubbleView.project`, `voice-bubble`, value = event): rep = trick icon + 3 dots with the new one popping, plus a small ear-perk tilt; learned = sparkles, icon + check, toast "Learned "word" -> Trick" and a happy hop; obeyed = a check as he starts (come shows it before the focus zoom); missed roll = "?" + trick + reliability %; unknown word / nothing heard = "?" / "..." with the head tilt; grumpy = the existing refusal. Name reps show a heart + dots.
+- **Trick-book row** (he demonstrates, no bubble): prompt pill "Now hold the mic and say a word for <Trick>" (`voice-prompt`) until the next word; the book's dots are live.
+- Debug: `-VoiceReps sit:3` pre-fills reps. Tests: `VoiceIntegrationTests` feedback cases, UI `testVoiceHeardPillAndRepBubbleAppear`.
+
+#### Glow timing (2026-10-17)
+- The glow and level bars are drawn from `mode.isListening`, which `begin()` sets synchronously on the second tap-down (in `pointerDown`) or the mic press. No hold threshold, no waiting for the audio session or analyzer; the mic starts in parallel (40 ms later, all of session activation, engine creation and start run off the main thread). A hold under 0.25 s is a silent cancel.
+- Release hides it in the same call (`VoiceMode.endHold`). Before, the state only left `.listening` after the analyzer had finalised the transcript, so the glow lingered for that whole time (the likely "gone on release" lag). The glow is four edge gradients with no blur or animation (a full-screen blur is an offscreen pass). A mic press wakes the 30 fps idle-rest governor (`gfxWake`).
+- `-VoiceLog 1` logs `begin() ran synchronously in N ms` and `touch-down -> glow visible N ms, -> audio running N ms`.
+
 ### 2. Wave at him, he waves back (camera awareness)
 - **What it is:** with the front camera on, the Blob notices you. Hold up a hand and it waves back (using the wave animation from the reference video). Lean in close and it gets excited, and it can follow your face with its eyes. Nintendogs + Cats on 3DS did a simple version of this, with face recognition and head-tilt copying.
 - **Apple tech:** Vision framework (hand-pose and face detection). Optional: ARKit face tracking on Face ID phones for head-tilt mirroring.

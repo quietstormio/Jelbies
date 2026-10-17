@@ -3,8 +3,8 @@
 //  The food / drink catalogue (data only) and the ONE shared eating timing.
 //  Adding a new food = one new entry here + one serving builder in DiningModels. No animation code changes.
 //
-//  Servings are SHARED and scaled for N Blobs (N = 1...3): one plate / cake / drink on a little tray, with 3 bites per Blob
-//  (berries: 3 berries each, cake: one fork each) or one bendy straw per Blob (drinks).
+//  Servings are SHARED and scaled for N Blobs (N = 1...3): one plate / pizza / drink on a little tray, with 3 bites per Blob
+//  (berries: 3 berries each, pizza: 3 slices each) or one bendy straw per Blob (drinks).
 //
 
 import simd
@@ -12,7 +12,8 @@ import Foundation
 
 nonisolated enum ConsumableKind: String { case food, drink }
 
-/// How it reaches his mouth: `finger` (the piece sticks to the nub), `fork` (a fork carries the bite), `sip` (his own bendy straw).
+/// How it reaches his mouth: `finger` (the piece sticks to the nub, then is flicked into his mouth: EVERY food), `sip` (his own bendy straw).
+/// `fork` is RETIRED (user decision 2026-10-17): no catalogue food uses it; the code path is dead and unreachable.
 nonisolated enum EatStyle: String { case finger, fork, sip }
 
 nonisolated enum BenefitKey: String, CaseIterable { case hunger, thirst, happy, energy }
@@ -94,12 +95,12 @@ nonisolated enum Consumables {
         benefits: [.hunger: 0.3, .happy: 0.1],
         serving: { b, st, pal, lay in DiningModels.berries(b, state: st, palette: pal, layout: lay) })
 
-    static let cake = Consumable(
-        id: "cake", name: "Cake", kind: .food, eatStyle: .fork, symbol: "birthday.cake.fill",
-        palette: ConsumablePalette(primary: srgb(1.0, 0.92, 0.74), secondary: srgb(1.0, 0.76, 0.82), accent: srgb(0.98, 0.52, 0.60),
-                                   detail: srgb(1.0, 0.97, 0.92)),
-        benefits: [.hunger: 0.2, .happy: 0.35],
-        serving: { b, st, pal, lay in DiningModels.cake(b, state: st, palette: pal, layout: lay) })
+    static let pizza = Consumable(
+        id: "pizza", name: "Pizza", kind: .food, eatStyle: .finger, symbol: "triangle.fill",
+        palette: ConsumablePalette(primary: srgb(0.93, 0.74, 0.50), secondary: srgb(1.0, 0.88, 0.55), accent: srgb(0.92, 0.50, 0.46),
+                                   detail: srgb(1.0, 0.96, 0.78)),
+        benefits: [.hunger: 0.3, .happy: 0.2],
+        serving: { b, st, pal, lay in DiningModels.pizza(b, state: st, palette: pal, layout: lay) })
 
     static let water = Consumable(
         id: "water", name: "Water", kind: .drink, eatStyle: .sip, symbol: "waterbottle.fill",
@@ -118,7 +119,7 @@ nonisolated enum Consumables {
         strawColors: (srgb(0.62, 0.84, 0.96), srgb(1.0, 1.0, 1.0)))
 
     /// Menu order.
-    static let all: [Consumable] = [berries, cake, water, soda]
+    static let all: [Consumable] = [berries, pizza, water, soda]
     static var foods: [Consumable] { all.filter { $0.kind == .food } }
     static var drinks: [Consumable] { all.filter { $0.kind == .drink } }
     static func with(id: String) -> Consumable? { all.first { $0.id == id } }

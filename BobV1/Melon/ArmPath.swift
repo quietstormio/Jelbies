@@ -120,6 +120,13 @@ nonisolated struct ArmPath: Sendable {
     /// (root and length interpolate, the axis slerps, so the arm sweeps up the outside without shrinking); between posed
     /// knots all pose parameters follow a Catmull-Rom Hermite curve.
     func geom(at sIn: Double, scale: Double = 1) -> ArmGeom {
+        var g = geomRaw(at: sIn, scale: scale)
+        g.B = ArmCap.clampTip(a: g.A, b: g.B, r2: g.r2, scale: scale)        // the global arm cap (the wave itself is the reference, so it passes untouched)
+        return g
+    }
+
+    /// `geom` before the global cap (the cap's own reference is measured on the wave with this).
+    func geomRaw(at sIn: Double, scale: Double = 1) -> ArmGeom {
         let s = min(max(sIn, 0), 1)
         var i = 0
         while i < knots.count - 2 && s > knots[i + 1].s { i += 1 }
@@ -207,6 +214,149 @@ nonisolated struct ArmPath: Sendable {
     static let nubGrabS: Double = 0.30
     /// Peak pendulum angle of the nub (REF2: std 12.8 deg front / 20 deg profile; a sine of this peak has std peak / sqrt 2).
     static let nubTiltDeg: Double = 24
+}
+
+// MARK: - Global arm protrusion cap
+
+/// ONE cap on how far any arm may stand out of the body, for every move (walk, run, jacks, flip, hops, dining, wave ...).
+/// "Exposed length" = the part of the capsule axis outside the egg plus the tip radius (what the eye reads as the arm's length,
+/// body surface -> tip). The cap is the WAVE's maximum (the approved stubby thumb); `clamp` pulls a longer tip back along its own
+/// axis (root stays buried, radii untouched), so a stub never grows into a tube whatever pose a move asks for. Body frame, +x arm.
+nonisolated enum ArmCap {
+    /// Test / comparison switch only (measuring the uncapped poses); always true in the app.
+    nonisolated(unsafe) static var enabled = true
+    /// Fillet collar switch (tests / cost measurement); always true in the app.
+    nonisolated(unsafe) static var collar = true
+    /// Fraction of the axis a->b that lies outside the egg, as a length, plus the tip radius.
+    static func exposed(a: SIMD3<Double>, b: SIMD3<Double>, r2: Double, samples n: Int = 10) -> Double {
+        let L = simd_length(b - a)
+        var out = 0.0
+        var prev = BobForm.bodySDF(a)
+        for i in 1...n {
+            let p = a + (b - a) * (Double(i) / Double(n))
+            let d = BobForm.bodySDF(p)
+            let seg = L / Double(n)
+            if d > 0 && prev > 0 { out += seg }
+            else if d > 0 || prev > 0 { out += seg * max(d, prev) / (abs(d) + abs(prev) + 1e-12) }
+            prev = d
+        }
+        return out + (BobForm.bodySDF(b) > -r2 ? r2 : 0)
+    }
+    /// The wave's largest exposed length over its whole path (the approved reference), plus 2 % slack for the sampled metric.
+    static let maximum: Double = {
+        var m = 0.0
+        for i in 0...100 {
+            let g = ArmPath.wave.geomRaw(at: Double(i) / 100)
+            m = max(m, exposed(a: g.A, b: g.B, r2: g.r2))
+        }
+        return m
+    }()
+    static let waveMax: Double = maximum
+    /// The wave's shallowest root burial (centre depth below the egg surface, u) once it is posed: a closed capsule arm must be at least this
+    /// deep, so its base is swallowed by the body like the wave's thumb instead of standing on the surface as a bare tube.
+    static let minRootDepth: Double = {
+        var m = 1.0
+        for i in 40...100 { let g = ArmPath.wave.geomRaw(at: Double(i) / 100); m = min(m, -BobForm.bodySDF(g.A)) }
+        return m
+    }()
+    /// The whole arm slid inward (along -x of the +x arm, length and radii unchanged) until its root is buried `minRootDepth` deep.
+    static func fuse(a: SIMD3<Double>, b: SIMD3<Double>) -> (a: SIMD3<Double>, b: SIMD3<Double>) {
+        if -BobForm.bodySDF(a) >= minRootDepth { return (a, b) }
+        var lo = 0.0, hi = max(a.x, 0.05)
+        for _ in 0..<14 {
+            let m = 0.5 * (lo + hi)
+            if -BobForm.bodySDF(a - SIMD3(m, 0, 0)) >= minRootDepth { hi = m } else { lo = m }
+        }
+        let d = SIMD3(hi, 0, 0)
+        return (a - d, b - d)
+    }
+    /// `b` pulled toward `a` until the exposed length is within the cap (unchanged when already within it).
+    /// The resting nub's exposed length (u): the limit for the body-led moves (jacks, flip, name hop ...): the arms stay at or below the rest nub,
+    /// only the wave may raise an arm further.
+    static let restNub: Double = exposed(a: BobForm.armTop, b: BobForm.armTip, r2: BobForm.armTipR)
+    /// The cap `w` of the way (0...1) from the wave's maximum toward the rest nub's (`w` = the body-led override weight). Walk / run arms (w = 0) keep the wave cap.
+    static func limit(bodyLed w: Double) -> Double { maximum + (min(restNub, maximum) - maximum) * smoothW(w) }
+    private static func smoothW(_ w: Double) -> Double { let x = min(max(w, 0), 1); return x * x * (3 - 2 * x) }
+    static func clampTip(a: SIMD3<Double>, b: SIMD3<Double>, r2: Double, scale: Double = 1, limit: Double? = nil) -> SIMD3<Double> {
+        let cap = (limit ?? maximum) * scale
+        if exposed(a: a, b: b, r2: r2, samples: 10) <= cap { return b }
+        var lo = 0.0, hi = 1.0
+        for _ in 0..<8 {
+            let m = 0.5 * (lo + hi)
+            if exposed(a: a, b: a + (b - a) * m, r2: r2, samples: 10) <= cap { lo = m } else { hi = m }
+        }
+        return a + (b - a) * lo
+    }
+}
+
+// MARK: - Fillet collar (capsule arms)
+
+/// The wave's join is a smooth union of the egg and the arm (`PosedArmField`, smin with k about 0.12). The capsule arms get the same join at run time:
+/// a skin vertex on the egg at cone distance c from the arm is raised along the egg normal by the smin bump h^2 k / 4, h = max(k - |c|, 0) / k.
+nonisolated enum ArmCollar {
+    static let k = 0.12
+    /// Bump height for a skin vertex at cone distance `c` (the first-order smooth-union fillet).
+    @inline(__always) static func bump(_ c: Float) -> Float {
+        let kk = Float(k), h = max(kk - abs(c), 0) / kk
+        return h * h * kk * 0.25
+    }
+    /// Rest-space data of the collar: vertex ids, side (0 / 1), mirrored (+x arm convention) rest positions and outward egg normals.
+    struct Set { var ids: [Int32] = [], side: [Int8] = [], pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = []; var ranges: [Range<Int>] = [0..<0, 0..<0] }
+    /// Skin vertices within `reach` of the shoulder (both sides) that are not capsule / bean vertices (`skip`).
+    static func build(rest: [Float], skip: [Range<Int>], reach: Double = 0.36) -> Set {
+        var out = Set()
+        let W = ArmPath.armWalkRoot, sh = SIMD3<Double>(W.x, W.y, W.z)
+        for side in 0..<2 {
+            let first = out.ids.count
+            for v in 0..<(rest.count / 3) where !skip.contains(where: { $0.contains(v) }) {
+                let x = Double(rest[3 * v]), y = Double(rest[3 * v + 1]), z = Double(rest[3 * v + 2])
+                if abs(x) < 0.25 || y < 0.15 || y > 1.0 || (x < 0 ? 0 : 1) != side { continue }
+                let p = SIMD3(abs(x), y, z)
+                if simd_length(p - sh) > reach { continue }
+                let n = simd_normalize(BobForm.eggGradient(p))
+                out.ids.append(Int32(v)); out.side.append(Int8(side))
+                out.pos.append(SIMD3<Float>(p)); out.nrm.append(SIMD3<Float>(n))
+            }
+            out.ranges[side] = first..<out.ids.count
+        }
+        return out
+    }
+    /// Fill `delta` (world, before the armBlend scale) for the two sides' capsules `g` (body frame, +x convention); `M` carries rest space into the world.
+    static func fill(_ set: Set, geoms g: [(a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float)], M: simd_float3x3, side only: Int, into delta: inout [SIMD3<Float>]) {
+        if delta.count != set.ids.count { delta = [SIMD3<Float>](repeating: .zero, count: set.ids.count) }
+        var mid = [SIMD3<Float>](repeating: .zero, count: 2), rad2 = [Float](repeating: 0, count: 2)
+        for s in 0..<2 {
+            let gg = g[s], F = gg.f
+            let a = SIMD3(gg.a.x, gg.a.y, gg.a.z * F), b = SIMD3(gg.b.x, gg.b.y, gg.b.z * F)
+            mid[s] = (a + b) * 0.5
+            let r = simd_length(b - a) * 0.5 + max(gg.r1, gg.r2) + Float(k) + 0.02
+            rad2[s] = r * r * F       // flatten stretches z at most by F
+        }
+        for i in set.ranges[only] {
+            let s = only, gg = g[s]
+            let F = gg.f
+            let p = set.pos[i], q = SIMD3(p.x, p.y, p.z * F)
+            let dm = q - mid[s]
+            if simd_dot(dm, dm) > rad2[s] { delta[i] = .zero; continue }
+            let a = SIMD3(gg.a.x, gg.a.y, gg.a.z * F), b = SIMD3(gg.b.x, gg.b.y, gg.b.z * F)
+            let c = roundConeF(q, a, b, gg.r1, gg.r2) / F.squareRoot()
+            let d = bump(c)
+            if d < 1e-5 { delta[i] = .zero; continue }
+            let sg: Float = s == 0 ? -1 : 1
+            let n = set.nrm[i]
+            delta[i] = M * (SIMD3(n.x * sg, n.y, n.z) * d)
+        }
+    }
+    @inline(__always) static func roundConeF(_ p: SIMD3<Float>, _ a: SIMD3<Float>, _ b: SIMD3<Float>, _ r1: Float, _ r2: Float) -> Float {
+        let ba = b - a, l2 = simd_dot(ba, ba), rr = r1 - r2, a2 = l2 - rr * rr, il2 = 1 / max(l2, 1e-9)
+        let pa = p - a, y = simd_dot(pa, ba), z = y - l2
+        let w = pa * l2 - ba * y
+        let x2 = simd_dot(w, w), y2 = y * y * l2, z2 = z * z * l2
+        let k = (rr < 0 ? -1 : 1) * rr * rr * x2
+        if (z < 0 ? -1 : 1) * a2 * z2 > k { return (x2 + z2).squareRoot() * il2 - r2 }
+        if (y < 0 ? -1 : 1) * a2 * y2 < k { return (x2 + y2).squareRoot() * il2 - r1 }
+        return ((x2 * a2 * il2).squareRoot() + y * rr) * il2 - r1
+    }
 }
 
 // MARK: - Posed field

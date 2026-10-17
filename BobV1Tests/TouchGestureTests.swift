@@ -30,15 +30,39 @@ final class TouchGestureTests: XCTestCase {
         XCTAssertEqual(h.up(t: 0.9), .tap)
     }
 
-    func testHoldThenDragUpIsPickUp() {
+    func testSinglePressHoldAndDragUpArePettingNeverPickUp() {
         var x = g()
         x.tick(t: 0.26)
         XCTAssertEqual(x.kind, .hold)
         x.move(t: 0.3, p: CGPoint(x: 202, y: 380))
-        XCTAssertEqual(x.kind, .pickUp)
-        // and stays one
-        x.move(t: 0.5, p: CGPoint(x: 400, y: 380))
-        XCTAssertEqual(x.kind, .pickUp)
+        XCTAssertEqual(x.kind, .pet, "a single hold then a drag up is a stroke now")
+        XCTAssertEqual(x.up(t: 1), .none)
+        var q = g(); q.move(t: 0.05, p: CGPoint(x: 200, y: 300))
+        XCTAssertEqual(q.kind, .pet)
+    }
+
+    func testDoubleTapHoldIsPickUpAfterPoint15sOrOnDrag() {
+        var h = TouchGesture(); h.down(t: 0, p: CGPoint(x: 200, y: 400), armed: true)
+        h.tick(t: 0.10); XCTAssertEqual(h.kind, .undecided)
+        h.tick(t: 0.16); XCTAssertEqual(h.kind, .pickUp)
+        h.move(t: 0.3, p: CGPoint(x: 400, y: 380)); XCTAssertEqual(h.kind, .pickUp, "stays a pick up, any direction")
+        var d = TouchGesture(); d.down(t: 0, p: CGPoint(x: 200, y: 400), armed: true)
+        d.move(t: 0.05, p: CGPoint(x: 200, y: 430)); XCTAssertEqual(d.kind, .pickUp, "dragged before 0.15 s")
+        var quick = TouchGesture(); quick.down(t: 0, p: CGPoint(x: 200, y: 400), armed: true)
+        XCTAssertEqual(quick.up(t: 0.1), .tap, "a quick second tap is just a tap")
+    }
+
+    func testPickUpArmNeeds300msWindowAnd40ptAndIsConsumed() {
+        var a = PickUpArm()
+        a.tapUp(time: 1.0, point: CGPoint(x: 200, y: 400))
+        XCTAssertTrue(a.touchDown(time: 1.2, point: CGPoint(x: 220, y: 410)))
+        XCTAssertFalse(a.touchDown(time: 1.25, point: CGPoint(x: 220, y: 410)), "consumed")
+        a.tapUp(time: 1.0, point: CGPoint(x: 200, y: 400))
+        XCTAssertFalse(a.touchDown(time: 1.31, point: CGPoint(x: 200, y: 400)), "too late")
+        a.tapUp(time: 1.0, point: CGPoint(x: 200, y: 400))
+        XCTAssertFalse(a.touchDown(time: 1.1, point: CGPoint(x: 260, y: 400)), "too far")
+        a.tapUp(time: 1.0, point: CGPoint(x: 200, y: 400)); a.reset()
+        XCTAssertFalse(a.touchDown(time: 1.1, point: CGPoint(x: 200, y: 400)))
     }
 
     func testHoldThenSidewaysOrDownIsAStroke() {
@@ -63,12 +87,12 @@ final class TouchGestureTests: XCTestCase {
     }
 
     func testFastFlickOnReleaseIsAThrowASlowReleaseIsNot() {
-        var x = g(); x.tick(t: 0.3)
+        var x = TouchGesture(); x.down(t: 0, p: CGPoint(x: 200, y: 400), armed: true); x.tick(t: 0.3)
         x.move(t: 0.35, p: CGPoint(x: 200, y: 380))
         var t = 0.4
         for k in 1...6 { x.move(t: t, p: CGPoint(x: 205, y: 380 - CGFloat(k) * 40)); t += 0.016 }     // 2500 pt/s up
         if case .throwIt(let v) = x.up(t: t + 0.01) { XCTAssertLessThan(v.dy, -1500) } else { XCTFail("throw") }
-        var slow = g(); slow.tick(t: 0.3)
+        var slow = TouchGesture(); slow.down(t: 0, p: CGPoint(x: 200, y: 400), armed: true); slow.tick(t: 0.3)
         slow.move(t: 0.35, p: CGPoint(x: 200, y: 380))
         for k in 1...10 { slow.move(t: 0.4 + Double(k) * 0.05, p: CGPoint(x: 200, y: 380 - CGFloat(k) * 4)); }
         XCTAssertEqual(slow.up(t: 1.0), .none)

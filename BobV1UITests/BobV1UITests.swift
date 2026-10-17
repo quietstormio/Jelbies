@@ -92,6 +92,16 @@ final class BobV1UITests: XCTestCase {
         }
     }
 
+    /// The tap is delivered immediately, but the SwiftUI -> accessibility label update lags it by ~0.5 s while the
+    /// Metal sim is loading the main thread (measured: label still old at t+0.0 s, new at t+0.5 s). Wait for the
+    /// label to reach the expected value (the assertion is unchanged, it just isn't read before the UI can show it).
+    @MainActor
+    private func awaitLabel(_ e: XCUIElement, _ expected: String, timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {
+        let t0 = Date()
+        while e.label != expected && Date().timeIntervalSince(t0) < timeout { usleep(100_000) }
+        XCTAssertEqual(e.label, expected, file: file, line: line)
+    }
+
     private func num(_ s: String) -> Double? {
         let m = s.split(separator: " ").first.map(String.init) ?? s
         return Double(m.replacingOccurrences(of: "≈", with: ""))
@@ -144,7 +154,7 @@ final class BobV1UITests: XCTestCase {
         let hop = el(app, "btn-hop")
         XCTAssertEqual(hop.label, "Hop around")
         hop.tap()
-        XCTAssertEqual(hop.label, "Stop hopping")
+        awaitLabel(hop, "Stop hopping")
         let kin = el(app, "stat-kinetic")
         var peak = 0.0
         let t0 = Date()
@@ -152,7 +162,7 @@ final class BobV1UITests: XCTestCase {
         XCTAssertGreaterThan(peak, 0, "kinetic never rose while hopping")
         XCTAssertTrue(app.state == .runningForeground)
         hop.tap()
-        XCTAssertEqual(hop.label, "Hop around")
+        awaitLabel(hop, "Hop around")
         XCTAssertTrue(app.state == .runningForeground)
     }
 
@@ -258,10 +268,10 @@ final class BobV1UITests: XCTestCase {
         XCTAssertTrue(feed.isEnabled && water.isEnabled && call.isEnabled)
         // Feed opens a tiny picker of the catalogue's foods; choosing one starts it and collapses the menu
         feed.tap()
-        let berries = app.buttons["care-food-berries"], cake = app.buttons["care-food-cake"]
+        let berries = app.buttons["care-food-berries"], pizza = app.buttons["care-food-pizza"]
         XCTAssertTrue(berries.waitForExistence(timeout: 10), "Feed unfolds the food picker")
-        XCTAssertTrue(cake.exists)
-        choose(berries)
+        XCTAssertTrue(pizza.exists)
+        choose(pizza)
         waitFor("exists == false", feed, 10, "menu collapses after choosing a food")
 
         // the tray is out (one tray at a time): Feed and Drink are disabled, Call is not
@@ -283,5 +293,140 @@ final class BobV1UITests: XCTestCase {
         waitFor("isEnabled == true", feed, 180, "Feed is available again once the tray is gone")
         waitFor("isEnabled == true", water, 180, "Drink is available again once the tray is gone")
         chooseWater()
+    }
+
+    // MARK: Voice v1
+
+    private func voiceApp(_ extra: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-VoiceFakeMic", "1", "-VoiceFakeText", "sit", "-VoiceReset", "1"] + extra
+        app.launch()
+        return app
+    }
+
+    private func waitValue(_ e: XCUIElement, contains: String, timeout: TimeInterval = 10, _ message: String) {
+        let ex = expectation(for: NSPredicate(format: "value CONTAINS %@", contains), evaluatedWith: e)
+        XCTAssertEqual(XCTWaiter().wait(for: [ex], timeout: timeout), .completed, message)
+    }
+
+    /// The mic exists; a 1.2 s hold opens listen mode (the edge glow was drawn) and the glow is gone after the release.
+    @MainActor
+    func testVoiceMicHoldShowsGlowThenHides() throws {
+        let app = voiceApp()
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20), "the mic button is on the HUD")
+        XCTAssertTrue(app.buttons["voice-tricks"].exists)
+        XCTAssertFalse(app.otherElements["voice-glow"].exists, "no glow before a hold")
+        mic.press(forDuration: 1.2)
+        XCTAssertTrue(app.otherElements["voice-glow"].waitForNonExistence(timeout: 0.6), "the glow is gone right after the release (mic path)")
+        waitValue(mic, contains: "1 talks", "one listen opened")
+        waitValue(mic, contains: "1 glows", "the glow was drawn during the hold")
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.otherElements["voice-glow"])
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 10), .completed, "the glow is gone after the release")
+    }
+
+    /// The glow is drawn within a frame or so of the press (budget generous for the simulator) and the level feedback exists.
+    @MainActor
+    func testVoiceGlowAppearsQuicklyAfterPress() throws {
+        let app = voiceApp(["-VoiceLog", "1"])
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20))
+        mic.press(forDuration: 0.8)
+        waitValue(mic, contains: "1 glows", "the glow was drawn")
+        let v = mic.value as? String ?? ""
+        let ms = Int(v.components(separatedBy: "glow ").last?.components(separatedBy: " ms").first ?? "") ?? 9999
+        XCTAssertGreaterThanOrEqual(ms, 0)
+        XCTAssertLessThan(ms, 100, "touch-down to glow visible: \(ms) ms (\(v))")
+    }
+
+    /// Double-tap-hold on EMPTY space: the glow is drawn on the second touch-down (not after the hold threshold), within the latency budget,
+    /// and it is gone right after the finger lifts (no lingering fade).
+    @MainActor
+    func testVoiceDoubleTapHoldGlowIsInstantAndGoneOnRelease() throws {
+        let app = voiceApp(["-VoiceLog", "1", "-BlobNoWander", "1"])
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20))
+        let empty = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        empty.tap()
+        empty.press(forDuration: 0.9)
+        // after the release: no waiting for the transcript, the glow is already gone
+        XCTAssertTrue(app.otherElements["voice-glow"].waitForNonExistence(timeout: 0.6), "the glow is gone right after the release")
+        waitValue(mic, contains: "1 talks", "the gesture opened a listen")
+        waitValue(mic, contains: "1 glows", "the glow was drawn during the hold")
+        let v = mic.value as? String ?? ""
+        let ms = Int(v.components(separatedBy: "glow ").last?.components(separatedBy: " ms").first ?? "") ?? 9999
+        XCTAssertGreaterThanOrEqual(ms, 0)
+        XCTAssertLessThan(ms, 100, "second tap-down to glow visible: \(ms) ms (\(v))")
+    }
+
+    /// A double-tap that does not hold (a quick second tap) cancels silently: no glow left behind, the listen is not sent.
+    @MainActor
+    func testVoiceQuickDoubleTapLeavesNoGlow() throws {
+        let app = voiceApp(["-BlobNoWander", "1"])
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20))
+        let empty = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        empty.tap(); empty.tap()
+        XCTAssertTrue(app.otherElements["voice-glow"].waitForNonExistence(timeout: 0.6), "no glow after a quick double tap")
+    }
+
+    /// After a taught word the heard pill quotes it and Bob's understanding bubble shows the rep.
+    @MainActor
+    func testVoiceHeardPillAndRepBubbleAppear() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-VoiceFakeMic", "1", "-VoiceFakeText", "sit", "-VoiceReset", "1", "-VoiceSay", "sit", "-VoiceTeach", "sit", "-VoiceDelay", "1", "-BlobNoWander", "1"]
+        app.launch()
+        let heard = app.descendants(matching: .any)["voice-heard"]
+        XCTAssertTrue(heard.waitForExistence(timeout: 30), "the heard pill shows")
+        XCTAssertTrue((heard.value as? String ?? "").contains("sit"), "it quotes the words: \(heard.value ?? "nil")")
+        let bubble = app.descendants(matching: .any)["voice-bubble"]
+        XCTAssertTrue(bubble.waitForExistence(timeout: 10), "Bob's bubble shows")
+        XCTAssertTrue((bubble.value as? String ?? "").hasPrefix("rep sit"), "a rep: \(bubble.value ?? "nil")")
+    }
+
+    /// The trick book opens from its button; tapping a row has him do the trick and closes the sheet.
+    @MainActor
+    func testVoiceTrickBookOpensAndRowCloses() throws {
+        let app = voiceApp()
+        let book = app.buttons["voice-tricks"]
+        XCTAssertTrue(book.waitForExistence(timeout: 20))
+        book.tap()
+        let sit = app.buttons["voice-trick-sit"]
+        XCTAssertTrue(sit.waitForExistence(timeout: 10), "a row per trick")
+        XCTAssertTrue(app.buttons["voice-trick-jacks"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["voice-name"].exists, "the name lesson row")
+        sit.tap()
+        let closed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: sit)
+        XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 10), .completed, "a row tap closes the book")
+        XCTAssertTrue(app.buttons["voice-mic"].waitForExistence(timeout: 5))
+    }
+
+    /// Trick book Flip row -> he just flips: no timing bar or any other meter appears, and the book closes.
+    @MainActor
+    func testFlipRowFlipsWithNoMeterOnScreen() throws {
+        let app = voiceApp()
+        let book = app.buttons["voice-tricks"]
+        XCTAssertTrue(book.waitForExistence(timeout: 20))
+        book.tap()
+        let row = app.buttons["voice-trick-flip"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the Flip row")
+        row.tap()
+        XCTAssertTrue(app.buttons["voice-mic"].waitForExistence(timeout: 10), "the book closes and the game is back")
+        let meter = app.descendants(matching: .any)["flip-meter"]
+        XCTAssertFalse(meter.waitForExistence(timeout: 3), "no flip meter appears while he flips")
+        XCTAssertFalse(app.descendants(matching: .any)["flip-hint"].exists)
+    }
+
+    /// A double-tap-hold ON Bob (he stands at the middle of the room when he does not wander) does not open listen mode.
+    @MainActor
+    func testVoiceDoubleTapHoldOnBobDoesNotListen() throws {
+        let app = voiceApp(["-BlobNoWander", "1"])
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20))
+        let bob = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        bob.tap()
+        bob.press(forDuration: 1.2)
+        XCTAssertFalse(app.otherElements["voice-glow"].exists, "no glow when the gesture lands on Bob")
+        XCTAssertTrue((mic.value as? String ?? "").contains("0 talks"), "listen mode never opened: \(mic.value ?? "nil")")
     }
 }

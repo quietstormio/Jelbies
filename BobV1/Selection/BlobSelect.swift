@@ -24,8 +24,8 @@ struct SelectBlob: Identifiable, Equatable {
     /// Preview Blobs (DEBUG / SELECT_PREVIEW only) are drawn by the overlay at this floor spot; the real Blob (id 0) has none.
     var floor: SIMD2<Float>? = nil
     var scale: Float = 1
-    /// Preview body colour (linear-ish rgb 0...1).
-    var tint: SIMD3<Float> = SIMD3(0.98, 0.78, 0.82)
+    /// Preview body colour (sRGB 0...1). Default = Bob's Baby blue (sRGB of PaletteKey.blue uiFlesh).
+    var tint: SIMD3<Float> = SIMD3(0.70, 0.83, 0.945)
 }
 
 /// The two preview Blobs (plus the real one) for the highlight: `-BlobSelectPreview 2` or `3` (DEBUG or the SELECT_PREVIEW build flag).

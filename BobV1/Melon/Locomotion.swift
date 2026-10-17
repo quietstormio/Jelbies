@@ -18,8 +18,8 @@ import Foundation
 import simd
 
 struct GaitDriver {
-    enum Phase { case idle, crouch, air, land, roll, right, thrown, recover, glide }
-    enum Move { case hop, roll }
+    enum Phase { case idle, crouch, air, land, roll, right, thrown, recover, glide, slide }
+    enum Move { case hop, roll, flip, slide }
 
     // tuning
     var hopDuration: Float = 0.26     // fixed airtime (small and cute: motion table section 5)
@@ -35,6 +35,30 @@ struct GaitDriver {
     var freeTime: Float = 1.05        // free flight after a fling
     var radius: Float = 1.2           // hop-around stays within this of `home`
     var wander = false                // "hop around"
+    // backflip (voice trick, `flip(_:apex:)`): crouch, one full backward pitch about the centre of mass in the air, a big landing, then a short "covers it" shake
+    static let flipGravity: Float = 12.4     // u/s^2 (the hop's)
+    var flipCrouch: Float = 0.16
+    var flipSettle: Float = 0.35             // the shake after the landing squash
+    var flipSquashTime: Float = 0.15
+    var kFlip: Float = 1000                  // stiffer than the hop so the rotation is followed (the soft body still jiggles on top)
+    var flipApex: Float = 0.42
+    /// `flipFail` = under-rotate and faceplant.
+    /// Fraction of the stiff foot-sole targets used during a flip (1 = the full 60000: the soles snap onto the rigid pose and the catch-up is the fastest motion in the flip).
+    static let flipFootGrip: Float = 0.15
+    var flipFail = false
+    /// Rotation (rad) of a clean flip / of the failed one (about 281 deg: he lands nose first).
+    static let flipCleanTurn: Float = 2 * .pi
+    static let flipFailTurn: Float = 4.9
+    /// Faceplant timing (seconds into the landing phase): impact, lie, peel up, brush-off.
+    static let fpImpact: Float = 0.14, fpLieEnd: Float = 0.64, fpPeelEnd: Float = 1.24, fpEnd: Float = 1.58
+    // belly slide (idle move, `slide(_:to:yaw:)`): from a run he dives forward onto his belly, slides a short way on the front (decelerating from the
+    // run's speed), pops back up with a little bounce and a wobble. Body-led: only the attractor, like the faceplant.
+    static let slideDive: Float = 0.20, slideEnd: Float = 0.95, slidePopEnd: Float = 1.25, slideAll: Float = 1.70
+    static let slidePitch: Float = 0.65     // rad forward (about 37 deg: belly toward the floor, crown leading)
+    static let slideDist: Float = 0.9
+    private(set) var slidePitchNow: Float = 0
+    /// Seconds into the slide (the brain reads the dive impact / pop landing from it for the jelly kicks).
+    private(set) var slideT: Float = 0
     var rollChance: Float = 0.45      // chance of a roll (instead of a hop) once three hops have passed
 
     // world
@@ -83,10 +107,32 @@ struct GaitDriver {
     /// Tip-back (rad, about his x axis, applied inside the heading) the brain asks for while he hops: the hop used to flatten the game's idle
     /// tip-back to upright, which makes the brows read angry from the camera.
     var basePitch: Float = 0
+    /// Flip only: the extra pitch (rad, negative = backward) about his x axis on top of `basePitch`. 0 outside a flip.
+    private(set) var flipPitch: Float = 0
+    /// Flip only: seconds since the flip began / the airborne window (tests, haptics).
+    private(set) var flipClock: Float = 0
+    /// Flip only: progress through the air phase (0...1), through the rotation (0...1), and seconds in the landing phase (tests, arms).
+    private(set) var flipU: Float = 0
+    private(set) var flipV: Float = 0
+    private(set) var flipLandT: Float = 0
+    /// Flip only: seconds spent holding the crouch / since the give-up stand began.
+    /// Flip only: true while he waits in the held crouch.
+    var isFlipFaceplant: Bool { move == .flip && flipFail }
     private func yawQ(_ y: Float) -> simd_quatf {
         let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
-        return basePitch == 0 ? q : q * simd_quatf(angle: basePitch, axis: SIMD3<Float>(1, 0, 0))
+        let p = basePitch + flipPitch + slidePitchNow
+        return p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
     }
+    /// Rotation progress 0...1 for turn progress `v`: constant angular speed with a 10 % ease at each end (a trapezoid rate; the abrupt start of a
+    /// linear turn was the fastest thing in the flip).
+    static func flipProfile(_ v: Float) -> Float {
+        let a: Float = 0.10, x = min(1, max(0, v))
+        if x < a { return 0.5 * x * x / (a * (1 - a)) }
+        if x > 1 - a { return 1 - 0.5 * (1 - x) * (1 - x) / (a * (1 - a)) }
+        return (x - a / 2) / (1 - a)
+    }
+    /// Airtime of a flip with this apex under the hop's gravity.
+    static func flipAir(apex: Float) -> Float { 2 * (2 * apex / flipGravity).squareRoot() }
     private func yawEase(_ u: Float) -> Float { yaw0 + wrap(yaw1 - yaw0) * smooth(u) }
 
     // MARK: control
@@ -97,9 +143,36 @@ struct GaitDriver {
     }
 
     mutating func cancel(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0; slideT = 0; flipFail = false
         sim.attractor.strength = 0
         if !sim.targets.isEmpty { sim.targets = [] }
+    }
+
+    /// A backflip on the spot (apex in world units). Ignored while a move is running.
+    mutating func flip(_ sim: SoftBody, apex: Float, reduceMotion: Bool = false, fail: Bool = false) {
+        guard phase == .idle || phase == .recover || phase == .glide || phase == .land else { return }
+        reduce = reduceMotion
+        flipApex = apex
+        flipFail = fail
+        flipU = 0; flipV = 0; flipLandT = 0
+        let pose = sim.bodyPose(iterations: 6)
+        from = SIMD2(pose.centroid.x, pose.centroid.z)
+        to = from
+        yaw0 = pose.yaw; yaw1 = yaw0
+        move = .flip; phase = .crouch; t = 0; tMove = 0; chained = false; flipPitch = 0; flipClock = 0
+        sim.attractor.rotation = yawQ(yaw0)
+    }
+
+    /// The belly slide: dive, slide to `target` (ground x, z), pop up. Ignored while a move is running.
+    mutating func slide(_ sim: SoftBody, to target: SIMD2<Float>, yaw: Float) {
+        guard phase == .idle || phase == .recover || phase == .glide || phase == .land else { return }
+        reduce = false
+        let pose = sim.bodyPose(iterations: 6)
+        from = SIMD2(pose.centroid.x, pose.centroid.z)
+        to = target
+        yaw0 = yaw; yaw1 = yaw
+        move = .slide; phase = .slide; t = 0; tMove = 0; chained = false; slidePitchNow = 0; slideT = 0
+        sim.attractor.rotation = yawQ(yaw0)
     }
 
     /// One scripted hop to the ground point `target` (x, z). Ignored while a move is running.
@@ -181,13 +254,122 @@ struct GaitDriver {
 
         case .crouch:
             tMove = t
-            let tc = chained ? crouchTime * 0.4 : crouchTime * (move == .roll ? 1.3 : 1)
+            let tc = move == .flip ? flipCrouch : (chained ? crouchTime * 0.4 : crouchTime * (move == .roll ? 1.3 : 1))
             let u = t / tc
-            let sy = 1 - 0.18 * amp * smooth(u)
-            let k = kHop * min(1, t / 0.06)
-            let yawNow = yawEase(t / (tc + 0.3))
+            let sy = 1 - (move == .flip ? 0.24 : 0.18) * amp * smooth(u)
+            let k = (move == .flip ? kFlip : kHop) * min(1, t / 0.06)
+            let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + 0.3))
+            if move == .flip { flipClock = min(t, tc) }
             setUpright(sim, xz: from, yaw: yawNow, squash: sy, lift: 0, strength: k)
+            if move == .flip { tuckFeet(sim, u: 0, amp: 0, ramp: Self.flipFootGrip * smooth(t / tc)) }       // the soles follow the squashed rigid pose from the start of the crouch
             if t >= tc { phase = move == .roll ? .roll : .air; t = 0; tMove = tc }
+
+        case .slide:
+            slideT = t
+            let dive = Self.slideDive, glideEnd = Self.slideEnd, popEnd = Self.slidePopEnd
+            let P = Self.slidePitch
+            var pitch: Float = 0, sy: Float = 1, dip: Float = 0, lift: Float = 0
+            let u = min(1, t / glideEnd)
+            let xz = from + (to - from) * (1 - (1 - u) * (1 - u))            // decelerating from the run's speed
+            if t < dive {
+                let a = smooth(t / dive)
+                pitch = P * a; sy = 1 - 0.08 * a
+            } else if t < glideEnd {
+                let s = t - dive
+                pitch = P * (1 + 0.025 * expf(-s / 0.15) * cosf(2 * .pi * 5 * s))
+                sy = 0.92 - 0.02 * expf(-s / 0.12) * cosf(2 * .pi * 6 * s)
+                dip = 0.01
+            } else if t < popEnd {
+                let a = (t - glideEnd) / (popEnd - glideEnd), e = smooth(a)       // body-led peel up with a little hop
+                pitch = P * (1 - e)
+                sy = 0.92 + 0.08 * e + 0.05 * sinf(.pi * a)
+                lift = 0.07 * sinf(.pi * a)
+            } else {
+                let s = t - popEnd
+                pitch = -0.07 * expf(-s / 0.16) * sinf(2 * .pi * 6 * s)
+                sy = 1 - 0.10 * expf(-s / 0.14) * cosf(2 * .pi * 5 * s)
+            }
+            slidePitchNow = pitch
+            let q = yawQ(yaw0)
+            sim.attractor.rotation = q
+            sim.attractor.squash = sy
+            sim.attractor.anchor = SIMD3(xz.x, sim.groundedAnchorY(rotation: q, squash: sy) - dip + lift, xz.y)
+            let fade = 1 - smooth((t - (Self.slideAll - 0.15)) / 0.15)
+            sim.attractor.strength = kFlip * max(0, fade)
+            if t >= Self.slideAll { endMove(sim) }
+
+        case .air where move == .flip:
+            let apex = flipApex * amp
+            let T = Self.flipAir(apex: apex) * (reduce ? 1.15 : 1)
+            tMove += dt; flipClock = flipCrouch + t
+            let u = min(1, t / T)
+            flipU = u
+            let h = apex * 4 * u * (1 - u)
+            // one backward turn spread over nearly the whole air time (a mostly linear profile keeps the peak speed down); the clean one is
+            // finished a hair before touch-down so he lands upright, the failed one arrives at touch-down still turning slowly
+            let turn = flipFail ? Self.flipFailTurn : Self.flipCleanTurn
+            let v = flipFail ? min(1, max(0, u / 0.995)) : min(1, max(0, u / 0.995))
+            flipV = v
+            flipPitch = -turn * Self.flipProfile(v)
+            // a touch of stretch at take-off, a subtle tuck through the turn, open again to land
+            // (the squash rises out of the crouch's over 0.10 s: a jump from 0.76 to 1.05 in one step is the fastest thing in the whole flip)
+            let crouchSy = 1 - 0.24 * amp
+            let stretch = 1 + 0.05 * amp * (1 - smooth(t / 0.14))
+            let launch = crouchSy + (stretch - crouchSy) * smooth(t / 0.10)
+            let sy = launch - 0.06 * amp * sinf(.pi * v)
+            setUpright(sim, xz: from, yaw: yaw0, squash: sy, lift: h + sim.restCentroid.y * 0.06 * amp * sinf(.pi * v), strength: kFlip)       // the tuck lowers the centre: lift it back so the apex is the centre's (only the tuck: the crouch's squash rises out of the floor by itself, not in one step)
+            tuckFeet(sim, u: u, amp: 0, ramp: Self.flipFootGrip)       // (the soles already follow the rigid crouch pose, see the crouch case: no catch-up kick at take-off)
+            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 } }
+
+        case .land where move == .flip && flipFail:
+            // faceplant: nose-first impact (the body presses into the floor: front squash), a beat lying there, a body-led push back up onto the
+            // feet (the same backward direction, so it is a push-up pivoting on the feet), then the "covers it" brush-off shake
+            flipClock = flipCrouch + Self.flipAir(apex: flipApex * amp) * (reduce ? 1.15 : 1) + t
+            flipLandT = t
+            let impact = Self.fpImpact, lieEnd = Self.fpLieEnd, peelEnd = Self.fpPeelEnd, end = Self.fpEnd
+            let down = -Self.flipFailTurn
+            var pitch = down, sy: Float = 1, dip: Float = 0
+            if t < impact {
+                let a = smooth(t / impact)
+                sy = 1 - 0.10 * amp * a
+                dip = 0.07 * amp * a
+            } else if t < lieEnd {
+                let s = t - impact
+                dip = 0.07 * amp * (0.45 + 0.55 * expf(-s / 0.12) * cosf(2 * .pi * 3.5 * s))      // a rebound, then the weight just rests
+                sy = 1 - 0.10 * amp * (0.4 + 0.6 * expf(-s / 0.12))
+            } else if t < peelEnd {
+                let u = (t - lieEnd) / (peelEnd - lieEnd)
+                // body-led: slow start (the weight shifts), then up, easing into upright
+                let e = smooth(u)
+                pitch = down - (Self.flipCleanTurn + down) * e
+                dip = 0.03 * amp * (1 - smooth(u * 2))
+                sy = 1 - 0.05 * amp * sinf(.pi * u)
+            } else {
+                let s = t - peelEnd
+                pitch = -Self.flipCleanTurn + 0.06 * amp * expf(-s / 0.14) * sinf(2 * .pi * 8 * s)
+                sy = 1 - 0.04 * amp * expf(-s / 0.12) * cosf(2 * .pi * 6 * s)
+            }
+            flipPitch = pitch
+            let fade = 1 - smooth((t - (end - 0.15)) / 0.15)
+            let q = yawQ(yaw0)
+            sim.attractor.rotation = q
+            sim.attractor.squash = sy
+            sim.attractor.anchor = SIMD3(from.x, sim.groundedAnchorY(rotation: q, squash: sy) - dip, from.y)
+            sim.attractor.strength = kFlip * max(0, fade)
+            if t >= end { flipPitch = 0; flipFail = false; endMove(sim) }
+
+        case .land where move == .flip:
+            flipClock = flipCrouch + Self.flipAir(apex: flipApex * amp) * (reduce ? 1.15 : 1) + t
+            flipLandT = t
+            // a big squash, a quick rebound, then the shake: a tiny yaw / squash wobble that dies out ("covers it")
+            let sq = flipSquashTime
+            var sy: Float, jig: Float = 0
+            if t < sq { sy = t < 0.05 ? 1 - 0.26 * smooth(t / 0.05) : 0.74 + 0.26 * smooth((t - 0.05) / (sq - 0.05)) }       // (it dips from 1.0 over 0.05 s: one step from 1 to 0.74 was a 12.6 u/s spike)
+            else { let s = t - sq; sy = 1 - 0.035 * amp * expf(-s / 0.12) * cosf(2 * .pi * 6 * s); jig = 0.045 * amp * expf(-s / 0.16) * sinf(2 * .pi * 9 * s) }
+            let fade = 1 - smooth((t - (sq + flipSettle - 0.15)) / 0.15)
+            flipPitch = jig
+            setUpright(sim, xz: from, yaw: yaw0, squash: sy, lift: 0, strength: kFlip * max(0, fade))
+            if t >= sq + flipSettle { flipPitch = 0; endMove(sim) }
 
         case .air:
             let T = hopDuration * (reduce ? 1.25 : 1), apex = hopApex * amp
@@ -280,14 +462,14 @@ struct GaitDriver {
     }
 
     private mutating func endMove(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0
         sim.attractor.strength = 0
         sim.targets = []
         waitTimer = (0.25 + 0.45 * rand()) * (reduce ? 1.4 : 1)
     }
 
     /// Feet tucked up toward the belly while he is in the air (the only time both feet may leave the floor).
-    private mutating func tuckFeet(_ sim: SoftBody, u: Float, amp: Float) {
+    private mutating func tuckFeet(_ sim: SoftBody, u: Float, amp: Float, ramp: Float = 1) {
         tuck = tuckHeight * amp * sinf(.pi * min(1, max(0, u)))
         let simTuck = min(tuck, simTuckCap)
         let q = sim.attractor.rotation, sy = sim.attractor.squash, sxz = 1 / sy.squareRoot()
@@ -297,7 +479,7 @@ struct GaitDriver {
             for p in a.particles {
                 let o = sim.restPosition(p) - c0
                 let w = sim.attractor.anchor + R * SIMD3<Float>(o.x * sxz, o.y * sy, o.z * sxz) + SIMD3<Float>(0, simTuck, 0)
-                list.append(ParticleTarget(index: p, pos: w, stiffness: 60000))
+                list.append(ParticleTarget(index: p, pos: w, stiffness: 60000 * ramp))
             }
         }
         sim.targets = list

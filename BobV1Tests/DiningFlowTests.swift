@@ -2,7 +2,7 @@
 //  DiningFlowTests.swift
 //  The tray meal end to end on the headless sim, through the REAL care flow (GameCare + DiningSet + the brain's dining hooks):
 //  tap -> tray pops in -> walk to his place -> stepped turn -> body-led lean -> grab -> straighten -> chomp x 3 -> happy -> tray poofs
-//  -> back to rest. Finger food (berries), fork food (cake) and the sip (water, soda).
+//  -> back to rest. Finger food (berries), pizza (3 slices) and the sip (water, soda).
 //
 
 import XCTest
@@ -323,36 +323,36 @@ final class DiningFlowTests: XCTestCase {
         checkReturnsToRest(m, before: before, "berries")
     }
 
-    func testCakeWithFork() {
+    func testPizzaThreeSlicesTossedIntoHisMouth() {
         let (m, before) = setup()
-        m.meal("cake")
-        m.trace("cake")
-        checkCommon(m, "cake")
+        m.meal("pizza")
+        m.trace("pizza")
+        checkCommon(m, "pizza")
         let d = m.dineFrames
-        XCTAssertEqual(m.tray.bitesLeft, [0], "three forkfuls")
-        // the fork poofs into his hand (nothing on the tray, nothing before he has arrived), stays on the nub until it poofs away with the tray
-        XCTAssertTrue(d.contains { $0.forkHeld }, "the fork appears in his hand")
-        XCTAssertFalse(m.frames.prefix { $0.phase == "-" }.contains { $0.forkVisible }, "no fork before he arrives (none on the tray)")
-        XCTAssertTrue(m.frames.allSatisfy { !$0.forkVisible || $0.forkHeld || $0.trayPhase == .poofing || $0.phase == "-" && $0.t > (d.last?.t ?? 0) },
-                      "a fork is only ever visible in his hand (or poofing away at the end)")
-        let firstFork = d.first { $0.forkHeld }
-        XCTAssertEqual(firstFork?.phase, "lean", "it appears at the start of the first lean, tines up")
-        XCTAssertEqual(firstFork?.armS ?? 1, 0, accuracy: 0.05, "at the rest nub")
-        XCTAssertEqual(m.runs { $0.holding }, 3, "three bites on the fork")
-        XCTAssertEqual(m.runs { $0.mouth > 0.05 }, 6, "two chomps per bite")
-        let held = d.filter { $0.forkHeld }.compactMap { $0.heldDist }
-        MotionLog.write("DINEFLOW cake fork-on-nub max \(held.max() ?? -1) over \(held.count) frames")
-        XCTAssertGreaterThan(held.count, 200)
-        XCTAssertLessThan(held.max() ?? 1, 0.01, "the fork stays on the nub from the poof-in to the poof-out")
-        checkToss(m, "cake")
-        XCTAssertFalse(m.brain.dineForkHeld, "the fork is gone at the end")
-        XCTAssertEqual(m.tray.forkVisible, [false], "no fork left")
-        checkReturnsToRest(m, before: before, "cake")
+        XCTAssertEqual(m.tray.bitesLeft, [0], "all three slices eaten")
+        XCTAssertEqual(m.runs { $0.holding }, 3, "three tosses, one slice each")
+        XCTAssertEqual(m.runs { $0.mouth > 0.05 }, 6, "two chomps per slice")
+        checkToss(m, "pizza")
+        // no fork, ever: finger food only
+        XCTAssertTrue(m.frames.allSatisfy { !$0.forkVisible && !$0.forkHeld }, "no fork")
+        // each slice leaves the tray when it is picked up: the plate goes 3 -> 2 -> 1 -> 0 slices (one in hand at a time)
+        XCTAssertTrue(m.tray.pieceInHand.allSatisfy { $0 == nil }, "nothing left in hand")
+        // the mouth is only open while eating (chew beat), never during the lean / grab
+        XCTAssertTrue(d.filter { $0.phase == "lean" || $0.phase == "grab" || $0.phase == "straighten" }.allSatisfy { $0.mouth == 0 })
+        // the slice sticks to the nub on the way up (like a berry) - within the same reach tolerance as the berries
+        let misses = d.map { $0.miss }.filter { $0 > 0 }
+        MotionLog.write("DINEFLOW pizza reach misses max \(misses.max() ?? -1)")
+        var perBite: [Float] = [], cur: Float = 0
+        for f in d { if f.phase == "lean" || f.phase == "grab" { cur = max(cur, f.miss) } else if cur > 0 { perBite.append(cur); cur = 0 } }
+        MotionLog.write("DINEFLOW pizza miss per bite \(perBite)")
+        XCTAssertLessThan(misses.max() ?? 1, 0.09, "the nub touches every slice (miss from its middle, slice is 0.26 x 0.16) \(perBite)")
+        // no arm reach to the mouth: the held slice rides the nub until the flick, then flies (never arm-to-mouth)
+        checkReturnsToRest(m, before: before, "pizza")
     }
 
-    func testBerriesAndCakeTakeTheSameTime() {
+    func testBerriesAndPizzaTakeTheSameTime() {
         var chew: [Float] = [], cycle: [Float] = []
-        for id in ["berries", "cake"] {
+        for id in ["berries", "pizza"] {
             let (m, _) = setup()
             m.meal(id)
             let d = m.dineFrames, dt = m.rig.sim.stepDt
@@ -421,7 +421,7 @@ final class DiningFlowTests: XCTestCase {
         XCTAssertEqual(m.care.servingKind, .food, "the first tap wins")
         XCTAssertEqual(m.tray.serving.id, "berries")
         XCTAssertEqual(RoomLayout.dynamicBoxes.count, 1, "one tray collider")
-        m.care.feed("cake"); m.care.drink("soda")
+        m.care.feed("pizza"); m.care.drink("soda")
         m.run(0.5)
         XCTAssertEqual(m.tray.serving.id, "berries", "taps while a tray is out are ignored")
         XCTAssertEqual(RoomLayout.dynamicBoxes.count, 1)
@@ -430,7 +430,7 @@ final class DiningFlowTests: XCTestCase {
     }
 
     func testCallMidMealPoofsTheTrayAndHeReturnsToRest() {
-        for id in ["berries", "cake", "water"] {
+        for id in ["berries", "pizza", "water"] {
             let (m, before) = setup()
             let c = Consumables.with(id: id)!
             if c.kind == .food { m.care.feed(id) } else { m.care.drink(id) }
@@ -458,7 +458,7 @@ final class DiningFlowTests: XCTestCase {
     /// The brain, the tray and the sim during a meal stay cheap (60 fps): mean and worst per fixed step of brain.tick + care.tick, the tray mesh
     /// rebuild (`DiningSet.frame`, twice a frame in the stage: after the tick and after the refresh) and sim.step.
     func testMealTickCost() {
-        for id in ["berries", "cake"] {
+        for id in ["berries", "pizza"] {
             let m = MealRun()
             m.care.feed(id)
             var worst = 0.0, sum = 0.0, n = 0, frameSum = 0.0, frameWorst = 0.0, frames = 0, stepSum = 0.0

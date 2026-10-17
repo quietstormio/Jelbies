@@ -44,7 +44,7 @@ final class MotionWaveShapeTests: XCTestCase {
             let armFoot = side > 0 ? 1 : 0, farFoot = 1 - armFoot
             let H = MotionRig.H
             let lift = w.map { $0.rgap[armFoot] / H }              // the RENDERED rigid foot (the sim sole only lifts a few cm)
-            let holdN = lift.filter { $0 >= 0.12 }.count
+            let holdN = lift.filter { $0 >= 0.03 }.count
             let far = w.map { $0.rgap[farFoot] / H }.max() ?? 0
             let rollAway = w.map { -Float(side) * $0.roll * 180 / .pi }.max() ?? 0
             let dur = (w.last?.t ?? 0) - t0
@@ -53,9 +53,9 @@ final class MotionWaveShapeTests: XCTestCase {
             var closes: [Float] = []
             var a: Float?
             for x in w { if x.openness < 0.01 { if a == nil { a = x.t } } else if let a0 = a { closes.append(x.t - a0); a = nil } }
-            MotionLog.write(String(format: "WAVESHAPE side %d: arm-side foot lift max %.3f H, held >=0.12 H for %.2f s, far foot max gap %.3f H, lean away max %.1f deg, duration %.2f s, closes %@",
+            MotionLog.write(String(format: "WAVESHAPE side %d: arm-side foot lift max %.3f H, held >=0.03 H for %.2f s, far foot max gap %.3f H, lean away max %.1f deg, duration %.2f s, closes %@",
                                    side, lift.max() ?? 0, Float(holdN) / 60, far, rollAway, dur, "\(closes.map { String(format: "%.2f", $0) })"))
-            XCTAssertGreaterThanOrEqual(lift.max() ?? 0, 0.12)
+            XCTAssertGreaterThanOrEqual(lift.max() ?? 0, 0.03)       // was 0.12: the arm-side foot no longer rises onto the belly (user 2026-10-17)
             XCTAssertLessThanOrEqual(lift.max() ?? 0, 0.20)
             XCTAssertGreaterThanOrEqual(Float(holdN) / 60, 0.3, "the arm-side foot is held up")
             XCTAssertLessThanOrEqual(far, 0.02, "far foot stays planted")

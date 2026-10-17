@@ -401,6 +401,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Bob;
+				INFOPLIST_FILE = "BobV1-Info.plist";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bob only listens while you hold to talk, so you can teach him his name and tricks. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -434,6 +436,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Bob;
+				INFOPLIST_FILE = "BobV1-Info.plist";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bob only listens while you hold to talk, so you can teach him his name and tricks. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

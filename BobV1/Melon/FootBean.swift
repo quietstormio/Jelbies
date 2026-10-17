@@ -15,8 +15,6 @@ import simd
 nonisolated enum FootBean {
     static let around = 32, rings = 13
     static var vertexCount: Int { 2 + around * rings }
-    /// Working size (world units): footprint half axes and the height of the sole plane to the crown.
-    static let rx = 0.135, rz = 0.125, centreY = 0.100, ry = 0.130, exponent = 2.0
     /// Where the bean sits when it replaces the rest foot (rest coordinates): footprint centre of the +x foot.
     static var footCentre: SIMD3<Double> { SIMD3(BobForm.footX, 0, BobForm.footZ) }
 
@@ -36,17 +34,20 @@ nonisolated enum FootBean {
     }
 
     /// Working-size shape in foot-local coordinates (sole plane y = 0, footprint centre at the origin) and outward unit normals.
+    /// 2026-10-16: the bean IS the rest foot (BobForm.footSDF alone, the arched shoe with the curled toe): each vertex is where a ray from the
+    /// foot's inside meets the foot surface, so the swap between the embedded foot and the bean changes neither size nor shape.
     static let local: (pos: [SIMD3<Double>], nrm: [SIMD3<Double>]) = {
         var pos: [SIMD3<Double>] = [], nrm: [SIMD3<Double>] = []
+        let c0 = SIMD3<Double>(0, 0.07, 0)
+        func f(_ l: SIMD3<Double>) -> Double { BobForm.footSDF(SIMD3(BobForm.footX + l.x, l.y, BobForm.footZ + l.z)) }
         func emit(_ d: SIMD3<Double>) {
-            // radial scale onto |x/a|^n + |y/b|^n + |z/c|^n = 1 (about the bean centre), then the flat sole: nothing below y = 0
-            let n = exponent
-            let q = pow(abs(d.x / rx), n) + pow(abs(d.y / ry), n) + pow(abs(d.z / rz), n)
-            let r = pow(q, -1 / n)
-            var p = d * r
-            let nn = simd_normalize(SIMD3(p.x / (rx * rx), p.y / (ry * ry), p.z / (rz * rz)))
-            p.y = max(p.y + centreY, 0)
-            pos.append(p); nrm.append(nn)
+            var lo = 0.0, hi = 0.6
+            for _ in 0..<44 { let m = (lo + hi) / 2; if f(c0 + d * m) < 0 { lo = m } else { hi = m } }
+            let p = c0 + d * lo
+            let e = 0.0008
+            let g = SIMD3(f(p + SIMD3(e, 0, 0)) - f(p - SIMD3(e, 0, 0)), f(p + SIMD3(0, e, 0)) - f(p - SIMD3(0, e, 0)), f(p + SIMD3(0, 0, e)) - f(p - SIMD3(0, 0, e)))
+            let q = p
+            pos.append(SIMD3(q.x, max(q.y, 0), q.z)); nrm.append(simd_length(g) > 1e-12 ? simd_normalize(g) : simd_normalize(d))
         }
         emit(SIMD3(0, -1, 0))
         for r in 0..<rings {
@@ -59,6 +60,19 @@ nonisolated enum FootBean {
         emit(SIMD3(0, 1, 0))
         return (pos, nrm)
     }()
+
+    /// Bean vertices that make the crown (the top three rings and the top pole): the part that must always lie inside the egg.
+    static let crownIndices: [Int] = Array((vertexCount - 1 - 3 * around)..<vertexCount)
+
+    /// The lifted shape: a soft rounded ball / bean on the same vertex layout (sphere directions), its bottom at the sole plane. A foot that is off the
+    /// floor morphs from the boot (`localF`) to this and back (see `BlobBrain.beanMorph`): it rounds as it leaves the floor and flattens into the boot as
+    /// it lands, with no pop (vertex-wise blend of two shapes of the same mesh).
+    static let ballRadii = SIMD3<Float>(0.118, 0.110, 0.128), ballZ: Float = 0.02
+    static let ballF: [SIMD3<Float>] = dirs.map { d in
+        SIMD3(Float(d.x) * ballRadii.x, ballRadii.y + Float(d.y) * ballRadii.y, ballZ + Float(d.z) * ballRadii.z)
+    }
+    /// Vertex `i` morphed by `m` (0 = planted boot, 1 = lifted ball).
+    @inline(__always) static func morphed(_ i: Int, _ m: Float) -> SIMD3<Float> { localF[i] + (ballF[i] - localF[i]) * m }
 
     static let localF: [SIMD3<Float>] = local.pos.map { SIMD3(Float($0.x), Float($0.y), Float($0.z)) }
 
@@ -79,16 +93,35 @@ nonisolated enum FootBean {
         return Float(lo)
     }()
 
-    /// Hidden shape in rest coordinates: a small ball deep inside the belly above the foot (side -1 / +1 mirrored).
+    /// The sphere directions the bean's vertices are laid out on (same order as `local`).
+    static let dirs: [SIMD3<Double>] = {
+        var out: [SIMD3<Double>] = [SIMD3(0, -1, 0)]
+        for r in 0..<rings {
+            let phi = Double.pi * Double(r + 1) / Double(rings + 1)
+            for j in 0..<around {
+                let th = 2 * Double.pi * Double(j) / Double(around)
+                out.append(SIMD3(sin(phi) * cos(th), -cos(phi), sin(phi) * sin(th)))
+            }
+        }
+        out.append(SIMD3(0, 1, 0))
+        return out
+    }()
+
+    /// Hidden shape in rest coordinates: a small ball deep inside the belly above the foot (side -1 / +1 mirrored). It is laid out on the sphere
+    /// directions (never on the bean's own normals: on a flat sole / straight wall many normals coincide, which collapses the hidden ball and
+    /// makes the mesh-build winding fix flip random triangles).
     static func inactive(sigma: Double) -> [SIMD3<Double>] {
         let c = SIMD3(sigma * BobForm.footX, 0.48, BobForm.footZ)
-        return local.nrm.map { c + $0 * 0.05 }
+        return dirs.map { c + $0 * 0.05 }
     }
 
-    /// Static `mat` (baked crease occlusion 0...0.4): darker toward the crown, where the bean meets the belly (a soft clay crease).
+    /// Static `mat` (baked crease occlusion 0...0.4): the same occlusion the rest skin bakes, read at the bean's rest pose against the whole body
+    /// (vertices inside the belly are projected onto its surface first, so the crown, which only shows once the foot is lifted, is crease-dark).
     static let mat: [Float] = local.pos.map { p in
-        let t = min(max((p.y - 0.06) / 0.08, 0), 1)
-        return Float(0.38 * t * t * (3 - 2 * t))
+        let w = SIMD3(BobForm.footX + p.x, p.y, BobForm.footZ + p.z)
+        let s = BobForm.project(w, steps: 3)
+        let n = BobForm.normal(s)
+        return Float(0.4 * BobForm.occlusion(s, n))
     }
 
     /// The crinkle-texture coordinate stream: the working-size bean at the rest foot, so the texture density matches the body skin.

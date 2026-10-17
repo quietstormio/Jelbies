@@ -12,7 +12,8 @@ struct SelectionOverlay: View {
 
     var body: some View {
         ZStack {
-            TimelineView(.animation) { tl in
+            // Perf: with one Blob and no highlight there is nothing to animate, so the full-screen Canvas must not redraw at display rate.
+            TimelineView(.animation(paused: select.count <= 1 && !select.isSelecting)) { tl in
                 let frame = tl.date          // the Canvas must read the timeline's date, or SwiftUI reuses its last drawing and the draw never animates
                 Canvas { ctx, size in _ = frame; SelectionPainter.paint(&ctx, size: size, select: select) }
             }
