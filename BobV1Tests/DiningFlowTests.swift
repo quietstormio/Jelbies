@@ -62,6 +62,7 @@ final class MealRun {
     init(settle: Float = 1.0) {
         rig = MotionRig(game: true, settle: settle)
         rig.brain.autonomy = false
+        care.needs.set(.hunger, 0.1); care.needs.set(.thirst, 0.1); care.eagerWhenFamished = false          // famished: he eats the whole serving (the tier tests vary this)
     }
 
     /// One fixed step: brain, care (tray), sim; records a frame.

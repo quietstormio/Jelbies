@@ -1,6 +1,6 @@
 //
 //  NeedsTests.swift
-//  Needs + mood v1: decay, the offline clamp, the first-launch seed, restores (meal, drink, petting), mood, the bubble schedule,
+//  Needs + mood v1: decay, the offline away curve, the first-launch seed, restores (meal, drink, petting), mood, the bubble schedule,
 //  bubble tap -> action, roster card -> highlight, persistence round-trip.
 //
 
@@ -65,9 +65,9 @@ final class NeedsTests: XCTestCase {
         n.set(.thirst, 0.29); XCTAssertTrue(n.isWanting(.thirst)); XCTAssertEqual(n.wantedNeed, .thirst)
     }
 
-    // MARK: offline clamp
+    // MARK: offline (the away curve; the full set is in TimeAwayTests)
 
-    func testOfflineDecayLeavesAtMostOneNeedWanting() {
+    func testOfflineDecayUsesTheAwayCurveAndStopsAtTheFloor() {
         for hours in [0.5, 1.5, 2.5, 5.0, 40.0] {
             let d = suite()
             let t0 = Date(timeIntervalSince1970: 1_000_000)
@@ -75,16 +75,20 @@ final class NeedsTests: XCTestCase {
             for k in NeedKind.allCases { first.set(k, 0.8) }
             first.save()
             let later = make(d, now: { t0.addingTimeInterval(hours * 3600) })
-            XCTAssertLessThanOrEqual(later.wantingCount, 1, "\(hours) h away: at most one wanting on open")
-            if hours >= 5 { XCTAssertEqual(later.wantingCount, 1); XCTAssertEqual(later.wantedNeed, .hunger, "the emptiest keeps wanting (hunger first on a tie)") }
-            for k in NeedKind.allCases where later.wantedNeed != k {
-                XCTAssertGreaterThanOrEqual(later.level(k), NeedsTuning.wanting, "rescued needs sit just above the line")
+            for k in NeedKind.allCases {
+                let want = max(0.8 - Float(hours / NeedsTuning.awayHoursToEmpty(k)), NeedsTuning.awayFloor)
+                XCTAssertEqual(later.level(k), want, accuracy: 1e-4, "\(hours) h away: \(k) on the away curve, never under the floor")
             }
         }
-        // the clamp only lifts the others; with three empty ones the lowest stays empty
-        let c = BlobNeeds.clampOne([0.0, 0.05, 0.1])
-        XCTAssertEqual(c[0], 0); XCTAssertEqual(c[1], NeedsTuning.clampedTo); XCTAssertEqual(c[2], NeedsTuning.clampedTo)
-        let ok = BlobNeeds.clampOne([0.9, 0.5, 0.2]); XCTAssertEqual(ok, [0.9, 0.5, 0.2], "nothing to clamp")
+        // a need already under the floor is not raised by the time away
+        let d = suite()
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let first = make(d, now: { t0 })
+        first.set(.hunger, 0.05); first.set(.thirst, 0.9); first.set(.attention, 0.9); first.save()
+        let later = make(d, now: { t0.addingTimeInterval(20 * 3600) })
+        XCTAssertEqual(later.level(.hunger), 0.05, accuracy: 1e-5, "not lifted to the floor")
+        XCTAssertEqual(later.level(.thirst), NeedsTuning.awayFloor, accuracy: 1e-5)
+        // (the old clampOne, which lifted the other needs to 0.35, is gone: it silently changed tiers and the away floor already does the job)
     }
 
     // MARK: restores
@@ -303,9 +307,9 @@ final class NeedsTests: XCTestCase {
         let same = make(d, now: { t0 })
         XCTAssertEqual(same.level(.hunger), 0.8, accuracy: 1e-6); XCTAssertEqual(same.level(.thirst), 0.7, accuracy: 1e-6); XCTAssertEqual(same.level(.attention), 0.9, accuracy: 1e-6)
         let hourLater = make(d, now: { t0.addingTimeInterval(3600) })
-        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 3, accuracy: 1e-4, "the offline hour decayed it")
-        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 0.5, accuracy: 1e-4)
-        XCTAssertEqual(hourLater.level(.attention), 0.9 - 0.25, accuracy: 1e-4)
+        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 10, accuracy: 1e-4, "the offline hour decayed it on the away curve")
+        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 8, accuracy: 1e-4)
+        XCTAssertEqual(hourLater.level(.attention), 0.9 - 1.0 / 6, accuracy: 1e-4)
         // restores save at once
         hourLater.restore(.hunger)
         let again = make(d, now: { t0.addingTimeInterval(3600) })

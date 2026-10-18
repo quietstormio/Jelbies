@@ -58,7 +58,7 @@ struct RosterPanel: View {
                     ScrollView {
                         VStack(spacing: 10) {
                             ForEach(care.select.blobs) { b in
-                                BlobCard(blob: b, needs: care.needs(for: b.id)) {
+                                BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id)) {
                                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                                     withAnimation(CareMenu.spring) { open = false }
                                     onPick(b.id)
@@ -70,7 +70,7 @@ struct RosterPanel: View {
                 }
                 .padding(14)
                 .frame(width: 300)
-                .frame(maxHeight: 420)
+                .frame(maxHeight: 500)
                 .fixedSize(horizontal: false, vertical: true)
                 .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.28), radius: 14, y: 6))
                 .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
@@ -85,6 +85,7 @@ struct RosterPanel: View {
 struct BlobCard: View {
     let blob: SelectBlob
     let needs: BlobNeeds
+    var coat: BlobGrime.CoatTier = .normal
     let action: () -> Void
 
     static func moodColor(_ m: BlobMood) -> Color {
@@ -112,6 +113,7 @@ struct BlobCard: View {
                 HStack(spacing: 12) {
                     ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) }
                 }
+                status
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
@@ -120,6 +122,29 @@ struct BlobCard: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("roster-card-\(blob.id)")
         .accessibilityLabel("\(blob.name), \(needs.mood.word)")
+        .accessibilityValue(statusSummary)
+    }
+
+    /// The Nintendogs-style status words, per Blob: Hunger, Thirst, Attention (their tier words) and Coat.
+    var statusItems: [(title: String, word: String)] {
+        [("Hunger", needs.tier(.hunger).word(.hunger)), ("Thirst", needs.tier(.thirst).word(.thirst)),
+         ("Attention", needs.tier(.attention).word(.attention)), ("Coat", coat.word)]
+    }
+    var statusSummary: String { statusItems.map { "\($0.title) \($0.word)" }.joined(separator: ", ") }
+
+    private var status: some View {
+        let cols = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
+        return LazyVGrid(columns: cols, alignment: .leading, spacing: 3) {
+            ForEach(statusItems, id: \.title) { item in
+                HStack(spacing: 4) {
+                    Text(item.title).foregroundStyle(FocusStyle.brown.opacity(0.55))
+                    Text(item.word).foregroundStyle(FocusStyle.brown).fontWeight(.bold)
+                        .accessibilityIdentifier("status-\(item.title.lowercased())-\(blob.id)")
+                }
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
     }
 
     private func meter(_ k: NeedKind) -> some View {

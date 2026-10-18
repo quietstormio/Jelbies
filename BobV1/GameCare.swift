@@ -8,6 +8,8 @@
 //
 
 import Foundation
+import QuartzCore
+import UIKit
 import Observation
 import simd
 
@@ -24,59 +26,112 @@ final class GameCare {
     var bowlOut: Bool { trayOut }
     private(set) var servingKind: ConsumableKind?
 
-    @ObservationIgnored private var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
+    @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
-    @ObservationIgnored private var callRunning = false
+    @ObservationIgnored var callRunning = false
     @ObservationIgnored private var finished: [BlobRequest] = []
-    @ObservationIgnored private var wanted: Consumable?             // picked, the tray not out yet
-    @ObservationIgnored private var meal: Consumable?               // the tray is out and he is working on it
-    @ObservationIgnored private var mealAge: Float = 0
-    @ObservationIgnored private var idleT: Float = 0
-    @ObservationIgnored private var retries = 0
-    @ObservationIgnored private var mealRequested = false
+    @ObservationIgnored var wanted: Consumable?             // picked, the tray not out yet
+    @ObservationIgnored var meal: Consumable?               // the tray is out and he is working on it
+    @ObservationIgnored var mealAge: Float = 0
+    @ObservationIgnored var idleT: Float = 0
+    @ObservationIgnored var retries = 0
+    @ObservationIgnored var mealRequested = false
     /// The walk to the stand before the tray pops in (see `serveWanted`).
-    @ObservationIgnored private var standRequested = false
-    @ObservationIgnored private var standIdle: Float = 0
-    @ObservationIgnored private var standSettle: Float = 0
-    @ObservationIgnored private var standRetries = 0
-    @ObservationIgnored private var wantedAge: Float = 0
-    @ObservationIgnored private var wantedOrigin: SIMD2<Float>?
+    @ObservationIgnored var standRequested = false
+    @ObservationIgnored var standIdle: Float = 0
+    @ObservationIgnored var standSettle: Float = 0
+    @ObservationIgnored var standRetries = 0
+    @ObservationIgnored var wantedAge: Float = 0
+    @ObservationIgnored var wantedOrigin: SIMD2<Float>?
+    /// Appetite of the current meal (decided when the tray pops in, from his tier then): pieces he will take (0 = refuses), already paid for.
+    @ObservationIgnored private(set) var mealPieces = 3
+    @ObservationIgnored var mealPaid = 0
+    @ObservationIgnored var mealTier = NeedTier.famished
+    /// Famished / Parched eats faster (tests of the shared bite timing turn this off).
+    @ObservationIgnored var eagerWhenFamished = true
+    /// The small "Not hungry" / "Not thirsty" label while he refuses (nil = none). `noticeSerial` bumps per refusal.
+    var notice: String?
+    @ObservationIgnored var noticeSerial = 0
+    @ObservationIgnored var noticeAge: Float = 0
+    @ObservationIgnored var noticeDone = false
 
+    /// Which Jelly the current order / meal is for (set by `order`; GameCare+Dining.swift). Others: their brain's finished jobs, their head, the brain to stand down.
+    @ObservationIgnored var mealJelly = 0
+    @ObservationIgnored var pendingJelly = 0
+    @ObservationIgnored var eaterFinished: [BlobRequest] = []
+    @ObservationIgnored var clearCool: [Int: Float] = [:]
+    @ObservationIgnored var mealHead = SIMD3<Float>(0, BlobShape.H, 1)
+    @ObservationIgnored weak var eaterBrain: BlobBrain?
     /// The meal tray (one shared serving scaled for N Blobs; drinks come with a straw per Blob).
     let dining = DiningSet()
     /// Focus mode (Come here): phase, dock selection and the camera spring. See TouchMode.swift.
     let focus = BlobFocus()
+    /// Which Jellies the close-up is on, where they stand, and their approach / touch bookkeeping (GameCare+Focus.swift).
+    let focusGroup = FocusGroup()
+    /// Clean: soap, rinse, shine (Bath/BathFlow.swift). Also owns the dirt that builds up in the room.
+    let bath = BathFlow()
+    /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
+    @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
     let select = BlobSelect()
-    @ObservationIgnored private var approachIdle: Float = 0
-    @ObservationIgnored private var approachRetries = 0
+    @ObservationIgnored var approachIdle: Float = 0
+    @ObservationIgnored var approachRetries = 0
     @ObservationIgnored private var savedAutonomy = true
     @ObservationIgnored private var wantHop = false
-    @ObservationIgnored private var afterRelease: Consumable?        // Feed / Drink asked inside focus: release first, then the tray flow
+    @ObservationIgnored var afterRelease: Consumable?        // Feed / Drink asked inside focus: release first, then the tray flow
     /// Needs + mood (hunger / thirst / attention). `needs.mood` and `needs.wantedNeed` are what the touch reactions read.
     let needs = BlobNeeds()
     var mood: BlobMood { needs.mood }
     var wantedNeed: NeedKind? { needs.wantedNeed }
     /// The need whose thought bubble is up right now (nil = none), and how the last bubble ended (the view poofs it, with a sparkle when fixed).
-    private(set) var bubbleNeed: NeedKind?
-    struct BubbleEnd: Equatable { var serial = 0; var need: NeedKind = .hunger; var fixed = false }
-    private(set) var bubbleEnd = BubbleEnd()
+    var bubbleNeed: NeedKind?                  // (settable for GameCare+Bubbles: the bubble slot is shared by every Jelly)
+    /// Who holds the one bubble slot when several Jellies need things (GameCare+Bubbles.swift). Never touched in a one-Jelly game.
+    @ObservationIgnored let bubbleHub = BubbleHub()
+    struct BubbleEnd: Equatable { var serial = 0; var need: NeedKind = .hunger; var fixed = false; var silent = false; var clean = false }
+    var bubbleEnd = BubbleEnd()
     @ObservationIgnored private(set) var schedule = BubbleSchedule()
+    /// The bath bubble (Dirty / Filthy coat): a parallel source to the need bubbles, sharing the one bubble slot.
+    var bubbleClean = false
+    @ObservationIgnored private(set) var coatSchedule = CoatBubbleSchedule()
     /// The touch model, read-only: petting in focus mode restores attention (set by the screen).
     @ObservationIgnored weak var touchPlay: TouchPlay?
     /// Where the bubble anchors: the top of his head in the world (the same projection as the hearts / outline), and his floor spot for the highlight.
     @ObservationIgnored private(set) var headWorld = SIMD3<Float>(0, BlobShape.H, 1)
     @ObservationIgnored private(set) var bodyFloor = SIMD3<Float>(0, 0, 1)
-    /// Other Blobs' needs (preview Blobs only, in memory); id 0 is `needs`.
-    @ObservationIgnored private var otherNeeds: [Int: BlobNeeds] = [:]
+    /// Every Jelly in the room (index = id). [0] wraps this care's own `needs`, `bath.grime` and `voice.training`; the others own theirs and persist
+    /// under their id (JellyKeys). Care actions (meals, Clean, Come here, voice) still drive Jelly 0 only.
+    private(set) var jellies: [JellyProfile] = []
+    var jellyCount: Int { jellies.count }
+    /// Phase A: the care menu (Feed / Drink / Come here / Clean) always acts on Bob, so it stays visible with several Jellies instead of waiting for a selection.
+    static let perJellyCare = false
+    /// The Jelly the care menu targets: the one highlighted (or confirmed) in the selection, else Bob (0).
+    var targetJelly: Int {
+        if focus.isActive, focusGroup.ids.count == 1 { return focusGroup.ids[0] }        // the dock acts on the one Jelly in the close-up
+        return select.selectedID ?? select.confirmed ?? 0
+    }
+    func jelly(_ id: Int) -> JellyProfile? { jellies.indices.contains(id) ? jellies[id] : nil }
+    /// The coat word of a Jelly.
+    /// The Home Screen / Lock Screen widget's data (Widget/WidgetBridge.swift): the snapshot + portraits in the App Group, written as needs / grime change.
+    @ObservationIgnored let widget = WidgetBridge()
+    /// What the widget shows: one input per Jelly in the room (`jellies`, each with its own needs / grime; colour by roster id).
+    func widgetInputs() -> [WidgetBridge.Input] {
+        jellies.map { j in
+            WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(j.id), levels: NeedKind.allCases.map { j.needs.level($0) },
+                               dirt: j.grime.dirt, sparkle: j.grime.sparkle)
+        }
+    }
+    /// The select hook for the widget's deep link (`jelbies://jelly/<id>`): the game is already open, so this plays that Jelly's roster highlight.
+    func openJelly(_ id: Int) { rosterPick(id) }
+    func coat(for id: Int) -> BlobGrime.CoatTier { jelly(id)?.coat ?? .normal }
     func needs(for id: Int) -> BlobNeeds {
-        if id == 0 { return needs }
+        if let p = jelly(id) { return p.needs }
         if let n = otherNeeds[id] { return n }
-        let n = BlobNeeds(persists: false)
-        n.set(NeedKind(rawValue: id % 3) ?? .thirst, 0.2)          // stand-ins differ: Pip is thirsty, Moss wants love
+        let n = BlobNeeds(persists: false)                          // an id outside the roster: an in-memory stand-in
         otherNeeds[id] = n
+        n.set(NeedKind(rawValue: id % 3) ?? .thirst, 0.2)           // stand-ins differ: Pip is thirsty, Moss wants love
         return n
     }
+    @ObservationIgnored private var otherNeeds: [Int: BlobNeeds] = [:]
     /// The food / drink the player last picked (consumable ids).
     private(set) var selectedFoodID = Consumables.berries.id
     private(set) var selectedDrinkID = Consumables.water.id
@@ -90,46 +145,67 @@ final class GameCare {
     /// Voice v1: his name, tricks, listen mode and the reaction queue (VoiceCoordinator.swift). Run from `tick`.
     let voice: VoiceCoordinator
 
-    init(voice: VoiceCoordinator? = nil) {
+    /// `jellyCount`: Jellies in the room (1...3). `persistent: false` keeps Jellies 1 and 2 in memory (tests); `defaults` is where they save.
+    init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, persistent: Bool = true, defaults: UserDefaults = .standard) {
         let v = voice ?? VoiceCoordinator()
         self.voice = v
         v.care = self
+        let n = min(max(jellyCount, 1), JellyRoster.maxCount)
+        jellies = [JellyProfile(id: 0, name: JellyRoster.names[0], needs: needs, grime: bath.grime, training: v.training)]
+            + (1..<n).map { JellyProfile(id: $0, name: JellyRoster.names[$0], persists: persistent, defaults: defaults) }
+        if n > 1 { select.setBlobs(JellyRoster.selectBlobs(count: n)) }
+        bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
+        bath.success = { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
     }
 
     // Not isolated: Swift 6.2's implicit isolated deinit (swift_task_deinitOnExecutor) aborts on the iOS 26.2 runtime; see MelonModel.
     nonisolated deinit {}
 
     /// A grumpy Bob ignored an order: the thought bubble of the need he is wanting comes up now (nothing if none).
+    /// What the bubble shows now: a need, the bath, or nothing.
+    var bubbleIcon: BubbleIcon? { bubbleNeed.map { .need($0) } ?? (bubbleClean ? .clean : nil) }
     func showNeedBubble() { if !focus.isActive { applyBubble(schedule.showNow()) } }
 
-    func feed() { feed(selectedFoodID) }
-    func water() { drink(selectedDrinkID) }
+    // Target Jelly: every care action takes `jelly:` (default 0 = Bob). Phase A drives Jelly 0 only; phase B routes the id to that Jelly's brain / needs / tray place.
+    func feed(jelly: Int = 0) { feed(selectedFoodID, jelly: jelly) }
+    func water(jelly: Int = 0) { drink(selectedDrinkID, jelly: jelly) }
     /// Picker entry points: pop the tray in with the chosen consumable (ignored while a tray is out).
-    func feed(_ id: String) { if let c = Consumables.with(id: id), c.kind == .food { selectedFoodID = id; order(c) } }
-    func drink(_ id: String) { if let c = Consumables.with(id: id), c.kind == .drink { selectedDrinkID = id; order(c) } }
-    func water(_ id: String) { drink(id) }
+    func feed(_ id: String, jelly: Int = 0) { if let c = Consumables.with(id: id), c.kind == .food { selectedFoodID = id; order(c, jelly: jelly) } }
+    func drink(_ id: String, jelly: Int = 0) { if let c = Consumables.with(id: id), c.kind == .drink { selectedDrinkID = id; order(c, jelly: jelly) } }
+    func water(_ id: String, jelly: Int = 0) { drink(id, jelly: jelly) }
     /// A tap on the thought bubble: opens the matching care action. Feed / Drink return the action so the screen can open the care menu on that
     /// picker; the attention bubble calls him over right here. The bubble goes away until its next turn.
     @discardableResult
     func tapBubble() -> BubbleAction? {
+        if bubbleHub.owner != 0 { return tapOtherBubble() }          // another Jelly's bubble (GameCare+Bubbles.swift)
+        if bubbleClean, bubbleNeed == nil {
+            _ = coatSchedule.dismiss(); bubbleClean = false
+            bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, clean: true)
+            selectForBubble(0)
+            if canClean { clean() }
+            return .clean
+        }
         guard let n = bubbleNeed else { return nil }
         let a = n.action
         if a != .comeHere, trayOut || focus.isActive { return nil }         // a meal is already on: the bubble only waits for it
         applyBubble(schedule.dismiss())
+        selectForBubble(0)
         if a == .comeHere { comeHere() }
         return a
     }
     /// The roster: tapping a card plays the outline highlight on that Blob (works with one Blob too), then the action button shows for him.
-    func rosterPick(_ id: Int) {
+    func rosterPick(_ id: Int, quietHop: Bool = false) {
         guard !focus.isActive else { return }
-        select.highlight(id)
+        select.highlight(id, quietHop: quietHop)
     }
-    private func applyBubble(_ events: [BubbleSchedule.Event]) {
+    func applyBubble(_ events: [BubbleSchedule.Event], from id: Int = 0) {
+        guard id == bubbleHub.owner else { return }          // only the Jelly holding the slot may change it
         for e in events {
             switch e {
             case .appeared(let n): bubbleNeed = n
             case .disappeared(let n):
-                bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: false)
+                bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: false, silent: bath.active)   // no puff when a clean-up starts
             case .fixed(let n, _):
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: true)
             }
@@ -137,56 +213,126 @@ final class GameCare {
     }
     private func tickNeeds(brain: BlobBrain, sim: SoftBody?, dt: Float) {
         var petting = false, purring = false
-        if focus.isFocused, let tp = touchPlay {
+        if focus.isFocused, focusGroup.touchID == 0, let tp = touchPlay {
             petting = tp.contact && tp.speed > TouchPlay.strokeSpeed * 0.5
             purring = tp.isPurring
         }
-        needs.step(dt: dt, petting: petting, purring: purring)
+        needs.step(dt: dt, petting: petting, purring: purring, exerting: brain.isExerting)
         // where his head is (for the bubble) and his floor spot (for the highlight)
         var c = SIMD3<Float>(brain.position.x, BlobShape.H * 0.5, brain.position.y)
         if let sim { c = sim.centroid() }
+        if let a = focusGroup.touchAnchor { c = a }          // petting another Jelly in the close-up: hearts and bubbles anchor on him
         bodyFloor = SIMD3(c.x, 0, c.z); select.bodyFloor = bodyFloor
         headWorld = SIMD3(c.x, c.y + BlobShape.H * 0.5, c.z)
         // a bubble is held back in focus mode and while a highlight is up; it stays while his meal for that need is on
         var pinned = false
-        if let n = needs.wantedNeed, trayOut, let k = servingKind { pinned = (k == .food && n == .hunger) || (k == .drink && n == .thirst) }
-        let suppressed = (focus.isActive || select.isSelecting) && !pinned
-        applyBubble(schedule.update(wanted: needs.wantedNeed, dt: dt, suppressed: suppressed, pinned: pinned))
+        if let n = needs.wantedNeed, trayOut, mealJelly == 0, let k = servingKind { pinned = (k == .food && n == .hunger) || (k == .drink && n == .thirst) }
+        let suppressed = ((focus.isActive || select.isSelecting || bath.active) && !pinned) || bubbleHub.owner != 0
+        // the one bubble slot: whoever is up keeps it; a Filthy coat takes it over from a need unless some need is Famished / Parched / Neglected
+        let coat = bath.grime.coat
+        let famished = NeedKind.allCases.contains { needs.tier($0) == .famished }
+        let preempt = coat == .filthy && !famished
+        let coatSuppressed = suppressed || pinned || (schedule.visible && !preempt)
+        if coatSchedule.update(coat: coat, dt: dt, suppressed: coatSuppressed) { bubbleClean = coatSchedule.visible; if !bubbleClean { bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, silent: bath.active, clean: true) } }
+        let needSuppressed = suppressed || (coatSchedule.visible && !pinned)
+        applyBubble(schedule.update(wanted: needs.wantedNeed, dt: dt, suppressed: needSuppressed, pinned: pinned))
     }
 
-    func wave() { if meal == nil, wanted == nil, !focus.isActive { queued = [.wave] } }
+    // MARK: time away
+
+    /// Greeting: back after at least this long, Bob trots to the front and does a happy hop with hearts.
+    @ObservationIgnored private(set) var greetings = 0
+    @ObservationIgnored var greeting = false
+    @ObservationIgnored private var greetAge: Float = 0
+    @ObservationIgnored private var greetHop = false
+    @ObservationIgnored private var greetHearts = 0
+    @ObservationIgnored private var greetT: Float = 0
+    @ObservationIgnored private var launchGreeted = false
+    /// The other Jellies' greeting: ids still to be sent, and the ones on their way (id -> seconds so far, spot).
+    @ObservationIgnored private var greetPending: Set<Int> = []
+    @ObservationIgnored private var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
+    /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
+    static func greetSpot(_ id: Int) -> SIMD2<Float> {
+        let c = VoiceCoordinator.comeSpot
+        switch id { case 1: return c + SIMD2(-0.9, -1.5); case 2: return c + SIMD2(0.9, -1.5); default: return c }
+    }
+
+    /// The app left the foreground: stamp and save needs AND grime (the stamp is what the next return / launch measures from).
+    func leftActive(at t: Date? = nil) {
+        for j in jellies { j.leftActive(at: t) }          // every Jelly: needs AND grime
+        widget.leftActive(widgetInputs())
+    }
+    /// The app is back in the foreground: apply the time away once (needs curve, dirt, sparkle), then greet after a long absence.
+    /// Returns the seconds applied.
+    @discardableResult
+    func returnedActive(at t: Date? = nil) -> TimeInterval {
+        var away: TimeInterval = 0
+        for j in jellies { away = max(away, j.returnedActive(at: t)) }
+        greetIfAway(away)
+        return away
+    }
+    /// Cold launch: the away time was applied when the models loaded; greet if it was long. Once.
+    func launched() {
+        guard !launchGreeted else { return }
+        launchGreeted = true
+        greetIfAway(jellies.map(\.lastAway).max() ?? 0)
+    }
+    /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
+    var greetBlocked: Bool {
+        trayOut || meal != nil || wanted != nil || bath.active || focus.isActive || focus.phase != .roaming
+            || voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow
+    }
+    func greetIfAway(_ away: TimeInterval) {
+        guard away >= TimeAway.greetAfter, !greetBlocked else { return }
+        select.cancel()
+        greeting = true; greetAge = 0; greetHop = false
+        queued = [.come(to: VoiceCoordinator.comeSpot)]          // the existing come-to-front walk (no close-up), then the happy hop
+        greetPending = Set(1..<max(jellies.count, 1)); greetOthers = [:]       // the other Jellies trot to the front too (tickOthers)
+        bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
+        greetings += 1
+    }
+
+    func wave(jelly: Int = 0) { if meal == nil, wanted == nil, !focus.isActive, !bath.active { queued = [.wave] } }
+    /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
+    var canClean: Bool { canClean(jelly: 0) }
+    /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
+    func clean(jelly: Int = 0) {
+        guard jelly == 0 else { startCleanOther(jelly: jelly); return }        // another Jelly: GameCare+Bath.swift
+        guard canClean, let brain = lastBrain else { return }
+        select.cancel()
+        queued.removeAll(); callRunning = false
+        voice.cancel()
+        bath.start(brain: brain)
+    }
+    @ObservationIgnored weak var lastBrain: BlobBrain?
+    @ObservationIgnored weak var lastSim: SoftBody?
     /// "Come here": calls him to the front spot, then focus mode starts (camera close-up, actions dock, release button).
     /// A meal in progress is dropped first: the tray poofs, the piece he held goes with it.
-    func comeHere() {
-        guard focus.phase == .roaming else { return }
-        select.cancel()
-        focus.beginApproach()
-        approachIdle = 0; approachRetries = 0
-        queued = [.come(to: GameCamera.callSpot)]
-    }
+    func comeHere(jelly: Int? = nil) { beginFocus(ids: [jelly ?? targetJelly]) }       // GameCare+Focus.swift
     /// Old name of `comeHere()` (the menu and the capture scripts).
-    func call() { comeHere() }
+    func call(jelly: Int? = nil) { comeHere(jelly: jelly) }
 
     /// "Let Bob go": the only way out of focus mode. The camera eases out, he hops, and he resumes roaming.
     func release() {
         guard focus.phase == .focused || focus.phase == .approaching else { return }
         let wasFocused = focus.phase == .focused
         focus.release()
-        if wasFocused { wantHop = true }
+        if wasFocused, focusGroup.includes(0) { wantHop = true }
         else { queued.removeAll { if case .come = $0 { return true }; return false }; callRunning = false }
     }
 
-    private func order(_ c: Consumable) {
+    private func order(_ c: Consumable, jelly: Int = 0) {
         if focus.isActive {                          // Feed / Drink from inside focus ends focus first
             release()
-            if focus.isActive { afterRelease = c; return }
+            if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
-        guard wanted == nil, meal == nil, dining.phase == .absent else { return }
+        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active else { return }
+        mealJelly = jellies.indices.contains(jelly) ? jelly : 0
         wanted = c; servingKind = c.kind; trayOut = true
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
         resetStandWalk()
     }
-    private func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil }
+    func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil }
 
     /// Floor obstacle for the brain's resolver: pushes a point out of the tray.
     /// Sipping stands `sipCloser` nearer the tray (his mouth only reaches a straw tip that close); his belly may overlap the tray's rim by that much.
@@ -223,40 +369,68 @@ final class GameCare {
         return h
     }
 
-    private func mealRequest(_ c: Consumable) -> BlobRequest { Self.mealRequest(c, tray: dining, place: 0) }
-    /// The brain request for place `i` of tray `d` (sip stands a little closer, eating a little farther back).
-    static func mealRequest(_ c: Consumable, tray dining: DiningSet, place i: Int) -> BlobRequest {
+    func mealRequest(_ c: Consumable) -> BlobRequest { Self.mealRequest(c, tray: dining, place: 0, pieces: mealPieces) }
+
+    /// How the sitting goes for a tier: the hooks' plan for the brain (refuse / pace / how much of the drink share this sitting drains).
+    static func plan(for c: Consumable, tier: NeedTier, tray d: DiningSet, place i: Int = 0) -> BlobBrain.DinePlan {
+        var p = BlobBrain.DinePlan()
+        p.refuse = MealAppetite.pieces(tier) == 0
+        p.pace = MealAppetite.pace(tier)
+        if c.kind == .drink {
+            let per = 1 / Float(DiningTiming.gulpsPerDrink)
+            let left = Int(((1 - d.drunk[i]) * Float(DiningTiming.gulpsPerDrink)).rounded(.up))
+            let take = max(min(left, MealAppetite.pieces(tier) - (DiningTiming.gulpsPerDrink - left)), 1)
+            p.levelBase = d.drunk[i]; p.levelSpan = Float(take) * per
+        }
+        return p
+    }
+    /// Pieces eaten so far from this tray (bites gone / gulps drunk).
+    private var piecesEaten: Int {
+        guard let c = meal else { return 0 }
+        if c.kind == .drink { return Int((dining.drunk[0] * Float(DiningTiming.gulpsPerDrink) + 0.001).rounded(.down)) }
+        return DiningTiming.bitesPerServing - dining.bitesLeft[0]
+    }
+    /// Hooks + plan + request for the current meal (the first serve and every re-serve).
+    func startMeal(_ c: Consumable, brain: BlobBrain) {
+        brain.dineHooks = Self.hooks(for: c, tray: dining)
+        brain.dinePlan = Self.plan(for: c, tier: mealTier, tray: dining)
+        if !eagerWhenFamished { brain.dinePlan.pace = 1 }
+        brain.requestNow(mealRequest(c))
+    }
+    /// The brain request for place `i` of tray `d` (sip stands a little closer, eating a little farther back). `pieces` caps what he takes this meal.
+    static func mealRequest(_ c: Consumable, tray dining: DiningSet, place i: Int, pieces: Int = DiningTiming.bitesPerServing) -> BlobRequest {
         var place = dining.places[i]
         switch c.eatStyle {
         case .sip:
             place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * sipCloser
             let left = Int(((1 - dining.drunk[i]) * Float(DiningTiming.gulpsPerDrink)).rounded(.up))
-            return .sip(place: place, gulps: max(left, 1))
+            return .sip(place: place, gulps: max(min(left, pieces - (DiningTiming.gulpsPerDrink - left)), 1))
         default:
             place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * eatCloser
-            return .dine(place: place, bites: max(dining.bitesLeft[i] + (dining.forkBite[i] ? 1 : 0), 1))
+            let left = dining.bitesLeft[i] + (dining.forkBite[i] ? 1 : 0)
+            return .dine(place: place, bites: max(min(left, pieces - (DiningTiming.bitesPerServing - left)), 1))
         }
     }
 
     private func enterFocus(brain: BlobBrain) {
         savedAutonomy = brain.autonomy
         brain.autonomy = false                       // he stays on the front spot until released
-        focus.arrive()
+        if focusGroup.markArrived(0) { focus.arrive() }
     }
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
         switch focus.phase {
-        case .approaching:
+        case .approaching where focusGroup.includes(0):
             // the come request can be cancelled (for example he was grabbed): ask again a couple of times, then give up
             let act = brain.activity
             if !callRunning, queued.isEmpty, act == .idle || act == .lookingAround || act == .steppingInPlace {
                 approachIdle += dt
                 if approachIdle > 0.8 {
                     approachIdle = 0
-                    let d = simd_length(brain.position - GameCamera.callSpot)
+                    let d = simd_length(brain.position - focusGroup.spot(of: 0))
                     if d < 0.5 { enterFocus(brain: brain) }
-                    else if approachRetries < 2 { approachRetries += 1; queued = [.come(to: GameCamera.callSpot)] }
+                    else if approachRetries < 2 { approachRetries += 1; queued = [.come(to: focusGroup.spot(of: 0))] }
                     else { focus.cancelApproach() }
                 }
             } else { approachIdle = 0 }
@@ -269,13 +443,24 @@ final class GameCare {
         default: break
         }
         if focus.step(dt: dt) {
-            if let c = afterRelease { afterRelease = nil; order(c) }
+            if let c = afterRelease { afterRelease = nil; order(c, jelly: pendingJelly) }
         }
+    }
+
+    /// Each piece he has eaten adds its share of the need as it goes (a Call mid-meal keeps what was eaten).
+    func payPieces() {
+        guard meal != nil, mealPieces > 0 else { return }
+        let n = min(piecesEaten, mealPieces)
+        guard n > mealPaid else { return }
+        needs(for: mealJelly).gain(meal!.kind == .food ? .hunger : .thirst, Float(n - mealPaid) * MealAppetite.gainPerPiece)
+        mealPaid = n
     }
 
     /// Clears the meal. Does NOT touch `retries`: a re-serve goes endMeal -> wanted -> serveWanted -> spawn, and the count has to survive that
     /// round trip or the loop is never bounded. `retries` restarts only on a fresh tap (`order`), a finished meal, or a dropped one (Come here).
-    private func endMeal() {
+    func endMeal() {
+        notice = nil
+        standDownEater()
         dining.despawn()
         meal = nil; mealRequested = false; idleT = 0
     }
@@ -306,7 +491,7 @@ final class GameCare {
     /// The tray never pops in where he would have to cross it. The visible floor beside the 1.56-wide tray is only ~0.2 u wide, so there is NO
     /// on-screen way around it for a body 1.4 wide: instead the tray waits until he is at (or behind) his stand line. If he is in front of
     /// it (or on the spot where it pops in) he first walks to his place with no tray out, then it pops in front of him.
-    private func serveWanted(_ c: Consumable, brain: BlobBrain, here: SIMD2<Float>, act: BlobActivity, dt: Float) {
+    func serveWanted(_ c: Consumable, brain: BlobBrain, here: SIMD2<Float>, act: BlobActivity, dt: Float) {
         let layout = DiningLayout.make(n: 1)
         if wantedOrigin == nil { wantedOrigin = DiningSpot.choose(bob: SIMD2(99, 99), layout: layout) }
         let origin = wantedOrigin ?? DiningSpot.preferred
@@ -322,8 +507,9 @@ final class GameCare {
             }
             if dining.phase == .absent, dining.spawn(serving: c, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
                 wanted = nil; meal = c; mealAge = 0; idleT = 0; resetStandWalk()
-                brain.dineHooks = Self.hooks(for: c, tray: dining)
-                brain.requestNow(mealRequest(c)); mealRequested = true
+                let kind: NeedKind = c.kind == .food ? .hunger : .thirst
+                mealTier = needs(for: mealJelly).tier(kind); mealPieces = MealAppetite.pieces(mealTier); mealPaid = 0; noticeDone = false
+                startMeal(c, brain: brain); mealRequested = true
             }
             return
         }
@@ -341,36 +527,85 @@ final class GameCare {
         } else { standIdle = 0 }
     }
 
+    /// The floor rules every Jelly's brain walks by: the visible floor, plus the meal tray as an obstacle.
+    func wireWorld(_ brain: BlobBrain, isBob: Bool) {
+        let base = brain.resolve
+        brain.resolve = { [weak self, weak brain] p, r in
+            if self?.bath.fenceLifted == true, self?.bath.targetID == (isBob ? 0 : brain?.steerID) { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase, only for the Jelly being washed
+            let rr = self?.footprint(r) ?? r
+            if self?.focusGroup.rowOpen == true, let me = self { return me.obstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: rr) }       // the wide close-up row stands past the roaming floor's sides
+            let q = base(p, rr)
+            return self?.obstacle(q, radius: rr) ?? q
+        }
+    }
+
+    /// Once per fixed step, after Bob's `tick`: the other Jellies' needs and dirt, their mood for the idle behaviours, the selection hop and the
+    /// greeting after a long absence. (Meals, Clean, Come here and voice stay Jelly 0's.)
+    func tickOthers(_ actors: [JellyActor], dt: Float) {
+        for a in actors where a.id > 0 {
+            guard let brain = a.brain, let profile = jelly(a.id) else { continue }
+            let here = Self.floorPos(brain, a.sim)
+            if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting) }
+            brain.idleMood = profile.needs.mood
+            brain.idleBlocked = (bath.active || focusGroup.pauses(a.id, phase: focus.phase)) && !brain.commanded
+            driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
+            tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
+            if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil { brain.startHopPlay(sim: a.sim, distance: 0.0001) }
+            // greeting: walk to the front spot (the existing come-to-front walk), then the happy in-place hop
+            if greetPending.contains(a.id), !greetBlocked, brain.activity != .coming, bubbleHub.greetClock >= BubbleHub.greetStagger(a.id) {
+                greetPending.remove(a.id)
+                let spot = Self.greetSpot(a.id)
+                greetOthers[a.id] = (0, spot, 0)
+                brain.requestNow(.come(to: spot))
+            } else if var g = greetOthers[a.id] {
+                g.age += dt
+                let calm = brain.activity == .idle || brain.activity == .lookingAround || brain.activity == .steppingInPlace
+                g.arrived = (calm && g.age > 0.5) ? g.arrived + dt : 0
+                if g.age > 25 || greetBlocked { greetOthers[a.id] = nil }
+                else if g.arrived > 0.3 { greetOthers[a.id] = nil; brain.startHopPlay(sim: a.sim, distance: 0.0001); startGreetHearts(a.id) }
+                else { greetOthers[a.id] = g }
+            }
+        }
+        tickBubbles(actors, dt: dt)          // who holds the bubble slot, the greeting hearts (GameCare+Bubbles.swift)
+    }
+
     func tick(brain: BlobBrain, renderer: MelonRenderer?, dt: Float, sim: SoftBody? = nil) {
+        driveFocus(id: 0, brain: brain, sim: sim, dt: dt)
         tickFocus(brain: brain, sim: sim, dt: dt)
         tickNeeds(brain: brain, sim: sim, dt: dt)
+        widget.tick(dt: dt) { widgetInputs() }
         select.tick(dt: dt)
-        if let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (the real Blob)
+        if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)
         if !hooked {
             hooked = true
             brain.onFinished = { [weak self] r in self?.finished.append(r) }
-            let base = brain.resolve
-            brain.resolve = { [weak self] p, r in
-                let rr = self?.footprint(r) ?? r
-                let q = base(p, rr)
-                return self?.obstacle(q, radius: rr) ?? q
-            }
+            wireWorld(brain, isBob: true)
         }
+        lastBrain = brain; lastSim = sim
         let act = brain.activity
-        busy = act != .idle && act != .lookingAround && act != .steppingInPlace
+        busy = (act != .idle && act != .lookingAround && act != .steppingInPlace) || bath.active
+
+        // greeting: the hop and hearts once he has come to the front (a stuck walk gives up after 25 s)
+        if greeting { greetAge += dt; if greetAge > 25 || greetBlocked { greeting = false } }
+        if greetHop {
+            greetHop = false
+            if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0 }       // the existing in-place hop (arm / feet caps hold)
+        }
+        if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
         // finished jobs
         for r in finished {
             switch r {
             case .come:
                 callRunning = false; retries = 0
+                if greeting { greeting = false; greetHop = true }
                 if UserDefaults.standard.integer(forKey: "GameFeedAfterCall") != 0 { feed() }          // capture aid: serve a meal once he has come
-                if focus.phase == .approaching { enterFocus(brain: brain) }
+                if focus.phase == .approaching, focusGroup.includes(0) { enterFocus(brain: brain) }
             case .goTo:
                 voice.goFinished()                  // a voice walk ends facing the camera
             case .dine, .sip:
-                if let m = meal {                    // a finished meal (not a dropped one) restores the need
-                    needs.restore(m.kind == .food ? .hunger : .thirst)
+                if meal != nil, mealJelly == 0 {      // a finished meal (not a dropped one): the leftovers poof with the tray (each piece already paid for)
+                    payPieces()
                     endMeal(); retries = 0
                 }
             default: break
@@ -393,28 +628,8 @@ final class GameCare {
             }
         }
 
-        // pop the tray in once he is at (or behind) his place; in front of it he walks there first
-        if let c = wanted, !callRunning, queued.isEmpty { serveWanted(c, brain: brain, here: Self.floorPos(brain, sim), act: act, dt: dt) }
-
-        if let c = meal {
-            mealAge += dt
-            if mealAge > Self.mealTimeout { endMeal(); retries = 0 }
-            else if !callRunning, queued.isEmpty, mealRequested {
-                // the request was cancelled (for example he was grabbed): ask again a couple of times, then give up
-                if act == .idle || act == .lookingAround || act == .steppingInPlace {
-                    idleT += dt
-                    if idleT > 0.8 {
-                        idleT = 0
-                        if retries < Self.maxReserves, let st = dining.places.first?.stand, Self.floorPos(brain, sim).y > st.y + Self.popTolerance + 0.05 {
-                            // dropped in front of his place (the tray is between him and it): the tray poofs, he walks back, it pops in again
-                            retries += 1; endMeal(); wanted = c; resetStandWalk()
-                        }
-                        else if retries < Self.maxReserves { retries += 1; brain.dineHooks = Self.hooks(for: c, tray: dining); brain.requestNow(mealRequest(c)) }
-                        else { endMeal(); retries = 0 }          // out of re-serves: the tray poofs, he is left at rest
-                    }
-                } else { idleT = 0 }
-            }
-        }
+        // the meal for Jelly 0 (the other Jellies' meals run from `tickOthers`): GameCare+Dining.swift
+        tickDining(id: 0, brain: brain, sim: sim, dt: dt)
 
         #if DEBUG || DINING_PREVIEW
         preview?.tick(dining: dining, bob: brain.position, dt: dt)
@@ -424,6 +639,17 @@ final class GameCare {
         let out = wanted != nil || meal != nil || dining.isPresent
         if out != trayOut { trayOut = out }
         if !out, servingKind != nil { servingKind = nil }
-        voice.tick(care: self, brain: brain, sim: sim, dt: dt)
+        if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers
+        if !bath.active { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
+    }
+}
+
+enum BubbleIcon: Equatable { case need(NeedKind), clean }
+
+extension BlobBrain {
+    /// Hurrying (thrown back to the focus spot), running, or one of the zoomies / slide / scoot moves: hunger and thirst drain faster and dirt builds 3x.
+    var isExerting: Bool {
+        if hurry || runW > 0.5 || zoomW > 0.1 { return true }
+        switch idleState.kind { case .run, .zoomies, .slide, .scoot: return true; default: return false }
     }
 }

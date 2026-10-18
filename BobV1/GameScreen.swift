@@ -16,6 +16,7 @@ struct GameScreen: View {
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     private var focus: BlobFocus { model.care.focus }
+    private var cleaning: Bool { model.care.bath.active }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -50,13 +51,17 @@ struct GameScreen: View {
             VoiceGlow(voice: model.care.voice, care: model.care)
             VoiceFeedbackView(voice: model.care.voice, care: model.care)
 
+            GreetHeartsView(care: model.care)          // Pip's and Moss's greeting hearts
+
             ThoughtBubbleView(care: model.care) { action in
                 switch action {
                 case .feed: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food }
                 case .drink: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink }
-                case .comeHere: break                    // GameCare.tapBubble already called him
+                case .comeHere, .clean: break            // GameCare.tapBubble already called him / started the clean-up
                 }
             }
+
+            RefusalLabel(care: model.care)
 
             // HUD
             ZStack {
@@ -65,7 +70,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                        } else if !focus.isActive {
+                        } else if !focus.isActive, !cleaning {
                             GameCircleButton(systemName: "gearshape", label: "Studio") {
                                 model.paused = true
                                 showStudio = true
@@ -74,7 +79,7 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                         Spacer()
-                        if !focus.isActive {
+                        if !focus.isActive, !cleaning {
                             RosterButton(care: model.care, open: $rosterOpen)
                                 .transition(.opacity)
                         }
@@ -85,7 +90,7 @@ struct GameScreen: View {
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
-                    HStack(alignment: .bottom, spacing: 10) {
+                    if !cleaning { HStack(alignment: .bottom, spacing: 10) {
                         VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                             .overlay(alignment: .topLeading) {
                                 VoiceTip(voice: model.care.voice).fixedSize().offset(y: -42)
@@ -93,13 +98,15 @@ struct GameScreen: View {
                         VoiceBookButton { bookOpen = true }
                             .padding(.bottom, 4)
                         Spacer()
-                        if !focus.isActive, model.care.select.actionVisible { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
-                    }
+                        if !focus.isActive { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
+                    } }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+
+            BathChrome(care: model.care)
 
             // (the come-here tutorial card is retired: he knows "come here" from the start)
 
@@ -107,9 +114,11 @@ struct GameScreen: View {
                 .padding(.top, 8)
         }
         .background(Color.black)
-        .onAppear { setUpSelect(); model.care.touchPlay = model.touch }
+        .onAppear { setUpSelect(); model.care.touchPlay = model.touch; model.care.launched() }
+        .onOpenURL { url in if let id = JellyLink.parse(url) { model.care.openJelly(id) } }          // widget tap: jelbies://jelly/<id>
         .onChange(of: scenePhase) { _, p in
-            if p != .active { model.care.needs.save(); model.care.voice.training.save(); model.care.voice.cancel() }
+            if p == .active { model.care.returnedActive() }          // time away: needs, dirt, sparkle (once per return) + the greeting
+            else { model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel() }
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
         .onChange(of: bookOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen }
@@ -191,6 +200,13 @@ struct GameScreen: View {
                 await sleep(3)
             }
         }
+        // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
+        if d.string(forKey: "BlobGameDemo") == "gclean" {
+            await sleep(4)
+            care.bath.grime.dirt = 0.5
+            care.bath.demo = true
+            care.clean()
+        }
         if let a = d.string(forKey: "GameAction") {
             await sleep(d.double(forKey: "GameActionDelay") > 0 ? d.double(forKey: "GameActionDelay") : 4)
             switch a {
@@ -201,6 +217,7 @@ struct GameScreen: View {
             case "feed:berries": care.feed("berries")
             case "drink:water": care.drink("water")
             case "call": care.call()
+            case "clean": care.clean()
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action
@@ -251,8 +268,8 @@ struct GameScreen: View {
         }
     }
 
-    static func makeGameModel() -> MelonModel {
-        let m = MelonModel()
+    static func makeGameModel(jellyCount: Int = JellyRoster.launchCount()) -> MelonModel {
+        let m = MelonModel(jellyCount: jellyCount)
         m.gameMode = true
         m.palette = .blue   // user 2026-10-16: pink is too close to Kirby; model default stays .blush (BaseBody lock)
         return m
@@ -297,10 +314,12 @@ struct CareMenu: View {
     }
     /// "waterbottle.fill" exists on the deployment target (iOS 26); keep the drop as a fallback.
     static let waterSymbol = UIImage(systemName: "waterbottle.fill") != nil ? "waterbottle.fill" : "drop.fill"
+    static let cleanSymbol = UIImage(systemName: "bubbles.and.sparkles") != nil ? "bubbles.and.sparkles" : "sparkles"
     // top to bottom
     private let items = [Item(id: "care-feed", title: "Feed", symbol: "fork.knife"),
                          Item(id: "care-water", title: "Drink", symbol: CareMenu.waterSymbol),
-                         Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill")]
+                         Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill"),
+                         Item(id: "care-clean", title: "Clean", symbol: CareMenu.cleanSymbol)]
 
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
@@ -330,7 +349,7 @@ struct CareMenu: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    if kind == .food { care.feed(c.id) } else { care.drink(c.id) }
+                    if kind == .food { care.feed(c.id, jelly: care.targetJelly) } else { care.drink(c.id, jelly: care.targetJelly) }
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
@@ -358,7 +377,11 @@ struct CareMenu: View {
     }
 
     private func enabled(_ item: Item) -> Bool {
-        switch item.id { case "care-feed", "care-water": return !care.trayOut; default: return true }
+        switch item.id {
+        case "care-feed", "care-water": return !care.trayOut && !care.bath.active
+        case "care-clean": return care.canClean(jelly: care.targetJelly)
+        default: return !care.bath.active
+        }
     }
 
     private func row(_ item: Item, index: Int) -> some View {
@@ -375,8 +398,9 @@ struct CareMenu: View {
                     withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink }
                     return
                 }
-                care.drink(Consumables.drinks.first?.id ?? "water")   // one drink: starts directly
-            default: care.comeHere()
+                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.targetJelly)   // one drink: starts directly
+            case "care-clean": care.clean(jelly: care.targetJelly)
+            default: care.comeHere(jelly: care.targetJelly)
             }
             withAnimation(Self.spring) { open = false }
         } label: {

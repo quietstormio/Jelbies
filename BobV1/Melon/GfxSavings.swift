@@ -40,10 +40,12 @@ nonisolated struct RoomCacheKey: Equatable {
     var keyDir = SIMD3<Float>(repeating: 0)
     var keyIntensity: Float = 0
     var fog = SIMD3<Float>(repeating: 0)
+    /// The bathroom is shown instead of the living room (it also bumps `propsVersion`; this is the explicit, test-visible reason).
+    var bath = false
 }
 
 nonisolated enum RoomCacheMiss: String, CaseIterable {
-    case disabled, camera, size, theme, props, light, settling, footprint
+    case disabled, camera, size, theme, props, light, settling, footprint, bath
 }
 
 nonisolated enum RoomCacheAction: Equatable {
@@ -99,6 +101,7 @@ nonisolated struct RoomCacheState {
     private mutating func miss(_ m: RoomCacheMiss) -> RoomCacheAction { misses[m, default: 0] += 1; return .bypass(m) }
 
     static func reason(_ a: RoomCacheKey, _ b: RoomCacheKey) -> RoomCacheMiss {
+        if a.bath != b.bath { return .bath }
         if a.width != b.width || a.height != b.height { return .size }
         if a.themeTint != b.themeTint { return .theme }
         if a.propsVersion != b.propsVersion { return .props }
@@ -159,6 +162,48 @@ nonisolated enum RoomFootprint {
     }
 
     static func share(_ r: Rect, width: Int, height: Int) -> Float { Float(r.area) / Float(Swift.max(width * height, 1)) }
+
+    /// Rects that touch or overlap are replaced by their bounding box, until the rest are pairwise disjoint (so no pixel is shaded twice).
+    static func mergeOverlapping(_ input: [Rect]) -> [Rect] {
+        var rs = input
+        var merged = true
+        while merged {
+            merged = false
+            outer: for i in 0..<rs.count {
+                for j in (i + 1)..<rs.count where intersects(rs[i], rs[j]) {
+                    rs[i] = union(rs[i], rs[j]); rs.remove(at: j); merged = true
+                    break outer
+                }
+            }
+        }
+        return rs
+    }
+    static func intersects(_ a: Rect, _ b: Rect) -> Bool { a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h }
+    static func union(_ a: Rect, _ b: Rect) -> Rect {
+        let x0 = Swift.min(a.x, b.x), y0 = Swift.min(a.y, b.y)
+        return Rect(x: x0, y: y0, w: Swift.max(a.x + a.w, b.x + b.w) - x0, h: Swift.max(a.y + a.h, b.y + b.h) - y0)
+    }
+
+    /// The viewport minus the union of `rects` as non-overlapping rects (vertical slabs between the rects' x edges, each cut around the rects
+    /// that cross it). Used to blit the cached room everywhere except the footprints.
+    static func complement(of rects: [Rect], width: Int, height: Int) -> [Rect] {
+        var xs: Set<Int> = [0, width]
+        for r in rects { xs.insert(Swift.max(0, Swift.min(width, r.x))); xs.insert(Swift.max(0, Swift.min(width, r.x + r.w))) }
+        let edges = xs.sorted()
+        var out: [Rect] = []
+        for k in 0..<(edges.count - 1) {
+            let xa = edges[k], xb = edges[k + 1]
+            guard xb > xa else { continue }
+            let crossing = rects.filter { $0.x < xb && $0.x + $0.w > xa }.map { (Swift.max(0, $0.y), Swift.min(height, $0.y + $0.h)) }.sorted { $0.0 < $1.0 }
+            var y = 0
+            for (ya, yb) in crossing {
+                if ya > y { out.append(Rect(x: xa, y: y, w: xb - xa, h: ya - y)) }
+                y = Swift.max(y, yb)
+            }
+            if y < height { out.append(Rect(x: xa, y: y, w: xb - xa, h: height - y)) }
+        }
+        return out
+    }
 }
 
 // MARK: - Idle rest frame rate

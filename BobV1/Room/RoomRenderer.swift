@@ -46,6 +46,26 @@ nonisolated final class RoomRenderer {
     private let blendPipeline: MTLRenderPipelineState
     private let blendDepthState: MTLDepthStencilState
     private let dummyShadow: MTLTexture
+    // Bath (see Bath/): the bathroom set replaces the living room while `bathVisible`; dirt / tool / bubbles / spray draw over Bob always.
+    private var bathOpaquePipeline: MTLRenderPipelineState?
+    private var bathBlendPipeline: MTLRenderPipelineState?
+    private var bathSetVB: MTLBuffer?, bathSetIB: MTLBuffer?, bathSetIndexCount = 0
+    private var bathWaterVB: MTLBuffer?, bathWaterIB: MTLBuffer?, bathWaterIndexCount = 0
+    /// Per-frame props over Bob. Three rotating buffers each (the GPU may still read the previous frame's).
+    let bathOverlay = BathOverlay()
+    private var bathOvVB: [MTLBuffer?] = [nil, nil, nil], bathOvIB: [MTLBuffer?] = [nil, nil, nil]
+    private var bathOvCapV = [0, 0, 0], bathOvCapI = [0, 0, 0]
+    private var bathOvSlot = 0, bathOvIndexCount = 0
+    /// Seconds (drives the water ripple, bubble film and glints). The renderer sets it from the frame time.
+    var bathTime: Float = 0
+    /// The bathroom is drawn instead of the living room. Changing it bumps `staticVersion`, which invalidates the room cache.
+    var bathVisible = false {
+        didSet {
+            guard bathVisible != oldValue else { return }
+            staticVersion &+= 1
+            if bathVisible { buildBathMeshes() }
+        }
+    }
     private var vertexBuffer: MTLBuffer?
     private var indexBuffer: MTLBuffer?
     private(set) var indexCount = 0
@@ -95,6 +115,72 @@ nonisolated final class RoomRenderer {
         guard let t = device.makeTexture(descriptor: td) else { return nil }
         dummyShadow = t
         rebuild()
+        makeBathPipelines(library: library, vertexDescriptor: vd, colorFormat: colorFormat, depthFormat: depthFormat, sampleCount: sampleCount)
+    }
+
+    private func makeBathPipelines(library: MTLLibrary, vertexDescriptor vd: MTLVertexDescriptor, colorFormat: MTLPixelFormat, depthFormat: MTLPixelFormat, sampleCount: Int) {
+        guard let vs = library.makeFunction(name: "bathVS"), let fs = library.makeFunction(name: "bathFS") else { print("RoomRenderer: bath shaders missing"); return }
+        let d = MTLRenderPipelineDescriptor()
+        d.label = "bath"
+        d.vertexFunction = vs; d.fragmentFunction = fs
+        d.vertexDescriptor = vd
+        d.rasterSampleCount = sampleCount
+        d.colorAttachments[0].pixelFormat = colorFormat
+        d.depthAttachmentPixelFormat = depthFormat
+        bathOpaquePipeline = try? device.makeRenderPipelineState(descriptor: d)
+        d.label = "bath blended"
+        d.colorAttachments[0].isBlendingEnabled = true
+        d.colorAttachments[0].rgbBlendOperation = .add
+        d.colorAttachments[0].alphaBlendOperation = .add
+        d.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+        d.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        d.colorAttachments[0].sourceAlphaBlendFactor = .one
+        d.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        bathBlendPipeline = try? device.makeRenderPipelineState(descriptor: d)
+    }
+
+    private func buildBathMeshes() {
+        guard bathSetVB == nil else { return }
+        let m = BathModels.buildSet(), w = BathModels.buildWater()
+        bathSetIndexCount = m.indices.count
+        bathSetVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        bathSetIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
+        bathWaterIndexCount = w.indices.count
+        bathWaterVB = device.makeBuffer(bytes: w.vertices, length: w.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        bathWaterIB = device.makeBuffer(bytes: w.indices, length: w.indices.count * 4, options: .storageModeShared)
+        bathSetVB?.label = "bath set"; bathWaterVB?.label = "bath water"
+    }
+
+    /// Uploads the overlay soup `bathOverlay` just composed (rotating buffer). Call once per frame, after `bathOverlay.compose`.
+    func commitBathOverlay() {
+        let s = bathOverlay.soup
+        bathOvSlot = (bathOvSlot + 1) % 3
+        bathOvIndexCount = s.i.count
+        guard bathOvIndexCount > 0 else { return }
+        let k = bathOvSlot
+        if s.v.count > bathOvCapV[k] {
+            bathOvCapV[k] = s.v.count + 2048
+            bathOvVB[k] = device.makeBuffer(length: bathOvCapV[k] * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        }
+        if s.i.count > bathOvCapI[k] {
+            bathOvCapI[k] = s.i.count + 8192
+            bathOvIB[k] = device.makeBuffer(length: bathOvCapI[k] * 4, options: .storageModeShared)
+        }
+        s.v.withUnsafeBytes { bathOvVB[k]?.contents().copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
+        s.i.withUnsafeBytes { bathOvIB[k]?.contents().copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
+    }
+
+    private func makeBathUniforms(viewProj: simd_float4x4, camPos: SIMD3<Float>, lightViewProj: simd_float4x4?, shadow: Bool) -> BathSetUniforms {
+        var u = BathSetUniforms()
+        u.viewProj = viewProj
+        u.lightVP = lightViewProj ?? matrix_identity_float4x4
+        u.camPos = SIMD4(camPos, shadow ? 1 : 0)
+        u.keyDir = SIMD4(keyDir, 0.85)
+        u.misc = SIMD4(bathTime, BathModels.waterY, BathModels.basinCentre.x, BathModels.basinCentre.y)
+        u.sky = SIMD4(0.95, 0.94, 0.92, 1) * 0.55
+        u.ground = SIMD4(0.78, 0.75, 0.72, 1) * 0.38
+        u.fog = SIMD4(0.58, 0.56, 0.53, 0.25)
+        return u
     }
 
     // Movable props (care bowls): a small shared buffer rewritten only when the props change.
@@ -196,6 +282,24 @@ nonisolated final class RoomRenderer {
     func encode(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                 lightViewProj: simd_float4x4?, shadowTex: MTLTexture?,
                 topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil, parts: Parts = .all) {
+        if bathVisible {
+            // the bathroom replaces the living room (static: cached like the room); dining pieces do not exist in the bath
+            if parts != .diningOnly, let pipe = bathOpaquePipeline, let vb = bathSetVB, let ib = bathSetIB, bathSetIndexCount > 0 {
+                var bu = makeBathUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadow: lightViewProj != nil && shadowTex != nil)
+                enc.pushDebugGroup("bath")
+                enc.setRenderPipelineState(pipe)
+                enc.setDepthStencilState(depthState)
+                enc.setFrontFacing(.counterClockwise)
+                enc.setCullMode(.back)
+                enc.setVertexBuffer(vb, offset: 0, index: 1)
+                enc.setVertexBytes(&bu, length: MemoryLayout<BathSetUniforms>.stride, index: 0)
+                enc.setFragmentBytes(&bu, length: MemoryLayout<BathSetUniforms>.stride, index: 0)
+                enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
+                enc.drawIndexedPrimitives(type: .triangle, indexCount: bathSetIndexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+                enc.popDebugGroup()
+            }
+            return
+        }
         guard let vb = vertexBuffer, let ib = indexBuffer, indexCount > 0 else { return }
         var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
         enc.pushDebugGroup("room")
@@ -228,20 +332,56 @@ nonisolated final class RoomRenderer {
     /// on top of him. Sets its own pipeline / depth / cull state and buffers.
     func encodeBlended(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                        lightViewProj: simd_float4x4?, shadowTex: MTLTexture?, topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil) {
-        guard diningTranslucent.indexCount > 0, let dv = diningTranslucent.vb[diningTranslucent.slot], let di = diningTranslucent.ib[diningTranslucent.slot] else { return }
-        var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
-        enc.pushDebugGroup("dining puff")
-        enc.setRenderPipelineState(blendPipeline)
+        if diningTranslucent.indexCount > 0, let dv = diningTranslucent.vb[diningTranslucent.slot], let di = diningTranslucent.ib[diningTranslucent.slot] {
+            var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
+            enc.pushDebugGroup("dining puff")
+            enc.setRenderPipelineState(blendPipeline)
+            enc.setDepthStencilState(blendDepthState)
+            enc.setFrontFacing(.counterClockwise)
+            enc.setCullMode(.back)
+            enc.setVertexBuffer(dv, offset: 0, index: 1)
+            enc.setVertexBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
+            enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
+            enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
+            enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: diningTranslucent.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+            enc.popDebugGroup()
+        }
+        // bath: the water over Bob's ankles, then dirt / tool / bubbles / spray (no shadow lookups: they sit on his own surface)
+        guard let pipe = bathBlendPipeline else { return }
+        let wantWater = bathVisible && bathWaterIndexCount > 0
+        let wantOverlay = bathOvIndexCount > 0
+        guard wantWater || wantOverlay else { return }
+        var bu = makeBathUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadow: false)
+        enc.pushDebugGroup("bath overlay")
+        enc.setRenderPipelineState(pipe)
         enc.setDepthStencilState(blendDepthState)
         enc.setFrontFacing(.counterClockwise)
         enc.setCullMode(.back)
-        enc.setVertexBuffer(dv, offset: 0, index: 1)
-        enc.setVertexBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
-        enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
-        enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
-        enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
-        enc.drawIndexedPrimitives(type: .triangle, indexCount: diningTranslucent.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+        enc.setVertexBytes(&bu, length: MemoryLayout<BathSetUniforms>.stride, index: 0)
+        enc.setFragmentBytes(&bu, length: MemoryLayout<BathSetUniforms>.stride, index: 0)
+        enc.setFragmentTexture(dummyShadow, index: 0)
+        if wantWater, let wv = bathWaterVB, let wi = bathWaterIB {
+            enc.setVertexBuffer(wv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: bathWaterIndexCount, indexType: .uint32, indexBuffer: wi, indexBufferOffset: 0)
+        }
+        if wantOverlay, let ov = bathOvVB[bathOvSlot], let oi = bathOvIB[bathOvSlot] {
+            enc.setVertexBuffer(ov, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: bathOvIndexCount, indexType: .uint32, indexBuffer: oi, indexBufferOffset: 0)
+        }
         enc.popDebugGroup()
     }
 
+}
+
+/// Mirrors `BathSetU` in BathShaders.metal (2 matrices + 6 float4 = 224 bytes).
+struct BathSetUniforms {
+    var viewProj = matrix_identity_float4x4
+    var lightVP = matrix_identity_float4x4
+    var camPos = SIMD4<Float>(repeating: 0)     // xyz, w = shadow map valid
+    var keyDir = SIMD4<Float>(repeating: 0)     // xyz toward the light, w = intensity
+    var misc = SIMD4<Float>(repeating: 0)       // time, water height, ripple centre x, z
+    var sky = SIMD4<Float>(repeating: 0)
+    var ground = SIMD4<Float>(repeating: 0)
+    var fog = SIMD4<Float>(repeating: 0)
 }

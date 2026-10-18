@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CD9FC80D307D6A00002EDC4A /* JelbiesWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CD9FC804307D6A00002EDC4A /* JelbiesWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		CD9FC80B307D6A00002EDC4A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CD9FC700307D6915002EDC4A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD9FC803307D6A00002EDC4A;
+			remoteInfo = JelbiesWidget;
+		};
 		CD9FC716307D6917002EDC4A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CD9FC700307D6915002EDC4A /* Project object */;
@@ -23,10 +34,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		CD9FC80E307D6A00002EDC4A /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CD9FC80D307D6A00002EDC4A /* JelbiesWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		CD9FC708307D6915002EDC4A /* BobV1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BobV1.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CD9FC715307D6917002EDC4A /* BobV1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BobV1Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CD9FC71F307D6917002EDC4A /* BobV1UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BobV1UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CD9FC804307D6A00002EDC4A /* JelbiesWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JelbiesWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +69,16 @@
 		CD9FC722307D6917002EDC4A /* BobV1UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = BobV1UITests;
+			sourceTree = "<group>";
+		};
+		CD9FC801307D6A00002EDC4A /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		CD9FC802307D6A00002EDC4A /* JelbiesWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JelbiesWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +105,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CD9FC809307D6A00002EDC4A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +121,8 @@
 				CD9FC70A307D6915002EDC4A /* BobV1 */,
 				CD9FC718307D6917002EDC4A /* BobV1Tests */,
 				CD9FC722307D6917002EDC4A /* BobV1UITests */,
+				CD9FC801307D6A00002EDC4A /* Shared */,
+				CD9FC802307D6A00002EDC4A /* JelbiesWidget */,
 				CD9FC709307D6915002EDC4A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +133,7 @@
 				CD9FC708307D6915002EDC4A /* BobV1.app */,
 				CD9FC715307D6917002EDC4A /* BobV1Tests.xctest */,
 				CD9FC71F307D6917002EDC4A /* BobV1UITests.xctest */,
+				CD9FC804307D6A00002EDC4A /* JelbiesWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,13 +148,16 @@
 				CD9FC704307D6915002EDC4A /* Sources */,
 				CD9FC705307D6915002EDC4A /* Frameworks */,
 				CD9FC706307D6915002EDC4A /* Resources */,
+				CD9FC80E307D6A00002EDC4A /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				CD9FC80C307D6A00002EDC4A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				CD9FC70A307D6915002EDC4A /* BobV1 */,
+				CD9FC801307D6A00002EDC4A /* Shared */,
 			);
 			name = BobV1;
 			packageProductDependencies = (
@@ -163,6 +212,29 @@
 			productReference = CD9FC71F307D6917002EDC4A /* BobV1UITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		CD9FC803307D6A00002EDC4A /* JelbiesWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CD9FC805307D6A00002EDC4A /* Build configuration list for PBXNativeTarget "JelbiesWidget" */;
+			buildPhases = (
+				CD9FC808307D6A00002EDC4A /* Sources */,
+				CD9FC809307D6A00002EDC4A /* Frameworks */,
+				CD9FC80A307D6A00002EDC4A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CD9FC802307D6A00002EDC4A /* JelbiesWidget */,
+				CD9FC801307D6A00002EDC4A /* Shared */,
+			);
+			name = JelbiesWidget;
+			packageProductDependencies = (
+			);
+			productName = JelbiesWidget;
+			productReference = CD9FC804307D6A00002EDC4A /* JelbiesWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -174,6 +246,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					CD9FC707307D6915002EDC4A = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					CD9FC803307D6A00002EDC4A = {
 						CreatedOnToolsVersion = 26.3;
 					};
 					CD9FC714307D6917002EDC4A = {
@@ -203,6 +278,7 @@
 				CD9FC707307D6915002EDC4A /* BobV1 */,
 				CD9FC714307D6917002EDC4A /* BobV1Tests */,
 				CD9FC71E307D6917002EDC4A /* BobV1UITests */,
+				CD9FC803307D6A00002EDC4A /* JelbiesWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +299,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CD9FC71D307D6917002EDC4A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CD9FC80A307D6A00002EDC4A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +336,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CD9FC808307D6A00002EDC4A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +355,11 @@
 			isa = PBXTargetDependency;
 			target = CD9FC707307D6915002EDC4A /* BobV1 */;
 			targetProxy = CD9FC720307D6917002EDC4A /* PBXContainerItemProxy */;
+		};
+		CD9FC80C307D6A00002EDC4A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CD9FC803307D6A00002EDC4A /* JelbiesWidget */;
+			targetProxy = CD9FC80B307D6A00002EDC4A /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -395,6 +490,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BobV1.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
@@ -430,6 +526,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = BobV1.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
@@ -544,6 +641,68 @@
 			};
 			name = Release;
 		};
+		CD9FC806307D6A00002EDC4A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = JelbiesWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5VVYA96U3R;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "JelbiesWidget-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.mgsllc.BobV1.JelbiesWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CD9FC807307D6A00002EDC4A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = JelbiesWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5VVYA96U3R;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "JelbiesWidget-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.mgsllc.BobV1.JelbiesWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -579,6 +738,15 @@
 			buildConfigurations = (
 				CD9FC730307D6917002EDC4A /* Debug */,
 				CD9FC731307D6917002EDC4A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CD9FC805307D6A00002EDC4A /* Build configuration list for PBXNativeTarget "JelbiesWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CD9FC806307D6A00002EDC4A /* Debug */,
+				CD9FC807307D6A00002EDC4A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

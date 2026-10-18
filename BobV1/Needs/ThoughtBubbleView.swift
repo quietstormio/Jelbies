@@ -13,11 +13,11 @@ struct ThoughtBubbleView: View {
     let care: GameCare
     let onTap: (BubbleAction) -> Void
 
-    @State private var shown: NeedKind?
+    @State private var shown: BubbleIcon?
     @State private var appeared = Date.distantPast
     @State private var leaving: Leave?
 
-    private struct Leave { var need: NeedKind; var start: Date; var fixed: Bool; var shownBefore: Bool }
+    private struct Leave { var need: BubbleIcon; var start: Date; var fixed: Bool; var shownBefore: Bool }
 
     static let radius: CGFloat = 40
     static let popTime = 0.55
@@ -41,6 +41,7 @@ struct ThoughtBubbleView: View {
                     Canvas { ctx, size in paint(&ctx, size: size, now: tl.date) } symbols: {
                         Image(systemName: "drop.fill").font(.system(size: 36, weight: .semibold)).foregroundStyle(NeedStyle.drop).tag(1)
                         Image(systemName: "heart.fill").font(.system(size: 34, weight: .semibold)).foregroundStyle(NeedStyle.heart).tag(2)
+                        Image(systemName: "bubbles.and.sparkles.fill").font(.system(size: 34, weight: .semibold)).foregroundStyle(NeedStyle.soap).tag(3)
                     }
                     .allowsHitTesting(false)
                     if let n = shown, let h = headPoint(geo.size) {
@@ -57,11 +58,12 @@ struct ThoughtBubbleView: View {
             }
         }
         .ignoresSafeArea()
-        .onChange(of: care.bubbleNeed) { _, n in
+        .onChange(of: care.bubbleIcon) { _, n in
             if let n { shown = n; appeared = Date(); leaving = nil }
         }
         .onChange(of: care.bubbleEnd) { _, e in
-            leaving = Leave(need: e.need, start: Date(), fixed: e.fixed, shownBefore: shown != nil)
+            if e.silent { leaving = nil; shown = nil; return }       // the clean-up run-out: the cloud just goes, no puff over the room
+            leaving = Leave(need: e.clean ? .clean : .need(e.need), start: Date(), fixed: e.fixed, shownBefore: shown != nil)
             shown = nil
         }
         .task(id: leaving?.start) {
@@ -71,12 +73,14 @@ struct ThoughtBubbleView: View {
         }
     }
 
-    private func label(_ n: NeedKind) -> String {
-        switch n { case .hunger: return "Bob is hungry. Tap to feed him"; case .thirst: return "Bob is thirsty. Tap to give a drink"; case .attention: return "Bob wants attention. Tap to call him" }
+    private func label(_ i: BubbleIcon) -> String {
+        let who = care.bubbleJellyName
+        guard case .need(let n) = i else { return "\(who) is dirty. Tap to clean him" }
+        switch n { case .hunger: return "\(who) is hungry. Tap to feed him"; case .thirst: return "\(who) is thirsty. Tap to give a drink"; case .attention: return "\(who) wants attention. Tap to call him" }
     }
 
     private func headPoint(_ size: CGSize) -> CGPoint? {
-        Self.project(care.headWorld + SIMD3(0, 0.1, 0), size: size, focus: care.focus.blend)
+        Self.project(care.bubbleHead(care.bubbleJelly) + SIMD3(0, 0.1, 0), size: size, focus: care.focus.blend)
     }
     private func bob(_ date: Date) -> CGFloat { CGFloat(sin(date.timeIntervalSinceReferenceDate * 2 * .pi / 2.2)) * 4 }
 
@@ -107,13 +111,14 @@ struct ThoughtBubbleView: View {
         }
     }
 
-    private func drawCloud(_ g: inout GraphicsContext, need: NeedKind, center c: CGPoint, head: CGPoint, scale s: CGFloat, ctx base: GraphicsContext) {
+    private func drawCloud(_ g: inout GraphicsContext, need: BubbleIcon, center c: CGPoint, head: CGPoint, scale s: CGFloat, ctx base: GraphicsContext) {
         guard s > 0.01 else { return }
         let R = Self.radius
         // the cloud scales about its bottom-centre (it pops out of the trailing circles), the circles toward the head grow with it
         let pivot = CGPoint(x: c.x, y: c.y + R * 0.8)
         g.translateBy(x: pivot.x, y: pivot.y); g.scaleBy(x: s, y: s); g.translateBy(x: -pivot.x, y: -pivot.y)
-        let fill = NeedStyle.bubble(need)
+        let fill: Color
+        if case .need(let k) = need { fill = NeedStyle.bubble(k) } else { fill = NeedStyle.cleanFill }
         var layer = g
         layer.addFilter(.shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.25), radius: 6, x: 0, y: 3))
         let blobs: [(CGFloat, CGFloat, CGFloat)] = [(0, 0, 0.78), (-0.62, 0.14, 0.58), (0.62, 0.14, 0.58), (-0.32, -0.42, 0.56), (0.30, -0.46, 0.62), (0, 0.32, 0.62)]
@@ -127,9 +132,10 @@ struct ThoughtBubbleView: View {
         g.fill(Path(ellipseIn: CGRect(x: c.x - R * 0.6, y: c.y - R * 0.62, width: R * 0.5, height: R * 0.28)), with: .color(.white.opacity(0.45)))   // glossy highlight
         // the icon
         switch need {
-        case .hunger: NeedStyle.drawBerries(&g, at: CGPoint(x: c.x, y: c.y + 2), size: 50)
-        case .thirst: if let sym = base.resolveSymbol(id: 1) { g.draw(sym, at: CGPoint(x: c.x, y: c.y + 2)) }
-        case .attention: if let sym = base.resolveSymbol(id: 2) { g.draw(sym, at: CGPoint(x: c.x, y: c.y + 3)) }
+        case .need(.hunger): NeedStyle.drawBerries(&g, at: CGPoint(x: c.x, y: c.y + 2), size: 50)
+        case .need(.thirst): if let sym = base.resolveSymbol(id: 1) { g.draw(sym, at: CGPoint(x: c.x, y: c.y + 2)) }
+        case .need(.attention): if let sym = base.resolveSymbol(id: 2) { g.draw(sym, at: CGPoint(x: c.x, y: c.y + 3)) }
+        case .clean: if let sym = base.resolveSymbol(id: 3) { g.draw(sym, at: CGPoint(x: c.x, y: c.y + 2)) }
         }
     }
 

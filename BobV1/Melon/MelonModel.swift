@@ -19,7 +19,7 @@ final class MelonModel {
     /// Game screen (living room, fixed camera) instead of the studio. Fixed for the lifetime of the stage.
     var gameMode: Bool = false
     /// Care actions of the game screen (feed / water / call); ticked by the stage controller.
-    let care = GameCare()
+    let care: GameCare
     /// Touch play of focus mode (pet / pick up / bounce / cheeks reactions, hearts, haptics). See BlobBrain+Touch.swift.
     let touch = TouchPlay()
 
@@ -72,7 +72,9 @@ final class MelonModel {
     var nudgeTick: Int = 0
     var resetTick: Int = 0
 
-    init() {
+    /// `jellyCount`: Jellies in the room (the game asks for `JellyRoster.launchCount()`; the studio and the tests use 1).
+    init(jellyCount: Int = 1) {
+        care = GameCare(jellyCount: jellyCount)
         // `-MelonPalette <rawValue>` launch argument (screenshots / tests).
         if let raw = UserDefaults.standard.string(forKey: "MelonPalette"), let key = PaletteKey(rawValue: raw) { palette = key }
     }

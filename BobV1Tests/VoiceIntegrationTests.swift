@@ -30,10 +30,10 @@ private final class VoiceRun {
     let care: GameCare
     var voice: VoiceCoordinator { care.voice }
     var brain: BlobBrain { rig.brain }
-    init(roll: Double = 0) {
+    init(roll: Double = 0, model: VoiceIntentModel? = nil) {
         let c = clock
         let training = VoiceTraining(defaults: UserDefaults(suiteName: "VoiceIntegrationTests")!, persists: false, random: { roll })
-        care = GameCare(voice: VoiceCoordinator(training: training, input: FakeSpeechInput(), now: { c.t }))
+        care = GameCare(voice: VoiceCoordinator(training: training, input: FakeSpeechInput(), intentModel: model, now: { c.t }))
         for k in NeedKind.allCases { care.needs.set(k, 1) }            // not grumpy unless a test says so
         brain.autonomy = true; brain.seed = 7
     }
@@ -68,8 +68,8 @@ final class VoiceIntegrationTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = [] }
     override func tearDown() { RoomLayout.dynamicBoxes = [] }
 
-    private func make(roll: Double = 0) -> VoiceRun {
-        let r = VoiceRun(roll: roll)
+    private func make(roll: Double = 0, model: VoiceIntentModel? = nil) -> VoiceRun {
+        let r = VoiceRun(roll: roll, model: model)
         Self.keep.append(r)
         return r
     }
@@ -178,10 +178,13 @@ final class VoiceIntegrationTests: XCTestCase {
         XCTAssertTrue(r.care.focus.isActive)
     }
 
-    func testNameLessonLearnsOverThreeListens() {
+    func testNameWorksOnTheFirstListen() {
         let r = make()
-        for _ in 0..<VoiceTuning.repsToLearn { r.say("bob", settle: 0.1) }
-        XCTAssertTrue(r.voice.training.nameLearned)
+        XCTAssertTrue(r.voice.training.nameLearned, "nothing to learn")
+        r.say("bob", settle: 0)
+        var hopped = false
+        r.run(1) { if case .hopPlay = r.brain.script { hopped = true }; return hopped }
+        XCTAssertTrue(r.voice.feedbackLog.isEmpty, "no lesson dots, no bubble: \(r.voice.feedbackLog)")
     }
 
     func testVoiceComeHereWalksThenEntersFocus() {
@@ -220,14 +223,16 @@ final class VoiceIntegrationTests: XCTestCase {
         XCTAssertEqual(r.care.focus.phase, .focused, "still focused, no second entry")
     }
 
-    func testGrumpyComeDoesNotEnterFocus() {
-        let r = make()
-        for k in NeedKind.allCases { r.care.needs.set(k, 0) }
-        r.run(0.2)
-        XCTAssertEqual(r.care.mood, .grumpy)
-        r.say("come here", settle: 0)
-        r.run(6)
-        XCTAssertEqual(r.care.focus.phase, .roaming, "a grumpy Bob refuses")
+    func testGrumpyComeStillEntersFocus() {
+        for roll in [0.0, 0.999] {                                // even a failing reliability roll: grumpy come is always obeyed
+            let r = make(roll: roll)
+            for k in NeedKind.allCases { r.care.needs.set(k, 0) }
+            r.run(0.2)
+            XCTAssertEqual(r.care.mood, .grumpy)
+            r.say("come here", settle: 0)
+            XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused }, "a grumpy Bob comes for the love he wants")
+            XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.come), "check bubble, not the grumpy refusal")
+        }
     }
 
     func testMissedRollDoesNotEnterFocus() {
@@ -338,5 +343,236 @@ final class VoiceIntegrationTests: XCTestCase {
         XCTAssertTrue(r.voice.begin())
         r.voice.hear("sit")                                   // no time passed: under 0.25 s
         XCTAssertEqual(r.voice.training.lesson(.sit).reps, 0)
+    }
+}
+
+// MARK: - names, targets, social commands, the model fallback
+
+extension VoiceIntegrationTests {
+    func testGrumpyOtherTricksStillRefuseButComeIsObeyed() {
+        let r = make()
+        r.voice.training.debugLearn(.sit, word: "sit")
+        for k in NeedKind.allCases { r.care.needs.set(k, 0) }
+        r.run(0.2)
+        r.say("sit", settle: 0.3)
+        XCTAssertEqual(r.voice.feedbackLog.last, .grumpy)
+        r.say("come here", settle: 0)
+        XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused }, "grumpy Bob still comes")
+    }
+
+    func testNamingBobSelectsHimWithTheTapHighlight() {
+        let r = make()
+        r.brain.autonomy = false
+        XCTAssertNil(r.care.select.selectedID)
+        r.say("Bobby", settle: 0)
+        XCTAssertEqual(r.care.select.selectedID, 0, "same outline highlight a tap gives")
+        XCTAssertGreaterThanOrEqual(r.care.select.drawStarts, 1)
+        XCTAssertTrue(r.care.select.rosterPick)
+    }
+
+    func testNamePlusTrickSelectsAndDoesTheTrick() {
+        let r = make()
+        r.voice.training.debugLearn(.sit, word: "sit")
+        r.say("Bob, sit", settle: 0)
+        XCTAssertEqual(r.care.select.selectedID, 0)
+        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit })
+    }
+
+    func testComeHereIsForTheSelectedOneByDefaultAndPipIsAbsent() {
+        let r = make()
+        var remote: [(VoiceReaction, [Int])] = []
+        r.voice.onRemote = { remote.append(($0, $1)) }
+        r.say("Pip, come here", settle: 0)
+        r.run(3)
+        XCTAssertEqual(r.care.focus.phase, .roaming, "Pip is not in the room: nothing happens to Bob")
+        XCTAssertTrue(remote.isEmpty)
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "confused look")
+    }
+
+    func testPipComeHereGoesToPhaseBHooksNotBob() {
+        let r = make()
+        r.voice.jellyIDs = { [0, 1, 2] }
+        var remote: [(VoiceReaction, [Int])] = []
+        var selected: [Int] = []
+        r.voice.onRemote = { remote.append(($0, $1)) }
+        r.voice.onSelect = { selected.append($0) }
+        r.say("Pip, come here", settle: 0)
+        r.run(3)
+        XCTAssertEqual(r.care.focus.phase, .roaming, "Bob stays")
+        XCTAssertEqual(remote.count, 1)
+        XCTAssertEqual(remote.first?.0, .perform(.come)); XCTAssertEqual(remote.first?.1, [1])
+        XCTAssertTrue(selected.isEmpty, "naming for come skips the highlight: the close-up is the selection")
+    }
+
+    func testEveryoneComeHereCallsAllAndBobComes() {
+        let r = make()
+        r.voice.jellyIDs = { [0, 1, 2] }
+        var every: [[Int]] = [], came: [[Int]] = []
+        r.voice.onEveryone = { every.append($0) }
+        r.voice.onComeHere = { ids in came.append(ids); if ids.contains(0) { r.care.comeHere() } }
+        r.say("everyone, come here", settle: 0)
+        XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused })
+        XCTAssertEqual(every, [[0, 1, 2]]); XCTAssertEqual(came, [[0, 1, 2]])
+    }
+
+    func testPlainEveryoneComeWithOneJellyIsBob() {
+        let r = make()
+        r.say("everybody over here", settle: 0)
+        XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused })
+    }
+
+    func testStopEndsASitAndStopFightingCallsTheHook() {
+        let r = make()
+        r.voice.training.debugLearn(.sit, word: "sit")
+        var fought: [[Int]] = []
+        r.voice.onStopFighting = { fought.append($0) }
+        r.brain.autonomy = false
+        r.say("sit", settle: 0)
+        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit })
+        r.run(1)
+        r.say("stop", settle: 0)
+        XCTAssertTrue(r.run(4) { r.brain.idleState.kind == nil }, "the sit ended")
+        r.say("stop fighting", settle: 0)
+        r.run(1)
+        XCTAssertEqual(fought, [[0]])
+        XCTAssertEqual(r.voice.feedbackLog.last, .social(.stopFighting))
+    }
+
+    func testPraiseGivesAttentionAndAHeartScoldDroops() {
+        let r = make()
+        r.care.needs.set(.attention, 0.5)
+        r.brain.autonomy = false
+        r.say("good boy", settle: 0)
+        r.run(0.5)
+        XCTAssertEqual(r.care.needs.levels[NeedKind.attention.rawValue], 0.5 + VoiceTuning.praiseAttention, accuracy: 0.02)
+        var hopped = false
+        r.run(3) { if case .hopPlay = r.brain.script { hopped = true }; return hopped }
+        XCTAssertTrue(hopped, "happy hop")
+        r.run(2)
+        r.say("bad", settle: 0)
+        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .slump }, "droop")
+        XCTAssertEqual(r.voice.feedbackLog.last, .social(.scold))
+    }
+
+    func testNicknameTaughtByVoiceThreeTimesThenUsed() {
+        let r = make()
+        r.voice.startNicknameLesson(for: 0)
+        r.say("bubbles", settle: 0.1); XCTAssertEqual(r.voice.nickLesson?.reps, 1)
+        r.say("bubbles", settle: 0.1); XCTAssertEqual(r.voice.nickLesson?.reps, 2)
+        r.say("bubbles", settle: 0.1)
+        XCTAssertNil(r.voice.nickLesson)
+        XCTAssertEqual(r.voice.training.names.nicknames(for: 0), ["bubbles"])
+        r.run(5)
+        r.say("bubbles, come here", settle: 0)
+        XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused }, "the nickname is a name")
+    }
+
+    func testNicknameLessonRestartsOnADifferentWordAndRejectsNames() {
+        let r = make()
+        r.voice.startNicknameLesson(for: 0)
+        r.say("bubbles", settle: 0.1)
+        r.say("wiggles", settle: 0.1)
+        XCTAssertEqual(r.voice.nickLesson?.reps, 1); XCTAssertEqual(r.voice.nickLesson?.word, "wiggles")
+        r.say("Pip", settle: 0.1)
+        XCTAssertEqual(r.voice.nickLesson?.reps, 1, "an existing name is not a nickname")
+    }
+
+    // The model fallback
+
+    private func hearAndAwait(_ r: VoiceRun, _ words: String) async {
+        r.run(0.1)
+        XCTAssertTrue(r.voice.begin())
+        r.run(0.3)
+        r.voice.hear(words)
+        await r.voice.intentTask?.value
+        r.run(0.3)
+        r.run(4) { r.brain.idleState.kind == nil }                     // the "?" tilt (a look) ends: a word said during it would teach "look"
+    }
+
+    func testModelMapsFreePhrasingToALearnedTrick() async {
+        let fake = FakeIntentModel()
+        fake.result = ModelIntent(action: .trick(.flip), confidence: 0.9)
+        let r = make(model: fake)
+        r.voice.training.debugLearn(.flip, word: "wheee")
+        r.brain.autonomy = false
+        await hearAndAwait(r, "do a backflip for me")
+        XCTAssertEqual(fake.calls, ["do a backflip for me"])
+        XCTAssertEqual(r.voice.lastParse?.path, "model")
+        XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.flip))
+        XCTAssertEqual(fake.prewarms, 1, "prewarmed when the mic opened")
+        XCTAssertEqual(fake.lastLearned, [.flip])
+    }
+
+    func testModelCannotTriggerAnUnlearnedTrick() async {
+        let fake = FakeIntentModel()
+        fake.result = ModelIntent(action: .trick(.flip), confidence: 0.95)
+        let r = make(model: fake)
+        r.brain.autonomy = false
+        await hearAndAwait(r, "do a backflip for me")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "confused look, no flip")
+        XCTAssertEqual(r.brain.flipTakeoffs, 0)
+    }
+
+    func testModelTargetsAndSocialAndComeWhenGrumpy() async {
+        let fake = FakeIntentModel()
+        let r = make(model: fake)
+        r.voice.jellyIDs = { [0, 1, 2] }
+        var remote: [(VoiceReaction, [Int])] = []
+        r.voice.onRemote = { remote.append(($0, $1)) }
+        fake.result = ModelIntent(targetKind: .named, targetName: "pippy", action: .social(.praise), confidence: 0.8)
+        await hearAndAwait(r, "what a lovely creature you are")
+        XCTAssertEqual(remote.first?.1, [1], "the model's name goes through the registry")
+        fake.result = ModelIntent(targetKind: .everyone, action: .come, confidence: 0.8)
+        for k in NeedKind.allCases { r.care.needs.set(k, 0) }
+        r.run(0.2)
+        r.voice.onComeHere = { _ in r.care.comeHere() }
+        await hearAndAwait(r, "who wants to come see me")
+        XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused }, "grumpy come through the model path too")
+    }
+
+    func testModelLowConfidenceNoneErrorAndTimeoutFallBack() async {
+        let fake = FakeIntentModel()
+        let r = make(model: fake)
+        r.brain.autonomy = false                                   // no wander move running that a word could be taught on
+        fake.result = ModelIntent(action: .social(.praise), confidence: 0.2)
+        await hearAndAwait(r, "go get some water buddy")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "low confidence ignored")
+        fake.result = ModelIntent(action: .none, confidence: 1)
+        await hearAndAwait(r, "the weather is nice")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown)
+        fake.error = VoiceModelError.unavailable
+        await hearAndAwait(r, "something else entirely")
+        XCTAssertEqual(r.voice.lastParse?.path, "error")
+        fake.error = nil; fake.delay = 2; fake.result = ModelIntent(action: .social(.praise), confidence: 1)
+        let old = VoiceTuning.modelBudget; VoiceTuning.modelBudget = 0.1
+        defer { VoiceTuning.modelBudget = old }
+        await hearAndAwait(r, "very slow phrase")
+        XCTAssertEqual(r.voice.lastParse?.path, "timeout")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "slow model: the deterministic result stands")
+    }
+
+    func testUnavailableModelAndDeterministicHitsNeverCallIt() async {
+        let fake = FakeIntentModel()
+        fake.availability = .unavailable("deviceNotEligible")
+        let r = make(model: fake)
+        await hearAndAwait(r, "unmatched phrase")
+        XCTAssertEqual(r.voice.lastParse?.path, "unavailable")
+        XCTAssertTrue(fake.calls.isEmpty)
+        fake.availability = .available
+        r.voice.training.debugLearn(.sit, word: "sit")
+        for w in ["come here", "good boy", "Bob", "sit", "stop fighting"] { await hearAndAwait(r, w); r.run(1) }
+        XCTAssertTrue(fake.calls.isEmpty, "the deterministic path is primary: \(fake.calls)")
+        XCTAssertEqual(r.voice.lastParse?.path, "det")
+    }
+
+    func testTeachingAWordNeverGoesToTheModel() async {
+        let fake = FakeIntentModel()
+        fake.result = ModelIntent(action: .social(.praise), confidence: 1)
+        let r = make(model: fake)
+        r.brain.idleReset(r.rig.skinner)
+        XCTAssertTrue(r.brain.idleStart(.sit, r.rig.sim))
+        await hearAndAwait(r, "mochi")
+        XCTAssertTrue(fake.calls.isEmpty)
+        XCTAssertEqual(r.voice.training.lesson(.sit).reps, 1)
     }
 }

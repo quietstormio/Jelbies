@@ -5,5 +5,17 @@
 	<!-- Lets CADisplayLink / MTKView run above 60 Hz on ProMotion iPhones (RateGovernor requests 120 only with GPU headroom). -->
 	<key>CADisableMinimumFrameDuration</key>
 	<true/>
+	<!-- The widget's deep link: jelbies://jelly/<id> opens the game and selects that Jelly. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.mgsllc.BobV1</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jelbies</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

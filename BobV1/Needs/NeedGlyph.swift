@@ -13,6 +13,9 @@ enum NeedStyle {
     static func tint(_ k: NeedKind) -> Color {
         switch k { case .hunger: return berry; case .thirst: return drop; case .attention: return heart }
     }
+    static let soap = Color(red: 0.36, green: 0.72, blue: 0.82)
+    /// The pastel the bath bubble is filled with.
+    static let cleanFill = Color(red: 0.88, green: 0.97, blue: 0.96)
     /// The pastel the bubble is filled with.
     static func bubble(_ k: NeedKind) -> Color {
         switch k {

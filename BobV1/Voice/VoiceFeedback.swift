@@ -31,6 +31,8 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
         case grumpy
         case nameRep(Int)
         case nameLearned
+        /// A built-in social command was understood (stop, praise ...).
+        case social(VoiceSocial)
         /// Internal: a demonstration (trick-book row, debug teach): no feedback at all.
         case silent
 
@@ -46,6 +48,7 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
             case .grumpy: return "grumpy"
             case .nameRep(let n): return "name \(n)"
             case .nameLearned: return "name learned"
+            case .social(let s): return "social \(s.rawValue)"
             case .silent: return "silent"
             }
         }
@@ -90,6 +93,9 @@ struct VoiceFeedbackView: View {
                     }
                     if let p = voice.teachPrompt, now < p.until, !voice.isListening {
                         pill("Now hold the mic and say a word for \(p.trick.title)", id: "voice-prompt", fade: 0, life: 99, accent: false)
+                    }
+                    if let l = voice.nickLesson, !voice.isListening {
+                        pill("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))", id: "voice-nick-prompt", fade: 0, life: 99, accent: false)
                     }
                     if let h = voice.heard, now - h.born < Self.heardLife {
                         pill(h.text, id: "voice-heard", fade: now - h.born, life: Self.heardLife, accent: false)
@@ -187,6 +193,13 @@ struct VoiceBubble: View {
             VStack(spacing: 6) { sym("heart.fill", FocusStyle.pink); dots(n, popping: true) }
         case .nameLearned:
             HStack(spacing: 6) { sym("heart.fill", FocusStyle.pink); sym("checkmark.circle.fill", Color(red: 0.36, green: 0.68, blue: 0.45)) }
+        case .social(let s):
+            switch s {
+            case .praise: sym("heart.fill", FocusStyle.pink, 30)
+            case .scold: sym("exclamationmark", FocusStyle.brown, 30)
+            case .play: sym("tennisball.fill", Color(red: 0.36, green: 0.68, blue: 0.45), 28)
+            case .stop, .stopFighting: sym("hand.raised.fill", FocusStyle.brown, 28)
+            }
         case .grumpy, .silent:
             EmptyView()
         }

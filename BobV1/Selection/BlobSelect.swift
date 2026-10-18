@@ -140,6 +140,14 @@ final class BlobSelect {
         }
     }
 
+    /// Called by the stage each frame with real Jellies: every Blob's outline from his own projected skin (`points(id)`), no stand-ins.
+    func publish(viewProj vp: simd_float4x4, size: CGSize, points: (Int) -> [CGPoint]) {
+        viewProj = vp; viewSize = size
+        guard count > 1 || isSelecting else { return }
+        publishedAt = CACurrentMediaTime()
+        for b in blobs { outlines[b.id] = Silhouette.outline(of: points(b.id)) }
+    }
+
     /// The real Blob's floor spot (GameCare sets it each step).
     @ObservationIgnored var bodyFloor = SIMD3<Float>(0, 0, 1)
     /// When the stage last published the projected outlines (CACurrentMediaTime).
@@ -182,6 +190,7 @@ final class BlobSelect {
         guard count > 1, blobs.contains(where: { $0.id == id }) else { return }
         if selectedID == id { return }                      // already highlighted: keep going
         rosterPick = false
+        quiet = false
         phase = .drawing(id: id)                            // a different Blob stops the first highlight on the spot and restarts the draw
         confirmed = nil
         clock = 0; tickFired = false; metFired = false; hopRequest = nil
@@ -191,9 +200,11 @@ final class BlobSelect {
 
     /// The roster: tapping a card plays the highlight on that Blob, even with a single Blob. No check chip: after the glow (`autoHold`) the pick
     /// confirms itself and the action button shows for him.
-    func highlight(_ id: Int) {
+    /// `quietHop`: no hop when the glow completes (a voice name already has its own hop, and a trick may be running).
+    func highlight(_ id: Int, quietHop: Bool = false) {
         guard blobs.contains(where: { $0.id == id }) else { return }
         if selectedID == id, rosterPick { return }
+        quiet = quietHop
         phase = .drawing(id: id)
         confirmed = nil; rosterPick = true
         clock = 0; tickFired = false; metFired = false; hopRequest = nil
@@ -204,6 +215,7 @@ final class BlobSelect {
     static let autoHold: Float = 2.45
     /// The current highlight came from the roster (no chip, self-confirming).
     @ObservationIgnored private(set) var rosterPick = false
+    @ObservationIgnored private var quiet = false
 
     /// The check on the chip.
     func confirm() {
@@ -236,7 +248,7 @@ final class BlobSelect {
             metFired = true
             onMeet()
             phase = .pending(id: id)
-            hopRequest = id
+            hopRequest = quiet ? nil : id
         }
         if rosterPick, case .pending = phase, clock >= Self.drawDuration + Self.autoHold {
             rosterPick = false

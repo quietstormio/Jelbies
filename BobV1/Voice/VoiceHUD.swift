@@ -191,6 +191,7 @@ struct VoiceBookButton: View {
 struct VoiceTrickBook: View {
     let voice: VoiceCoordinator
     var close: () -> Void
+    @State private var drafts: [Int: String] = [:]
 
     static func symbol(_ t: VoiceTrick) -> String {
         let s: String
@@ -218,7 +219,7 @@ struct VoiceTrickBook: View {
             .padding(.leading, 6)
             ScrollView {
                 VStack(spacing: 10) {
-                    nameRow(tr)
+                    ForEach(voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
                     ForEach(VoiceTrick.allCases, id: \.rawValue) { t in trickRow(t, tr) }
                 }
                 .padding(.bottom, 6)
@@ -238,24 +239,72 @@ struct VoiceTrickBook: View {
         }
     }
 
-    private func nameRow(_ tr: VoiceTraining) -> some View {
-        let reps = tr.nameLearned ? VoiceTuning.repsToLearn : min(tr.book.name.reps, VoiceTuning.repsToLearn)
-        return HStack(spacing: 10) {
-            Image(systemName: "heart.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(FocusStyle.pink)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Name: Bob").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
-                Text(tr.nameLearned ? "He knows it" : "Say his name while you hold")
+    private func nameRow(_ tr: VoiceTraining, id: Int) -> some View {
+        let name = tr.names.displayName(id)
+        let nicks = tr.names.nicknames(for: id)
+        let lesson = voice.nickLesson?.id == id ? voice.nickLesson : nil
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(FocusStyle.pink)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Name: \(name)").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                    Text("He knows it")
+                        .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                }
+                Spacer()
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Color(red: 0.36, green: 0.68, blue: 0.45))
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("voice-name")
+            .accessibilityLabel("Name: \(name). He knows it")
+            if !nicks.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(nicks, id: \.self) { n in
+                        Button { tr.names.removeNickname(n, for: id) } label: {
+                            HStack(spacing: 4) {
+                                Text(n).font(.system(size: 13, weight: .semibold, design: .rounded))
+                                Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                            }
+                            .foregroundStyle(FocusStyle.brown)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Capsule().fill(FocusStyle.cream))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("voice-nickname-\(n)").accessibilityLabel("Nickname \(n). Remove")
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                TextField("Add nickname", text: Binding(get: { drafts[id] ?? "" }, set: { drafts[id] = $0 }))
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(Capsule().fill(FocusStyle.cream))
+                    .submitLabel(.done).onSubmit { addDraft(tr, id) }
+                    .accessibilityIdentifier("voice-nickname-field")
+                Button { addDraft(tr, id) } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 24)).foregroundStyle(FocusStyle.pink)
+                }
+                .buttonStyle(.plain).disabled(VoiceMatcher.normalise(drafts[id] ?? "").isEmpty)
+                .accessibilityIdentifier("voice-nickname-add").accessibilityLabel("Add nickname")
+                Button { voice.startNicknameLesson(for: id); close() } label: {
+                    Image(systemName: "mic.circle.fill").font(.system(size: 24)).foregroundStyle(FocusStyle.brown)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("voice-nickname-say").accessibilityLabel("Teach a nickname by saying it \(VoiceTuning.nicknameReps) times")
+            }
+            if let l = lesson {
+                Text("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))")
                     .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
             }
-            Spacer()
-            dots(reps)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
-        .accessibilityElement(children: .ignore)
-        .accessibilityIdentifier("voice-name")
-        .accessibilityLabel("Name: Bob. \(reps) of \(VoiceTuning.repsToLearn) lessons\(tr.nameLearned ? ", learned" : "")")
+    }
+
+    private func addDraft(_ tr: VoiceTraining, _ id: Int) {
+        if tr.names.addNickname(drafts[id] ?? "", for: id) { drafts[id] = "" }
     }
 
     private func trickRow(_ t: VoiceTrick, _ tr: VoiceTraining) -> some View {

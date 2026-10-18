@@ -295,6 +295,47 @@ final class BobV1UITests: XCTestCase {
         chooseWater()
     }
 
+    /// The roster card shows the Nintendogs-style status words (Hunger, Thirst, Attention, Coat) for each Blob.
+    @MainActor
+    func testRosterCardShowsStatusWords() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-NeedsReset", "1"]          // first-launch seed: hunger 0.2 (Hungry), thirst / attention 0.85 (Quenched / Content)
+        app.launch()
+        let button = app.buttons["roster-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20))
+        button.tap()
+        let card = app.buttons["roster-card-0"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "the panel lists Bob's card")
+        let v = (card.value as? String) ?? ""
+        // the seed drains a hair as the app starts, so the tier is one of the neighbours: check the shape, not the exact word
+        XCTAssertNotNil(v.range(of: #"Hunger (Full|Normal|Hungry|Famished), Thirst (Quenched|Normal|Thirsty|Parched), Attention (Content|Normal|Lonely|Neglected), Coat (Beautiful|Clean|Normal|Dirty|Filthy)"#, options: .regularExpression), "status summary: \(v)")
+        for title in ["Hunger", "Thirst", "Attention", "Coat"] {
+            XCTAssertTrue(app.staticTexts[title].exists || card.staticTexts[title].exists, "the \(title) title is drawn on the card")
+        }
+    }
+
+    /// Clean: the row runs him out of the room, the fade lands in the bath with the tool bar; the cancel button returns to the room.
+    @MainActor
+    func testCareMenuClean() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let menu = app.buttons["care-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        menu.tap()
+        let clean = app.buttons["care-clean"]
+        XCTAssertTrue(clean.waitForExistence(timeout: 10), "the menu has a Clean row")
+        XCTAssertTrue(clean.isEnabled)
+        XCTAssertFalse(app.buttons["care-bath"].exists, "there is no separate Bath row")
+        clean.tap()
+        let cancel = app.buttons["bath-cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 60), "the clean-up scene comes up with a cancel button")
+        XCTAssertTrue(app.staticTexts["Jelly Soap"].exists, "the tool bar is up")
+        XCTAssertFalse(menu.exists, "the care menu hides during the clean-up")
+        cancel.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 60), "cancel returns to the room")
+        XCTAssertFalse(cancel.exists)
+    }
+
     // MARK: Voice v1
 
     private func voiceApp(_ extra: [String] = []) -> XCUIApplication {
@@ -399,6 +440,24 @@ final class BobV1UITests: XCTestCase {
         let closed = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: sit)
         XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 10), .completed, "a row tap closes the book")
         XCTAssertTrue(app.buttons["voice-mic"].waitForExistence(timeout: 5))
+    }
+
+    /// The name row shows the name as known (no lesson) and a nickname can be typed in.
+    @MainActor
+    func testVoiceNameRowIsKnownAndTakesANickname() throws {
+        let app = voiceApp()
+        let book = app.buttons["voice-tricks"]
+        XCTAssertTrue(book.waitForExistence(timeout: 20))
+        book.tap()
+        let name = app.descendants(matching: .any)["voice-name"].firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 10))
+        XCTAssertTrue(name.label.contains("He knows it"), name.label)
+        let field = app.textFields["voice-nickname-field"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("bubbles")
+        app.buttons["voice-nickname-add"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["voice-nickname-bubbles"].firstMatch.waitForExistence(timeout: 5), "the nickname chip appears")
     }
 
     /// Trick book Flip row -> he just flips: no timing bar or any other meter appears, and the book closes.

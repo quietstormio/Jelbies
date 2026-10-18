@@ -94,7 +94,10 @@ extension BlobBrain {
         guard idleState.kind == nil, !idleBlocked, idleState.cooldown <= 0, attached else { return false }
         let kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand())
         if kind == .wander { idleState.cooldown = rand(5, 9); return false }
-        return idleStart(kind, sim)
+        if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
+        let started = idleStart(kind, sim)
+        if started && kind == .zoomies { socialOfferZoomies(sim) }
+        return started
     }
 
     /// Mood shapes the ordinary wander table too: grumpy skips waves and play, and idles longer.
@@ -215,7 +218,7 @@ extension BlobBrain {
 
     /// Start `kind` now (the scheduler, tests and the capture demos). False = no room / not possible.
     @discardableResult
-    func idleStart(_ kind: IdleKind, _ sim: SoftBody) -> Bool {
+    func idleStart(_ kind: IdleKind, _ sim: SoftBody, goal: SIMD2<Float>? = nil) -> Bool {
         if idleState.kind != nil { return false }
         currentPose(sim)
         let here = SIMD2(px, pz)
@@ -223,7 +226,7 @@ extension BlobBrain {
         case .wander, .stumble: return false
         case .zoomies, .slide:
             // a dash across the rug like the run (slide: the last ~0.9 u is the belly slide, so the goal is the end of the slide)
-            guard let g = pickRunGoal(from: here, minD: kind == .slide ? 2.6 : 2.6, maxD: kind == .slide ? 4.4 : 4.2) else { return false }
+            guard let g = goal ?? pickRunGoal(from: here, minD: kind == .slide ? 2.6 : 2.6, maxD: kind == .slide ? 4.4 : 4.2) else { return false }
             idleBegin(kind)
             idleState.target = g
             if kind == .slide { idleState.stumbleAt = GaitDriver.slideDist + 0.12 }
@@ -239,11 +242,11 @@ extension BlobBrain {
             idleState.phase = 1; idleState.phaseT = 0
             idleScootHop(sim)
         case .run:
-            guard let g = pickRunGoal(from: here, minD: 2.5, maxD: 4.4) else { return false }
+            guard let g = goal ?? pickRunGoal(from: here, minD: 2.5, maxD: 4.4) else { return false }
             idleBegin(.run)
             idleState.target = g
             // about one run in three ends in a trip (needs room: the trip happens 1.9 u before the goal)
-            if rand() < 0.34 && simd_length(g - here) >= 3.2 { idleState.stumbleAt = 1.9 }
+            if rand() < 0.34 && goal == nil && simd_length(g - here) >= 3.2 { idleState.stumbleAt = 1.9 }
             script = .walk(target: g, then: .none); activity = .walking
         case .jacks:
             idleBegin(.jacks)
@@ -263,6 +266,7 @@ extension BlobBrain {
             idleState.baseYaw = yaw
             idleState.hold = rand(1.6, 2.6)
             idleState.goalYaw = faceCameraYaw() + idleState.sign * rand(0.8, 1.3)
+            if let aim = socialLookAim() { idleState.goalYaw = aim.yaw; idleState.hold = aim.hold }
             script = .idle; activity = .lookingAround
         case .yawn:
             idleBegin(.yawn)
@@ -272,7 +276,7 @@ extension BlobBrain {
     }
 
     /// A random spot inside the roaming area `minD...maxD` from `here` that is reachable in a straight line (nil = no room).
-    private func pickRunGoal(from here: SIMD2<Float>, minD: Float, maxD: Float) -> SIMD2<Float>? {
+    func pickRunGoal(from here: SIMD2<Float>, minD: Float, maxD: Float) -> SIMD2<Float>? {
         for _ in 0..<160 {
             var cand: SIMD2<Float>
             if let r = wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
@@ -283,7 +287,7 @@ extension BlobBrain {
             let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
             let c2 = SIMD2(rv.x, rv.z)
             let d = simd_length(c2 - here)
-            if d >= minD && d <= maxD && simd_length(c2 - cand) < 0.05 && legClear(here, c2, margin: steerMargin) { return c2 }
+            if d >= minD && d <= maxD && simd_length(c2 - cand) < 0.05 && peerFree(c2) && legClear(here, c2, margin: steerMargin) { return c2 }
         }
         return nil
     }

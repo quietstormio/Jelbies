@@ -8,22 +8,69 @@ import simd
 import Foundation
 
 enum GameCamera {
-    static let eye = SIMD3<Float>(0, 7.2, 14)
-    static let target = SIMD3<Float>(0, 0.0, -0.3)
+    /// The roaming camera. One Jelly keeps `baseEye` / `baseTarget` exactly; 2-3 Jellies get a wider pose (`configureRoom`), set once when the stage starts.
+    nonisolated(unsafe) static var eye = baseEye
+    nonisolated(unsafe) static var target = baseTarget
+    static let baseEye = SIMD3<Float>(0, 7.2, 14)
+    static let baseTarget = SIMD3<Float>(0, 0.0, -0.3)
+
+    /// Roaming camera choices for 2-3 Jellies (`-RoomCam A|B`, default B). `current` is the one-Jelly pose.
+    enum RoomCam: String { case current, A, B
+        static var launch: RoomCam { RoomCam(rawValue: (UserDefaults.standard.string(forKey: "RoomCam") ?? "B").uppercased().replacingOccurrences(of: "CURRENT", with: "current")) ?? .B }
+    }
+    /// A: about 20% further out, same angle. B: about 15% further out and 9 degrees higher (more top-down). Both look at a point nearer the camera,
+    /// so the rug and the play area sit nearer the screen centre.
+    static let roomLookZ: Float = -1.0
+    static func roomPose(_ o: RoomCam) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let v = baseEye - baseTarget, L = simd_length(v), e0 = atan2f(v.y, v.z)
+        switch o {
+        case .current: return (baseEye, baseTarget)
+        case .A:
+            let t = SIMD3<Float>(0, 0, roomLookZ)
+            return (t + v * 1.2, t)
+        case .B:
+            let t = SIMD3<Float>(0, 0, roomLookZ), e = e0 + 9 * .pi / 180
+            return (t + SIMD3(0, sinf(e), cosf(e)) * (L * 1.15), t)
+        }
+    }
+    /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
+    static func configureRoom(count: Int, option: RoomCam = RoomCam.launch) {
+        if count <= 1 || option == .current {
+            eye = baseEye; target = baseTarget
+            walkMaxZ = 3.0; arenaCenter = SIMD2(0, 0.5); arenaRadius = 3.3; roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1))
+            return
+        }
+        let p = roomPose(option)
+        eye = p.eye; target = p.target
+        walkMaxZ = 3.6; arenaCenter = SIMD2(0, 0.8); arenaRadius = 3.9      // the foreground floor is used too
+        roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.5))
+    }
+    nonisolated(unsafe) static var roamRect: (min: SIMD2<Float>, max: SIMD2<Float>) = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1))
+
     static let fovY: Float = 34 * .pi / 180
+    // MARK: Bath close-up
+
+    /// Close-up of Bob in the washtub: one source of truth, `BathSet.closeUpPose`.
+    static func bathPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) { BathSet.closeUpPose(aspect: aspect) }
+
     /// Key light for the room (toward the light): front, upper left. Fixed, since the camera is.
     static let keyDir = simd_normalize(SIMD3<Float>(-0.5, 0.8, 0.55))
     /// Default portrait aspect (iPhone 17 Pro Max); the stage updates this from its real size.
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
-    static func camera(aspect: Float, focus: Float = 0) -> CameraState {
+    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0) -> CameraState {
         self.aspect = aspect
         var e = eye, t = target
         if focus != 0 {
-            let p = focusPose(aspect: aspect)
+            let p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
+        }
+        if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
+            let p = bathPose(aspect: aspect)
+            e += (p.eye - e) * bath
+            t += (p.target - t) * bath
         }
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0))
@@ -56,19 +103,73 @@ enum GameCamera {
         return (e, t)
     }
 
+    // MARK: Focus close-up of several Jellies ("Everyone, come here")
+
+    /// The spots (x, z) of every focused Jelly while the close-up frames more than one; empty = the one-Jelly close-up on `callSpot`.
+    /// Set by GameCare when the focus begins and cleared when the camera is home (the hearts / bubbles project through `camera`, so it is global like `aspect`).
+    nonisolated(unsafe) static var focusSpots: [SIMD2<Float>] = []
+    /// Share of the screen width the row of Jellies fills in the wide close-up (a little looser than the single one).
+    static let focusRowFill: Float = 0.90
+    /// Where the row's middle sits on screen (0 top ... 1 bottom): lower than the single close-up so the pulled-back camera does not see past the room's near edge.
+    static let focusRowScreenY: Float = 0.46
+    /// Distance between neighbouring Jellies' centres in the "everyone" row (body width 2R plus a gap).
+    static let focusRowSpacing: Float = 1.15
+    /// How far behind the front Jelly the two side ones stand (a shallow group-photo arc), and the hard gap between Jellies while the group is on.
+    static let focusRowBack: Float = 0.35, focusRowGap: Float = 1.0
+
+    /// Where each of `ids` stands in the "everyone" row: abreast on the front line, in id order, centred on the call spot.
+    /// Index 0 is the front Jelly (centre, on the call spot); the rest alternate left, right, a little behind.
+    static func focusRowSpots(count n: Int) -> [SIMD2<Float>] {
+        (0..<max(n, 0)).map { k in
+            if k == 0 { return callSpot }
+            let side: Float = k % 2 == 1 ? -1 : 1, rank = Float((k + 1) / 2)
+            return SIMD2(callSpot.x + side * rank * focusRowSpacing, callSpot.y - focusRowBack)
+        }
+    }
+
+    /// Eye / target framing every spot: the row's width (plus a body) fills the screen; a single spot is exactly `focusPose(spot:)`.
+    static func focusPose(aspect: Float, spots: [SIMD2<Float>]) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        guard spots.count > 1 else { return focusPose(aspect: aspect, spot: spots.first ?? callSpot) }
+        var lo = spots[0], hi = spots[0]
+        for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
+        let mid = (lo + hi) * 0.5
+        let visW = (hi.x - lo.x + 2 * BobShape.R) / focusRowFill
+        let visH = visW / max(aspect, 0.2)
+        let dist = visH / (2 * tanf(fovY / 2))
+        let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
+        let t = SIMD3<Float>(mid.x, ty, callSpot.y)
+        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
+        return (e, t)
+    }
+
     /// Key light + shadow / height maps centred on Bob (same extents the studio uses).
     /// Direction used only to build the shadow map: steeper than the shading key, so the cast shadow stays short.
     static let shadowDir = simd_normalize(SIMD3<Float>(-0.18, 1.0, 0.22))
 
-    static func light(centroid c: SIMD3<Float>) -> LightState {
+    static func light(centroid c: SIMD3<Float>) -> LightState { light(centre: c, half: 2.2, topHalf: 2.4) }
+
+    /// Several Jellies: the shadow / height boxes are centred on the middle of their bounding box and grown to cover all of them (at least the
+    /// single-body size, so one Jelly is exactly `light(centroid:)`).
+    static func light(centroids cs: [SIMD3<Float>]) -> LightState {
+        guard cs.count > 1 else { return light(centroid: cs.first ?? SIMD3(0, 0, 0)) }
+        var lo = cs[0], hi = cs[0]
+        for c in cs { lo = simd_min(lo, c); hi = simd_max(hi, c) }
+        let mid = (lo + hi) * 0.5
+        let half = max(2.2, 0.5 * max(hi.x - lo.x, hi.z - lo.z) + shadowReach)
+        return light(centre: mid, half: half, topHalf: half + 0.2)
+    }
+    /// How far past a Jelly's centre the shadow box must reach (body half width + the cast shadow's offset + the soft edge).
+    static let shadowReach: Float = 1.8
+
+    static func light(centre c: SIMD3<Float>, half: Float, topHalf: Float) -> LightState {
         let k = keyDir
         let at = SIMD3<Float>(c.x, 0.4 * BobShape.H, c.z)
         var l = LightState()
         l.dir = k
         l.intensity = 2.3
-        l.lightVP = M4.mul(M4.ortho(l: -2.2, r: 2.2, b: -2.2, t: 2.2, n: 0.1, f: 14),
+        l.lightVP = M4.mul(M4.ortho(l: -half, r: half, b: -half, t: half, n: 0.1, f: 14),
                            M4.lookAt(eye: at + shadowDir * 7, at: at, up: SIMD3<Float>(0, 0, 1)))
-        l.topVP = M4.mul(M4.ortho(l: -2.4, r: 2.4, b: -2.4, t: 2.4, n: 0, f: 5),
+        l.topVP = M4.mul(M4.ortho(l: -topHalf, r: topHalf, b: -topHalf, t: topHalf, n: 0, f: 5),
                          M4.lookAt(eye: SIMD3<Float>(at.x, -1, at.z), at: SIMD3<Float>(at.x, 1, at.z), up: SIMD3<Float>(0, 0, -1)))
         return l
     }
@@ -76,8 +177,9 @@ enum GameCamera {
     // MARK: Visible floor
 
     /// Walkable depth range (z) and the circular safety arena used by the sim.
-    static let walkMinZ: Float = -2.6, walkMaxZ: Float = 3.0
-    static let arenaCenter = SIMD2<Float>(0, 0.5), arenaRadius: Float = 3.3
+    static let walkMinZ: Float = -2.6
+    nonisolated(unsafe) static var walkMaxZ: Float = 3.0
+    nonisolated(unsafe) static var arenaCenter = SIMD2<Float>(0, 0.5), arenaRadius: Float = 3.3
     /// Bob's half width (rest) ~0.8.
     static let bobRadius: Float = 0.8
 
@@ -98,9 +200,10 @@ enum GameCamera {
     static let bodyHalfExtent: Float = 0.8, screenFill: Float = 0.9
 
     /// Clamps a floor position (centroid) so a body of `radius` stays on the visible floor, off the sofa and props.
-    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1) -> SIMD3<Float> {
+    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1, openSides: Bool = false) -> SIMD3<Float> {
         var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale)
         q.z = min(max(q.z, walkMinZ), walkMaxZ)
+        if openSides { return q }                    // the wide close-up row: the camera is pulled back, the sides are on screen there
         let hw = max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)
         return q

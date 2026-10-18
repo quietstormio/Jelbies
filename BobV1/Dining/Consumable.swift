@@ -38,6 +38,19 @@ nonisolated enum DiningTiming {
     static func servingScale(n: Int) -> Float { servingScales[min(max(n, 1), 3) - 1] }
 }
 
+/// How much he eats or drinks, by how hungry / thirsty he is (Nintendogs style). The serving is 3 pieces (bites / gulps) per Blob.
+/// Full / Quenched refuses (0), Normal takes a little (1), Hungry a lot (2), Famished / Parched the whole thing (3) and eagerly (`pace`).
+nonisolated enum MealAppetite {
+    static func pieces(_ t: NeedTier) -> Int {
+        switch t { case .full: return 0; case .normal: return 1; case .hungry: return 2; case .famished: return DiningTiming.bitesPerServing }
+    }
+    /// Speed of the bite / gulp beats: 1 = the shared rate, eager = a shorter beat between bites.
+    static func pace(_ t: NeedTier) -> Float { t == .famished ? 1.3 : 1 }
+    /// Each piece eaten adds this to the need: a whole serving from Famished (< 0.2) ends at Full (>= 0.85 for sure), Normal + 1 bite lands 0.8...1.
+    static let gainPerPiece: Float = 0.3
+    static func refusalText(_ k: NeedKind) -> String { k == .thirst ? "Not thirsty" : "Not hungry" }
+}
+
 /// Everything a model builder needs. Colours are linear RGB.
 nonisolated struct ConsumablePalette {
     var primary: SIMD3<Float>

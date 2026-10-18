@@ -8,7 +8,7 @@
 //  (the player is teaching it) he keeps doing it. Either way the attention tilt eases 0.06 rad up and one blink marks the open. Restored after.
 //  Reactions never show text: they are existing moves (look / slump / hop / sit ...), a blink, a heart bubble, or the need bubble.
 //  A voice "come" (known from the start: "come here") is the game's Come here: he walks to the front, then focus / cuddle mode starts
-//  (`GameCare.comeHere`); already in focus it is a happy hop. Grumpy and the reliability roll still apply (decided in VoiceTraining).
+//  (`GameCare.comeHere`); already in focus it is a happy hop. Grumpy never refuses come (decided in VoiceTraining); the reliability roll applies otherwise.
 //
 
 import AVFoundation
@@ -84,7 +84,30 @@ final class VoiceCoordinator {
     @ObservationIgnored private(set) var lastFlipFailed = false
     @ObservationIgnored private var flipFailQueued = false
     @ObservationIgnored private var seenFaceplants = 0
-        @ObservationIgnored private var queue: [(r: VoiceReaction, kind: VoiceFeedback.Kind?)] = []
+    @ObservationIgnored private var queue: [(r: VoiceReaction, kind: VoiceFeedback.Kind?, ids: [Int], target: VoiceTarget)] = []
+    // MARK: multi-Jelly hooks (phase B wires these; the lab has one real Jelly, Bob = id 0)
+    /// The on-device language model fallback (nil = none: the deterministic result stands).
+    @ObservationIgnored let intentModel: VoiceIntentModel?
+    /// The Jelly ids in the room (default: the selection model's blobs).
+    @ObservationIgnored var jellyIDs: (() -> [Int])?
+    /// A Jelly was NAMED: select it (default: `care.rosterPick(id)`, the same outline highlight a tap gives).
+    @ObservationIgnored var onSelect: ((Int) -> Void)?
+    /// "Everyone ...": called with all ids before the action runs.
+    @ObservationIgnored var onEveryone: (([Int]) -> Void)?
+    /// Come here for these ids (default: Bob comes if id 0 is in the list; the close-up frames all in phase B).
+    @ObservationIgnored var onComeHere: (([Int]) -> Void)?
+    /// stopFighting: stop any interaction and step them apart (Bob alone: just a stop plus a sheepish look).
+    @ObservationIgnored var onStopFighting: (([Int]) -> Void)?
+    /// A reaction for Jellies other than Bob (ids != 0); Bob's own part still runs here.
+    @ObservationIgnored var onRemote: ((VoiceReaction, [Int]) -> Void)?
+    /// The language-model request in flight (tests await it).
+    private(set) var intentTask: Task<Void, Never>?
+    /// How the last utterance was understood: "det", "model", "timeout", "error", "unavailable" and the ms it took.
+    private(set) var lastParse: (path: String, ms: Int)?
+    /// The nickname being taught by voice (3 listens), nil when none.
+    private(set) var nickLesson: NickLesson?
+    struct NickLesson: Equatable { var id: Int; var word = ""; var reps = 0; var sessions: [Int] = [] }
+    @ObservationIgnored private var currentIDs: [Int] = []
     @ObservationIgnored private var session = 0
     @ObservationIgnored private var runningAtOpen: VoiceTrick?
     @ObservationIgnored private weak var brainRef: BlobBrain?
@@ -146,9 +169,10 @@ final class VoiceCoordinator {
             case .wrongTrick(let said, _): kind = .missed(said, pct: Int((training.reliability(said) * 100).rounded()))
             case .puzzled, .ignore: kind = .unknown
             case .grumpyIgnore: kind = .grumpy
-            case .nameHeard(learned: false): kind = .nameRep(training.book.name.reps)
-            case .nameLearned: kind = .nameLearned
-            case .nameHeard(learned: true): kind = nil
+            case .nicknameStep(let n): kind = .nameRep(n)
+            case .nicknameLearned: kind = .nameLearned
+            case .social(let s): kind = .social(s)
+            case .nameHeard: kind = nil
             }
         }
         guard let kind else { return }
@@ -177,7 +201,10 @@ final class VoiceCoordinator {
 
     nonisolated deinit {}
 
-    init(training: VoiceTraining? = nil, input: SpeechInput? = nil, tutorial: VoiceTutorial? = nil, now: @escaping () -> Double = { Date.timeIntervalSinceReferenceDate }) {
+    init(training: VoiceTraining? = nil, input: SpeechInput? = nil, tutorial: VoiceTutorial? = nil, intentModel: VoiceIntentModel? = nil,
+         now: @escaping () -> Double = { Date.timeIntervalSinceReferenceDate }) {
+        // The real model only in the shipped app (not in unit tests, which pass a fake or nothing; `-VoiceNoModel 1` turns it off).
+        self.intentModel = intentModel ?? (NSClassFromString("XCTestCase") == nil && !UserDefaults.standard.bool(forKey: "VoiceNoModel") ? VoiceIntentModels.make() : nil)
         self.training = training ?? VoiceTraining()
         self.tutorial = tutorial ?? VoiceTutorial()
         self.clock = now
@@ -213,6 +240,7 @@ final class VoiceCoordinator {
         glowLatencyMs = nil; audioLatencyMs = nil
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
         input.warmUp()
+        intentModel?.prewarm()                         // the first request must not pay the model load
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
         openCount += 1
@@ -288,19 +316,102 @@ final class VoiceCoordinator {
         if mode.phase != .idle { mode.cancel(); mode.finish(); Task { [input] in await st?.value; await input.abort() } }
     }
 
+    private func enqueue(_ r: VoiceReaction, _ kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected) { queue.append((r, kind, ids, target)) }
+
+    /// The Jelly ids in the room.
+    var presentIDs: [Int] { jellyIDs?() ?? care?.jellies.map(\.id) ?? [0] }
+    /// The selected Jelly (Bob by default).
+    var selectedJellyID: Int { care?.targetJelly ?? 0 }
+    /// Who a target means right now.
+    func ids(for t: VoiceTarget) -> [Int] {
+        switch t {
+        case .selected: return [selectedJellyID]
+        case .jelly(let id): return [id]
+        case .everyone: return presentIDs
+        }
+    }
+
     private func process(_ transcript: String) {
         defer { mode.finish() }
         guard let care else { return }
         // a meal / tray owns him: commands are ignored and nothing is learned
-        if care.trayOut { queue.append((.ignore, nil)); return }
+        if care.trayOut { enqueue(.ignore, nil); return }
         if Self.logging { NSLog("[voice] process transcript=\"%@\" tokens=%@", transcript, VoiceMatcher.tokens(transcript).joined(separator: ",")) }
-        let r = training.decide(transcript: transcript, runningMove: runningAtOpen, mood: care.mood, session: session)
-        if r == .perform(.come) { comeCommands += 1 }
-        // feedback for the player: what was heard (now), and what he understood (when the reaction runs)
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         teachPrompt = nil
+        if nickLesson != nil { nicknameListen(transcript); return }
+        let t0 = CACurrentMediaTime()
+        let d = training.decideFull(transcript: transcript, runningMove: runningAtOpen, mood: moodMeant(by: transcript), session: session)
+        if d.noMatch, !VoiceMatcher.tokens(transcript).isEmpty, let model = intentModel {
+            guard model.availability.isAvailable else {
+                recordParse("unavailable", t0, transcript); finish(d, transcript: transcript); return
+            }
+            askModel(model, transcript: transcript, deterministic: d, t0: t0)
+            return
+        }
+        recordParse("det", t0, transcript)
+        finish(d, transcript: transcript)
+    }
+
+    /// The mood of the Jelly a transcript is aimed at (a name in it), else of the targeted one: a grumpy Jelly is the one who refuses (but always comes).
+    private func moodMeant(by transcript: String) -> BlobMood {
+        guard let care else { return .happy }
+        if let id = training.names.resolve(tokens: VoiceMatcher.tokens(transcript)).first?.id { return care.needs(for: id).mood }
+        return care.needs(for: care.targetJelly).mood
+    }
+
+    private func recordParse(_ path: String, _ t0: Double, _ transcript: String) {
+        let ms = Int((CACurrentMediaTime() - t0) * 1000)
+        lastParse = (path, ms)
+        if Self.logging { NSLog("VOICELOG parse path=%@ ms=%d text=\"%@\"", path, ms, transcript) }
+    }
+
+    /// (b) the model fallback: free phrasing -> a structured intent, within `modelBudget` seconds. Never produces text for the player.
+    private func askModel(_ model: VoiceIntentModel, transcript: String, deterministic d: VoiceDecision, t0: Double) {
+        let learned = training.learnedTricks.filter { $0 != .come }
+        let names = JellyNameRoster.all.map(\.display)
+        intentTask = Task { @MainActor [weak self] in
+            var path = "model"
+            var intent: ModelIntent?
+            do {
+                intent = try await Self.withBudget(VoiceTuning.modelBudget) { try await model.interpret(transcript, learned: learned, names: names) }
+            } catch VoiceModelError.timedOut { path = "timeout" } catch { path = "error" }
+            guard let self, let care = self.care else { return }
+            self.recordParse(path, t0, transcript)
+            var decision = d
+            if let i = intent, i.confidence >= VoiceTuning.modelMinConfidence, i.action != .none {
+                var target = d.target
+                if target == .selected {
+                    switch i.targetKind {
+                    case .everyone: target = .everyone
+                    case .named: if let h = self.training.names.match(token: i.targetName) { target = .jelly(h.id) }
+                    case .selected: break
+                    }
+                }
+                decision = self.training.decide(model: i.action, target: target, mood: { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }())
+            }
+            self.finish(decision, transcript: transcript)
+        }
+    }
+
+    nonisolated static func withBudget<T: Sendable>(_ seconds: Double, _ op: @escaping @MainActor @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { g in
+            g.addTask { try await op() }
+            g.addTask { try await Task.sleep(nanoseconds: UInt64(seconds * 1e9)); throw VoiceModelError.timedOut }
+            defer { g.cancelAll() }
+            return try await g.next()!
+        }
+    }
+
+    /// A decision becomes feedback + a queued reaction (with who it is for), and a named Jelly is selected.
+    private func finish(_ d: VoiceDecision, transcript: String) {
+        guard let care else { return }
+        var r = d.reaction
+        if r == .perform(.come) { comeCommands += 1 }
+        var ids = ids(for: d.target)
+        if case .jelly(let id) = d.target, !presentIDs.contains(id) { r = .puzzled; ids = [] }        // a name for a Jelly that is not here
         var kind: VoiceFeedback.Kind?
         switch r {
         case .ignore:
@@ -310,17 +421,50 @@ final class VoiceCoordinator {
         case .wrongTrick(let said, _): kind = .missed(said, pct: Int((training.reliability(said) * 100).rounded()))
         default: break
         }
+        // naming a Jelly selects it (the outline a tap gives); come already zooms onto him, and the close-up needs no highlight
+        if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come) {
+            if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }
+        }
+        if d.target == .everyone { onEveryone?(ids) }
         if r == .ignore, training.lastMiss == .flip, flipRoll() < 0.5 {            // he knew it but missed: sometimes it is a faceplant
             flipFailQueued = true
-            queue.append((.perform(.flip), kind)); return
+            enqueue(.perform(.flip), kind, ids: ids); return
         }
-        queue.append((r, kind))
+        enqueue(r, kind, ids: ids, target: d.target)
+    }
+
+    // MARK: nicknames (taught by voice: say it 3 times while he is selected)
+
+    /// The trick book's "Say it" button: the next listens teach a nickname for Jelly `id`.
+    func startNicknameLesson(for id: Int) { nickLesson = NickLesson(id: id) }
+    func cancelNicknameLesson() { nickLesson = nil }
+
+    private func nicknameListen(_ transcript: String) {
+        guard var l = nickLesson else { return }
+        let toks = VoiceMatcher.tokens(transcript)
+        let word = toks.prefix(2).joined(separator: " ")
+        guard !toks.isEmpty else { enqueue(.ignore, .nothing); return }
+        if let h = training.names.match(token: toks[0]), h.score >= 0.8 || training.names.nicknames(for: h.id).contains(toks[0]) {
+            enqueue(.ignore, .unknown); return                                   // that is already a name
+        }
+        let same = !l.word.isEmpty && (word == l.word || (word.count >= 4 && VoiceMatcher.levenshtein(word, l.word) <= 1)
+                                       || (word.count >= 4 && !word.contains(" ") && !l.word.contains(" ") && VoiceMatcher.soundex(word) == VoiceMatcher.soundex(l.word)))
+        if !same { l.word = word; l.reps = 0; l.sessions = [] }
+        guard !l.sessions.contains(session) else { nickLesson = l; return }       // one rep per listen
+        l.reps += 1; l.sessions.append(session)
+        if l.reps >= VoiceTuning.nicknameReps {
+            if training.names.addNickname(l.word, for: l.id) { enqueue(.nicknameLearned, nil, ids: [l.id]) } else { enqueue(.ignore, .unknown) }
+            nickLesson = nil
+        } else {
+            nickLesson = l
+            enqueue(.nicknameStep(reps: l.reps), nil, ids: [l.id])
+        }
     }
 
     /// Debug / capture: a listen that "hears" `words` after `hold` seconds. `teach` starts that trick first and waits a second.
     func simulate(_ words: String, teach: VoiceTrick? = nil, hold: Double = 1.2) async {
         if let t = teach {
-            queue.append((.perform(t), .silent))
+            enqueue(.perform(t), .silent)
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
         guard begin() else { return }
@@ -331,14 +475,13 @@ final class VoiceCoordinator {
 
     /// Debug / capture (`-VoiceLearned 1`): his name and every trick count as learned with their suggestion words.
     func debugLearnAll() {
-        training.debugLearnName()
-        for t in VoiceTrick.allCases { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }
+                for t in VoiceTrick.allCases { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }
         tutorial.finish()
     }
 
     /// The trick book row: do the trick now (so the next said word binds to it).
     func show(_ t: VoiceTrick) {
-        queue.append((.perform(t), .silent))
+        enqueue(.perform(t), .silent)
         if !training.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }
     }
 
@@ -477,7 +620,7 @@ final class VoiceCoordinator {
         }
 
         // one reaction at a time, once the hold is over
-        if !listening, !queue.isEmpty { let q = queue.removeFirst(); run(q.r, kind: q.kind, care: care, brain: brain) }
+        if !listening, !queue.isEmpty { let q = queue.removeFirst(); run(q.r, kind: q.kind, ids: q.ids, target: q.target, care: care, brain: brain) }
     }
 
     // MARK: flip
@@ -529,30 +672,78 @@ final class VoiceCoordinator {
 
     // MARK: reactions
 
-    private func run(_ r: VoiceReaction, kind: VoiceFeedback.Kind?, care: GameCare, brain: BlobBrain) {
-        if UserDefaults.standard.bool(forKey: "VoiceLog") { NSLog("VOICELOG reaction=%@ mood=%@", String(describing: r), String(describing: care.needs.mood)) }   // capture aid
+    private func run(_ r: VoiceReaction, kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected, care: GameCare, brain: BlobBrain) {
+        if UserDefaults.standard.bool(forKey: "VoiceLog") { NSLog("VOICELOG reaction=%@ mood=%@ ids=%@", String(describing: r), String(describing: care.needs.mood), ids.description) }   // capture aid
         if care.trayOut { return }                                   // a meal owns him
         let focused = care.focus.isActive
         if focused, care.focus.phase == .approaching { return }
+        if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
+            emitFeedback(r, override: kind)
+            comeUntil = clock() + Self.comeWindow
+            switch target {
+            case .jelly(let id): care.comeHere(jelly: id)
+            case .selected: care.comeHere(jelly: nil)                 // = care.targetJelly
+            case .everyone: care.comeHereEveryone()
+            }
+            return
+        }
+        let others = ids.filter { $0 != 0 }
+        if !others.isEmpty { onRemote?(r, others) }
+        if !ids.isEmpty, !ids.contains(0) { emitFeedback(r, override: kind); return }      // only other Jellies were meant: Bob does nothing
+        currentIDs = ids.isEmpty ? [0] : ids
         let trickRunning = Self.running(brain) != nil
         emitFeedback(r, override: kind)
         switch r {
         case .perform(let t), .wrongTrick(_, let t):
             doTrick(t, care: care, brain: brain, focused: focused)
-        case .learnedStep:
+        case .learnedStep, .nicknameStep:
             brain.blinkRequested = true                              // a nod: he noticed (plus the small ear-perk tilt, see `perkLeft`)
-        case .trickLearned(let learnedTrick):
+        case .trickLearned:
             brain.blinkRequested = true
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !care.focus.isActive { pendingHop = true; hopWait = 0; walkAfterHop = false }      // the happy hop at the lesson's end
-        case .puzzled, .nameHeard(learned: false), .ignore:
+        case .puzzled, .ignore:
             if !trickRunning { brain.commandedIdle = .look }         // the tilt / shrug: look away briefly and back
         case .grumpyIgnore:
             if !trickRunning { brain.commandedIdle = .slump }
             care.showNeedBubble()
-        case .nameHeard(learned: true), .nameLearned:
+        case .nameHeard, .nicknameLearned:
             nameHop = true; nameHopSeen = false; hopWait = 0; walkAfterHop = !focused
             brain.commandedNameHop = true
+        case .social(let s):
+            doSocial(s, care: care, brain: brain, focused: focused, trickRunning: trickRunning)
+        }
+    }
+
+    /// Stops what he is doing: walks, runs, hops and idle moves end (a flip in the air is allowed to land first), pending follow-ups are dropped.
+    func stopNow(brain: BlobBrain) {
+        voiceGoing = false; pendingHop = false; walkAfterHop = false; hopWait = 0; comeUntil = 0
+        nameHop = false; nameTurning = false; nameWalking = false; holdLeft = 0
+        guard Self.running(brain) != .flip else { return }
+        brain.interruptScript = true
+        brain.commandedIdle = nil
+        if brain.idleState.kind != nil, !brain.idleState.yielding { brain.idleState.yielding = true; brain.idleState.yieldT = 0 }
+    }
+
+    private func doSocial(_ s: VoiceSocial, care: GameCare, brain: BlobBrain, focused: Bool, trickRunning: Bool) {
+        switch s {
+        case .stop:
+            stopNow(brain: brain)
+            brain.stop()                                             // and any social he is in ends
+        case .stopFighting:
+            stopNow(brain: brain)
+            onStopFighting?(currentIDs)                              // phase C: stop any interaction and step the Jellies apart
+            if Self.running(brain) == nil { brain.commandedIdle = .look }      // alone he is just sheepish: a look away and back
+        case .praise:
+            care.needs.gain(.attention, VoiceTuning.praiseAttention)  // a small attention boost
+            care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
+            brain.blinkRequested = true
+            if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }     // the happy hop
+        case .scold:
+            if !trickRunning { brain.commandedIdle = .slump }        // the droop
+        case .play:
+            care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
+            if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }
         }
     }
 
@@ -561,7 +752,9 @@ final class VoiceCoordinator {
         case .come:
             comeUntil = clock() + Self.comeWindow
             if focused { pendingHop = true; hopWait = 0; walkAfterHop = false; return }       // already in the close-up: a happy hop
-            care.comeHere()                      // the same call as tapping him: he walks to the front, then the camera zooms into cuddle mode
+            if let f = onComeHere { f(currentIDs) }                  // phase B: every Jelly in the list comes, the close-up frames them all
+            else { care.comeHere(jelly: currentIDs.first ?? 0) }             // the same call as tapping him: he walks to the front, then the camera zooms into cuddle mode
+                                                 // (a grumpy Bob comes too: his grumpy walk is already slow and small, and the close-up petting cheers him up)
         case .run where focused:
             pendingHop = true; hopWait = 0; walkAfterHop = false      // a run would carry him off the focus spot
         case .flip:

@@ -37,6 +37,69 @@ struct MelonUniforms {
     var shadowTint = SIMD4<Float>(repeating: 0)
 }
 
+/// Mirrors `BathParams` in BathShaders.metal (fragment buffer 3 of the bath body shader): 146 float4 = 2336 bytes.
+/// `MelonUniforms` stays 544 bytes: `struct Uniforms` is part of the locked base body (BaseBodyLock), so the bath controls ride here.
+struct MelonBathParams {
+    var a = SIMD4<Float>(repeating: 0)          // wet, sparkle, foamOn, dirt
+    var centre = SIMD4<Float>(repeating: 0)     // body centre in the rest frame
+    var foam: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>)
+    var soot: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+               SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>)
+    static let sootOffset = 1184
+    static let foamOffset = 32
+}
+
+/// One Jelly's GPU state: its skinned vertex stream, its static stream (the wave-arm mat channel is written per body), its own copy of the
+/// uniforms (palette and mouth differ per body; the rest is identical) and its bath body-shader parameters (dirt / soot / shine / suds).
+final class BodySlot {
+    let dynBuf: MTLBuffer
+    let dynPointer: UnsafeMutablePointer<Float>
+    let staticBuf: MTLBuffer
+    let uboBuf: MTLBuffer
+    let bathParamsBuf: MTLBuffer
+    /// 0...1 mouth opening (uniform byte 460).
+    var mouthOpen: Float = 0
+    /// Not drawn this frame (for example the bath close-up shows Bob alone).
+    var hidden = false
+    /// This body's colours; nil = the palette the renderer-wide `setUniforms` was given.
+    var palette: Palette?
+    var bathLook: BathLook = .dry {
+        didSet { foamAny = bathLook.foam.contains { $0 > 0.01 }; sootAny = bathLook.dirt > 0.001 || bathLook.soot.contains { $0 > 0.004 } }
+    }
+    var foamAny = false
+    var sootAny = false
+    var uploadedBathA = SIMD4<Float>(repeating: -1)
+    var uploadedFoam: [Float] = []
+    var uploadedSoot: [Float] = []
+
+    init?(device: MTLDevice, vertexCount nV: Int, staticData st: [Float], label: String) {
+        guard let dyn = device.makeBuffer(length: max(nV * 6 * 4, 16), options: .storageModeShared),
+              let sb = device.makeBuffer(bytes: st, length: max(st.count * 4, 16), options: .storageModeShared),
+              let ub = device.makeBuffer(length: MemoryLayout<MelonUniforms>.stride, options: .storageModeShared),
+              let bpb = device.makeBuffer(length: MemoryLayout<MelonBathParams>.stride, options: .storageModeShared) else { return nil }
+        dyn.label = "dynamic vertices" + label
+        memset(dyn.contents(), 0, dyn.length)
+        memset(bpb.contents(), 0, bpb.length)
+        memset(ub.contents(), 0, ub.length)
+        dynBuf = dyn; staticBuf = sb; uboBuf = ub; bathParamsBuf = bpb
+        dynPointer = dyn.contents().bindMemory(to: Float.self, capacity: max(nV * 6, 4))
+    }
+    nonisolated deinit {}
+}
+
 final class MelonRenderer {
     static let msaa = 4
     static let hdrFormat = MTLPixelFormat.rgba16Float
@@ -46,24 +109,28 @@ final class MelonRenderer {
     let queue: MTLCommandQueue
     let colorPixelFormat: MTLPixelFormat
 
-    /// pos+normal per vertex (6 floats), shared memory, written by the CPU every frame.
-    let dynPointer: UnsafeMutablePointer<Float>
+    /// pos+normal per vertex (6 floats), shared memory, written by the CPU every frame. Body 0 (Bob); `dynPointer(body:)` for the others.
+    var dynPointer: UnsafeMutablePointer<Float> { slots[0].dynPointer }
+    /// One entry per Jelly drawn (1 unless the game asked for more): own vertex stream, uniforms (palette, mouth), bath parameters.
+    private(set) var slots: [BodySlot] = []
+    var bodyCount: Int { slots.count }
+    func dynPointer(body i: Int) -> UnsafeMutablePointer<Float> { slots[i].dynPointer }
 
     private let mesh: RenderMesh
     private let vertexCount: Int
     private let lineCount: Int
-    private let dynBuf: MTLBuffer
-    private let staticBuf: MTLBuffer
+    private var dynBuf: MTLBuffer { slots[0].dynBuf }
+    private var staticBuf: MTLBuffer { slots[0].staticBuf }
     private let indexBuf: MTLBuffer
     private let lineIdxBuf: MTLBuffer
     private let particleBuf: MTLBuffer
     private let particleBytes: Int
-    private let uboBuf: MTLBuffer
+    private var uboBuf: MTLBuffer { slots[0].uboBuf }
     private let lightBuf: MTLBuffer
     private let topBuf: MTLBuffer
     private var uniforms = MelonUniforms()
 
-    private let shadowSize = 1024
+    private let shadowSize: Int
     private let topSize = 512
     private let shadowTex: MTLTexture
     private let topTex: MTLTexture
@@ -76,14 +143,31 @@ final class MelonRenderer {
     private let pJelly: MTLRenderPipelineState
     private let pMatte: MTLRenderPipelineState
     private let pEyes: MTLRenderPipelineState
+    /// Bob's matte skin with suds / wet / sparkle (BathShaders.metal). Only used while the BathLook asks for one of them; dry = `pMatte`.
+    private let pMatteBath: MTLRenderPipelineState
     /// Soft matte look (Bob / blush palette) instead of the glossy translucent jelly.
     private(set) var useMatte = false
     /// The living room (game screen). When set, it replaces the studio backdrop and Bob is drawn into the same pass.
     private(set) var room: RoomRenderer?
-    /// 0...1: Bob's mouth (matte body shader). 0 = no mouth at all. The brain sets this each frame.
-    var mouthOpen: Float = 0
+    /// 0...1: Bob's mouth (matte body shader). 0 = no mouth at all. The brain sets this each frame. Body 0; `slots[i].mouthOpen` for the others.
+    var mouthOpen: Float { get { slots[0].mouthOpen } set { slots[0].mouthOpen = newValue } }
     /// DEBUG/screenshot override: launch argument -MelonMouth <0...1>.
     private let forcedMouth: Float? = UserDefaults.standard.object(forKey: "MelonMouth") != nil ? Float(UserDefaults.standard.double(forKey: "MelonMouth")) : nil
+    /// What the bath does to Bob's look this frame (suds, soot, wet, sparkle, held tool, spray, bubbles, bathroom on/off).
+    /// `.dry` (the default) draws exactly the pre-bath frame. The stage sets this once per frame.
+    var bathLook: BathLook { get { slots[bathBody].bathLook } set { slots[bathBody].bathLook = newValue } }
+    /// The body the bath close-up is about (props, sparkles, the bathroom switch follow it): Bob (0) unless another Jelly is being washed.
+    var bathBody = 0 { didSet { if bathBody < 0 || bathBody >= slots.count { bathBody = 0 } } }
+    private var bathFoamAny: Bool { slots[bathBody].foamAny }
+    private var bathSootAny: Bool { slots[bathBody].sootAny }
+    /// Test hook: draw Bob with the bath shader even when every control is zero (to compare it with the original).
+    var forceBathShader = false
+    /// Which body pipeline the last frame used ("matte" or "matteBath").
+    private(set) var lastBodyPipeline = "matte"
+    private var bodyVerts: [Int32] = []
+    private var surfaceVertex = -1
+    private var surfaceDirKey = SIMD3<Float>.zero
+    private var sparkleVerts: [Int] = []
     private let pLines: MTLRenderPipelineState
     private let pPost: MTLRenderPipelineState
     private let pCacheBlit: MTLRenderPipelineState
@@ -113,9 +197,13 @@ final class MelonRenderer {
     var lastGPUMs: Double { gpuTimes.lastMs }
     private var frameOwned = false
 
-    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int, game: Bool = false) {
+    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int, game: Bool = false, bodyCount: Int = 1) {
         guard MemoryLayout<MelonUniforms>.size == 544, MemoryLayout<MelonUniforms>.stride == 544 else {
             print("MelonRenderer: MelonUniforms layout is \(MemoryLayout<MelonUniforms>.size) bytes, expected 544")
+            return nil
+        }
+        guard MemoryLayout<MelonBathParams>.size == 2336, MemoryLayout<MelonBathParams>.stride == 2336 else {
+            print("MelonRenderer: MelonBathParams layout is \(MemoryLayout<MelonBathParams>.size) bytes, expected 2336")
             return nil
         }
         guard let queue = device.makeCommandQueue(), let library = device.makeDefaultLibrary() else {
@@ -130,11 +218,7 @@ final class MelonRenderer {
         self.vertexCount = nV
 
         // ── buffers ──
-        guard let dyn = device.makeBuffer(length: max(nV * 6 * 4, 16), options: .storageModeShared) else { return nil }
-        dyn.label = "dynamic vertices"
-        dynBuf = dyn
-        dynPointer = dyn.contents().bindMemory(to: Float.self, capacity: max(nV * 6, 4))
-        memset(dyn.contents(), 0, dyn.length)
+        shadowSize = bodyCount > 1 ? 2048 : 1024          // the shadow box covers the whole arena with several Jellies: keep the texel size near the single-body one
 
         var st = [Float](repeating: 0, count: nV * 4)
         for i in 0..<nV {
@@ -157,10 +241,9 @@ final class MelonRenderer {
                 }
             }
         }
-        guard let sb = device.makeBuffer(bytes: st, length: max(st.count * 4, 16), options: .storageModeShared),
-              let ib = device.makeBuffer(bytes: mesh.index, length: max(mesh.index.count * 4, 16), options: .storageModeShared)
+        guard let ib = device.makeBuffer(bytes: mesh.index, length: max(mesh.index.count * 4, 16), options: .storageModeShared)
         else { return nil }
-        staticBuf = sb; indexBuf = ib
+        indexBuf = ib
         lineCount = simEdges.count
         guard let lb = simEdges.isEmpty
                 ? device.makeBuffer(length: 16, options: .storageModeShared)
@@ -169,11 +252,17 @@ final class MelonRenderer {
         lineIdxBuf = lb
         particleBytes = particleCount * 12
         guard let pb = device.makeBuffer(length: max(particleBytes, 16), options: .storageModeShared),
-              let ub = device.makeBuffer(length: MemoryLayout<MelonUniforms>.stride, options: .storageModeShared),
               let lightB = device.makeBuffer(length: 64, options: .storageModeShared),
               let topB = device.makeBuffer(length: 64, options: .storageModeShared)
         else { return nil }
-        particleBuf = pb; uboBuf = ub; lightBuf = lightB; topBuf = topB
+        particleBuf = pb; lightBuf = lightB; topBuf = topB
+        // one GPU slot per Jelly: own vertex stream, wave-arm mat stream, uniforms (palette / mouth) and bath parameters (dirt, soot, shine)
+        var made: [BodySlot] = []
+        for i in 0..<max(1, bodyCount) {
+            guard let slot = BodySlot(device: device, vertexCount: nV, staticData: st, label: i == 0 ? "" : " \(i)") else { return nil }
+            made.append(slot)
+        }
+        slots = made
 
         // ── fixed textures ──
         func depthMap(_ size: Int, _ label: String) -> MTLTexture? {
@@ -240,6 +329,7 @@ final class MelonRenderer {
               let f = make("jelly", vs: "vsJelly", fs: "fsJelly", vd: meshVD, color: hdr, depth: true, samples: ms),
               let mt = make("matte", vs: "vsJelly", fs: "fsSoftMatte", vd: meshVD, color: hdr, depth: true, samples: ms),
               let ey = make("eyes", vs: "vsMesh", fs: "fsEyesMatte", vd: meshVD, color: hdr, depth: true, samples: ms),
+              let mtb = make("matte bath", vs: "vsJelly", fs: "fsSoftMatteBath", vd: meshVD, color: hdr, depth: true, samples: ms),
               let g = make("lines", vs: "vsLine", fs: "fsLine", vd: lineVD, color: hdr, depth: true, samples: ms, blend: true),
               let h = make("post", vs: "postVS", fs: "postFS", vd: nil, color: colorPixelFormat, depth: false, samples: 1)
         else { return nil }
@@ -257,6 +347,7 @@ final class MelonRenderer {
               let pr = makeGfx("present", fs: "gfxPresentFS", color: colorPixelFormat, depth: false, samples: 1)
         else { return nil }
         pCacheBlit = cb; pPresent = pr
+        pMatteBath = mtb
         pDepth = a; pBackground = b; pProps = c; pBack = d; pCopy = e; pJelly = f; pMatte = mt; pEyes = ey; pLines = g; pPost = h
 
         func ds(_ fn: MTLCompareFunction, _ write: Bool) -> MTLDepthStencilState? {
@@ -318,24 +409,41 @@ final class MelonRenderer {
         u.keyDir = SIMD4(light.dir, light.intensity)
         u.screen = SIMD4(viewSize.x, viewSize.y, 1 / viewSize.x, 1 / viewSize.y)
         useMatte = palette.matte
+        u.shape = params.shape
+        Self.applyPalette(&u, palette)
+        u.misc = SIMD4(params.exposure, params.meshAlpha, 0, palette.marking)
+        u.bg = SIMD4(params.bg, 1)
+        uniforms = u
+        // Writes target shared buffers the GPU may still be reading from the previous frame; call beginFrame() first.
+        waitIfNeeded()
+        uboBuf.contents().copyMemory(from: &uniforms, byteCount: MemoryLayout<MelonUniforms>.stride)
+        // the other Jellies: the same frame uniforms with their own colours (the mouth byte is written per body in encodeFrame)
+        for slot in slots.dropFirst() {
+            var ub = u
+            if let pal = slot.palette { Self.applyPalette(&ub, pal); ub.misc.w = pal.marking }
+            slot.uboBuf.contents().copyMemory(from: &ub, byteCount: MemoryLayout<MelonUniforms>.stride)
+        }
+        lightBuf.contents().copyMemory(from: &uniforms.lightVP, byteCount: 64)
+        topBuf.contents().copyMemory(from: &uniforms.topVP, byteCount: 64)
+    }
+
+    /// The palette-dependent uniform fields (everything a body's colour reads).
+    private static func applyPalette(_ u: inout MelonUniforms, _ palette: Palette) {
         u.flesh = SIMD4(palette.flesh, 1)
         u.fleshDeep = SIMD4(palette.fleshDeep, 1)
         u.pale = SIMD4(palette.pale, 1)
         u.skin = SIMD4(palette.skin, 1)
         u.stripe = SIMD4(palette.stripe, 1)
         u.seed = SIMD4(palette.seed, 1)
-        u.shape = params.shape
         u.shape = SIMD4(palette.extra, palette.bodyHeight)   // white-tone fleshDeep (shape is unused by the Bob shader)
-        u.misc = SIMD4(params.exposure, params.meshAlpha, 0, palette.marking)
-        u.bg = SIMD4(params.bg, 1)
         u.shadowTint = SIMD4(palette.shadowTint, palette.matte ? 2 : 1)
-        uniforms = u
-        // Writes target shared buffers the GPU may still be reading from the previous frame; call beginFrame() first.
-        waitIfNeeded()
-        uboBuf.contents().copyMemory(from: &uniforms, byteCount: MemoryLayout<MelonUniforms>.stride)
-        lightBuf.contents().copyMemory(from: &uniforms.lightVP, byteCount: 64)
-        topBuf.contents().copyMemory(from: &uniforms.topVP, byteCount: 64)
     }
+
+    /// Sets the colours of Jelly `i` (0 is the palette given to `setUniforms`).
+    func setPalette(_ palette: Palette, body i: Int) { if i > 0, i < slots.count { slots[i].palette = palette } }
+    func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
+    func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
+    func setMouth(_ m: Float, body i: Int) { if i < slots.count { slots[i].mouthOpen = m } }
 
     /// `p` points at particleCount * 3 floats.
     func uploadParticles(_ p: UnsafePointer<Float>) {
@@ -345,9 +453,9 @@ final class MelonRenderer {
 
     /// Writes (or, with `values == nil`, restores the baked) mat channel of the given render vertices in the static stream.
     /// Call after `beginFrame()` (the buffer is shared with the GPU).
-    func writeMat(_ vertices: [Int32], values: [Float]?) {
+    func writeMat(_ vertices: [Int32], values: [Float]?, body: Int = 0) {
         waitIfNeeded()
-        let p = staticBuf.contents().bindMemory(to: Float.self, capacity: vertexCount * 4)
+        let p = slots[body].staticBuf.contents().bindMemory(to: Float.self, capacity: vertexCount * 4)
         if let values {
             for (k, v) in vertices.enumerated() { p[4 * Int(v) + 3] = values[k] }
         } else {
@@ -365,6 +473,98 @@ final class MelonRenderer {
         _ = inflight.wait(timeout: .now() + 1.0)
         frameOwned = true
     }
+
+    // MARK: bath
+
+    /// Writes the bath body-shader parameters (only when something changed; the frame is owned, so the GPU is not reading the buffer).
+    private func uploadBathParams(_ slot: BodySlot) {
+        let look = slot.bathLook
+        let a = SIMD4<Float>(look.wet, look.sparkle, slot.foamAny ? 1 : 0, look.dirt)
+        let p = slot.bathParamsBuf.contents()
+        if a != slot.uploadedBathA {
+            p.storeBytes(of: a, toByteOffset: 0, as: SIMD4<Float>.self)
+            slot.uploadedBathA = a
+        }
+        p.storeBytes(of: SIMD4<Float>(BathSet.bodyCentre, look.sootStyle), toByteOffset: 16, as: SIMD4<Float>.self)      // .w = this Jelly's soot placement (0 = Bob)
+        if slot.uploadedFoam != look.foam {
+            slot.uploadedFoam = look.foam
+            let n = min(look.foam.count, BathLook.rows * BathLook.cols)
+            look.foam.withUnsafeBytes { src in
+                memcpy(p + MelonBathParams.foamOffset, src.baseAddress!, n * MemoryLayout<Float>.size)
+            }
+        }
+        if slot.uploadedSoot != look.soot {
+            slot.uploadedSoot = look.soot
+            let n = min(look.soot.count, BathLook.rows * BathLook.cols)
+            look.soot.withUnsafeBytes { src in
+                memcpy(p + MelonBathParams.sootOffset, src.baseAddress!, n * MemoryLayout<Float>.size)
+            }
+        }
+    }
+    /// The body-shader (suds / soot / wet / sparkle) is used for this Jelly this frame.
+    private func usesBathShader(_ slot: BodySlot) -> Bool {
+        forceBathShader || slot.bathLook.wet > 0.001 || slot.bathLook.sparkle > 0.001 || slot.foamAny || slot.sootAny
+    }
+
+    /// Deformed surface point and normal for a body direction: the base-body render vertex whose REST direction (from the body centre) is
+    /// closest, read from this frame's skinned positions, so it rides with walks, squishes and jiggles.
+    private func surfaceAttach(_ dir: SIMD3<Float>) -> (p: SIMD3<Float>, n: SIMD3<Float>)? {
+        ensureBodyVerts()
+        if surfaceVertex < 0 || surfaceDirKey != dir {
+            let d = simd_length(dir) > 1e-6 ? simd_normalize(dir) : SIMD3<Float>(0, 0, 1)
+            let c = BathSet.bodyCentre
+            var best = -2 as Float, bv = -1
+            for v32 in bodyVerts {
+                let v = Int(v32)
+                let r = SIMD3<Float>(mesh.rest[3 * v], mesh.rest[3 * v + 1], mesh.rest[3 * v + 2]) - c
+                let l = simd_length(r)
+                if l < 1e-5 { continue }
+                let s = simd_dot(r / l, d)
+                if s > best { best = s; bv = v }
+            }
+            guard bv >= 0 else { return nil }
+            surfaceVertex = bv; surfaceDirKey = dir
+        }
+        let q = slots[bathBody].dynPointer + 6 * surfaceVertex
+        return (SIMD3(q[0], q[1], q[2]), SIMD3(q[3], q[4], q[5]))
+    }
+
+    private func ensureBodyVerts() {
+        guard bodyVerts.isEmpty else { return }
+        let end = mesh.armCapsule.map { $0.indexFirst } ?? (mesh.body.first + mesh.body.count)
+        var seen = Set<Int32>()
+        var i = mesh.body.first
+        while i < end { seen.insert(Int32(mesh.index[i])); i += 1 }
+        bodyVerts = seen.sorted()
+    }
+
+    /// Skinned surface point / normal at one of `BathOverlay.sparkleSpots` evenly spread directions (floating sparkles spawn there).
+    private func sparkleSpot(_ i: Int) -> (p: SIMD3<Float>, n: SIMD3<Float>)? {
+        ensureBodyVerts()
+        if sparkleVerts.isEmpty {
+            let n = BathOverlay.sparkleSpots, c = BathSet.bodyCentre
+            for k in 0..<n {
+                let y = 1 - 2 * (Float(k) + 0.5) / Float(n), rr = (1 - y * y).squareRoot(), a = Float(k) * 2.39996323
+                let d = SIMD3<Float>(rr * sinf(a), y, rr * cosf(a))
+                var best: Float = -2; var bv = bodyVerts.first.map { Int($0) } ?? 0
+                for v32 in bodyVerts {
+                    let v = Int(v32)
+                    let r = SIMD3<Float>(mesh.rest[3 * v], mesh.rest[3 * v + 1], mesh.rest[3 * v + 2]) - c
+                    let l = simd_length(r)
+                    if l < 1e-5 { continue }
+                    let s = simd_dot(r / l, d)
+                    if s > best { best = s; bv = v }
+                }
+                sparkleVerts.append(bv)
+            }
+        }
+        guard i < sparkleVerts.count else { return nil }
+        let q = slots[bathBody].dynPointer + 6 * sparkleVerts[i]
+        return (SIMD3(q[0], q[1], q[2]), SIMD3(q[3], q[4], q[5]))
+    }
+
+    /// World point on Bob's current (skinned) surface in rest direction `dir` from his body centre (tools use it to find where to press).
+    func surfacePoint(dir: SIMD3<Float>) -> SIMD3<Float>? { surfaceAttach(dir)?.p }
 
     // MARK: draw
 
@@ -429,9 +629,9 @@ final class MelonRenderer {
     func invalidateRoomCache() { roomCacheState.invalidate() }
 
     /// World AABB of the vertices Bob is drawn with this frame (CPU copy in the shared dynamic buffer; call after waitIfNeeded).
-    private func bobBounds() -> (lo: SIMD3<Float>, hi: SIMD3<Float>) {
+    private func bobBounds(_ body: Int = 0) -> (lo: SIMD3<Float>, hi: SIMD3<Float>) {
         var x0 = Float.infinity, y0 = Float.infinity, z0 = Float.infinity, x1 = -Float.infinity, y1 = -Float.infinity, z1 = -Float.infinity
-        dynPointer.withMemoryRebound(to: Float.self, capacity: vertexCount * 6) { p in
+        slots[body].dynPointer.withMemoryRebound(to: Float.self, capacity: vertexCount * 6) { p in
             var i = 0
             let n = vertexCount * 6
             while i < n {
@@ -482,7 +682,10 @@ final class MelonRenderer {
         guard let msScene, let msDepth, let sceneTex, let backTex, let backDepth, let msHdr, let hdrTex else { return false }
         waitIfNeeded()
         // mouthOpen rides in `stripe.w` (byte 460 of MelonUniforms); written here so it is always current for this frame.
-        uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
+        for (i, slot) in slots.enumerated() {
+            slot.uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? slot.mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
+            _ = i
+        }
         let m = mesh
         let bodyAndSeeds = m.body.count + m.seeds.count
         let tri = MTLPrimitiveType.triangle
@@ -501,8 +704,10 @@ final class MelonRenderer {
             e.setFrontFacing(.counterClockwise)
             e.setDepthBias(2, slopeScale: 2, clamp: 0)
             e.setVertexBuffer(mbuf, offset: 0, index: 0)
-            e.setVertexBuffer(dynBuf, offset: 0, index: 1)
-            e.drawIndexedPrimitives(type: tri, indexCount: bodyAndSeeds, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: 0)
+            for slot in slots where !slot.hidden {
+                e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
+                e.drawIndexedPrimitives(type: tri, indexCount: bodyAndSeeds, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: 0)
+            }
             e.endEncoding()
             split(&cmd, label)
         }
@@ -510,22 +715,55 @@ final class MelonRenderer {
         // Game: the room and Bob share one MSAA pass that resolves straight to hdrTex (matte Bob needs no scene copy / back faces).
         if let room {
             room.fog = SIMD3(14, 32, 0.3)
+            // ---- bath: bathroom on/off, props over Bob, body shader parameters ----
+            room.bathVisible = bathLook.visible
+            room.bathTime = uniforms.camPos.w
+            let vw = uniforms.view
+            room.bathOverlay.compose(look: bathLook, time: uniforms.camPos.w,
+                                     camRight: SIMD3(vw.columns.0.x, vw.columns.1.x, vw.columns.2.x), camUp: SIMD3(vw.columns.0.y, vw.columns.1.y, vw.columns.2.y),
+                                     sparkleAt: { [self] i in sparkleSpot(i) })
+            room.commitBathOverlay()
+            let bodyBath = usesBathShader(slots[bathBody])
+            for slot in slots where !slot.hidden && usesBathShader(slot) { uploadBathParams(slot) }
+            lastBodyPipeline = bodyBath ? "matteBath" : "matte"
+
             room.keyDir = SIMD3(uniforms.keyDir.x, uniforms.keyDir.y, uniforms.keyDir.z)
             let camPos3 = SIMD3<Float>(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z)
             let fullPx = Double(width * height)
 
             // Room cache: decide before the main pass (a build is its own pass, first).
             var action = RoomCacheAction.bypass(.disabled)
-            var scissor: MTLScissorRect?
+            var scissor: MTLScissorRect?                  // the box around every footprint
+            var scissors: [MTLScissorRect] = []           // the footprints themselves (disjoint)
             if roomCacheEnabled {
-                var (lo, hi) = bobBounds()
-                if let d = room.diningBounds { lo = simd_min(lo, d.lo); hi = simd_max(hi, d.hi) }
-                let rect = RoomFootprint.rect(min: lo, max: hi, shadowDir: GameCamera.shadowDir, viewProj: uniforms.viewProj, width: width, height: height)
-                let share = RoomFootprint.share(rect, width: width, height: height)
+                // One Jelly: one footprint with the tray / bath pieces folded in (the original single rect). Several: one footprint per visible
+                // Jelly (Bob's with the bath pieces) plus the tray's, merged where they touch, so spread-out Jellies keep the saving.
+                var rects: [RoomFootprint.Rect] = []
+                func footprint(_ lo0: SIMD3<Float>, _ hi0: SIMD3<Float>) -> RoomFootprint.Rect {
+                    RoomFootprint.rect(min: lo0, max: hi0, shadowDir: GameCamera.shadowDir, viewProj: uniforms.viewProj, width: width, height: height)
+                }
+                var (lo, hi) = bobBounds(bathBody)
+                let single = slots.count == 1
+                if single, let d = room.diningBounds { lo = simd_min(lo, d.lo); hi = simd_max(hi, d.hi) }
+                if let b = room.bathOverlay.bounds { lo = simd_min(lo, b.lo); hi = simd_max(hi, b.hi) }
+                if room.bathVisible {       // the water disc is drawn inside the footprint too
+                    let c = BathModels.basinCentre, r = BathModels.waterR
+                    lo = simd_min(lo, SIMD3(c.x - r, 0, c.y - r)); hi = simd_max(hi, SIMD3(c.x + r, BathModels.waterY, c.y + r))
+                }
+                rects.append(footprint(lo, hi))
+                if !single {
+                    for i in 0..<slots.count where i != bathBody && !slots[i].hidden { let b = bobBounds(i); rects.append(footprint(b.lo, b.hi)) }
+                    if let d = room.diningBounds { rects.append(footprint(d.lo, d.hi)) }
+                    rects = RoomFootprint.mergeOverlapping(rects)
+                }
+                let rect = rects[0]
+                let share = single ? RoomFootprint.share(rect, width: width, height: height)
+                                   : Float(rects.reduce(0) { $0 + $1.area }) / Float(Swift.max(width * height, 1))
                 var key = RoomCacheKey()
                 key.viewProj = uniforms.viewProj; key.camPos = camPos3; key.width = width; key.height = height
                 key.themeTint = room.theme.tint; key.propsVersion = room.staticVersion
                 key.keyDir = room.keyDir; key.keyIntensity = room.keyIntensity; key.fog = room.fog
+                key.bath = room.bathVisible
                 action = roomCacheState.frame(key: key, footprint: share, enabled: true)
                 if action == .build {
                     if roomCacheTex == nil || roomCacheTex!.width != width || roomCacheTex!.height != height {
@@ -552,7 +790,12 @@ final class MelonRenderer {
                         roomPixelsShaded += fullPx      // the one-off build cost
                     } else { action = .bypass(.disabled) }
                 }
-                if action == .use || action == .build { scissor = MTLScissorRect(x: rect.x, y: rect.y, width: rect.w, height: rect.h) }
+                if action == .use || action == .build {
+                    scissors = rects.map { MTLScissorRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+                    let x0 = rects.map(\.x).min()!, y0 = rects.map(\.y).min()!
+                    let x1 = rects.map { $0.x + $0.w }.max()!, y1 = rects.map { $0.y + $0.h }.max()!
+                    scissor = MTLScissorRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+                }
                 lastFootprintShare = (action == .use || action == .build) ? share : 1
                 lastFootprintRect = scissor
             }
@@ -570,7 +813,7 @@ final class MelonRenderer {
             guard var e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
             e.label = perfPasses ? "room" : "room + bob"
             if let sc = scissor, let cacheTex = roomCacheTex {
-                roomPixelsShaded += Double(sc.width * sc.height)
+                roomPixelsShaded += Double(scissors.reduce(0) { $0 + $1.width * $1.height })
                 // Cached colour only OUTSIDE the footprint (four scissored strips), so the pixels inside see exactly the old draw sequence
                 // (a full-screen underlay changed the resolve of a few of Bob's edge pixels by 1-3 levels).
                 e.pushDebugGroup("room cache")
@@ -578,20 +821,29 @@ final class MelonRenderer {
                 e.setDepthStencilState(dsAlwaysNoWrite)
                 e.setCullMode(.none)
                 e.setFragmentTexture(cacheTex, index: 0)
-                let strips = [MTLScissorRect(x: 0, y: 0, width: width, height: sc.y),
+                let strips: [MTLScissorRect]
+                if scissors.count == 1 {
+                    strips = [MTLScissorRect(x: 0, y: 0, width: width, height: sc.y),
                               MTLScissorRect(x: 0, y: sc.y + sc.height, width: width, height: height - sc.y - sc.height),
                               MTLScissorRect(x: 0, y: sc.y, width: sc.x, height: sc.height),
                               MTLScissorRect(x: sc.x + sc.width, y: sc.y, width: width - sc.x - sc.width, height: sc.height)]
+                } else {
+                    strips = RoomFootprint.complement(of: scissors.map { RoomFootprint.Rect(x: $0.x, y: $0.y, w: $0.width, h: $0.height) }, width: width, height: height)
+                        .map { MTLScissorRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+                }
                 for r in strips where r.width > 0 && r.height > 0 {
                     e.setScissorRect(r)
                     e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
                 }
                 e.popDebugGroup()
+                for fp in scissors {
+                    e.setScissorRect(fp)
+                    room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
+                                topViewProj: uniforms.topVP, heightTex: topTex, parts: .staticOnly)
+                    room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
+                                topViewProj: uniforms.topVP, heightTex: topTex, parts: .diningOnly)
+                }
                 e.setScissorRect(sc)
-                room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
-                            topViewProj: uniforms.topVP, heightTex: topTex, parts: .staticOnly)
-                room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
-                            topViewProj: uniforms.topVP, heightTex: topTex, parts: .diningOnly)
             } else {
                 roomPixelsShaded += fullPx
                 room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
@@ -608,17 +860,24 @@ final class MelonRenderer {
                 e = e2
             }
             e.setFrontFacing(.counterClockwise)
-            e.setVertexBuffer(uboBuf, offset: 0, index: 0)
-            e.setFragmentBuffer(uboBuf, offset: 0, index: 0)
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)
-            e.setVertexBuffer(dynBuf, offset: 0, index: 1)
-            e.setVertexBuffer(staticBuf, offset: 0, index: 2)
-            e.setRenderPipelineState(pMatte)
-            e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
-            if m.seeds.count > 0 {
-                e.setRenderPipelineState(pEyes)
-                e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
+            for slot in slots where !slot.hidden {      // each Jelly: its own vertex stream, colours / mouth and bath look
+                e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
+                e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
+                e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
+                e.setVertexBuffer(slot.staticBuf, offset: 0, index: 2)
+                if usesBathShader(slot) {
+                    e.setRenderPipelineState(pMatteBath)
+                    e.setFragmentBuffer(slot.bathParamsBuf, offset: 0, index: 3)
+                } else {
+                    e.setRenderPipelineState(pMatte)
+                }
+                e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                if m.seeds.count > 0 {
+                    e.setRenderPipelineState(pEyes)
+                    e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
+                }
             }
             // translucent room pieces (dining puffs, contact shadows) blend over Bob; sets its own state (not part of the body path)
             room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,

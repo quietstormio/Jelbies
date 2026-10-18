@@ -106,6 +106,11 @@ final class BlobBrain {
     var idleMood: IdleMood = .okay
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
+    /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
+    var social: SocialSession?
+    var socialBook = SocialBook()
+    var socialOthers: () -> [BlobBrain] = { [] }
+    var onSocial: ((SocialEvent) -> Void)?
     /// Tests / captures: run idle behaviours although `autonomy` is off.
     var idleForced = false
     /// Voice v1: the running idle behaviour was ASKED for by the player. It runs although `autonomy` is off (focus mode) or the stage holds idle back,
@@ -270,7 +275,7 @@ final class BlobBrain {
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
         b.resolve = { p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
-        b.wanderRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1))
+        b.wanderRect = GameCamera.roamRect
         b.maxWanderLeg = 4.0
         b.facePlayerWhenIdle = true
         b.attentionPitch = 0.28
@@ -447,6 +452,7 @@ final class BlobBrain {
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }
         if idleBodyMoveTick(sim, skinner, dt) { return }
+        socialTick(sim, skinner, dt)
 
         // gait-driven tricks (hop / roll) own the attractor while they run
         switch script {
@@ -466,7 +472,7 @@ final class BlobBrain {
         if demo != nil { demoTick(sim) }
         if case .none = script {
             if let r = pending { pending = nil; start(request: r, sim) }
-            else if autonomy {
+            else if autonomy && social == nil {
                 restTimer -= dt
                 if restTimer <= 0 { pickAutonomous(sim) }
             }
@@ -552,6 +558,7 @@ final class BlobBrain {
 
     func pickAutonomous(_ sim: SoftBody) {
         currentPose(sim)
+        if socialMaybeStart(sim) { return }
         if idleMaybeStart(sim) { return }
         var w: [(Int, Float)] = [(0, 5), (1, 2), (2, 1.5)]
         if sinceWave > 18 { w.append((3, 2)) }
@@ -577,7 +584,7 @@ final class BlobBrain {
                 }
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                if d > 0.8 && d < idleLegMax(maxWanderLeg) { target = cand; break }
+                if d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) { target = cand; break }
             }
             if simd_length(target - here) < 0.3 { restTimer = 0.6; return }
             script = .walk(target: target, then: .none); activity = .walking
@@ -650,6 +657,7 @@ final class BlobBrain {
         skinner.setEyeOpenness(1)
         skinner.browCounterOn = false
         dineAbort()
+        socialAbort(skinner)
         idleReset(skinner)
         armActive = false; armBlend = 0; armPathName = ArmPath.wave.name
         armWalkWant = 0
@@ -744,7 +752,7 @@ final class BlobBrain {
     func intrusion(_ p: SIMD2<Float>, margin: Float) -> Float {
         let r = resolve(SIMD3(p.x, 0, p.y), footprint + margin)
         var d = simd_length(SIMD2(r.x, r.z) - p)
-        for o in peers() where o.id > steerID { d = max(d, peerGap + margin * 0.5 - simd_distance(o.pos, p)) }
+        for o in peers() where o.id > steerID { d = max(d, socialGap(at: o.pos) + margin * 0.5 - simd_distance(o.pos, p)) }
         return max(d, 0)
     }
 
@@ -804,17 +812,25 @@ final class BlobBrain {
         if legClear(root, target, margin: steerMargin) { return target }
         if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
-        if steerWait < 0.7, peerOnLeg(root, target) { return nil }
+        // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
+        let patience: Float = peers().contains { $0.id >= Int.max / 4 } ? 6 : 0.7
+        if steerWait < patience, peerOnLeg(root, target) { return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// A wander goal is no closer than `peerGap` to any other Blob (always true without peers: a lone Blob picks exactly as before).
+    func peerFree(_ p: SIMD2<Float>) -> Bool {
+        let others = peers()
+        if others.isEmpty { return true }
+        return !others.contains { simd_distance($0.pos, p) < peerGap }
+    }
     /// A Blob with a higher id stands within the gap of the straight leg a -> b.
     func peerOnLeg(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
         let others = peers().filter { $0.id > steerID }
         if others.isEmpty { return false }
         let d = b - a, n = max(2, Int(simd_length(d) / 0.1))
-        for i in 0...n { let p = a + d * (Float(i) / Float(n)); if others.contains(where: { simd_distance($0.pos, p) < peerGap }) { return true } }
+        for i in 0...n { let p = a + d * (Float(i) / Float(n)); if others.contains(where: { simd_distance($0.pos, p) < socialGap(at: $0.pos) }) { return true } }
         return false
     }
 
@@ -875,9 +891,9 @@ final class BlobBrain {
             break
 
         case .none:
-            if facePlayerWhenIdle {
+            if facePlayerWhenIdle || socialBook.hold {
                 poseOn = true; ensureFeet(sim)
-                _ = turnSteps(goal: faceCameraYaw(), tol: 0.12)
+                _ = turnSteps(goal: socialBook.hold ? (socialBook.faceYaw ?? yaw) : faceCameraYaw(), tol: socialBook.hold ? 0.06 : 0.12)
                 gaitPose(sway: 0.6 * waddleRoll, bob: 0.03, rock: 0.5)
             }
 
@@ -1016,9 +1032,9 @@ final class BlobBrain {
         if poseOn { poseW = min(1, poseW + dt / 0.25) } else { poseW = max(0, poseW - dt / 0.3) }
         guard poseW > 0 else { if sim.attractor.strength > 0 && !gait.isBusy { sim.attractor.strength = 0 }; return }
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
-        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll, axis: SIMD3(0, 0, 1))
+        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
-        let sq = squash * touchSquash
+        let sq = squash * touchSquash * socialBook.squash
         sim.attractor.squash = sq
         if geom.valid {
             // pivot on his feet: the middle of both soles (or one foot, for the wave's lean) stays on the floor at its world spot
@@ -1516,6 +1532,13 @@ final class BlobBrain {
         var level: (Float) -> Void = { _ in }                      // fraction of his share drunk so far, 0...1
     }
     var dineHooks: DineHooks?
+    /// How this sitting goes (GameCare sets it with the hooks, from his hunger / thirst tier): `refuse` = he shakes his head at the tray and eats nothing,
+    /// `pace` = beat speed (eager when famished), `levelBase` / `levelSpan` = the part of his drink share this sitting drains (a partial drink never
+    /// empties the bottle). Defaults = the whole serving at the shared rate.
+    struct DinePlan: Equatable { var refuse = false; var pace: Float = 1; var levelBase: Float = 0; var levelSpan: Float = 1 }
+    var dinePlan = DinePlan()
+    /// True while he shakes his head at a tray (the refusal): GameCare shows the "Not hungry" label for it.
+    var isRefusing: Bool { if case .dine = script { return dinePlan.refuse }; return false }
 
     enum DinePhase { case lean, grab, straighten, chew, happy }
     struct DineState {
@@ -1651,11 +1674,12 @@ final class BlobBrain {
         poseOn = true; ensureFeet(sim)
         // hand-off: the walking arm capsules must be swapped out (0.12 s) before anything reaches; nothing starts while one is out
         if armCapsuleOut || armLift != 0 { armLift = 0; armLiftV = 0; armHold = 0; return }
+        if dinePlan.refuse { runRefuse(sim, skinner, dt); return }
         if dine.mode == .sip { runSip(sim, skinner, dt); return }
         if armBuilding || armKeyframes[ArmPath.nubToMouth.name] == nil { return }          // path still precomputing: stand and wait
         guard let h = dineHooks else { return }
         if !armActive { armActive = true; armPathName = ArmPath.nubToMouth.name; armT = 0; armBlend = 0 }
-        dine.t += dt
+        dine.t += dt * dinePlan.pace
         let grabS = Float(ArmPath.nubGrabS)
         var pose = ReachPose()
         var armTarget: Float = 0, mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
@@ -1731,7 +1755,7 @@ final class BlobBrain {
             if dine.t >= Self.tHappy { dine.finished = true }
         }
         // the arm follows its target with the shared spring-less slew (rates in path units per second), so s never jumps
-        let rate: Float = 3.2
+        let rate: Float = 3.2 * dinePlan.pace
         if let snap { armS = snap } else { armS += max(-rate * dt, min(rate * dt, armTarget - armS)) }
         dine.armS = armS
         applyDine(sim, skinner, pose: pose, mouth: mouth, eyes: eyes, pulse: pulse)
@@ -1787,7 +1811,7 @@ final class BlobBrain {
     /// The sip: he tips his whole body until his mouth meets the tip of his own straw (hands-free), three gulps, a closed-eyes "ahh".
     func runSip(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let h = dineHooks else { return }
-        dine.t += dt
+        dine.t += dt * dinePlan.pace
         var pose = ReachPose()
         var mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
         dine.window = false
@@ -1806,10 +1830,10 @@ final class BlobBrain {
             mouth = w * 0.55
             dine.window = dine.t > 0.04 * b && dine.t < 0.78 * b
             pulse = MotionCurve.pulse((dine.t - 0.45 * b) / (0.5 * b))
-            h.level((Float(dine.k) + smooth01(dine.t / b)) / Float(max(dine.total, 1)))
+            h.level(dinePlan.levelBase + dinePlan.levelSpan * (Float(dine.k) + smooth01(dine.t / b)) / Float(max(dine.total, 1)))
             if dine.t >= b {
                 dine.k += 1; dine.bitesLeft -= 1; dine.t = 0
-                if dine.k >= dine.total { h.level(1); dine.phase = .straighten }
+                if dine.k >= dine.total { h.level(dinePlan.levelBase + dinePlan.levelSpan); dine.phase = .straighten }
             }
         case .straighten:
             pose = lerpPose(dine.reach, ReachPose(), MotionCurve.spring(dine.t / Self.tStraighten))
@@ -1823,7 +1847,23 @@ final class BlobBrain {
         if dine.finished { dineDone(sim, skinner) }
     }
 
+    /// The refusal (Full / Quenched): he stands at the tray and shakes his head "no" (a quick yaw wobble about the planted feet, the same twist channel
+    /// the reach uses; arms stay at rest, feet attached), eyes squinted, one small squash at the end. Nothing is held, nothing eaten.
+    func runRefuse(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        dine.t += dt
+        let T = Self.refuseDuration
+        var pose = ReachPose()
+        let env = smooth01((dine.t - 0.25) / 0.15) * (1 - smooth01((dine.t - (T - 0.55)) / 0.35))
+        pose.twist = 0.42 * sinf(2 * .pi * 2.4 * max(0, dine.t - 0.25)) * env
+        let eyes = 1 - 0.55 * env
+        let pulse = MotionCurve.pulse((dine.t - (T - 0.6)) / 0.45)
+        applyDine(sim, skinner, pose: pose, mouth: 0, eyes: eyes, pulse: pulse)
+        if dine.t >= T { dine.finished = true; dineDone(sim, skinner) }
+    }
+    static let refuseDuration: Float = 1.9
+
     func dineDone(_ sim: SoftBody, _ skinner: Skinner) {
+        dinePlan = DinePlan()
         skinner.setEyeOpenness(1); mouthOpen = 0
         skinner.browCounterOn = false
         if dine.forkHeld { dineHooks?.releaseFork(); dine.forkHeld = false }

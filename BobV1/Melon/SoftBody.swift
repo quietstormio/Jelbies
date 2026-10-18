@@ -46,7 +46,7 @@ struct BodyPose {
     var yaw: Float { let f = rotation.act(SIMD3<Float>(0, 0, 1)); return atan2f(f.x, f.z) }
 }
 
-final class SoftBody {
+nonisolated final class SoftBody {
     let n: Int
     let nT: Int
     let nE: Int
@@ -239,6 +239,28 @@ final class SoftBody {
         fitQ = SIMD4<Float>(0, 0, 0, 1)
         attractor = Attractor(); attPrev = Attractor(); attFresh = true
         endGrab(); endPress()
+    }
+
+    /// Slides the whole body (and its previous positions, so there is no velocity) by (dx, dz) on the floor.
+    func shift(byXZ d: SIMD2<Float>) {
+        for i in 0..<n {
+            x[3 * i] += d.x; x[3 * i + 2] += d.y
+            prev[3 * i] += d.x; prev[3 * i + 2] += d.y
+        }
+    }
+
+    /// Clean-up flow: puts the whole body, at rest on the floor, over floor spot `p` (centroid x, z). No velocity, no foot / arm targets, so the
+    /// first step after the move has nothing to catch up on.
+    func teleport(toXZ p: SIMD2<Float>) {
+        reset(drop: 0)
+        targets = []
+        restoreStiffness()
+        let c = centroid()
+        let dx = p.x - c.x, dz = p.y - c.z
+        for i in 0..<n {
+            x[3 * i] += dx; x[3 * i + 2] += dz
+            prev[3 * i] += dx; prev[3 * i + 2] += dz
+        }
     }
 
     // stiffness mapping: firmness 0..1 -> edge compliance (log scale)
