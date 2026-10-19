@@ -34,9 +34,9 @@ final class SelectionTests: XCTestCase {
         s.doubleTap(1)
         XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertEqual(starts, 1, "a light tick at the draw start"); XCTAssertEqual(meets, 0)
         XCTAssertFalse(s.chipVisible)
-        run(s, 0.5)
+        run(s, 0.25)
         XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertGreaterThan(s.drawProgress, 0.05); XCTAssertLessThan(s.drawProgress, 0.95)
-        run(s, 0.8)                                              // 1.3 s: the halves have met at 1.2 s
+        run(s, 0.4)                                              // 0.65 s: the halves have met at 0.6 s
         XCTAssertEqual(s.phase, .pending(id: 1)); XCTAssertEqual(meets, 1, "a crisp tap when the halves meet, once")
         XCTAssertEqual(s.drawProgress, 1)
         XCTAssertTrue(s.chipVisible); XCTAssertEqual(s.selectedName, "Pip")
@@ -49,19 +49,19 @@ final class SelectionTests: XCTestCase {
         XCTAssertTrue(s.actionVisible, "the check shows the action button for that Blob")
     }
 
-    func testDrawTakesAboutOneAndAQuarterSecond() {
+    func testDrawTakesAboutSixTenthsOfASecond() {
         let s = three()
         s.doubleTap(0)
         var t: Float = 0
         while s.phase == .drawing(id: 0), t < 2 { s.tick(dt: 1.0 / 60); t += 1.0 / 60 }
-        XCTAssertEqual(t, 1.2, accuracy: 0.03)
+        XCTAssertEqual(t, 0.6, accuracy: 0.03)
     }
 
     func testDoubleTapAnotherStopsTheFirstAndRestartsTheDraw() {
         let s = three()
         var starts = 0, meets = 0
         s.onDrawStart = { starts += 1 }; s.onMeet = { meets += 1 }
-        s.doubleTap(0); run(s, 0.6)
+        s.doubleTap(0); run(s, 0.3)
         let mid = s.drawProgress
         XCTAssertGreaterThan(mid, 0.2)
         s.doubleTap(2)

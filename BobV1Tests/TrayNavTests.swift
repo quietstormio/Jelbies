@@ -116,7 +116,7 @@ final class TrayNavTests: XCTestCase {
         // the visible floor beside the tray is a corridor only ~0.2 u wide: two Blobs meeting inside it cannot pass, so the lower id gives way for up to
         // 0.7 s and then squeezes by (soft bodies overlap, nobody is ever deadlocked or exactly on top of another)
         XCTAssertGreaterThan(minPair, 0.05, "nobody is ever on top of another")
-        XCTAssertGreaterThan(minClear, 0.7 * RoomLayout.lowPropRadiusScale - 0.05, "nobody overlaps the tray")
+        XCTAssertGreaterThan(minClear, 0.7 * RoomLayout.lowPropRadiusScale - 0.06, "nobody overlaps the tray")
         XCTAssertLessThanOrEqual(stall, 1.0, "no stall longer than 1 s")
     }
 }

@@ -11,13 +11,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		CD9FC80B307D6A00002EDC4A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = CD9FC700307D6915002EDC4A /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = CD9FC803307D6A00002EDC4A;
-			remoteInfo = JelbiesWidget;
-		};
 		CD9FC716307D6917002EDC4A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CD9FC700307D6915002EDC4A /* Project object */;
@@ -31,6 +24,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = CD9FC707307D6915002EDC4A;
 			remoteInfo = BobV1;
+		};
+		CD9FC80B307D6A00002EDC4A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CD9FC700307D6915002EDC4A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD9FC803307D6A00002EDC4A;
+			remoteInfo = JelbiesWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -225,8 +225,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				CD9FC802307D6A00002EDC4A /* JelbiesWidget */,
 				CD9FC801307D6A00002EDC4A /* Shared */,
+				CD9FC802307D6A00002EDC4A /* JelbiesWidget */,
 			);
 			name = JelbiesWidget;
 			packageProductDependencies = (
@@ -248,9 +248,6 @@
 					CD9FC707307D6915002EDC4A = {
 						CreatedOnToolsVersion = 26.3;
 					};
-					CD9FC803307D6A00002EDC4A = {
-						CreatedOnToolsVersion = 26.3;
-					};
 					CD9FC714307D6917002EDC4A = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = CD9FC707307D6915002EDC4A;
@@ -258,6 +255,9 @@
 					CD9FC71E307D6917002EDC4A = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = CD9FC707307D6915002EDC4A;
+					};
+					CD9FC803307D6A00002EDC4A = {
+						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -496,8 +496,8 @@
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Bob;
 				INFOPLIST_FILE = "BobV1-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Bob;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bob only listens while you hold to talk, so you can teach him his name and tricks. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -532,8 +532,8 @@
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Bob;
 				INFOPLIST_FILE = "BobV1-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Bob;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Bob only listens while you hold to talk, so you can teach him his name and tricks. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

@@ -24,8 +24,37 @@ nonisolated enum GfxFlags {
     /// MetalFX defaults OFF everywhere: spatial upscaling is a visible (softer) trade, not an identical one; the user opts in.
     static var metalFX: Bool { flag("MetalFX", defaultOn: false) }
     static var idleRest: Bool { flag("IdleRest", defaultOn: true) }
-    /// Render scale (in native-pixel multiples) MetalFX renders at when the adaptive scaler is not driving it. -MetalFXScale 2.
-    static var metalFXScale: Double { let v = UserDefaults.standard.double(forKey: "MetalFXScale"); return v >= 1 ? v : 2 }
+    /// Render scale (in native-pixel multiples) MetalFX renders at when the adaptive scaler is not driving it. -MetalFXScale 1.5.
+    static var metalFXScale: Double { let v = UserDefaults.standard.double(forKey: "MetalFXScale"); return v >= 1 ? v : 1.5 }
+    /// GPU-side options (GfxOpt): memoryless MSAA / depth targets in the game pass (pixel-identical; default on), front-to-back body order
+    /// (pixel-identical; default off) and the opt-in cheaper matte body shader tier (-FastMatte 1...3, pixel-changing; default 0 = locked shader).
+    static var gfxOpt: GfxOpt {
+        var o = GfxOpt()
+        o.memorylessMSAA = flag("MemorylessMSAA", defaultOn: true)
+        o.frontToBack = flag("FrontToBack", defaultOn: false)
+        let t = UserDefaults.standard.integer(forKey: "FastMatte")
+        o.fastMatteTier = Swift.max(0, Swift.min(t, 3))
+        o.bathVariants = flag("BathVariants", defaultOn: false)
+        o.shadowDepth16 = flag("ShadowDepth16", defaultOn: false)
+        return o
+    }
+}
+
+/// GPU-side render options of `MelonRenderer` (see GfxFlags.gfxOpt). The defaults are pixel-identical to the old path.
+nonisolated struct GfxOpt: Equatable {
+    /// Game pass only: the MSAA colour (resolve-only) and depth (never stored) targets live in tile memory (`.memoryless`), never in RAM.
+    /// Off automatically with -PerfPasses (that path stores and reloads them). Pixel-identical by construction.
+    var memorylessMSAA = true
+    /// Draw the nearest Jelly first. Measured pixel-identical and no faster (Apple TBDR hidden-surface removal is order independent) while
+    /// costing a CPU bounds pass per body: off by default, kept as -FrontToBack 1 for A/B on device.
+    var frontToBack = false
+    /// 0 = the locked fsSoftMatte; 1...3 = fsSoftMatteFast tiers (GfxBodyFast.metal), each cheaper and each a (small) visible change.
+    var fastMatteTier = 0
+    /// Bath body shader specialised per body with function constants (soot / foam / wet / sparkle blocks compiled out when unused). Same maths,
+    /// but a specialised build is not bit-identical to the plain one (a few ulps on some frames: BathSootSeedZeroTests): opt-in, -BathVariants 1.
+    var bathVariants = false
+    /// 16-bit shadow and height maps (half the depth-store bandwidth and cheaper compare taps). Visible change possible: off by default.
+    var shadowDepth16 = false
 }
 
 // MARK: - Room cache invalidation
@@ -40,6 +69,8 @@ nonisolated struct RoomCacheKey: Equatable {
     var keyDir = SIMD3<Float>(repeating: 0)
     var keyIntensity: Float = 0
     var fog = SIMD3<Float>(repeating: 0)
+    /// Time of day (the window sky, the lamp): the room is re-cached when it changes (at most once a minute on the real clock).
+    var daylight = DayLight.day
     /// The bathroom is shown instead of the living room (it also bumps `propsVersion`; this is the explicit, test-visible reason).
     var bath = false
 }
@@ -61,8 +92,10 @@ nonisolated enum RoomCacheAction: Equatable {
 /// a carried bowl or a resize never pays for a cache that the next frame throws away.
 nonisolated struct RoomCacheState {
     static let settleFrames = 3
-    /// Above this share of the viewport the footprint saves too little (focus close-up): old path, cache kept.
-    static let maxFootprint: Float = 0.5
+    /// Above this share of the viewport the footprint saves too little (focus close-up): old path, cache kept. The cached part is a 1:1 read per
+    /// pixel against ~50 shadow / AO taps for a re-shaded floor pixel, so the cache still pays well past half the screen (three spread-out
+    /// Jellies plus the tray can cover 50-70 %).
+    static let maxFootprint: Float = 0.85
 
     private(set) var key: RoomCacheKey?
     private(set) var stable = 0
@@ -105,7 +138,7 @@ nonisolated struct RoomCacheState {
         if a.width != b.width || a.height != b.height { return .size }
         if a.themeTint != b.themeTint { return .theme }
         if a.propsVersion != b.propsVersion { return .props }
-        if a.keyDir != b.keyDir || a.keyIntensity != b.keyIntensity || a.fog != b.fog { return .light }
+        if a.keyDir != b.keyDir || a.keyIntensity != b.keyIntensity || a.fog != b.fog || a.daylight != b.daylight { return .light }
         return .camera
     }
 

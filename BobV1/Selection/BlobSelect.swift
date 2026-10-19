@@ -55,7 +55,7 @@ final class BlobSelect {
         case pending(id: Int)
     }
 
-    static let drawDuration: Float = 1.2
+    static let drawDuration: Float = 0.6      // was 1.2: the highlight animates 2x faster
 
     /// The Blobs in the room (index 0 is the real one).
     private(set) var blobs: [SelectBlob] = [SelectBlob(id: 0, name: "Bob")]
@@ -212,7 +212,7 @@ final class BlobSelect {
         arm()
     }
     /// Seconds the glow holds after the halves meet before a roster pick confirms itself.
-    static let autoHold: Float = 2.45
+    static let autoHold: Float = 1.2
     /// The current highlight came from the roster (no chip, self-confirming).
     @ObservationIgnored private(set) var rosterPick = false
     @ObservationIgnored private var quiet = false

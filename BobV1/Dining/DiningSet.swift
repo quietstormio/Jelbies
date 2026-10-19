@@ -230,6 +230,7 @@ final class DiningSet {
         origin = forcedOrigin ?? DiningSpot.choose(bob: bob, layout: layout, aspect: aspect)
         phase = .popping; t = 0; scale = 0
         puffNow()
+        AudioHub.shared.play(.setdown)          // the plate / cup lands on the floor
         refreshColliders(); dirty = true
         return true
     }
@@ -286,6 +287,7 @@ final class DiningSet {
     func setDrunk(place i: Int, _ fraction: Float) {
         guard i >= 0, i < n else { return }
         let f = min(max(fraction, 0), 1)
+        if Int(f * Float(DiningTiming.bitesPerServing)) > Int(drunk[i] * Float(DiningTiming.bitesPerServing)) { AudioHub.shared.play(.slurp) }       // a gulp
         if abs(f - drunk[i]) > 1e-4 { drunk[i] = f; dirty = true }
         // the bottle drains through ServingState.totalLeft: one step per gulp, half way into the gulp
         if serving.eatStyle == .sip { bitesLeft[i] = max(0, DiningTiming.bitesPerServing - Int((f * Float(DiningTiming.bitesPerServing)).rounded())); dirty = true }
@@ -295,8 +297,8 @@ final class DiningSet {
     func finishBite(place i: Int) {
         guard i >= 0, i < n else { return }
         switch serving.eatStyle {
-        case .finger: if pieceInHand[i] != nil { bitesLeft[i] -= 1; pieceInHand[i] = nil; piecePose[i] = nil }
-        case .fork: forkBite[i] = false; biteFlying[i] = false; biteFlight[i] = nil
+        case .finger: if pieceInHand[i] != nil { bitesLeft[i] -= 1; pieceInHand[i] = nil; piecePose[i] = nil; AudioHub.shared.play(.chomp, jelly: i) }
+        case .fork: if forkBite[i] || biteFlying[i] { AudioHub.shared.play(.chomp, jelly: i) }; forkBite[i] = false; biteFlying[i] = false; biteFlight[i] = nil
         case .sip: break
         }
         dirty = true

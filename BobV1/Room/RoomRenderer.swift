@@ -28,6 +28,12 @@ struct RoomUniforms {
     var pal3 = SIMD4<Float>(repeating: 0)
     var pal4 = SIMD4<Float>(repeating: 0)
     var topVP = matrix_identity_float4x4
+    var sky0 = SIMD4<Float>(repeating: 0)
+    var sky1 = SIMD4<Float>(repeating: 0)
+    var keyCol = SIMD4<Float>(1, 0.95, 0.88, 0)
+    var ambCol = SIMD4<Float>(1, 1, 1, 1)
+    var lamp = SIMD4<Float>(repeating: 0)
+    var lampPos = SIMD4<Float>(repeating: 0)
 }
 
 nonisolated final class RoomRenderer {
@@ -39,6 +45,8 @@ nonisolated final class RoomRenderer {
     var keyIntensity: Float = 1.6
     /// Depth fog: start, end, max amount. The game camera is ~15 units from the room centre, so it pushes this out.
     var fog = SIMD3<Float>(3, 9, 0.35)
+    /// Time of day (DayLight.swift): the window sky, key colour, ambient tint and lamp glow. `DayLight.day` = the room as it was before.
+    var daylight = DayLight.day
 
     private let device: MTLDevice
     private let pipeline: MTLRenderPipelineState
@@ -272,6 +280,8 @@ nonisolated final class RoomRenderer {
         u.rug = SIMD4(RoomLayout.rugCentre.x, RoomLayout.rugCentre.y, RoomLayout.rugRadius, 0)
         u.bounds = SIMD4(RoomLayout.minX, RoomLayout.maxX, RoomLayout.minZ, RoomLayout.maxZ)
         u.fog = SIMD4(fog.x, fog.y, fog.z, 0)
+        u.sky0 = daylight.sky0; u.sky1 = daylight.sky1; u.keyCol = daylight.keyCol; u.ambCol = daylight.ambCol
+        u.lamp = daylight.lamp; u.lampPos = daylight.lampPos
         u.pal0 = SIMD4(sw[0], 1); u.pal1 = SIMD4(sw[1], 1); u.pal2 = SIMD4(sw[2], 1); u.pal3 = SIMD4(sw[3], 1); u.pal4 = SIMD4(sw[4], 1)
         return u
     }

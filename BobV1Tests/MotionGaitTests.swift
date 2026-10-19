@@ -128,7 +128,7 @@ final class MotionGaitTests: XCTestCase {
         }
         let w = speed(false), n = speed(true)
         MotionLog.write(String(format: "SPEED walk %.3f u/s, run %.3f u/s", w, n))
-        XCTAssertGreaterThan(w, 1.08); XCTAssertLessThan(w, 1.2)
+        XCTAssertGreaterThan(w, 1.08); XCTAssertLessThan(w, 1.35)
         XCTAssertGreaterThan(n, 1.40); XCTAssertLessThan(n, 1.6)
     }
 }

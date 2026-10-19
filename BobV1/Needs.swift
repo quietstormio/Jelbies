@@ -79,9 +79,10 @@ final class BlobNeeds {
 
     /// Real-time decay by `dt` seconds, plus attention while petting (rate 0.05/s, more during the purr).
     /// `exerting`: hunger and thirst drain `exertionDrain` times faster.
-    func step(dt: Float, petting: Bool = false, purring: Bool = false, exerting: Bool = false) {
+    /// `drainScale`: 1 normally; `NeedsTuning.napDrain` (0.5) while he naps at night.
+    func step(dt: Float, petting: Bool = false, purring: Bool = false, exerting: Bool = false, drainScale: Float = 1) {
         for k in NeedKind.allCases {
-            let mul = exerting && k != .attention ? NeedsTuning.exertionDrain : 1
+            let mul = (exerting && k != .attention ? NeedsTuning.exertionDrain : 1) * Double(drainScale)
             raw[k.rawValue] -= Float(Double(dt) * mul / (NeedsTuning.hoursToEmpty(k) * 3600))
         }
         if petting || purring {
@@ -149,8 +150,9 @@ final class BlobNeeds {
     func returnActive(at t: Date? = nil) -> TimeInterval {
         guard let since = awaySince else { return 0 }
         awaySince = nil
-        let away = TimeAway.clamp((t ?? now()).timeIntervalSince(since))
-        applyAway(seconds: away)
+        let end = t ?? now()
+        let away = TimeAway.clamp(end.timeIntervalSince(since))
+        applyAway(seconds: away, endingAt: end)
         sinceSave = 0
         if persists { save() }
         return away
@@ -158,10 +160,12 @@ final class BlobNeeds {
 
     /// THE time-away path (cold launch and foreground resume both end here). Pure arithmetic on `raw`: each need falls linearly on the away curve,
     /// stops at the floor, and a need already below the floor is left alone.
-    func applyAway(seconds: TimeInterval) {
+    /// `endingAt`: when the absence ended; the hours of it that fell at night (21-6) count half on the needs (he slept through them).
+    func applyAway(seconds: TimeInterval, endingAt end: Date? = nil) {
         let away = TimeAway.clamp(seconds)
         lastAway = away
-        raw = Self.awayLevels(raw, seconds: away)
+        if let end { raw = AwayMath.needLevels(raw, from: end.addingTimeInterval(-away), to: end) }
+        else { raw = Self.awayLevels(raw, seconds: away) }
         lastWantedSet = wantedSet            // no "fixed" events for what the time away did
         publish(force: true)
     }
@@ -179,7 +183,7 @@ final class BlobNeeds {
         }
         raw = l.map { min(max(Float($0), 0), 1) }
         awaySince = nil
-        applyAway(seconds: now().timeIntervalSince1970 - t)
+        applyAway(seconds: now().timeIntervalSince1970 - t, endingAt: now())
         sinceSave = 0
         if persists { save() }
         publish(force: true)

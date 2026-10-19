@@ -40,9 +40,9 @@ enum SocialEvent {
 
 enum SocialTuning {
     /// (tests turn this up to make every pick a social)
-    nonisolated(unsafe) static var pickChance: Float = 0.12
-    static let brainCooldown: (Float, Float) = (12, 25)
-    static let pairCooldown: (Float, Float) = (25, 45)
+    nonisolated(unsafe) static var pickChance: Float = 0.24
+    static let brainCooldown: (Float, Float) = (6, 12.5)
+    static let pairCooldown: (Float, Float) = (12.5, 22.5)
     static let lookCooldown: Float = 20
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
     static let greetApart: Float = 20

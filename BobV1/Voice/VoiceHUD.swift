@@ -168,7 +168,7 @@ struct VoiceBookButton: View {
     let action: () -> Void
     var body: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             action()
         } label: {
             Image(systemName: "book.closed.fill")
@@ -313,7 +313,7 @@ struct VoiceTrickBook: View {
         let rel = Int((tr.reliability(t) * 100).rounded())
         return HStack(spacing: 8) {
             Button {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                 voice.show(t)
                 close()
             } label: {

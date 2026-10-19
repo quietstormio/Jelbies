@@ -351,7 +351,7 @@ final class BathFlow {
         phase = p
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
         switch p {
-        case .soap: progress = 0; prompt = nil
+        case .soap: progress = 0; prompt = nil; AudioHub.shared.play(.splash)
         case .rinse: prompt = "Rinse him off!"; promptT = BathTuning.promptSeconds; progress = 0
         case .shine:
             prompt = "Shine him up!"; promptT = BathTuning.promptSeconds
@@ -362,6 +362,7 @@ final class BathFlow {
             look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
             finishT = 0; heartsLeft = 3; heartT = 0
             prompt = "Sparkling clean!"
+            AudioHub.shared.play(.sparkle)
             success()
         default: break
         }
@@ -395,7 +396,9 @@ final class BathFlow {
             look.spray = w + BathLook.sprayOffset
             look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * v) * dt)
             look.wet = min(1, look.wet + BathTuning.wetRise * dt)
+            if v > 0.3 { AudioHub.shared.play(.splash, volume: 0.6) }
         case .shine:
+            if v > 0.3 { AudioHub.shared.play(.lintroller) }
             let before = polish
             polish = min(1, polish + BathTuning.polishGain * v * dt)
             look.wet = wetStart * (1 - polish)
@@ -411,6 +414,7 @@ final class BathFlow {
         bubbleT -= dt
         guard bubbleT <= 0 else { return }
         bubbleT = 0.09
+        AudioHub.shared.play(.soapbubbles, volume: 0.8)
         let p = w + SIMD3(rand() - 0.5, rand() * 0.3, rand() * 0.3) * 0.3
         look.bubbles.append(SIMD4(p.x, p.y, p.z, 0.03 + 0.05 * rand()))
         bubbleAge.append(BathTuning.bubbleLife.lowerBound + (BathTuning.bubbleLife.upperBound - BathTuning.bubbleLife.lowerBound) * rand())
@@ -421,7 +425,7 @@ final class BathFlow {
         guard !look.bubbles.isEmpty else { return }
         for i in look.bubbles.indices { look.bubbles[i].y += 0.35 * dt; bubbleAge[i] -= dt }
         var k = 0
-        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k) } else { k += 1 } }
+        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); AudioHub.shared.play(.bubblepop, volume: 0.6) } else { k += 1 } }
     }
 
     // MARK: scripted fake scrubs (capture aid)

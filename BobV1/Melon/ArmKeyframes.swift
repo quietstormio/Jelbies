@@ -302,3 +302,121 @@ nonisolated enum ArmKeyframeBuilder {
         return out
     }
 }
+
+// MARK: - Shared / persistent cache
+
+/// Every Jelly wears the same arm (same mesh, same paths), so the keyframes are built once per process and shared, and saved to the Caches folder
+/// keyed by the mesh and the app binary: a later launch loads them (a few ms) instead of burning ~3 s of CPU at startup.
+nonisolated final class ArmKeyframeStore: @unchecked Sendable {
+    static let shared = ArmKeyframeStore()
+    private let lock = NSLock()          // guards `ready` and the counters
+    private let buildLock = NSLock()     // one build at a time: a second Jelly asking for the same key waits, then finds it ready
+    private var ready: [String: [ArmKeyframes]] = [:]
+    private var builds = 0, hits = 0
+    /// How many times keyframes were actually computed in this process (tests assert this stays at one set).
+    var buildCount: Int { lock.lock(); defer { lock.unlock() }; return builds }
+    var diskHits: Int { lock.lock(); defer { lock.unlock() }; return hits }
+    nonisolated(unsafe) var diskEnabled = true
+
+    func key(paths: [ArmPath], rest: [Float], mat: [Float], index: [UInt32], scale: Double) -> String {
+        var h: UInt64 = 1469598103934665603
+        func mix(_ v: UInt64) { h = (h ^ v) &* 1099511628211 }
+        for p in paths { for u in p.name.utf8 { mix(UInt64(u)) } }
+        mix(UInt64(rest.count)); mix(UInt64(index.count)); mix(scale.bitPattern)
+        for f in rest { mix(UInt64(f.bitPattern)) }
+        for f in mat { mix(UInt64(f.bitPattern)) }
+        if let u = Bundle.main.executableURL, let d = (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date { mix(d.timeIntervalSince1970.bitPattern) }
+        return String(h, radix: 16)
+    }
+
+    /// The keyframes of `paths`: memory, else disk, else computed (blocks the caller; call off the main thread unless synchronous).
+    func keyframes(paths: [ArmPath], rest: [Float], mat: [Float], capsule: ArmCapsuleInfo, index: [UInt32], scale: Double) -> [ArmKeyframes] {
+        let k = key(paths: paths, rest: rest, mat: mat, index: index, scale: scale)
+        lock.lock(); let hit = ready[k]; lock.unlock()
+        if let hit { return hit }
+        buildLock.lock(); defer { buildLock.unlock() }
+        lock.lock(); let again = ready[k]; lock.unlock()
+        if let again { return again }
+        var out: [ArmKeyframes]
+        let t0 = CFAbsoluteTimeGetCurrent()
+        if diskEnabled, let loaded = Self.load(k, count: paths.count) {
+            out = loaded
+            NSLog("%@", String(format: "[melon] arm paths loaded from the cache in %.0f ms", (CFAbsoluteTimeGetCurrent() - t0) * 1000))
+            lock.lock(); hits += 1; lock.unlock()
+        } else {
+            out = []
+            for p in paths {
+                let kf = ArmKeyframeBuilder.build(path: p, rest: rest, mat: mat, capsule: capsule, index: index, scale: scale)
+                NSLog("%@", String(format: "[melon] arm path '%@' precompute: %.0f ms (%d keyframes)", p.name, kf.seconds * 1000, kf.intervals + 1))
+                out.append(kf)
+            }
+            lock.lock(); builds += 1; lock.unlock()
+            if diskEnabled { Self.save(out, k) }
+        }
+        lock.lock(); ready[k] = out; lock.unlock()
+        return out
+    }
+
+    // MARK: disk
+
+    private static func url(_ k: String) -> URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("armkf-\(k).bin")
+    }
+
+    private static func save(_ list: [ArmKeyframes], _ k: String) {
+        guard let u = url(k) else { return }
+        var d = Data()
+        func put<T>(_ v: T) { withUnsafeBytes(of: v) { d.append(contentsOf: $0) } }
+        func putArray<T>(_ a: [T]) { put(Int64(a.count)); a.withUnsafeBytes { d.append(contentsOf: $0) } }
+        put(Int64(list.count))
+        for kf in list {
+            let nameBytes = Array(kf.name.utf8); put(Int64(nameBytes.count)); d.append(contentsOf: nameBytes)
+            put(Int64(kf.intervals)); put(kf.seconds); put(kf.scale); put(Int64(kf.sides.count))
+            for s in kf.sides {
+                put(Int64(s.skinCount)); putArray(s.vertices); putArray(s.delta); putArray(s.ao); putArray(s.cls); putArray(s.restMat)
+            }
+        }
+        try? d.write(to: u, options: .atomic)
+    }
+
+    private static func load(_ k: String, count: Int) -> [ArmKeyframes]? {
+        guard let u = url(k), let d = try? Data(contentsOf: u) else { return nil }
+        var o = 0
+        func get<T>(_ t: T.Type) -> T? {
+            let n = MemoryLayout<T>.size
+            guard o + n <= d.count else { return nil }
+            let v = d.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: o, as: T.self) }
+            o += n
+            return v
+        }
+        func getArray<T>(_ t: T.Type) -> [T]? {
+            guard let c = get(Int64.self), c >= 0, c < 1 << 31 else { return nil }
+            let n = Int(c) * MemoryLayout<T>.stride
+            guard o + n <= d.count else { return nil }
+            let base = o
+            let a = [T](unsafeUninitializedCapacity: Int(c)) { buf, cnt in
+                d.withUnsafeBytes { raw in if n > 0 { memcpy(buf.baseAddress!, raw.baseAddress! + base, n) } }
+                cnt = Int(c)
+            }
+            o += n
+            return a
+        }
+        guard let n = get(Int64.self), Int(n) == count else { return nil }
+        var out: [ArmKeyframes] = []
+        for _ in 0..<Int(n) {
+            guard let nl = get(Int64.self), nl >= 0, o + Int(nl) <= d.count else { return nil }
+            let name = String(decoding: d[d.startIndex + o ..< d.startIndex + o + Int(nl)], as: UTF8.self); o += Int(nl)
+            guard let iv = get(Int64.self), let secs = get(Double.self), let sc = get(Double.self), let ns = get(Int64.self), ns >= 0, ns < 8 else { return nil }
+            var sides: [ArmKeyframes.Side] = []
+            for _ in 0..<Int(ns) {
+                guard let skin = get(Int64.self), let v = getArray(Int32.self), let dl = getArray(Float.self), let ao = getArray(Float.self),
+                      let cl = getArray(UInt8.self), let rm = getArray(Float.self) else { return nil }
+                var s = ArmKeyframes.Side(); s.skinCount = Int(skin); s.vertices = v; s.delta = dl; s.ao = ao; s.cls = cl; s.restMat = rm
+                sides.append(s)
+            }
+            var kf = ArmKeyframes(name: name, intervals: Int(iv), sides: sides, scale: sc); kf.seconds = secs
+            out.append(kf)
+        }
+        return out
+    }
+}

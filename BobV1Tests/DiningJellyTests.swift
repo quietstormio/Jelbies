@@ -41,7 +41,7 @@ final class DiningJellyTests: XCTestCase {
                     b.peers = { [unowned self] in self.snapshot.enumerated().filter { $0.offset != id }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }
                     let floorRules = b.resolve
                     b.resolve = { [unowned self] p, r in
-                        self.snapshot.isEmpty ? floorRules(p, r) : floorRules(MelonController.keepApart(floorRules(p, r), id: id, peers: self.snapshot), r)
+                        self.snapshot.isEmpty ? floorRules(p, r) : floorRules(MelonController.keepApart(floorRules(p, r), id: id, peers: self.snapshot, gap: self.care.groupGap), r)
                     }
                 }
                 a.brain = b

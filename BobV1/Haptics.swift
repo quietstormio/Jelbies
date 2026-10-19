@@ -398,24 +398,30 @@ final class HapticDriver {
     }
 
     func transient(now: Double, intensity: Float, sharpness: Float) {
-        guard warm, enabled else { return }
-        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
+        guard warm else { return }
+        AudioHub.shared.touch(kind: "transient", intensity: intensity)         // the sound is paired with the haptic but does not need the haptics setting
         soundHook?("transient", intensity)
+        guard enabled else { return }
+        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
     /// Bounce / landing thump scaled by the impact speed; rate limited.
     func impact(now: Double, speed: Float) {
-        guard warm, enabled, now - lastImpact >= Self.impactGap else { return }
+        guard warm, now - lastImpact >= Self.impactGap else { return }
         lastImpact = now
         let i = HapticMap.impactIntensity(speed: speed), s = HapticMap.impactSharpness(speed: speed)
-        for k in sinks { k.transient(intensity: i, sharpness: s) }
+        AudioHub.shared.touch(kind: "impact", intensity: i)
         soundHook?("impact", i)
+        guard enabled else { return }
+        for k in sinks { k.transient(intensity: i, sharpness: s) }
     }
 
     func wobble(now: Double, peak: Float) {
-        guard warm, enabled else { return }
-        for k in sinks { k.wobble(peak: peak, sharpness: 0.2, tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }
+        guard warm else { return }
+        AudioHub.shared.touch(kind: "wobble", intensity: peak)
         soundHook?("wobble", peak)
+        guard enabled else { return }
+        for k in sinks { k.wobble(peak: peak, sharpness: 0.2, tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }
     }
 
     func takeCost() -> (ms: Double, n: Int) {

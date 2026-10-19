@@ -300,7 +300,7 @@ final class NeedsTests: XCTestCase {
 
     func testPersistenceRoundTripAndTheTimestamp() {
         let d = suite()
-        let t0 = Date(timeIntervalSince1970: 2_000_000)
+        let t0 = localNoon(2_000_000)          // daytime: the night half-rate on the needs (AwayMath.needSeconds) does not apply to this hour
         let a = make(d, now: { t0 })
         a.set(.hunger, 0.8); a.set(.thirst, 0.7); a.set(.attention, 0.9)
         a.save()

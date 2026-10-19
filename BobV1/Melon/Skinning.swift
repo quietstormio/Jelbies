@@ -382,6 +382,59 @@ nonisolated final class Skinner {
         }
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
+        if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
+        if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
+        if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
+    }
+
+    // MARK: vertex normals
+    // The original pass scattered every triangle's face normal onto its three vertices (nine read-modify-writes per triangle, chained through memory),
+    // then normalised. `gatherNormals` gives the very same floats: the face normals once into a buffer, then per vertex the sum over its triangles in
+    // ascending triangle order, which is exactly the order the scatter added them in, and the normalise in the same pass. ~2x faster.
+    /// Perf A/B (SolverBenchTests): the original scatter pass.
+    nonisolated(unsafe) static var scatterNormals = false
+    private var faceNormals: UnsafeMutablePointer<Float>? = nil
+    private var faceNormalCount = 0
+    private var triAdj: TriangleAdjacency? = nil
+
+    deinit { faceNormals?.deallocate() }
+
+    private func gatherNormals(_ dyn: UnsafeMutablePointer<Float>, index: [UInt32]) {
+        let nTri = index.count / 3
+        if faceNormalCount < nTri {
+            faceNormals?.deallocate(); faceNormals = UnsafeMutablePointer<Float>.allocate(capacity: max(nTri * 3, 1)); faceNormalCount = nTri
+        }
+        if triAdj == nil || triAdj!.triangleCount != nTri || triAdj!.vertexCount != vertexCount { triAdj = TriangleAdjacency.shared(index: index, vertexCount: vertexCount) }
+        let fn = faceNormals!
+        index.withUnsafeBufferPointer { ix in
+            var t = 0, o = 0
+            while t < ix.count {
+                let a = 6 * Int(ix[t]), b = 6 * Int(ix[t + 1]), c = 6 * Int(ix[t + 2])
+                let e1x = dyn[b] - dyn[a], e1y = dyn[b + 1] - dyn[a + 1], e1z = dyn[b + 2] - dyn[a + 2]
+                let e2x = dyn[c] - dyn[a], e2y = dyn[c + 1] - dyn[a + 1], e2z = dyn[c + 2] - dyn[a + 2]
+                fn[o] = e1y * e2z - e1z * e2y; fn[o + 1] = e1z * e2x - e1x * e2z; fn[o + 2] = e1x * e2y - e1y * e2x
+                t += 3; o += 3
+            }
+        }
+        let adj = triAdj!
+        adj.start.withUnsafeBufferPointer { st in
+            adj.tri.withUnsafeBufferPointer { tr in
+                for v in 0..<vertexCount {
+                    let o = 6 * v
+                    var nx = dyn[o + 3], ny = dyn[o + 4], nz = dyn[o + 5]       // what the scatter would have started from (0 after the embed)
+                    for j in Int(st[v])..<Int(st[v + 1]) {
+                        let f = 3 * Int(tr[j])
+                        nx += fn[f]; ny += fn[f + 1]; nz += fn[f + 2]
+                    }
+                    var l = (nx * nx + ny * ny + nz * nz).squareRoot()
+                    if l == 0 { l = 1 }
+                    dyn[o + 3] = nx / l; dyn[o + 4] = ny / l; dyn[o + 5] = nz / l
+                }
+            }
+        }
+    }
+
+    private func scatterNormals(_ dyn: UnsafeMutablePointer<Float>, index: [UInt32]) {
         index.withUnsafeBufferPointer { ix in
             var t = 0
             while t < ix.count {
@@ -403,8 +456,39 @@ nonisolated final class Skinner {
             dyn[o + 3] /= l; dyn[o + 4] /= l; dyn[o + 5] /= l
             o += 6
         }
+    }
+
+    /// Perf diagnostic (SolverBenchTests): the plain skin split into its passes, each timed (microseconds). Same output as `update` for a body
+    /// without overrides / beans / arms / dent smoothing (those are skipped here).
+    func profileUpdate(x: UnsafePointer<Float>, index: [UInt32], into dyn: UnsafeMutablePointer<Float>) -> [(String, Double)] {
+        var out: [(String, Double)] = []
+        var t0 = DispatchTime.now().uptimeNanoseconds
+        func lap(_ s: String) { let t = DispatchTime.now().uptimeNanoseconds; out.append((s, Double(t - t0) / 1000)); t0 = t }
+        skinIdx.withUnsafeBufferPointer { si in
+            skinW.withUnsafeBufferPointer { sw in
+                for v in 0..<vertexCount {
+                    let i4 = 4 * v, o = 6 * v
+                    let a = 3 * Int(si[i4]), b = 3 * Int(si[i4 + 1]), c = 3 * Int(si[i4 + 2]), d = 3 * Int(si[i4 + 3])
+                    let w0 = sw[i4], w1 = sw[i4 + 1], w2 = sw[i4 + 2], w3 = sw[i4 + 3]
+                    dyn[o] = x[a] * w0 + x[b] * w1 + x[c] * w2 + x[d] * w3
+                    dyn[o + 1] = x[a + 1] * w0 + x[b + 1] * w1 + x[c + 1] * w2 + x[d + 1] * w3
+                    dyn[o + 2] = x[a + 2] * w0 + x[b + 2] * w1 + x[c + 2] * w2 + x[d + 2] * w3
+                    dyn[o + 3] = 0; dyn[o + 4] = 0; dyn[o + 5] = 0
+                }
+            }
+        }
+        lap("embed")
+        eyeFixK[0] = 1; eyeFixK[1] = 1
+        if hasEyes { applyEyes(x, dyn) }
+        if !antennae.isEmpty { applyAntennae(x, dyn) }
+        lap("eyes+antennae")
+        if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }
+        lap("jiggle")
+        if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
+        lap(Skinner.scatterNormals ? "normals (scatter+normalize)" : "normals (gather)")
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
-        if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
+        lap("eye normals")
+        return out
     }
 
     /// Eye-only neighbours (built once from the triangle list).
@@ -716,5 +800,42 @@ nonisolated final class Skinner {
                 }
             }
         }
+    }
+}
+
+/// Vertex -> triangles (CSR, triangles ascending) of a render mesh, built once and shared by every Skinner that draws the same mesh.
+nonisolated final class TriangleAdjacency {
+    let vertexCount: Int
+    let triangleCount: Int
+    let start: [Int32]      // vertexCount + 1
+    let tri: [Int32]        // index.count entries
+
+    private init(index: [UInt32], vertexCount: Int) {
+        self.vertexCount = vertexCount
+        triangleCount = index.count / 3
+        var count = [Int32](repeating: 0, count: vertexCount + 1)
+        for i in index { count[Int(i) + 1] += 1 }
+        for v in 0..<vertexCount { count[v + 1] += count[v] }
+        start = count
+        var fill = count
+        var t = [Int32](repeating: 0, count: index.count)
+        for (k, i) in index.enumerated() {               // triangles in ascending order per vertex: the scatter's addition order
+            let v = Int(i); t[Int(fill[v])] = Int32(k / 3); fill[v] += 1
+        }
+        tri = t
+    }
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [Int: TriangleAdjacency] = [:]
+    /// Keyed by a hash of the index list; a different mesh gets its own.
+    static func shared(index: [UInt32], vertexCount: Int) -> TriangleAdjacency {
+        var h = Hasher(); h.combine(vertexCount); h.combine(index.count)
+        index.withUnsafeBytes { h.combine(bytes: $0) }
+        let key = h.finalize()
+        lock.lock(); defer { lock.unlock() }
+        if let a = cache[key], a.vertexCount == vertexCount, a.triangleCount == index.count / 3 { return a }
+        let a = TriangleAdjacency(index: index, vertexCount: vertexCount)
+        cache[key] = a
+        return a
     }
 }

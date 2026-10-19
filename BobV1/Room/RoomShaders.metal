@@ -19,6 +19,13 @@ struct RoomUniforms {
     float4 fog;         // start, end, max, unused
     float4 pal0; float4 pal1; float4 pal2; float4 pal3; float4 pal4;
     float4x4 topVP;     // Bob's top-down height map (contact AO)
+    // time of day (DayLight.swift); the day values are the identity
+    float4 sky0;        // rgb window sky top, w = star amount
+    float4 sky1;        // rgb window sky horizon, w = sky mix (0 = the palette pane)
+    float4 keyCol;      // rgb key light colour
+    float4 ambCol;      // rgb ambient tint, w = ambient multiplier
+    float4 lamp;        // rgb lamp colour, w = glow amount
+    float4 lampPos;     // xyz lamp position, w = pool radius
 };
 
 struct RoomVertexIn {
@@ -136,8 +143,22 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
 
     if (m == 4) {
         // glowing pane: emissive, only the fog-free light
-        float soft = 1.0 + 0.5 * smoothstep(0.0, 1.0, (P.y - 1.5) / 2.8);
-        return float4(albedo * soft * 1.25, 1.0);
+        float t = saturate((P.y - 1.5) / 2.8);
+        float soft = 1.0 + 0.5 * smoothstep(0.0, 1.0, t);
+        float3 pane = albedo * soft * 1.25;
+        if (u.sky1.w > 0.001) {
+            float3 sky = mix(u.sky1.rgb, u.sky0.rgb, smoothstep(0.0, 1.0, t));
+            pane = mix(pane, sky, u.sky1.w);
+            if (u.sky0.w > 0.001) {      // a few stars (cell hash), only in the upper part of the sky
+                float2 g = P.xy * 12.0;
+                float2 id = floor(g);
+                float h = roomHash(id + 3.1);
+                float2 c = (fract(g) - 0.5) - (float2(roomHash(id + 7.7), roomHash(id + 1.9)) - 0.5) * 0.45;
+                float star = step(0.972, h) * smoothstep(0.24, 0.0, length(c));
+                pane += star * u.sky0.w * smoothstep(0.15, 0.6, t) * float3(1.0, 0.96, 0.85) * 1.7;
+            }
+        }
+        return float4(pane, 1.0);
     } else if (m == 1) {
         float seam;
         albedo = roomFloor(u, P.xz, u.pal2.rgb, u.pal3.rgb, seam);
@@ -168,11 +189,21 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     ndl = saturate(ndl);
     ndl = ndl * ndl * (3.0 - 2.0 * ndl) * 0.35 + ndl * 0.65;
     float sh = roomShadow(u, shadowMap, P, N);
-    float3 keyCol = float3(1.0, 0.95, 0.88) * u.keyDir.w;
+    float3 keyCol = u.keyCol.rgb * u.keyDir.w;
     float3 sky = u.pal4.rgb * 0.9 + float3(0.1);
     float3 ground = u.pal2.rgb * 0.8;
-    float3 amb = mix(ground, sky, N.y * 0.5 + 0.5) * 0.62;
+    float3 amb = mix(ground, sky, N.y * 0.5 + 0.5) * 0.62 * u.ambCol.rgb * u.ambCol.w;
     float3 col = albedo * (amb * ao + keyCol * ndl * sh * mix(0.55, 1.0, ao) * 0.62);
+
+    // the table lamp: a warm pool of light around it, and the shade itself glows (material 5)
+    if (u.lamp.w > 0.001) {
+        float3 toL = u.lampPos.xyz - P;
+        float d2 = dot(toL, toL);
+        float pool = exp(-d2 / (u.lampPos.w * u.lampPos.w));
+        float facing = saturate(dot(N, normalize(toL)) * 0.5 + 0.5);
+        col += albedo * u.lamp.rgb * (u.lamp.w * pool * facing * 1.25) * ao;
+        if (m == 5) { col += u.lamp.rgb * albedo * (u.lamp.w * 2.6); }
+    }
 
     // soft sheen from the key (floor planks) and a faint window-light fresnel
     float3 H = normalize(L + V);
@@ -183,7 +214,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
 
     // fog toward the background swatch
     float f = saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;
-    col = mix(col, u.pal3.rgb * 0.62, f);
+    col = mix(col, u.pal3.rgb * 0.62 * u.ambCol.rgb * u.ambCol.w, f);
     return float4(col, in.alpha);   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
 }
 

@@ -135,7 +135,7 @@ extension GameCare {
                 if simd_length(here - g.spot(of: id)) < 0.5 {
                     g.saved[id] = brain.autonomy; brain.autonomy = false
                     brain.onFinished = nil
-                    if g.markArrived(id) { focus.arrive() }
+                    if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
                 } else if s.retries < 2 { s.retries += 1; s.age = 0; brain.requestNow(.come(to: g.spot(of: id))) }
                 else { focus.cancelApproach() }
             }

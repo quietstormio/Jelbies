@@ -9,14 +9,26 @@ import Foundation
 
 enum GameCamera {
     /// The roaming camera. One Jelly keeps `baseEye` / `baseTarget` exactly; 2-3 Jellies get a wider pose (`configureRoom`), set once when the stage starts.
-    nonisolated(unsafe) static var eye = baseEye
+    nonisolated(unsafe) static var eye = baseEye                 // the pose in use: `roomEye` pulled back by the portrait-wide factor (see `camera(aspect:)`)
     nonisolated(unsafe) static var target = baseTarget
+    nonisolated(unsafe) static var roomEye = baseEye             // the pose chosen by `configureRoom`, before the portrait widening
+    /// Portrait widening for 2-3 Jellies (`-RoomWide 0|1|2`, default 2): horizontal coverage x1.35 (W1) or x1.6 (W2) over the room pose (A), by distance only
+    /// (same angle, same fov, so the look and every close-up stay put). 0 = off. Landscape (aspect >= 1) is untouched.
+    static var wideLaunch: Int { UserDefaults.standard.object(forKey: "RoomWide") == nil ? 2 : min(max(UserDefaults.standard.integer(forKey: "RoomWide"), 0), 2) }
+    static func wideScale(_ w: Int) -> Float { w == 1 ? 1.35 : (w == 2 ? 1.6 : 1) }
+    nonisolated(unsafe) static var roomWideScale: Float = 1
+    nonisolated(unsafe) static var roomTarget = baseTarget
+    /// W2 only: the camera rises this much (same angle) in portrait, so the room sits lower on screen and the empty foreground floor shrinks.
+    static func wideLift(_ w: Int) -> Float { w == 2 ? 1.5 : 0 }
+    nonisolated(unsafe) static var roomWideLift: Float = 0
+    /// 1 in a portrait phone (aspect <= 0.8), 0 from square up, eased between so a rotation does not jump.
+    static func portraitAmount(_ aspect: Float) -> Float { let t = min(max((1.0 - aspect) / 0.2, 0), 1); return t * t * (3 - 2 * t) }
     static let baseEye = SIMD3<Float>(0, 7.2, 14)
     static let baseTarget = SIMD3<Float>(0, 0.0, -0.3)
 
-    /// Roaming camera choices for 2-3 Jellies (`-RoomCam A|B`, default B). `current` is the one-Jelly pose.
+    /// Roaming camera choices for 2-3 Jellies (`-RoomCam A|B`, default A). `current` is the one-Jelly pose.
     enum RoomCam: String { case current, A, B
-        static var launch: RoomCam { RoomCam(rawValue: (UserDefaults.standard.string(forKey: "RoomCam") ?? "B").uppercased().replacingOccurrences(of: "CURRENT", with: "current")) ?? .B }
+        static var launch: RoomCam { RoomCam(rawValue: (UserDefaults.standard.string(forKey: "RoomCam") ?? "A").uppercased().replacingOccurrences(of: "CURRENT", with: "current")) ?? .A }
     }
     /// A: about 20% further out, same angle. B: about 15% further out and 9 degrees higher (more top-down). Both look at a point nearer the camera,
     /// so the rug and the play area sit nearer the screen centre.
@@ -34,18 +46,20 @@ enum GameCamera {
         }
     }
     /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
-    static func configureRoom(count: Int, option: RoomCam = RoomCam.launch) {
+    static func configureRoom(count: Int, option: RoomCam = RoomCam.launch, wide: Int = wideLaunch) {
         if count <= 1 || option == .current {
-            eye = baseEye; target = baseTarget
-            walkMaxZ = 3.0; arenaCenter = SIMD2(0, 0.5); arenaRadius = 3.3; roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1))
+            eye = baseEye; target = baseTarget; roomEye = baseEye; roomTarget = baseTarget; roomWideScale = 1; roomWideLift = 0
+            walkMaxZ = 3.0; arenaCenter = SIMD2(0, 0.5); arenaRadius = 3.3; roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1)); roamRectWide = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
             return
         }
         let p = roomPose(option)
-        eye = p.eye; target = p.target
+        eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = wideScale(wide); roomWideLift = wideLift(wide)
         walkMaxZ = 3.6; arenaCenter = SIMD2(0, 0.8); arenaRadius = 3.9      // the foreground floor is used too
-        roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.5))
+        roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.5)); roamRectWide = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.5))
     }
     nonisolated(unsafe) static var roamRect: (min: SIMD2<Float>, max: SIMD2<Float>) = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1))
+    /// The wander pick's box (2026-10-18): wider than the frame; goals the frame clamp would drag in are rejected, so the whole visible floor is used.
+    nonisolated(unsafe) static var roamRectWide: (min: SIMD2<Float>, max: SIMD2<Float>) = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
 
     static let fovY: Float = 34 * .pi / 180
     // MARK: Bath close-up
@@ -61,6 +75,11 @@ enum GameCamera {
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
     static func camera(aspect: Float, focus: Float = 0, bath: Float = 0) -> CameraState {
         self.aspect = aspect
+        if roomWideScale != 1 {
+            let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
+            target = roomTarget + lift
+            eye = roomTarget + (roomEye - roomTarget) * (1 + (roomWideScale - 1) * pa) + lift
+        }
         var e = eye, t = target
         if focus != 0 {
             let p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)

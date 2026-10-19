@@ -14,7 +14,7 @@ struct RosterButton: View {
     var body: some View {
         let wanting = care.select.blobs.filter { care.needs(for: $0.id).wantedNeed != nil }.count
         Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             withAnimation(CareMenu.spring) { open.toggle() }
         } label: {
             Image(systemName: open ? "xmark" : "person.2.fill")
@@ -59,7 +59,7 @@ struct RosterPanel: View {
                         VStack(spacing: 10) {
                             ForEach(care.select.blobs) { b in
                                 BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id)) {
-                                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                                     withAnimation(CareMenu.spring) { open = false }
                                     onPick(b.id)
                                 }

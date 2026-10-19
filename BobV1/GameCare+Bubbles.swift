@@ -151,7 +151,7 @@ extension GameCare {
     }
 
     /// A Jelly 1... finished his greeting hop: three hearts, like Bob's.
-    func startGreetHearts(_ id: Int) { bubbleHub.greetHearts[id] = (BubbleHub.greetHeartCount, 0) }
+    func startGreetHearts(_ id: Int) { bubbleHub.greetHearts[id] = (BubbleHub.greetHeartCount, 0); AudioHub.shared.chirp(jelly: id, .happy) }
 }
 
 /// The hearts of the other Jellies' greeting: the same hearts as Bob's (TouchHeartsView's look and motion), over their own heads.

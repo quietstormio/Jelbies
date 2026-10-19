@@ -8,12 +8,14 @@ import SwiftUI
 import simd
 
 struct SelectionOverlay: View {
+    /// The chip springs in 2x faster than the care menu (was CareMenu.spring, response 0.38).
+    static let spring = Animation.spring(response: 0.19, dampingFraction: 0.68)
     let select: BlobSelect
 
     var body: some View {
         ZStack {
             // Perf: with one Blob and no highlight there is nothing to animate, so the full-screen Canvas must not redraw at display rate.
-            TimelineView(.animation(paused: select.count <= 1 && !select.isSelecting)) { tl in
+            TimelineView(.animation(paused: !select.isSelecting && !select.blobs.contains { $0.floor != nil })) { tl in      // (stand-in previews are DEBUG only)
                 let frame = tl.date          // the Canvas must read the timeline's date, or SwiftUI reuses its last drawing and the draw never animates
                 Canvas { ctx, size in _ = frame; SelectionPainter.paint(&ctx, size: size, select: select) }
             }
@@ -22,13 +24,13 @@ struct SelectionOverlay: View {
             if select.chipVisible, let name = select.selectedName {
                 VStack {
                     Spacer()
-                    SelectChip(name: name, yes: { withAnimation(CareMenu.spring) { select.confirm() } }, no: { withAnimation(CareMenu.spring) { select.cancel() } })
+                    SelectChip(name: name, yes: { withAnimation(SelectionOverlay.spring) { select.confirm() } }, no: { withAnimation(SelectionOverlay.spring) { select.cancel() } })
                         .padding(.bottom, 30)
                         .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.8)))
                 }
             }
         }
-        .animation(CareMenu.spring, value: select.chipVisible)
+        .animation(SelectionOverlay.spring, value: select.chipVisible)
     }
 }
 
@@ -43,12 +45,12 @@ struct SelectChip: View {
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.leading, 8)
-            Button(action: { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); no() }) {
+            Button(action: { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); no() }) {
                 Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(FocusStyle.brown)
                     .frame(width: 40, height: 40).background(Circle().fill(Color.white.opacity(0.85)))
             }
             .buttonStyle(.plain).accessibilityIdentifier("select-cancel").accessibilityLabel("Cancel")
-            Button(action: { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); yes() }) {
+            Button(action: { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); AudioHub.shared.uiConfirm(); yes() }) {
                 Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 40, height: 40).background(Circle().fill(FocusStyle.pink))
             }
@@ -85,7 +87,7 @@ enum SelectionPainter {
         let (l, r) = Silhouette.halves(o)
         let p = Double(select.drawProgress)
         let pl = Silhouette.prefix(l, fraction: p), pr = Silhouette.prefix(r, fraction: p)
-        let glow = select.glowing ? 0.5 + 0.5 * sin(Double(select.glowTime) * 2 * .pi / 1.4 - .pi / 2) : 1.0     // soft pulse once drawn
+        let glow = select.glowing ? 0.5 + 0.5 * sin(Double(select.glowTime) * 2 * .pi / 0.7 - .pi / 2) : 1.0     // soft pulse once drawn
         let style = { (w: CGFloat) in StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round) }
         for (w, a) in [(26.0, 0.10), (16.0, 0.18), (9.0, 0.30)] {
             let k = select.glowing ? (0.55 + 0.45 * glow) : 1
@@ -96,8 +98,8 @@ enum SelectionPainter {
         // spark at the two leading ends while drawing; a burst where they meet
         if !select.glowing {
             for half in [pl, pr] where half.count > 1 { if let e = half.last { spark(&ctx, at: e, r: 9, a: 0.95) } }     // never a spark without its line
-        } else if t - BlobSelect.drawDuration < 0.35, let m = pl.last {
-            let k = CGFloat((t - BlobSelect.drawDuration) / 0.35)
+        } else if t - BlobSelect.drawDuration < 0.18, let m = pl.last {
+            let k = CGFloat((t - BlobSelect.drawDuration) / 0.18)
             spark(&ctx, at: m, r: 9 + 20 * k, a: Double(1 - k))
         }
     }
@@ -130,7 +132,7 @@ enum SelectionPainter {
         return o.map { CGPoint(x: $0.x, y: $0.y - dy) }
     }
     static func hopOffset(_ select: BlobSelect) -> CGFloat {
-        let u = (select.clock - BlobSelect.drawDuration) / 0.5
+        let u = (select.clock - BlobSelect.drawDuration) / 0.25
         return (u > 0 && u < 1) ? CGFloat(sinf(u * .pi)) * 38 : 0
     }
 

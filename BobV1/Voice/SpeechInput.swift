@@ -455,11 +455,13 @@ final class DictationSpeechInput: SpeechInput {
         try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
         try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try s.setActive(true)
+        Task { @MainActor in AudioHub.shared.micSessionBegan() }       // the audio hub owns the session; it keeps its hands off while the mic is up
     }
 
     private func deactivateSession() {
         guard sessionActive else { return }
         sessionActive = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // the hub puts the shared `.ambient` session back (music and effects keep playing); without a running hub the session is just deactivated
+        if !AudioHub.shared.micSessionEnded() { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     }
 }

@@ -147,7 +147,7 @@ final class ThreeJellyTests: XCTestCase {
         let care = GameCare(jellyCount: 3, persistent: false)
         XCTAssertEqual(care.jellyCount, 3)
         for j in care.jellies { for k in NeedKind.allCases { j.needs.set(k, 1) }; j.grime.dirt = 0 }
-        let t0 = Date(timeIntervalSince1970: 3_000_000_000)
+        let t0 = localNoon(3_000_000_000)          // daytime: the night half-rate on the needs does not apply
         care.leftActive(at: t0)
         care.returnedActive(at: t0.addingTimeInterval(4 * 3600))
         for j in care.jellies {

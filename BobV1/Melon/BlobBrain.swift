@@ -52,6 +52,8 @@ final class BlobBrain {
     var cameraPosXZ = SIMD2<Float>(0, 10)
     /// Optional rectangular wander area (min, max in x, z); when set it replaces the disk.
     var wanderRect: (min: SIMD2<Float>, max: SIMD2<Float>)?
+    /// The ordinary wander pick's box when set (wider than `wanderRect`, which the run / zoomies goals keep).
+    var wanderRectWide: (min: SIMD2<Float>, max: SIMD2<Float>)?
     /// Longest wander leg.
     var maxWanderLeg: Float = 2.6
     /// When idle he turns to face the player and tilts back a little (`attentionPitch` rad) so his flat brows read
@@ -104,6 +106,11 @@ final class BlobBrain {
     /// Idle behaviours (BlobBrain+Idle.swift): run, stumble, jumping jacks, sit, look, yawn-stretch. State, mood source and the run blend.
     var idleState = IdleState()
     var idleMood: IdleMood = .okay
+    /// Time of day (DayClock): 0...1 night / morning weights. Night makes him sleepier (naps, yawns), morning makes him stretch and wake.
+    var idleNight: Float = 0
+    var idleMorning: Float = 0
+    /// The current sit is a night nap (long hold, eyes closed). Set when the sit starts, cleared when the behaviour ends.
+    var napping = false
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
@@ -138,13 +145,15 @@ final class BlobBrain {
     private(set) var flipTakeoffs = 0
     private(set) var flipLandings = 0
     var flipPhaseSeen: GaitDriver.Phase = .idle
-    func noteFlipBeats(_ takeoff: Bool, _ landing: Bool) { if takeoff { flipTakeoffs += 1 }; if landing { flipLandings += 1 } }
+    func noteFlipBeats(_ takeoff: Bool, _ landing: Bool) { if takeoff { flipTakeoffs += 1; AudioHub.shared.play(.jump, jelly: steerID, x: px) }; if landing { flipLandings += 1 } }
     /// Voice v1: one blink on the next tick (the listening pose).
     var blinkRequested = false
     /// Run blend 0...1 (the third gait point built from the walk: stride x1.2, step rate x1.125, 5.5 deg lean, bigger arm sweep). Exactly 0 = the locked walk.
     var runW: Float = 0
     /// Zoomies blend 0...1 on top of the run (a faster dash: cadence +20 % on top of the run; extra bob or sway pulls the planted feet off the belly, so the wobble is all in the stop and the jelly). 0 = the plain run.
     var zoomW: Float = 0
+    /// Eased walk boost (BlobBrain.walkBoost for the plain roam walk, 1 while a run / zoomies / slide is on or blending out); see `walkBoostNow`.
+    var walkBoostK: Float = 1.1427
     var slideKicks = 0
     /// Capture aid (`-RunMove zoomies|slide|scoot`): the scheduler always picks this move, with a short cooldown.
     var runMoveDemo: IdleKind?
@@ -220,6 +229,7 @@ final class BlobBrain {
     /// The arm sweep follows the stride phase of the step clock (see `stridePhase`); one gait point (the march / stride of the phone build).
     let gaitW: Float = 1
     /// Gait tuning (motion table, REF2 walk): steps/s, single-step length (world units; speed = stride * rate), swing lift arc (0.11 H).
+    // 2026-10-18: the roam walk is x1.143 stride (same cadence) on top of these (BlobBrain.walkBoost, ground speed 1.144 -> ~1.30 u/s); the run is unchanged
     var stepRate: Float = 3.75     // 3.5 -> 3.75 (Build B, user: a little faster: walk 1.016 -> 1.144 u/s, run 1.350 -> 1.435; the ground speed steps in whole frames of step time); was 3.2 before the 20 % speed-up
     var stride: Float = 0.305      // was 0.27 (measured ground speed 0.853 -> 1.021 u/s)
     var stepLift: Float = 0.035          // was 0.115: a shuffle, the foot stays in the bottom band under the belly (feet-lab 2026-10-17)
@@ -276,7 +286,8 @@ final class BlobBrain {
         b.resolve = { p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
         b.wanderRect = GameCamera.roamRect
-        b.maxWanderLeg = 4.0
+        b.wanderRectWide = GameCamera.roamRectWide
+        b.maxWanderLeg = 5.5
         b.facePlayerWhenIdle = true
         b.attentionPitch = 0.28
         let d = UserDefaults.standard
@@ -366,20 +377,16 @@ final class BlobBrain {
         let rest = rm.rest, mat = rm.mat, scale = Self.waveArmScale
         let index = rm.index
         if synchronous {
-            for p in Self.armPaths { armKeyframes[p.name] = ArmKeyframeBuilder.build(path: p, rest: rest, mat: mat, capsule: cap, index: rm.index, scale: scale) }
+            for kf in ArmKeyframeStore.shared.keyframes(paths: Self.armPaths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale) { armKeyframes[kf.name] = kf }
             return
         }
         armBuilding = true
         let paths = Self.armPaths
-        Task.detached(priority: .utility) { [weak self] in
-            var built: [ArmKeyframes] = []
-            for p in paths {
-                let kf = ArmKeyframeBuilder.build(path: p, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
-                NSLog("%@", String(format: "[melon] arm path '%@' precompute: %.0f ms (%d keyframes)", p.name, kf.seconds * 1000, kf.intervals + 1))
-                built.append(kf)
-            }
-            let result = built
-            await MainActor.run {
+        // The store computes each set once per process (the second and third Jelly wait for the first, on a plain queue thread) and
+        // loads it from the Caches folder on later launches.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let result = ArmKeyframeStore.shared.keyframes(paths: paths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
+            Task { @MainActor in
                 guard let self else { return }
                 for kf in result { self.armKeyframes[kf.name] = kf }
                 self.armBuilding = false
@@ -575,17 +582,23 @@ final class BlobBrain {
         case 0:
             let here = SIMD2(px, pz)
             var target = here
-            for _ in 0..<16 {
+            var fallback: SIMD2<Float>?
+            for _ in 0..<40 {
                 var cand: SIMD2<Float>
-                if let r = wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
+                if let r = wanderRectWide ?? wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
                 else {
                     let a = rand() * 2 * .pi, rr = wanderRadius * rand().squareRoot()
                     cand = wanderCenter + SIMD2(sinf(a), cosf(a)) * rr
                 }
+                let raw = cand
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                if d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) { target = cand; break }
+                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) else { continue }
+                // a goal the floor rules had to drag in (off the frame / onto a prop) piles up at the edges: take real floor first, the dragged one only as a fallback
+                if wanderRectWide != nil || wanderRect != nil, simd_length(cand - raw) > 0.15 { fallback = fallback ?? cand; continue }
+                target = cand; fallback = nil; break
             }
+            if simd_length(target - here) < 0.3, let f = fallback { target = f }
             if simd_length(target - here) < 0.3 { restTimer = 0.6; return }
             script = .walk(target: target, then: .none); activity = .walking
         case 1: script = .look(index: 0, t: 0, base: yaw)
@@ -601,6 +614,7 @@ final class BlobBrain {
     }
 
     func startHop(_ sim: SoftBody, distance: Float? = nil) {
+        AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.8)
         // the stepping feet were held by stiff world targets: release them (and the rigid render feet) before the hop owns the body, or the
         // pinned soles drag it around (that was the hop "face-plant": the old resting spots stayed pinned while he squashed and travelled)
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
@@ -691,6 +705,7 @@ final class BlobBrain {
                    rate: rate ?? stepRate * runRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
         nextSwing = 1 - s
         stepLive = true
+        AudioHub.shared.footstep(jelly: steerID, x: px, running: runW > 0.5)
     }
 
     /// Advance the feet and the root / heading interpolation of the running step (called first thing each tick).

@@ -13,7 +13,7 @@ struct RoomVertex {
     var color: SIMD4<Float>
 }
 
-enum RoomMaterial: Float { case plain = 0, floor = 1, wall = 2, rug = 3, glow = 4 }
+enum RoomMaterial: Float { case plain = 0, floor = 1, wall = 2, rug = 3, glow = 4, lamp = 5 }
 
 struct RoomMesh {
     var vertices: [RoomVertex] = []
@@ -273,6 +273,22 @@ enum RoomGeometry {
                 .init(r: 0.5, y: 0.6, nr: 1, ny: -0.3), .init(r: 0.5, y: 0.65, nr: 1, ny: 0.3),
                 .init(r: 0.46, y: 0.67, nr: 0.3, ny: 1), .init(r: 0, y: 0.67, nr: 0, ny: 1)]
             b.lathe(cx: c.x, cz: c.y, profile: top, segments: 40)
+        }
+
+        // ---- table lamp (on the side table; its shade glows with the time of day) ----
+        do {
+            let c = L.table.centre
+            let top: Float = 0.67
+            b.material = .plain; b.color = sw[RoomSwatch.tableLeg]
+            b.lathe(cx: c.x, cz: c.y, profile: [
+                .init(r: 0, y: top, nr: 0, ny: -1), .init(r: 0.12, y: top, nr: 0, ny: -1),
+                .init(r: 0.135, y: top + 0.02, nr: 1, ny: 0.2), .init(r: 0.10, y: top + 0.06, nr: 0.4, ny: 1, ao: 0.9),
+                .init(r: 0.03, y: top + 0.09, nr: 0, ny: 1), .init(r: 0.03, y: top + 0.32, nr: 1, ny: 0, ao: 0.9)], segments: 24)
+            b.material = .lamp; b.color = sw[RoomSwatch.rug]
+            b.lathe(cx: c.x, cz: c.y, profile: [
+                .init(r: 0.30, y: top + 0.26, nr: 1, ny: 0.12), .init(r: 0.18, y: top + 0.52, nr: 0.7, ny: 0.7),
+                .init(r: 0.0, y: top + 0.53, nr: 0, ny: 1), .init(r: 0.0, y: top + 0.50, nr: 0, ny: -1),
+                .init(r: 0.16, y: top + 0.49, nr: -0.6, ny: -0.8), .init(r: 0.28, y: top + 0.26, nr: -0.9, ny: -0.4)], segments: 32)
         }
 
         // ---- plant ----

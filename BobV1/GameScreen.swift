@@ -13,6 +13,7 @@ struct GameScreen: View {
     @State private var menuOpen = UserDefaults.standard.integer(forKey: "GameMenuOpen") != 0
     @State private var rosterOpen = false
     @State private var bookOpen = false                       // Voice v1 trick book
+    @State private var soundOpen = false                      // sound settings panel
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     private var focus: BlobFocus { model.care.focus }
@@ -21,13 +22,13 @@ struct GameScreen: View {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
         let light = UIImpactFeedbackGenerator(style: .light), crisp = UIImpactFeedbackGenerator(style: .rigid)
-        sel.onDrawStart = { light.impactOccurred(intensity: 0.6) }      // a light tick as the outline starts
+        sel.onDrawStart = { light.impactOccurred(intensity: 0.6); AudioHub.shared.play(.select) }      // a light tick as the outline starts
         sel.onMeet = { crisp.impactOccurred(intensity: 0.9) }          // a crisp tap when the halves meet
         // Voice: a light tick as he starts and stops listening (works roaming; HapticDriver is only warm in focus mode)
         let voiceTick = UIImpactFeedbackGenerator(style: .light)
         voiceTick.prepare()                                  // warm, so the tick lands on the touch-down frame
-        model.care.voice.mode.onOpen = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }
-        model.care.voice.mode.onClose = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }
+        model.care.voice.mode.onOpen = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare(); AudioHub.shared.micListening(true) }
+        model.care.voice.mode.onClose = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare(); AudioHub.shared.micListening(false) }
         model.care.voice.prewarm()
     }
 
@@ -77,6 +78,12 @@ struct GameScreen: View {
                             }
                             .accessibilityIdentifier("studio-button")
                             .transition(.opacity)
+                            GameCircleButton(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
+                                AudioHub.shared.uiTap()
+                                withAnimation(CareMenu.spring) { soundOpen.toggle() }
+                            }
+                            .accessibilityIdentifier("sound-button")
+                            .transition(.opacity)
                         }
                         Spacer()
                         if !focus.isActive, !cleaning {
@@ -112,13 +119,31 @@ struct GameScreen: View {
 
             RosterPanel(care: model.care, open: $rosterOpen) { id in model.care.rosterPick(id) }
                 .padding(.top, 8)
+
+            if soundOpen {
+                SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 16).padding(.top, 52)
+                    .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
+            }
         }
         .background(Color.black)
-        .onAppear { setUpSelect(); model.care.touchPlay = model.touch; model.care.launched() }
+        .onAppear {
+            setUpSelect(); model.care.touchPlay = model.touch; model.care.launched()
+            AudioHub.shared.start()
+            if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
+        }
         .onOpenURL { url in if let id = JellyLink.parse(url) { model.care.openJelly(id) } }          // widget tap: jelbies://jelly/<id>
         .onChange(of: scenePhase) { _, p in
-            if p == .active { model.care.returnedActive() }          // time away: needs, dirt, sparkle (once per return) + the greeting
-            else { model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel() }
+            if p == .active {
+                model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
+                AudioHub.shared.setForeground(true)
+                if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }      // away > 1 h: sweep the window light from then to now
+            } else {
+                model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()
+                DayClock.shared.leaving()
+                AudioHub.shared.setForeground(false)
+            }
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
         .onChange(of: bookOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen }
@@ -348,8 +373,8 @@ struct CareMenu: View {
         HStack(spacing: 10) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    if kind == .food { care.feed(c.id, jelly: care.targetJelly) } else { care.drink(c.id, jelly: care.targetJelly) }
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                    if kind == .food { care.feed(c.id, jelly: care.singledOutJelly) } else { care.drink(c.id, jelly: care.singledOutJelly) }
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
@@ -388,7 +413,7 @@ struct CareMenu: View {
         let fromBottom = items.count - 1 - index          // 0 = nearest the main button
         let on = enabled(item)
         return Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             switch item.id {
             case "care-feed":
                 withAnimation(Self.spring) { picker = picker == .food ? nil : .food }
@@ -398,7 +423,7 @@ struct CareMenu: View {
                     withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink }
                     return
                 }
-                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.targetJelly)   // one drink: starts directly
+                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)   // one drink: starts directly (nobody singled out = the group serving)
             case "care-clean": care.clean(jelly: care.targetJelly)
             default: care.comeHere(jelly: care.targetJelly)
             }
@@ -430,7 +455,7 @@ struct CareMenu: View {
 
     private var mainButton: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             withAnimation(Self.spring) { open.toggle() }
         } label: {
             ZStack {
@@ -471,7 +496,7 @@ struct ReleaseButton: View {
     let action: () -> Void
     var body: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             action()
         } label: {
             HStack(spacing: 7) {

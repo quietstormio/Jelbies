@@ -174,8 +174,9 @@ final class IdleBehaviourTests: XCTestCase {
         MotionLog.write(String(format: "IDLE run vs walk: speed %.3f -> %.3f u/s (x%.3f), stride %.3f -> %.3f (x%.3f), lean %.2f -> %.2f deg (+%.2f), arm sweep %.2f -> %.2f (x%.2f)",
                                w.speed, n.speed, n.speed / w.speed, w.stride, n.stride, n.stride / w.stride, w.lean * 57.3, n.lean * 57.3, (n.lean - w.lean) * 57.3, w.sweep, n.sweep, n.sweep / w.sweep))
         // Build B (walk cadence 3.5 -> 3.75, ground speed in whole frames): run / walk speed 1.35 -> 1.25, stride ratio 1.2 -> 1.15 (the run is still +25 % over the walk)
-        XCTAssertEqual(n.speed / w.speed, 1.25, accuracy: 0.07)
-        XCTAssertEqual(n.stride / w.stride, 1.15, accuracy: 0.05)
+        // (2026-10-18: the walk is x1.143 faster, the run unchanged: ratios 1.25 -> 1.09, 1.15 -> 1.0)
+        XCTAssertEqual(n.speed / w.speed, 1.10, accuracy: 0.07)
+        XCTAssertEqual(n.stride / w.stride, 1.0, accuracy: 0.07)
         XCTAssertEqual((n.lean - w.lean) * 57.3, 5.5, accuracy: 1.6)
         XCTAssertGreaterThan(n.sweep / w.sweep, 1.1)
     }
@@ -184,8 +185,8 @@ final class IdleBehaviourTests: XCTestCase {
     /// is bit-identical, see READY_I1.md).
     func testRunBlendOffIsExactlyTheWalk() {
         let b = BlobBrain()
-        XCTAssertEqual(b.runW, 0); XCTAssertEqual(b.runStrideMul, 1); XCTAssertEqual(b.runRateMul, 1)
-        XCTAssertEqual(b.stepRate * b.runRateMul, b.stepRate); XCTAssertEqual(b.stride * b.runStrideMul, b.stride)
+        XCTAssertEqual(b.runW, 0); XCTAssertEqual(b.runStrideMul, BlobBrain.walkBoost); XCTAssertEqual(b.runRateMul, 1)      // 2026-10-18: the roam walk's stride is x1.143 (cadence unchanged); the run itself is unchanged
+        XCTAssertEqual(b.stepRate * b.runRateMul, b.stepRate); XCTAssertEqual(b.stride * b.runStrideMul, b.stride * BlobBrain.walkBoost)
         XCTAssertEqual(BlobBrain.runLean * b.runW, 0); XCTAssertEqual(1 + BlobBrain.runArmGain * b.runW, 1)
         // a walk with the idle machinery in the build never touches runW
         let r = MotionRig(game: true)

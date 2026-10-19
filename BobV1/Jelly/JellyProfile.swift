@@ -47,10 +47,10 @@ final class JellyProfile: Identifiable {
     var coat: BlobGrime.CoatTier { grime.coat }
 
     /// One fixed sim step: needs drain, dirt builds with the floor he covered, the look follows the dirt.
-    func step(dt: Float, position: SIMD2<Float>, exerting: Bool) {
+    func step(dt: Float, position: SIMD2<Float>, exerting: Bool, drainScale: Float = 1) {
         let travelled = lastPos.map { simd_distance($0, position) } ?? 0
         lastPos = position
-        needs.step(dt: dt, exerting: exerting)
+        needs.step(dt: dt, exerting: exerting, drainScale: drainScale)
         grime.step(dt: dt, travelled: travelled < 1 ? travelled : 0, exerting: exerting)      // a jump of a metre in one step is a teleport, not a walk
         refreshLook(force: false)
     }

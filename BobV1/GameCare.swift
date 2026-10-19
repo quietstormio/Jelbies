@@ -57,13 +57,17 @@ final class GameCare {
 
     /// Which Jelly the current order / meal is for (set by `order`; GameCare+Dining.swift). Others: their brain's finished jobs, their head, the brain to stand down.
     @ObservationIgnored var mealJelly = 0
-    @ObservationIgnored var pendingJelly = 0
+    @ObservationIgnored var pendingJelly: Int? = 0
     @ObservationIgnored var eaterFinished: [BlobRequest] = []
     @ObservationIgnored var clearCool: [Int: Float] = [:]
     @ObservationIgnored var mealHead = SIMD3<Float>(0, BlobShape.H, 1)
     @ObservationIgnored weak var eaterBrain: BlobBrain?
     /// The meal tray (one shared serving scaled for N Blobs; drinks come with a straw per Blob).
     let dining = DiningSet()
+    /// The GROUP serving (GameCare+Group.swift): one drink with a straw per Jelly, driven over the same `dining` set.
+    @ObservationIgnored let group: DiningGroup
+    @ObservationIgnored var groupWanted: Consumable?
+    @ObservationIgnored var groupAge: Float = 0
     /// Focus mode (Come here): phase, dock selection and the camera spring. See TouchMode.swift.
     let focus = BlobFocus()
     /// Which Jellies the close-up is on, where they stand, and their approach / touch bookkeeping (GameCare+Focus.swift).
@@ -147,6 +151,7 @@ final class GameCare {
 
     /// `jellyCount`: Jellies in the room (1...3). `persistent: false` keeps Jellies 1 and 2 in memory (tests); `defaults` is where they save.
     init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, persistent: Bool = true, defaults: UserDefaults = .standard) {
+        group = DiningGroup(dining: dining, shared: true)
         let v = voice ?? VoiceCoordinator()
         self.voice = v
         v.care = self
@@ -168,12 +173,14 @@ final class GameCare {
     func showNeedBubble() { if !focus.isActive { applyBubble(schedule.showNow()) } }
 
     // Target Jelly: every care action takes `jelly:` (default 0 = Bob). Phase A drives Jelly 0 only; phase B routes the id to that Jelly's brain / needs / tray place.
-    func feed(jelly: Int = 0) { feed(selectedFoodID, jelly: jelly) }
-    func water(jelly: Int = 0) { drink(selectedDrinkID, jelly: jelly) }
+    func feed(jelly: Int? = nil) { feed(selectedFoodID, jelly: jelly) }
+    func water(jelly: Int? = nil) { drink(selectedDrinkID, jelly: jelly) }
     /// Picker entry points: pop the tray in with the chosen consumable (ignored while a tray is out).
-    func feed(_ id: String, jelly: Int = 0) { if let c = Consumables.with(id: id), c.kind == .food { selectedFoodID = id; order(c, jelly: jelly) } }
-    func drink(_ id: String, jelly: Int = 0) { if let c = Consumables.with(id: id), c.kind == .drink { selectedDrinkID = id; order(c, jelly: jelly) } }
-    func water(_ id: String, jelly: Int = 0) { drink(id, jelly: jelly) }
+    /// `jelly: nil` = nobody singled out: with several Jellies a GROUP serving (like `drink`).
+    func feed(_ id: String, jelly: Int? = nil) { if let c = Consumables.with(id: id), c.kind == .food { selectedFoodID = id; order(c, jelly: jelly) } }
+    /// `jelly: nil` = nobody singled out: with several Jellies it is a GROUP serving (one drink, a straw each); one Jelly keeps the old flow.
+    func drink(_ id: String, jelly: Int? = nil) { if let c = Consumables.with(id: id), c.kind == .drink { selectedDrinkID = id; order(c, jelly: jelly) } }
+    func water(_ id: String, jelly: Int? = nil) { drink(id, jelly: jelly) }
     /// A tap on the thought bubble: opens the matching care action. Feed / Drink return the action so the screen can open the care menu on that
     /// picker; the attention bubble calls him over right here. The bubble goes away until its next turn.
     @discardableResult
@@ -207,6 +214,7 @@ final class GameCare {
             case .disappeared(let n):
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: false, silent: bath.active)   // no puff when a clean-up starts
             case .fixed(let n, _):
+                AudioHub.shared.chirp(jelly: id, .happy, x: id == 0 ? bodyFloor.x : 0)
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: true)
             }
         }
@@ -217,7 +225,7 @@ final class GameCare {
             petting = tp.contact && tp.speed > TouchPlay.strokeSpeed * 0.5
             purring = tp.isPurring
         }
-        needs.step(dt: dt, petting: petting, purring: purring, exerting: brain.isExerting)
+        needs.step(dt: dt, petting: petting, purring: purring, exerting: brain.isExerting, drainScale: brain.napDrainScale)
         // where his head is (for the bubble) and his floor spot (for the highlight)
         var c = SIMD3<Float>(brain.position.x, BlobShape.H * 0.5, brain.position.y)
         if let sim { c = sim.centroid() }
@@ -292,7 +300,7 @@ final class GameCare {
         greetings += 1
     }
 
-    func wave(jelly: Int = 0) { if meal == nil, wanted == nil, !focus.isActive, !bath.active { queued = [.wave] } }
+    func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active { queued = [.wave] } }
     /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
     var canClean: Bool { canClean(jelly: 0) }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
@@ -321,12 +329,17 @@ final class GameCare {
         else { queued.removeAll { if case .come = $0 { return true }; return false }; callRunning = false }
     }
 
-    private func order(_ c: Consumable, jelly: Int = 0) {
+    private func order(_ c: Consumable, jelly: Int? = 0) {
         if focus.isActive {                          // Feed / Drink from inside focus ends focus first
             release()
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
-        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active else { return }
+        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active, !groupActive else { return }
+        if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
+            mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0
+            return
+        }
+        let jelly = jelly ?? 0
         mealJelly = jellies.indices.contains(jelly) ? jelly : 0
         wanted = c; servingKind = c.kind; trayOut = true
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
@@ -416,6 +429,7 @@ final class GameCare {
         savedAutonomy = brain.autonomy
         brain.autonomy = false                       // he stays on the front spot until released
         if focusGroup.markArrived(0) { focus.arrive() }
+        AudioHub.shared.chirp(jelly: 0, .happy)
     }
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
@@ -545,7 +559,7 @@ final class GameCare {
         for a in actors where a.id > 0 {
             guard let brain = a.brain, let profile = jelly(a.id) else { continue }
             let here = Self.floorPos(brain, a.sim)
-            if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting) }
+            if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale) }
             brain.idleMood = profile.needs.mood
             brain.idleBlocked = (bath.active || focusGroup.pauses(a.id, phase: focus.phase)) && !brain.commanded
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
@@ -566,6 +580,7 @@ final class GameCare {
                 else { greetOthers[a.id] = g }
             }
         }
+        tickGroup(actors, dt: dt)            // the group serving (GameCare+Group.swift)
         tickBubbles(actors, dt: dt)          // who holds the bubble slot, the greeting hearts (GameCare+Bubbles.swift)
     }
 
@@ -589,7 +604,7 @@ final class GameCare {
         if greeting { greetAge += dt; if greetAge > 25 || greetBlocked { greeting = false } }
         if greetHop {
             greetHop = false
-            if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0 }       // the existing in-place hop (arm / feet caps hold)
+            if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy) }       // the existing in-place hop (arm / feet caps hold)
         }
         if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
@@ -617,6 +632,7 @@ final class GameCare {
         if let r = queued.first {
             var isCome = false
             if case .come = r { isCome = true }
+            if isCome, groupActive { cancelGroup() }
             if isCome, meal != nil { endMeal(); retries = 0 }
             if isCome, wanted != nil { wanted = nil; retries = 0; resetStandWalk() }        // a pending tray (he is still walking to his place) is dropped too
             if isCome, dining.isPresent {
@@ -636,7 +652,7 @@ final class GameCare {
         #endif
         dining.update(dt: dt)
         if let room = renderer?.room, let f = dining.frame(theme: room.theme) { room.setDining(f) }
-        let out = wanted != nil || meal != nil || dining.isPresent
+        let out = wanted != nil || meal != nil || dining.isPresent || groupActive
         if out != trayOut { trayOut = out }
         if !out, servingKind != nil { servingKind = nil }
         if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers

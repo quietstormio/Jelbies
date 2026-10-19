@@ -167,7 +167,7 @@ struct VoiceTutorialCard: View {
                 switch p {
                 case .call, .again:
                     pill(p == .call ? "Call him" : "Call him again", prominent: true, id: "voice-tutorial-call") {
-                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                         tutorial.call()
                     }
                     .disabled(voice.isListening)

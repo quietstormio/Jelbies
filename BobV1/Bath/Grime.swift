@@ -23,6 +23,7 @@ final class DropsWallet {
     }
     nonisolated deinit {}
     func add(_ n: Int = 1) {
+        if n > 0 { AudioHub.shared.play(.coin) }
         count += n
         if persists { UserDefaults.standard.set(count, forKey: Self.key) }
     }

@@ -67,6 +67,8 @@ nonisolated enum NeedsTuning {
     static let awayFloor: Float = famishedBelow
     /// Hunger and thirst drain this many times faster while he hurries / runs / does zoomies, slide or scoot (a stand-in for walks and contests).
     static let exertionDrain: Double = 3
+    /// Hunger and thirst drain this many times slower while he naps at night.
+    static let napDrain: Float = 0.5
     /// Below this a need is "wanting" (bubble, grumpy).
     static let wanting: Float = 0.3
     /// All needs at or above this: happy.
@@ -128,6 +130,35 @@ nonisolated enum AwayMath {
             v[i] = min(max(v[i], 0), 1)
         }
         return v
+    }
+    /// Night hours (21:00-06:00) count `nightAwayFactor` on the needs: he slept through them, so an overnight absence is gentle.
+    static let nightAwayFactor = 0.5
+    /// Seconds of [from, to] that fall between 21:00 and 06:00 local time.
+    static func nightSeconds(from: Date, to: Date, calendar cal: Calendar = .current) -> TimeInterval {
+        guard to > from else { return 0 }
+        var total: TimeInterval = 0
+        var day = cal.startOfDay(for: from)
+        var guardN = 0
+        while day < to && guardN < 40 {
+            guardN += 1
+            guard let next = cal.date(byAdding: .day, value: 1, to: day),
+                  let six = cal.date(byAdding: .hour, value: 6, to: day),
+                  let nine = cal.date(byAdding: .hour, value: 21, to: day) else { break }
+            for (a, b) in [(day, six), (nine, next)] {
+                let lo = max(a, from), hi = min(b, to)
+                if hi > lo { total += hi.timeIntervalSince(lo) }
+            }
+            day = next
+        }
+        return total
+    }
+    /// The away seconds the needs feel: the night part at half weight.
+    static func needSeconds(from: Date, to: Date, calendar: Calendar = .current) -> TimeInterval {
+        let total = max(0, to.timeIntervalSince(from))
+        return total - nightSeconds(from: from, to: to, calendar: calendar) * (1 - nightAwayFactor)
+    }
+    static func needLevels(_ v: [Float], from: Date, to: Date, calendar: Calendar = .current) -> [Float] {
+        needLevels(v, seconds: needSeconds(from: from, to: to, calendar: calendar))
     }
     /// Dirt gained from one absence: +0.05 per 2 h, at most +0.15.
     static func dirtGain(awaySeconds: TimeInterval) -> Float {
