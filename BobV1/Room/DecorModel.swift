@@ -21,6 +21,33 @@ import Foundation
 
 nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     case beanbag, cushion, plant, ball, rug, toybox, nightlight, bouncymat
+    // the second batch (2026-10-20): furniture ...
+    case loveseat, petbed, pouf, rockingchair, armchair, swing, diningset, bookshelf, wardrobe, divider, floorlamp, slide, monstera
+    // ... and toys
+    case duck, blocks, spintop, toycar, yarnball, drum, football
+
+    /// The first eight pieces (circle placement geometry, as they were built).
+    static let original: [DecorKind] = [.beanbag, .cushion, .plant, .ball, .rug, .toybox, .nightlight, .bouncymat]
+    static let batch2: [DecorKind] = DecorKind.allCases.filter { !original.contains($0) }
+    /// Which tab of the Shop / Bag lists it.
+    enum Category: String, Sendable { case furniture, toys }
+    var category: Category {
+        switch self {
+        case .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .football: return .toys
+        default: return .furniture
+        }
+    }
+    /// Pieces that roll when kicked (the ball and its cousins).
+    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .football }
+    /// Round things a pair of Jellies may pass to each other.
+    var isBallLike: Bool { self == .ball || self == .yarnball || self == .football }
+    /// Radius of the rolling piece for the wall bounce and the roll angle.
+    var rollRadius: Float {
+        switch self {
+        case .ball: return 0.27; case .yarnball: return 0.30; case .football: return 0.16; case .toycar: return 0.42
+        default: return 0.27
+        }
+    }
 
     var storeID: String { "decor-" + rawValue }
     init?(storeID id: String) {
@@ -37,6 +64,27 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .toybox: return DecorSpec(half: SIMD2(0.52, 0.41), height: 0.62, solid: true, units: 1, corner: 0.08, reach: 1)
         case .nightlight: return DecorSpec(half: SIMD2(0.26, 0.26), height: 0.68, solid: true, units: 1, corner: 0.20, reach: 1)
         case .bouncymat: return DecorSpec(half: SIMD2(0.88, 0.88), height: 0.14, solid: false, units: 2, corner: 0.2, reach: 1)
+        // second batch: footprints are the JSON `footprint_half` / `spots` / `solid` (the sub-mesh bounds may stick out: leaves, an open door, the yarn strand)
+        case .loveseat: return DecorSpec(half: SIMD2(1.35, 0.55), height: 1.06, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
+        case .petbed: return DecorSpec(half: SIMD2(1.07, 1.07), height: 0.58, solid: true, units: 2, corner: 1.07, reach: 1, box: true)
+        case .pouf: return DecorSpec(half: SIMD2(0.6, 0.6), height: 0.48, solid: true, units: 1, corner: 0.6, reach: 1, box: true)
+        case .rockingchair: return DecorSpec(half: SIMD2(0.68, 0.7), height: 1.28, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
+        case .armchair: return DecorSpec(half: SIMD2(0.88, 0.55), height: 1.305, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
+        case .swing: return DecorSpec(half: SIMD2(1.55, 0.95), height: 2.2, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
+        case .diningset: return DecorSpec(half: SIMD2(1.25, 0.62), height: 1.05, solid: true, units: 2, corner: 0.15, reach: 1, box: true)
+        case .bookshelf: return DecorSpec(half: SIMD2(0.52, 0.24), height: 1.22, solid: true, units: 1, corner: 0.05, reach: 1, box: true)
+        case .wardrobe: return DecorSpec(half: SIMD2(0.55, 0.3), height: 1.385, solid: true, units: 1, corner: 0.05, reach: 1, box: true)
+        case .divider: return DecorSpec(half: SIMD2(0.9, 0.35), height: 1.55, solid: true, units: 1, corner: 0.05, reach: 1, box: true)
+        case .floorlamp: return DecorSpec(half: SIMD2(0.29, 0.29), height: 1.515, solid: true, units: 1, corner: 0.29, reach: 1, box: true)
+        case .slide: return DecorSpec(half: SIMD2(0.8, 1.4), height: 1.1, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
+        case .monstera: return DecorSpec(half: SIMD2(0.42, 0.42), height: 1.75, solid: true, units: 1, corner: 0.42, reach: 1, box: true)
+        case .duck: return DecorSpec(half: SIMD2(0.34, 0.5), height: 0.9, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
+        case .blocks: return DecorSpec(half: SIMD2(0.26, 0.26), height: 1.5, solid: false, units: 1, corner: 0.26, reach: 1, box: true)
+        case .spintop: return DecorSpec(half: SIMD2(0.34, 0.34), height: 0.82, solid: false, units: 1, corner: 0.34, reach: 1, box: true)
+        case .toycar: return DecorSpec(half: SIMD2(0.38, 0.55), height: 0.69, solid: false, units: 1, corner: 0.2, reach: 1, box: true)
+        case .yarnball: return DecorSpec(half: SIMD2(0.3, 0.3), height: 0.6, solid: false, units: 1, corner: 0.3, reach: 1, box: true)
+        case .drum: return DecorSpec(half: SIMD2(0.42, 0.42), height: 0.55, solid: true, units: 1, corner: 0.42, reach: 1, box: true)
+        case .football: return DecorSpec(half: SIMD2(0.16, 0.16), height: 0.21, solid: false, units: 1, corner: 0.16, reach: 1, box: true)
         }
     }
     /// What it does, in a sentence (shop and bag).
@@ -50,26 +98,80 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .toybox: return "Jellies lean over to peek in at the toys."
         case .nightlight: return "A glowing mushroom for when the room goes dark."
         case .bouncymat: return "A big springy mat. Jellies hop on it and it dips."
+        case .loveseat: return "A two-seat sofa. Two friends hop up and cuddle."
+        case .petbed: return "A cosy pet bed. A sleepy Jelly hops in and curls up."
+        case .pouf: return "A round pouf. Jellies hop on and sit."
+        case .rockingchair: return "Jellies sit in it and the chair rocks."
+        case .armchair: return "A comfy armchair. Jellies hop up and sit."
+        case .swing: return "A swing for two. Jellies sit and sway."
+        case .diningset: return "A little table with two stools, one seat for each Jelly."
+        case .bookshelf: return "Jellies lean in to look at the books."
+        case .wardrobe: return "Jellies peek at the clothes inside; the door swings."
+        case .divider: return "A painted screen. Jellies walk round it."
+        case .floorlamp: return "A floor lamp that glows when the room goes dark."
+        case .slide: return "Climb the steps and whoosh down the slide."
+        case .monstera: return "A big leafy plant. Jellies boop it and the leaves wiggle."
+        case .duck: return "A squeaky rubber duck. Boop it for a squeak."
+        case .blocks: return "A tower of blocks. A kick sends them tumbling."
+        case .spintop: return "Boop it and it spins, wobbles and falls over."
+        case .toycar: return "A little car. Kick it and it rolls along."
+        case .yarnball: return "A ball of yarn. It rolls and trails its strand."
+        case .drum: return "A drum. Boop it for a thump."
+        case .football: return "A football to hug, fling and fumble. Or just kick it."
         }
     }
     var title: String {
         switch self {
         case .beanbag: return "Beanbag"; case .cushion: return "Floor cushion"; case .plant: return "Potted plant"; case .ball: return "Bouncy ball"
         case .rug: return "Small rug"; case .toybox: return "Toy box"; case .nightlight: return "Night light"; case .bouncymat: return "Bouncy mat"
+        case .loveseat: return "Loveseat"; case .petbed: return "Pet bed"; case .pouf: return "Pouf"; case .rockingchair: return "Rocking chair"
+        case .armchair: return "Armchair"; case .swing: return "Swing"; case .diningset: return "Dining set"; case .bookshelf: return "Bookshelf"
+        case .wardrobe: return "Wardrobe"; case .divider: return "Room divider"; case .floorlamp: return "Floor lamp"; case .slide: return "Slide"
+        case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block tower"; case .spintop: return "Spinning top"
+        case .toycar: return "Toy car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"; case .football: return "Football"
         }
     }
 }
 
 extension DecorKind {
+    /// Where a sitter's base goes, piece-local (x, seat height, z), from the exports' `sit_points`; empty for a piece that is not hopped onto.
+    var sitPoints: [SIMD3<Float>] {
+        switch self {
+        case .beanbag: return [SIMD3(0, DecorModels.bagSeatY, DecorModels.bagSeatZ)]
+        case .pouf: return [SIMD3(0, 0.47, 0)]
+        case .armchair: return [SIMD3(0, 0.52, 0.05)]
+        case .loveseat: return [SIMD3(-0.55, 0.52, 0.05), SIMD3(0.55, 0.52, 0.05)]
+        case .diningset: return [SIMD3(-0.85, 0.47, 0), SIMD3(0.85, 0.47, 0)]
+        case .rockingchair: return [SIMD3(0, 0.6, 0.02)]
+        case .swing: return [SIMD3(-0.5, 0.6, 0), SIMD3(0.5, 0.6, 0)]
+        default: return []
+        }
+    }
+    /// The pet bed's lying point (piece-local): the base of a curled sleeper on the mattress.
+    static let sleepPoint = SIMD3<Float>(0, 0.16, 0.05)
+    /// The seat faces this way (yaw about +y from +z): the dining stools face the table, everything else the camera.
+    func seatFacing(_ seat: Int) -> Float? { self == .diningset ? (seat == 0 ? .pi / 2 : -.pi / 2) : nil }
+    /// Sideways distance from the piece's centre to where a Jelly stands for it (the seat off to one side).
+    var standOffsetX: Float { sitPoints.map { abs($0.x) }.max() ?? 0 }
+    /// A piece a Jelly hops onto (a bottom-sit on its seat point, like the beanbag) as opposed to the cushion's plain sit.
+    var hopSit: Bool { !sitPoints.isEmpty }
+    /// The pieces whose Jelly behaviour is wired (the rest are scenery that is walked round).
+    static let wired: Set<DecorKind> = Set(DecorKind.allCases)
+    /// What a Jelly may actually pick with it right now (`interaction` for a wired piece).
+    var activeInteraction: IdleKind? { Self.wired.contains(self) ? interaction : nil }
+    /// Does a Jelly's `move` apply to this piece? (The football is thrown, and kicked as a fallback.)
+    func offers(_ move: IdleKind) -> Bool { activeInteraction == move || (self == .football && move == .decorKick && Self.wired.contains(self)) }
     /// The interaction a Jelly may pick with it (nil = none).
     var interaction: IdleKind? {
         switch self {
-        case .beanbag, .cushion: return .decorSit
-        case .plant: return .decorBoop
-        case .ball: return .decorKick
-        case .toybox: return .decorPeek
+        case .beanbag, .cushion, .pouf, .armchair, .loveseat, .diningset, .rockingchair, .swing: return .decorSit
+        case .plant, .monstera, .duck, .drum, .spintop: return .decorBoop
+        case .ball, .blocks, .toycar, .yarnball: return .decorKick
+        case .toybox, .bookshelf, .wardrobe: return .decorPeek
         case .bouncymat: return .decorHop
-        case .rug, .nightlight: return nil
+        case .slide: return .decorSlide
+        case .football: return .decorThrow
+        case .petbed, .rug, .nightlight, .divider, .floorlamp: return nil
         }
     }
 }
@@ -86,8 +188,13 @@ nonisolated struct DecorSpec: Sendable {
     var corner: Float
     /// Fraction of a Jelly's footprint radius that has to keep off it (a low cushion: his round belly goes over it).
     var reach: Float
-    /// The circle round the footprint (placement overlap tests).
+    /// Placement geometry: the first eight pieces are circles round `radius` (as built); the second batch uses its rounded box (a loveseat is 2.7 wide but only 1.1 deep).
+    var box = false
+    /// The circle round the footprint.
     var radius: Float { max(half.x, half.y) }
+    /// The rounded box placement tests use: inner half extents and the rounding radius (a circle = no inner box, the whole radius).
+    var inner: SIMD2<Float> { box ? simd_max(half - SIMD2(repeating: min(corner, min(half.x, half.y))), .zero) : .zero }
+    var round: Float { box ? min(corner, min(half.x, half.y)) : radius }
     var big: Bool { units >= 2 }
     var flat: Bool { height < 0.2 && !solid }
 }
@@ -118,30 +225,72 @@ struct DecorFoot: Equatable, Sendable {
 enum DecorTuning {
     /// A plausible 10-spot room (2 beanbags, the mat, a toy box, a plant, a night light, a cushion): the capture aid and the tests fill the room with it.
     static let fullRoom: [DecorKind] = [.beanbag, .beanbag, .bouncymat, .toybox, .plant, .nightlight, .cushion]
+    /// The second batch, big furniture (10 spots; fits a portrait room): swing, loveseat, slide, rocking chair, bookshelf, floor lamp, duck.
+    static let furnitureRoom: [DecorKind] = [.swing, .loveseat, .slide, .rockingchair, .bookshelf, .floorlamp, .duck]
+    /// The pet bed, the dining set and small pieces (10 spots).
+    static let bedRoom: [DecorKind] = [.petbed, .diningset, .armchair, .pouf, .wardrobe, .monstera, .drum, .toycar]
+    /// The heaviest new meshes (triangles), 10 spots: the perf test's room.
+    static let heaviestRoom: [DecorKind] = [.loveseat, .diningset, .bookshelf, .monstera, .rockingchair, .toycar, .yarnball, .duck]
 }
 
 // MARK: - where things may go
 
 enum DecorPlacement {
     /// The middle of the rug and the front strip (tray, come-here spot, bowls, the sleeping pile, the group row): solid decor stays out.
-    static let coreMin = SIMD2<Float>(-2.0, -1.6), coreMax = SIMD2<Float>(2.0, 3.0)
+    static let coreMin = SIMD2<Float>(-2.0, -1.5), coreMax = SIMD2<Float>(2.0, 3.0)
     static let minZ: Float = -4.3, maxZ: Float = 3.0
     /// Gap kept between two items and between an item and the sofa / table.
     static let gap: Float = 0.06
 
     /// Half of the visible floor width at depth `z` (the camera sees less of the floor near the front).
     static func visibleHalf(z: Float) -> Float { GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 }
-    /// The most |x| a piece of radius `r` may have at depth `z`: on screen, and (when a Jelly plays with it) where a Jelly's centre can go: he has to be
-    /// able to stand at it.
+    /// The most |x| a piece may have at depth `z`: on screen, and (when a Jelly plays with it) where a Jelly's centre can go: he has to be
+    /// able to stand at it (at its seat, for a seat off to one side).
     static func xLimit(_ kind: DecorKind, z: Float) -> Float {
-        let seen = visibleHalf(z: z) - kind.spec.radius
-        guard kind.interaction != nil else { return seen }
-        return min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63))
+        let s = kind.spec
+        let seen = visibleHalf(z: z) - (s.box ? s.half.x : s.radius)
+        guard kind.interaction != nil || kind == .petbed else { return seen }
+        return min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - kind.standOffsetX)
     }
 
+    /// Core: the footprint's rounded box against the core rectangle (for a circle piece this is the old circle test).
     static func inCore(_ p: SIMD2<Float>, radius r: Float) -> Bool {
         let q = simd_max(simd_max(coreMin - p, p - coreMax), .zero)
         return simd_length(q) < r
+    }
+    static func inCore(_ kind: DecorKind, at p: SIMD2<Float>) -> Bool {
+        let s = kind.spec
+        let q = simd_max(simd_max(coreMin - (p + s.inner), (p - s.inner) - coreMax), .zero)
+        return simd_length(q) < s.round
+    }
+
+    /// Two footprints (rounded boxes; a circle for the first eight pieces) closer than `gap`.
+    static func overlaps(_ a: DecorKind, _ pa: SIMD2<Float>, _ b: DecorKind, _ pb: SIMD2<Float>, gap g: Float = DecorPlacement.gap) -> Bool {
+        let sa = a.spec, sb = b.spec
+        let q = simd_max(simd_abs(pa - pb) - (sa.inner + sb.inner), .zero)
+        return simd_length(q) < sa.round + sb.round + g
+    }
+    /// Clearance from the sofa for a footprint at `p` (negative = overlapping), sampled along its outline.
+    static func sofaClearance(_ kind: DecorKind, at p: SIMD2<Float>) -> Float {
+        let s = kind.spec
+        guard s.box else { return RoomLayout.sofaDistanceXZ(p) - s.radius }
+        var d = RoomLayout.sofaDistanceXZ(p)
+        for q in outline(kind, at: p) { d = min(d, RoomLayout.sofaDistanceXZ(q)) }
+        return d
+    }
+    /// Points round the footprint's rounded outline (every ~0.2).
+    static func outline(_ kind: DecorKind, at p: SIMD2<Float>) -> [SIMD2<Float>] {
+        let s = kind.spec, r = s.round, i = s.inner
+        var out: [SIMD2<Float>] = []
+        let nx = max(1, Int((2 * i.x / 0.2).rounded(.up))), nz = max(1, Int((2 * i.y / 0.2).rounded(.up)))
+        for k in 0...nx { let x = -i.x + 2 * i.x * Float(k) / Float(nx); out.append(p + SIMD2(x, -i.y - r)); out.append(p + SIMD2(x, i.y + r)) }
+        for k in 0...nz { let z = -i.y + 2 * i.y * Float(k) / Float(nz); out.append(p + SIMD2(-i.x - r, z)); out.append(p + SIMD2(i.x + r, z)) }
+        for (cx, cz) in [(Float(-1), Float(-1)), (1, -1), (-1, 1), (1, 1)] {
+            for a in stride(from: Float(0.2), to: Float.pi / 2 - 0.1, by: 0.45) {
+                out.append(p + SIMD2(cx * (i.x + r * cosf(a)), cz * (i.y + r * sinf(a))))
+            }
+        }
+        return out
     }
 
     /// Lift (on the rug) of an item at `p`, or nil when it overlaps the rug's edge or the rug cannot host it.
@@ -153,19 +302,28 @@ enum DecorPlacement {
     }
 
     static func isValid(_ kind: DecorKind, at p: SIMD2<Float>, among others: [PlacedDecor], ignoring uid: Int? = nil) -> Bool {
-        let s = kind.spec, r = s.radius
-        let lowZ = kind.interaction != nil ? max(minZ, GameCamera.walkMinZ) : minZ, highZ = kind.interaction != nil ? min(maxZ, GameCamera.walkMaxZ) : maxZ
+        let s = kind.spec
+        let walked = kind.interaction != nil || kind == .petbed          // (a Jelly walks to it: the pet bed too)
+        let lowZ = walked ? max(minZ, GameCamera.walkMinZ) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
         guard p.y >= lowZ, p.y <= highZ, abs(p.x) <= xLimit(kind, z: p.y) else { return false }
-        let L = RoomLayout.self
-        guard L.sofaDistanceXZ(p) > r + gap else { return false }
-        for c in L.cylinders where simd_distance(p, c.centre) < c.radius + r + gap { return false }
-        if s.solid, inCore(p, radius: r) { return false }
+        // inside the walls (the room is 10 wide; a landscape screen sees past them)
+        guard abs(p.x) + (s.box ? s.half.x : s.radius) <= RoomLayout.maxX - 0.02 else { return false }
+        // a deep piece (slide, swing) stays wholly in the walkable depth; its front edge may not pass the front of the floor
+        if s.box, p.y + s.half.y > max(highZ, GameCamera.walkMaxZ) + 0.2 { return false }
+        // the slide is climbed from behind: that spot (1.85 back) has to be floor a Jelly can stand on
+        if kind == .slide, p.y - 1.85 < GameCamera.walkMinZ + 0.1 { return false }
+        guard sofaClearance(kind, at: p) > gap else { return false }
+        for c in RoomLayout.cylinders {
+            let b = RoomLayout.FlatBox(centre: p, half: s.half, height: 1, radius: s.round)
+            if RoomLayout.boxDistanceXZ(c.centre, b) < c.radius + gap { return false }
+        }
+        if s.solid, inCore(kind, at: p) { return false }
         for o in others where o.uid != uid {
-            let d = simd_distance(p, o.at), orad = o.kind.spec.radius
-            if d >= r + orad + gap { continue }
+            let orad = o.kind.spec.radius, d = simd_distance(p, o.at)
+            if !overlaps(kind, p, o.kind, o.at) { continue }
             // the rug hosts small things that sit fully on it
-            if o.kind == .rug, kind != .rug, !s.big, d + r <= orad - 0.02 { continue }
-            if kind == .rug, o.kind != .rug, !o.kind.spec.big, d + orad <= r - 0.02 { continue }
+            if o.kind == .rug, kind != .rug, !s.big, d + s.radius <= orad - 0.02 { continue }
+            if kind == .rug, o.kind != .rug, !o.kind.spec.big, d + orad <= s.radius - 0.02 { continue }
             return false
         }
         return true
@@ -186,7 +344,7 @@ enum DecorPlacement {
                 if isValid(kind, at: p, among: placed) {
                     // the sides first (left and right in turn), then the back, the middle of the floor last (flat pieces may go there, solid ones may not)
                     var cost = abs(z - 0.4) * 0.25 + (sideSign * x > 0 ? 0 : 3) + (3.6 - abs(x)) * 0.5 + max(0, 3.0 - simd_length(p)) * 0.3
-                    if inCore(p, radius: s.radius) { cost += 6 }
+                    if inCore(kind, at: p) { cost += 6 }
                     if best == nil || cost < best!.1 - 1e-5 { best = (p, cost) }
                 }
                 x += 0.1
@@ -220,7 +378,54 @@ struct DecorAnim: Equatable, Sendable {
     var vel = SIMD2<Float>.zero
     var rot = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
     var moving: Bool { simd_length_squared(vel) > 1e-4 }
-    var active: Bool { sink > 0.002 || sinkWant > 0 || kick > 0.002 || peek > 0.002 || peekWant > 0 || moving }
+    // --- the second batch ---
+    /// A seat each (loveseat cushions, stools, swing seats): pressed in while somebody sits on it.
+    var seatSink = SIMD2<Float>.zero
+    var seatWant = SIMD2<Float>.zero
+    /// Rocking chair / swing: how hard it is rocking (0...1, eased to `rockWant`), and its clock.
+    var rockAmp: Float = 0
+    var rockWant: Float = 0
+    var rockT: Float = 0
+    /// Spinning top: angular speed, its turned angle, and the fall (0 = up; 0...1.6 = tipping over, lying, righting).
+    var spin: Float = 0
+    var spinAngle: Float = 0
+    var fallT: Float = -1
+    var fallAxis: Float = 0
+    /// Toy car: heading (yaw so that its nose points along its travel) and the wheels' turn. Yarn ball: where its strand trails.
+    var heading: Float = 0
+    var wheel: Float = 0
+    /// The block tower: nil = stacked. Time since it was knocked over.
+    var blocks: [TumbleBlock] = []
+    var tumbleT: Float = -1
+    /// Football: lifted off the floor (hugged / in the air).
+    var held = false
+    var air: Float = 0
+    var airV: Float = 0
+    var airH = SIMD2<Float>.zero
+    var flying = false
+    var bounces = 0
+    /// Set by the thrower: what to do when the flight comes down (0 plain arc, 1 bonk on the head, 2 drop).
+    var flightKind = 0
+    var headHit = false
+    var bonkDir = SIMD2<Float>.zero
+    /// Set when a bonked ball met the head (the thrower squashes and boops, then clears it).
+    var bonked = false
+    var tumbling: Bool { tumbleT >= 0 }
+    var active: Bool {
+        sink > 0.002 || sinkWant > 0 || kick > 0.002 || peek > 0.002 || peekWant > 0 || moving || seatSink != .zero || seatWant != .zero
+            || rockAmp > 0.002 || rockWant > 0 || spin > 0 || fallT >= 0 || tumbleT >= 0 || held || flying || air > 0.001
+    }
+}
+
+/// One block of the tumbling tower (position relative to the piece's origin).
+struct TumbleBlock: Equatable, Sendable {
+    var pos: SIMD3<Float>
+    var vel: SIMD3<Float>
+    var yaw: Float
+    var yawV: Float
+    var roll: Float
+    var rollV: Float
+    var rest = false
 }
 
 /// The room's decor as the sim reads it (main-thread, like `RoomLayout.dynamicBoxes`).
@@ -232,6 +437,36 @@ final class DecorField {
     private(set) var anim: [Int: DecorAnim] = [:]
     /// Which Jelly (steer id) is using a piece.
     var occupant: [Int: Int] = [:]
+    /// Seat by seat for the multi-seat pieces (loveseat, swing, dining stools): uid -> seat -> steer id. `occupant` also holds one of them.
+    var seatOccupant: [Int: [Int: Int]] = [:]
+    /// A Jelly may start using it: a single-seat piece nobody uses, or a multi-seat one with a seat free.
+    func available(_ f: DecorFoot) -> Bool {
+        guard f.uid != held else { return false }
+        if f.kind.sitPoints.count > 1 { return (seatOccupant[f.uid]?.count ?? 0) < f.kind.sitPoints.count }
+        return occupant[f.uid] == nil
+    }
+    /// The lowest free seat (or nil).
+    func freeSeat(_ f: DecorFoot, preferring side: Float = 0) -> Int? {
+        let n = max(f.kind.sitPoints.count, 1)
+        let free = (0..<n).filter { seatOccupant[f.uid]?[$0] == nil }
+        guard !free.isEmpty else { return nil }
+        if n > 1, side != 0 { return free.min { abs(f.kind.sitPoints[$0].x - side) < abs(f.kind.sitPoints[$1].x - side) } }
+        return free.first
+    }
+    func take(_ uid: Int, seat: Int, by id: Int) { seatOccupant[uid, default: [:]][seat] = id; occupant[uid] = id }
+    func leave(_ uid: Int, by id: Int) {
+        if var s = seatOccupant[uid] {
+            for (k, v) in s where v == id { s[k] = nil }
+            seatOccupant[uid] = s.isEmpty ? nil : s
+            if occupant[uid] == id { occupant[uid] = s.values.first }
+        } else if occupant[uid] == id { occupant[uid] = nil }
+    }
+    /// World position of a seat (xz) and height of its surface right now.
+    func seatWorld(_ uid: Int, seat: Int) -> SIMD3<Float>? {
+        guard let f = foot(uid), !f.kind.sitPoints.isEmpty else { return nil }
+        let p = DecorModels.seatPoint(f.kind, seat: seat, anim: anim[uid] ?? DecorAnim(), lift: f.lift)
+        return SIMD3(f.centre.x + p.x, p.y, f.centre.y + p.z)
+    }
     /// The piece the player has picked up in arrange mode: no Jelly starts using it meanwhile.
     var held: Int?
     /// Bumped when the pieces or their positions change; the mesh is rebuilt on it and while anything animates.
@@ -242,15 +477,18 @@ final class DecorField {
         guard list != placed else { return }
         let oldKinds = Dictionary(placed.map { ($0.uid, $0.kind) }, uniquingKeysWith: { a, _ in a })
         placed = list
+        if let h = held, !list.contains(where: { $0.uid == h }) { held = nil }
         feet = DecorPlacement.feet(list)
         var a: [Int: DecorAnim] = [:]
         for p in list {
             var x = anim[p.uid] ?? DecorAnim()
-            if p.kind == .ball, !x.moving { x.pos = p.at }
+            if p.kind == .yarnball, anim[p.uid] == nil { x.heading = .pi / 4 }          // (its strand as exported, until it rolls)
+            if p.kind.rolls, !x.moving, !x.held, !x.flying { x.pos = p.at }
             a[p.uid] = x
         }
         anim = a
         occupant = occupant.filter { o in a[o.key] != nil && list.first(where: { $0.uid == o.key })?.kind == oldKinds[o.key] }
+        seatOccupant = seatOccupant.filter { so in a[so.key] != nil && list.first(where: { l in l.uid == so.key })?.kind == oldKinds[so.key] }
         RoomLayout.decorFeet = feet
         version &+= 1
     }
@@ -287,10 +525,35 @@ final class DecorField {
     func kinds(_ k: DecorKind) -> [DecorFoot] { feet.filter { $0.kind == k } }
 
     /// Where a piece is right now (the ball moves).
-    func position(_ f: DecorFoot) -> SIMD2<Float> { f.kind == .ball ? (anim[f.uid]?.pos ?? f.centre) : f.centre }
+    func position(_ f: DecorFoot) -> SIMD2<Float> { f.kind.rolls ? (anim[f.uid]?.pos ?? f.centre) : f.centre }
 
     // hooks the Jellies call
     func sit(_ uid: Int, _ k: Float) { guard let w = anim[uid]?.sinkWant else { return }; anim[uid]?.sinkWant = max(w, k) }
+    /// One seat of a multi-seat piece is sat in (0 / 1).
+    func sit(_ uid: Int, seat: Int, _ k: Float) {
+        guard anim[uid] != nil else { return }
+        anim[uid]!.seatWant[min(max(seat, 0), 1)] = max(anim[uid]!.seatWant[min(max(seat, 0), 1)], k)
+        anim[uid]!.sinkWant = max(anim[uid]!.sinkWant, k)
+    }
+    /// The rocking chair / swing is rocked (level 0...1).
+    func rock(_ uid: Int, _ level: Float) { guard anim[uid] != nil else { return }; anim[uid]!.rockWant = max(anim[uid]!.rockWant, level) }
+    /// A boop sets the spinning top going.
+    func spinTop(_ uid: Int) { guard anim[uid] != nil else { return }; anim[uid]!.spin = 18; anim[uid]!.fallT = -1 }
+    /// A kick knocks the block tower over (away from `dir`).
+    func tumble(_ uid: Int, direction d: SIMD2<Float>) {
+        guard anim[uid] != nil, !anim[uid]!.tumbling, let f = foot(uid), f.kind == .blocks else { return }
+        let piv = DecorMeshes.loaded[.blocks]?.parts.map { $0.pivot } ?? [SIMD3(0, 0.18, 0), SIMD3(0, 0.525, 0), SIMD3(0, 0.84, 0), SIMD3(0, 1.125, 0), SIMD3(0, 1.375, 0)]
+        var seed = UInt32(truncatingIfNeeded: uid &* 2654435761 &+ 12345)
+        func r() -> Float { seed = seed &* 1664525 &+ 1013904223; return Float(seed >> 8) / Float(1 << 24) }
+        var out: [TumbleBlock] = []
+        for (i, v) in piv.enumerated() {
+            let sp = 1.5 + 0.6 * Float(i)
+            let a = atan2f(d.x, d.y) + (r() - 0.5) * 0.9
+            out.append(TumbleBlock(pos: v, vel: SIMD3(sinf(a) * sp * (0.7 + 0.5 * r()), 2.0 + 0.5 * Float(i), cosf(a) * sp * (0.7 + 0.5 * r())),
+                                   yaw: 0, yawV: (r() - 0.5) * 9, roll: 0, rollV: (r() - 0.5) * 12))
+        }
+        anim[uid]!.blocks = out; anim[uid]!.tumbleT = 0
+    }
     func kick(_ uid: Int, _ amount: Float = 1) { guard anim[uid] != nil else { return }; anim[uid]!.kick = max(anim[uid]!.kick, amount); anim[uid]!.kickT = 0 }
     func peek(_ uid: Int, _ k: Float) { guard let w = anim[uid]?.peekWant else { return }; anim[uid]?.peekWant = max(w, k) }
     func kickBall(_ uid: Int, direction d: SIMD2<Float>, speed: Float) {
@@ -312,15 +575,126 @@ final class DecorField {
                 a.kickT += dt
                 a.kick *= expf(-dt * 3.2)
                 if a.kick < 0.002 { a.kick = 0 }
-                if f.kind == .ball, a.moving { Self.roll(&a, dt: dt, ignoring: uid, feet: feet) }
+                // the second batch
+                a.seatSink += (a.seatWant - a.seatSink) * min(1, dt * 5)
+                for k in 0..<2 where a.seatWant[k] == 0 && a.seatSink[k] < 0.002 { a.seatSink[k] = 0 }
+                a.seatWant = .zero
+                a.rockT += dt
+                if a.rockWant > 0 { a.rockAmp += (a.rockWant - a.rockAmp) * min(1, dt * 2.5) } else { a.rockAmp *= expf(-dt * 0.9); if a.rockAmp < 0.002 { a.rockAmp = 0 } }
+                a.rockWant = 0
+                if f.kind == .spintop { Self.tickTop(&a, dt: dt) }
+                if f.kind == .blocks { Self.tickBlocks(&a, dt: dt, uid: uid, held: held == uid) }
+                if f.kind == .football, a.flying || a.air > 0 { Self.tickFlight(&a, dt: dt) }
+                if f.kind.rolls, a.moving, !a.held, !a.flying { Self.roll(&a, dt: dt, ignoring: uid, feet: feet, kind: f.kind) }
+                if f.kind == .toycar, a.moving {
+                    let want = atan2f(-a.vel.x, -a.vel.y)
+                    var d = want - a.heading
+                    while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
+                    a.heading += d * min(1, dt * 10)
+                    a.wheel += simd_length(a.vel) * dt / 0.17
+                }
+                if f.kind == .yarnball, a.moving {
+                    let want = atan2f(-a.vel.x, -a.vel.y)
+                    var d = want - a.heading
+                    while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
+                    a.heading += d * min(1, dt * 6)
+                }
                 anim[uid] = a
             }
         }
     }
 
-    static func roll(_ a: inout DecorAnim, dt: Float, ignoring uid: Int, feet: [DecorFoot]) {
-        let r = DecorKind.ball.spec.radius
-        a.vel *= expf(-1.15 * dt)
+    /// The thrower hugs the ball: it hangs at `pos`, `height` above its resting centre.
+    func hold(_ uid: Int, at p: SIMD2<Float>, lift: Float) {
+        guard anim[uid] != nil else { return }
+        anim[uid]!.held = true; anim[uid]!.flying = false; anim[uid]!.vel = .zero
+        anim[uid]!.pos = p; anim[uid]!.air = lift
+    }
+    /// Lets go: a short arc (`kind` 0 plain, 1 bonk on the head, 2 drop).
+    func fling(_ uid: Int, vh: SIMD2<Float>, vy: Float, kind: Int, bonkDir: SIMD2<Float> = .zero) {
+        guard anim[uid] != nil else { return }
+        anim[uid]!.held = false; anim[uid]!.flying = true
+        anim[uid]!.airH = vh; anim[uid]!.airV = vy; anim[uid]!.bounces = 0
+        anim[uid]!.flightKind = kind; anim[uid]!.headHit = false; anim[uid]!.bonkDir = bonkDir; anim[uid]!.bonked = false
+    }
+    /// The thrower saw the bonk (true once per bonk).
+    func takeBonk(_ uid: Int) -> Bool { guard anim[uid]?.bonked == true else { return false }; anim[uid]!.bonked = false; return true }
+    func dropHeld(_ uid: Int) { guard anim[uid] != nil else { return }; anim[uid]!.held = false }
+
+    /// The top: spins down, wobbling more as it slows, tips over, lies a moment, rights itself.
+    static func tickTop(_ a: inout DecorAnim, dt: Float) {
+        if a.fallT >= 0 {
+            a.fallT += dt
+            if a.fallT > 1.7 { a.fallT = -1; a.spin = 0 }
+            return
+        }
+        guard a.spin > 0 else { return }
+        a.spinAngle += a.spin * dt
+        a.spin *= expf(-0.45 * dt)
+        if a.spin < 2 { a.fallT = 0; a.fallAxis = a.spinAngle.truncatingRemainder(dividingBy: 6.28) }
+    }
+    /// How far the top leans (rad) and about which horizontal angle: a wobble that grows as it slows, then the fall.
+    static func topTilt(_ a: DecorAnim) -> (angle: Float, axis: Float) {
+        if a.fallT >= 0 {
+            let t = a.fallT
+            let tip = t < 0.3 ? smooth(0, 0.3, t) : (t < 1.2 ? 1 : 1 - smooth(1.2, 1.7, t))
+            return (0.07 + 0.28 * tip, a.fallAxis)
+        }
+        if a.spin <= 0 { return (0, 0) }          // at rest it stands upright
+        return (0.07 * (1 + 2 * (1 - min(a.spin, 18) / 18)), a.spinAngle * 0.15)
+    }
+
+    /// The tower: gravity, a floor, friction; at rest for ~20 s, then it eases back into a stack.
+    static let blockRest: [Float] = [0.18, 0.165, 0.15, 0.135, 0.115]
+    static func tickBlocks(_ a: inout DecorAnim, dt: Float, uid: Int, held: Bool) {
+        guard a.tumbleT >= 0 else { return }
+        if held { a.blocks = []; a.tumbleT = -1; return }
+        a.tumbleT += dt
+        if a.tumbleT > 21.6 { a.blocks = []; a.tumbleT = -1; return }
+        guard a.tumbleT < 20 else { return }
+        for i in a.blocks.indices {
+            var b = a.blocks[i]
+            if b.rest { continue }
+            b.vel.y -= 9 * dt
+            b.pos += b.vel * dt
+            b.yaw += b.yawV * dt; b.roll += b.rollV * dt
+            let rest = blockRest[min(i, 4)]
+            if b.pos.y <= rest {
+                b.pos.y = rest
+                if b.vel.y < -0.8 { b.vel.y *= -0.3 } else { b.vel.y = 0 }
+                let k = expf(-4 * dt)
+                b.vel.x *= k; b.vel.z *= k; b.yawV *= k; b.rollV *= k
+                if b.vel.y == 0, simd_length(SIMD2(b.vel.x, b.vel.z)) < 0.08, abs(b.rollV) < 0.2 {
+                    b.vel = .zero; b.rest = true
+                    b.roll = (b.roll / (.pi / 2)).rounded() * (.pi / 2)         // settles flat on a face
+                }
+            }
+            a.blocks[i] = b
+        }
+    }
+    /// The football in the air: gravity 6 (`airV` up), horizontal `airH`; one bounce (e = 0.4), then it rolls like a kick.
+    static func tickFlight(_ a: inout DecorAnim, dt: Float) {
+        guard a.flying else { return }
+        a.airV -= 6 * dt
+        if a.flightKind == 1, !a.headHit, a.airV < 0, a.air + 0.105 <= 1.35 {          // the ball comes down on his head
+            a.headHit = true; a.bonked = true
+            a.airV = 1.6; a.airH = a.bonkDir * 0.9
+        }
+        a.air += a.airV * dt
+        let step = a.airH * dt
+        a.pos += step
+        let dist = simd_length(step)
+        if dist > 1e-6 { a.rot = simd_normalize(simd_quatf(angle: 9 * dt, axis: SIMD3(1, 0, 0)) * a.rot) }     // tumbles about its long axis
+        if a.air <= 0 {
+            a.air = 0
+            if a.bounces == 0 && a.airV < -0.8 { a.bounces = 1; a.airV = -a.airV * 0.4 }
+            else { a.flying = false; a.vel = a.airH * 0.55; a.airV = 0; a.airH = .zero }
+        }
+    }
+
+    static func roll(_ a: inout DecorAnim, dt: Float, ignoring uid: Int, feet: [DecorFoot], kind: DecorKind = .ball) {
+        let r = kind.rollRadius
+        a.vel *= expf(kind == .toycar ? -1.4 * dt : -1.15 * dt)
         if simd_length(a.vel) < 0.06 { a.vel = .zero; return }
         var p = a.pos + a.vel * dt
         // the visible floor
@@ -360,8 +734,8 @@ final class DecorField {
 
     /// The ball came to rest somewhere else: the piece's saved position follows.
     func restingBall() -> (uid: Int, at: SIMD2<Float>)? {
-        for f in feet where f.kind == .ball {
-            if let a = anim[f.uid], !a.moving, simd_distance(a.pos, f.centre) > 0.05 { return (f.uid, a.pos) }
+        for f in feet where f.kind.rolls {
+            if let a = anim[f.uid], !a.moving, !a.held, !a.flying, simd_distance(a.pos, f.centre) > 0.05 { return (f.uid, a.pos) }
         }
         return nil
     }

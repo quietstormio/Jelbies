@@ -49,6 +49,10 @@ struct SleepState {
     var leanW: Float = 0
     /// Test hook: the hold shows without a partner (arm-cap / feet suites measure one rig).
     var holdForce = false
+    /// A pet bed (decorSleep): the piece's uid (-1 = none), and its hops: 1 turn to the bed, 2 hopping in, 3 hopping out.
+    var bed = -1
+    var bedHop = 0
+    var lieYawHop: Float = 0
 }
 
 enum SleepMode { case plain, hold, cuddle }
@@ -281,8 +285,11 @@ extension BlobBrain {
     /// `idleStart(.sleep)`.
     func sleepBegin(_ sim: SoftBody, night: Bool) -> Bool {
         let wantHold = rand() < SleepTuning.holdChance
-        let c = chooseSleepSpot(hold: wantHold)
-        guard c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
+        // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
+        var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
+        if sleepMates.isEmpty { bed = freeBed() }
+        let c = bed.map { b in (spot: b.foot.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
+        guard bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
         sleep = SleepState()
         sleep.spot = c.spot; sleep.lieYaw = c.yaw; sleep.joined = c.joined
@@ -297,6 +304,12 @@ extension BlobBrain {
         if perkFlags.bedtime { sleep.hold *= 1.35 }          // the bedtime perk: a deeper, longer sleep
         if idleDeepNight > 0.5 { sleep.hold = 3600 }
         sleep.minHold = night ? 20 : 12
+        if let b = bed {
+            sleep.bed = b.foot.uid; sleep.stage = 0
+            idleState.decorUID = b.foot.uid; DecorField.shared.occupant[b.foot.uid] = steerID; decorIgnore = b.foot.uid
+            script = .walk(target: b.stand, then: .none); activity = .walking
+            return true
+        }
         if simd_distance(position, c.spot) > 0.25 {
             script = .walk(target: c.spot, then: .none); activity = .walking
             sleep.stage = 0
@@ -310,6 +323,13 @@ extension BlobBrain {
     /// The walk to the spot is over (script .none). Short of it (the leg was given up: somebody stood in the way) he tries again, up to three times,
     /// then lies down where he is. On to the turn + yawn.
     func sleepArrived(_ sim: SoftBody, _ skinner: Skinner) {
+        if sleep.bed >= 0 {          // at the foot of the pet bed: turn to it, then the hop over the rim (`sleepBodyTick`)
+            sleep.bedHop = 1; sleep.t = 0
+            if let f = DecorField.shared.foot(sleep.bed) { let d = f.centre - position; sleep.lieYawHop = atan2f(d.x, d.y) }
+            script = .idle; activity = .lookingAround
+            idleState.phaseT = 0
+            return
+        }
         if simd_distance(position, sleep.spot) > 0.6, sleep.walkTries < 3 {
             sleep.walkTries += 1
             // re-plan: the pile may have moved on, so choose again
@@ -346,6 +366,15 @@ extension BlobBrain {
 
     func runSleep(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         sleep.t += dt
+        if sleep.bed >= 0, sleep.bedHop == 1 {
+            let turning = turnSteps(goal: sleep.lieYawHop, tol: 0.08)
+            gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
+            if !turning && !feet.active && sleep.t > 0.1, let f = DecorField.shared.foot(sleep.bed) {
+                sleep.bedHop = 2; sleep.t = 0
+                bagHop(sim, to: f.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), ground: DecorModels.bedFloor(DecorField.shared.anim[f.uid] ?? DecorAnim(), lift: f.lift), apex: 0.42)
+            }
+            return
+        }
         switch sleep.stage {
         case 1:
             // turn to the lying heading, then a big yawn, then down
@@ -373,6 +402,11 @@ extension BlobBrain {
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if t > 2.7 && !feet.active {
                 skinner.setEyeOpenness(1); mouthOpen = 0; armDirW = 0; armDirOut = 0; armWalkWant = 0
+                if sleep.bed >= 0, sleep.bedHop == 0, let f = DecorField.shared.foot(sleep.bed) {
+                    sleep.bedHop = 3; sleep.t = 0          // up and over the rim again
+                    bagHop(sim, to: bedExitSpot(f), ground: 0, apex: 0.42)
+                    return
+                }
                 idleFinish(skinner)
             }
         default: break
@@ -403,6 +437,7 @@ extension BlobBrain {
 
     /// Ticked from `BlobBrain.tick` right after the idle gate; true = this tick is fully handled.
     func sleepBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if bedHopTick(sim, skinner, dt) { return true }
         guard idleState.kind == .sleep, case .idle = script, sleep.stage >= 2, sleep.stage <= 4 else { return false }
         activity = .lookingAround
         mouthOpen = 0
@@ -504,5 +539,76 @@ extension BlobBrain {
         }
         feetInit = false; feet.reset(); stepLive = false; walkFinal = false
         idleState.phase = 0; idleState.phaseT = 0
+    }
+}
+
+// MARK: - the pet bed
+
+extension BlobBrain {
+    /// Spots round the bed (front first, then the sides and the back) a hop from its mattress: 0.4 beyond the rim.
+    func bedStandSpots(_ f: DecorFoot) -> [SIMD2<Float>] {
+        let r = f.spec.half.y + 0.4
+        return [Float(0), 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4, .pi].map { f.centre + SIMD2(sinf($0), cosf($0)) * r }
+    }
+    /// A pet bed nobody uses, with a spot round it he can stand on to hop over the rim.
+    func freeBed() -> (foot: DecorFoot, stand: SIMD2<Float>)? {
+        let field = DecorField.shared
+        for f in field.feet.sorted(by: { simd_distance($0.centre, position) < simd_distance($1.centre, position) }) where f.kind == .petbed && field.available(f) {
+            let keep = decorIgnore
+            decorIgnore = f.uid          // (he hops over its rim: the bed itself is no wall for the last steps)
+            for stand in bedStandSpots(f).sorted(by: { simd_distance($0, position) < simd_distance($1, position) }) {
+                let q = fixed(stand)
+                if simd_distance(stand, q) < 0.08, peerFree(q), reachable(position, q) { return (f, q) }
+            }
+            decorIgnore = keep
+        }
+        return nil
+    }
+    /// Where he hops down to: the nearest clear spot round the bed to his front.
+    func bedExitSpot(_ f: DecorFoot) -> SIMD2<Float> {
+        for p in bedStandSpots(f) {
+            let q = fixed(p)
+            if simd_distance(p, q) < 0.06, peerFree(q) { return p }
+        }
+        return f.centre + SIMD2(0, f.spec.half.y + 0.4)
+    }
+
+    /// The two hops over the rim own the body (like the beanbag's): true = this step is handled.
+    func bedHopTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        guard idleState.kind == .sleep, sleep.bed >= 0, sleep.bedHop == 2 || sleep.bedHop == 3, case .idle = script, let f = DecorField.shared.foot(sleep.bed) else { return false }
+        activity = .playing
+        mouthOpen = 0
+        sleep.t += dt
+        let hopGoal: Float = -hopTipBack * attentionPitch * amplitude
+        pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
+        gait.basePitch = pitchBase
+        gait.tick(sim, held: false, reduce: amplitude < 0.7)
+        if sleep.bedHop == 2 {
+            if gait.phase == .land, !bagFloorOn {
+                bagFloorOn = true; applyBagFloor(sim, skinner)
+                DecorField.shared.kick(f.uid, 1)
+                AudioHub.shared.play(.beanbagSit, jelly: steerID, x: px)
+            }
+        } else if gait.phase == .air || gait.phase == .land, bagFloorOn { bagFloorOn = false; applyBagFloor(sim, skinner) }
+        armWalkWant = 1
+        let flap = sinf(2 * .pi * 5 * sleep.t)
+        armDirW = 1; armDirEl = [0.45 + 0.1 * flap, 0.45 - 0.1 * flap]; armDirSa = [0.1, 0.1]; armDirOut = 0.05
+        driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
+        driveArms(sim, skinner, dt)
+        if !gait.isBusy {
+            gait.basePitch = 0
+            gait.hopApex = 0.10; gait.hopDuration = 0.26
+            currentPose(sim)
+            armDirW = 0; armDirOut = 0
+            if sleep.bedHop == 2 {
+                sleep.bedHop = 0; sleep.stage = 1; sleep.t = 0; sleep.stageStart = true; sleep.spot = position
+                idleState.phaseT = 0
+                script = .idle; activity = .lookingAround
+            } else {
+                sleep.bedHop = 0
+                idleFinish(skinner)
+            }
+        }
+        return true
     }
 }

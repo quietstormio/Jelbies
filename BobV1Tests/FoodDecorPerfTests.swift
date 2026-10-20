@@ -140,4 +140,54 @@ final class FoodDecorPerfTests: XCTestCase {
         XCTAssertLessThan(loadExtra, 8.3, "the wardrobe, rebuilt EVERY frame, costs under half a 60 fps frame of CPU")
         XCTAssertGreaterThan(tris.wear, 5000)
     }
+
+    /// The second decor batch: the 10-spot room filled with the HEAVIEST new meshes (loveseat 2200, dining set 1944, bookshelf 1500, toy car, yarn ball, monstera, rocking chair, duck: about 12.7k triangles), three Jellies,
+    /// the rocking chair rocking and the toy car rolling so the decor is rebuilt every frame (the worst case). Prints "FURNPERF ...".
+    func testHeaviestFurnitureRoomFrameCost() throws {
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2)
+        let s = try XCTUnwrap(GpuOptPerfTests.Scene(n: 3, W: 1100, H: 2390))
+        Self.keep.append(s)
+        let room = try XCTUnwrap(s.ren.room)
+        let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
+        for k in DecorTuning.heaviestRoom { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
+        let rocker = try XCTUnwrap(book.placedDecor.first { $0.kind == .rockingchair }?.uid)
+        let car = try XCTUnwrap(book.placedDecor.first { $0.kind == .toycar }?.uid)
+        let tris = book.placedDecor.reduce(0) { $0 + (DecorMeshes.loaded[$1.kind]?.triangles ?? 0) }
+        var extraMs = 0.0, decorTris = 0
+        func work(loaded: Bool, count: Bool = false) {
+            for a in s.actors { a.sim.step() }
+            guard loaded else { return }
+            let t0 = CACurrentMediaTime()
+            DecorField.shared.rock(rocker, 1); DecorField.shared.tick(dt: 1.0 / 60)
+            if DecorField.shared.anim[car]?.moving != true { DecorField.shared.kickBall(car, direction: SIMD2(1, 0), speed: 3) }
+            let dm = DecorModels.build(feet: DecorField.shared.feet, field: DecorField.shared, time: s.time)
+            room.setDecorStatic(dm)
+            extraMs += (CACurrentMediaTime() - t0) * 1000
+            if count { decorTris = dm.indices.count / 3 }
+        }
+        func run(loaded: Bool, frames: Int = 60) -> (total: Double, extra: Double) {
+            for _ in 0..<6 { work(loaded: loaded); s.frame(wait: false) }
+            s.lastCmd?.waitUntilCompleted()
+            extraMs = 0
+            let t0 = CACurrentMediaTime()
+            for i in 0..<frames { work(loaded: loaded, count: i == 0); s.frame(wait: false) }
+            s.lastCmd?.waitUntilCompleted()
+            return ((CACurrentMediaTime() - t0) / Double(frames) * 1000, extraMs / Double(frames))
+        }
+        var emptyT = 0.0, loadT = 0.0, loadExtra = 0.0
+        let blocks = 3
+        for _ in 0..<blocks {
+            DecorField.shared.clear(); room.setDecorStatic(RoomMesh())
+            emptyT += run(loaded: false).total
+            DecorField.shared.set(book.placedDecor)
+            let r = run(loaded: true)
+            loadT += r.total; loadExtra += r.extra
+        }
+        emptyT /= Double(blocks); loadT /= Double(blocks); loadExtra /= Double(blocks)
+        let line = String(format: "3 Jellies, 1100x2390, back-to-back frames: empty room %.2f ms/frame | 10 spots of the heaviest new furniture (%d pieces, %d art tris, %d drawn, rocking chair rocking, toy car rolling, decor rebuilt EVERY frame) %.2f ms/frame (+%.2f ms) | extra mesh build CPU %.2f ms/frame",
+                          emptyT, book.placedDecor.count, tris, decorTris, loadT, loadT - emptyT, loadExtra)
+        print("FURNPERF " + line); NSLog("FURNPERF %@", line)
+        XCTAssertLessThan(loadT, 200, "sanity bound the other perf tests use")
+        XCTAssertLessThan(loadExtra, 8.3, "the decor, rebuilt EVERY frame, costs under half a 60 fps frame of CPU")
+    }
 }

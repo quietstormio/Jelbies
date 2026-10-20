@@ -39,6 +39,9 @@ enum SocialKind: String, CaseIterable, Sendable {
     // 2026-10-20 (more interaction): both from existing moves, BlobSocial+Pass.swift
     case pass           // ball pass: the ball is kicked to the partner, who kicks it back (2...4 passes)
     case bagSit         // sit together on the beanbag / cushion (a second piece each, else one on it and one beside it)
+    // 2026-10-20 (batch 2): BlobSocial+Toss.swift
+    case cuddle         // two Jellies on the two cushions of the loveseat: both settle, then lean toward each other
+    case toss           // football: one throws (hug, squat, fling, or a fumble), the other tries to catch it by hugging it, or misses comically; then they swap
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -92,7 +95,7 @@ struct SocialBook {
     var wantPitch: Float = 0, wantRoll: Float = 0, wantSquash: Float = 1, wantEyes: Float = 1
     var squinting = false
     var stopAll = false
-    var apartStarted = false, sheepishStarted = false, hopStarted = false
+    var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
     var started: [SocialKind: Int] = [:]
     var lastKind: SocialKind?
     var roundSeen = -1
@@ -122,7 +125,7 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle }
     var round = 0, roles = 0, fastMoves = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
@@ -291,7 +294,7 @@ extension BlobBrain {
             socialBook.lookHold = rand(1.4, 2.2)
             o.socialBook.glanceDelay = rand(0.5, 1.1)
             if !idleStart(.look, sim) { social = nil; o.social = nil; return false }
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit:
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle, .toss:
             return socialStartPlay(kind, with: o, sim)
         case .zoomies:
             guard d < 6 else { return false }
@@ -493,7 +496,10 @@ extension BlobBrain {
         social = nil
         socialBook.drought = 0
         guard let s else { return }
-        if s.kind == .pass, s.uid >= 0, DecorField.shared.occupant[s.uid] == s.idA { DecorField.shared.occupant[s.uid] = nil }          // (the ball is free again)
+        if (s.kind == .pass || s.kind == .toss), s.uid >= 0 {          // (the ball is free again; a hugged one is let go)
+            if DecorField.shared.occupant[s.uid] == s.idA || DecorField.shared.occupant[s.uid] == s.idB { DecorField.shared.occupant[s.uid] = nil }
+            if DecorField.shared.anim[s.uid]?.held == true { DecorField.shared.fling(s.uid, vh: SIMD2(sinf(yaw), cosf(yaw)) * 0.8, vy: 0, kind: 2) }
+        }
         let pid = s.idA == steerID ? s.idB : s.idA
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
@@ -584,7 +590,7 @@ extension BlobBrain {
         case .zoomies: driveZoomies(s, o, isA)
         case .greet: driveGreet(s, o, isA, sim, dt)
         case .look: driveLook(s, o, isA, sim, dt)
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit: drivePlay(s, o, isA, sim, skinner, dt)
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle, .toss: drivePlay(s, o, isA, sim, skinner, dt)
         }
         if let e = s.end, isA { _ = e }
     }

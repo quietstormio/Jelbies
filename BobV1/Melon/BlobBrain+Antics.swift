@@ -23,7 +23,7 @@ extension BlobBrain {
         switch k {
         case .jacks, .zoomies, .slide, .tail, .roll, .flop, .peek: return 30
         case .sit, .look, .wander: return 8
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek: return 25
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow: return 25
         case .sleep: return 0
         default: return 20
         }
@@ -33,7 +33,12 @@ extension BlobBrain {
     /// Kinds that may not be picked now: on their own cooldown, or what the others are doing this moment (two Jellies do not do the same thing at once).
     var kindCooling: Set<IdleKind> {
         var s = Set(kindCool.keys)
-        for o in socialOthers() { if let k = o.idleState.kind, k != .wander, k != .look, k != .sleep { s.insert(k) } }
+        for o in socialOthers() {
+            guard let k = o.idleState.kind, k != .wander, k != .look, k != .sleep else { continue }
+            // (a second seat of the same sofa / swing / table is a friend joining in, not a repeat)
+            if k == .decorSit, o.idleState.decorUID >= 0, (DecorField.shared.foot(o.idleState.decorUID)?.kind.sitPoints.count ?? 0) > 1 { continue }
+            s.insert(k)
+        }
         return s
     }
 

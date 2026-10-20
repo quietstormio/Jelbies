@@ -127,7 +127,7 @@ final class StoreTests: XCTestCase {
         }
         XCTAssertEqual(Consumables.storeFoods.count, 10)
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "the Decor tab shows now that part B has items")
-        XCTAssertEqual(StoreCatalog.items(.decor).count, 8)
+        XCTAssertEqual(StoreCatalog.items(.decor).count, 28)
         XCTAssertEqual(StoreTuning.roomCapacity, 10)
         XCTAssertFalse(Consumables.foods.contains { $0.stored }, "store foods stay out of the free Feed picker")
         XCTAssertTrue(Consumables.foods.map(\.id).contains("berries"))

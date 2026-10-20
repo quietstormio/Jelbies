@@ -1,6 +1,6 @@
 //
 //  ShopUI.swift
-//  The Shop: a full screen with a pink wavy header, tabs (Snacks / Care / Wear / Tricks / Decor), two-column item cards
+//  The Shop: a full screen with a pink wavy header, tabs (Snacks / Care / Wear / Tricks / Furniture / Toys), two-column item cards
 //  (picture, perk chip, price, owned count) and a bottom sheet per item (what it does, condition chips, quantity, Buy).
 //  Drops are earned only; there is no purchase of Drops anywhere.
 //
@@ -8,14 +8,22 @@
 import SwiftUI
 
 enum ShopTab: String, CaseIterable, Identifiable {
-    case snacks = "Snacks", care = "Care", wear = "Wear", tricks = "Tricks", decor = "Decor"
+    case snacks = "Snacks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys"
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .snacks: return [.food, .treat]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .decor: return [.decor]
+        case .snacks: return [.food, .treat]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]
         }
     }
-    var items: [StoreItem] { kinds.flatMap { StoreCatalog.items($0) }.filter { !$0.awarded } }
+    var items: [StoreItem] {
+        switch self {
+        case .furniture: return StoreCatalog.decorItems(.furniture)
+        case .toys: return StoreCatalog.decorItems(.toys)
+        default: return kinds.flatMap { StoreCatalog.items($0) }.filter { !$0.awarded }
+        }
+    }
+    /// The tab named by the `-StoreTab` capture aid ("decor" = furniture).
+    static func named(_ s: String?) -> ShopTab? { let n = (s ?? "").capitalized; return ShopTab(rawValue: n == "Decor" ? "Furniture" : n) }
     /// Tabs with goods in them.
     static var shown: [ShopTab] { allCases.filter { !$0.items.isEmpty } }
 }
@@ -24,7 +32,7 @@ struct ShopScreen: View {
     let care: GameCare
     var who: Int
     var back: () -> Void
-    @State private var tab: ShopTab = ShopTab(rawValue: (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized) ?? .snacks          // (-StoreTab decor: capture aid)
+    @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .snacks          // (-StoreTab decor: capture aid)
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
     /// The Wear tab's slot filter (nil = all).

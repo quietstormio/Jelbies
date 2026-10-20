@@ -50,6 +50,8 @@ enum IdleKind: String, CaseIterable, Sendable {
     case decorKick     // walks into the ball: it rolls away (once or twice)
     case decorHop      // walks onto the bouncy mat and bounces on it (the happy bounce)
     case decorPeek     // goes to the toy box and leans over to peek in
+    case decorSlide    // (batch 2) climbs the slide's steps, sits on the platform, rides down and exits with a squash
+    case decorThrow    // (batch 2) hugs the football, squats, flings it (or fumbles it)
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -136,6 +138,18 @@ struct IdleState {
     var decorBooped = false
     /// The beanbag sit (hop on, rest on top, hop off): 0 turn to the bag, 1 hopping on, 2 on top, 3 hopping off.
     var bagStage = 0
+    /// Which seat of a multi-seat piece he is on, and how far the rocking seat has carried him (so he follows it by the difference).
+    var seat = 0
+    var seatShift = SIMD2<Float>.zero
+    var cuddle: Float = 0
+    /// The slide: 0 climb, 1 sit on the platform, 2 ride, 3 exit; the distance ridden along the path.
+    var slideStage = 0
+    var slideS: Float = 0
+    var slideStep = 0
+    /// The throw: 0 walk, 1 hug, 2 wind up, 3 fling, 4 settle; and how it will end (0 plain, 1 bonk, 2 drop).
+    var throwStage = 0
+    var throwFate = 0
+    var throwDir = SIMD2<Float>(0, 1)
 }
 
 extension BlobBrain {
@@ -241,6 +255,8 @@ extension BlobBrain {
                 // on the bag he hops off (the hold ends now); a turn on the floor just stops; a hop in progress is finished first
                 if idleState.bagStage == 2 { idleState.hold = 0 } else if idleState.bagStage == 0 { abortAll(sim, skinner); return }
             case .decorSit where !idleState.decorGo, .decorBoop where !idleState.decorGo, .decorPeek where !idleState.decorGo: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
+            case .decorSlide where !idleState.decorGo && idleState.slideStage == 0: abortAll(sim, skinner); return          // (still turning on the floor: just stop)
+            case .decorSlide where !idleState.decorGo, .decorThrow where !idleState.decorGo: idleState.yielding = true          // (they finish: the slide hurries its ride, the throw its flight)
             case .sleep where sleep.stage >= 2 && sleep.stage <= 4: idleState.yielding = true; sleepWake(groggy: false, fast: true)
             default: abortAll(sim, skinner); return
             }
@@ -420,7 +436,7 @@ extension BlobBrain {
             script = .walk(target: spot, then: .none); activity = .walking
         case .sleep:
             return sleepBegin(sim, night: idleNight > SleepTuning.nightEdge || idleDeepNight > 0.5)
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek:
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow:
             return decorStart(kind, sim)
         }
         return true
@@ -464,6 +480,8 @@ extension BlobBrain {
         case .sit, .slump, .sway, .decorSit: runSit(sim, skinner, dt, slump: kind == .slump)
         case .look, .window, .decorBoop, .decorPeek: runLook(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
+        case .decorSlide: runSlide(sim, skinner, dt)
+        case .decorThrow: runThrow(sim, skinner, dt)
         case .yawn, .stretch: runYawn(sim, skinner, dt)
         case .flop, .peek: runPosePlay(sim, skinner, dt)
         case .sleep: runSleep(sim, skinner, dt)
@@ -741,6 +759,7 @@ extension BlobBrain {
     /// Belly slide and scoot, ticked each step while they run (true = this tick is fully handled).
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if bagBodyTick(sim, skinner, dt) { return true }
+        if slideBodyTick(sim, skinner, dt) { return true }
         guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce, idleState.phase >= 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0

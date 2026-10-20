@@ -256,20 +256,22 @@ final class AudioHub {
 
     private func panFor(x: Float?) -> Float { x.map { min(max($0 / 5, -1), 1) * 0.5 } ?? 0 }
 
-    private func fire(_ name: String, volume: Float, pan: Float) {
+    private func fire(_ name: String, volume: Float, pan: Float, rate: Float = 1) {
         guard let u = url(name) else { return }
         var ps = pool[name] ?? []
         var p = ps.first(where: { !$0.isPlaying })
-        if p == nil, ps.count < 3, let np = try? AVAudioPlayer(contentsOf: u) { np.prepareToPlay(); ps.append(np); pool[name] = ps; p = np }
+        if p == nil, ps.count < 3, let np = try? AVAudioPlayer(contentsOf: u) { np.enableRate = true; np.prepareToPlay(); ps.append(np); pool[name] = ps; p = np }
         guard let p else { return }
         p.volume = volume
         p.pan = pan
+        p.rate = rate
         p.currentTime = 0
         p.play()
     }
 
     /// Plays a random variant of `sfx` (never the same twice in a row). `x`: the Jelly's floor x for a gentle pan.
-    func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1) {
+    /// `rate`: playback speed (1 = as recorded; a squeak is a boop at 1.7, a drum thump a boop at 0.55).
+    func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
@@ -280,7 +282,7 @@ final class AudioHub {
         let n = variants(sfx)
         guard n > 0 else { return }
         let v = picker.pick(sfx.rawValue, count: n) + 1
-        fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x))
+        fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
     }
 
     // Jelly Circuit cues. Named hooks: dedicated sounds are added later under these names; for now they use existing effects.

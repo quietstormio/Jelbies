@@ -10,9 +10,14 @@ Indices are global vertex indices; each part owns a contiguous index range. OBJ:
 """
 import json, struct, sys, os
 
-IDS = "cushion ball rug plant nightlight toybox beanbag bouncymat".split()
+IDS = ("cushion ball rug plant nightlight toybox beanbag bouncymat "
+       "loveseat petbed pouf rockingchair armchair swing diningset bookshelf wardrobe divider floorlamp slide monstera "
+       "duck blocks spintop toycar yarnball drum football").split()
+# the pieces whose exported frame came out inside-out (see below); every other piece is trusted as exported (open surfaces such as the slide chute or the ropes
+# have a legitimately negative signed volume)
+FLIP_FIX = {"bouncymat"}
 
-def convert(src, meta):
+def convert(src, meta, fix=False):
     pos, col, nrm, ao, w, parts = [], [], [], [], [], []
     for line in open(src):
         t = line.split()
@@ -29,7 +34,7 @@ def convert(src, meta):
     # the artist's bouncymat frame came out inside-out (normals and winding both point into the solid, so it culls away from above):
     # flip every closed connected component whose signed volume is negative
     flipped = 0
-    for part in parts:
+    for part in (parts if fix else []):
         ix = part[1]
         key = lambda i: (round(pos[i][0], 3), round(pos[i][1], 3), round(pos[i][2], 3))
         par = {}
@@ -55,6 +60,7 @@ def convert(src, meta):
     head = b""
     for name, ix in parts:
         s = info[name]
+        assert len(name.encode()) <= 15, name
         mat = 5 if s["material"] == "lamp" else 0
         head += struct.pack("<16sIII3f", name.encode(), len(tris), len(ix), mat, *s["pivot"])
         tris += ix
@@ -70,7 +76,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     for i in IDS:
         meta = json.load(open(os.path.join(exp, i + ".json")))
-        data, nv, nt, names = convert(os.path.join(exp, i + ".obj"), meta)
+        data, nv, nt, names = convert(os.path.join(exp, i + ".obj"), meta, i in FLIP_FIX)
         open(os.path.join(out, "decor_%s.bin" % i), "wb").write(data)
         print(i, nv, "verts", nt, "tris", len(data), "bytes", names)
 

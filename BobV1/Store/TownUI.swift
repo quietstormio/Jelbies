@@ -387,9 +387,9 @@ struct BagSheet: View {
     @State var who: Int
     var close: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
-    @State private var tab: BagTab = BagTab(rawValue: (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized) ?? .snacks          // (-StoreTab decor: capture aid)
+    @State private var tab: BagTab = BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .snacks          // (-StoreTab decor: capture aid)
 
-    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", decor = "Decor", care = "Care"; var id: String { rawValue } }
+    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
     private var tabs: [BagTab] { BagTab.allCases }
@@ -397,7 +397,8 @@ struct BagSheet: View {
         switch t {
         case .snacks: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
         case .wear: return StoreCatalog.items.filter { $0.isWearable && book.owns($0) && (wearSlot == nil || $0.wear?.slot == wearSlot) }
-        case .decor: return StoreCatalog.items(.decor).filter { book.count($0.id) > 0 }
+        case .furniture: return StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }
+        case .toys: return StoreCatalog.decorItems(.toys).filter { book.count($0.id) > 0 }
         case .care: return StoreCatalog.items(.supply).filter { book.count($0.id) > 0 }
         }
     }
@@ -427,14 +428,14 @@ struct BagSheet: View {
                 }
                 let list = entries(tab)
                 if tab == .wear { SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && book.owns($0) } }, idPrefix: "bag-slot-") }
-                if tab == .decor, !book.placedDecor.isEmpty {
+                if tab.isDecor, !book.placedDecor.isEmpty {
                     Button { AudioHub.shared.uiTap(); close(); care.beginArrange() } label: {
                         HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .heavy)); Text("Arrange the room").font(SK.font(15, .black)) }
                             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48).background(Capsule().fill(SK.honey))
                     }.buttonStyle(.plain).accessibilityIdentifier("bag-arrange")
                 }
                 if list.isEmpty {
-                    Text(tab == .snacks ? "No snacks yet. The Shop has plenty." : tab == .decor ? "No decor yet. Beanbags, plants and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
+                    Text(tab == .snacks ? "No snacks yet. The Shop has plenty." : tab == .furniture ? "No furniture yet. Beanbags, sofas and more are in the Shop." : tab == .toys ? "No toys yet. Balls, ducks and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
                         .frame(maxWidth: .infinity, minHeight: 80)
                 }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: vsc == .compact ? 2 : 1), spacing: 10) {

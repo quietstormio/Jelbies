@@ -80,7 +80,16 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + wearItems
+    static let items: [StoreItem] = base + batch2 + wearItems
+
+    /// The second batch of furniture and toys (prices and spots from the Blender exports' JSON).
+    private static let batch2: [StoreItem] = [
+        (DecorKind.loveseat, 120, "sofa.fill"), (.petbed, 90, "bed.double.fill"), (.pouf, 40, "circle.circle.fill"), (.rockingchair, 80, "chair.fill"),
+        (.armchair, 70, "chair.lounge.fill"), (.swing, 100, "figure.play"), (.diningset, 85, "fork.knife"), (.bookshelf, 65, "books.vertical.fill"),
+        (.wardrobe, 75, "cabinet.fill"), (.divider, 60, "rectangle.split.3x1.fill"), (.floorlamp, 55, "lamp.floor.fill"), (.slide, 110, "arrow.down.right.circle.fill"),
+        (.monstera, 70, "leaf.fill"), (.duck, 25, "bird.fill"), (.blocks, 35, "cube.fill"), (.spintop, 30, "tornado"), (.toycar, 50, "car.fill"),
+        (.yarnball, 25, "scribble.variable"), (.drum, 45, "drum.fill"), (.football, 40, "football.fill"),
+    ].map { StoreItem(id: $0.0.storeID, name: $0.0.title, kind: .decor, price: $0.1, perk: nil, description: $0.0.use, symbol: $0.2, roomUnits: $0.0.spec.units) }
 
     private static let base: [StoreItem] = [
         // food (hand-held, tossed into his mouth)
@@ -117,6 +126,8 @@ nonisolated enum StoreCatalog {
     /// The store item of a wearable look.
     static func item(wearing look: WearLook) -> StoreItem? { items.first { $0.wear == look } }
     static func items(_ k: StoreKind) -> [StoreItem] { items.filter { $0.kind == k } }
+    /// The decor of one Shop / Bag tab (furniture or toys).
+    static func decorItems(_ c: DecorKind.Category) -> [StoreItem] { items.filter { $0.decor?.category == c } }
     /// Every wearable, built from the Blender art table (WearGenerated.swift): shoes keep their original ids, the rest are `wear-<art id>`.
     /// The winner medal is awarded for a first place on the Circuit and never sold.
     static let wearItems: [StoreItem] = WearGenerated.rows.map { r in

@@ -97,6 +97,9 @@ final class ArmCapTests: XCTestCase {
                                    ("decor: hop on the mat", .bouncymat, .decorHop, SIMD2(-1.1, 0.9)), ("decor: peek in the toy box", .toybox, .decorPeek, SIMD2(1.1, 0.9))] {
             note(n); rows.append((n, capsuleStat(26, start: { FeetAttachTests.decorStart($0, kind, at, move) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
+        for d in FeetAttachTests.batch2Decor {
+            note(d.0); rows.append((d.0, capsuleStat(d.4, start: { $0.brain.throwFateForce = d.6; FeetAttachTests.decorStart($0, d.1, d.2, d.3) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
         note("hop"); rows.append(("hop", capsuleStat(2, start: { $0.brain.startHopPlay(sim: $0.sim) })))
         note("name hop"); rows.append(("name hop", capsuleStat(2, start: { $0.brain.startNameHop($0.sim, $0.skinner) })))
         note("flip clean"); rows.append(("flip clean", capsuleStat(4, start: { $0.brain.startFlip(sim: $0.sim) })))

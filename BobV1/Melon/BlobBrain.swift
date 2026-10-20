@@ -70,6 +70,12 @@ final class BlobBrain {
     var decorIgnore: Int?
     /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
     var bagFloorOn = false
+    /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
+    var slideY: Float = 0
+    /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
+    var throwFateForce: Int?
+    /// A toss: where the football is aimed (the catcher's spot); nil = a solo throw.
+    var throwAim: SIMD2<Float>?
     /// 1 = full motion; lower for reduce-motion.
     var amplitude: Float = 1
     /// Called when a requested job (goTo / eat / drink / come / wave) has finished.

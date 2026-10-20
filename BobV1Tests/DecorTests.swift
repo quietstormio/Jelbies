@@ -40,26 +40,33 @@ final class DecorTests: XCTestCase {
     /// The most pieces the room's 10 spots hold, as a plausible mix: 2 beanbags + the mat (6), toy box, plant, night light, cushion (10).
     static let fullMix: [DecorKind] = DecorTuning.fullRoom
 
-    private func fillRoom(_ b: StoreBook) {
-        for k in Self.fullMix { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits") }
+    private func fillRoom(_ b: StoreBook, mix: [DecorKind] = DecorTuning.fullRoom) {
+        for k in mix { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits") }
         DecorField.shared.set(b.placedDecor)
     }
 
     // MARK: catalogue and capacity
 
-    func testCatalogueHasEightDecorItemsInTheRightPriceBand() {
+    func testCatalogueHasTwentyEightDecorItemsInTheRightPriceBand() {
         let items = StoreCatalog.items(.decor)
-        XCTAssertEqual(items.count, 8)
+        XCTAssertEqual(items.count, 28)
+        XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, 28, "every piece is on exactly one tab")
+        XCTAssertFalse(items.contains { $0.id == "decor-eggchair" }, "the swing replaces the egg chair")
         for i in items {
-            XCTAssertTrue((25...90).contains(i.price), "\(i.name) \(i.price)")
+            XCTAssertTrue((25...120).contains(i.price), "\(i.name) \(i.price)")
             XCTAssertNotNil(i.decor, i.id)
             XCTAssertEqual(i.roomUnits, i.decor?.spec.units)
             XCTAssertTrue(i.roomUnits == 1 || i.roomUnits == 2)
         }
         XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases))
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat])
-        XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "the Decor tab shows now")
-        XCTAssertTrue(ShopTab.shown.contains(.decor))
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat, .petbed, .slide, .swing])
+        XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
+        XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
+        // prices and spots come from the Blender exports' JSON
+        let json: [DecorKind: (Int, Int)] = [.loveseat: (120, 2), .petbed: (90, 2), .pouf: (40, 1), .rockingchair: (80, 1), .armchair: (70, 1), .swing: (100, 2), .diningset: (85, 2),
+                                             .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 2), .monstera: (70, 1), .duck: (25, 1),
+                                             .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .football: (40, 1)]
+        for (k, v) in json { XCTAssertEqual(StoreCatalog.item(k.storeID)?.price, v.0, "\(k) price"); XCTAssertEqual(k.spec.units, v.1, "\(k) spots") }
     }
 
     func testRoomHoldsTenSpotsAndNoMore() {
@@ -83,10 +90,10 @@ final class DecorTests: XCTestCase {
         fillRoom(b)
         for p in b.placedDecor {
             XCTAssertTrue(DecorPlacement.isValid(p.kind, at: p.at, among: b.placedDecor, ignoring: p.uid), "\(p.kind) at \(p.at)")
-            XCTAssertGreaterThan(RoomLayout.sofaDistanceXZ(p.at), p.kind.spec.radius)
-            for c in RoomLayout.cylinders { XCTAssertGreaterThan(simd_distance(p.at, c.centre), c.radius + p.kind.spec.radius) }
-            for o in b.placedDecor where o.uid != p.uid { XCTAssertGreaterThan(simd_distance(p.at, o.at), p.kind.spec.radius + o.kind.spec.radius - 0.001, "\(p.kind) / \(o.kind) overlap") }
-            if p.kind.spec.solid { XCTAssertFalse(DecorPlacement.inCore(p.at, radius: p.kind.spec.radius), "\(p.kind) is out of the core") }
+            XCTAssertGreaterThan(DecorPlacement.sofaClearance(p.kind, at: p.at), 0)
+            for c in RoomLayout.cylinders { XCTAssertGreaterThan(RoomLayout.boxDistanceXZ(c.centre, .init(centre: p.at, half: p.kind.spec.half, height: 1, radius: p.kind.spec.round)), c.radius) }
+            for o in b.placedDecor where o.uid != p.uid { XCTAssertFalse(DecorPlacement.overlaps(p.kind, p.at, o.kind, o.at, gap: -0.001), "\(p.kind) / \(o.kind) overlap") }
+            if p.kind.spec.solid { XCTAssertFalse(DecorPlacement.inCore(p.kind, at: p.at), "\(p.kind) is out of the core") }
         }
     }
 
@@ -423,11 +430,11 @@ final class DecorTests: XCTestCase {
     /// progress, and a walk he was ASKED to make (a step-aside from makeRoom) waits up to 6 s for a Jelly that stands in the way. The empty room shows the
     /// same 2...3.4 s waits; more than 6.5 s would be a real jam.
     static let stuckLimit: Float = 6.5
-    func soak(seeds: [UInt64], fill: Bool) {
+    func soak(seeds: [UInt64], fill: Bool, mix: [DecorKind] = DecorTuning.fullRoom) {
         for seed in seeds {
             room(3)
             DecorField.shared.clear()
-            if fill { let b = book(); fillRoom(b); DecorField.shared.set(b.placedDecor) }
+            if fill { let b = book(); fillRoom(b, mix: mix); DecorField.shared.set(b.placedDecor) }
             let lab = SocialTests.Lab(quiet: false, seed: seed)
             for (i, r) in lab.rigs.enumerated() {
                 r.brain.idleMood = .happy; r.brain.socialBook.cooldown = 8; r.brain.idleState.cooldown = 6; r.brain.restTimer = 0.5 + Float(i)
@@ -466,6 +473,33 @@ final class DecorTests: XCTestCase {
     }
 
     func testThreeJelliesInAFullRoomStillWanderWithoutGettingStuck() { soak(seeds: [11, 23], fill: true) }
+    /// The second batch: a room of big furniture (swing, loveseat, slide + a rocking chair, bookshelf, lamp, duck = 10 spots, portrait): the Jellies still roam and use it.
+    func testThreeJelliesInABigFurnitureRoomStillRoam() { soak(seeds: [11, 23], fill: true, mix: DecorTuning.furnitureRoom) }
+    /// ... and the pet bed / dining set room.
+    func testThreeJelliesInABedAndDiningRoomStillRoam() { soak(seeds: [7], fill: true, mix: DecorTuning.bedRoom) }
+
+    /// A big furniture room: all three told goodnight are asleep within 40 s.
+    func testAllThreeSleepInABigFurnitureRoomAndInThePetBedRoom() {
+        for mix in [DecorTuning.furnitureRoom, DecorTuning.bedRoom] {
+            for seed in [5, 9, 21] as [UInt64] {
+                DecorField.shared.clear(); room(3)
+                let b = book(); fillRoom(b, mix: mix)
+                let lab = SocialTests.Lab(quiet: true, seed: seed)
+                Self.keep.append(lab)
+                for r in lab.rigs { r.brain.sleepEnabled = true; r.brain.commandedGoodnight = true }
+                var asleepAt: Float?
+                for f in 0..<(60 * 50) {
+                    lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                    if lab.rigs.allSatisfy({ $0.brain.isSleeping && $0.brain.sleep.stage >= 3 }) { asleepAt = Float(f) / 60; break }
+                }
+                XCTAssertNotNil(asleepAt, "seed \(seed) \(mix.first!): all three asleep within 50 s")
+                let spots = lab.rigs.map { $0.brain.sleep.spot }
+                for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThan(simd_distance(spots[i], spots[j]), SleepTuning.minGap - 0.05, "seed \(seed): bodies apart") } }
+                if mix == DecorTuning.bedRoom { XCTAssertEqual(lab.rigs.filter { $0.brain.sleep.bed >= 0 }.count, 1, "seed \(seed): one of them is in the pet bed") }
+                for r in lab.rigs { XCTAssertFalse(DecorField.shared.feet.contains { $0.spec.solid && $0.kind != .petbed && $0.distance(r.brain.sleep.spot) < 0.3 }, "nobody sleeps inside a piece") }
+            }
+        }
+    }
     /// The same harness in the empty room, for comparison (one seed).
     func testSoakHarnessInTheEmptyRoomForComparison() { soak(seeds: [11], fill: false) }
     // MARK: double tap to move

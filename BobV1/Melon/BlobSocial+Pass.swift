@@ -15,17 +15,18 @@ extension BlobBrain {
     /// A placed ball nobody is using and that is at rest.
     func freeBall() -> DecorFoot? {
         let f = DecorField.shared
-        return f.feet.first { $0.kind == .ball && f.occupant[$0.uid] == nil && $0.uid != f.held && f.anim[$0.uid]?.moving != true }
+        return f.feet.first { $0.kind.isBallLike && DecorKind.wired.contains($0.kind) && f.occupant[$0.uid] == nil && $0.uid != f.held && f.anim[$0.uid]?.moving != true }
     }
     /// A beanbag / cushion nobody is using.
     func freeSeat() -> DecorFoot? {
         let f = DecorField.shared
-        return f.feet.first { $0.kind.interaction == .decorSit && f.occupant[$0.uid] == nil && $0.uid != f.held }
+        return f.feet.first { $0.kind.activeInteraction == .decorSit && f.occupant[$0.uid] == nil && $0.uid != f.held }
     }
 
     func socialStartPass(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
         let me = position, you = o.position
         let d = simd_distance(me, you)
+        if kind == .cuddle || kind == .toss { return socialStartToss(kind, with: o, sim) }
         guard !sleepLocked, d > 1.6, d < 5.5 || kind == .bagSit else { return false }
         if kind == .pass {
             guard let ball = freeBall() else { return false }

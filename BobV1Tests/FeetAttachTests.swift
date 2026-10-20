@@ -60,7 +60,32 @@ final class FeetAttachTests: XCTestCase {
         let name: String, game: Bool, seconds: Float, expectBeans: Bool
         let start: (MotionRig) -> Void
     }
-    static let moves: [Move] = [
+    /// The second decor batch: every interaction (name, piece, where, move, seconds, beans expected, forced throw fate).
+    static let batch2Decor: [(String, DecorKind, SIMD2<Float>, IdleKind, Float, Bool, Int?)] = [
+        ("decor2: sit on the pouf", .pouf, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: sit in the armchair", .armchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: sit on the loveseat", .loveseat, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: sit on a dining stool", .diningset, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: rock in the rocking chair", .rockingchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: sway on the swing", .swing, SIMD2(1.1, 0.9), .decorSit, 28, true, nil),
+        ("decor2: peek at the bookshelf", .bookshelf, SIMD2(1.1, 0.9), .decorPeek, 14, false, nil),
+        ("decor2: peek in the wardrobe", .wardrobe, SIMD2(0.0, -0.8), .decorPeek, 14, false, nil),
+        ("decor2: boop the duck", .duck, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
+        ("decor2: boop the drum", .drum, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
+        ("decor2: boop the monstera", .monstera, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
+        ("decor2: boop the spinning top", .spintop, SIMD2(1.1, 0.9), .decorBoop, 16, false, nil),
+        ("decor2: kick the block tower", .blocks, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
+        ("decor2: kick the toy car", .toycar, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
+        ("decor2: kick the yarn ball", .yarnball, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
+        ("decor2: kick the football", .football, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
+        ("decor2: throw the football", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 0),
+        ("decor2: throw the football (bonks off his head)", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 1),
+        ("decor2: throw the football (drops it)", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 2),
+        ("decor2: climb the slide, sit, ride, exit", .slide, SIMD2(1.0, 1.2), .decorSlide, 30, true, nil),
+    ]
+    static let moves: [Move] = batch2Decor.map { d in
+        Move(name: d.0, game: true, seconds: d.4, expectBeans: d.5, start: { $0.brain.throwFateForce = d.6; decorStart($0, d.1, d.2, d.3) })
+    } + [
         Move(name: "walk", game: false, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo($0.root + SIMD2(0, 2.4))) }),
         Move(name: "walk (game)", game: true, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }),
         Move(name: "run", game: true, seconds: 6, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.run, $0.sim) }),
@@ -107,7 +132,15 @@ final class FeetAttachTests: XCTestCase {
             r.renderSamples = false
             m.start(r)
             var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
-            r.run(m.seconds) { if let f = Self.footFrame(r) { Self.accumulate(&w, f); frames += 1 } }
+            var worstInfo = "", clock: Float = 0
+            r.run(m.seconds) {
+                clock += 1.0 / 60
+                if let f = Self.footFrame(r) {
+                    if f.overlap > w.overlap { worstInfo = String(format: "t=%.2f kind=%@ stage=%d script=%@ gait=%@ feetActive=%d stepU=%.2f yaw=%.2f boost=%.3f runW=%.2f pos=(%.2f,%.2f) amp=%.2f", clock, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")", r.brain.idleState.bagStage, "\(r.brain.script)", "\(r.brain.gait.phase)", r.brain.feet.active ? 1 : 0, r.brain.feet.stepU, r.brain.yaw, r.brain.walkBoostK, r.brain.runW, r.brain.px, r.brain.pz, r.brain.amplitude) }
+                    Self.accumulate(&w, f); frames += 1
+                }
+            }
+            if w.overlap > Self.minOverlap { print("FEETWORST \(m.name): \(worstInfo)") }
             if m.expectBeans { XCTAssertGreaterThan(frames, 20, "\(m.name): the beans were out") }
             Self.check(m.name, w, frames: frames)
         }

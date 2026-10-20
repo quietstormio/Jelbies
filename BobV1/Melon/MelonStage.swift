@@ -490,7 +490,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             guard let b else { continue }
             switch b.idleState.kind { case .zoomies?, .jacks?, .slide?, .scoot?: playing = true; default: break }
             if b.activity == .playing { playing = true }
-            if let s = b.social, ![.squabble, .look, .nuzzle, .sitTogether, .sneak, .bagSit].contains(s.kind) { playing = true }          // (chase / tag, dances, bumps ... start the play music)
+            if let s = b.social, ![.squabble, .look, .nuzzle, .sitTogether, .sneak, .bagSit, .cuddle].contains(s.kind) { playing = true }          // (chase / tag, dances, bumps ... start the play music)
         }
         if model.touch.thrown { playing = true }          // a toy thrown / bounced in the close-up
         let napping = brains.map { $0?.isNapping ?? false }

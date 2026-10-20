@@ -61,6 +61,8 @@ extension BlobBrain {
         add(.line, others.count >= 2 ? 1.5 : 1.1)          // follow the leader: a line of three, or two
         if freeBall() != nil { add(.pass, 2.4) }
         if freeSeat() != nil { add(.bagSit, 1.8) }
+        if freeLoveseat() != nil { add(.cuddle, 2.0) }
+        if freeFootball() != nil { add(.toss, 2.2) }
         if socialBook.lastKind != nil || o.socialBook.lastKind != nil { w.removeAll { $0.0 == socialBook.lastKind || $0.0 == o.socialBook.lastKind } }
         return w
     }
@@ -115,7 +117,7 @@ extension BlobBrain {
             let s = newSession(.line, with: o, duration: rand(5.5, 7.5), third: c)
             s.leaderWait = 0.2
             if let c { onSocial?(.began(.line, partner: c.steerID)); c.onSocial?(.began(.line, partner: steerID)) }
-        case .pass, .bagSit:
+        case .pass, .bagSit, .cuddle, .toss:
             return socialStartPass(kind, with: o, sim)
         default: return false
         }
@@ -136,6 +138,8 @@ extension BlobBrain {
         case .line: driveLine(s, o, isA, sim, dt)
         case .pass: driveBallPass(s, o, isA, sim, dt)
         case .bagSit: driveBagSit(s, o, isA, sim, dt)
+        case .cuddle: driveCuddle(s, o, isA, sim, dt)
+        case .toss: driveToss(s, o, isA, sim, dt)
         default: break
         }
     }

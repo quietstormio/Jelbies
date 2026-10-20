@@ -22,7 +22,7 @@ enum DecorModels {
     /// The whole room's decor in one mesh.
     static func build(feet: [DecorFoot], field: DecorField, time: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
-        for f in feet { add(f.kind, at: f.kind == .ball ? field.position(f) : f.centre, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b) }
+        for f in feet { add(f.kind, at: f.kind.rolls ? field.position(f) : f.centre, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b) }
         return b.mesh
     }
 
@@ -46,6 +46,7 @@ enum DecorModels {
         case .toybox: toybox(p, lift, a, time, b)
         case .nightlight: nightlight(p, lift, b)
         case .bouncymat: bouncymat(p, lift, a, b)
+        default: break          // (the second batch has no procedural fallback: it is only drawn from its art)
         }
     }
 
@@ -110,6 +111,156 @@ enum DecorModels {
             DecorMeshes.emit(frame, into: b, offset: o)
             let dip = min(a.kick, 1) * abs(sinf(a.kickT * 9)) * 0.05
             DecorMeshes.emit(top, into: b, offset: o, pose: { v, n, w in (SIMD3(v.x, v.y - dip * w, v.z), n) })
+        default:
+            return addBatch2(kind, art, o: o, anim: a, time: time, uid: uid, into: b)
+        }
+        return true
+    }
+
+    // MARK: the second batch's poses
+
+    /// Seat cushion compression for a sat-in seat (0...1 press): y *= 1 - 0.30 * amount * w about the cushion pivot.
+    static func cushionAmount(_ press: Float) -> Float { 0.8 * press }
+    static let rockPivot = SIMD3<Float>(0, 1.145, 0), swingPivot = SIMD3<Float>(0, 2.1, 0)
+    /// The rocking chair's angle now (rad about game X) and the swing's.
+    static func rockAngle(_ a: DecorAnim) -> Float { 0.14 * sinf(2 * .pi * a.rockT / 1.7) * min(a.rockAmp, 1) }
+    static func swingAngle(_ a: DecorAnim) -> Float { 0.22 * sinf(2 * .pi * a.rockT / 2.6) * min(a.rockAmp, 1) }
+
+    /// Where a sitter's base goes on seat `seat` of a piece (piece-local x, y, z; y includes the rug lift): it follows the squash and the rock / sway.
+    static func seatPoint(_ kind: DecorKind, seat: Int, anim a: DecorAnim, lift: Float) -> SIMD3<Float> {
+        let sp = kind.sitPoints[min(seat, kind.sitPoints.count - 1)]
+        var p = sp
+        func rel(_ pivot: SIMD3<Float>, _ ang: Float) -> SIMD3<Float> { pivot + simd_quatf(angle: ang, axis: SIMD3(1, 0, 0)).act(sp - pivot) }
+        switch kind {
+        case .beanbag: p.y = bagSeatY * (1 - bagSquish(a))
+        case .pouf: p.y = sp.y * (1 - (0.10 * a.sink + 0.05 * min(a.kick, 1.2) * cosf(a.kickT * 13)))
+        case .armchair: p.y = 0.34 + (sp.y - 0.34) * (1 - 0.30 * cushionAmount(a.sink))
+        case .loveseat: p.y = 0.34 + (sp.y - 0.34) * (1 - 0.30 * cushionAmount(seat == 0 ? a.seatSink.x : a.seatSink.y))
+        case .diningset: p.y = sp.y * (1 - 0.06 * (seat == 0 ? a.seatSink.x : a.seatSink.y))
+        case .rockingchair: p = rel(rockPivot, rockAngle(a))
+        case .swing: p = rel(swingPivot, swingAngle(a))
+        default: break
+        }
+        p.y += lift
+        return p
+    }
+
+    /// The pet bed's mattress top (the sleeper's floor): its lying point, a touch lower while the mattress is pressed.
+    static func bedFloor(_ a: DecorAnim, lift: Float) -> Float { lift + 0.02 + (DecorKind.sleepPoint.y - 0.02) * (1 - 0.35 * a.sink) }
+
+    private static func rotX(_ pivot: SIMD3<Float>, _ ang: Float) -> (SIMD3<Float>, SIMD3<Float>, Float) -> (SIMD3<Float>, SIMD3<Float>) {
+        let q = simd_quatf(angle: ang, axis: SIMD3(1, 0, 0))
+        return { v, n, _ in rotated(v, n, about: pivot, q) }
+    }
+
+    private static func addBatch2(_ kind: DecorKind, _ art: DecorMeshes.Art, o: SIMD3<Float>, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) -> Bool {
+        func all(_ pose: ((SIMD3<Float>, SIMD3<Float>, Float) -> (SIMD3<Float>, SIMD3<Float>))? = nil, except: Set<String> = []) {
+            for part in art.parts where !except.contains(part.name) { DecorMeshes.emit(part, into: b, offset: o, pose: pose) }
+        }
+        func squish(_ part: String, _ pose: @escaping (SIMD3<Float>, SIMD3<Float>, Float) -> (SIMD3<Float>, SIMD3<Float>)) {
+            if let p = art.part(part) { DecorMeshes.emit(p, into: b, offset: o, pose: pose) }
+        }
+        let k = a.kick, ph = Float(uid) * 0.7
+        switch kind {
+        case .loveseat:
+            all(except: ["seat"])
+            let l = cushionAmount(a.seatSink.x), r = cushionAmount(a.seatSink.y)
+            squish("seat") { v, n, w in (SIMD3(v.x, 0.34 + (v.y - 0.34) * (1 - 0.30 * (v.x < 0 ? l : r) * w), v.z), n) }
+        case .armchair:
+            all(except: ["seat"])
+            let m = cushionAmount(a.sink)
+            squish("seat") { v, n, w in (SIMD3(v.x, 0.34 + (v.y - 0.34) * (1 - 0.30 * m * w), v.z), n) }
+        case .pouf:
+            let amt = 0.10 * a.sink + 0.05 * min(k, 1.2) * cosf(a.kickT * 13)
+            squish("pouf") { v, n, w in (SIMD3(v.x * (1 + 0.5 * amt * w), v.y * (1 - amt), v.z * (1 + 0.5 * amt * w)), n) }
+        case .rockingchair:
+            all(rotX(rockPivot, rockAngle(a)))
+        case .swing:
+            all(rotX(swingPivot, swingAngle(a)), except: ["stand"])
+            if let st = art.part("stand") { DecorMeshes.emit(st, into: b, offset: o) }
+        case .diningset:
+            all(except: ["stool_l", "stool_r"])
+            for (name, press) in [("stool_l", a.seatSink.x), ("stool_r", a.seatSink.y)] {
+                squish(name) { v, n, w in (SIMD3(v.x, v.y * (1 - 0.06 * press), v.z), n) }
+            }
+        case .petbed:
+            all(except: ["mat"])
+            let amt = 0.35 * a.sink
+            squish("mat") { v, n, w in (SIMD3(v.x, 0.02 + (v.y - 0.02) * (1 - amt * w), v.z), n) }
+        case .bookshelf:
+            all(except: ["plant"])
+            if let pl = art.part("plant") {
+                let s1 = 0.12 * k * sinf(time * 16 + ph), pv = pl.pivot
+                DecorMeshes.emit(pl, into: b, offset: o, pose: { v, n, w in rotated(v, n, about: pv, simd_quatf(angle: s1 * w, axis: SIMD3(0, 0, 1))) })
+            }
+        case .wardrobe:
+            all(except: ["door_l", "clothes"])
+            if let d = art.part("door_l"), let c = art.part("clothes") {
+                let swing = 0.14 * k * sinf(time * 9 + ph) + 0.12 * a.peek, dp = d.pivot
+                DecorMeshes.emit(d, into: b, offset: o, pose: { v, n, _ in rotated(v, n, about: dp, simd_quatf(angle: swing, axis: SIMD3(0, 1, 0))) })
+                let sw = 0.12 * (k * sinf(time * 12 + ph) + 0.4 * a.peek * sinf(time * 5)), cp = c.pivot
+                DecorMeshes.emit(c, into: b, offset: o, pose: { v, n, _ in rotated(v, n, about: cp, simd_quatf(angle: sw, axis: SIMD3(1, 0, 0))) })
+            }
+        case .monstera:
+            all(except: ["leaves"])
+            if let lv = art.part("leaves") {
+                let pv = lv.pivot, s1 = k * sinf(time * 22 + ph), s2 = k * sinf(time * 19 + 1.3 + ph)
+                DecorMeshes.emit(lv, into: b, offset: o, pose: { v, n, w in
+                    rotated(v, n, about: pv, simd_quatf(angle: 0.10 * s1 * w, axis: SIMD3(0, 0, 1)) * simd_quatf(angle: 0.08 * s2 * w, axis: SIMD3(1, 0, 0)))
+                })
+            }
+        case .duck:
+            let s1 = 0.28 * k * sinf(time * 19 + ph), s2 = 0.20 * k * sinf(time * 17 + 1.1 + ph)
+            all({ v, n, w in rotated(v, n, about: .zero, simd_quatf(angle: s1 * (0.35 + 0.65 * w), axis: SIMD3(0, 0, 1)) * simd_quatf(angle: s2 * (0.35 + 0.65 * w), axis: SIMD3(1, 0, 0))) })
+        case .drum:
+            all(except: ["head"])
+            if let h = art.part("head") {
+                let dip = 0.05 * k * abs(sinf(time * 19 + ph))
+                DecorMeshes.emit(h, into: b, offset: o, pose: { v, n, _ in (SIMD3(v.x, v.y - dip, v.z), n) })
+            }
+        case .spintop:
+            guard let t = art.part("top") else { return false }
+            let tilt = DecorField.topTilt(a)
+            let axis = SIMD3<Float>(cosf(tilt.axis), 0, sinf(tilt.axis))
+            let q = simd_quatf(angle: tilt.angle, axis: axis) * simd_quatf(angle: a.spinAngle, axis: SIMD3(0, 1, 0))
+            DecorMeshes.emit(t, into: b, offset: o, pose: { v, n, _ in (q.act(v), q.act(n)) })
+        case .toycar:
+            let yaw = simd_quatf(angle: a.heading, axis: SIMD3(0, 1, 0))
+            for part in art.parts {
+                if part.name.hasPrefix("wheel") {
+                    let pv = part.pivot, q = simd_quatf(angle: -a.wheel, axis: SIMD3(1, 0, 0))
+                    DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in let (p1, n1) = rotated(v, n, about: pv, q); return (yaw.act(p1), yaw.act(n1)) })
+                } else {
+                    DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in (yaw.act(v), yaw.act(n)) })
+                }
+            }
+        case .yarnball:
+            guard let ball = art.part("ball"), let strand = art.part("strand") else { return false }
+            let q = a.rot, pv = ball.pivot
+            DecorMeshes.emit(ball, into: b, offset: o, pose: { v, n, _ in rotated(v, n, about: pv, q) })
+            // the strand trails opposite to the way it rolls (exported pointing toward +x +z)
+            let sp = strand.pivot, yaw = simd_quatf(angle: a.heading - .pi / 4, axis: SIMD3(0, 1, 0))
+            DecorMeshes.emit(strand, into: b, offset: o, pose: { v, n, _ in
+                let c = SIMD3<Float>(0, sp.y, 0)
+                return (c + yaw.act(v - c), yaw.act(n))
+            })
+        case .football:
+            guard let ball = art.part("ball") else { return false }
+            let q = a.rot, pv = ball.pivot
+            var oo = o; oo.y += a.air
+            DecorMeshes.emit(ball, into: b, offset: oo, pose: { v, n, _ in rotated(v, n, about: pv, q) })
+        case .blocks:
+            if a.tumbleT < 0 || a.blocks.isEmpty { all(); return true }
+            let back: Float = a.tumbleT > 20 ? smooth(20, 21.5, a.tumbleT) : 0           // eases back into the stack
+            for (i, part) in art.parts.enumerated() where i < a.blocks.count {
+                let blk = a.blocks[i], pv = part.pivot
+                let q = simd_quatf(angle: blk.yaw, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: blk.roll, axis: SIMD3(1, 0, 0))
+                let c = blk.pos + (pv - blk.pos) * back
+                let qq = simd_slerp(q, simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), back)
+                DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in (c + qq.act(v - pv), qq.act(n)) })
+            }
+        default:
+            all()
         }
         return true
     }
