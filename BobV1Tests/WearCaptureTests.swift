@@ -411,3 +411,54 @@ extension WearCaptureTests {
         gpuShoes = false
     }
 }
+
+extension WearCaptureTests {
+    /// Fix C: the bare blue foot under the shoes. Every look, Bob standing still (3 s) and mid-step: game camera (magnified) + a low close-up.
+    /// SHOE_STAND_TAG labels the variant (before / after); writes shoes_stand_<tag>.png.
+    func testCaptureShoesStanding() throws {
+        let d = try dir()
+        let tag = ProcessInfo.processInfo.environment["SHOE_STAND_TAG"] ?? "after"
+        DayClock.shared.forcedHour = 12
+        var rows: [UIImage] = []
+        let side: CGFloat = 330
+        for look in WearLook.shoes {
+            var cells: [UIImage] = []
+            W = 603 * 2; H = 1311 * 2
+            let lab = setUpLab([SIMD2(0.2, 0.6), SIMD2(30, 30), SIMD2(32, 30)], seed: 3)
+            let outfit: Outfit = [.feet: look]
+            let sets = dress(lab, [outfit])
+            let r = lab.rigs[0]
+            r.brain.shoesWorn = true          // AFTERONLY
+            func step() { lab.tick(watching: false); for q in lab.rigs { q.skinner.jelly.tick(brain: q.brain, sim: q.sim, dt: q.sim.stepDt) } }
+            func shoot(_ pose: String) throws {
+                let c = r.sim.centroid()
+                W = 603 * 2; H = 1311 * 2
+                let (ren, target) = try renderer(lab)
+                let game = composite(lab, sets, [outfit], ren, target)
+                let gc = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+                let k = gc.viewProj * SIMD4<Float>(c.x, 0.12, c.z, 1)
+                let sx = (k.x / k.w * 0.5 + 0.5) * Float(W), sy = (1 - (k.y / k.w * 0.5 + 0.5)) * Float(H)
+                if let cg = game.cgImage(), let part = cg.cropping(to: CGRect(x: Int(sx) - 90, y: Int(sy) - 90, width: 180, height: 180)) {
+                    cells.append(labelled(UIImage(cgImage: part).scaled(side), "\(look.title) \(pose): game camera"))
+                }
+                W = 900; H = 900
+                let (ren2, t2) = try renderer(lab)
+                let cam = Self.lookCamera(target: SIMD3(c.x, 0.06, c.z + 0.02), dir: simd_normalize(SIMD3(0.5, 0, 0.87)), dist: 1.15, aspect: 1, lift: 0.1)
+                cells.append(labelled(composite(lab, sets, [outfit], ren2, t2, cam: cam).uiImage()!.scaled(side), "\(look.title) \(pose): low close-up"))
+            }
+            for _ in 0..<(60 * 3) { step() }
+            try shoot("STANDING")
+            r.brain.request(.goTo(r.root + SIMD2(1.0, 1.2)))
+            var n = 0
+            while n < 60 * 5 { step(); n += 1; if n > 50, max(r.footBottom(0), r.footBottom(1)) - r.sim.floorY > 0.035 { break } }
+            try shoot("MID-STEP")
+            rows.append(hstack(cells))
+        }
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let w = rows.map { $0.size.width }.max()!, h = rows.map { $0.size.height }.reduce(0, +)
+        try write(UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
+            var y: CGFloat = 0
+            for r in rows { r.draw(at: CGPoint(x: 0, y: y)); y += r.size.height }
+        }, d + "/shoes_stand_\(tag).png")
+    }
+}

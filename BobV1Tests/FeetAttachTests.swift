@@ -62,7 +62,7 @@ final class FeetAttachTests: XCTestCase {
     }
     /// The second decor batch: every interaction (name, piece, where, move, seconds, beans expected, forced throw fate).
     static let batch2Decor: [(String, DecorKind, SIMD2<Float>, IdleKind, Float, Bool, Int?)] = [
-        ("decor2: sit on the pouf", .pouf, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
+        ("decor2: sit on the pouf", .pouf, SIMD2(1.3, 0.9), .decorSit, 26, true, nil),
         ("decor2: sit in the armchair", .armchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
         ("decor2: sit on the loveseat", .loveseat, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
         ("decor2: sit on a dining stool", .diningset, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),

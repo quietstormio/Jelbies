@@ -197,13 +197,13 @@ extension BlobBrain {
 
     /// Free to start / join a social: idle, autonomous, nothing else owns him.
     var socialFree: Bool {
-        social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !idleBlocked && !commanded && pending == nil && job == nil
+        social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !held && !commanded && pending == nil && job == nil
             && commandedIdle == nil && !commandedFlip && !commandedNameHop && !interruptScript && !hurry
             && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil
     }
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
-        guard social == nil, socialBook.enabled, attached, autonomy || idleForced, !idleBlocked, !commanded, pending == nil, job == nil, commandedIdle == nil,
+        guard social == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
               !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking else { return false }
         if case .walk = script { return true }
         return false
@@ -225,7 +225,7 @@ extension BlobBrain {
     }
     /// Something took one of the pair away (touch, meal, bath, focus, voice, a request).
     var socialTaken: Bool {
-        pending != nil || idleBlocked || commanded || commandedIdle != nil || commandedFlip || commandedNameHop || interruptScript || job != nil
+        pending != nil || held || commanded || commandedIdle != nil || commandedFlip || commandedNameHop || interruptScript || job != nil
             || activity == .touched || activity == .recovering
     }
 
@@ -448,7 +448,7 @@ extension BlobBrain {
 
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        let blocked = idleBlocked || !autonomy
+        let blocked = held || !autonomy
         if !blocked { socialBook.cooldown -= dt }
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
@@ -554,7 +554,7 @@ extension BlobBrain {
         for p in ps {
             let o = p.b
             let d = simd_distance(p.pos, position)
-            if d > peerGap + 0.8 || o.idleBlocked || (!o.autonomy && !o.idleForced) { socialBook.apart[p.id, default: 0] += dt; socialBook.near[p.id] = 0 }
+            if d > peerGap + 0.8 || o.held || (!o.autonomy && !o.idleForced) { socialBook.apart[p.id, default: 0] += dt; socialBook.near[p.id] = 0 }
             else if d < peerGap + 0.4 {
                 let n = (socialBook.near[p.id] ?? 0) + dt
                 socialBook.near[p.id] = n

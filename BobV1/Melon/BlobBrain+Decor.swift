@@ -94,7 +94,7 @@ extension BlobBrain {
             return hopStand(f, seat: seat)
         case .decorSlide:
             // behind the slide, where the steps start (the JSON's approach point)
-            let p = c + SIMD2(0, -1.85)
+            let p = c + SIMD2(0, -DecorKind.slideApproach)
             let q = fixed(p)
             return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil
         case .decorThrow:
@@ -424,6 +424,7 @@ extension BlobBrain {
             let a = DecorField.shared.anim[uid] ?? DecorAnim()
             pitch += (f.kind == .swing ? DecorModels.swingAngle(a) : DecorModels.rockAngle(a)) * 0.9
         }
+        if f.kind == .armchair || f.kind == .loveseat { pitch += 0.12 * k }          // (upright against the backrest: leaning back sank his rear and a tall hat into it)
         if f.kind == .loveseat {
             // both seats taken and both settled: lean toward each other (the snuggle lean), a hair closer
             var want: Float = 0
@@ -432,7 +433,7 @@ extension BlobBrain {
             if idleState.cuddle > 0.001 {
                 let sgn: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1       // toward the middle
                 roll += -sgn * 0.12 * idleState.cuddle
-                let want = SIMD2<Float>(sgn * 0.08 * idleState.cuddle, 0)
+                let want = SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0)
                 let d = want - idleState.seatShift
                 px += d.x; feet.pos[0] += d; feet.pos[1] += d
                 idleState.seatShift = want

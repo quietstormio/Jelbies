@@ -32,11 +32,14 @@ extension GameCare {
 
     /// Once per fixed step for Jelly `id`: his perks reach his brain, and a sugar rush runs once he has finished eating.
     func syncPerks(id: Int, brain: BlobBrain) {
+        // shoes keep the beans out for good (the same rule as `shoeLook`: no shoes drawn on a race rival or on the Jelly in the wash)
+        let shod = store.worn(id, .feet) != nil && !(race.active && id != race.playerID) && !(bath.active && bath.targetID == id)
+        if brain.shoesWorn != shod { brain.shoesWorn = shod }
         guard let p = jelly(id)?.perks else { return }
         let c = p.cache
         let f = PerkFlags(bouncy: c.any && p.isActive(.bouncy), social: c.any && p.isActive(.social), bedtime: c.any && p.isActive(.bedtime))
         if brain.perkFlags != f { brain.perkFlags = f }
-        if zoomiesDue.contains(id), !race.active, !(id == mealJelly && (meal != nil || wanted != nil)), !(groupActive), brain.activity != .eating, brain.activity != .drinking,
+        if zoomiesDue.contains(id), !race.active, !(id == mealJelly && (meal != nil || wanted != nil)), !(groupActive), !brain.reserved, brain.activity != .eating, brain.activity != .drinking,
            !brain.commanded, brain.commandedIdle == nil, !brain.isSleeping, !bath.active {
             zoomiesDue.remove(id)
             brain.commandedIdle = .zoomies

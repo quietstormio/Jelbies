@@ -121,7 +121,7 @@ enum DecorModels {
 
     /// Seat cushion compression for a sat-in seat (0...1 press): y *= 1 - 0.30 * amount * w about the cushion pivot.
     static func cushionAmount(_ press: Float) -> Float { 0.8 * press }
-    static let rockPivot = SIMD3<Float>(0, 1.145, 0), swingPivot = SIMD3<Float>(0, 2.1, 0)
+    static let rockPivot = SIMD3<Float>(0, 1.145, 0) * DecorKind.rockingchair.scale, swingPivot = SIMD3<Float>(0, 2.1, 0) * DecorKind.swing.scale
     /// The rocking chair's angle now (rad about game X) and the swing's.
     static func rockAngle(_ a: DecorAnim) -> Float { 0.14 * sinf(2 * .pi * a.rockT / 1.7) * min(a.rockAmp, 1) }
     static func swingAngle(_ a: DecorAnim) -> Float { 0.22 * sinf(2 * .pi * a.rockT / 2.6) * min(a.rockAmp, 1) }
@@ -134,8 +134,8 @@ enum DecorModels {
         switch kind {
         case .beanbag: p.y = bagSeatY * (1 - bagSquish(a))
         case .pouf: p.y = sp.y * (1 - (0.10 * a.sink + 0.05 * min(a.kick, 1.2) * cosf(a.kickT * 13)))
-        case .armchair: p.y = 0.34 + (sp.y - 0.34) * (1 - 0.30 * cushionAmount(a.sink))
-        case .loveseat: p.y = 0.34 + (sp.y - 0.34) * (1 - 0.30 * cushionAmount(seat == 0 ? a.seatSink.x : a.seatSink.y))
+        case .armchair: let c = 0.34 * kind.scale; p.y = c + (sp.y - c) * (1 - 0.30 * cushionAmount(a.sink))
+        case .loveseat: let c = 0.34 * kind.scale; p.y = c + (sp.y - c) * (1 - 0.30 * cushionAmount(seat == 0 ? a.seatSink.x : a.seatSink.y))
         case .diningset: p.y = sp.y * (1 - 0.06 * (seat == 0 ? a.seatSink.x : a.seatSink.y))
         case .rockingchair: p = rel(rockPivot, rockAngle(a))
         case .swing: p = rel(swingPivot, swingAngle(a))
@@ -146,7 +146,7 @@ enum DecorModels {
     }
 
     /// The pet bed's mattress top (the sleeper's floor): its lying point, a touch lower while the mattress is pressed.
-    static func bedFloor(_ a: DecorAnim, lift: Float) -> Float { lift + 0.02 + (DecorKind.sleepPoint.y - 0.02) * (1 - 0.35 * a.sink) }
+    static func bedFloor(_ a: DecorAnim, lift: Float) -> Float { lift + 0.02 * DecorKind.petbed.scale + (DecorKind.sleepPoint.y - 0.02 * DecorKind.petbed.scale) * (1 - 0.35 * a.sink) }
 
     private static func rotX(_ pivot: SIMD3<Float>, _ ang: Float) -> (SIMD3<Float>, SIMD3<Float>, Float) -> (SIMD3<Float>, SIMD3<Float>) {
         let q = simd_quatf(angle: ang, axis: SIMD3(1, 0, 0))
@@ -165,11 +165,13 @@ enum DecorModels {
         case .loveseat:
             all(except: ["seat"])
             let l = cushionAmount(a.seatSink.x), r = cushionAmount(a.seatSink.y)
-            squish("seat") { v, n, w in (SIMD3(v.x, 0.34 + (v.y - 0.34) * (1 - 0.30 * (v.x < 0 ? l : r) * w), v.z), n) }
+            let c0 = 0.34 * kind.scale
+            squish("seat") { v, n, w in (SIMD3(v.x, c0 + (v.y - c0) * (1 - 0.30 * (v.x < 0 ? l : r) * w), v.z), n) }
         case .armchair:
             all(except: ["seat"])
             let m = cushionAmount(a.sink)
-            squish("seat") { v, n, w in (SIMD3(v.x, 0.34 + (v.y - 0.34) * (1 - 0.30 * m * w), v.z), n) }
+            let c0 = 0.34 * kind.scale
+            squish("seat") { v, n, w in (SIMD3(v.x, c0 + (v.y - c0) * (1 - 0.30 * m * w), v.z), n) }
         case .pouf:
             let amt = 0.10 * a.sink + 0.05 * min(k, 1.2) * cosf(a.kickT * 13)
             squish("pouf") { v, n, w in (SIMD3(v.x * (1 + 0.5 * amt * w), v.y * (1 - amt), v.z * (1 + 0.5 * amt * w)), n) }
@@ -186,7 +188,8 @@ enum DecorModels {
         case .petbed:
             all(except: ["mat"])
             let amt = 0.35 * a.sink
-            squish("mat") { v, n, w in (SIMD3(v.x, 0.02 + (v.y - 0.02) * (1 - amt * w), v.z), n) }
+            let m0 = 0.02 * kind.scale
+            squish("mat") { v, n, w in (SIMD3(v.x, m0 + (v.y - m0) * (1 - amt * w), v.z), n) }
         case .bookshelf:
             all(except: ["plant"])
             if let pl = art.part("plant") {

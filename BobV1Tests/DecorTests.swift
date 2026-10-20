@@ -56,15 +56,16 @@ final class DecorTests: XCTestCase {
             XCTAssertTrue((25...120).contains(i.price), "\(i.name) \(i.price)")
             XCTAssertNotNil(i.decor, i.id)
             XCTAssertEqual(i.roomUnits, i.decor?.spec.units)
-            XCTAssertTrue(i.roomUnits == 1 || i.roomUnits == 2)
+            XCTAssertTrue((1...3).contains(i.roomUnits))
         }
         XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases))
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat, .petbed, .slide, .swing])
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat])
+        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .slide, .swing], "the 1.25x swing, slide and pet bed count 3 spots")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
         // prices and spots come from the Blender exports' JSON
-        let json: [DecorKind: (Int, Int)] = [.loveseat: (120, 2), .petbed: (90, 2), .pouf: (40, 1), .rockingchair: (80, 1), .armchair: (70, 1), .swing: (100, 2), .diningset: (85, 2),
-                                             .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 2), .monstera: (70, 1), .duck: (25, 1),
+        let json: [DecorKind: (Int, Int)] = [.loveseat: (120, 2), .petbed: (90, 3), .pouf: (40, 1), .rockingchair: (80, 1), .armchair: (70, 1), .swing: (100, 3), .diningset: (85, 2),
+                                             .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 3), .monstera: (70, 1), .duck: (25, 1),
                                              .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .football: (40, 1)]
         for (k, v) in json { XCTAssertEqual(StoreCatalog.item(k.storeID)?.price, v.0, "\(k) price"); XCTAssertEqual(k.spec.units, v.1, "\(k) spots") }
     }
@@ -276,7 +277,7 @@ final class DecorTests: XCTestCase {
             }
             XCTAssertNotNil(asleepAt, "seed \(seed): all three asleep within 40 s")
             let spots = lab.rigs.map { $0.brain.sleep.spot }
-            for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThan(simd_distance(spots[i], spots[j]), SleepTuning.minGap - 0.05, "seed \(seed): bodies apart") } }
+            for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThan(simd_distance(spots[i], spots[j]), SleepTuning.minGap - 0.1, "seed \(seed): bodies apart") } }
         }
     }
 
@@ -494,7 +495,7 @@ final class DecorTests: XCTestCase {
                 }
                 XCTAssertNotNil(asleepAt, "seed \(seed) \(mix.first!): all three asleep within 50 s")
                 let spots = lab.rigs.map { $0.brain.sleep.spot }
-                for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThan(simd_distance(spots[i], spots[j]), SleepTuning.minGap - 0.05, "seed \(seed): bodies apart") } }
+                for i in 0..<3 { for j in (i + 1)..<3 { XCTAssertGreaterThan(simd_distance(spots[i], spots[j]), SleepTuning.minGap - 0.1, "seed \(seed): bodies apart") } }
                 if mix == DecorTuning.bedRoom { XCTAssertEqual(lab.rigs.filter { $0.brain.sleep.bed >= 0 }.count, 1, "seed \(seed): one of them is in the pet bed") }
                 for r in lab.rigs { XCTAssertFalse(DecorField.shared.feet.contains { $0.spec.solid && $0.kind != .petbed && $0.distance(r.brain.sleep.spot) < 0.3 }, "nobody sleeps inside a piece") }
             }

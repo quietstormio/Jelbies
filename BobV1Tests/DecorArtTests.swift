@@ -65,10 +65,12 @@ final class DecorArtTests: XCTestCase {
         for k in DecorKind.allCases {
             guard let art = DecorMeshes.loaded[k] else { continue }
             let s = k.spec
+            // (the 1.25x swing keeps its authored depth and the slide its authored width as walking footprints: the room has no space for more, see DecorKind.spec)
+            let slack: Float = k == .swing || k == .slide ? 0.3 : 0.06
             for p in art.parts where !Self.canopy.contains(p.name) || DecorKind.original.contains(k) {
                 let lo = p.positions.reduce(SIMD3<Float>(repeating: .infinity)) { simd_min($0, $1) }, hi = p.positions.reduce(SIMD3<Float>(repeating: -.infinity)) { simd_max($0, $1) }
-                XCTAssertLessThanOrEqual(max(-lo.x, hi.x), s.half.x + 0.06, "\(k).\(p.name) footprint x")
-                XCTAssertLessThanOrEqual(max(-lo.z, hi.z), s.half.y + 0.06, "\(k).\(p.name) footprint z")
+                XCTAssertLessThanOrEqual(max(-lo.x, hi.x), s.half.x + slack, "\(k).\(p.name) footprint x")
+                XCTAssertLessThanOrEqual(max(-lo.z, hi.z), s.half.y + slack, "\(k).\(p.name) footprint z")
             }
         }
     }

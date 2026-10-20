@@ -156,6 +156,13 @@ final class BlobBrain {
     var napping = false
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
+    /// A reserved Jelly (a meal is coming for him, GameCare / DiningGroup): he waits where he stands. Unlike `idleBlocked` (rewritten by the stage every frame)
+    /// nobody else touches it. Every autonomous starter respects `held`; `pickAutonomous` only allows the wait pose (look at the tray / a neighbour, step in place, a bounce, a blink).
+    var reserved = false
+    /// Where the waiting Jelly looks first (the tray); nil = at the nearest neighbour or just stays.
+    var waitFocus: SIMD2<Float>?
+    var waitBounceT: Float = 0
+    var held: Bool { idleBlocked || reserved }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
     var social: SocialSession?
     var socialBook = SocialBook()
@@ -243,6 +250,8 @@ final class BlobBrain {
     var beanG: Float = 0                 // 0 = hidden (plain embedded feet) ... 1 = beans out, embedded feet retracted
     var beanHold: Float = 0              // seconds the beans stay out after the last foot motion
     var beanHoldTime: Float = 0.7
+    /// He wears shoes (GameCare.syncPerks sets it): the beans stay out for good so the rendered foot IS the bean the shell is grown from (no soft-skin foot sagging out under the sole).
+    var shoesWorn = false
     var beanGrowTime: Float = 0.12
     var beanFirstIdx: [Int] = []
     var retractReady = false
@@ -501,7 +510,7 @@ final class BlobBrain {
             // hands-off (held, thrown, tumbling): foot beans that are still out must follow the body (they are drawn from world positions, so
             // frozen they would hang in the air where he was picked up); they fold back into the embedded feet. The held dangle (driveExcited,
             // from the touch play) drives them while it runs.
-            if !excitedOn && (beanG > 0 || beanHold > 0) { driveBeansRigid(sim, skinner, dt) }
+            if !excitedOn && (beanG > 0 || beanHold > 0 || shoesWorn) { driveBeansRigid(sim, skinner, dt) }
             return
         }
         if activity == .touched { activity = .recovering; gaitRecover = false; calmT = 0; recoverT = 0 }
@@ -625,6 +634,7 @@ final class BlobBrain {
 
     func pickAutonomous(_ sim: SoftBody) {
         currentPose(sim)
+        if reserved && !commanded { waitPose(sim); return }
         if socialMaybeStart(sim) { return }
         if idleMaybeStart(sim) { return }
         var w: [(Int, Float)] = [(0, 5), (1, 2), (2, 1.5)]
@@ -675,6 +685,24 @@ final class BlobBrain {
             sincePlay = 0
             let k = rand()
             if k < 0.4 { startHop(sim) } else if k < 0.7 { script = .spin(t: 0); activity = .playing } else { startRoll(sim) }
+        }
+    }
+
+    /// The wait pose of a reserved Jelly (meal coming): never a leg. Looks at the tray or a neighbour, steps in place, or a small bounce and a blink.
+    func waitPose(_ sim: SoftBody) {
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        let r = rand()
+        var aim: Float?
+        if r < 0.35 {
+            if let o = socialOthers().filter({ $0 !== self }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) { aim = yawTo(o.position) }
+        } else if r < 0.6, let f = waitFocus { aim = yawTo(f) }
+        if let aim, abs(wrapAngle(aim - yaw)) > 0.12 {
+            script = .look(index: 2, t: 0, base: aim); activity = .lookingAround
+        } else if rand() < 0.6 {
+            script = .stepInPlace(t: 0, dur: rand(1.2, 2.2)); activity = .steppingInPlace
+        } else {
+            blinkRequested = true; jellyKick = max(jellyKick, 0.9)          // a little bounce and a blink, then rest again
+            restTimer = rand(0.8, 1.4)
         }
     }
 
@@ -1309,7 +1337,7 @@ final class BlobBrain {
         if want {
             if beanG <= 0 && beanHold <= 0 { beanSwaps += 1 }
             beanHold = beanHoldTime
-        } else { beanHold = max(0, beanHold - dt) }
+        } else if shoesWorn { beanHold = beanHoldTime } else { beanHold = max(0, beanHold - dt) }
         let target: Float = (want || beanHold > 0) ? 1 : 0
         beanG += max(-dt / beanGrowTime, min(dt / beanGrowTime, target - beanG))
         if beanG <= 0.0001 { beanG = 0; skinner.clearBeans(); return }
@@ -1380,7 +1408,7 @@ final class BlobBrain {
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         var list: [ParticleTarget] = []
-        let beanLive = beanG > 0 || beanHold > 0
+        let beanLive = beanG > 0 || beanHold > 0 || shoesWorn
         let footOn = feetInit && geom.valid && feetDrive && (poseW > 0 || beanLive) && debugFeet
         guard footOn || armActive || nubOverride || armWalkWant > 0 || armLift != 0 || armG > 0 else {
             if !sim.targets.isEmpty { sim.targets.removeAll() }

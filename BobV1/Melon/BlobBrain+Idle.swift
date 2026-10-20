@@ -176,8 +176,8 @@ extension BlobBrain {
 
     /// Called from `pickAutonomous` (a pick is due, script .none): starts a special when the cooldown is over. True = a behaviour started.
     func idleMaybeStart(_ sim: SoftBody) -> Bool {
-        if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !idleBlocked, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
-        guard idleState.kind == nil, !idleBlocked, idleState.cooldown <= 0, attached else { return false }
+        if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
+        guard idleState.kind == nil, !held, idleState.cooldown <= 0, attached else { return false }
         // the zoomies urge: a burst of energy every few minutes (not at night, never grumpy, one of the two fast Jellies at a time)
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 1 {
             let k: IdleKind = rand() < 0.6 ? .zoomies : .run
@@ -218,7 +218,7 @@ extension BlobBrain {
         guard let kind = idleState.kind else {
             commanded = false
             if decorIgnore != nil || !DecorField.shared.feet.isEmpty { decorExitCheck() }
-            if autonomy && !idleBlocked { idleState.cooldown -= dt; zoomUrge -= dt }
+            if autonomy && !held { idleState.cooldown -= dt; zoomUrge -= dt }
             return
         }
         idleState.t += dt
@@ -248,7 +248,7 @@ extension BlobBrain {
         // woken (a tap / the selection / a request) before he lay down: the walk to bed or the yawn just ends (nothing else read `yielding` for stages 0 / 1: he used to lie down anyway)
         if kind == .sleep, idleState.yielding, sleep.stage <= 1 { abortAll(sim, skinner); return }
         if Self.decorKinds.contains(kind) { decorTick(sim, skinner, dt) }
-        if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (idleBlocked && !commanded)) && !idleState.yielding {
+        if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:

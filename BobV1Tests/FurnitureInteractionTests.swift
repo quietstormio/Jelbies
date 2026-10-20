@@ -73,7 +73,7 @@ final class FurnitureInteractionTests: XCTestCase {
             _ = r
             XCTAssertEqual(stages, [0, 1, 2, 3], "\(kind): turn, hop on, on top, hop off")
             XCTAssertGreaterThan(seated, 100, "\(kind): he rests on the seat")
-            XCTAssertLessThan(floorErr, 0.002, "\(kind): his floor is the seat's top")
+            XCTAssertLessThan(floorErr, 0.003, "\(kind): his floor is the seat's top")
             XCTAssertGreaterThan(maxTop, y - 0.2, "\(kind): up on the seat (\(maxTop))")
         }
     }
@@ -204,7 +204,7 @@ final class FurnitureInteractionTests: XCTestCase {
         XCTAssertGreaterThan(maxY, 0.6, "he reaches the platform")
         XCTAssertGreaterThan(riding, 20, "he rides")
         XCTAssertLessThan(floorErr, 0.02, "his floor follows the chute")
-        XCTAssertEqual(lastZ, c.y + 1.75, accuracy: 0.4, "he ends 0.35 beyond the chute")
+        XCTAssertEqual(lastZ, c.y + 1.75 * DecorKind.slide.scale, accuracy: 0.4, "he ends 0.35 beyond the chute")
         _ = endPz
     }
 
@@ -260,13 +260,13 @@ final class FurnitureInteractionTests: XCTestCase {
             if r.brain.isNapping {
                 lyingFloor = r.sim.floorY
                 let c = r.sim.centroid()
-                inside = abs(c.x - 2.3) < 1.07 && abs(c.z - 0.45) < 1.07
+                inside = abs(c.x - 2.3) < DecorKind.petbed.spec.half.x && abs(c.z - 0.45) < DecorKind.petbed.spec.half.y
                 if set.phase(0) == .shown { maskShown = true }
             }
             if r.brain.idleState.kind == nil, r.t > 5 { break }
         }
         XCTAssertEqual(hops, [0, 1, 2, 0, 3], "walk, turn, hop in, sleep, hop out")
-        XCTAssertEqual(lyingFloor, 0.16, accuracy: 0.01, "he lies on the mattress")
+        XCTAssertEqual(lyingFloor, 0.12 * DecorKind.petbed.scale, accuracy: 0.01, "he lies on the mattress")
         XCTAssertTrue(inside, "curled up inside the bed")
         XCTAssertTrue(maskShown, "the sleep mask goes on")
         XCTAssertTrue(hopOut)

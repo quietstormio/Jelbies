@@ -27,6 +27,13 @@ nonisolated enum DecorMeshes {
         var parts: [Part]
         var triangles: Int { parts.reduce(0) { $0 + $1.triangles } }
         func part(_ n: String) -> Part? { parts.first { $0.name == n } }
+        /// Every position and pivot times `k` (normals and the rest unchanged): the in-game size of a piece authored small.
+        func scaled(_ k: Float, x kx: Float? = nil) -> Art {
+            var a = self
+            let m = SIMD3<Float>(kx ?? k, k, k)
+            for i in a.parts.indices { a.parts[i].pivot *= m; a.parts[i].positions = a.parts[i].positions.map { $0 * m } }
+            return a
+        }
         var bounds: (lo: SIMD3<Float>, hi: SIMD3<Float>) {
             var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
             for p in parts { for v in p.positions { lo = simd_min(lo, v); hi = simd_max(hi, v) } }
@@ -39,7 +46,7 @@ nonisolated enum DecorMeshes {
     /// Every piece that loaded, by kind. Thread-safe lazy static.
     static let loaded: [DecorKind: Art] = {
         var out: [DecorKind: Art] = [:]
-        for k in DecorKind.allCases { if let a = load(k.rawValue) { out[k] = a } }
+        for k in DecorKind.allCases { if let a = load(k.rawValue) { out[k] = k.scale == 1 ? a : a.scaled(k.scale, x: k.scaleX) } }
         return out
     }()
 

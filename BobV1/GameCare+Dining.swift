@@ -22,6 +22,11 @@ extension GameCare {
     /// paid as eaten, the refusal label, the re-serve loop. Jelly 0 keeps the Call / queued-request gating it always had.
     func tickDining(id: Int, brain: BlobBrain, sim: SoftBody?, dt: Float) {
         if id == 0, notice != nil { noticeAge += dt; if noticeAge > 1.9 { notice = nil } }
+        if !group.isActive {          // single serving: the Jelly the tray is for waits where he stands (reserved), everybody else is free
+            let reserving = id == mealJelly && (wanted != nil || meal != nil)
+            brain.reserved = reserving
+            brain.waitFocus = reserving ? (dining.isPresent ? dining.places.first?.stand : (wantedOrigin ?? DiningSpot.preferred)) : nil
+        }
         if id != mealJelly, wanted != nil || meal != nil { stepAside(id: id, brain: brain, sim: sim, dt: dt); return }
         guard id == mealJelly, wanted != nil || meal != nil else { return }
         let act = brain.activity

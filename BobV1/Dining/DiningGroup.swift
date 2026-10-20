@@ -50,7 +50,7 @@ final class DiningGroup {
     private var settle: Float = 0
     private var age: Float = 0
     private var idle: [Float] = []
-    private var walkRetries: [Int] = []
+    private(set) var walkRetries: [Int] = []
     private var mealRetries: [Int] = []
     /// Re-serves used (a displaced Blob: the tray poofs, everybody re-forms behind it, it pops again). Bounded like GameCare.
     private(set) var reserves = 0
@@ -129,6 +129,7 @@ final class DiningGroup {
             }
         }
         hooked = true
+        for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
         beginApproach()
     }
 
@@ -149,7 +150,7 @@ final class DiningGroup {
     private func end() {
         settlePay()
         dining.despawn(); state = .idle; requested = false
-        for (i, b) in brains.enumerated() where i < savedFinished.count { b.onFinished = savedFinished[i]; b.peerGap = savedGap[i]; b.idleBlocked = false; if i < savedPeers.count { b.peers = savedPeers[i] } }
+        for (i, b) in brains.enumerated() where i < savedFinished.count { b.onFinished = savedFinished[i]; b.peerGap = savedGap[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; if i < savedPeers.count { b.peers = savedPeers[i] } }
         savedFinished = []; savedGap = []; savedPeers = []
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
@@ -202,6 +203,8 @@ final class DiningGroup {
             settle = 0
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             for i in brains.indices where !ready(i) && isIdle(brains[i]) {
+                // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
+                guard brains.indices.allSatisfy({ $0 == i || isIdle(brains[$0]) }) else { idle[i] = 0; continue }
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0

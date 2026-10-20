@@ -382,7 +382,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     static func makeRoom(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains: [BlobBrain?], cooldown: inout [Float], dt: Float) {
         for i in cooldown.indices { cooldown[i] = max(0, cooldown[i] - dt) }
         func free(_ i: Int) -> Bool {
-            guard let b = brains[i], b.enabled, b.autonomy, !b.commanded, !b.idleBlocked, b.pending == nil, !b.isSocial, b.idleState.kind == nil, cooldown[i] <= 0 else { return false }
+            guard let b = brains[i], b.enabled, b.autonomy, !b.commanded, !b.held, b.pending == nil, !b.isSocial, b.idleState.kind == nil, cooldown[i] <= 0 else { return false }
             if case .none = b.script {} else { return false }
             return b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace
         }

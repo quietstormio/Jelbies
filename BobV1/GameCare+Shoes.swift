@@ -20,8 +20,10 @@ extension GameCare {
         var rigid: [[SIMD3<Float>]] = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)]
         b.fillBeansRigid(sim, into: &rigid, tuck: 0)
         guard sk.beansActive else { return rigid }
+        // the SAME blend the skin draws (Skinner.update): beanStart -> beanPos by the bean blend, so the shell is grown from the foot that is on screen
         let bl = sk.beanBlend
-        for s in 0..<2 { for i in 0..<FootBean.vertexCount { rigid[s][i] += (sk.beanPos[s][i] - rigid[s][i]) * bl } }
+        guard sk.beanStart.count == 2, sk.beanStart[0].count == FootBean.vertexCount, sk.beanPos.count == 2, sk.beanPos[0].count == FootBean.vertexCount else { return rigid }
+        for s in 0..<2 { for i in 0..<FootBean.vertexCount { let a = sk.beanStart[s][i]; rigid[s][i] = a + (sk.beanPos[s][i] - a) * bl } }
         return rigid
     }
 

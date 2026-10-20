@@ -333,7 +333,7 @@ final class GameCare {
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
-        trayOut || meal != nil || wanted != nil || bath.active || race.active || focus.isActive || focus.phase != .roaming
+        trayOut || meal != nil || wanted != nil || groupActive || bath.active || race.active || focus.isActive || focus.phase != .roaming
             || voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow
     }
     func greetIfAway(_ away: TimeInterval) {

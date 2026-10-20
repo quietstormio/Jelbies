@@ -13,8 +13,12 @@ import Foundation
 
 nonisolated enum ShoeModel {
     /// Greatest distance of any shoe vertex from the bean vertex it grew from (the sole is the thickest part).
-    static let maxThickness: Float = 0.03
+    static let maxThickness: Float = 0.046          // (0.028 sole along the normal + the 0.018 rim flare)
     static let soleThickness: Float = 0.028, upperThickness: Float = 0.016
+    /// Radial xz flare of the sole's rim (fades out by u = 0.2) and the sole's lift over the floor plane.
+    static let rimFlare: Float = 0.018, soleLift: Float = 0.001
+    /// Bean vertices of the sole (the bottom ring and pole): their mean xz is the sole centre the flare grows from.
+    static let soleVerts: [Int] = style.u.indices.filter { style.u[$0] < 0.06 }
 
     /// Where each bean vertex sits on the foot (from the planted rest shape): u = 0 sole ... 1 crown, v = 0 heel ... 1 toe, sx = 0 centre ... 1 outer side.
     struct Style { var u: [Float] = [], v: [Float] = [], sx: [Float] = [] }
@@ -152,9 +156,20 @@ nonisolated enum ShoeModel {
         let glowCol = mix(srgb(0.25, 0.92, 1.0), srgb(1.0, 0.45, 0.78), ph)
         var P = [SIMD3<Float>](), N = [SIMD3<Float>]()
         P.reserveCapacity(w.count + sb.mids.count); N.reserveCapacity(w.count + sb.mids.count)
+        // the sole's rim flares out (radially, in xz, from the sole centre) so the shell's bottom edge always stands clear of the bean's own rim: the bean sole is
+        // clamped to the floor, and a sole grown only along the normal would end coplanar with it (the bare foot showed there). The sole stays 1 mm over the floor.
+        var cx: Float = 0, cz: Float = 0, cn: Float = 0
+        for i in soleVerts { cx += w[i].x; cz += w[i].z; cn += 1 }
+        let ctr = SIMD2<Float>(cx, cz) / max(cn, 1)
         for i in w.indices {
             var p = w[i] + n[i] * thickness(i)
-            p.y = max(p.y, floorY)
+            let fl = rimFlare * (1 - smooth(0.0, 0.2, style.u[i]))
+            if fl > 0 {
+                let d = SIMD2(w[i].x, w[i].z) - ctr
+                let l = simd_length(d)
+                if l > 1e-5 { p.x += d.x / l * fl; p.z += d.y / l * fl }
+            }
+            p.y = max(p.y, floorY + soleLift)
             P.append(p); N.append(n[i])
         }
         for m in sb.mids { P.append((P[Int(m.a)] + P[Int(m.b)]) * 0.5); N.append(simd_normalize(N[Int(m.a)] + N[Int(m.b)])) }

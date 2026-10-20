@@ -54,7 +54,33 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         guard id.hasPrefix("decor-"), let k = DecorKind(rawValue: String(id.dropFirst(6))) else { return nil }
         self = k
     }
+    /// The seating and sleeping pieces were authored for Jellies at about 0.8 scale: in game they are drawn, measured and used 1.25x (art, footprint, sit points, pivots, slide path, sleep point).
+    static let bigScale: Float = 1.25
+    var scale: Float {
+        switch self {
+        case .loveseat, .swing, .rockingchair, .armchair, .pouf, .diningset, .petbed, .slide: return Self.bigScale
+        default: return 1
+        }
+    }
+    /// Width scale: the loveseat's art is 1.4x wide (1.25x in depth and height) so two bodies of ~1.3 sit side by side between its arms.
+    var scaleX: Float { self == .loveseat ? 1.4 : scale }
     var spec: DecorSpec {
+        var s = baseSpec
+        let k = scale
+        if k != 1 {
+            let h0 = s.half
+            s.half *= k; s.height *= k; s.corner *= k
+            s.half.x = h0.x * scaleX
+            // The room has no space for a swing 2.4 deep (between the sofa and the meal core there is ~1.9) or a slide 2.0 wide in portrait: their frames keep the
+            // authored depth / width as walking footprints (the art is 1.25x; only the footprint of the legs / rails stays), everything else scales whole.
+            if self == .swing { s.half.y = h0.y }
+            if self == .slide { s.half.x = h0.x }
+            if self == .swing || self == .slide || self == .petbed { s.units = 3 }          // 1.25x: the swing, the slide and the pet bed take 3 room spots
+        }
+        return s
+    }
+    /// The footprints as authored (JSON `footprint_half`, before `scale`).
+    private var baseSpec: DecorSpec {
         switch self {
         case .beanbag: return DecorSpec(half: SIMD2(0.72, 0.72), height: 0.73, solid: true, units: 2, corner: 0.72, reach: 1)
         case .cushion: return DecorSpec(half: SIMD2(0.37, 0.37), height: 0.24, solid: true, units: 1, corner: 0.2, reach: 0.55)
@@ -135,20 +161,23 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
 
 extension DecorKind {
     /// Where a sitter's base goes, piece-local (x, seat height, z), from the exports' `sit_points`; empty for a piece that is not hopped onto.
-    var sitPoints: [SIMD3<Float>] {
+    var sitPoints: [SIMD3<Float>] { baseSitPoints.map { SIMD3($0.x * scaleX, $0.y * scale, $0.z * scale) } }
+    private var baseSitPoints: [SIMD3<Float>] {
         switch self {
         case .beanbag: return [SIMD3(0, DecorModels.bagSeatY, DecorModels.bagSeatZ)]
-        case .pouf: return [SIMD3(0, 0.47, 0)]
-        case .armchair: return [SIMD3(0, 0.52, 0.05)]
-        case .loveseat: return [SIMD3(-0.55, 0.52, 0.05), SIMD3(0.55, 0.52, 0.05)]
+        case .pouf: return [SIMD3(0, 0.45, 0)]
+        case .armchair: return [SIMD3(0, 0.52, 0.3)]
+        case .loveseat: return [SIMD3(-0.57, 0.52, 0.3), SIMD3(0.57, 0.52, 0.3)]          // (x 1.4x: seats 1.6 apart, two bodies of ~1.3 do not touch)
         case .diningset: return [SIMD3(-0.85, 0.47, 0), SIMD3(0.85, 0.47, 0)]
-        case .rockingchair: return [SIMD3(0, 0.6, 0.02)]
-        case .swing: return [SIMD3(-0.5, 0.6, 0), SIMD3(0.5, 0.6, 0)]
+        case .rockingchair: return [SIMD3(0, 0.6, 0.2)]
+        case .swing: return [SIMD3(-0.62, 0.6, 0), SIMD3(0.62, 0.6, 0)]
         default: return []
         }
     }
     /// The pet bed's lying point (piece-local): the base of a curled sleeper on the mattress.
-    static let sleepPoint = SIMD3<Float>(0, 0.16, 0.05)
+    /// How far behind the slide's centre he stands to climb it (the JSON's approach point, scaled).
+    static let slideApproach: Float = (1.28 * DecorKind.slide.scale) + 0.57
+    static let sleepPoint = SIMD3<Float>(0, 0.12 * DecorKind.petbed.scale, 0.05)
     /// The seat faces this way (yaw about +y from +z): the dining stools face the table, everything else the camera.
     func seatFacing(_ seat: Int) -> Float? { self == .diningset ? (seat == 0 ? .pi / 2 : -.pi / 2) : nil }
     /// Sideways distance from the piece's centre to where a Jelly stands for it (the seat off to one side).
@@ -226,11 +255,11 @@ enum DecorTuning {
     /// A plausible 10-spot room (2 beanbags, the mat, a toy box, a plant, a night light, a cushion): the capture aid and the tests fill the room with it.
     static let fullRoom: [DecorKind] = [.beanbag, .beanbag, .bouncymat, .toybox, .plant, .nightlight, .cushion]
     /// The second batch, big furniture (10 spots; fits a portrait room): swing, loveseat, slide, rocking chair, bookshelf, floor lamp, duck.
-    static let furnitureRoom: [DecorKind] = [.swing, .loveseat, .slide, .rockingchair, .bookshelf, .floorlamp, .duck]
+    static let furnitureRoom: [DecorKind] = [.swing, .loveseat, .slide, .rockingchair, .bookshelf]
     /// The pet bed, the dining set and small pieces (10 spots).
-    static let bedRoom: [DecorKind] = [.petbed, .diningset, .armchair, .pouf, .wardrobe, .monstera, .drum, .toycar]
+    static let bedRoom: [DecorKind] = [.petbed, .armchair, .diningset, .pouf]
     /// The heaviest new meshes (triangles), 10 spots: the perf test's room.
-    static let heaviestRoom: [DecorKind] = [.loveseat, .diningset, .bookshelf, .monstera, .rockingchair, .toycar, .yarnball, .duck]
+    static let heaviestRoom: [DecorKind] = [.rockingchair, .loveseat, .diningset, .bookshelf, .toycar]
 }
 
 // MARK: - where things may go
@@ -304,14 +333,17 @@ enum DecorPlacement {
     static func isValid(_ kind: DecorKind, at p: SIMD2<Float>, among others: [PlacedDecor], ignoring uid: Int? = nil) -> Bool {
         let s = kind.spec
         let walked = kind.interaction != nil || kind == .petbed          // (a Jelly walks to it: the pet bed too)
-        let lowZ = walked ? max(minZ, GameCamera.walkMinZ) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
+        // A big deep piece (swing, slide, pet bed at 1.25x) may stand far back: it is its FRONT (where a Jelly stands for it, or the slide's climb behind it) that has to be on walkable floor
+        let deep = s.box && s.half.y > 0.9
+        let lowZ = walked ? (deep ? minZ : max(minZ, GameCamera.walkMinZ)) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
         guard p.y >= lowZ, p.y <= highZ, abs(p.x) <= xLimit(kind, z: p.y) else { return false }
         // inside the walls (the room is 10 wide; a landscape screen sees past them)
         guard abs(p.x) + (s.box ? s.half.x : s.radius) <= RoomLayout.maxX - 0.02 else { return false }
         // a deep piece (slide, swing) stays wholly in the walkable depth; its front edge may not pass the front of the floor
         if s.box, p.y + s.half.y > max(highZ, GameCamera.walkMaxZ) + 0.2 { return false }
         // the slide is climbed from behind: that spot (1.85 back) has to be floor a Jelly can stand on
-        if kind == .slide, p.y - 1.85 < GameCamera.walkMinZ + 0.1 { return false }
+        if deep, walked, kind != .slide, p.y + s.half.y + 0.9 < GameCamera.walkMinZ { return false }
+        if kind == .slide, p.y - DecorKind.slideApproach < GameCamera.walkMinZ + 0.1 { return false }
         guard sofaClearance(kind, at: p) > gap else { return false }
         for c in RoomLayout.cylinders {
             let b = RoomLayout.FlatBox(centre: p, half: s.half, height: 1, radius: s.round)

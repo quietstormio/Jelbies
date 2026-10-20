@@ -326,3 +326,71 @@ final class FurnCaptureTests: XCTestCase {
         try save(sheet([(img, "Landscape 2.17:1, \(book.roomUnitsUsed) of 10 spots: swing, loveseat, slide, pet bed, dining set; three Jellies (doing: \(doing))")], cols: 1, title: "Full room, landscape"), "room_full_land.png")
     }
 }
+
+extension FurnCaptureTests {
+    /// Fix C QA: every piece in use, labelled, at the room camera's tilt in portrait; a close 3/4 view for the two-seat pieces.
+    func testCaptureFurnitureQA() throws {
+        guard dir != nil else { throw XCTSkip("FURN_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        let w = 520, h = 560
+        var cells: [(LockImage, String)] = []
+        func close(_ ren: MelonRenderer, _ t: MTLTexture, _ rigs: [MotionRig], focus: SIMD3<Float>, dist: Float) -> LockImage {
+            decorMesh(into: ren, time: 0.37)
+            return shot(ren, t, rigs: rigs, cam: camera(eye: focus + SIMD3(2.3, 1.0, dist * 0.62), at: focus, aspect: Float(w) / Float(h), fov: 33 * .pi / 180), w: w, h: h)
+        }
+        func sitCell(_ kind: DecorKind, n: Int, label: String, focusY: Float, dist: Float, extreme: Float? = nil, threeQuarter: Bool = false) throws {
+            DecorField.shared.clear()
+            let c = SIMD2<Float>(0.0, -0.8)
+            DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: c.x, z: c.y)])
+            let lab = SocialTests.Lab(n: n, positions: Array([SIMD2(c.x - 1.6, c.y + 2.0), SIMD2(c.x + 1.6, c.y + 2.0)].prefix(n)), quiet: true, seed: 7)
+            Self.keep.append(lab)
+            for r in lab.rigs { r.skinner.autoBlink = false; r.brain.idleForced = true; XCTAssertTrue(r.brain.idleStart(.decorSit, r.sim)) }
+            func seated(_ r: MotionRig) -> Bool { r.brain.idleState.bagStage == 2 && r.brain.idleState.phase == 2 && r.brain.idleState.phaseT > 3.0 }
+            var f = 0
+            func angle() -> Float { DecorField.shared.anim[7].map { abs(kind == .swing ? DecorModels.swingAngle($0) : DecorModels.rockAngle($0)) } ?? 0 }
+            while f < 60 * 120 {
+                stepLab(lab); f += 1
+                if lab.rigs.allSatisfy(seated), extreme == nil || angle() > extreme! { break }
+            }
+            let (ren, t) = try makeRenderer(device, lab.rigs[0], w: w, h: h)
+            let focus = SIMD3<Float>(c.x, focusY, c.y)
+            cells.append((closeUp(ren, t, rigs: lab.rigs, focus: focus, dist: dist, w: w, h: h), label))
+            if threeQuarter { cells.append((close(ren, t, lab.rigs, focus: focus, dist: dist), label + " (close 3/4)")) }
+        }
+        try sitCell(.pouf, n: 1, label: "Pouf", focusY: 0.5, dist: 4.4)
+        try sitCell(.armchair, n: 1, label: "Armchair", focusY: 0.7, dist: 4.8)
+        try sitCell(.diningset, n: 2, label: "Dining set: a Jelly on each stool", focusY: 0.6, dist: 9.0, threeQuarter: true)
+        try sitCell(.rockingchair, n: 1, label: "Rocking chair at the rock extreme", focusY: 0.8, dist: 4.8, extreme: 0.1)
+        try sitCell(.swing, n: 2, label: "Swing for two at the sway extreme", focusY: 0.9, dist: 6.6, extreme: 0.15, threeQuarter: true)
+        try sitCell(.loveseat, n: 1, label: "Loveseat, one Jelly", focusY: 0.7, dist: 5.4)
+        try sitCell(.loveseat, n: 2, label: "Loveseat, two Jellies", focusY: 0.7, dist: 5.6, threeQuarter: true)
+        try sitCell(.beanbag, n: 1, label: "Beanbag", focusY: 0.5, dist: 4.4)
+        // pet bed
+        do {
+            let c = SIMD2<Float>(1.0, 0.4)
+            let r = scene(.petbed, at: c, start: .sleep, from: SIMD2(-1.0, 1.4))
+            let (ren, t) = try makeRenderer(device, r, w: w, h: h)
+            var n = 0
+            while !(r.brain.isNapping && r.brain.sleep.t > 2.5) && n < 9000 { step(r); n += 1 }
+            cells.append((closeUp(ren, t, rigs: [r], focus: SIMD3(c.x, 0.4, c.y), dist: 4.8, w: w, h: h), "Pet bed: asleep"))
+        }
+        // the slide
+        do {
+            let c = SIMD2<Float>(1.4, 0.3)
+            let r = scene(.slide, at: c, start: .decorSlide, from: SIMD2(-1.0, 1.0))
+            let (ren, t) = try makeRenderer(device, r, w: w, h: h)
+            var n = 0
+            let f = SIMD3<Float>(c.x, 0.7, c.y)
+            while !(r.brain.idleState.slideStage == 1 && r.brain.idleState.slideStep == 1 && r.brain.gait.phase == .air) && n < 9000 { step(r); n += 1 }
+            for _ in 0..<6 { step(r) }
+            cells.append((closeUp(ren, t, rigs: [r], focus: f, dist: 6.4, w: w, h: h), "Slide: climbing"))
+            while !(r.brain.idleState.slideStage == 4 && r.brain.idleState.phase == 2) && n < 18000 { step(r); n += 1 }
+            for _ in 0..<20 { step(r) }
+            cells.append((closeUp(ren, t, rigs: [r], focus: f, dist: 6.4, w: w, h: h), "Slide: sitting on the platform"))
+            while !(r.brain.idleState.slideStage == 5 && r.brain.idleState.slideS > 1.4) && n < 27000 { step(r); n += 1 }
+            cells.append((closeUp(ren, t, rigs: [r], focus: f, dist: 6.4, w: w, h: h), "Slide: mid-slide"))
+        }
+        try save(sheet(cells, cols: 3, title: "Furniture QA at 1.25x, portrait room camera"), "furniture_qa.png")
+    }
+}

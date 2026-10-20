@@ -43,13 +43,18 @@ final class FurniturePlacementTests: XCTestCase {
             Self.room(a)
             if name == "landscape" {
                 let b = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-                for k in Self.bigs { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) beside the others") }
-                XCTAssertEqual(b.roomUnitsUsed, 10)
+                for k in [DecorKind.loveseat, .slide, .swing] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) beside the others") }
+                XCTAssertEqual(b.roomUnitsUsed, 8, "loveseat 2 + slide 3 + swing 3 (the 1.25x swing / slide / pet bed count 3 spots)")
                 Self.assertClear(b.placedDecor, name)
             }
             for i in 0..<Self.bigs.count { for j in (i + 1)..<Self.bigs.count {
                 let b = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-                for k in [Self.bigs[i], Self.bigs[j]] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) next to \(Self.bigs[i])/\(Self.bigs[j])") }
+                for k in [Self.bigs[i], Self.bigs[j]] {
+                    b.grant(k.storeID)
+                    // (the 1.25x pet bed is 2.7 round: beside another big piece in the narrow portrait room it may be refused with a reason, never overlapped)
+                    if k == .petbed, name == "portrait" { if b.place(k.storeID) == nil { XCTAssertNotNil(b.placeBlocker(StoreCatalog.item(k.storeID)!)) }; continue }
+                    XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) next to \(Self.bigs[i])/\(Self.bigs[j])")
+                }
                 Self.assertClear(b.placedDecor, name)
             } }
             if name == "portrait" {
