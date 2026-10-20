@@ -44,6 +44,8 @@ final class BlobNeeds {
     /// The away time (seconds, clamped) the last load / return applied. GameCare reads it for the greeting.
     @ObservationIgnored private(set) var lastAway: TimeInterval = 0
     @ObservationIgnored private var lastWantedSet: Set<NeedKind> = []
+    /// Where this Jelly's perks are persisted (their expiries shorten the time away that counts, see applyAway).
+    @ObservationIgnored private var perkKey: String? { PerkTuning.key(forNeeds: key) }
     /// Counts the needs fixed (restored from wanting to not wanting), and which was the last (the bubble's sparkle reads this).
     @ObservationIgnored private(set) var fixedCount = 0
     @ObservationIgnored private(set) var lastFixed: NeedKind?
@@ -80,9 +82,9 @@ final class BlobNeeds {
     /// Real-time decay by `dt` seconds, plus attention while petting (rate 0.05/s, more during the purr).
     /// `exerting`: hunger and thirst drain `exertionDrain` times faster.
     /// `drainScale`: 1 normally; `NeedsTuning.napDrain` (0.5) while he naps at night.
-    func step(dt: Float, petting: Bool = false, purring: Bool = false, exerting: Bool = false, drainScale: Float = 1) {
+    func step(dt: Float, petting: Bool = false, purring: Bool = false, exerting: Bool = false, drainScale: Float = 1, perkDrain: [Double] = [1, 1, 1]) {
         for k in NeedKind.allCases {
-            let mul = (exerting && k != .attention ? NeedsTuning.exertionDrain : 1) * Double(drainScale)
+            let mul = (exerting && k != .attention ? NeedsTuning.exertionDrain : 1) * Double(drainScale) * perkDrain[k.rawValue]
             raw[k.rawValue] -= Float(Double(dt) * mul / (NeedsTuning.hoursToEmpty(k) * 3600))
         }
         if petting || purring {
@@ -164,7 +166,20 @@ final class BlobNeeds {
     func applyAway(seconds: TimeInterval, endingAt end: Date? = nil) {
         let away = TimeAway.clamp(seconds)
         lastAway = away
-        if let end { raw = AwayMath.needLevels(raw, from: end.addingTimeInterval(-away), to: end) }
+        if let end {
+            let from = end.addingTimeInterval(-away)
+            let ex = perkKey.map { PerkStore.load(defaults: defaults, key: $0) } ?? [:]
+            if ex.isEmpty { raw = AwayMath.needLevels(raw, from: from, to: end) }
+            else {
+                // a perk that slows a need shortens the time that counts for it (the strongest perk wins; they do not multiply)
+                var out = raw
+                for k in NeedKind.allCases {
+                    let eff = max(0, away - PerkStore.needCredit(ex, need: k.rawValue, from: from, to: end))
+                    out[k.rawValue] = AwayMath.needLevels(raw, from: end.addingTimeInterval(-eff), to: end)[k.rawValue]
+                }
+                raw = out
+            }
+        }
         else { raw = Self.awayLevels(raw, seconds: away) }
         lastWantedSet = wantedSet            // no "fixed" events for what the time away did
         publish(force: true)

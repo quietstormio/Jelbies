@@ -65,6 +65,7 @@ final class ArmCapTests: XCTestCase {
     }
 
     func testEveryMoveStaysWithinTheWaveThumb() {
+        defer { DecorField.shared.clear() }
         let wave = waveStat()
         let cap = ArmCap.maximum
         MotionLog.write(String(format: "ARMCAP wave (control): exposed max %.3f H (%.4f u), base width %.3f H, root depth min %.3f u", wave.capMax / Self.H, wave.capMax, wave.baseW / Self.H, wave.minDepth))
@@ -85,6 +86,17 @@ final class ArmCapTests: XCTestCase {
         note("stumble"); rows.append(("stumble", capsuleStat(10, start: idle(.stumble), until: { $0.brain.idleState.kind == nil })))
         note("sit"); rows.append(("sit", capsuleStat(20, start: idle(.sit), until: { $0.brain.idleState.kind == nil })))
         note("look"); rows.append(("look", capsuleStat(20, start: idle(.look), until: { $0.brain.idleState.kind == nil })))
+        note("sleep roll"); rows.append(("sleep (yawn, roll onto the back and up)", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 2 }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
+        note("sleep hand-hold"); rows.append(("sleep hand-hold (arm reaches sideways)", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 5; r.brain.sleep.holdForce = true }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
+        note("sleep hand-hold + cuddle"); rows.append(("sleep hand-hold + cuddle lean", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 5; r.brain.sleep.holdForce = true; r.brain.sleep.mode = .cuddle }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
+        for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway", .sway)] {
+            note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
+        for (n, kind, move, at) in [("decor: hop onto the beanbag, sit on top, hop off", DecorKind.beanbag, IdleKind.decorSit, SIMD2<Float>(1.1, 0.9)), ("decor: sit on a cushion", .cushion, .decorSit, SIMD2(-1.1, 0.9)),
+                                   ("decor: boop the plant", .plant, .decorBoop, SIMD2(1.1, 0.9)), ("decor: kick the ball", .ball, .decorKick, SIMD2(0.9, 0.9)),
+                                   ("decor: hop on the mat", .bouncymat, .decorHop, SIMD2(-1.1, 0.9)), ("decor: peek in the toy box", .toybox, .decorPeek, SIMD2(1.1, 0.9))] {
+            note(n); rows.append((n, capsuleStat(26, start: { FeetAttachTests.decorStart($0, kind, at, move) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
         note("hop"); rows.append(("hop", capsuleStat(2, start: { $0.brain.startHopPlay(sim: $0.sim) })))
         note("name hop"); rows.append(("name hop", capsuleStat(2, start: { $0.brain.startNameHop($0.sim, $0.skinner) })))
         note("flip clean"); rows.append(("flip clean", capsuleStat(4, start: { $0.brain.startFlip(sim: $0.sim) })))
@@ -109,6 +121,43 @@ final class ArmCapTests: XCTestCase {
         }
         let capsuleRows = rows.filter { !["wave (control)"].contains($0.0) && $0.1.frames > 0 }
         XCTAssertGreaterThan(capsuleRows.count, 5, "the moves actually drew arms")
+        XCTAssertTrue(rows.contains { $0.0.hasPrefix("sleep hand-hold (") && $0.1.frames > 100 }, "the hand-hold drew its reaching arm")
+    }
+
+    /// Shoes are separate props on the feet: building them every frame in the walking / jacks / run / hop moves leaves every arm within the wave's thumb.
+    func testShoesLeaveTheArmsStubby() {
+        func idle(_ k: IdleKind) -> (MotionRig) -> Void { { r in r.brain.idleForced = true; _ = r.brain.idleStart(k, r.sim) } }
+        let moves: [(String, Float, (MotionRig) -> Void)] = [
+            ("walk + shoes", 7, { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }), ("run + shoes", 6, idle(.run)), ("jacks + shoes", 8, idle(.jacks)),
+            ("zoomies + shoes", 8, idle(.zoomies)), ("hop + shoes", 2, { $0.brain.startHopPlay(sim: $0.sim) }), ("bounce + shoes", 4, idle(.bounce)),
+        ]
+        for (name, secs, start) in moves {
+            let r = MotionRig(game: true)
+            Self.keep.append(r)
+            r.brain.seed = 11; r.brain.amplitude = 1
+            start(r)
+            var st = Stat(), k = 0
+            r.run(secs) {
+                k += 1
+                if k % 4 == 0, r.skinner.beansActive {
+                    r.render()
+                    for s in 0..<2 {
+                        let bean = r.bean[s].map { id -> SIMD3<Float> in let o = 6 * Int(id); return SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]) }
+                        guard bean.count == FootBean.vertexCount else { continue }
+                        let b = RoomMeshBuilder(); b.material = .plain
+                        ShoeModel.build(.glitterShoes, bean: bean, floorY: r.sim.floorY, time: Float(k) / 60, side: s, into: b)
+                    }
+                }
+                guard r.brain.armG > 0.5 else { return }
+                for si in 0..<2 {
+                    let g = r.brain.armLastGeom[si]
+                    st.add(a: SIMD3<Double>(g.a), b: SIMD3<Double>(g.b), rawB: SIMD3<Double>(r.brain.armLastRawTip[si]), r1: Double(g.r1), r2: Double(g.r2), led: r.brain.armShortW >= 0.95)
+                }
+            }
+            MotionLog.write(String(format: "ARMCAP shoes %@: %d frames, exposed max %.3f H", name, st.frames, st.capMax / Self.H))
+            XCTAssertLessThanOrEqual(st.capMax, ArmCap.maximum * 1.02, "\(name): arms stay within the wave's thumb")
+            if st.frames > 0 { XCTAssertGreaterThanOrEqual(st.minDepth, 0.015, "\(name): arm bases stay buried") }
+        }
     }
 
     /// Cost of the cap + fillet collar per walking step: brain.tick with ArmCap on vs off.

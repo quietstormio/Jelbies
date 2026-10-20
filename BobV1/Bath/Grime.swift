@@ -10,7 +10,8 @@ import Foundation
 import Observation
 import simd
 
-/// Earned-only currency (design: races pay most, care pays steady). Nothing feeds it yet.
+/// Earned-only currency: it comes from competitions only (races now; more games later), never from care and never from real money.
+/// Plus a one-time starter balance (StoreBook). Spent in the store.
 @MainActor
 @Observable
 final class DropsWallet {
@@ -22,10 +23,18 @@ final class DropsWallet {
         if persists { count = UserDefaults.standard.integer(forKey: Self.key) }
     }
     nonisolated deinit {}
-    func add(_ n: Int = 1) {
-        if n > 0 { AudioHub.shared.play(.coin) }
+    func add(_ n: Int = 1, silent: Bool = false) {
+        if n > 0, !silent { AudioHub.shared.play(.coin) }
         count += n
         if persists { UserDefaults.standard.set(count, forKey: Self.key) }
+    }
+    /// Spends `n` Drops; false (and nothing changes) when there are not enough.
+    @discardableResult
+    func spend(_ n: Int) -> Bool {
+        guard n >= 0, n <= count else { return false }
+        count -= n
+        if persists { UserDefaults.standard.set(count, forKey: Self.key) }
+        return true
     }
 }
 
@@ -50,6 +59,8 @@ final class BlobGrime {
     @ObservationIgnored private var awaySince: Date?
     @ObservationIgnored private(set) var lastAway: TimeInterval = 0
     @ObservationIgnored var dirtPerUnit = GrimeTuning.dirtPerUnit
+    /// The perks of this Jelly (shine: the sparkle fades slower; tidy: lint comes back slower). Set by his profile.
+    @ObservationIgnored var perks: JellyPerks?
 
     init(persists: Bool = true, seed: UInt32 = 0xB47B, defaults: UserDefaults = .standard, key: String = GrimeTuning.defaultsKey, now: @escaping () -> Date = Date.init) {
         self.persists = persists
@@ -66,8 +77,8 @@ final class BlobGrime {
     /// Walking / running adds dirt (`dirtPerUnit` per floor unit moved; `exerting` = run / zoomies / slide / scoot makes it 3x). `travelled` is the
     /// floor distance moved this step (0 when idle).
     func step(dt: Float, travelled: Float, exerting: Bool = false) {
-        if sparkle > 0 { sparkle = max(0, sparkle - dt / GrimeTuning.sparkleFade) }
-        if travelled > 0 { addDirt(travelled * dirtPerUnit * (exerting ? GrimeTuning.exertionMul : 1)) }
+        if sparkle > 0 { sparkle = max(0, sparkle - dt * (perks?.cache.fade ?? 1) / GrimeTuning.sparkleFade) }
+        if travelled > 0 { addDirt(travelled * dirtPerUnit * (exerting ? GrimeTuning.exertionMul : 1) * (perks?.cache.dirt ?? 1)) }
         saveT += dt
         if saveT > GrimeTuning.saveEvery { saveT = 0; save() }
     }
@@ -93,7 +104,7 @@ final class BlobGrime {
         guard let data = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: data) else { return }
         distance = s.distance; dirt = min(1, max(0, s.dirt ?? 0))
         sparkle = s.sparkle
-        applyAway(seconds: now().timeIntervalSince1970 - s.at)
+        applyAway(seconds: now().timeIntervalSince1970 - s.at, endingAt: now())
         save()
     }
 
@@ -109,18 +120,25 @@ final class BlobGrime {
         guard let since = awaySince else { return 0 }
         awaySince = nil
         let away = TimeAway.clamp((t ?? now()).timeIntervalSince(since))
-        applyAway(seconds: away)
+        applyAway(seconds: away, endingAt: t ?? now())
         save()
         return away
     }
 
     /// THE time-away path (cold launch and foreground resume). The sparkle fades at the wall-clock rate; dirt grows +0.05 per 2 h away, at most +0.15
     /// from one absence (the sparkle also ends if that takes him past `cleanBelow`).
-    func applyAway(seconds: TimeInterval) {
+    func applyAway(seconds: TimeInterval, endingAt end: Date? = nil) {
         let away = TimeAway.clamp(seconds)
         lastAway = away
         awaySince = nil
-        sparkle = AwayMath.sparkle(sparkle, awaySeconds: away)
-        addDirt(AwayMath.dirtGain(awaySeconds: away))
+        var fadeAway = away, dirtAway = away
+        if let end, let pk = PerkTuning.key(forGrime: key) {          // shine / tidy that were on during the absence slow the fade / the lint
+            let from = end.addingTimeInterval(-away)
+            let ex = PerkStore.load(defaults: defaults, key: pk)
+            if let e = ex[.shine] { fadeAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.shineFade)) }
+            if let e = ex[.tidy] { dirtAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.tidyDirt)) }
+        }
+        sparkle = AwayMath.sparkle(sparkle, awaySeconds: fadeAway)
+        addDirt(AwayMath.dirtGain(awaySeconds: dirtAway))
     }
 }

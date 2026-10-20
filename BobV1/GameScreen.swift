@@ -14,10 +14,14 @@ struct GameScreen: View {
     @State private var rosterOpen = false
     @State private var bookOpen = false                       // Voice v1 trick book
     @State private var soundOpen = false                      // sound settings panel
+    @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
+    @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
     private var cleaning: Bool { model.care.bath.active }
+    private var racing: Bool { model.care.race.active }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -71,7 +75,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                        } else if !focus.isActive, !cleaning {
+                        } else if !focus.isActive, !cleaning, !racing {
                             GameCircleButton(systemName: "gearshape", label: "Studio") {
                                 model.paused = true
                                 showStudio = true
@@ -86,10 +90,16 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                         Spacer()
-                        if !focus.isActive, !cleaning {
-                            RosterButton(care: model.care, open: $rosterOpen)
-                                .transition(.opacity)
+                        if !focus.isActive, !cleaning, !racing {
+                            HStack(spacing: 8) {
+                                DropsPill(wallet: model.care.bath.wallet)
+                                RosterButton(care: model.care, open: $rosterOpen)
+                            }
+                            .transition(.opacity)
                         }
+                    }
+                    if !focus.isActive, !cleaning, !racing {
+                        HStack { Spacer(); PerkBadgeRow(care: model.care) }
                     }
                     Spacer()
                     if focus.showsDock {
@@ -97,15 +107,23 @@ struct GameScreen: View {
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
-                    if !cleaning { HStack(alignment: .bottom, spacing: 10) {
+                    if !cleaning, !racing { HStack(alignment: .bottom, spacing: 10) {
                         VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                             .overlay(alignment: .topLeading) {
-                                VoiceTip(voice: model.care.voice).fixedSize().offset(y: -42)
+                                VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
                             }
-                        VoiceBookButton { bookOpen = true }
-                            .padding(.bottom, 4)
+                        VStack(spacing: 6) {
+                            VoiceBookButton { bookOpen = true }
+                            if !focus.isActive { BagButton(store: model.care.store) { bagOpen = true } }
+                        }
+                        .padding(.bottom, focus.isActive ? 4 : 0)
                         Spacer()
                         if !focus.isActive { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if !focus.isActive, !model.care.trayOut, !model.care.arranging, !model.care.select.isSelecting, !model.care.select.chipVisible {          // (hidden while a Jelly is picked / the "Play with ...?" chip is up: they share the bottom centre)
+                            GoOutPill { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }.padding(.bottom, 10)
+                        }
                     } }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
@@ -114,6 +132,15 @@ struct GameScreen: View {
             }
 
             BathChrome(care: model.care)
+
+            RaceChrome(care: model.care)          // Jelly Circuit: numerals, foot buttons, placings card, the white fade
+
+            if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+
+            if town != nil {                     // Go out: Town / Shop / Track
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                    .transition(.opacity)
+            }
 
             // (the come-here tutorial card is retired: he knows "come here" from the start)
 
@@ -130,7 +157,9 @@ struct GameScreen: View {
         .background(Color.black)
         .onAppear {
             setUpSelect(); model.care.touchPlay = model.touch; model.care.launched()
+            model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
+            AudioHub.shared.setTownScene(town == .shop ? .shop : town == nil ? .none : .town)
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
         }
         .onOpenURL { url in if let id = JellyLink.parse(url) { model.care.openJelly(id) } }          // widget tap: jelbies://jelly/<id>
@@ -150,9 +179,18 @@ struct GameScreen: View {
         .onChange(of: bookOpen) { _, on in if !on, model.care.voice.tutorial.phase == .book { model.care.voice.tutorial.finish() } }      // tutorial: the book was read
         .sheet(isPresented: $bookOpen) {
             VoiceTrickBook(voice: model.care.voice) { bookOpen = false }
-                .presentationDetents([.medium, .large])
+                .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
                 .presentationBackground(FocusStyle.cream)
         }
+        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(t == .shop ? .shop : t == nil ? .none : .town) }
+        .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen }
+        .sheet(isPresented: $bagOpen) {
+            BagSheet(care: model.care, who: model.care.targetJelly) { bagOpen = false }
+                .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SK.cream)
+        }
+        .task { await GameScreen.runStoreDemo(model: model) }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onAppear { model.care.select.gateDraw = true }
@@ -225,6 +263,20 @@ struct GameScreen: View {
                 await sleep(3)
             }
         }
+        // capture aid: -RaceStart 1 sends Jelly 0 (or -RaceJelly n) to the track as soon as the room is up; -RaceSeed n, -RaceAuto <taps/s> (the player's buttons tapped for him)
+        if d.integer(forKey: "RaceStart") != 0 {
+            let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
+            for _ in 0..<100 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
+            await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            care.startRace(jelly: who)
+        }
+        // capture aid: -TrainStart 1 sends Jelly 0 (or -RaceJelly n) to practise Rhythm Steps; -TrainAuto 1 plays the drill for him
+        if d.integer(forKey: "TrainStart") != 0 {
+            let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
+            for _ in 0..<100 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
+            await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            care.startDrill(jelly: who)
+        }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {
             await sleep(4)
@@ -293,6 +345,53 @@ struct GameScreen: View {
         }
     }
 
+    /// Capture aid: `-StoreOpen town|shop|item|bag` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
+    static func launchTown() -> TownScreen? {
+        switch UserDefaults.standard.string(forKey: "StoreOpen") {
+        case "town": return .town
+        case "shop", "item": return .shop
+        case "track": return .track
+        default: return nil
+        }
+    }
+    @MainActor static func runStoreDemo(model: MelonModel) async {
+        let d = UserDefaults.standard
+        guard d.integer(forKey: "StoreSeed") != 0 else { return }
+        let care = model.care
+        care.store.grantStarterIfNeeded()
+        for (id, n) in [("sushi", 2), ("donut", 1), ("nuggets", 3), ("lavender", 1), ("fries", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
+        care.store.grant("shoe-mint"); care.store.grant("shoe-rain")
+        if care.bath.wallet.count < 60 { care.bath.wallet.add(60 - care.bath.wallet.count, silent: true) }
+        care.jelly(0)?.perks.grant(.cozy); care.jelly(0)?.perks.grant(.zoomies, duration: 25 * 60)
+        care.jelly(1)?.perks.grant(.fullBelly, duration: 3 * 3600 + 20 * 60)
+        if d.string(forKey: "StoreWear") != nil { care.store.wear(.sneakerMint, on: 0) }
+        // capture aid: -WearSeed 1 owns the whole wardrobe (and the medal); -WearSeed 2 also dresses Bob, Pip and Moss in three outfits
+        if d.integer(forKey: "WearSeed") != 0 {
+            for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
+            care.store.awardMedal()
+            care.bath.wallet.add(max(0, 400 - care.bath.wallet.count), silent: true)
+            if d.integer(forKey: "WearSeed") == 2 {
+                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .glovePink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .tutuPink, .balletPink]]
+                for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
+            }
+        }
+        // capture aid: -StoreDecor 1 owns one of every decor piece (a second beanbag) and puts the first few in the room; -StoreDecor 2 fills the room (10 spots)
+        if d.integer(forKey: "StoreDecor") != 0 {
+            for k in DecorKind.allCases { care.store.grant(k.storeID) }
+            care.store.grant(DecorKind.beanbag.storeID)
+            care.bath.wallet.add(max(0, 120 - care.bath.wallet.count), silent: true)
+            if care.store.placedDecor.isEmpty {
+                let order: [DecorKind] = d.integer(forKey: "StoreDecor") == 2 ? DecorTuning.fullRoom : [.beanbag, .plant, .ball]
+                for k in order { _ = care.store.place(k.storeID) }
+            }
+            if d.integer(forKey: "DoubleTapDemo") != 0 {          // capture aid: a double tap on the first piece (the demo drag follows in Store/DecorUI.swift)
+                try? await Task.sleep(nanoseconds: UInt64((d.double(forKey: "DoubleTapDelay") > 0 ? d.double(forKey: "DoubleTapDelay") : 20) * 1e9))
+                if let uid = care.store.placedDecor.first?.uid { care.pickUpDecor(uid) }
+            }
+            if d.integer(forKey: "ArrangeDemo") != 0 { try? await Task.sleep(nanoseconds: 1_000_000_000); care.beginArrange(care.store.placedDecor.first?.uid) }          // arrange mode with the demo drag (Store/DecorUI.swift)
+        }
+    }
+
     static func makeGameModel(jellyCount: Int = JellyRoster.launchCount()) -> MelonModel {
         let m = MelonModel(jellyCount: jellyCount)
         m.gameMode = true
@@ -340,27 +439,37 @@ struct CareMenu: View {
     /// "waterbottle.fill" exists on the deployment target (iOS 26); keep the drop as a fallback.
     static let waterSymbol = UIImage(systemName: "waterbottle.fill") != nil ? "waterbottle.fill" : "drop.fill"
     static let cleanSymbol = UIImage(systemName: "bubbles.and.sparkles") != nil ? "bubbles.and.sparkles" : "sparkles"
+    static let raceSymbol = UIImage(systemName: "flag.checkered") != nil ? "flag.checkered" : "flag.fill"
     // top to bottom
     private let items = [Item(id: "care-feed", title: "Feed", symbol: "fork.knife"),
+                         Item(id: "care-snacks", title: "Snacks", symbol: "bag.fill"),
                          Item(id: "care-water", title: "Drink", symbol: CareMenu.waterSymbol),
                          Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill"),
-                         Item(id: "care-clean", title: "Clean", symbol: CareMenu.cleanSymbol)]
+                         Item(id: "care-clean", title: "Clean", symbol: CareMenu.cleanSymbol),
+                         Item(id: "care-race", title: "Race", symbol: CareMenu.raceSymbol)]
 
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
+    /// The Snacks picker (store foods in the bag, with counts) is unfolded.
+    @State private var snackPicker = false
+    @Environment(\.verticalSizeClass) private var vsc
+    private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
+    private var iconSize: CGFloat { tight ? 40 : 54 }
+    private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 14) {
+        VStack(alignment: .trailing, spacing: rowGap) {
             if open {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     row(item, index: index)
                     if picker == .food, item.id == "care-feed" { pickerRow(Consumables.foods, kind: .food) }
                     if picker == .drink, item.id == "care-water" { pickerRow(Consumables.drinks, kind: .drink) }
+                    if snackPicker, item.id == "care-snacks" { snackRow }
                 }
             }
             mainButton
         }
-        .onChange(of: open) { _, isOpen in if !isOpen { picker = nil } }
+        .onChange(of: open) { _, isOpen in if !isOpen { picker = nil; snackPicker = false } }
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
@@ -381,7 +490,7 @@ struct CareMenu: View {
                         Image(systemName: UIImage(systemName: c.symbol) != nil ? c.symbol : "drop.fill")
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Self.brown)
-                            .frame(width: 46, height: 46)
+                            .frame(width: tight ? 38 : 46, height: tight ? 38 : 46)
                             .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                         Text(c.name)
@@ -401,10 +510,42 @@ struct CareMenu: View {
         .padding(.trailing, 8)
     }
 
+    /// The snacks in the bag as chips (3D thumbnail, count); tapping one feeds the selected Jelly (or everybody with nobody singled out).
+    private var snackRow: some View {
+        let list = care.store.snacks
+        return HStack(spacing: 10) {
+            if list.isEmpty {
+                Text("None yet. Visit the Shop!").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(Self.brown)
+                    .padding(.horizontal, 12).padding(.vertical, 8).background(Capsule().fill(Self.cream))
+            }
+            ForEach(Array(list.prefix(4).enumerated()), id: \.element.item.id) { i, s in
+                Button {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                    care.feedSnack(s.item.id, jelly: care.singledOutJelly)
+                    withAnimation(Self.spring) { snackPicker = false; open = false }
+                } label: {
+                    VStack(spacing: 3) {
+                        ItemArt(item: s.item, size: 50).overlay(alignment: .topTrailing) {
+                            Text("\(s.count)").font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
+                                .frame(minWidth: 18, minHeight: 18).background(Circle().fill(FocusStyle.pink)).offset(x: 5, y: -5)
+                        }
+                        Text(s.item.name).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Self.brown).lineLimit(1)
+                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Self.cream))
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("care-snack-\(s.item.id)").accessibilityLabel("\(s.item.name), \(s.count) left")
+                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+            }
+        }
+        .padding(.trailing, 8)
+    }
+
     private func enabled(_ item: Item) -> Bool {
         switch item.id {
-        case "care-feed", "care-water": return !care.trayOut && !care.bath.active
+        case "care-feed", "care-water", "care-snacks": return !care.trayOut && !care.bath.active
         case "care-clean": return care.canClean(jelly: care.targetJelly)
+        case "care-race": return care.canRace(jelly: care.targetJelly)
         default: return !care.bath.active
         }
     }
@@ -416,8 +557,11 @@ struct CareMenu: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             switch item.id {
             case "care-feed":
-                withAnimation(Self.spring) { picker = picker == .food ? nil : .food }
+                withAnimation(Self.spring) { picker = picker == .food ? nil : .food; snackPicker = false }
                 return                                       // the picker row chooses; the menu stays open
+            case "care-snacks":
+                withAnimation(Self.spring) { snackPicker.toggle(); picker = nil }
+                return
             case "care-water":
                 if Consumables.drinks.count >= 2 {
                     withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink }
@@ -425,6 +569,7 @@ struct CareMenu: View {
                 }
                 care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)   // one drink: starts directly (nobody singled out = the group serving)
             case "care-clean": care.clean(jelly: care.targetJelly)
+            case "care-race": care.startRace(jelly: care.targetJelly)
             default: care.comeHere(jelly: care.targetJelly)
             }
             withAnimation(Self.spring) { open = false }
@@ -433,12 +578,12 @@ struct CareMenu: View {
                 Text(item.title)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(Self.brown)
-                    .padding(.horizontal, 15).padding(.vertical, 8)
+                    .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
                     .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
                 Image(systemName: item.symbol)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: tight ? 17 : 21, weight: .semibold))
                     .foregroundStyle(Self.brown)
-                    .frame(width: 54, height: 54)
+                    .frame(width: iconSize, height: iconSize)
                     .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
             }
@@ -471,7 +616,7 @@ struct CareMenu: View {
                     .scaleEffect(open ? 1 : 0.4)
             }
             .foregroundStyle(Self.brown)
-            .frame(width: 64, height: 64)
+            .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
             .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.28), radius: 9, y: 4))
             .overlay(Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
         }

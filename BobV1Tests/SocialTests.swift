@@ -86,7 +86,7 @@ final class SocialTests: XCTestCase {
                 r.brain.steerID = i; r.brain.peerGap = MelonController.jellyGap
                 r.brain.onSocial = { [unowned self] e in self.events[i].append(e) }
             }
-            snapshot = rigs.map { (pos: $0.brain.position, walking: false) }
+            snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
             for (i, r) in rigs.enumerated() {
                 let floorRules = r.brain.resolve
                 r.brain.resolve = { [unowned self] p, rad in floorRules(MelonController.keepApart(floorRules(p, rad), id: i, peers: self.snapshot), rad) }
@@ -96,7 +96,7 @@ final class SocialTests: XCTestCase {
             for _ in 0..<60 { tick(watching: false) }
         }
         func tick(watching: Bool = true) {
-            snapshot = rigs.map { (pos: $0.brain.position, walking: $0.brain.activity == .walking || $0.brain.activity == .coming) }
+            snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: $0.brain.activity == .walking || $0.brain.activity == .coming) }          // (as the stage: the body's centroid while a hop / scoot / slide has the body, else the root)
             asideClock += 1.0 / 60
             if asideClock >= 0.25 { MelonController.makeRoom(snapshot: snapshot, brains: rigs.map { $0.brain }, cooldown: &aside, dt: asideClock); asideClock = 0 }
             for (i, r) in rigs.enumerated() { r.tick(); if watching { watch[i].sample(r) } }

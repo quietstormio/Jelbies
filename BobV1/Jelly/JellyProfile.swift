@@ -17,6 +17,10 @@ final class JellyProfile: Identifiable {
     let grime: BlobGrime
     /// His book of learned words. Only Jelly 0's is used by the voice coordinator in phase A; 1 and 2 keep an idle book under their own key.
     let training: VoiceTraining
+    /// What he is good at (waddle for racing, focus): persisted under his id (JellyStats.swift).
+    let stats: JellyStats
+    /// Timed perks from store food and supplies (Store/Perks.swift), persisted under his id.
+    let perks: JellyPerks
     /// What the room draws on his body: dirt, soot, shine (no suds / wet: the clean-up is Bob-only for now). Jelly 0's look lives in BathFlow.
     private(set) var look = BathLook()
     @ObservationIgnored private var sootSeededFor: Float = -1
@@ -25,8 +29,11 @@ final class JellyProfile: Identifiable {
     nonisolated deinit {}
 
     /// Jelly 0: wraps the existing objects.
-    init(id: Int, name: String, needs: BlobNeeds, grime: BlobGrime, training: VoiceTraining) {
+    init(id: Int, name: String, needs: BlobNeeds, grime: BlobGrime, training: VoiceTraining, stats: JellyStats? = nil, perks: JellyPerks? = nil) {
         self.id = id; self.name = name; self.needs = needs; self.grime = grime; self.training = training
+        self.perks = perks ?? JellyPerks(key: JellyKeys.perks(id))
+        grime.perks = self.perks
+        self.stats = stats ?? JellyStats(key: JellyKeys.stats(id), seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
         refreshLook(force: true)
     }
 
@@ -41,7 +48,9 @@ final class JellyProfile: Identifiable {
         }
         let grime = BlobGrime(persists: persists, seed: 0xB47B &+ UInt32(id) &* 7919, defaults: defaults, key: JellyKeys.grime(id), now: now)
         let training = VoiceTraining(defaults: defaults, key: JellyKeys.words(id), name: name, persists: persists)
-        self.init(id: id, name: name, needs: needs, grime: grime, training: training)
+        let stats = JellyStats(persists: persists, defaults: defaults, key: JellyKeys.stats(id),
+                               seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
+        self.init(id: id, name: name, needs: needs, grime: grime, training: training, stats: stats, perks: JellyPerks(persists: persists, defaults: defaults, key: JellyKeys.perks(id), now: now))
     }
 
     var coat: BlobGrime.CoatTier { grime.coat }
@@ -50,7 +59,8 @@ final class JellyProfile: Identifiable {
     func step(dt: Float, position: SIMD2<Float>, exerting: Bool, drainScale: Float = 1) {
         let travelled = lastPos.map { simd_distance($0, position) } ?? 0
         lastPos = position
-        needs.step(dt: dt, exerting: exerting, drainScale: drainScale)
+        perks.step(dt: dt)
+        needs.step(dt: dt, exerting: exerting, drainScale: drainScale, perkDrain: perks.cache.drain)
         grime.step(dt: dt, travelled: travelled < 1 ? travelled : 0, exerting: exerting)      // a jump of a metre in one step is a teleport, not a walk
         refreshLook(force: false)
     }

@@ -47,6 +47,7 @@ enum GameCamera {
     }
     /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
     static func configureRoom(count: Int, option: RoomCam = RoomCam.launch, wide: Int = wideLaunch) {
+        roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)          // (a new set-up: the old fixed floor until `refreshRoam`)
         if count <= 1 || option == .current {
             eye = baseEye; target = baseTarget; roomEye = baseEye; roomTarget = baseTarget; roomWideScale = 1; roomWideLift = 0
             walkMaxZ = 3.0; arenaCenter = SIMD2(0, 0.5); arenaRadius = 3.3; roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1)); roamRectWide = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
@@ -62,6 +63,10 @@ enum GameCamera {
     nonisolated(unsafe) static var roamRectWide: (min: SIMD2<Float>, max: SIMD2<Float>) = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
 
     static let fovY: Float = 34 * .pi / 180
+    /// The aspect the close-up poses (focus, bath, race) are SIZED for. A phone on its side (aspect >= 1.2) keeps the portrait framing's height, so the Jelly / track is
+    /// the same size on the screen's short side and the extra width shows more room, not a face-filling zoom. Below that nothing changes (portrait, the widget's square).
+    static let landscapeFramingAspect: Float = 0.56
+    static func framingAspect(_ a: Float) -> Float { a >= 1.2 ? landscapeFramingAspect : a }
     // MARK: Bath close-up
 
     /// Close-up of Bob in the washtub: one source of truth, `BathSet.closeUpPose`.
@@ -73,7 +78,7 @@ enum GameCamera {
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
-    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0) -> CameraState {
+    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil) -> CameraState {
         self.aspect = aspect
         if roomWideScale != 1 {
             let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
@@ -91,13 +96,76 @@ enum GameCamera {
             e += (p.eye - e) * bath
             t += (p.target - t) * bath
         }
+        if race != 0 {                                      // the Waddle Sprint track: a fixed wide frame, snapped under the white fade (0 or 1)
+            let p = drillAt.map { drillPose(aspect: aspect, at: $0) } ?? racePose(aspect: aspect)      // the practice drill follows its Jelly closer
+            e += (p.eye - e) * race
+            t += (p.target - t) * race
+        }
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0))
-        c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: 60), c.view)
+        c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: race != 0 ? 260 : 60), c.view)      // the track's far hills and sky wall are ~100 u away
         c.invViewProj = M4.invert(c.viewProj)
         c.pos = e
         c.fwd = simd_normalize(t - e)
         return c
+    }
+
+    // MARK: Screen <-> floor (arrange mode, tests)
+
+    /// The floor point (x, z) under a screen point of a view of `size` (the room camera), or nil when the ray misses the floor. The inverse of `screenPoint`.
+    static func floorPoint(screen: CGPoint, size: CGSize) -> SIMD2<Float>? {
+        guard size.width > 1, size.height > 1 else { return nil }
+        let cam = camera(aspect: Float(size.width / size.height))
+        let ndc = SIMD2<Float>(Float(screen.x / size.width) * 2 - 1, 1 - Float(screen.y / size.height) * 2)
+        let ray = unproject(ndc: ndc, invViewProj: cam.invViewProj)
+        guard abs(ray.d.y) > 1e-4 else { return nil }
+        let t = -ray.o.y / ray.d.y
+        guard t > 0 else { return nil }
+        let p = ray.o + ray.d * t
+        return SIMD2(p.x, p.z)
+    }
+
+    /// Where a floor point (x, z; at height `y`) lands on the screen of a view of `size`; nil when it is behind the camera.
+    static func screenPoint(floor: SIMD2<Float>, y: Float = 0, size: CGSize) -> CGPoint? {
+        guard size.width > 1, size.height > 1 else { return nil }
+        let cam = camera(aspect: Float(size.width / size.height))
+        let c = cam.viewProj * SIMD4<Float>(floor.x, y, floor.y, 1)
+        guard c.w > 1e-4 else { return nil }
+        return CGPoint(x: CGFloat((c.x / c.w * 0.5 + 0.5)) * size.width, y: CGFloat((1 - (c.y / c.w * 0.5 + 0.5))) * size.height)
+    }
+
+    // MARK: Race track (Jelly Circuit)
+
+    /// Camera elevation over the track (rad) and the z the view is centred on (a third of the way up the track).
+    static let raceElevation: Float = 19 * .pi / 180
+    static let raceTargetZ: Float = RaceTuning.startZ + RaceTuning.length * 0.40
+    /// Half the width (world units) the frame must hold at the finish line, which is the nearest thing: three lanes, a body either side and the gantry;
+    /// it fills `raceFill` of the screen's half width there.
+    static let raceHalfWidth: Float = 3.5, raceFill: Float = 0.94
+    /// One static frame for the whole sprint: behind the finish line, looking back down the track (the Jellies run toward the camera, faces to the viewer).
+    /// Portrait phones are tall and narrow, so the track runs along the screen's height; the distance is set by the width it must hold at the finish line.
+    static func racePose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let th = tanf(fovY / 2)
+        let toFinish = raceHalfWidth / (raceFill * th * max(framingAspect(aspect), 0.2))                    // depth of the finish line along the view axis
+        let dist = toFinish + (RaceTuning.finishZ - raceTargetZ) * cosf(raceElevation)
+        let t = SIMD3<Float>(0, 0.4, raceTargetZ)
+        return (t + SIMD3(0, sinf(raceElevation), cosf(raceElevation)) * dist, t)
+    }
+
+    // MARK: Drill follow camera (Rhythm Steps)
+
+    /// Distance from the followed Jelly to the eye. The race frame is ~33 u from the middle of the track; this is ~2.1x closer (2.5x at the start line), so the Jelly is that much bigger.
+    static let drillDistance: Float = 16
+    /// Where the Jelly sits on screen, measured from the top (0...1): above the prompt strip and the foot buttons, below the stat card.
+    static let drillScreenY: Float = 0.40
+    /// The race's elevation, the Jelly framed at `drillScreenY`. `at` is the Jelly's centroid on the track. The race camera is untouched.
+    static func drillPose(aspect: Float, at: SIMD3<Float>) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let th = tanf(fovY / 2)
+        let drop = (0.5 - drillScreenY) * 2 * th * drillDistance             // the target sits below the Jelly by this much, so he rides high
+        let dir = SIMD3<Float>(0, sinf(raceElevation), cosf(raceElevation))
+        let up = SIMD3<Float>(0, cosf(raceElevation), -sinf(raceElevation))
+        let t = SIMD3<Float>(at.x, 0.45, at.z) - up * drop
+        return (t + dir * drillDistance + up * drop, t)
     }
 
     // MARK: Focus close-up
@@ -113,7 +181,7 @@ enum GameCamera {
     /// Eye / target of the close-up: centred on the front spot, facing him.
     static func focusPose(aspect: Float, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let visW = 2 * BobShape.R / focusWidthFill
-        let visH = visW / max(aspect, 0.2)
+        let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let mid = 0.5 * BobShape.H
         let ty = mid - (0.5 - focusBodyScreenY) * visH           // below his middle -> he sits above the screen centre
@@ -153,7 +221,7 @@ enum GameCamera {
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
         let visW = (hi.x - lo.x + 2 * BobShape.R) / focusRowFill
-        let visH = visW / max(aspect, 0.2)
+        let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
         let t = SIMD3<Float>(mid.x, ty, callSpot.y)
@@ -219,9 +287,9 @@ enum GameCamera {
     static let bodyHalfExtent: Float = 0.8, screenFill: Float = 0.9
 
     /// Clamps a floor position (centroid) so a body of `radius` stays on the visible floor, off the sofa and props.
-    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1, openSides: Bool = false) -> SIMD3<Float> {
-        var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale)
-        q.z = min(max(q.z, walkMinZ), walkMaxZ)
+    static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1, openSides: Bool = false, ignoreDecor: Int? = nil) -> SIMD3<Float> {
+        var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale, ignoreDecor: ignoreDecor)
+        q.z = min(max(q.z, walkMinZ), roamMaxZ)          // (the roaming polygon's front when the room camera set one: RoamFloor.swift)
         if openSides { return q }                    // the wide close-up row: the camera is pulled back, the sides are on screen there
         let hw = max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)

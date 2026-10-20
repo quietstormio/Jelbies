@@ -84,6 +84,8 @@ final class VoiceCoordinator {
     @ObservationIgnored private(set) var lastFlipFailed = false
     @ObservationIgnored private var flipFailQueued = false
     @ObservationIgnored private var seenFaceplants = 0
+    /// Who each "goodnight" meant (tests).
+    @ObservationIgnored private(set) var goodnightLog: [[Int]] = []
     @ObservationIgnored private var queue: [(r: VoiceReaction, kind: VoiceFeedback.Kind?, ids: [Int], target: VoiceTarget)] = []
     // MARK: multi-Jelly hooks (phase B wires these; the lab has one real Jelly, Bob = id 0)
     /// The on-device language model fallback (nil = none: the deterministic result stands).
@@ -100,6 +102,8 @@ final class VoiceCoordinator {
     @ObservationIgnored var onStopFighting: (([Int]) -> Void)?
     /// A reaction for Jellies other than Bob (ids != 0); Bob's own part still runs here.
     @ObservationIgnored var onRemote: ((VoiceReaction, [Int]) -> Void)?
+    /// "Goodnight": the Jellies (ids) that go to bed now (the stage sets `commandedGoodnight` on their brains).
+    @ObservationIgnored var onGoodnight: (([Int]) -> Void)?
     /// The language-model request in flight (tests await it).
     private(set) var intentTask: Task<Void, Never>?
     /// How the last utterance was understood: "det", "model", "timeout", "error", "unavailable" and the ms it took.
@@ -475,7 +479,7 @@ final class VoiceCoordinator {
 
     /// Debug / capture (`-VoiceLearned 1`): his name and every trick count as learned with their suggestion words.
     func debugLearnAll() {
-                for t in VoiceTrick.allCases { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }
+                for t in VoiceTrick.allCases where training.unlocked(t) { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }
         tutorial.finish()
     }
 
@@ -493,6 +497,9 @@ final class VoiceCoordinator {
         case .jacks: return .jacks
         case .run, .stumble: return .run
         case .look: return .look
+        case .tail: return .spin
+        case .bounce: return .hop
+        case .roll: return .roll
         default: return nil
         }
     }
@@ -502,6 +509,9 @@ final class VoiceCoordinator {
         case .jacks: return .jacks
         case .run: return .run
         case .look: return .look
+        case .spin: return .tail
+        case .hop: return .bounce
+        case .roll: return .roll
         case .flip, .come: return nil
         }
     }
@@ -675,8 +685,21 @@ final class VoiceCoordinator {
     private func run(_ r: VoiceReaction, kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected, care: GameCare, brain: BlobBrain) {
         if UserDefaults.standard.bool(forKey: "VoiceLog") { NSLog("VOICELOG reaction=%@ mood=%@ ids=%@", String(describing: r), String(describing: care.needs.mood), ids.description) }   // capture aid
         if care.trayOut { return }                                   // a meal owns him
+        if r == .social(.goodnight), care.raceBusy { return }        // no bedtime during a race trip (or the roll up before it)
         let focused = care.focus.isActive
         if focused, care.focus.phase == .approaching { return }
+        if r == .social(.goodnight) {            // a group command like come-here-everyone: every awake Jelly (or the one meant) goes to bed
+            emitFeedback(r, override: kind)
+            let meant: [Int]
+            switch target {
+            case .everyone: meant = presentIDs
+            case .jelly(let id): meant = [id]
+            case .selected: meant = (focused || care.select.selectedID != nil) ? [care.targetJelly] : presentIDs
+            }
+            goodnightLog.append(meant); if goodnightLog.count > 20 { goodnightLog.removeFirst() }
+            if let f = onGoodnight { f(meant) } else { brain.commandedGoodnight = true }
+            return
+        }
         if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
             emitFeedback(r, override: kind)
             comeUntil = clock() + Self.comeWindow
@@ -744,6 +767,8 @@ final class VoiceCoordinator {
         case .play:
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }
+        case .goodnight:
+            break                                                    // (handled before: a group command)
         }
     }
 

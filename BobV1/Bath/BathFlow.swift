@@ -166,7 +166,7 @@ final class BathFlow {
             brain.hurry = false
             brain.requestNow(.goTo(targetID != 0 ? (returnSpot ?? GameCamera.callSpot) : GameCamera.callSpot))
             phase = .exitBack
-            if let sim, Self.floorZ(brain, sim) <= GameCamera.walkMaxZ { restoreAll(brain: brain, sim: sim) }
+            if let sim, Self.floorZ(brain, sim) <= GameCamera.roamMaxZ { restoreAll(brain: brain, sim: sim) }
         case .fade:
             guard fadeDest == .bath else { return }             // already on the way back
             fadeDest = .room
@@ -287,7 +287,7 @@ final class BathFlow {
             exitT += dt
             if here.y >= BathTuning.exitCutZ || exitT >= BathTuning.exitTimeout { beginFade(.bath) }
         case .exitBack:
-            if here.y <= GameCamera.walkMaxZ { restoreAll(brain: brain, sim: sim) }
+            if here.y <= GameCamera.roamMaxZ { restoreAll(brain: brain, sim: sim) }
         case .fade: tickFade(dt: dt, brain: brain, sim: sim)
         case .soap:
             look.tool = .soap

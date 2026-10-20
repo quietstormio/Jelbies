@@ -27,7 +27,7 @@ nonisolated enum BathSet {
     static var bodyCentre: SIMD3<Float> { SIMD3(0, 0.5 * BlobShape.H, 0) }
 
     static func closeUpPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        let visH = closeUpVisibleWidth / max(aspect, 0.2)
+        let visH = closeUpVisibleWidth / max(GameCamera.framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(GameCamera.fovY / 2))
         let t = SIMD3<Float>(standPoint.x, closeUpTargetY, standPoint.z)
         let e = t + SIMD3<Float>(0, sinf(closeUpElevation), cosf(closeUpElevation)) * dist

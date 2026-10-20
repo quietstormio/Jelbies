@@ -103,6 +103,8 @@ final class BodySlot {
     }
     var foamAny = false
     var sootAny = false
+    /// The Circuit jersey this body wears (Wear/GfxJersey.metal); nil = the locked body shader.
+    var jersey: WearTeam?
 
     init?(device: MTLDevice, vertexCount nV: Int, staticData st: [Float], label: String) {
         var dyns: [MTLBuffer] = [], sbs: [MTLBuffer] = [], ubs: [MTLBuffer] = [], bpbs: [MTLBuffer] = []
@@ -215,6 +217,10 @@ final class MelonRenderer {
     private let meshVD: MTLVertexDescriptor
     /// fsSoftMatteFast pipelines by tier (GfxBodyFast.metal), built on first use.
     private var pMatteFast: [Int: MTLRenderPipelineState] = [:]
+    /// The jersey body pipeline (Wear/GfxJersey.metal) and its per-vertex egg flags; built on first use.
+    private var pJersey: MTLRenderPipelineState?
+    private var eggFlagBuf: MTLBuffer?
+    private(set) var jerseyDraws = 0
     /// Whether the current MSAA / depth targets are memoryless (game pass, no PerfPasses, device supports it).
     private(set) var targetsMemoryless = false
     /// The body draw order of the last frame (slot indices), for tests.
@@ -484,6 +490,8 @@ final class MelonRenderer {
         // Writes target shared buffers the GPU may still be reading from the previous frame; call beginFrame() first.
         waitIfNeeded()
         uboBuf.contents().copyMemory(from: &uniforms, byteCount: MemoryLayout<MelonUniforms>.stride)
+        // Jelly Circuit: body 0 wears a rival's colours on the track (nil = the palette above, i.e. Bob's)
+        if let pal = slots[0].palette { var ub = u; Self.applyPalette(&ub, pal); ub.misc.w = pal.marking; uboBuf.contents().copyMemory(from: &ub, byteCount: MemoryLayout<MelonUniforms>.stride) }
         // the other Jellies: the same frame uniforms with their own colours (the mouth byte is written per body in encodeFrame)
         for slot in slots.dropFirst() {
             var ub = u
@@ -508,6 +516,12 @@ final class MelonRenderer {
 
     /// Sets the colours of Jelly `i` (0 is the palette given to `setUniforms`).
     func setPalette(_ palette: Palette, body i: Int) { if i > 0, i < slots.count { slots[i].palette = palette } }
+    /// Jelly Circuit: a body wears a rival's colours on the track (any body, Bob's too) and its own again with nil (`own` = the roster colours, nil for Bob).
+    func setRacePalette(_ palette: Palette?, own: Palette?, body i: Int) { if i < slots.count { slots[i].palette = palette ?? own } }
+    /// The race track is drawn instead of the living room (the stage sets it each frame from the race flow).
+    var raceVisible = false
+    /// The jersey band colour of a body (nil = none: the locked body shader draws him).
+    func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     func setMouth(_ m: Float, body i: Int) { if i < slots.count { slots[i].mouthOpen = m } }
@@ -680,6 +694,16 @@ final class MelonRenderer {
     var roomCacheEnabled = false
     /// Capture / test aid: draw the room at this hour instead of the DayClock's.
     var dayHourOverride: Double?
+    /// 0...1: the sleepers are tucked in (the stage sets it): the lamp dims and the quilt over the cuddle pile fades in.
+    /// The quilt RoomProp is parked (tuck-in stays as lamp dim + room darken). Flip to bring it back.
+    static let showQuilt = false
+    var tuckAmount: Float = 0
+    /// Where the quilt lies (centre x, z; half size x, z): the sleepers' pile. Set by the stage.
+    var quiltSpot: (centre: SIMD2<Float>, half: SIMD2<Float>)?
+    private func quiltProps(_ t: Float) -> [RoomProp] {
+        guard let q = quiltSpot else { return [] }
+        return [RoomProp(kind: .quilt, pos: q.centre, scale: t, half: q.half)]
+    }
     private var roomCacheState = RoomCacheState()
     private var roomCacheTex: MTLTexture?
     private(set) var lastCacheAction = RoomCacheAction.bypass(.disabled)
@@ -803,6 +827,42 @@ final class MelonRenderer {
         return p
     }
 
+    // MARK: jersey (Wear/GfxJersey.metal)
+
+    private func jerseyPipeline() -> MTLRenderPipelineState? {
+        if let p = pJersey { return p }
+        guard let vs = library.makeFunction(name: "vsJellyJersey"), let fs = library.makeFunction(name: "fsSoftMatteJersey") else { print("MelonRenderer: jersey shader unavailable"); return nil }
+        let d = MTLRenderPipelineDescriptor()
+        d.label = "matte jersey"
+        d.vertexFunction = vs; d.fragmentFunction = fs
+        d.vertexDescriptor = meshVD
+        d.colorAttachments[0].pixelFormat = Self.hdrFormat
+        d.depthAttachmentPixelFormat = Self.depthFormat
+        d.rasterSampleCount = Self.msaa
+        guard let p = try? device.makeRenderPipelineState(descriptor: d) else { print("MelonRenderer: jersey pipeline failed"); return nil }
+        pJersey = p
+        return p
+    }
+    /// One byte per render vertex: 1 for the egg, 0 for the arm capsules and foot beans (they share the mesh; their rest y overlaps the band).
+    private func eggFlags() -> MTLBuffer? {
+        if let b = eggFlagBuf { return b }
+        var f = [UInt8](repeating: 1, count: mesh.vertexCount)
+        if let info = mesh.armCapsule {
+            for side in [-1, 1] {
+                let a = info.first(side: side), e = info.beanFirst(side: side) + FootBean.vertexCount
+                for i in a..<min(e, f.count) { f[i] = 0 }
+            }
+        }
+        eggFlagBuf = device.makeBuffer(bytes: f, length: max(f.count, 1), options: .storageModeShared)
+        eggFlagBuf?.label = "jersey egg flags"
+        return eggFlagBuf
+    }
+    /// Shader parameters of a team's band: cloth and trim, with the shadow side of each.
+    static func jerseyParams(_ t: WearTeam) -> (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) {
+        let c = t.linear, cr = WearTeam.creamLinear
+        return (SIMD4(c, 1), SIMD4(c * 0.56, 1), SIMD4(cr, 1), SIMD4(cr * 0.62, 1), SIMD4(0.22, 0.51, 0.008, 0.03))
+    }
+
     // MARK: MetalFX spatial upscaling (GfxUpscaler.swift)
 
     /// When on and the target (drawable) is larger than the render size set by `resize`, post renders at render size and MetalFX upscales
@@ -875,8 +935,11 @@ final class MelonRenderer {
 
         // Game: the room and Bob share one MSAA pass that resolves straight to hdrTex (matte Bob needs no scene copy / back faces).
         if let room {
-            room.fog = SIMD3(14, 32, 0.3)
-            room.daylight = dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)
+            room.raceVisible = raceVisible
+            room.fog = raceVisible ? SIMD3(45, 150, 0.5) : SIMD3(14, 32, 0.3)
+            let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
+            room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)
+            room.props = (Self.showQuilt && tuckQ > 0.05) ? quiltProps(tuckQ) : []
             // ---- bath: bathroom on/off, props over Bob, body shader parameters ----
             room.bathVisible = bathLook.visible
             room.bathTime = uniforms.camPos.w
@@ -907,6 +970,7 @@ final class MelonRenderer {
                 var (lo, hi) = bobBounds(bathBody)
                 let single = slots.count == 1
                 if single, let d = room.diningBounds { lo = simd_min(lo, d.lo); hi = simd_max(hi, d.hi) }
+                if single { for w in room.wearBounds { lo = simd_min(lo, w.lo); hi = simd_max(hi, w.hi) } }
                 if let b = room.bathOverlay.bounds { lo = simd_min(lo, b.lo); hi = simd_max(hi, b.hi) }
                 if room.bathVisible {       // the water disc is drawn inside the footprint too
                     let c = BathModels.basinCentre, r = BathModels.waterR
@@ -916,6 +980,7 @@ final class MelonRenderer {
                 if !single {
                     for i in 0..<slots.count where i != bathBody && !slots[i].hidden { let b = bobBounds(i); rects.append(footprint(b.lo, b.hi)) }
                     if let d = room.diningBounds { rects.append(footprint(d.lo, d.hi)) }
+                    for w in room.wearBounds { rects.append(footprint(w.lo, w.hi)) }
                     rects = RoomFootprint.mergeOverlapping(rects)
                 }
                 let rect = rects[0]
@@ -1036,6 +1101,12 @@ final class MelonRenderer {
                 if usesBathShader(slot) {
                     e.setRenderPipelineState(bathPipeline(slot))
                     e.setFragmentBuffer(slot.bathParamsBuf, offset: 0, index: 3)
+                } else if let team = slot.jersey, let jp = jerseyPipeline(), let flags = eggFlags() {
+                    e.setRenderPipelineState(jp)
+                    e.setVertexBuffer(flags, offset: 0, index: 3)
+                    var par = Self.jerseyParams(team)
+                    e.setFragmentBytes(&par, length: MemoryLayout.size(ofValue: par), index: 1)
+                    jerseyDraws += 1
                 } else {
                     e.setRenderPipelineState(fast ?? pMatte)
                 }

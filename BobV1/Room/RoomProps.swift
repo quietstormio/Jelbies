@@ -8,11 +8,12 @@ import simd
 import Foundation
 
 nonisolated struct RoomProp: Equatable {
-    enum Kind { case food, water }
+    enum Kind { case food, water, quilt }
     var kind: Kind
     var pos: SIMD2<Float>          // floor (x, z) of the bowl centre
     var scale: Float = 1           // 0...1 appear / disappear
     var level: Float = 1           // 1 = full, 0 = empty
+    var half = SIMD2<Float>(0, 0)  // quilt: half size (x, z)
 }
 
 nonisolated enum RoomPropGeometry {
@@ -29,7 +30,28 @@ nonisolated enum RoomPropGeometry {
         return b.mesh
     }
 
+    /// The quilt over the cuddle pile: a soft rounded slab with a lighter border, lying over the sleepers' feet (it grows in with `scale`).
+    static let quiltY: Float = 0.50, quiltThick: Float = 0.09
+    private static func addQuilt(_ p: RoomProp, _ b: RoomMeshBuilder) {
+        let s = min(max(p.scale, 0), 1)
+        guard s > 0.02 else { return }
+        let hx = p.half.x * s, hz = p.half.y * s
+        let y = quiltY * (0.4 + 0.6 * s)
+        b.material = .plain
+        let base = SIMD3<Float>(0.40, 0.46, 0.80), trim = SIMD3<Float>(0.92, 0.86, 0.70)
+        b.roundedBox(centre: SIMD3(p.pos.x, y, p.pos.y), half: SIMD3(hx, quiltThick, hz), radius: 0.09, segments: 4, aoFloor: false, color: trim)
+        b.roundedBox(centre: SIMD3(p.pos.x, y + 0.025, p.pos.y), half: SIMD3(max(hx - 0.14, 0.05), quiltThick, max(hz - 0.14, 0.05)), radius: 0.08, segments: 4, aoFloor: false, color: base)
+        // a few stitched puffs
+        let nx = max(2, Int((hx * 2 / 0.55).rounded())), nz = max(1, Int((hz * 2 / 0.55).rounded()))
+        for i in 0..<nx { for j in 0..<nz {
+            let x = p.pos.x - hx + 0.28 + (hx * 2 - 0.56) * (nx > 1 ? Float(i) / Float(nx - 1) : 0.5)
+            let z = p.pos.y - hz + 0.28 + (hz * 2 - 0.56) * (nz > 1 ? Float(j) / Float(nz - 1) : 0.5)
+            b.roundedBox(centre: SIMD3(x, y + 0.115, z), half: SIMD3(0.16, 0.035, 0.16), radius: 0.035, segments: 2, aoFloor: false, color: base * 1.18)
+        } }
+    }
+
     private static func add(_ p: RoomProp, _ sw: [SIMD3<Float>], _ b: RoomMeshBuilder) {
+        if p.kind == .quilt { addQuilt(p, b); return }
         let s = p.scale
         let R = radius * s, H = height * s
         let cx = p.pos.x, cz = p.pos.y
@@ -107,6 +129,8 @@ nonisolated enum RoomPropGeometry {
             let water = SIMD3<Float>(0.50, 0.74, 0.92)
             let disc: [PP] = [PP(r: 0, y: yw, nr: 0, ny: 1, ao: 1), PP(r: rw, y: yw, nr: 0, ny: 1, ao: 1)]
             b.lathe(cx: cx, cz: cz, profile: disc, segments: 32, color: water)
+        case .quilt:
+            break
         }
     }
 }

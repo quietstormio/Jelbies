@@ -54,6 +54,8 @@ nonisolated final class RoomRenderer {
     private let blendPipeline: MTLRenderPipelineState
     private let blendDepthState: MTLDepthStencilState
     private let dummyShadow: MTLTexture
+    /// The shoe paint table the fragment shader reads (Wear/ShoeGPU.swift), bound at fragment buffer 2 wherever the room pipelines run.
+    private lazy var shoeTable: MTLBuffer? = ShoeGPU.table.withUnsafeBytes { device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared) }
     // Bath (see Bath/): the bathroom set replaces the living room while `bathVisible`; dirt / tool / bubbles / spray draw over Bob always.
     private var bathOpaquePipeline: MTLRenderPipelineState?
     private var bathBlendPipeline: MTLRenderPipelineState?
@@ -73,6 +75,24 @@ nonisolated final class RoomRenderer {
             staticVersion &+= 1
             if bathVisible { buildBathMeshes() }
         }
+    }
+    // Race (Race/RaceModels.swift): the Waddle Sprint track replaces the living room while `raceVisible`. Same pipeline and vertex format as the room.
+    private var raceVB: MTLBuffer?, raceIB: MTLBuffer?, raceIndexCount = 0
+    /// The track is drawn instead of the living room. Changing it bumps `staticVersion`, which invalidates the room cache.
+    var raceVisible = false {
+        didSet {
+            guard raceVisible != oldValue else { return }
+            staticVersion &+= 1
+            if raceVisible { buildRaceMeshes() }
+        }
+    }
+    private func buildRaceMeshes() {
+        guard raceVB == nil else { return }
+        let m = RaceModels.build()
+        raceIndexCount = m.indices.count
+        raceVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        raceIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
+        raceVB?.label = "race track vertices"; raceIB?.label = "race track indices"
     }
     private var vertexBuffer: MTLBuffer?
     private var indexBuffer: MTLBuffer?
@@ -227,7 +247,29 @@ nonisolated final class RoomRenderer {
     /// Bumped whenever the static room pixels can change (geometry rebuild, props). Part of the room cache key.
     private(set) var staticVersion = 0
     /// World AABB of the dining meshes (opaque + translucent), nil when there are none. The room cache re-shades this area every frame.
-    private(set) var diningBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
+    var diningBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)? {
+        var out: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
+        for b in [trayBounds, maskBounds, decorBounds] {
+            guard let b else { continue }
+            out = out.map { (simd_min($0.lo, b.lo), simd_max($0.hi, b.hi)) } ?? b
+        }
+        return out
+    }
+    private var trayBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
+    /// Sleep eye masks (opaque) and their puffs (translucent): world space, replaced every frame while any is out (SleepMask.swift).
+    private var maskOpaque = DynMesh(), maskTranslucent = DynMesh()
+    private var maskBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
+    // Decor (Room/DecorModels.swift): the resting pieces are part of the cached static room (one buffer, rebuilt when the set or a piece's rest pose
+    // changes); a piece that is animating (sat in, booped, rolling) is drawn per frame instead, and its box joins the re-shaded footprint.
+    private var decorVB: MTLBuffer?, decorIB: MTLBuffer?, decorIndexCount = 0
+    private var decorActive = DynMesh()
+    private var decorBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
+    /// Worn pieces (hats, glasses, scarves, mitts, ...; opaque) and their poof puffs (translucent): world space, rebuilt every frame while any is worn
+    /// (Wear/WornSet.swift). `wearBounds` = one world box per wearing Jelly (hats stand above the body's own box), which the room cache re-shades.
+    private var wearOpaque = DynMesh(), wearTranslucent = DynMesh()
+    private(set) var wearBounds: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
+    /// Worn shoes (opaque, world space, rebuilt every frame while any is worn; ShoeModel.swift). Drawn in the room, on the track and in the bath's absence.
+    private var shoeMesh = DynMesh()
 
     private func upload(_ m: RoomMesh, into d: inout DynMesh) {
         d.slot = (d.slot + 1) % 3
@@ -256,7 +298,48 @@ nonisolated final class RoomRenderer {
             let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
             lo = simd_min(lo, p); hi = simd_max(hi, p)
         } }
-        diningBounds = diningVertexCount > 0 ? (lo, hi) : nil
+        trayBounds = diningVertexCount > 0 ? (lo, hi) : nil
+    }
+
+    /// Replaces the resting decor (world space). Invalidates the room cache.
+    func setDecorStatic(_ m: RoomMesh) {
+        staticVersion &+= 1
+        decorIndexCount = m.indices.count
+        guard decorIndexCount > 0 else { return }
+        decorVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        decorIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
+        decorVB?.label = "decor vertices"; decorIB?.label = "decor indices"
+    }
+    /// Replaces the animating decor (world space, per frame). An empty mesh clears it.
+    func setDecorActive(_ m: RoomMesh) {
+        upload(m, into: &decorActive)
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for v in m.vertices { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
+        decorBounds = m.vertices.isEmpty ? nil : (lo, hi)
+    }
+    var decorActiveVertexCount: Int { decorBounds == nil ? 0 : 1 }
+
+    /// Replaces the worn pieces (world space). Empty meshes clear them.
+    func setWear(opaque: RoomMesh, translucent: RoomMesh, bounds: [(lo: SIMD3<Float>, hi: SIMD3<Float>)]) {
+        upload(opaque, into: &wearOpaque)
+        upload(translucent, into: &wearTranslucent)
+        wearBounds = bounds
+    }
+    var wearVertexCount: Int { wearOpaque.indexCount }
+
+    /// Replaces the worn shoes (world space). An empty mesh clears them.
+    func setShoes(_ m: RoomMesh) { upload(m, into: &shoeMesh) }
+
+    /// Replaces the sleep masks / puffs (world space). An empty frame clears them.
+    func setMasks(opaque: RoomMesh, translucent: RoomMesh) {
+        upload(opaque, into: &maskOpaque)
+        upload(translucent, into: &maskTranslucent)
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for mesh in [opaque, translucent] { for v in mesh.vertices {
+            let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
+            lo = simd_min(lo, p); hi = simd_max(hi, p)
+        } }
+        maskBounds = opaque.vertices.count + translucent.vertices.count > 0 ? (lo, hi) : nil
     }
 
     private func rebuild() {
@@ -310,10 +393,43 @@ nonisolated final class RoomRenderer {
             }
             return
         }
+        if raceVisible {
+            // the track replaces the room (static: cached like the room); no props, no dining tray out there
+            guard let vb = raceVB, let ib = raceIB, raceIndexCount > 0 else { return }
+            var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
+            u.pal2 = SIMD4(RaceModels.swatch2, 1); u.pal3 = SIMD4(RaceModels.swatch3, 1); u.pal4 = SIMD4(RaceModels.swatch4, 1)
+            u.lamp.w = 0
+            enc.pushDebugGroup("race track")
+            enc.setRenderPipelineState(pipeline)
+            enc.setFragmentBuffer(shoeTable, offset: 0, index: 2)
+            enc.setDepthStencilState(depthState)
+            enc.setFrontFacing(.counterClockwise)
+            enc.setCullMode(.back)
+            enc.setVertexBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
+            enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
+            enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
+            enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
+            if parts != .diningOnly {
+                enc.setVertexBuffer(vb, offset: 0, index: 1)
+                enc.drawIndexedPrimitives(type: .triangle, indexCount: raceIndexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+            }
+            if parts != .staticOnly {          // the racers' shoes and numbered bibs, hats and the rest of what they wear stand on the track too
+                for (label, d) in [("shoes", shoeMesh), ("wardrobe", wearOpaque)] where d.indexCount > 0 {
+                    guard let dv = d.vb[d.slot], let di = d.ib[d.slot] else { continue }
+                    enc.pushDebugGroup(label)
+                    enc.setVertexBuffer(dv, offset: 0, index: 1)
+                    enc.drawIndexedPrimitives(type: .triangle, indexCount: d.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+                    enc.popDebugGroup()
+                }
+            }
+            enc.popDebugGroup()
+            return
+        }
         guard let vb = vertexBuffer, let ib = indexBuffer, indexCount > 0 else { return }
         var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
         enc.pushDebugGroup("room")
         enc.setRenderPipelineState(pipeline)
+        enc.setFragmentBuffer(shoeTable, offset: 0, index: 2)
         enc.setDepthStencilState(depthState)
         enc.setFrontFacing(.counterClockwise)
         enc.setCullMode(.back)
@@ -328,11 +444,41 @@ nonisolated final class RoomRenderer {
             enc.setVertexBuffer(pv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: propIndexCount, indexType: .uint32, indexBuffer: pi, indexBufferOffset: 0)
         }
+        if decorIndexCount > 0, let dv = decorVB, let di = decorIB {
+            enc.pushDebugGroup("decor")
+            enc.setVertexBuffer(dv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: decorIndexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+            enc.popDebugGroup()
+        }
+        }
+        if parts != .staticOnly, decorActive.indexCount > 0, let dv = decorActive.vb[decorActive.slot], let di = decorActive.ib[decorActive.slot] {
+            enc.pushDebugGroup("decor (animating)")
+            enc.setVertexBuffer(dv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: decorActive.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+            enc.popDebugGroup()
         }
         if parts != .staticOnly, diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {
             enc.pushDebugGroup("dining")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: diningOpaque.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+            enc.popDebugGroup()
+        }
+        if parts != .staticOnly, maskOpaque.indexCount > 0, let mv = maskOpaque.vb[maskOpaque.slot], let mi = maskOpaque.ib[maskOpaque.slot] {
+            enc.pushDebugGroup("sleep mask")
+            enc.setVertexBuffer(mv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: maskOpaque.indexCount, indexType: .uint32, indexBuffer: mi, indexBufferOffset: 0)
+            enc.popDebugGroup()
+        }
+        if parts != .staticOnly, shoeMesh.indexCount > 0, let sv = shoeMesh.vb[shoeMesh.slot], let si = shoeMesh.ib[shoeMesh.slot] {
+            enc.pushDebugGroup("shoes")
+            enc.setVertexBuffer(sv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: shoeMesh.indexCount, indexType: .uint32, indexBuffer: si, indexBufferOffset: 0)
+            enc.popDebugGroup()
+        }
+        if parts != .staticOnly, wearOpaque.indexCount > 0, let wv = wearOpaque.vb[wearOpaque.slot], let wi = wearOpaque.ib[wearOpaque.slot] {
+            enc.pushDebugGroup("wardrobe")
+            enc.setVertexBuffer(wv, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: wearOpaque.indexCount, indexType: .uint32, indexBuffer: wi, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
         enc.popDebugGroup()
@@ -342,10 +488,12 @@ nonisolated final class RoomRenderer {
     /// on top of him. Sets its own pipeline / depth / cull state and buffers.
     func encodeBlended(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                        lightViewProj: simd_float4x4?, shadowTex: MTLTexture?, topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil) {
-        if diningTranslucent.indexCount > 0, let dv = diningTranslucent.vb[diningTranslucent.slot], let di = diningTranslucent.ib[diningTranslucent.slot] {
+        for d in (bathVisible || raceVisible) ? [diningTranslucent, wearTranslucent] : [diningTranslucent, maskTranslucent, wearTranslucent] {
+        if d.indexCount > 0, let dv = d.vb[d.slot], let di = d.ib[d.slot] {
             var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
             enc.pushDebugGroup("dining puff")
             enc.setRenderPipelineState(blendPipeline)
+            enc.setFragmentBuffer(shoeTable, offset: 0, index: 2)
             enc.setDepthStencilState(blendDepthState)
             enc.setFrontFacing(.counterClockwise)
             enc.setCullMode(.back)
@@ -354,8 +502,9 @@ nonisolated final class RoomRenderer {
             enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
             enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
             enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
-            enc.drawIndexedPrimitives(type: .triangle, indexCount: diningTranslucent.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: d.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
             enc.popDebugGroup()
+        }
         }
         // bath: the water over Bob's ankles, then dirt / tool / bubbles / spray (no shadow lookups: they sit on his own surface)
         guard let pipe = bathBlendPipeline else { return }

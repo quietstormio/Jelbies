@@ -8,12 +8,38 @@ import Foundation
 nonisolated enum SFX: String, CaseIterable, Sendable {
     case squish, boop, wobble, footstep, zoomies, jump, chomp, slurp, setdown, splash, soapbubbles, bubblepop
     case lintroller, sparkle, snore, uitap, uiconfirm, coin, select
+    /// Jelly Circuit cues (files countdown_beep_N, race_go_N, race_finish_N, stumble_N).
+    case countdownBeep = "countdown_beep", raceGo = "race_go", raceFinish = "race_finish", stumble
+    /// Store cues (files store_open_N, buy_coins_N, ...). The sound worker's clips, normalised; buy_coins keeps only the long variant.
+    case storeOpen = "store_open", buyCoins = "buy_coins", notEnough = "not_enough", pageTurn = "page_turn", shoeOn = "shoe_on", unwrap
+    case crunchNugget = "crunch_nugget", crunchFries = "crunch_fries", perkSparkle = "perk_sparkle"
+    /// Decor cues (files place_item_N, beanbag_sit_N).
+    case placeItem = "place_item", beanbagSit = "beanbag_sit"
+    /// Training cues (files whistle_N, tick_N, good_step_N, perfect_streak_N, stat_up_N, tired_N, cheer_small_N).
+    case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
     var gain: Float {
         switch self {
         case .footstep: return 0.45
-        case .snore: return 0.5
+        case .snore: return 0.175           // was 0.5: "the snoring is too loud" (0.35x)
+        case .slurp: return 0.51            // was 0.85 (default): 0.6x, "a little more quiet"
+        case .countdownBeep: return 0.55
+        case .raceGo: return 0.65
+        case .raceFinish: return 0.7
+        case .stumble: return 0.6
+        case .storeOpen, .pageTurn: return 0.5
+        case .buyCoins, .perkSparkle: return 0.55
+        case .notEnough: return 0.5
+        case .shoeOn, .unwrap: return 0.45
+        case .placeItem: return 0.55
+        case .beanbagSit: return 0.5
+        case .whistle, .statUp, .cheerSmall: return 0.6
+        case .tick: return 0.55
+        case .goodStep: return 0.5
+        case .perfectStreak: return 0.6
+        case .tired: return 0.5
+        case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
         case .uitap: return 0.6
         case .soapbubbles, .lintroller: return 0.7
@@ -25,10 +51,12 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         switch self {
         case .footstep: return 0.2
         case .squish, .boop, .wobble: return 0.16
-        case .chomp, .slurp: return 0.25
+        case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45
         case .bubblepop: return 0.07
         case .uitap, .uiconfirm: return 0.06
+        case .countdownBeep, .raceGo: return 0.3
+        case .tick, .goodStep: return 0.05
         default: return 0.1
         }
     }
@@ -41,6 +69,9 @@ nonisolated enum AudioMix {
     static let ambience: Float = 0.34
     static let sfxMaster: Float = 1
     static let crossfade: Double = 3
+    /// The race crowd loop: level in the mix and the crossfade at the loop point (the file is not seamless).
+    static let crowd: Float = 0.22
+    static let crowdCrossfade: Double = 1.0
 }
 
 /// Music and Sound Effects, separately on/off with a volume each. Persisted in UserDefaults; `-Mute 1` (and the test host) silences everything.
@@ -73,5 +104,30 @@ nonisolated struct Fader: Equatable, Sendable {
     mutating func update(dt: Double) {
         let step = Float(dt) / seconds
         if level < target { level = min(target, level + step) } else if level > target { level = max(target, level - step) }
+    }
+}
+
+/// When the sleeping Jellies snore: one snore per Jelly every 6...10 s at most, and never two Jellies within `hubGap` of each other
+/// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
+nonisolated struct SnoreScheduler: Sendable {
+    static let interval: ClosedRange<Double> = 6...10
+    static let firstDelay: ClosedRange<Double> = 2...5
+    static let hubGap: Double = 2.5
+    private(set) var next: [Double] = [0, 0, 0]
+    private(set) var lastAny: Double = -100
+
+    /// The Jellies that snore now (`now` seconds; `napping[i]` = asleep).
+    mutating func due(napping: [Bool], now: Double, random: (ClosedRange<Double>) -> Double) -> [Int] {
+        var out: [Int] = []
+        for i in napping.indices where i < next.count {
+            guard napping[i] else { next[i] = 0; continue }
+            if next[i] == 0 { next[i] = now + random(Self.firstDelay) + Double(i) * 1.3 }       // (staggered, so a pile does not start together)
+            guard now >= next[i] else { continue }
+            if now - lastAny < Self.hubGap { next[i] = lastAny + Self.hubGap + random(0.2...1.0); continue }
+            next[i] = now + random(Self.interval)
+            lastAny = now
+            out.append(i)
+        }
+        return out
     }
 }

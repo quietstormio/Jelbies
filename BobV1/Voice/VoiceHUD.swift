@@ -198,6 +198,7 @@ struct VoiceTrickBook: View {
         switch t {
         case .sit: s = "arrow.down.to.line"; case .jacks: s = "figure.jumprope"; case .run: s = "figure.run"
         case .flip: s = "figure.gymnastics"; case .look: s = "eye.fill"; case .come: s = "arrow.down.circle.fill"
+        case .spin: s = "arrow.triangle.2.circlepath"; case .hop: s = "arrow.up.circle.fill"; case .roll: s = "arrow.left.arrow.right.circle.fill"
         }
         return UIImage(systemName: s) != nil ? s : "star.fill"
     }
@@ -220,7 +221,7 @@ struct VoiceTrickBook: View {
             ScrollView {
                 VStack(spacing: 10) {
                     ForEach(voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
-                    ForEach(VoiceTrick.allCases, id: \.rawValue) { t in trickRow(t, tr) }
+                    ForEach(VoiceTrick.allCases.filter { tr.unlocked($0) }, id: \.rawValue) { t in trickRow(t, tr) }
                 }
                 .padding(.bottom, 6)
             }

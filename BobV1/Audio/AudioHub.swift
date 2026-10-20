@@ -36,9 +36,15 @@ final class AudioHub {
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var lastTick = CACurrentMediaTime()
     @ObservationIgnored private var micSession = false
+    @ObservationIgnored private var verifyTask: Task<Void, Never>?
     // music
     private struct Deck { var player: AVAudioPlayer; var fader = Fader(); var track: MusicTrack }
     @ObservationIgnored private var decks: [Deck] = []
+    @ObservationIgnored private var scene: SceneMusicEngine?
+    /// What the screens want: the race / drill (from the stage) wins over the town / shop (from the game screen).
+    @ObservationIgnored private var raceScene: MusicScene = .none
+    @ObservationIgnored private var townScene: MusicScene = .none
+    @ObservationIgnored private var jingle: AVAudioPlayer?
     @ObservationIgnored private var layer: (player: AVAudioPlayer, fader: Fader)?
     @ObservationIgnored private var ambDay: (player: AVAudioPlayer, fader: Fader)?
     @ObservationIgnored private var ambEve: (player: AVAudioPlayer, fader: Fader)?
@@ -48,7 +54,9 @@ final class AudioHub {
     @ObservationIgnored private var variantCount: [String: Int] = [:]
     @ObservationIgnored private var lastPlay: [String: Double] = [:]
     @ObservationIgnored private var lastFoot: [Double] = [0, 0, 0]
-    @ObservationIgnored private var nextSnore: [Double] = [0, 0, 0]
+    @ObservationIgnored private var snores = SnoreScheduler()
+    /// Called for the Jelly that snores now (the sleep z's ride it).
+    @ObservationIgnored var onSnore: ((Int) -> Void)?
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
     @ObservationIgnored private var lastMood: [Int: BlobMood] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -77,10 +85,10 @@ final class AudioHub {
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            Task { @MainActor in if type == .ended { self?.resumeAfterInterruption() } }
+            Task { @MainActor in if type == .ended { self?.resumeAfterInterruption(verify: true) } }
         })
         observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.resumeAfterInterruption() }
+            Task { @MainActor in self?.resumeAfterInterruption(verify: true) }
         })
         lastTick = CACurrentMediaTime()
         let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in Task { @MainActor in self?.tick() } }
@@ -96,12 +104,43 @@ final class AudioHub {
         try? s.setActive(true)
     }
 
-    private func resumeAfterInterruption() {
+    private func resumeAfterInterruption(verify: Bool = false) {
         guard started, active else { return }
         if !micSession { setUpSession() }
         for d in decks { d.player.play() }
         layer?.player.play(); ambDay?.player.play(); ambEve?.player.play()
+        scene?.resume()
+        ensureMusic(delay: false)
+        if verify { verifyTask?.cancel(); verifyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            if !Task.isCancelled { self?.ensureMusic(delay: true) }
+        } }
     }
+
+    /// True when a main deck that should be audible is really playing.
+    private var deckPlaying: Bool { decks.contains { $0.fader.target > 0 && $0.player.isPlaying } }
+
+    /// After a resume: start the next room track when the director is in a gap or nothing plays (1.5 s fade-in), and bring a scene's music back
+    /// if its engine lost it. `delay`: the 0.5 s re-check (also rebuilds a scene whose engine is not running).
+    func ensureMusic(delay: Bool) {
+        guard started, active else { return }
+        perform(director.resumed(deckPlaying: deckPlaying, fade: 1.5))
+        if let t = director.scene.track, !(scene?.isPlaying(t) ?? false) {
+            if scene?.current != t { perform([.sceneOn(t, fade: 1.5)]) }          // lost (or never started)
+            else if delay { scene?.recoverIfStalled() }                             // decoded but its node stopped
+        }
+    }
+
+    /// Test seams.
+    /// Tests on a host without audio output (the simulator) must not start an AVAudioEngine: the scene request is logged only.
+    @ObservationIgnored var _sceneEngineDisabled = false
+    var _decksPlaying: Bool { deckPlaying }
+    var _directorScene: MusicScene { director.scene }
+    func _forceGap(_ s: Double) { director.forceGap(s) }
+    var _inGap: Bool { director.gapLeft != nil }
+    var _micSession: Bool { micSession }
+    var _sceneEngine: SceneMusicEngine? { scene }
+    func _tick(_ dt: Double) { _ = dt; tick() }
 
     /// Foreground / background (scenePhase).
     func setForeground(_ on: Bool) {
@@ -109,10 +148,13 @@ final class AudioHub {
         active = on
         if on {
             lastTick = CACurrentMediaTime()
-            resumeAfterInterruption()
+            resumeAfterInterruption(verify: true)
         } else {
+            verifyTask?.cancel()
+            micSession = false          // the mic engine died with the background; a stale flag would skip setUpSession on return
             for d in decks { d.player.pause() }
             layer?.player.pause(); ambDay?.player.pause(); ambEve?.player.pause()
+            scene?.pause(); jingle?.pause()
             for ps in pool.values { for p in ps where p.isPlaying { p.stop() } }
         }
     }
@@ -135,22 +177,22 @@ final class AudioHub {
     }
     var isDucked: Bool { duck.isDucked || duck.listening }
 
+    /// Music is on and audible (the Jellies sway to it).
+    var musicAudible: Bool { started && !muted && settings.musicLevel > 0.05 }
+
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
-    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood]) {
+    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none) {
         guard !muted, started else { return }
         input.allNapping = !napping.isEmpty && !napping.contains(false)
         input.playing = playing
+        raceScene = scene
+        input.scene = scene != .none ? scene : townScene
         let now = CACurrentMediaTime()
-        for i in napping.indices where i < 3 {
-            if napping[i] {
-                if nextSnore[i] == 0 { nextSnore[i] = now + Double.random(in: 2...5) }
-                if now >= nextSnore[i] {
-                    nextSnore[i] = now + Double.random(in: 6...11)
-                    play(.snore, jelly: i, x: i < xs.count ? xs[i] : 0)
-                }
-            } else { nextSnore[i] = 0 }
+        for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
+            play(.snore, jelly: i, x: i < xs.count ? xs[i] : 0)
+            onSnore?(i)
         }
         for i in moods.indices {
             if let old = lastMood[i], old != moods[i] {
@@ -159,6 +201,34 @@ final class AudioHub {
             }
             lastMood[i] = moods[i]
         }
+    }
+
+    /// The Town / Shop / Track screens (the game screen tells; `.none` = back in the room).
+    func setTownScene(_ s: MusicScene) {
+        townScene = s
+        guard !muted, started else { return }
+        input.scene = raceScene != .none ? raceScene : townScene
+    }
+
+    /// Song time (seconds, as heard) of the training music, nil while it is not playing (muted, still decoding): the drill's audio clock.
+    func trainingSongTime() -> Double? {
+        guard !muted, started, active else { return nil }
+        return scene?.songTime(of: .training)
+    }
+    /// The track of this scene is decoded and playing.
+    func scenePlaying(_ s: MusicScene) -> Bool { s.track.map { scene?.isPlaying($0) ?? false } ?? false }
+
+    /// A result jingle (trimmed, faded at its end). Follows the music setting.
+    func playJingle(_ j: Jingle) {
+        guard !muted, started, active else { return }
+        let level = settings.musicLevel * duck.gain
+        guard level > 0.01, let u = url(j.rawValue), let p = try? AVAudioPlayer(contentsOf: u) else { return }
+        jingle?.stop()
+        p.volume = min(1, level * 0.7)
+        p.prepareToPlay(); p.play()
+        jingle = p
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(j.trim - 0.4, 0.1)) { [weak p] in p?.setVolume(0, fadeDuration: 0.4) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + j.trim) { [weak p] in p?.stop() }
     }
 
     // MARK: effects
@@ -211,6 +281,66 @@ final class AudioHub {
         guard n > 0 else { return }
         let v = picker.pick(sfx.rawValue, count: n) + 1
         fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x))
+    }
+
+    // Jelly Circuit cues. Named hooks: dedicated sounds are added later under these names; for now they use existing effects.
+    func raceCountdownBeep() { play(.countdownBeep) }
+    func raceGo() { play(.raceGo) }
+    func raceFinish() { play(.raceFinish) }
+    func raceStumble() { play(.stumble) }
+    func raceCue(_ c: RaceCue) {
+        switch c { case .countdownBeep: raceCountdownBeep(); case .go: raceGo(); case .finish: raceFinish() }
+    }
+
+    /// The practice drill's sounds (Training/DrillFlow.swift).
+    func drillCue(_ c: DrillCue) {
+        switch c {
+        case .perfect: play(.tick, volume: 0.9)
+        case .good: play(.goodStep)
+        case .streak: play(.perfectStreak)
+        case .lap: play(.whistle, volume: 0.6)
+        case .go: play(.whistle)
+        case .statUp: play(.statUp); play(.cheerSmall, volume: 0.7)
+        case .tired: play(.tired)
+        case .jingle(let win): playJingle(win ? .win : .lose)
+        }
+    }
+
+    // MARK: race crowd (quiet loop with a crossfade at the loop point)
+
+    @ObservationIgnored private var crowdPlayers: [AVAudioPlayer] = []
+    @ObservationIgnored private var crowdWant = false
+    @ObservationIgnored private var crowdLevel: Float = 0
+    @ObservationIgnored private var crowdCur = 0
+    @ObservationIgnored private var crowdFade: Double = -1          // seconds into a crossfade, -1 = none
+
+    /// The crowd murmurs while a race is on (fades in and out).
+    func raceCrowd(_ on: Bool) {
+        guard !muted, started else { return }
+        crowdWant = on
+        if on, crowdPlayers.isEmpty, let u = url("crowd_loop_1") {
+            crowdPlayers = (0..<2).compactMap { _ in try? AVAudioPlayer(contentsOf: u) }
+            for p in crowdPlayers { p.volume = 0; p.prepareToPlay() }
+        }
+        if on, crowdPlayers.count == 2, !crowdPlayers[crowdCur].isPlaying, active { crowdPlayers[crowdCur].currentTime = 0; crowdPlayers[crowdCur].play() }
+    }
+
+    private func tickCrowd(dt: Double) {
+        guard crowdPlayers.count == 2 else { return }
+        crowdLevel += Float(dt) * (crowdWant ? 1 : -1) / 1.2
+        crowdLevel = min(max(crowdLevel, 0), 1)
+        let cur = crowdPlayers[crowdCur], nxt = crowdPlayers[1 - crowdCur]
+        let base = settings.sfxLevel * duck.gain * AudioMix.crowd * crowdLevel
+        if crowdWant || crowdLevel > 0 {
+            if crowdFade < 0, cur.isPlaying, cur.duration - cur.currentTime <= AudioMix.crowdCrossfade { nxt.currentTime = 0; nxt.play(); crowdFade = 0 }
+        }
+        if crowdFade >= 0 {
+            crowdFade += dt
+            let k = Float(min(crowdFade / AudioMix.crowdCrossfade, 1))
+            cur.volume = base * (1 - k); nxt.volume = base * k
+            if k >= 1 { cur.stop(); crowdCur = 1 - crowdCur; crowdFade = -1 }
+        } else { cur.volume = base }
+        if !crowdWant, crowdLevel == 0 { for p in crowdPlayers where p.isPlaying { p.stop() }; crowdFade = -1 }
     }
 
     func uiTap() { play(.uitap) }
@@ -289,6 +419,12 @@ final class AudioHub {
                 layer?.fader.ramp(to: 1, over: fade)
             case .layerOff(let fade):
                 layer?.fader.ramp(to: 0, over: fade)
+            case .sceneOn(let t, let fade):
+                if _sceneEngineDisabled { break }
+                if scene == nil { scene = SceneMusicEngine() }
+                scene?.play(t, fade: fade)
+            case .sceneOff(let fade):
+                scene?.stopAll(fade: fade)
             }
         }
     }
@@ -305,7 +441,9 @@ final class AudioHub {
         inp.phase = DayPhase.of(hour: DayClock.shared.hour)
         perform(director.update(dt: dt, input: inp))
         for i in decks.indices { decks[i].fader.update(dt: dt) }
+        scene?.update(dt: dt)
         layer?.fader.update(dt: dt); ambDay?.fader.update(dt: dt); ambEve?.fader.update(dt: dt)
+        tickCrowd(dt: dt)
         decks.removeAll { d in
             if d.fader.level <= 0.0001 && d.fader.target == 0 { d.player.stop(); return true }
             return false
@@ -320,6 +458,7 @@ final class AudioHub {
         let main = Float(director.mainGain(playing: input.playing))
         for d in decks { d.player.volume = d.fader.level * main * m }
         layer?.player.volume = (layer?.fader.level ?? 0) * m * 1.1
+        scene?.setLevel(m)
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)
         let b = DayClock.shared.blend
         let a = settings.musicLevel * duck.gain * AudioMix.ambience

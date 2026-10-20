@@ -223,8 +223,9 @@ nonisolated final class Skinner {
     var browCounterOn = false
     static let browFloor: Float = 0.08          // a little friendly: the measured slant is only matched to ~0.13 rad on a heavily turned head
     private var browCW: Float = 0
-    private static let gameViewProj: simd_float4x4 = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: GameCamera.aspect, near: 0.3, far: 60),
-                                                           M4.lookAt(eye: GameCamera.eye, at: GameCamera.target, up: SIMD3(0, 1, 0)))
+    /// The game camera as it is NOW (the screen-space brow measure multiplies by the live aspect, so the matrix must use it too: a frozen portrait one skews the slant in landscape).
+    private static var gameViewProj: simd_float4x4 { M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: GameCamera.aspect, near: 0.3, far: 60),
+                                                           M4.lookAt(eye: GameCamera.eye, at: GameCamera.target, up: SIMD3(0, 1, 0))) }
     private var browW: Float = 0
     private var browRest: [[SIMD3<Float>]] = [[], []]
     private var browMidRest = SIMD3<Float>(0, 0, 0)

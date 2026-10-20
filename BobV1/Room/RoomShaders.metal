@@ -42,6 +42,7 @@ struct RoomVOut {
     float ao;
     float alpha;
     float mat [[flat]];
+    float pack [[flat]];     // shoes: the body colour as 3 sRGB bytes (normal.w)
 };
 
 vertex RoomVOut roomVS(RoomVertexIn v [[stage_in]], constant RoomUniforms& u [[buffer(0)]]) {
@@ -50,6 +51,7 @@ vertex RoomVOut roomVS(RoomVertexIn v [[stage_in]], constant RoomUniforms& u [[b
     o.position = u.viewProj * float4(v.pos.xyz, 1.0);
     o.normal = v.normal.xyz;
     o.ao = v.normal.w;
+    o.pack = v.normal.w;
     o.color = v.color.rgb;
     o.alpha = v.color.a;
     o.mat = v.pos.w;
@@ -126,8 +128,87 @@ static float3 roomFloor(constant RoomUniforms& u, float2 xz, float3 base, float3
     return c;
 }
 
+
+// ---- shoes: the paint specs evaluated per pixel (ShoeGPU.swift builds the table) ----
+
+static float3 roomSrgbToLin(float3 c) {
+    return select(pow((c + 0.055) / 1.055, 2.4), c / 12.92, c <= 0.04045);
+}
+static float roomSmooth(float a, float b, float x) { float t = saturate((x - a) / max(b - a, 1e-6)); return t * t * (3.0 - 2.0 * t); }
+static float roomWin(float4 w, float x) {
+    float r = 1.0;
+    if (w.x > -100.0) { r *= roomSmooth(w.x - w.z, w.x + w.z, x); }
+    if (w.y < 100.0) { r *= 1.0 - roomSmooth(w.y - w.z, w.y + w.z, x); }
+    return r;
+}
+/// A hard edge at 0.5 that is one pixel wide on screen (so the band is crisp, never stair-stepped or shimmering).
+static float roomEdge(float x) {
+    float f = max(fwidth(x) * 0.75, 1e-4);
+    return smoothstep(0.5 - f, 0.5 + f, x);
+}
+
+constant int ROOM_SHOE_LAYERS = 12;
+constant int ROOM_SHOE_LOOK_STRIDE = 1 + 12 * 9;
+
+static void roomShoe(constant float4* T, int look, float3 uvs, float ph, float pack, thread float3& albedo, thread float& emit) {
+    float u = uvs.x, v = uvs.y, sx = uvs.z;
+    int o = look * ROOM_SHOE_LOOK_STRIDE;
+    float4 head = T[o];
+    int n = int(head.w + 0.5);
+    uint pk = uint(pack + 0.5);
+    float3 body = roomSrgbToLin(float3(float((pk >> 16) & 255u), float((pk >> 8) & 255u), float(pk & 255u)) / 255.0);
+    float3 c = head.rgb;
+    float g = 0.0;
+    for (int k = 0; k < n; k++) {
+        int b = o + 1 + k * 9;
+        float4 colA = T[b], fl = T[b + 1];
+        float w = roomWin(T[b + 2], u) * roomWin(T[b + 3], v) * roomWin(T[b + 4], sx);
+        float4 e6 = T[b + 6];
+        if (e6.y > 0.5) {
+            float4 el = T[b + 5];
+            float dv = (v - el.x) / el.z, ds = (sx - el.y) / el.w;
+            w *= 1.0 - roomSmooth(1.0 - e6.x, 1.0, sqrt(dv * dv + ds * ds));
+        }
+        if (e6.z > 0.5) {
+            float4 b0 = T[b + 7], b1 = T[b + 8];
+            float hw = e6.w, be = b1.z, m = 0.0;
+            float cs[6] = { b0.x, b0.y, b0.z, b0.w, b1.x, b1.y };
+            for (int j = 0; j < 6; j++) {
+                if (float(j) < e6.z) { m = max(m, 1.0 - roomSmooth(hw - be, hw + be, abs(v - cs[j]))); }
+            }
+            w *= m;
+        }
+        float alpha = colA.w;
+        if (fl.w > 0.0) {
+            // glitter: round dots on a cell grid in the shoe's own coordinates (cell hash, anti-aliased), not a per-pixel noise
+            float2 p = float2(v * 20.0, u * 13.0 + sx * 9.0);
+            float2 id = floor(p), f = fract(p);
+            float h = roomHash(id + 17.0);
+            float2 jit = 0.32 + 0.36 * float2(roomHash(id + 3.3), roomHash(id + 9.1));
+            float fw = max(fwidth(p.x), 1e-3);
+            float dot_ = 1.0 - smoothstep(0.3 - fw, 0.3 + fw, length(f - jit));
+            w = roomEdge(w) * step(1.0 - min(fl.w * 2.2, 0.9), h) * dot_;
+        }
+        float a;
+        if (fl.z > 0.5) { a = w * alpha; }                         // gradients by design (sheen, shine, ombre): smooth
+        else if (alpha >= 0.99) { a = fl.w > 0.0 ? w : roomEdge(w); }
+        else { a = roomEdge(w / alpha) * alpha; }
+        if (a <= 0.0) { continue; }
+        float3 lc = fl.y > 0.5 ? body : colA.rgb;
+        c += (lc - c) * min(a, 1.0);
+        if (fl.x > 0.5) { g = max(g, a); } else { g *= 1.0 - min(a, 1.0); }
+    }
+    if (g > 0.02) {
+        float3 cyan = roomSrgbToLin(float3(0.25, 0.92, 1.0)), pink = roomSrgbToLin(float3(1.0, 0.45, 0.78));
+        c = mix(c, mix(cyan, pink, ph), g);
+        emit = g * (0.65 + 0.35 * ph);
+    }
+    albedo = c;
+}
+
 fragment float4 roomFS(RoomVOut in [[stage_in]],
                        constant RoomUniforms& u [[buffer(0)]],
+                       constant float4* shoeTable [[buffer(2)]],
                        depth2d<float> shadowMap [[texture(0)]],
                        depth2d<float> heightMap [[texture(1)]]) {
     float3 N = normalize(in.normal);
@@ -139,7 +220,14 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
 
     float3 albedo = in.color;
     float ao = in.ao;
+    // baked AO above 1 marks an EMISSIVE vertex (the light-up sneakers' glow): the excess is the glow weight (every other mesh has ao <= 1)
+    float emit = max(ao - 1.0, 0.0);
+    ao = min(ao, 1.0);
     float gloss = 0.0;
+    if (m >= 16) {            // a shoe: painted per pixel from its (u, v, sx), the glow phase in colour.a
+        ao = 1.0; emit = 0.0;
+        roomShoe(shoeTable, m - 16, in.color, in.alpha, in.pack, albedo, emit);
+    }
 
     if (m == 4) {
         // glowing pane: emissive, only the fog-free light
@@ -210,12 +298,13 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     float spec = pow(saturate(dot(N, H)), 40.0) * gloss * sh * 0.22;
     float fres = pow(1.0 - saturate(dot(N, V)), 4.0) * gloss * 0.08;
     col += (keyCol * spec + u.pal4.rgb * fres) * ao;
+    col += albedo * emit * 1.7;
     if ((m == 1 || m == 3) && u.camPos.w > 0.5) { col *= 1.0 - 0.62 * roomContactAO(u, heightMap, P); }
 
     // fog toward the background swatch
     float f = saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;
     col = mix(col, u.pal3.rgb * 0.62 * u.ambCol.rgb * u.ambCol.w, f);
-    return float4(col, in.alpha);   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
+    return float4(col, m >= 16 ? 1.0 : in.alpha);   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
 }
 
 /// Optional final-composite helper: darken screen corners. uv in 0..1.

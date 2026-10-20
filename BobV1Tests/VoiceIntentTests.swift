@@ -111,6 +111,21 @@ final class VoiceIntentTests: XCTestCase {
         XCTAssertEqual(decide(v, "everyone").target, .everyone)
     }
 
+    func testGoodnightPhrasesBeatPraiseAndKeepTheirTargets() {
+        let v = training()
+        for said in ["goodnight", "good night", "Good night!", "night night", "nighty night", "bedtime", "it's bedtime", "time for bed", "go to sleep", "sleep tight", "sweet dreams", "lights out"] {
+            XCTAssertEqual(decide(v, said).reaction, .social(.goodnight), said)
+        }
+        XCTAssertEqual(decide(v, "good night everyone").target, .everyone)
+        XCTAssertEqual(decide(v, "goodnight everybody").target, .everyone)
+        XCTAssertEqual(decide(v, "Pip goodnight").target, .jelly(1))
+        XCTAssertEqual(decide(v, "goodnight").target, .selected)
+        XCTAssertEqual(decide(v, "good boy").reaction, .social(.praise), "praise is untouched")
+        XCTAssertEqual(decide(v, "stop").reaction, .social(.stop))
+        XCTAssertNotEqual(decide(v, "night").reaction, .social(.goodnight), "a lone word is not a command")
+        XCTAssertFalse(decide(v, "goodnight").noMatch, "deterministic: no model needed")
+    }
+
     func testSocialPhrases() {
         let v = training()
         let table: [(String, VoiceSocial)] = [

@@ -15,6 +15,8 @@ enum JellyKeys {
     static func needs(_ id: Int) -> String { suffixed(NeedsTuning.defaultsKey, id) }
     static func grime(_ id: Int) -> String { suffixed(GrimeTuning.defaultsKey, id) }
     static func words(_ id: Int) -> String { suffixed(VoiceTuning.defaultsKey, id) }
+    static func stats(_ id: Int) -> String { suffixed(StatTuning.defaultsKey, id) }
+    static func perks(_ id: Int) -> String { suffixed(PerkTuning.defaultsKey, id) }
     private static func suffixed(_ legacy: String, _ id: Int) -> String { id == 0 ? legacy : "\(legacy).jelly\(id)" }
 }
 

@@ -18,12 +18,15 @@ enum RoomLayout {
 
     /// Half-space: a point p is inside while dot(normal, p) >= d.
     struct Plane { var normal: SIMD3<Float>; var d: Float }
-    static let walls: [Plane] = [
-        Plane(normal: SIMD3(0, 0, 1), d: minZ),     // back
-        Plane(normal: SIMD3(0, 0, -1), d: -maxZ),   // front (invisible)
-        Plane(normal: SIMD3(1, 0, 0), d: minX),     // left
-        Plane(normal: SIMD3(-1, 0, 0), d: -maxX)    // right
-    ]
+    nonisolated(unsafe) static var walls: [Plane] = makeWalls(front: maxZ)
+    private static func makeWalls(front: Float) -> [Plane] {
+        [Plane(normal: SIMD3(0, 0, 1), d: minZ),     // back
+         Plane(normal: SIMD3(0, 0, -1), d: -front),  // front (invisible)
+         Plane(normal: SIMD3(1, 0, 0), d: minX),     // left
+         Plane(normal: SIMD3(-1, 0, 0), d: -maxX)]   // right
+    }
+    /// Moves the invisible front wall (the roaming floor follows the screen: `GameCamera.refreshRoam`); `maxZ` itself stays the drawn room's front.
+    static func setFront(z: Float) { walls = makeWalls(front: z) }
 
     static let rugCentre = SIMD2<Float>(0, 0)       // (x, z)
     static let rugRadius: Float = 2.8
@@ -42,6 +45,8 @@ enum RoomLayout {
     struct FlatBox: Equatable { var centre: SIMD2<Float>; var half: SIMD2<Float>; var height: Float; var radius: Float = 0.04 }
     /// Set by DiningSet; empty when no meal set is out, so nothing is left behind.
     nonisolated(unsafe) static var dynamicBoxes: [FlatBox] = []
+    /// Decor (Room/DecorModel.swift): the placed pieces. Solid ones are walking obstacles in `resolve`; every one is kept clear of by sleep spots.
+    nonisolated(unsafe) static var decorFeet: [DecorFoot] = []
     /// The meal tray is only 0.3 high: his round belly goes over it, so only his base (about 0.6 of his footprint radius) has to keep off its box. Without this
     /// the visible floor beside the tray (|x| <= ~1.0 there) is too narrow to pass it, and he was stuck in front of it.
     static let lowPropRadiusScale: Float = 0.5
@@ -68,6 +73,13 @@ enum RoomLayout {
         p.x += push.x; p.z += push.y
     }
 
+    /// Distance from `p` to the nearest decor piece's edge (infinite when there is none); `solidOnly` skips the flat ones.
+    static func decorDistance(_ p: SIMD2<Float>, solidOnly: Bool = false) -> Float {
+        var d = Float.infinity
+        for f in decorFeet where !solidOnly || f.spec.solid { var g = f; g.centre = DecorField.shared.position(f); d = min(d, g.distance(p)) }
+        return d
+    }
+
     /// Signed distance in the xz plane to the sofa's rounded footprint (negative inside).
     static func sofaDistanceXZ(_ p: SIMD2<Float>) -> Float {
         let b = sofa, inner = SIMD2(b.halfExtents.x, b.halfExtents.z) - SIMD2(repeating: b.radius)
@@ -76,7 +88,7 @@ enum RoomLayout {
     }
 
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
-    static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1) -> SIMD3<Float> {
+    static func resolve(position p0: SIMD3<Float>, radius: Float, lowPropScale: Float = 1, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var p = p0
         for _ in 0..<2 {
             for w in walls {
@@ -105,6 +117,7 @@ enum RoomLayout {
                 }
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
+            for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach, box: f.box) }
         }
         return p
     }

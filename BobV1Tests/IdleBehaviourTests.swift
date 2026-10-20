@@ -245,7 +245,7 @@ final class IdleBehaviourTests: XCTestCase {
 
     func testMoodWeightsSelectTheRightSet() {
         XCTAssertEqual(IdleTable.set(.happy), [.run, .jacks, .look, .zoomies, .slide, .scoot])      // Build B: + the body-led running actions
-        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn, .scoot])
+        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn, .scoot, .zoomies, .run])      // 2026-10-20: + zoomies / run (the happy table alone almost never came up)
         XCTAssertEqual(IdleTable.set(.grumpy), [.slump])
         for m in [IdleMood.happy, .okay, .grumpy] {
             var seen: Set<IdleKind> = []

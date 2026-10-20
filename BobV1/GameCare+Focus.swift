@@ -86,7 +86,7 @@ extension GameCare {
     func comeHereEveryone() { beginFocus(ids: Array(0..<max(jellies.count, 1)), front: targetJelly) }
 
     func beginFocus(ids requested: [Int], front: Int? = nil) {
-        guard focus.phase == .roaming, !bath.active else { return }
+        guard focus.phase == .roaming, !bath.active, !race.active else { return }
         var ids = Array(Set(requested.filter { jellies.indices.contains($0) })).sorted()
         if ids.isEmpty { ids = [0] }                  // an id outside the roster (a selection of a Jelly this game does not have): Bob
         greeting = false

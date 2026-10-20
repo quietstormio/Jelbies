@@ -81,6 +81,9 @@ nonisolated struct ContainerModel {
 /// `fill`: 1 = full ... 0 = empty (the drink level; the group passes bites left / (gulps x n)).
 typealias ContainerBuilder = @Sendable (_ n: Int, _ palette: ConsumablePalette, _ fill: Float) -> ContainerModel
 
+/// One piece of a plate food, built around its centre `c` (tray-local), `j` = which of a Jelly's three, `s` = the serving scale.
+typealias PieceBuilder = @Sendable (_ b: RoomMeshBuilder, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) -> Void
+
 nonisolated struct Consumable {
     let id: String
     let name: String
@@ -96,6 +99,15 @@ nonisolated struct Consumable {
     /// Drinks: the container builder (N) and the straw's stripe colours.
     var container: ContainerBuilder? = nil
     var strawColors: (SIMD3<Float>, SIMD3<Float>)? = nil
+    /// Store foods: fed from the inventory (not in the free Feed picker), one piece builder for the plate and the hand, the pizza fan layout or the
+    /// berry ring, what it does for him (perk) and his condition, and the sound of a bite.
+    var stored = false
+    var pizzaLayout = false
+    var piece: PieceBuilder? = nil
+    var perk: PerkKind? = nil
+    var condition: [ConditionKey: Float] = [:]
+    var chew: SFX = .chomp
+    var storeID: String? = nil
 }
 
 nonisolated enum Consumables {
@@ -132,8 +144,9 @@ nonisolated enum Consumables {
         strawColors: (srgb(0.62, 0.84, 0.96), srgb(1.0, 1.0, 1.0)))
 
     /// Menu order.
-    static let all: [Consumable] = [berries, pizza, water, soda]
-    static var foods: [Consumable] { all.filter { $0.kind == .food } }
+    static let all: [Consumable] = [berries, pizza, water, soda] + storeFoods
+    /// The FREE foods of the Feed picker (store foods are fed from the inventory).
+    static var foods: [Consumable] { all.filter { $0.kind == .food && !$0.stored } }
     static var drinks: [Consumable] { all.filter { $0.kind == .drink } }
     static func with(id: String) -> Consumable? { all.first { $0.id == id } }
 }

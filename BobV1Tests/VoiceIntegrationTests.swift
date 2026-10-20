@@ -454,6 +454,39 @@ extension VoiceIntegrationTests {
         XCTAssertEqual(r.voice.feedbackLog.last, .social(.scold))
     }
 
+    func testGoodnightPutsHimToBedOnHisBackTuckedInAndATapWakesHim() {
+        let r = make()
+        r.brain.autonomy = false
+        var asked: [[Int]] = []
+        r.voice.jellyIDs = { [0, 1, 2] }
+        r.voice.onGoodnight = { ids in asked.append(ids); r.brain.commandedGoodnight = true }
+        r.say("goodnight everyone", settle: 0)
+        r.run(1)
+        XCTAssertEqual(asked, [[0, 1, 2]], "everyone is asked to go to bed")
+        XCTAssertEqual(r.voice.feedbackLog.last, .social(.goodnight))
+        XCTAssertTrue(r.run(40) { r.brain.isNapping }, "yawn, roll onto the back, asleep")
+        XCTAssertTrue(r.brain.sleep.tucked, "tucked in")
+        XCTAssertGreaterThan(r.rig.sim.bodyPose(iterations: 4).rotation.act(SIMD3<Float>(0, 0, 1)).y, sinf(SleepTuning.lieAngle) - 0.02, "on his back")
+        // a tap wakes him gently
+        for _ in 0..<8 { r.brain.tick(sim: r.rig.sim, skinner: r.rig.skinner, dt: r.rig.sim.stepDt, touched: true); r.rig.sim.step() }
+        XCTAssertTrue(r.run(10) { r.brain.idleState.kind == nil }, "up again")
+        // a named one, and the selected one
+        r.say("Pip good night", settle: 0)
+        r.run(1)
+        XCTAssertEqual(asked.last, [1])
+        r.say("night night", settle: 0)
+        r.run(1)
+        XCTAssertEqual(asked.last, [0, 1, 2], "nobody selected: every awake Jelly goes to bed")
+    }
+
+    func testGoodnightWithoutAGroupHookSendsTheOneBrainToBed() {
+        let r = make()
+        r.brain.autonomy = false
+        r.say("bedtime", settle: 0)
+        XCTAssertTrue(r.run(40) { r.brain.isNapping }, "he goes to bed on his own")
+        XCTAssertEqual(r.voice.goodnightLog.last, [0])
+    }
+
     func testNicknameTaughtByVoiceThreeTimesThenUsed() {
         let r = make()
         r.voice.startNicknameLesson(for: 0)

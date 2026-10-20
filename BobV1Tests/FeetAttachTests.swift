@@ -69,6 +69,15 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "hop-scoot", game: true, seconds: 5, expectBeans: true, start: { $0.brain.seed = 11; $0.brain.idleForced = true; _ = $0.brain.idleStart(.scoot, $0.sim) }),
         Move(name: "jumping jacks", game: true, seconds: 8, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.jacks, $0.sim) }),
         Move(name: "sit", game: true, seconds: 5, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sit, $0.sim) }),
+        Move(name: "sleep: roll onto the back and up again", game: true, seconds: 16, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 2 }),
+        Move(name: "sleep: hand-hold", game: true, seconds: 18, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 5; $0.brain.sleep.holdForce = true }),
+        Move(name: "sleep: hand-hold + cuddle lean", game: true, seconds: 18, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 5; $0.brain.sleep.holdForce = true; $0.brain.sleep.mode = .cuddle }),
+        Move(name: "antic: spin after his tail", game: true, seconds: 6, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.tail, $0.sim) }),
+        Move(name: "antic: flop", game: true, seconds: 4, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.flop, $0.sim) }),
+        Move(name: "antic: happy bounce", game: true, seconds: 4, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.bounce, $0.sim) }),
+        Move(name: "antic: roll", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.roll, $0.sim) }),
+        Move(name: "antic: window", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
+        Move(name: "antic: stretch", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stretch, $0.sim) }),
         Move(name: "march", game: false, seconds: 5, expectBeans: true, start: { $0.brain.startStepping(seconds: 3, sim: $0.sim) }),
         Move(name: "turn", game: false, seconds: 3.5, expectBeans: true, start: { $0.brain.startTurn(to: $0.poseYaw + 2.4, sim: $0.sim) }),
         Move(name: "wave", game: true, seconds: 4, expectBeans: true, start: { $0.brain.request(.wave) }),
@@ -76,9 +85,22 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "call", game: true, seconds: 12, expectBeans: true, start: { $0.brain.requestNow(.come(to: SIMD2(0, 1.4))) }),
         Move(name: "flip", game: true, seconds: 3, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim) }),
         Move(name: "faceplant", game: true, seconds: 4, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim, fail: true) }),
+        // decor (store part B): the walk to the piece and what he does with it; installed in the field for the run (the tests clear it afterwards)
+        Move(name: "decor: hop onto the beanbag, sit on top, hop off", game: true, seconds: 26, expectBeans: true, start: { decorStart($0, .beanbag, SIMD2(1.1, 0.9), .decorSit) }),
+        Move(name: "decor: sit on a cushion", game: true, seconds: 26, expectBeans: true, start: { decorStart($0, .cushion, SIMD2(-1.1, 0.9), .decorSit) }),
+        Move(name: "decor: boop the plant", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .plant, SIMD2(1.1, 0.9), .decorBoop) }),
+        Move(name: "decor: kick the ball", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .ball, SIMD2(0.9, 0.9), .decorKick) }),
+        Move(name: "decor: hop on the mat", game: true, seconds: 16, expectBeans: true, start: { decorStart($0, .bouncymat, SIMD2(-1.1, 0.9), .decorHop) }),
+        Move(name: "decor: peek in the toy box", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .toybox, SIMD2(1.1, 0.9), .decorPeek) }),
     ]
+    /// Puts one piece in the field and starts the Jelly's behaviour with it.
+    static func decorStart(_ r: MotionRig, _ kind: DecorKind, _ at: SIMD2<Float>, _ move: IdleKind) {
+        DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: at.x, z: at.y)])
+        r.brain.idleForced = true; _ = r.brain.idleStart(move, r.sim)
+    }
 
     func testFeetStayLowUnderAndAttachedInEveryScriptedMove() {
+        defer { DecorField.shared.clear() }
         for m in Self.moves {
             let r = MotionRig(game: m.game)
             Self.keep.append(r)
@@ -88,6 +110,55 @@ final class FeetAttachTests: XCTestCase {
             r.run(m.seconds) { if let f = Self.footFrame(r) { Self.accumulate(&w, f); frames += 1 } }
             if m.expectBeans { XCTAssertGreaterThan(frames, 20, "\(m.name): the beans were out") }
             Self.check(m.name, w, frames: frames)
+        }
+    }
+
+    /// Shoes (store, cosmetic) are grown from the rendered bean vertices: in every scripted move they stay on the bean (within their thickness) and
+    /// obey the same low / under / attached limits as the bare foot.
+    func testShoesStayAttachedInEveryScriptedMove() {
+        defer { DecorField.shared.clear() }
+        for m in Self.moves where m.expectBeans {
+            let r = MotionRig(game: m.game)
+            Self.keep.append(r)
+            r.renderSamples = false
+            m.start(r)
+            var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
+            var worstOff: Float = 0
+            var k = 0
+            r.run(m.seconds) {
+                k += 1
+                guard k % 3 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return }
+                r.render()
+                let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
+                var f = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity)
+                for s in 0..<2 {
+                    let bean = r.bean[s].map { id -> SIMD3<Float> in let o = 6 * Int(id); return SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]) }
+                    guard bean.count == FootBean.vertexCount else { continue }
+                    let b = RoomMeshBuilder(); b.material = .plain
+                    ShoeModel.build(.rainBoots, bean: bean, floorY: r.sim.floorY, time: 0, side: s, into: b)
+                    var lo = Float.infinity, cx: Float = 0, cy: Float = 0, cz: Float = 0, deepest = Float.infinity
+                    for i in 0..<FootBean.vertexCount {
+                        let v = b.mesh.vertices[i]
+                        let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
+                        worstOff = max(worstOff, simd_distance(p, bean[i]))
+                        let q = c0 + pose.rotation.inverse.act(p - pose.centroid)
+                        lo = min(lo, q.y); cx += q.x; cy += q.y; cz += q.z
+                        deepest = min(deepest, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z)))))
+                    }
+                    let n = Float(FootBean.vertexCount)
+                    f.soleRise = max(f.soleRise, lo); f.centreHeight = max(f.centreHeight, cy / n)
+                    f.radius = max(f.radius, hypotf(cx / n, cz / n)); f.overlap = max(f.overlap, deepest)
+                }
+                Self.accumulate(&w, f); frames += 1
+            }
+            XCTAssertGreaterThan(frames, 10, "\(m.name): shoes were built")
+            XCTAssertLessThanOrEqual(worstOff, ShoeModel.maxThickness + 1e-3, "\(m.name) + shoes: the shoe grows from the bean")
+            // the shoe may sit a hair lower / wider than the bare foot by its own thickness: the limits get that much slack, never more
+            let slack = ShoeModel.maxThickness
+            MotionLog.write(String(format: "FEETATTACH shoes %@: %d frames, sole rise %.3f, centre height %.3f, radius %.3f, overlap %.3f", m.name, frames, w.soleRise, w.centreHeight, w.radius, w.overlap))
+            XCTAssertLessThanOrEqual(w.soleRise, Self.maxSoleRise + slack, "\(m.name) + shoes: low")
+            XCTAssertLessThanOrEqual(w.centreHeight, Self.maxCentreHeight + slack, "\(m.name) + shoes: not up on the belly")
+            XCTAssertLessThanOrEqual(w.radius, Self.maxRadius + slack, "\(m.name) + shoes: under him")
         }
     }
 

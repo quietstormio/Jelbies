@@ -88,6 +88,7 @@ nonisolated enum DiningSpot {
         guard onScreen(origin: o, layout: L, aspect: aspect) else { return false }
         let b = L.bounds
         for x in [o.x + b.minX, o.x + b.maxX] where RoomLayout.sofaDistanceXZ(SIMD2(x, o.y + b.minZ)) < 0.05 { return false }
+        for f in RoomLayout.decorFeet where f.spec.solid && distance(from: f.centre, origin: o, layout: L) < f.radius + 0.1 { return false }          // never on a beanbag or a toy box
         return o.y + b.minZ > RoomLayout.minZ + 0.2
     }
 
@@ -157,7 +158,7 @@ final class DiningSet {
     private var groupKey = "", groupOpaque = RoomMesh(), groupTranslucent = RoomMesh()
     private var worldKey = "", worldOpaque = RoomMesh(), worldTranslucent = RoomMesh()
     private var forkMeshes: [Bool: RoomMesh] = [:]
-    private var heldBerry: [Int: RoomMesh] = [:]
+    private var heldBerry: [String: RoomMesh] = [:]
 
     nonisolated deinit {}
 
@@ -181,7 +182,7 @@ final class DiningSet {
 
     /// World position of berry `j` of place `i` resting on the plate.
     func pieceAnchorWorld(place i: Int, index j: Int) -> SIMD3<Float> {
-        let a = serving.id == Consumables.pizza.id ? DiningModels.pizzaAnchor(layout: layout, place: i, index: j) : DiningModels.berryAnchor(layout: layout, place: i, index: j)
+        let a = (serving.id == Consumables.pizza.id || serving.pizzaLayout) ? DiningModels.pizzaAnchor(layout: layout, place: i, index: j) : DiningModels.berryAnchor(layout: layout, place: i, index: j)
         return SIMD3(origin.x + a.x, a.y, origin.y + a.z)
     }
     /// Where place `i`'s fork lies on the tray (world position + yaw; tines point along (sin yaw, cos yaw)).
@@ -297,7 +298,7 @@ final class DiningSet {
     func finishBite(place i: Int) {
         guard i >= 0, i < n else { return }
         switch serving.eatStyle {
-        case .finger: if pieceInHand[i] != nil { bitesLeft[i] -= 1; pieceInHand[i] = nil; piecePose[i] = nil; AudioHub.shared.play(.chomp, jelly: i) }
+        case .finger: if pieceInHand[i] != nil { bitesLeft[i] -= 1; pieceInHand[i] = nil; piecePose[i] = nil; AudioHub.shared.play(serving.chew, jelly: i) }
         case .fork: if forkBite[i] || biteFlying[i] { AudioHub.shared.play(.chomp, jelly: i) }; forkBite[i] = false; biteFlying[i] = false; biteFlight[i] = nil
         case .sip: break
         }
@@ -462,10 +463,13 @@ final class DiningSet {
         biteChunk = b.mesh; return b.mesh
     }
     private func heldBerryMesh(_ gi: Int) -> RoomMesh {
-        let key = gi * 10 + n + (serving.id == Consumables.pizza.id ? 1000 : 0)
+        let key = "\(serving.id)-\(gi)-\(n)"
         if let m = heldBerry[key] { return m }
-        let m = serving.id == Consumables.pizza.id ? DiningModels.heldSlice(scale: layout.scale)
-            : DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale)
+        let m: RoomMesh
+        if serving.id == Consumables.pizza.id { m = DiningModels.heldSlice(scale: layout.scale) }
+        else if serving.pizzaLayout && serving.piece == nil { m = DiningModels.heldSlice(scale: layout.scale, palette: serving.palette) }
+        else if serving.piece != nil { m = DiningModels.heldPiece(serving, index: gi, scale: layout.scale) }
+        else { m = DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale) }
         heldBerry[key] = m; return m
     }
 }

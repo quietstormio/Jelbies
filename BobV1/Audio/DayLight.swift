@@ -21,6 +21,16 @@ nonisolated struct DayLight: Equatable, Sendable {
 
     static let day = DayLight()
 
+    /// Tucked in (voice "goodnight", everybody asleep): the lamp dims and the room darkens a little. `t` 0...1; 0 is exactly this light.
+    func tucked(_ t: Float) -> DayLight {
+        guard t > 0.001 else { return self }
+        var d = self
+        d.lamp.w *= 1 - 0.85 * t
+        d.ambCol.w *= 1 - 0.2 * t
+        d.jellyMul *= 1 - 0.08 * t
+        return d
+    }
+
     private struct Key {
         var top: SIMD3<Float>, bottom: SIMD3<Float>, sky: Float, stars: Float
         var key: SIMD3<Float>, amb: SIMD3<Float>, ambMul: Float, lamp: Float, jelly: Float

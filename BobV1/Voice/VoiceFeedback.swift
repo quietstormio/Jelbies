@@ -201,6 +201,7 @@ struct VoiceBubble: View {
             case .scold: sym("exclamationmark", FocusStyle.brown, 30)
             case .play: sym("tennisball.fill", Color(red: 0.36, green: 0.68, blue: 0.45), 28)
             case .stop, .stopFighting: sym("hand.raised.fill", FocusStyle.brown, 28)
+            case .goodnight: sym("moon.zzz.fill", Color(red: 0.45, green: 0.50, blue: 0.85), 30)
             }
         case .grumpy, .silent:
             EmptyView()

@@ -128,6 +128,12 @@ final class DayClock {
     }
     nonisolated deinit {}
 
+    /// The phone's calendar day as one number (yyyymmdd). It changes at local midnight, whatever time has gone by (Pep resets on it). The curtain offset does not move it.
+    var dayKey: Int {
+        let c = calendar.dateComponents([.year, .month, .day], from: now())
+        return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
+    }
+
     /// The phone's hour of day, 0..<24 (or the forced hour).
     var realHour: Double {
         if let f = forcedHour { return DayMath.wrap(f) }
@@ -191,6 +197,8 @@ final class DayClock {
 
     /// 0...1: how night-like (naps, yawns).
     var nightFactor: Float { Float(DayBlend(hour: hour).night) }
+    /// 1 from 23:00 to 6:00 (everybody asleep unless the player is busy with them), else 0.
+    var deepNightFactor: Float { let h = hour; return (h >= 23 || h < 6) ? 1 : 0 }
     /// 0...1: the stretch-and-wake hour.
     var morningFactor: Float { Float(DayBlend(hour: hour).morning) }
 }

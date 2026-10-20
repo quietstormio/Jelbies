@@ -41,7 +41,7 @@ extension GameCare {
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             group.eager = eagerWhenFamished
             group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
-            group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece) }
+            group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             group.start(c, brains: brains, floor: { floors[$0]() })
             groupWanted = nil
             return

@@ -26,6 +26,8 @@ struct GaitDriver {
     var hopApex: Float = 0.10         // fixed apex height of the centroid above its ground pose (0.075 H)
     var crouchTime: Float = 0.13
     var maxHop: Float = 1.6           // longest single hop
+    /// Ground height the NEXT hop lands on (nil = the floor he is on): the beanbag hop onto / off a seat. `sim.floorY` itself is switched by the brain.
+    var hopToGround: Float?
     var rollTravel: Float = 1.1       // distance covered by one roll
     var rollAngle: Float = 1.7        // radians tipped over before he rights himself
     var kHop: Float = 900             // attractor stiffness (1/s^2)
@@ -82,6 +84,7 @@ struct GaitDriver {
     private var yaw0: Float = 0
     private var yaw1: Float = 0
     private var rollDir = SIMD2<Float>(1, 0)
+    private var groundFrom: Float = 0, groundTo: Float = 0      // ground heights at take-off / landing of the running hop (equal = an ordinary hop)
     private var chained = false
     private var reduce = false
     private var waitTimer: Float = 0.4
@@ -188,6 +191,7 @@ struct GaitDriver {
         yaw0 = pose.yaw
         yaw1 = simd_length(d) > 1e-3 ? atan2f(d.x, d.y) : yaw0
         move = .hop; phase = .crouch; t = 0; tMove = 0
+        groundFrom = sim.floorY; groundTo = hopToGround ?? sim.floorY; hopToGround = nil
         self.chained = chained
         sim.attractor.rotation = yawQ(yaw0)
     }
@@ -382,7 +386,10 @@ struct GaitDriver {
             let sy = crouchSy + (stretch - crouchSy) * smooth(t / 0.08)
             let xz = from + (to - from) * u
             let yawNow = yawEase(tMove / (crouchTime + 0.3))
-            setUpright(sim, xz: xz, yaw: yawNow, squash: sy, lift: h, strength: kHop)
+            // a hop up onto a seat rises early (over its edge), a hop down drops late: the ground under him eases from take-off to landing height
+            let ge = groundTo >= groundFrom ? 1 - (1 - u) * (1 - u) : u * u
+            let gOff = groundFrom + (groundTo - groundFrom) * ge - sim.floorY
+            setUpright(sim, xz: xz, yaw: yawNow, squash: sy, lift: h + gOff, strength: kHop)
             tuckFeet(sim, u: u, amp: amp)
             if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0 }
 

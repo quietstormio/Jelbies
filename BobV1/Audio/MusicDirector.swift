@@ -8,6 +8,8 @@
 //    - after every 1 or 2 tracks a 30...90 s gap where only the room ambience plays; tracks crossfade over `fade` seconds;
 //    - play layer (lofi_play): fades in ~1 s when the Jellies play / zoom, fades out 8...10 s after it calms; 2 min cooldown;
 //      never at night (night only lifts the music volume a little while they play).
+//    - screens: a `scene` (race, the final stretch, training, shop, town; Audio/SceneMusic.swift) fades the room music and the play layer out and plays
+//      the scene's own track (crossfading between scenes); `results` is silence (a jingle plays); back to `none` the room music crossfades in again.
 //
 
 import Foundation
@@ -31,6 +33,8 @@ nonisolated struct MusicInput: Equatable, Sendable {
     var phase: DayPhase = .day
     var allNapping = false
     var playing = false
+    /// What the screen in front wants (race / training / shop / town); `.none` = the room.
+    var scene: MusicScene = .none
 }
 
 nonisolated enum MusicEvent: Equatable, Sendable {
@@ -38,6 +42,9 @@ nonisolated enum MusicEvent: Equatable, Sendable {
     case fadeOutMain(fade: Double)
     case layerOn(fade: Double)
     case layerOff(fade: Double)
+    /// A screen's own track starts (fading in; the others fade out) / stops.
+    case sceneOn(SceneTrack, fade: Double)
+    case sceneOff(fade: Double)
 }
 
 nonisolated struct MusicDirector {
@@ -59,6 +66,9 @@ nonisolated struct MusicDirector {
     private(set) var tracksSincePause = 0
     private(set) var tracksBeforeGap = 1
     private(set) var layerOn = false
+    /// The screen scene that is playing (`.none` = the room's own music).
+    private(set) var scene: MusicScene = .none
+    static let sceneFade = 1.2
     private(set) var cooldownLeft = 0.0
     private var calm = 0.0
     private var release = 9.0
@@ -103,11 +113,30 @@ nonisolated struct MusicDirector {
         return t
     }
 
-    private mutating func startNext(_ ev: inout [MusicEvent]) {
+    private mutating func startNext(_ ev: inout [MusicEvent], fade f: Double? = nil) {
         let t = nextTrack()
         current = t; elapsed = 0; gapLeft = nil
         played.append(t)
-        ev.append(.playTrack(t, fade: fade))
+        ev.append(.playTrack(t, fade: f ?? fade))
+    }
+
+    /// Back from the background / an interruption. The gap clock froze while away, so a return mid-gap would give up to 90 s of silence: start the
+    /// next track now (fading in over `fade`). Also when the room's music should be playing but no deck actually is (`deckPlaying` false).
+    /// Does nothing while a screen's scene music is up (the hub re-checks the scene engine itself).
+    mutating func resumed(deckPlaying: Bool, fade f: Double = 1.5) -> [MusicEvent] {
+        guard started, scene == .none else { return [] }
+        guard gapLeft != nil || !deckPlaying else { return [] }
+        var ev: [MusicEvent] = []
+        pickGapPlan()
+        tracksSincePause = 0
+        startNext(&ev, fade: f)
+        return ev
+    }
+
+    /// Test seam: be in an ambience-only gap of `length` seconds.
+    mutating func forceGap(_ length: Double) {
+        guard started, scene == .none else { return }
+        current = nil; gapLength = length; gapLeft = length
     }
 
     private mutating func pickGapPlan() {
@@ -118,6 +147,28 @@ nonisolated struct MusicDirector {
         var ev: [MusicEvent] = []
         dwell += dt
         cooldownLeft = max(0, cooldownLeft - dt)
+
+        // screens
+        if input.scene != scene {
+            let old = scene
+            scene = input.scene
+            if old == .none {                       // leaving the room: its music and the play layer fade out
+                ev.append(.fadeOutMain(fade: Self.sceneFade))
+                if layerOn { layerOn = false; cooldownLeft = Self.layerCooldown; ev.append(.layerOff(fade: Self.sceneFade)) }
+                current = nil; gapLeft = nil; tracksSincePause = 0
+            }
+            if let t = scene.track { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : 0.8)) }
+            else if scene == .results { ev.append(.sceneOff(fade: 0.5)) }
+            else {                                  // back in the room
+                ev.append(.sceneOff(fade: Self.sceneFade))
+                started = true; dwell = 0
+                mode = Self.mode(for: input)
+                if mode == .evening { eveningIntro = true }
+                pickGapPlan()
+                startNext(&ev)
+            }
+        }
+        if scene != .none { return ev }          // a screen's music plays: no playlist, no play layer
 
         // mode
         let want = Self.mode(for: input)
@@ -160,7 +211,7 @@ nonisolated struct MusicDirector {
                 layerOn = false; cooldownLeft = Self.layerCooldown
                 ev.append(.layerOff(fade: Self.layerFadeOut))
             }
-        } else if input.playing, !night, cooldownLeft <= 0 {
+        } else if input.playing && !night && cooldownLeft <= 0 {
             layerOn = true; calm = 0
             release = Self.layerRelease.lowerBound + rand() * (Self.layerRelease.upperBound - Self.layerRelease.lowerBound)
             ev.append(.layerOn(fade: Self.layerFadeIn))

@@ -167,15 +167,20 @@ final class BlobSelect {
     /// A highlight is armed but its draw has not started (waiting for the real outline / the sheet to go).
     @ObservationIgnored private(set) var waiting = false
 
+    /// The Jelly is not ready to be drawn yet (asleep on his back, rolling up): the draw waits for him to stand, then goes on as usual.
+    /// GameCare wires it and wakes the sleeper; nil / false = go.
+    @ObservationIgnored var holdFor: ((Int) -> Bool)?
+
     private func gateOpen(_ id: Int) -> Bool {
+        if holdFor?(id) == true { return false }
         if !gateDraw { return true }
         guard !sheetOpen, CACurrentMediaTime() - sheetClosedAt >= Self.sheetSettle else { return false }
         return publishedAt > armedAt && (outlines[id]?.count ?? 0) >= 8
     }
     private func arm() {
         armedAt = CACurrentMediaTime()
-        waiting = gateDraw
-        if !gateDraw { fireStartIfNeeded() }
+        waiting = gateDraw || (selectedID.map { holdFor?($0) == true } ?? false)
+        if !waiting { fireStartIfNeeded() }
     }
     /// 1 normally; for a roster pick the outline fades out over the last 0.45 s of its hold.
     var outlineAlpha: Float {

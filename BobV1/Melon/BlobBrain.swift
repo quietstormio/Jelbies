@@ -56,12 +56,20 @@ final class BlobBrain {
     var wanderRectWide: (min: SIMD2<Float>, max: SIMD2<Float>)?
     /// Longest wander leg.
     var maxWanderLeg: Float = 2.6
+    /// The roaming polygon of the room camera (GameCamera.RoamFloor): goals are sampled by area over it, with zone picks and a spread score. nil = the boxes above.
+    var roamProvider: (() -> GameCamera.RoamFloor?)?
+    /// How often each 1 u cell of the floor was picked as a goal by this Jelly (the spread score prefers the less visited).
+    var roamVisits: [Int: Int] = [:]
     /// When idle he turns to face the player and tilts back a little (`attentionPitch` rad) so his flat brows read
     /// friendly from a camera that looks down on him; relaxed while he walks.
     var facePlayerWhenIdle = false
     var attentionPitch: Float = 0
     /// Footprint radius used with `resolve`.
     var footprint: Float = 0.55
+    /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
+    var decorIgnore: Int?
+    /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
+    var bagFloorOn = false
     /// 1 = full motion; lower for reduce-motion.
     var amplitude: Float = 1
     /// Called when a requested job (goTo / eat / drink / come / wave) has finished.
@@ -99,16 +107,45 @@ final class BlobBrain {
         case eat(t: Float, bowl: SIMD2<Float>, dur: Float, drink: Bool)
         case dine
         case idle                      // an idle behaviour (BlobBrain+Idle.swift): sit, look, yawn, stumble
+        case race                      // Jelly Circuit: one committed gait step at a time (BlobBrain+Race.swift)
     }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
     var script: Script = .none
+    /// Jelly Circuit race state (BlobBrain+Race.swift).
+    var race = RaceDrive()
     /// Idle behaviours (BlobBrain+Idle.swift): run, stumble, jumping jacks, sit, look, yawn-stretch. State, mood source and the run blend.
     var idleState = IdleState()
     var idleMood: IdleMood = .okay
     /// Time of day (DayClock): 0...1 night / morning weights. Night makes him sleepier (naps, yawns), morning makes him stretch and wake.
     var idleNight: Float = 0
     var idleMorning: Float = 0
+    /// 1 between ~23:00 and 6:00 (DayClock.deepNight): everybody goes to sleep (on his back, in a pile) unless the player is busy with him.
+    var idleDeepNight: Float = 0
+    /// The sleep (BlobBrain+Sleep.swift) and the lively room life (new antics, shorter waits) are on: the stage sets these; the headless suites that predate them leave them off.
+    var sleepEnabled = false
+    /// The app is in front and no menu / close-up is open: the room life keeps something happening (see `idleLively`, SocialTuning.lively).
+    var watching = false
+    /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
+    var perkFlags = PerkFlags()
+    /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
+    var anticsEnabled = false
+    /// Music is playing (the stage sets it from the audio hub): he may sway to it.
+    var musicPlaying = false
+    /// Per-behaviour cooldowns (seconds left): the same antic does not come round again at once.
+    var kindCool: [IdleKind: Float] = [:]
+    var flopKicks = 0
+    var sleep = SleepState()
+    /// Seconds until he may again decide to go and snuggle beside a sleeper (BlobBrain+Sleep.swift).
+    var snuggleCool: Float = 0
+    /// Seconds he stays up after any wake (no bedtime roll outside deep night): kills the sleep / wake / sleep loop (BlobBrain+Sleep.swift).
+    var awakeMin: Float = 0
+    /// Seconds until the next bedtime roll while mates sleep (set on every failed or abandoned try: the walk to the pile is not retried in a loop).
+    var sleepTryCool: Float = 0
+    /// The player has this Jelly picked (the "Play with ...?" selection): nobody who is picked goes to bed (GameCare sets it every tick).
+    var selectedNow = false
+    /// Seconds until the next forced zoomies / run (the "zoomies urge": a visible burst of energy every few minutes in any ordinary mood).
+    var zoomUrge: Float = IdleTuning.zoomUrgeFirst
     /// The current sit is a night nap (long hold, eyes closed). Set when the sit starts, cleared when the behaviour ends.
     var napping = false
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
@@ -129,6 +166,10 @@ final class BlobBrain {
     var commandedFlip = false
     var flipCompact = false
     var commandedNameHop = false
+    /// Voice "goodnight": go to bed now (yawn, gather with the others, roll onto the back, sleep tucked in until morning or a tap).
+    var commandedGoodnight = false
+    /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
+    var sleepLocked = false
     var nameHopping = false
     var flipArmA: Float = 0
     /// The flip's smoothed arm angles (rad). `commandedFlipFail` = the queued commanded flip is the funny faceplant.
@@ -283,10 +324,11 @@ final class BlobBrain {
         let b = BlobBrain()
         b.followsStudioCamera = false
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
-        b.resolve = { p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale) }      // the tray is low: only his base keeps off it
+        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
         b.wanderRect = GameCamera.roamRect
         b.wanderRectWide = GameCamera.roamRectWide
+        b.roamProvider = { GameCamera.roamFloor }
         b.maxWanderLeg = 5.5
         b.facePlayerWhenIdle = true
         b.attentionPitch = 0.28
@@ -433,9 +475,18 @@ final class BlobBrain {
 
     // MARK: tick
 
-    func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched: Bool) {
+    func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt
+        snuggleCool = max(0, snuggleCool - dt)
+        awakeMin = max(0, awakeMin - dt); sleepTryCool = max(0, sleepTryCool - dt)
+        // a finger on a sleeper: a tap wakes him gently (he rolls back over and stretches, groggy); a long hold is a real pick up (below)
+        var touched = touchedIn
+        if idleState.kind == .sleep {
+            if touched, sleep.stage >= 2, sleep.stage <= 4, sleep.touchT < SleepTuning.tapTime { sleep.touchT += dt; sleepWake(groggy: true); touched = false }
+            else if !touched { sleep.touchT = 0 }
+        }
 
         if touched {
             if activity != .touched { abortAll(sim, skinner) }
@@ -455,10 +506,12 @@ final class BlobBrain {
         if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
+        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         if flipTick(sim, skinner, dt) { return }
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }
         if idleBodyMoveTick(sim, skinner, dt) { return }
+        if sleepBodyTick(sim, skinner, dt) { return }
         socialTick(sim, skinner, dt)
 
         // gait-driven tricks (hop / roll) own the attractor while they run
@@ -504,6 +557,7 @@ final class BlobBrain {
         case .eat(_, _, _, let drink): activity = drink ? .drinking : .eating
         case .dine: activity = dine.mode == .sip ? .drinking : .eating
         case .idle: activity = idleActivity
+        case .race: activity = .walking
         }
     }
 
@@ -569,7 +623,7 @@ final class BlobBrain {
         if idleMaybeStart(sim) { return }
         var w: [(Int, Float)] = [(0, 5), (1, 2), (2, 1.5)]
         if sinceWave > 18 { w.append((3, 2)) }
-        if sincePlay > 10 { w.append((4, 2)) }
+        if sincePlay > 10, !(anticsEnabled && fastOthers() >= 2) { w.append((4, 2)) }
         idleShapeWander(&w)
         w.removeAll { $0.0 == lastPick && $0.0 != 0 }
         let total = w.reduce(0) { $0 + $1.1 }
@@ -583,7 +637,12 @@ final class BlobBrain {
             let here = SIMD2(px, pz)
             var target = here
             var fallback: SIMD2<Float>?
-            for _ in 0..<40 {
+            var roamed = false
+            if let rf = roamProvider?() {          // the whole visible floor: zone picks first (30 %), else an area sample; spread from the others
+                if rand() < 0.3, let g = pickRoamGoal(rf, from: here, zone: Int(rand() * 4) % 4) { target = g; roamed = true }
+                else if let g = pickRoamGoal(rf, from: here, zone: nil) { target = g; roamed = true }
+            }
+            for _ in 0..<(roamed ? 0 : 40) {
                 var cand: SIMD2<Float>
                 if let r = wanderRectWide ?? wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
                 else {
@@ -593,7 +652,7 @@ final class BlobBrain {
                 let raw = cand
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) else { continue }
+                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && reachable(here, cand) else { continue }
                 // a goal the floor rules had to drag in (off the frame / onto a prop) piles up at the edges: take real floor first, the dragged one only as a fallback
                 if wanderRectWide != nil || wanderRect != nil, simd_length(cand - raw) > 0.15 { fallback = fallback ?? cand; continue }
                 target = cand; fallback = nil; break
@@ -612,6 +671,35 @@ final class BlobBrain {
             if k < 0.4 { startHop(sim) } else if k < 0.7 { script = .spin(t: 0); activity = .playing } else { startRoll(sim) }
         }
     }
+
+    /// A wander goal on the roaming polygon: `zone` (0 front, 1 back, 2 left, 3 right: legs of at least 2.5 u) or a uniform sample by area. Of up to six valid
+    /// candidates the best wins: far from the other Jellies (and from where they are heading) and from the cells he picked before.
+    func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
+        let maxL = idleLegMax(maxWanderLeg)
+        let lo: Float = zone != nil ? 2.5 : 0.8
+        guard maxL > lo else { return nil }
+        let others = socialOthers().filter { $0 !== self }
+        var best: (SIMD2<Float>, Float)?
+        var valid = 0
+        for _ in 0..<48 {
+            let raw = zone.map { rf.sampleZone($0, rand(), rand(), rand()) } ?? rf.sampleArea(rand(), rand(), rand())
+            let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
+            let d = simd_length(cand - here)
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
+            var nearest: Float = 4
+            for o in others {
+                nearest = min(nearest, simd_distance(o.position, cand))
+                if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
+            }
+            let score = 0.5 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand()
+            if best == nil || score > best!.1 { best = (cand, score) }
+            valid += 1
+            if valid >= 6 { break }
+        }
+        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; return b.0 }
+        return nil
+    }
+    private func roamKey(_ p: SIMD2<Float>) -> Int { (Int(floorf(p.x)) + 50) * 1000 + Int(floorf(p.y)) + 50 }
 
     func startHop(_ sim: SoftBody, distance: Float? = nil) {
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.8)
@@ -648,7 +736,7 @@ final class BlobBrain {
 
     func finishScript(_ sim: SoftBody, after served: Bool) {
         script = .none
-        restTimer = rand(1.5, 4.0)
+        restTimer = rand(1.5, 4.0) * idleLively
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
@@ -660,6 +748,7 @@ final class BlobBrain {
     }
 
     func abortAll(_ sim: SoftBody, _ skinner: Skinner) {
+        let wasLying = isLying
         if poseW > 0.2 { for i in sim.v.indices { sim.v[i] *= 0.25 } }       // dropped mid-stride: no carried-over momentum (he stays where he was stopped)
         mouthOpen = 0
         route = []
@@ -679,6 +768,7 @@ final class BlobBrain {
         poseW = 0; poseOn = false
         script = .none
         job = nil
+        if wasLying { activity = .recovering; gaitRecover = false; calmT = 0; recoverT = 0 }       // dropped while he lies on his back: the recover path rolls him up onto his feet
     }
 
     // MARK: gait helpers
@@ -828,17 +918,35 @@ final class BlobBrain {
         if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
-        let patience: Float = peers().contains { $0.id >= Int.max / 4 } ? 6 : 0.7
+        let standing = peers().contains { $0.id >= Int.max / 4 }
+        // Autonomous legs (a wander / run / social walk: no job, no voice command) do not wait for a Jelly that blocks them: after a beat they give the leg up
+        // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
+        let requested = job != nil || commanded || pending != nil
+        let patience: Float = requested ? (standing ? 6 : 0.7) : (standing ? 1.0 : 0.6)
         if steerWait < patience, peerOnLeg(root, target) { return nil }
+        if !requested, peerOnLeg(root, target) { steerGiveUp = true; return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// An autonomous walk found its way blocked for good (see `steerTarget`): the walk ends and a new goal is picked.
+    var steerGiveUp = false
+    /// Seconds an autonomous walk has made no root progress (turning on the spot included, up to a half turn): the stuck detector.
+    var walkStallT: Float = 0
+    var walkStallRoot = SIMD2<Float>(0, 0)
+    /// How often the leg-level give-ups fired (tests / the soak report).
+    var stuckRepicks = 0
     /// A wander goal is no closer than `peerGap` to any other Blob (always true without peers: a lone Blob picks exactly as before).
     func peerFree(_ p: SIMD2<Float>) -> Bool {
         let others = peers()
         if others.isEmpty { return true }
         return !others.contains { simd_distance($0.pos, p) < peerGap }
+    }
+    /// A goal he can really get to: the straight leg is clear, or a route of at most two corners goes round whatever stands in it (a goal behind a
+    /// standing Jelly in a narrow strip of floor is not a goal: he would wait there and give up).
+    func reachable(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        if peers().isEmpty { return true }
+        return legClear(a, b, margin: steerMargin) || planRoute(a, b, depth: 2) != nil
     }
     /// A Blob with a higher id stands within the gap of the straight leg a -> b.
     func peerOnLeg(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
@@ -915,9 +1023,21 @@ final class BlobBrain {
         case .walk(let target, let then):
             poseOn = true; ensureFeet(sim)
             if simd_distance(SIMD2(px, pz), stallRoot) > 0.04 || abs(wrapAngle(yaw - stallYaw)) > 0.05 { stallRoot = SIMD2(px, pz); stallYaw = yaw; steerStall = 0 } else { steerStall += dt }
+            if scriptT <= dt * 1.5 { walkStallRoot = SIMD2(px, pz); walkStallT = 0; steerWait = 0; steerGiveUp = false }       // a new leg starts clean
+            // stuck detector: an autonomous walk whose root has not moved 0.12 u in 3 s (a half turn on the spot takes ~1.7 s) is dropped and re-picked
+            if simd_distance(SIMD2(px, pz), walkStallRoot) > 0.12 { walkStallRoot = SIMD2(px, pz); walkStallT = 0 } else { walkStallT += dt }
+            if walkStallT > 3.0, job == nil, !commanded, pending == nil {
+                walkStallT = 0; stuckRepicks += 1
+                step(after: .none, sim, giveUp: true); restTimer = 0.25
+                return
+            }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
-                guard let eff = steerTarget(to: target) else { steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1; return }
+                guard let eff = steerTarget(to: target) else {
+                    steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
+                    if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
+                    return
+                }
                 steerWait = max(0, steerWait - dt)
                 let inter = eff != target
                 switch planWalkStep(to: eff, intermediate: inter) {
@@ -994,6 +1114,9 @@ final class BlobBrain {
 
         case .idle:
             runIdle(sim, skinner, dt)
+
+        case .race:
+            raceRun(sim, dt)
 
         case .eat(let t, let bowl, let dur, let drink):
             poseOn = true; ensureFeet(sim)
@@ -1990,4 +2113,9 @@ final class BlobBrain {
 
 private extension Float {
     func clamped(_ a: Float, _ b: Float) -> Float { Swift.min(b, Swift.max(a, self)) }
+}
+
+/// The behaviour-side perks of one brain (set by GameCare from the Jelly's JellyPerks).
+struct PerkFlags: Equatable {
+    var bouncy = false, social = false, bedtime = false
 }

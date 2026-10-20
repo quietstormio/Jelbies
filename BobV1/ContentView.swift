@@ -15,7 +15,7 @@ struct ContentView: View {
                 MelonStage(model: studioModel)
             }
         } else {
-            GameScreen()
+            GameScreen().onAppear { OrientationForce.apply() }
         }
     }
 

@@ -294,6 +294,22 @@ nonisolated enum DiningModels {
         }
     }
 
+    /// A plate food of the store: each remaining piece at the berry anchors (same ring / arc, same reach), built by `piece`.
+    static func pieces(_ b: RoomMeshBuilder, state st: ServingState, palette p: ConsumablePalette, layout L: TrayLayout, piece: PieceBuilder) {
+        for i in 0..<L.n {
+            let eaten = DiningTiming.bitesPerServing - st.bitesLeft[i]
+            for j in 0..<3 where j >= eaten && !st.skipped.contains(i * 3 + j) {
+                piece(b, berryAnchor(layout: L, place: i, index: j), j, L.scale, p)
+            }
+        }
+    }
+    /// A store food's piece for the hand (centred on the origin).
+    static func heldPiece(_ f: Consumable, index gi: Int, scale s: Float) -> RoomMesh {
+        let b = RoomMeshBuilder(); b.material = .plain
+        f.piece?(b, .zero, gi % 3, s, f.palette)
+        return b.mesh
+    }
+
     /// One berry centred on `c` with a little leaf cap.
     static func berry(_ b: RoomMeshBuilder, centre c: SIMD3<Float>, color: SIMD3<Float>, leaf: SIMD3<Float>, scale s: Float = 1) {
         ellipsoid(b, centre: c, rx: 0.065 * s, ry: 0.06 * s, color: color, rings: 6, segments: 12, ao: 1)
@@ -350,11 +366,19 @@ nonisolated enum DiningModels {
     }
 
     /// Resting slices on the plate (one per remaining bite); a slice in his hand is skipped.
-    static func pizza(_ b: RoomMeshBuilder, state st: ServingState, palette p: ConsumablePalette, layout L: TrayLayout) {
+    static func pizza(_ b: RoomMeshBuilder, state st: ServingState, palette p: ConsumablePalette, layout L: TrayLayout, piece: PieceBuilder? = nil) {
         for i in 0..<L.n {
             let eaten = DiningTiming.bitesPerServing - st.bitesLeft[i]
             for j in 0..<3 where j >= eaten && !st.skipped.contains(i * 3 + j) {
-                pizzaSlice(b, centre: pizzaAnchor(layout: L, place: i, index: j), yaw: sliceYaw(layout: L, place: i, index: j), palette: p, scale: L.scale)
+                let c = pizzaAnchor(layout: L, place: i, index: j)
+                if let piece {      // a meshed slice (mini pizza): the piece builder draws it at yaw 0, so turn it about its centre
+                    let one = RoomMeshBuilder(); one.material = .plain
+                    piece(one, .zero, j, L.scale, p)
+                    let y = sliceYaw(layout: L, place: i, index: j)
+                    append(one.mesh, to: b, transform: translation(c, yaw: y))
+                } else {
+                    pizzaSlice(b, centre: c, yaw: sliceYaw(layout: L, place: i, index: j), palette: p, scale: L.scale)
+                }
             }
         }
     }
@@ -379,9 +403,9 @@ nonisolated enum DiningModels {
     }
 
     /// Standalone slice for a held item (centred on the origin, tip toward +z = the camera).
-    static func heldSlice(scale s: Float, yaw: Float = 0) -> RoomMesh {
+    static func heldSlice(scale s: Float, yaw: Float = 0, palette: ConsumablePalette = Consumables.pizza.palette) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
-        pizzaSlice(b, centre: .zero, yaw: yaw, palette: Consumables.pizza.palette, scale: s)
+        pizzaSlice(b, centre: .zero, yaw: yaw, palette: palette, scale: s)
         return b.mesh
     }
 
@@ -764,7 +788,7 @@ nonisolated enum DiningModels {
         if previewGhosts, L.n > 1 { append(ghostBlobs(layout: L), to: b, transform: matrix_identity_float4x4) }
         #endif
         if f.kind == .food {
-            append(plate(layout: L, theme: theme, pizza: f.id == Consumables.pizza.id), to: b, transform: matrix_identity_float4x4)
+            append(plate(layout: L, theme: theme, pizza: f.pizzaLayout || f.id == Consumables.pizza.id), to: b, transform: matrix_identity_float4x4)
             let fb = RoomMeshBuilder(); fb.material = .plain
             f.serving?(fb, state, f.palette, L)
             append(fb.mesh, to: b, transform: matrix_identity_float4x4)
