@@ -200,6 +200,8 @@ final class BlobBrain {
     var feature: JellyFeature = .none
     var wingsFolded = false
     var wingFlapLimit: Float = 75
+    /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
+    var trainingLock = false
     var flapHop = FlapHopState()
     var nameHopping = false
     var flipArmA: Float = 0

@@ -45,6 +45,10 @@ nonisolated enum FeatureMeshes {
 
     /// Budget: like the wardrobe (every feature is rebuilt every frame for every Jelly).
     static let vertexBudget = 1000, triangleBudget = 1500
+    /// Lavender's wings, uniformly scaled about each wing's hinge at build time (the art is drawn full size; 0.85 = the "slightly smaller" wings of
+    /// 2026-10-21). The hinges, binds and the measured clearance tables are untouched: smaller wings only clear the worn items by more. (A var for the
+    /// before / after captures; the cache key carries it.)
+    nonisolated(unsafe) static var wingScale: Float = 0.85
 
     static func art(_ id: String) -> DecorMeshes.Art? {
         lock.lock(); defer { lock.unlock() }
@@ -67,7 +71,7 @@ nonisolated enum FeatureMeshes {
     static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared) -> FeaturePrepared? {
         guard f != .none else { return nil }
         let id = (f == .daisy && p.onHat) ? spec.daisyOnHat.id : f.art
-        let key = id + "|" + p.key
+        let key = id + "|" + p.key + (f == .wings ? String(format: "|s%.3f", wingScale) : "")
         lock.lock(); let c = prepared[key]; lock.unlock()
         if let c { return c }
         guard let a = art(id) else { return nil }
@@ -125,8 +129,10 @@ nonisolated enum FeatureMeshes {
             pr.pivot = pivot
             pr.bind = body.bind(pivot) ?? SurfaceBind()
             var centroid = SIMD3<Float>.zero
+            let partScale: Float = f == .wings ? wingScale : 1
             for k in 0..<part.positions.count {
-                let q = place(part.positions[k])
+                var q = place(part.positions[k])
+                if partScale != 1 { q = pivot + (q - pivot) * partScale }           // the wings: smaller about their hinge, still rooted there
                 r.rest.append(q); r.off.append(q - pivot); r.nrm.append(simd_normalize(placeN(part.normals[k]))); r.col.append(part.colors[k]); r.ao.append(part.ao[k])
                 r.partOfVertex.append(pi)
                 centroid += q
