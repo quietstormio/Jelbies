@@ -46,6 +46,9 @@ nonisolated enum RaceTuning {
     static let goFlash: Float = 0.6
     /// After the first racer finishes the others get this long to cross, then the placings are made from where they are.
     static let finishGrace: Float = 5.0
+    /// A player who has not stepped for this long once someone has finished is not racing any more: the window is the plain 2 x finishGrace,
+    /// not the course's longer one (RaceCourse.stragglerGrace). Longer than a trip (0.6 s) or a look-around (1.3 s).
+    static let stragglerStall: Float = 2.5
     /// The race is called off this long after GO (a Jelly that never moves).
     static let timeout: Float = 45
     /// The final-stretch music starts when the leader is this close to the line (world units).
@@ -407,7 +410,9 @@ nonisolated struct RaceSim: Sendable {
         if phase == .running, racers.contains(where: { $0.finished }) { phase = .finishing; firstFinishAt = clock }
         if phase == .finishing {
             let since = clock - (firstFinishAt ?? clock)
-            if racers.allSatisfy({ $0.finished }) || (racers[0].finished && since >= RaceTuning.finishGrace) || since >= 2 * RaceTuning.finishGrace { endRace() }
+            // the stragglers' window: the course's (a tapping player always gets to finish), or the old 10 s when the player has stopped tapping
+            let window = racers[0].sinceStep > RaceTuning.stragglerStall ? 2 * RaceTuning.finishGrace : course.stragglerGrace
+            if racers.allSatisfy({ $0.finished }) || (racers[0].finished && since >= RaceTuning.finishGrace) || since >= window { endRace() }
         }
         if phase != .results, clock >= course.timeout { endRace() }
     }

@@ -412,7 +412,8 @@ final class RaceBodyRig {
         self.tapsPerSecond = tapsPerSecond
         if let c = course {
             let spot = c.lanePoint(lane, at: 0)
-            if simd_distance(spot, SIMD2(rig.brain.px, rig.brain.pz)) > 1e-3 {          // (a course placed where the rig stands keeps the rig's state as it is)
+            let here = rig.sim.bodyPose(iterations: 8).centroid                          // where the body stands (the brain's px / pz are not posed yet)
+            if simd_distance(spot, SIMD2(here.x, here.z)) > 1e-3 {                        // (a course placed where the rig stands keeps the rig's state as it is)
                 rig.sim.arenaRadius = .infinity
                 rig.sim.teleport(toXZ: spot)
                 for _ in 0..<60 { rig.sim.step() }
@@ -571,8 +572,28 @@ final class RaceGaitTests: XCTestCase {
             var feet = FeetAttachTests.FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
             var arms = ArmCapTests.Stat()
             var armFrames = 0, cornerTrips = 0, inCornerFrames = 0
-            r.run(2.9 + RaceCourse.wave.length / 0.8 + 4) {
-                if let f = FeetAttachTests.footFrame(r.rig) { FeetAttachTests.accumulate(&feet, f); frames += 1 }
+            var worst: (overlap: Float, note: String) = (-.infinity, "")
+            r.run(2.9 + RaceCourse.wave.length / 0.6 + 6) {                 // (a starter with trips and look-arounds runs well under 0.8 u/s)
+                if let f = FeetAttachTests.footFrame(r.rig) {
+                    FeetAttachTests.accumulate(&feet, f); frames += 1
+                    if f.overlap > worst.overlap {                         // diagnostic: which foot, which phase, where in the body frame
+                        let b = r.rig.brain, g = b.feet
+                        let pose = r.rig.sim.bodyPose(iterations: 4), c0 = r.rig.sim.restCentroid
+                        var detail = ""
+                        for side in 0..<2 {
+                            var deepest = Float.infinity, at = SIMD3<Float>()
+                            for id in r.rig.bean[side] {
+                                let o = 6 * Int(id)
+                                let q = c0 + pose.rotation.inverse.act(SIMD3(r.rig.dyn[o], r.rig.dyn[o + 1], r.rig.dyn[o + 2]) - pose.centroid)
+                                let d = Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z))))
+                                if d < deepest { deepest = d; at = q }
+                            }
+                            detail += String(format: " foot%d %@ sdf %.3f at (%.3f, %.3f, %.3f);", side, g.active && g.side == side ? "SWING" : "stance", deepest, at.x, at.y, at.z)
+                        }
+                        let dist = r.sim.racers[0].dist
+                        worst = (f.overlap, String(format: "dist %.1f curv %.2f stepU %.2f yaw-heading %.3f stumble %.2f%@", dist, RaceCourse.wave.curvature(at: dist), g.stepU, wrapAngle(b.yaw - RaceCourse.wave.pose(at: dist).heading), b.race.stumbleT, detail))
+                    }
+                }
                 if RaceCourse.wave.turnRadius(at: r.sim.racers[0].dist) != nil { inCornerFrames += 1 }
                 cornerTrips = r.sim.racers[0].cornerTrips
                 guard r.rig.brain.armG > 0.5 else { return }
@@ -586,6 +607,7 @@ final class RaceGaitTests: XCTestCase {
             XCTAssertGreaterThan(armFrames, 100, "\(c.name): the walking arms were drawn")
             XCTAssertGreaterThan(inCornerFrames, 200, "\(c.name): he went round the bends")
             FeetAttachTests.check("race \(c.name)", feet, frames: frames)
+            MotionLog.write("RACE feet worst frame \(c.name): \(worst.note)")
             MotionLog.write(String(format: "RACE arms %@: exposed max %.3f H (cap %.3f H), min root depth %.3f u, %d frames, %d corner trips", c.name, arms.capMax / ArmCapTests.H, ArmCap.maximum / ArmCapTests.H, arms.minDepth, armFrames, cornerTrips))
             XCTAssertLessThanOrEqual(arms.capMax, ArmCap.maximum * 1.02, "\(c.name): arms within the wave's maximum")
             XCTAssertGreaterThanOrEqual(arms.minDepth, 0.015, "\(c.name): arm bases stay buried")

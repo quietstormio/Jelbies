@@ -13,7 +13,9 @@ struct CourseMiniMap: View {
     var lineWidth: CGFloat = 7
     var tint: Color = Color(hex: 0xE5A88E)
 
-    /// The centreline points mapped into `size` with a margin, keeping proportion (the x axis is world x, the y axis is -world z: the start at the bottom on the Puddle).
+    /// The centreline points mapped into `size` with a margin, keeping proportion, in the race camera's orientation: world x to the right, world z
+    /// DOWN the box (the start line far away at the top, the finish near the player at the bottom), so the card's shape is the track as seen from
+    /// the finish end, with a right turn bending to the right.
     static func points(_ course: RaceCourse, in size: CGSize, lane: Int = 1, margin: CGFloat = 8) -> [CGPoint] {
         let pts = course.polyline(lane: lane, step: 0.3)
         let all = course.polyline(lane: 0, step: 0.5) + course.polyline(lane: 2, step: 0.5)
@@ -22,7 +24,7 @@ struct CourseMiniMap: View {
         let w = max(hi.x - lo.x, 0.5), h = max(hi.y - lo.y, 0.5)
         let sc = min((size.width - 2 * margin) / CGFloat(w), (size.height - 2 * margin) / CGFloat(h))
         let ox = (size.width - CGFloat(w) * sc) / 2, oy = (size.height - CGFloat(h) * sc) / 2
-        return pts.map { CGPoint(x: ox + CGFloat($0.x - lo.x) * sc, y: size.height - (oy + CGFloat($0.y - lo.y) * sc)) }
+        return pts.map { CGPoint(x: ox + CGFloat($0.x - lo.x) * sc, y: oy + CGFloat($0.y - lo.y) * sc) }
     }
 
     static func path(_ pts: [CGPoint]) -> Path {
@@ -41,7 +43,7 @@ struct CourseMiniMap: View {
                 Self.path(pts).stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round, dash: [3, 3]))
                 if let s = pts.first { Circle().fill(SK.mint).frame(width: lineWidth + 3, height: lineWidth + 3).position(s) }
                 if let f = pts.last {
-                    Image(systemName: "flag.checkered").font(.system(size: 11, weight: .black)).foregroundStyle(SK.ink).position(x: f.x, y: f.y - 8)
+                    Image(systemName: "flag.checkered").font(.system(size: 11, weight: .black)).foregroundStyle(SK.ink).position(x: f.x, y: f.y + 8)
                 }
             }
         }

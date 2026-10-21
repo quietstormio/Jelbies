@@ -62,12 +62,14 @@ extension BlobBrain {
         abortScript(sim, skinner)
         pending = nil; interruptScript = false
         race = RaceDrive(active: true, heading: heading, laneX: x)
-        if let course { race.course = course; race.lane = lane }
-        else { race.course = RaceCourse.straight(from: SIMD2(x, pz), heading: heading, length: RaceTuning.length); race.lane = RaceTuning.playerLane }
-        race.lastS = 0
         autonomy = false; idleBlocked = false
         runW = 0; zoomW = 0; hurry = false
         currentPose(sim)
+        // the course after the pose: a straight from where he now STANDS (the pz the pre-course race measured progress from), so the straight's
+        // progress is exactly pz - startZ
+        if let course { race.course = course; race.lane = lane }
+        else { race.course = RaceCourse.straight(from: SIMD2(x, pz), heading: heading, length: RaceTuning.length); race.lane = RaceTuning.playerLane }
+        race.lastS = 0
         yaw = heading
         nextSwing = 0
         script = .race; activity = .walking
@@ -167,13 +169,25 @@ extension BlobBrain {
         nextSwing = foot
         let stance = 1 - foot
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)
-        var r = 0.5 * L, a: Float
-        if final { a = max(0, s); r = 0 } else { a = min(max(s + r, 0.3 * L), 1.5 * L) }
         let m = turnRate * min(max(amplitude, 0.5), 1) * (1 / rate)
-        let dyaw = max(-m, min(m, wrapAngle(heading - yaw)))
+        let err = wrapAngle(heading - yaw)
+        // a curved course only (the straight keeps the pre-course step to the bit): back from a look-around in a bend he can face far from the
+        // lane (on the straight a look faces the camera, which IS the way he runs); a stride then would plant the swing foot out to his side, off
+        // the body. So he turns on the spot first, feet under him, then strides.
+        if !race.course.isStraight, abs(err) > 0.5 {
+            race.steps += 1
+            startStep(dyaw: max(-1.5 * m, min(1.5 * m, err)), peak: turnLift * amplitude, rate: rate)
+            return
+        }
+        let dyaw = max(-m, min(m, err))
+        // in a bend the reach and the sideways swing shorten a little with the turn of the step, so the feet stay fused to the egg (the body turns
+        // under a foot in flight); zero on the straight, so its step is exactly the pre-course one
+        let turnK: Float = race.course.isStraight ? 0 : min(1, abs(dyaw) / 0.1)
+        var r = 0.5 * L * (1 - 0.2 * turnK), a: Float
+        if final { a = max(0, s); r = 0 } else { a = min(max(s + r, 0.3 * L), 1.5 * L) }
         let drift = max(-0.04, min(0.04, -race.course.lateral(of: root, lane: race.lane, at: at) * 0.5))
         race.steps += 1
-        startStep(rootD: u * a + right * drift, dyaw: dyaw, reach: u * r, peak: stepLift * amplitude, rate: rate, outScale: 0.6)
+        startStep(rootD: u * a + right * drift, dyaw: dyaw, reach: u * r, peak: stepLift * amplitude, rate: rate, outScale: 0.6 * (1 - 0.6 * turnK))
     }
 
     /// How far he is along his lane now (arc length), and how far off its line (positive = to the right). For the glue's progress and the tests.

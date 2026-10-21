@@ -208,6 +208,10 @@ nonisolated struct RaceCourse: Equatable, Sendable {
 
     /// The race is called off this long after GO (RaceTuning.timeout on the Puddle; longer courses get longer).
     var timeout: Float { tier == .puddle ? RaceTuning.timeout : max(RaceTuning.timeout, length / 0.55 + 12) }
+    /// After the first racer finishes, the others (the player among them) get this long to cross before the placings are made from where they
+    /// stand: 2 x finishGrace on the Puddle (10 s, as before courses); on a longer course enough for a slow, tripping starter against a trained
+    /// field (about length / 1.2: Ripple 20 s, Splash 27 s, Wave 29 s). A player who is tapping always gets to finish; the timeout still bounds it.
+    var stragglerGrace: Float { tier == .puddle ? 2 * RaceTuning.finishGrace : max(2 * RaceTuning.finishGrace, length / 1.2) }
 
     // MARK: the courses
 

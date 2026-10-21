@@ -19,9 +19,10 @@ struct RaceFollowPose: Equatable {
 
     /// Camera elevation over the track and the distance to the target (set by the width the frame must hold, like the Puddle's frame).
     static let elevation: Float = 24 * .pi / 180
-    static let halfWidth: Float = 2.9, fill: Float = 0.94, minDistance: Float = 16
-    /// How far down the course (arc length) from the front racer the eye's anchor sits.
-    static let lead: Float = 8
+    static let halfWidth: Float = 3.3, fill: Float = 0.94, minDistance: Float = 16
+    /// How far down the course (arc length) from the front racer the eye's anchor sits. Short enough that a hairpin (radius 4) does not swing
+    /// the eye round to the racers' side: with 3.3 half-width the player stays within |ndc.x| 0.70 in portrait on the Wave (was 0.98 at 8 / 2.9).
+    static let lead: Float = 5
     /// The target sits this share of the way from the player toward the leader, but never more than `maxGap` from the player.
     static let leaderShare: Float = 0.4, maxGap: Float = 4.5
     static let targetHeight: Float = 0.45

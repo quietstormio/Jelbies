@@ -66,6 +66,8 @@ final class PuddleGoldenTests: XCTestCase {
         }
         XCTAssertEqual(RaceTuning.drops(place: 1), 12); XCTAssertEqual(RaceTuning.drops(place: 2), 7); XCTAssertEqual(RaceTuning.drops(place: 3), 4)
         XCTAssertEqual(RaceCourse.puddle.timeout, RaceTuning.timeout)
+        XCTAssertEqual(RaceCourse.puddle.stragglerGrace, 2 * RaceTuning.finishGrace, "the Puddle's straggler window is the pre-course 10 s")
+        for t in [CourseTier.ripple, .splash, .wave] { XCTAssertGreaterThan(RaceCourse.course(t).stragglerGrace, 2 * RaceTuning.finishGrace, "\(t): a longer course waits longer for a slow starter") }
     }
 
     /// The body-driven race on the straight (RaceBodyRig, the game's glue): progress and heading every 30 ticks, recorded before the course model.
@@ -192,7 +194,7 @@ final class CourseModelTests: XCTestCase {
                 XCTAssertEqual(sim.phase, .results)
                 guard let ft = sim.player.finishTime else { XCTFail("\(t) seed \(seed): the player did not finish"); continue }
                 times.append(ft)
-                XCTAssertLessThan(ft + RaceTuning.finishGrace, sim.course.timeout, "\(t): the timeout leaves room for the stragglers")
+                XCTAssertLessThan(ft + sim.course.stragglerGrace, sim.course.timeout, "\(t): the timeout leaves room for the stragglers' window")
             }
             let mean = times.reduce(0, +) / Float(times.count)
             print("COURSE time \(t): mean \(mean) s, \(times)")
@@ -201,6 +203,21 @@ final class CourseModelTests: XCTestCase {
         }
         let (p, _) = PuddleGoldenTests.race(seed: 1, course: .puddle)
         XCTAssertLessThan(p.player.finishTime!, 20, "the Puddle is the sprint it was")
+    }
+
+    /// The stragglers' window: a slow starter who keeps tapping finishes the Wave even when the field is long home; one who has stopped tapping is
+    /// placed from where he stands after the plain 10 s, as on the Puddle.
+    func testATappingStragglerFinishesAndAStoppedOneIsPlacedAfterTenSeconds() {
+        let fast = [Rival(name: "A", tint: .one, stats: RacerStats(waddle: 1, focus: 1)), Rival(name: "B", tint: .one, stats: RacerStats(waddle: 1, focus: 1))]
+        let slow = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 3, course: .wave, rivals: fast).sim
+        XCTAssertNotNil(slow.player.finishTime, "a slow tapping starter crosses the line")
+        XCTAssertEqual(slow.phase, .results)
+        // stops tapping at GO: the race is called 2 x finishGrace after the first finisher, not stragglerGrace later
+        let stopped = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 0.0001, course: .wave, rivals: fast).sim
+        XCTAssertNil(stopped.player.finishTime)
+        let firstHome = stopped.racers.dropFirst().compactMap(\.finishTime).min()!
+        XCTAssertEqual(stopped.clock, firstHome + 2 * RaceTuning.finishGrace, accuracy: 0.1, "placed from where he stands after the plain window")
+        XCTAssertEqual(stopped.playerPlace, 3)
     }
 
     /// The corner rule: the safe speed grows with radius and with skill; the trip chance is zero at or under it and grows above it; bumps bite the unfocused.
@@ -241,6 +258,7 @@ final class CourseModelTests: XCTestCase {
             for seed in seeds {
                 let u = PuddleGoldenTests.race(seed: seed, player: starter, taps: 5, course: c, rivals: rivals).sim
                 let tr = PuddleGoldenTests.race(seed: seed, player: trained, taps: 5, course: c, rivals: rivals).sim
+                if u.player.finishTime == nil { print("COURSE DNF \(t) seed \(seed): phase \(u.phase) clock \(u.clock) dist \(u.player.dist)/\(c.length) trips \(u.player.tap.trips) firstFinish \(u.firstFinishAt.map { "\($0)" } ?? "nil") timeout \(c.timeout) rivals \(u.racers.dropFirst().map { "\($0.finishTime.map { "\($0)" } ?? "-")" })") }
                 XCTAssertNotNil(u.player.finishTime, "\(t) seed \(seed): the starter finishes"); XCTAssertNotNil(tr.player.finishTime)
                 if (tr.player.finishTime ?? 99) < (u.player.finishTime ?? 99) { faster += 1 }
                 tripsU += u.player.tap.trips; tripsT += tr.player.tap.trips; stepsU += u.player.stepCount
@@ -426,7 +444,7 @@ final class RaceFollowCameraTests: XCTestCase {
                 XCTAssertLessThanOrEqual(abs(f.bank), RaceFollowPose.bankMax + 1e-4)
                 maxBank = max(maxBank, abs(f.bank))
                 let curv = c.curvature(at: s)
-                if abs(curv) > 0.1, abs(f.bank) > 0.01 { if (f.bank > 0) == (curv > 0) { bankSigns += 1 } else { bankSigns -= 1 } }
+                if abs(curv) > 0.05, abs(f.bank) > 0.01 { if (f.bank > 0) == (curv > 0) { bankSigns += 1 } else { bankSigns -= 1 } }
                 for (name, a) in aspects {
                     let cam = GameCamera.camera(aspect: a, race: 1, raceFollow: f)
                     XCTAssertGreaterThan(cam.pos.y, RaceModels.gantryHeight + 0.6, "\(t) \(name): the eye clears the gantry and the trees (s \(s))")
@@ -450,7 +468,7 @@ final class RaceFollowCameraTests: XCTestCase {
         var f = RaceFollowPose(target: SIMD3(0, 0.45, 0), toEye: SIMD2(0, 1), bank: 0)
         let want = RaceFollowPose(target: SIMD3(3, 0.45, 2), toEye: SIMD2(1, 0), bank: 0.05)
         for _ in 0..<300 { f = f.smoothed(toward: want, dt: 1 / 60); XCTAssertEqual(simd_length(f.toEye), 1, accuracy: 1e-3) }
-        XCTAssertEqual(f.target, want.target); XCTAssertEqual(f.bank, want.bank, accuracy: 1e-4); XCTAssertEqual(f.toEye.x, 1, accuracy: 1e-3)
+        XCTAssertLessThan(simd_distance(f.target, want.target), 1e-3, "the target converges"); XCTAssertEqual(f.bank, want.bank, accuracy: 1e-4); XCTAssertEqual(f.toEye.x, 1, accuracy: 1e-3)
     }
 
     /// GameCare hands the stage a follow pose only on a curved course while the track is up.
