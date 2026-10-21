@@ -18,18 +18,19 @@
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<false/>
-	<!-- Siri: "Jelbies" also names the app in App Shortcut phrases (the display name is "Bob" today). -->
+	<!-- Siri: the display name is "Jelbies"; these alternates also name the app in App Shortcut phrases
+	     ("My Jelbies", and "Bob" so the old phrasing from before the rename still works). None may repeat the display name. -->
 	<key>INAlternativeAppNames</key>
 	<array>
 		<dict>
 			<key>INAlternativeAppName</key>
-			<string>Jelbies</string>
+			<string>My Jelbies</string>
 			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>jell bees</string>
+			<string>my jell bees</string>
 		</dict>
 		<dict>
 			<key>INAlternativeAppName</key>
-			<string>My Jelbies</string>
+			<string>Bob</string>
 		</dict>
 	</array>
 	<!-- The widget's deep link: jelbies://jelly/<id> opens the game and selects that Jelly. -->

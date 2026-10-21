@@ -497,7 +497,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "BobV1-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Bob;
+				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, and with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -533,7 +533,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "BobV1-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Bob;
+				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, and with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
