@@ -70,7 +70,12 @@ extension BlobBrain {
         else {
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
             let a0 = atan2f(base.x, base.y)
-            angles = (0..<9).map { k in a0 + Float((k + 1) / 2) * 0.5 * (k % 2 == 0 ? 1 : -1) }
+            // (Xcode 27.1: spelled out in steps; the one-line closure no longer type-checks in time)
+            angles = (0..<9).map { (k: Int) -> Float in
+                let ring = Float((k + 1) / 2)
+                let side: Float = k % 2 == 0 ? 1 : -1
+                return a0 + ring * 0.5 * side
+            }
         }
         for a in angles {
             let u = SIMD2(sinf(a), cosf(a))

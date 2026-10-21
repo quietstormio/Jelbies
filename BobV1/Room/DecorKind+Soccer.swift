@@ -35,9 +35,13 @@ nonisolated enum SoccerTuning {
     static let dribbleReach: Float = 1.1
     /// The ball this close to his root is touched on at once, whatever the feet are doing (his belly would walk into it otherwise).
     static let dribbleTouch: Float = 0.72
+    /// A dribble leg walks to this far behind the ball (outside the body's bump circle, `bodyRadius` + the ball's radius; inside `dribbleTouch`).
+    static let dribbleStandOff: Float = 0.7
     /// Stuck: at rest against a wall / in a corner / under furniture this long and a Jelly comes to dribble it out; the boundary nudge is the fallback.
     static let stuckAfter: Float = 20
     static let nudgeAfter: Float = 28
+    /// The fallback nudge rolls the ball to the open floor it found (speed = distance x decay): never harder than this (a roll of ~1.9).
+    static let nudgeSpeedMax: Float = 2.2
     /// After a goal the ball rolls gently back out of the mouth and stops about 0.6 in front of the goal.
     static let rollOutStop: Float = 0.6
     /// The net puffs by w * maxPush * amount and rings down at ~2.5 Hz.

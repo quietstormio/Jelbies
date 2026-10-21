@@ -80,9 +80,9 @@ final class FeetAttachTests: XCTestCase {
         ("decor2: climb the slide, sit, ride, exit", .slide, SIMD2(1.0, 1.2), .decorSlide, 30, true, nil, nil),
         // soccer (BlobBrain+Soccer.swift): the stomp kick, a dribble to the goal's kick spot and the shot, the shot and the celebration bounce, a stuck ball's rescue
         ("soccer: stomp-kick the ball", .soccerball, SIMD2(0.9, 0.9), .soccerKick, 16, true, 0, nil),
-        ("soccer: dribble the ball to the goal and shoot", .soccerball, SIMD2(1.4, 1.2), .soccerKick, 34, true, 1, SIMD2(0.0, -1.6)),
+        ("soccer: dribble the ball to the goal and shoot", .soccerball, SIMD2(0.9, 1.4), .soccerKick, 34, true, 1, SIMD2(0.0, -1.6)),
         ("soccer: shoot at the goal and celebrate", .soccerball, SIMD2(0.5, 0.1), .soccerKick, 22, true, 2, SIMD2(0.0, -1.6)),
-        ("soccer: dribble a stuck ball back to open floor", .soccerball, SIMD2(-2.2, -2.2), .soccerKick, 30, true, 3, nil),
+        ("soccer: dribble a stuck ball back to open floor", .soccerball, SIMD2(-1.4, -2.2), .soccerKick, 30, true, 3, nil),
     ]
     static let moves: [Move] = batch2Decor.map { d in
         Move(name: d.0, game: true, seconds: d.4, expectBeans: d.5, start: { $0.brain.soccerModeForce = d.6; decorStart($0, d.1, d.2, d.3, goal: d.7) })
@@ -123,10 +123,16 @@ final class FeetAttachTests: XCTestCase {
     static func decorStart(_ r: MotionRig, _ kind: DecorKind, _ at: SIMD2<Float>, _ move: IdleKind, goal: SIMD2<Float>? = nil) {
         var placed = [PlacedDecor(uid: 7, kind: kind, x: at.x, z: at.y)]
         if let goal { placed.append(PlacedDecor(uid: 8, kind: .minigoal, x: goal.x, z: goal.y)) }
+        DecorField.shared.clear()          // (the last row's piece, uid 7 too, may still be rolling: `set` would keep its motion and the pick would skip a moving ball)
         DecorField.shared.set(placed)
         SoccerState.shared.reset()
         if move == .soccerKick, r.brain.soccerModeForce == 3 { DecorField.shared.tick(dt: 0); SoccerState.shared.setStuck(7, SoccerTuning.stuckAfter) }          // (a stuck ball: the 20 s have passed)
-        r.brain.idleForced = true; _ = r.brain.idleStart(move, r.sim)
+        r.brain.idleForced = true
+        let ok = r.brain.idleStart(move, r.sim)
+        if move == .soccerKick {
+            MotionLog.write("DECORSTART soccer mode \(r.brain.soccerModeForce ?? -1) started \(ok) at (\(r.brain.px), \(r.brain.pz)) occupant \(String(describing: DecorField.shared.occupant[7])) ball \(DecorField.shared.anim[7]?.pos ?? .zero) stand \(String(describing: r.brain.soccerStand(DecorField.shared.foot(7)!, from: r.brain.position))) plan \(r.brain.soccerPlan.mode) kind \(String(describing: r.brain.idleState.kind)) openFloor \(String(describing: DecorField.shared.nearestOpenFloor(to: at)))")
+            XCTAssertTrue(ok, "soccer mode \(r.brain.soccerModeForce ?? -1) starts")
+        }
     }
 
     func testFeetStayLowUnderAndAttachedInEveryScriptedMove() {

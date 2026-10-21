@@ -34,6 +34,8 @@ struct SoccerIdle {
     /// The field's clock when the shot left the toe (-1 = no shot yet) and its speed.
     var shotT: Float = -1
     var kickSpeed: Float = 0
+    /// A dribble leg re-aimed after a nudge: taken up between steps (a walk re-targeted mid-step pulls the feet off the locked gait).
+    var pendingWalk: SIMD2<Float>?
     var isDribbling: Bool { mode == .dribble || mode == .rescue }
 }
 
@@ -54,7 +56,8 @@ extension BlobBrain {
         var base = ball - here; let L = simd_length(base); base = L > 1e-3 ? base / L : SIMD2(0, 1)
         var best = base, bestScore: Float = -.infinity
         for k in 0..<9 {
-            let a = Float((k + 1) / 2) * 0.45 * (k % 2 == 0 ? 1 : -1)
+            let ring = Float((k + 1) / 2), side: Float = k % 2 == 0 ? 1 : -1
+            let a = ring * 0.45 * side
             let u = rotate(base, a)
             var open: Float = 0
             for d in [Float(0.8), 1.6, 2.4] where field.openFloor(ball + u * d) { open += 1 }
@@ -95,18 +98,25 @@ extension BlobBrain {
         case .kick:
             plan.dir = soccerOpenDirection(from: here, ball: ball)
         }
-        // behind the ball on the line; when that is a wall / a piece / a friend, round the ball (the line turns with him, except for a shot)
+        // behind the ball on the line; when that is a wall / a piece / a friend, round the ball (the line turns with him, except for a shot).
+        // A rescue takes the standable spot nearest to him (the ball is in a corner: the first touch is a side-foot out of it either way, no long turn first).
+        var best: (q: SIMD2<Float>, a: Float)?
         for a in [Float(0), 0.5, -0.5, 1.0, -1.0, 1.5, -1.5] {
             let u = rotate(plan.dir, a)
             guard let q = standable(ball - u * SoccerTuning.standBack) else { continue }
-            if a != 0 {
-                if plan.mode == .shoot { plan.mode = .kick; plan.target = .zero; plan.goal = -1 }
-                if plan.mode == .kick { plan.dir = u }
+            if plan.mode == .rescue {
+                if best == nil || simd_distance(q, here) < simd_distance(best!.q, here) { best = (q, a) }
+                continue
             }
-            soccerPlan = plan
-            return q
+            best = (q, a); break
         }
-        return nil
+        guard let (q, a) = best else { return nil }
+        if a != 0 {
+            if plan.mode == .shoot { plan.mode = .kick; plan.target = .zero; plan.goal = -1 }
+            if plan.mode == .kick { plan.dir = rotate(plan.dir, a) }
+        }
+        soccerPlan = plan
+        return q
     }
 
     // MARK: arriving, legs
@@ -126,13 +136,26 @@ extension BlobBrain {
         script = .walk(target: p, then: .none); activity = .walking
     }
 
+    /// Where a dribble leg walks to: `standOff` behind `ball` on its line to the target, or, when the floor rules move that spot onto the ball (it is
+    /// against a wall), round the ball to the nearest spot that is outside his body's bump circle; the plain spot when there is none.
+    private func dribbleStand(ball: SIMD2<Float>, u: SIMD2<Float>) -> SIMD2<Float> {
+        let want = SoccerTuning.dribbleStandOff
+        let lo = SoccerTuning.bodyRadius + SoccerTuning.radius - 0.03
+        for a in [Float(0), 0.5, -0.5, 1.0, -1.0, 1.5, -1.5] {
+            let q = fixed(ball - rotate(u, a) * want)
+            let d = simd_distance(q, ball)
+            if d >= lo && d <= want + 0.2 && peerFree(q) { return q }
+        }
+        return fixed(ball - u * want)
+    }
+
     /// The next dribble leg: toward the ball on its line to the target; at the target, the shot (when a goal is the point) or done.
     private func soccerDribbleLeg(_ sim: SoftBody, _ skinner: Skinner, _ f: DecorFoot) {
         let field = DecorField.shared
         let ball = field.position(f)
         var s = idleState.soccer
         let toT = s.target - ball, L = simd_length(toT)
-        if L < 0.55 || s.legs > 14 || idleState.t > 40 {
+        if L < 0.55 || s.legs > 14 || idleState.t > 40 || (s.mode == .rescue && s.legs >= 1 && field.openFloor(ball)) {
             if s.mode == .dribble, s.goal >= 0, let g = field.foot(s.goal), L < 0.9 {
                 // the ball is at the kick spot: line up the shot
                 let aim = g.centre + GoalGeometry.kickSpots[1].aim
@@ -144,7 +167,7 @@ extension BlobBrain {
             idleFinish(skinner); return
         }
         let u = toT / L
-        let goalPt = fixed(ball - u * 0.25)
+        let goalPt = dribbleStand(ball: ball, u: u)
         s.legs += 1; s.wasStepping = feet.active
         idleState.soccer = s
         if simd_distance(position, goalPt) < 0.35 {
@@ -170,6 +193,7 @@ extension BlobBrain {
         var s = idleState.soccer
         guard s.isDribbling, s.stage == 10 else { return }
         let field = DecorField.shared
+        if let p = s.pendingWalk, !feet.active { idleState.soccer.pendingWalk = nil; s.pendingWalk = nil; soccerWalk(to: p) }
         let ball = field.position(f)
         let fwd = SIMD2(sinf(yaw), cosf(yaw))
         let rel = ball - position, dist = simd_length(rel), ahead = simd_dot(rel, fwd)
@@ -179,12 +203,25 @@ extension BlobBrain {
         idleState.soccer = s
         let speedNow = simd_length(field.anim[f.uid]?.vel ?? .zero)
         guard speedNow < 0.35 else { return }          // (still rolling from the last nudge)
-        // a footfall with the ball ahead in reach, or the ball right at his toe (before his belly walks into it)
-        if (landed && ahead > 0.05 && dist < SoccerTuning.dribbleReach) || (dist < SoccerTuning.dribbleTouch && ahead > 0.0) || (dist < 0.5 && ahead > -0.1 && !stepping) {
+        // at the target (or a rescued ball already on open floor): no more nudges; the leg decision ends it or lines up the shot
+        let toTarget = simd_length(s.target - ball)
+        if toTarget < 0.55 || (s.mode == .rescue && s.legs >= 1 && field.openFloor(ball)) {
+            if speedNow < SoccerTuning.stopSpeed + 1e-3 { soccerDribbleLeg(sim, skinner, f) }
+            return
+        }
+        var standing = false
+        if case .idle = script, !stepping, speedNow < SoccerTuning.stopSpeed + 1e-3, idleState.phaseT > 0.3 { standing = true }
+        // a footfall with the ball ahead (within ~50 degrees) in reach; the ball right at his toe (before his belly walks into it); or, standing at a ball
+        // at rest a stride ahead of him, a touch after a short beat (he has turned to it by then)
+        let footfall = landed && ahead > 0.6 * dist && dist < SoccerTuning.dribbleReach
+        let atToe = (dist < SoccerTuning.dribbleTouch && ahead > 0.5 * dist) || (dist < 0.5 && ahead > -0.1 && !stepping)          // (facing it within ~60 degrees, or right under him)
+        let standTouch = standing && dist < SoccerTuning.dribbleReach && ahead > 0.8 * dist
+        if footfall || atToe || standTouch {
             let toT = s.target - ball, L = simd_length(toT)
             let u = L > 0.05 ? toT / L : fwd
-            let want = SoccerTuning.dribbleAhead + SoccerTuning.dribbleStride - max(ahead, 0)
-            let speed = min(max(want * SoccerTuning.linearDecayPerS, SoccerTuning.dribbleNudge.lowerBound), SoccerTuning.dribbleNudge.upperBound)
+            // a nudge that leaves the ball a stride ahead of him (and never past the target)
+            let want = min(SoccerTuning.dribbleAhead + SoccerTuning.dribbleStride - max(ahead, 0), L)
+            let speed = min(max(want * SoccerTuning.linearDecayPerS, L < 0.6 ? 0.45 : SoccerTuning.dribbleNudge.lowerBound), SoccerTuning.dribbleNudge.upperBound)
             field.kickBall(f.uid, direction: u, speed: speed, by: steerID)
             SoccerState.shared.newKick(f.uid)
             field.kick(f.uid, 0.3)
@@ -192,8 +229,10 @@ extension BlobBrain {
             AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.35, rate: 1.3)
             SoccerEvents.emit(.kick(jelly: steerID, speed: speed, shot: false))
             // the leg follows the ball
-            let goalPt = fixed(ball + u * (speed / SoccerTuning.linearDecayPerS) - u * 0.25)
-            if case .walk(let t, _) = script { if simd_distance(t, goalPt) > 0.4 { soccerWalk(to: goalPt) } } else { soccerWalk(to: goalPt) }
+            let goalPt = dribbleStand(ball: ball + u * (speed / SoccerTuning.linearDecayPerS), u: u)
+            var follow: SIMD2<Float>? = goalPt
+            if case .walk(let t, _) = script, simd_distance(t, goalPt) <= 0.4 { follow = nil }
+            if let follow { if feet.active { idleState.soccer.pendingWalk = follow } else { soccerWalk(to: follow) } }
         }
     }
 

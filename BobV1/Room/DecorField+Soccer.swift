@@ -205,29 +205,39 @@ extension DecorField {
             // the fallback: a soft roll to the nearest open floor (not into the piece it is wedged against)
             let open = nearestOpenFloor(to: p) ?? SIMD2<Float>(0, 0.6)
             var d = open - p; let L = simd_length(d); d = L > 1e-3 ? d / L : SIMD2(0, 1)
-            kickBall(uid, direction: d, speed: min(max(L * SoccerTuning.linearDecayPerS + SoccerTuning.stopSpeed, 0.8), 1.6))
+            kickBall(uid, direction: d, speed: min(max(L * SoccerTuning.linearDecayPerS + SoccerTuning.stopSpeed, 0.8), SoccerTuning.nudgeSpeedMax))
             SoccerState.shared.setStuck(uid, 0)
             SoccerState.shared.newKick(uid)
         }
         _ = f
     }
 
-    /// Is a world point open floor for the ball (`margin` clear of the walls, the sofa, every solid piece and the room's cylinders)?
-    func openFloor(_ p: SIMD2<Float>, margin: Float = 0.3) -> Bool {
+    /// The ball's clearance at a world point: the least signed gap between its surface and the walls, the floor's edges, the sofa, every solid piece and
+    /// the room's cylinders (negative = overlapping).
+    func floorClearance(_ p: SIMD2<Float>) -> Float {
         let r = SoccerTuning.radius
         let fl = Self.soccerFloor(z: p.y)
-        guard p.y > fl.zlo + r + margin, p.y < fl.zhi - r - margin, abs(p.x) < fl.xlim - margin else { return false }
-        if RoomLayout.sofaDistanceXZ(p) < r + margin { return false }
-        for c in feet where c.spec.solid && c.distance(p) < r + margin { return false }
-        for c in RoomLayout.cylinders where simd_distance(p, c.centre) < c.radius + r + margin { return false }
-        return true
+        var c = min(p.y - (fl.zlo + r), (fl.zhi - r) - p.y, fl.xlim - abs(p.x))
+        c = min(c, RoomLayout.sofaDistanceXZ(p) - r)
+        for f in feet where f.spec.solid { c = min(c, f.distance(p) - r) }
+        for cy in RoomLayout.cylinders { c = min(c, simd_distance(p, cy.centre) - cy.radius - r) }
+        return c
     }
-    /// Can the ball roll straight from `a` to `b` (sampled every 0.15, from a little way out: it may start wedged against the very thing it leaves)?
+    /// Is a world point open floor for the ball (`margin` clear of everything)?
+    func openFloor(_ p: SIMD2<Float>, margin: Float = 0.3) -> Bool { floorClearance(p) > margin }
+    /// Can the ball roll straight from `a` to `b`? Its clearance may never drop below what it starts with (it may rest against, even overlap, a wall or
+    /// a piece: a line INTO that surface fails at once, one that leaves it or runs along it passes), and once it is clear (> 0.02) it stays clear.
     func clearRoll(from a: SIMD2<Float>, to b: SIMD2<Float>) -> Bool {
         let L = simd_distance(a, b)
         guard L > 1e-3 else { return true }
-        var s: Float = 0.3
-        while s < L { if !openFloor(a + (b - a) * (s / L), margin: 0.02) { return false }; s += 0.15 }
+        let slack = min(-0.015, floorClearance(a) - 0.005)
+        var freed = false
+        var s: Float = 0.05
+        while s < L {
+            let c = floorClearance(a + (b - a) * (s / L))
+            if c > 0.02 { freed = true } else if freed || c <= slack { return false }
+            s += 0.05
+        }
         return true
     }
     /// The nearest open-floor spot to `p` the ball can roll straight to, with room to spare (0.5 clear), searched outward and leaning toward the middle of the floor (nil = none within 4 u).

@@ -35,8 +35,10 @@ final class SoccerTests: XCTestCase {
         r.brain.currentPose(r.sim)
         return r
     }
-    /// One stage step: the Jelly, then the field with his position as a bumper.
-    func step(_ r: MotionRig) { r.tick(); DecorField.shared.bodies = [(r.brain.steerID, r.brain.position)]; DecorField.shared.tick(dt: 1.0 / 60) }
+    /// The field's step after the Jelly's (`r.run` ticks him; inside its `each` this is all that is left): his position is a bumper.
+    func step(_ r: MotionRig) { DecorField.shared.bodies = [(r.brain.steerID, r.brain.position)]; DecorField.shared.tick(dt: 1.0 / 60) }
+    /// A whole frame outside `r.run`: the Jelly, then the field.
+    func frame(_ r: MotionRig) { r.tick(); step(r) }
     func ball() -> SIMD2<Float> { DecorField.shared.anim[7]!.pos }
     func ballLocal() -> SIMD2<Float> { ball() - Self.goalAt }
 
@@ -192,6 +194,10 @@ final class SoccerTests: XCTestCase {
             }
             if simd_distance(self.ball(), spot) < 0.9 { reached = true }
             if r.brain.idleState.soccer.mode == .shoot { shot = true }
+            if Int(r.t * 60) % 20 == 0 {
+                let fwd = SIMD2(sinf(r.brain.yaw), cosf(r.brain.yaw)), rel = self.ball() - r.brain.position, an = DecorField.shared.anim[7]!
+                MotionLog.write(String(format: "SOCCER dribble trace t %.2f jelly (%.2f, %.2f) yaw %.2f ball (%.2f, %.2f) speed %.2f ahead %.2f lateral %.2f stage %d mode %d legs %d script %@ feet %d", r.t, r.brain.px, r.brain.pz, r.brain.yaw, an.pos.x, an.pos.y, simd_length(an.vel), simd_dot(rel, fwd), abs(rel.x * fwd.y - rel.y * fwd.x), r.brain.idleState.soccer.stage, r.brain.idleState.soccer.mode.rawValue, r.brain.idleState.soccer.legs, "\(r.brain.script)", r.brain.feet.active ? 1 : 0))
+            }
         }
         MotionLog.write(String(format: "SOCCER dribble: %d frames, ahead ok %.2f, lateral ok %.2f, max lateral %.2f, max ahead %.2f, nudges %d", frames, Float(aheadOK) / Float(max(frames, 1)), Float(lateralOK) / Float(max(frames, 1)), maxLateral, maxAhead, nudges))
         XCTAssertGreaterThanOrEqual(nudges, 2, "the toe nudges the ball on at footfalls")
@@ -311,14 +317,16 @@ final class SoccerTests: XCTestCase {
             let an = DecorField.shared.anim[7]!
             if k % 15 == 0, SoccerState.shared.goals > 0 || an.moving { MotionLog.write(String(format: "SOCCER shot trace t %.2f local (%.2f, %.2f) vel (%.2f, %.2f) inGoal %d inNet %d goals %d jelly (%.2f, %.2f) kind %@", r.t, self.ballLocal().x, self.ballLocal().y, an.vel.x, an.vel.y, an.inGoal, SoccerState.shared.inNet.contains(7) ? 1 : 0, SoccerState.shared.goals, r.brain.px, r.brain.pz, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")")) }
         }
+        XCTAssertNil(r.brain.idleState.kind, "the celebration is over")
+        r.run(5, until: { !DecorField.shared.anim[7]!.moving && r.t > 1 }) { self.step(r) }          // (the ball finishes its gentle roll back out while he stands there)
         XCTAssertEqual(SoccerState.shared.goals, 1, "GOAL")
         XCTAssertTrue(SoccerEvents.recent.contains { if case .kick(_, _, true) = $0 { return true }; return false }, "the shot event")
         XCTAssertTrue(SoccerEvents.recent.contains { if case .goal(let s, 8) = $0 { return s == r.brain.steerID }; return false }, "he is the scorer")
         XCTAssertTrue(bounced && goalBeforeBounce, "the jump for joy after the goal")
         XCTAssertGreaterThan(maxBulge, 0.5, "the net puffed")
         XCTAssertEqual(ballLocal().y, GoalGeometry.mouthZ + SoccerTuning.rollOutStop, accuracy: 0.25, "the ball rolled back out in front of the goal (\(ballLocal()))")
-        XCTAssertNil(r.brain.idleState.kind); XCTAssertNil(DecorField.shared.occupant[7]); XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5)
-        r.run(2) { self.step(r) }
+        XCTAssertFalse(DecorField.shared.anim[7]!.moving, "the ball has come to rest")
+        XCTAssertNil(DecorField.shared.occupant[7]); XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5)
         XCTAssertLessThan(r.sim.centroid().y, 1.0)
     }
 
@@ -329,15 +337,22 @@ final class SoccerTests: XCTestCase {
         let r = installed(ball: SIMD2(-1.0, -2.3), from: SIMD2(0.8, 1.2))
         r.brain.seed = 3
         var t: Float = 0
-        while t < SoccerTuning.stuckAfter + 0.1 { self.step(r); t += 1.0 / 60 }
+        while t < SoccerTuning.stuckAfter + 0.1 { self.frame(r); t += 1.0 / 60 }
         XCTAssertTrue(SoccerState.shared.isStuck(7), "stuck after 20 s")
         XCTAssertNotNil(DecorField.shared.stuckBall())
+        MotionLog.write("SOCCER rescue: open floor near the ball \(String(describing: DecorField.shared.nearestOpenFloor(to: ball()))) stand \(String(describing: r.brain.soccerStand(DecorField.shared.foot(7)!, from: r.brain.position))) plan mode \(r.brain.soccerPlan.mode) fixed(-1,-2.3+0.72) \(r.brain.fixed(SIMD2(-1.0, -1.58))) fixed(-0.3,-2.3) \(r.brain.fixed(SIMD2(-0.3, -2.3)))")
         XCTAssertEqual(IdleTable.decorWeights(.happy, offers: [.soccerKick]).first?.weight, BlobBrain.soccerRescueWeight, "the rescue dominates the decor table")
         // the scheduler's pick: the rescue mode
         r.brain.idleForced = true
         XCTAssertTrue(r.brain.idleStart(.soccerKick, r.sim), "the rescue starts")
         XCTAssertEqual(r.brain.idleState.soccer.mode, .rescue)
-        r.run(30 - t, until: { r.brain.idleState.kind == nil && r.t > 1 }) { self.step(r); t += 1.0 / 60 }
+        r.run(30 - t, until: { r.brain.idleState.kind == nil && r.t > 1 }) {
+            self.step(r); t += 1.0 / 60
+            if Int(t * 60) % 30 == 0 {
+                let an = DecorField.shared.anim[7]!
+                MotionLog.write(String(format: "SOCCER rescue trace t %.2f jelly (%.2f, %.2f) yaw %.2f ball (%.2f, %.2f) speed %.2f stage %d mode %d legs %d script %@ feet %d phaseT %.2f", t, r.brain.px, r.brain.pz, r.brain.yaw, an.pos.x, an.pos.y, simd_length(an.vel), r.brain.idleState.soccer.stage, r.brain.idleState.soccer.mode.rawValue, r.brain.idleState.soccer.legs, "\(r.brain.script)", r.brain.feet.active ? 1 : 0, r.brain.idleState.phaseT))
+            }
+        }
         XCTAssertLessThanOrEqual(t, 30.5, "within 30 s")
         XCTAssertTrue(DecorField.shared.openFloor(ball()), "the ball is on open floor (\(ball()))")
         XCTAssertFalse(SoccerState.shared.isStuck(7))
@@ -351,9 +366,11 @@ final class SoccerTests: XCTestCase {
             // a corner-ish spot and one against a side wall; furniture beside it too
             DecorField.shared.set([PlacedDecor(uid: 7, kind: .soccerball, x: p.x, z: p.y), PlacedDecor(uid: 9, kind: .armchair, x: 2.0, z: 0.4)])
             var t: Float = 0, movedAt: Float = -1
+            MotionLog.write("SOCCER nudge \(p): open floor \(String(describing: DecorField.shared.nearestOpenFloor(to: p))) openFloor(3.1,1.8) \(DecorField.shared.openFloor(SIMD2(3.1, 1.8), margin: 0.5)) clear \(DecorField.shared.clearRoll(from: p, to: SIMD2(3.1, 1.8))) xlim(0.4) \(DecorField.soccerFloor(z: 0.4).xlim) xlim(1.8) \(DecorField.soccerFloor(z: 1.8).xlim) chair dist \(DecorField.shared.foot(9)!.distance(p)) sofa \(RoomLayout.sofaDistanceXZ(p))")
             while t < 40 {
                 DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
                 if movedAt < 0, simd_distance(ball(), p) > 0.1 { movedAt = t }
+                if Int(t * 60) % 60 == 0, t > 19 { let a = DecorField.shared.anim[7]!; MotionLog.write(String(format: "SOCCER nudge trace t %.1f ball (%.2f, %.2f) vel (%.2f, %.2f) stuckT %.1f", t, a.pos.x, a.pos.y, a.vel.x, a.vel.y, SoccerState.shared.stuckT[7] ?? 0)) }
             }
             XCTAssertGreaterThan(movedAt, SoccerTuning.stuckAfter, "\(p): left alone for the first 20 s")
             XCTAssertLessThanOrEqual(movedAt, 30, "\(p): nudged by 30 s (\(movedAt))")
