@@ -49,6 +49,15 @@ extension BlobBrain {
         return s
     }
 
+    /// The dashes look alike from the sofa: a run next to a zoomies is "the same thing".
+    static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot]
+    /// Another Jelly is in `k` (or, for a dash, in any dash) right now. The flourishes, the reactions and the event-driven jumps wait on this, so two Jellies never
+    /// start the same move at the same moment (the scheduler's own picks go through `kindCooling`); a copycat waits for the friend to finish before doing the same.
+    func othersDoing(_ k: IdleKind) -> Bool {
+        let family: Set<IdleKind> = Self.dashKinds.contains(k) ? Self.dashKinds : [k]
+        return socialOthers().contains { o in o !== self && o.idleState.kind.map { family.contains($0) } == true }
+    }
+
     /// In a fast move right now (the cap counts these).
     var isFastMove: Bool {
         if let k = idleState.kind, Self.fastKinds.contains(k) { return true }

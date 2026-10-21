@@ -83,6 +83,7 @@ final class AnticsTests: XCTestCase {
         }
         var seq: [[IdleKind]] = [[], [], []], prev = [IdleKind?](repeating: nil, count: 3)
         var same = 0, both = 0
+        var sameTags: [String: Int] = [:]
         for _ in 0..<(60 * 300) {
             lab.tick(watching: false)
             for (i, r) in lab.rigs.enumerated() {
@@ -90,9 +91,21 @@ final class AnticsTests: XCTestCase {
                 if let k, k != prev[i] { seq[i].append(k) }
                 prev[i] = k
             }
-            let ks = lab.rigs.filter { $0.brain.social == nil }.compactMap { $0.brain.idleState.kind }.filter { $0 != .look }
-            if ks.count >= 2 { both += 1; if Set(ks).count < ks.count { same += 1 } }
+            // (the `join` reaction is the one deliberate same-moment move: he runs ALONG with a friend's zoomies, like the social zoomies session that is exempt as a social; every other
+            // reaction, flourish and pick waits while a friend is in the same move - `othersDoing` - so those are counted)
+            let free = lab.rigs.filter { $0.brain.social == nil && $0.brain.idleState.kind != nil && $0.brain.idleState.kind != .look && $0.brain.idleState.reaction != .join }
+            let ks = free.compactMap { $0.brain.idleState.kind }
+            if ks.count >= 2 {
+                both += 1
+                if Set(ks).count < ks.count {
+                    same += 1
+                    // who did what (a reaction, a mid-walk flourish or his own pick) in the colliding frames
+                    let tag = free.map { r in "\(r.brain.idleState.kind!.rawValue)\(r.brain.idleState.reaction.map { "<\($0.rawValue)" } ?? (r.brain.idleState.resume != nil ? "<walk" : ""))" }.sorted().joined(separator: "+")
+                    sameTags[tag, default: 0] += 1
+                }
+            }
         }
+        MotionLog.write("ANTICS same-time tags: \(sameTags.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
         for i in 0..<3 {
             var dup = 0
             for j in 1..<max(seq[i].count, 1) where seq[i][j] == seq[i][j - 1] && seq[i][j] != .stumble { dup += 1 }

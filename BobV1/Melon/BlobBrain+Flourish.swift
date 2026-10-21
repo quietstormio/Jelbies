@@ -22,6 +22,8 @@ struct LegState {
     var wants = false
     var rolled = true
     var resuming = false
+    /// Waiting at the step boundaries for a friend to finish the same move (counted once in `blocked`).
+    var waiting = false
     /// The flourish chosen for this leg (the leg is long enough for it), and the distance it needs ahead.
     var kind: IdleKind?
     // diagnostics (tests)
@@ -58,6 +60,7 @@ extension BlobBrain {
         leg.total = simd_distance(position, target)
         leg.rolled = true
         leg.wants = false
+        leg.waiting = false
         leg.kind = nil
         guard FlourishTuning.enabled, anticsEnabled, job == nil, !commanded, pending == nil, idleState.kind == nil, !held, !race.active, leg.total >= FlourishTuning.minLeg else { return }
         leg.legs += 1
@@ -86,6 +89,7 @@ extension BlobBrain {
         let remaining = simd_distance(position, target)
         if remaining <= FlourishTuning.minRemaining { leg.rolled = true; return false }
         guard simd_distance(position, leg.from) >= leg.trigger else { return false }
+        if let k = leg.kind, othersDoing(k) { if !leg.waiting { leg.waiting = true; leg.blocked += 1 }; return false }          // (a friend is doing just that: try again at the next step, once he is done)
         leg.rolled = true
         guard let kind = leg.kind, kindCool[kind] == nil, !(Self.fastKinds.contains(kind) && fastOthers() >= 2), remaining >= FlourishTuning.need(kind) - 0.2 else { leg.blocked += 1; return false }
         if flourishStart(kind, resume: target, sim, skinner) { leg.fired += 1; return true }
@@ -212,6 +216,7 @@ extension BlobBrain {
         guard joyWanted else { return false }
         if joyAge > 5 || idleNight > 0.7 || idleMood == .grumpy { joyWanted = false; return false }
         guard idleState.kind == nil, !held, attached, !race.active, kindCool[.joy] == nil, fastOthers() < 2 else { return false }
+        if othersDoing(.joy) { return false }          // (both ends of a dance want to jump: the second one jumps once the first has landed)
         joyWanted = false
         if idleStart(.joy, sim) { kindCooldownStart(.joy); blushBump(hold: 2.4, peak: 0.7); face(.excited, hold: 1.1); postEvent(.joyJump); return true }
         return false
@@ -265,6 +270,7 @@ extension BlobBrain {
         guard hmphWanted else { return false }
         if hmphAge > 5 || idleMood == .happy { hmphWanted = false; return false }
         guard idleState.kind == nil, !held, attached, !race.active else { return false }
+        if othersDoing(.hmph) { return false }          // (after a squabble both huff: one after the other)
         hmphWanted = false
         return idleStart(.hmph, sim)
     }

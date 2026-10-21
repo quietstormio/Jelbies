@@ -305,7 +305,8 @@ final class FixC2CaptureTests: XCTestCase {
             }
             lab.rigs[1].brain.react.cool = 0
         }
-        try scene("copycat: one boops the drum, the friend does the same", seconds: 9.0, frames: 6, toys: [.drum]) { lab in
+        // (the friend starts on the drum's open side: from the default spot his straight walk runs through where the drummer stands afterwards, and the copycat expires before the way is clear)
+        try scene("copycat: one boops the drum, the friend does the same", seconds: 9.0, frames: 6, toys: [.drum], positions: [SIMD2(-1.0, 0.6), SIMD2(-2.3, 2.2), SIMD2(1.2, 2.4)]) { lab in
             let a = lab.rigs[0].brain, b = lab.rigs[1].brain
             _ = a.decorStart(.decorBoop, lab.rigs[0].sim, only: .drum)
             _ = b.accept(.copycat, event(.booped, from: 0, lab, piece: .drum), delay: 4.5)

@@ -101,6 +101,7 @@ final class ReactionBus {
         // nearest first, then a shuffle among the near ones so it is not always the same Jelly
         cands.sort { simd_distance($0.position, e.pos) < simd_distance($1.position, e.pos) }
         var taken = 0
+        var takenKinds: [ReactionKind] = []
         for b in cands {
             if taken >= ReactionRules.maxReactors { break }
             // (a mood tilts the chance: a happy Jelly joins in more, a grumpy one hardly at all)
@@ -108,13 +109,16 @@ final class ReactionBus {
             var p = chance * mood
             if e.kind == .yawned || e.kind == .fellAsleep { p *= 0.4 + 1.6 * max(b.idleNight, 0.25) }          // a yawn spreads in the evening
             guard rnd() < p else { continue }
-            let total = options.reduce(0) { $0 + $1.1 }
+            // the second reactor to one event picks among the reactions the first did not take (two different answers to one thing; the same one would only wait its turn)
+            var opts = options.filter { !takenKinds.contains($0.0) }
+            if opts.isEmpty { opts = options }
+            let total = opts.reduce(0) { $0 + $1.1 }
             var x = rnd() * total
-            var kind = options[0].0
-            for (k, w) in options { if x < w { kind = k; break }; x -= w }
+            var kind = opts[0].0
+            for (k, w) in opts { if x < w { kind = k; break }; x -= w }
             // a grumpy Jelly huffs at somebody else's fun (a ball kicked away, a dash, a hop, a slide)
             if b.idleMood == .grumpy, [.booped, .zoomies, .joyJump, .slid].contains(e.kind) { kind = .hmph }
-            if b.accept(kind, e, delay: 0.4 + 1.2 * rnd()) { taken += 1 }
+            if b.accept(kind, e, delay: 0.4 + 1.2 * rnd()) { taken += 1; takenKinds.append(kind) }
         }
     }
 }
@@ -200,6 +204,9 @@ extension BlobBrain {
         let e = p.event
         let resume = midWalkGoal
         let canInPlace = standing || resume != nil
+        // never the same move as a friend is in right now: the second reactor to one event follows once the first is done, and a copycat copies AFTER the friend has finished
+        // (the join is the one deliberate run-along; the comfort is a social session with its own rules)
+        if let move = Self.reactionMove(p.kind, e), othersDoing(move) { return false }
         var started = false
         switch p.kind {
         case .watch:
@@ -274,6 +281,27 @@ extension BlobBrain {
             bus?.onStart?(self, p.kind)
         }
         return started
+    }
+
+    /// The idle move a reaction starts (nil: a social session or the deliberate run-along).
+    static func reactionMove(_ k: ReactionKind, _ e: BusEvent) -> IdleKind? {
+        switch k {
+        case .watch, .admire, .wantSome: return .stopLook
+        case .cheer: return .joy
+        case .giggle: return .giggle
+        case .startle: return .startle
+        case .hmph: return .hmph
+        case .yawn: return .yawn
+        case .join, .comfort: return nil
+        case .copycat:
+            switch e.kind {
+            case .booped, .towerToppled: return e.piece == .blocks ? .decorKick : .decorBoop
+            case .slid: return .decorSlide
+            case .joyJump, .scoredGoal: return .joy
+            case .zoomies: return .run
+            default: return nil
+            }
+        }
     }
 
     /// Turn to `pos` and look (a flourish-class look: resumes the walk it interrupted).
