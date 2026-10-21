@@ -217,7 +217,7 @@ final class BehaviourRoundTests: XCTestCase {
 
     /// 10 sim minutes, okay mood, by day: cells walked (centre-only, 0.5 u), the share of all samples within the rug-centre circle (r 1.5), the share spent
     /// walking, and whether each Jelly visited every quadrant and the front band of the visible floor.
-    struct DwellReport { var cells: Float; var centre: Float; var walking: Float; var moving: Float = 0; var quadrants: [Int]; var front: [Bool]; var polygonHW: Float; var maxZ: Float }
+    struct DwellReport { var cells: Float; var centre: Float; var walking: Float; var moving: Float = 0; var quadrants: [Int]; var front: [Bool]; var polygonHW: Float; var maxZ: Float; var overshoot: Float = 0; var sofaGap: Float = 9; var cylGap: Float = 9 }
     private func dwell(aspect: Float, label: String, seed: UInt64 = 7) -> DwellReport {
         let lab = roomLab(aspect: aspect, mood: .okay, seed: seed)
         for r in lab.rigs { r.brain.watching = true }          // (the player is looking, as on the phone: the waits between behaviours are halved)
@@ -236,7 +236,8 @@ final class BehaviourRoundTests: XCTestCase {
             z += cell
         }
         let midZ = (rf.minZ + rf.maxZ) / 2, frontZ = rf.maxZ - (rf.maxZ - rf.minZ) * 0.25
-        var seen = Set<Int>(), samples = 0, centre = 0, walking = 0, moving = 0
+        var seen = Set<Int>(), samples = 0, centre = 0, walking = 0, moving = 0, edge = 0
+        var overshoot: Float = 0, sofaGap: Float = 9, cylGap: Float = 9, beyond = 0
         var quads = [Set<Int>](repeating: [], count: 3), front = [Bool](repeating: false, count: 3)
         var hist = [[SIMD2<Float>]](repeating: [], count: 3)
         var acts = [String: Int](), turning = 0
@@ -259,18 +260,26 @@ final class BehaviourRoundTests: XCTestCase {
                     if simd_distance(q, p) <= GameCamera.bobRadius { seen.insert(key(q.x, q.y)) }
                 } }
                 if simd_distance(p, RoomLayout.rugCentre) < IdleTuning.centreRadius { centre += 1 }
+                if min(rf.halfWidth(at: p.y) - abs(p.x), p.y - rf.minZ, rf.maxZ - p.y) < 0.4 { edge += 1 }          // (hugging the polygon's border)
+                let out = max(abs(p.x) - rf.halfWidth(at: p.y), rf.minZ - p.y, p.y - rf.maxZ)          // (how far outside the polygon: a body pushed by a mate)
+                overshoot = max(overshoot, out); if out > 0.3 { beyond += 1 }
+                sofaGap = min(sofaGap, RoomLayout.sofaDistanceXZ(p)); cylGap = min(cylGap, RoomLayout.cylinders.map { simd_distance(p, $0.centre) - $0.radius }.min() ?? 9)
                 if r.brain.activity == .walking || r.brain.activity == .coming { walking += 1 }
                 quads[i].insert((p.x < 0 ? 0 : 1) + (p.y < midZ ? 0 : 2))
                 if p.y >= frontZ { front[i] = true }
             }
         }
         let rep = DwellReport(cells: Float(seen.intersection(walkable).count) / Float(max(walkable.count, 1)), centre: Float(centre) / Float(max(samples, 1)),
-                              walking: Float(walking) / Float(max(samples, 1)), moving: Float(moving) / Float(max(samples, 1)), quadrants: quads.map(\.count), front: front, polygonHW: rf.hw.max() ?? 0, maxZ: rf.maxZ)
+                              walking: Float(walking) / Float(max(samples, 1)), moving: Float(moving) / Float(max(samples, 1)), quadrants: quads.map(\.count), front: front, polygonHW: rf.hw.max() ?? 0, maxZ: rf.maxZ, overshoot: overshoot, sofaGap: sofaGap, cylGap: cylGap)
         let top = acts.sorted { $0.value > $1.value }.prefix(24).map { "\($0.key)=\(String(format: "%.3f", Float($0.value) / Float(max(samples, 1))))" }
-        MotionLog.write("BEHAV dwell \(label): cells \(rep.cells), centre share \(rep.centre), walking share \(rep.walking), moving share \(rep.moving), walking-but-still \(Float(turning) / Float(max(samples, 1))), quadrants per Jelly \(rep.quadrants), front band \(rep.front), polygon hw \(rep.polygonHW) z \(rf.minZ)...\(rf.maxZ), time by activity \(top), counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
+        MotionLog.write("BEHAV dwell \(label): cells \(rep.cells), centre share \(rep.centre), walking share \(rep.walking), moving share \(rep.moving), walking-but-still \(Float(turning) / Float(max(samples, 1))), within 0.4 u of the polygon edge \(Float(edge) / Float(max(samples, 1))), max overshoot outside the polygon \(overshoot) (\(beyond) samples over 0.3), min gap to the sofa \(sofaGap) and to the plant/table \(cylGap), quadrants per Jelly \(rep.quadrants), front band \(rep.front), polygon hw \(rep.polygonHW) z \(rf.minZ)...\(rf.maxZ), time by activity \(top), counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
         return rep
     }
     private func assertDwell(_ rep: DwellReport, _ label: String) {
+        // (2026-10-21 the roam area reaches the furniture and the screen edges: a Jelly never stands in the sofa, plant or table, nor far outside the polygon)
+        XCTAssertGreaterThan(rep.sofaGap, 0.55, "\(label): never in the sofa (the closest a centre came to its edge)")
+        XCTAssertGreaterThan(rep.cylGap, 0.55, "\(label): never in the plant or the side table")
+        XCTAssertLessThan(rep.overshoot, 0.6, "\(label): never far outside the roaming polygon")
         XCTAssertGreaterThanOrEqual(rep.cells, 0.8, "\(label): at least 80 % of the visible floor's cells are visited")
         for (i, q) in rep.quadrants.enumerated() { XCTAssertEqual(q, 4, "\(label): Jelly \(i) visited every quadrant") }
         for (i, f) in rep.front.enumerated() { XCTAssertTrue(f, "\(label): Jelly \(i) visited the front band") }

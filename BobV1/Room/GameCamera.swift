@@ -294,7 +294,7 @@ enum GameCamera {
     /// Clamps a floor position (centroid) so a body of `radius` stays on the visible floor, off the sofa and props.
     static func constrain(_ p: SIMD3<Float>, radius: Float = GameCamera.bobRadius, lowPropScale: Float = 1, openSides: Bool = false, ignoreDecor: Int? = nil) -> SIMD3<Float> {
         var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale, ignoreDecor: ignoreDecor)
-        q.z = min(max(q.z, walkMinZ), roamMaxZ)          // (the roaming polygon's front when the room camera set one: RoamFloor.swift)
+        q.z = min(max(q.z, roamMinZ), roamMaxZ)          // (the roaming polygon's back and front when the room camera set one: RoamFloor.swift)
         if openSides { return q }                    // the wide close-up row: the camera is pulled back, the sides are on screen there
         // the roaming polygon's width when the room camera built one (RoamFloor.swift; it already holds the body extent), else the one-Jelly rule
         let hw = roamFloor.map { max($0.halfWidth(at: q.z) + bodyHalfExtent - max(bodyHalfExtent, radius * 0.9), 0) }

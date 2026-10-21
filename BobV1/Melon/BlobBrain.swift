@@ -760,7 +760,14 @@ final class BlobBrain {
                 if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
             }
             let central = max(0, 1 - simd_distance(cand, RoomLayout.rugCentre) / (IdleTuning.centreRadius * 1.6))
-            let score = 0.6 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
+            // not right in front of another Jelly (nearer the camera, within a body's width of it) or on the spot one is heading for: he would hide it
+            var hides: Float = 0
+            for o in others {
+                var spots = [o.position]
+                if case .walk(let t, _) = o.script { spots.append(t) }
+                for s in spots where cand.y > s.y + 0.3 && abs(cand.x - s.x) < 1.3 && cand.y - s.y < 3.0 { hides = 1 }
+            }
+            let score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
