@@ -105,7 +105,7 @@ final class GameCare {
     /// Which Jellies the close-up is on, where they stand, and their approach / touch bookkeeping (GameCare+Focus.swift).
     let focusGroup = FocusGroup()
     /// Clean: soap, rinse, shine (Bath/BathFlow.swift). Also owns the dirt that builds up in the room.
-    let bath = BathFlow()
+    let bath: BathFlow
     /// The store: what the player owns (Store/StoreBook.swift, GameCare+Store.swift). Bought with Drops from `bath.wallet`.
     let store: StoreBook
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
@@ -126,7 +126,7 @@ final class GameCare {
     @ObservationIgnored private var wantHop = false
     @ObservationIgnored var afterRelease: Consumable?        // Feed / Drink asked inside focus: release first, then the tray flow
     /// Needs + mood (hunger / thirst / attention). `needs.mood` and `needs.wantedNeed` are what the touch reactions read.
-    let needs = BlobNeeds()
+    let needs: BlobNeeds
     var mood: BlobMood { needs.mood }
     var wantedNeed: NeedKind? { needs.wantedNeed }
     /// The need whose thought bubble is up right now (nil = none), and how the last bubble ended (the view poofs it, with a sparkle when fixed).
@@ -148,6 +148,8 @@ final class GameCare {
     /// under their id (JellyKeys). Care actions (meals, Clean, Come here, voice) still drive Jelly 0 only.
     private(set) var jellies: [JellyProfile] = []
     var jellyCount: Int { jellies.count }
+    /// The characters in the room, by slot (JellyRoster).
+    var roster: [Int] { jellies.map(\.character) }
     /// Phase A: the care menu (Feed / Drink / Come here / Clean) always acts on Bob, so it stays visible with several Jellies instead of waiting for a selection.
     static let perJellyCare = false
     /// The Jelly the care menu targets: the one highlighted (or confirmed) in the selection, else Bob (0).
@@ -162,7 +164,7 @@ final class GameCare {
     /// What the widget shows: one input per Jelly in the room (`jellies`, each with its own needs / grime; colour by roster id).
     func widgetInputs() -> [WidgetBridge.Input] {
         jellies.map { j in
-            WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(j.id), levels: NeedKind.allCases.map { j.needs.level($0) },
+            WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(j.character), levels: NeedKind.allCases.map { j.needs.level($0) },
                                dirt: j.grime.dirt, sparkle: j.grime.sparkle)
         }
     }
@@ -191,18 +193,34 @@ final class GameCare {
     /// Voice v1: his name, tricks, listen mode and the reaction queue (VoiceCoordinator.swift). Run from `tick`.
     let voice: VoiceCoordinator
 
-    /// `jellyCount`: Jellies in the room (1...3). `persistent: false` keeps Jellies 1 and 2 in memory (tests); `defaults` is where they save.
-    init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, persistent: Bool = true, defaults: UserDefaults = .standard) {
+    /// `jellyCount`: Jellies in the room (1...3), the first that many of `JellyRoster.current`; `roster` names the characters by slot instead
+    /// (SetRosterTests). `persistent: false` keeps the slots after 0 in memory (tests); `defaults` is where they save.
+    /// Slot 0 wraps the legacy objects (`needs`, `bath.grime`, the voice training) under ITS CHARACTER's keys: with Bob there they are the old keys.
+    init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, roster: [Int]? = nil, persistent: Bool = true, defaults: UserDefaults = .standard) {
+        var chars: [Int]
+        if let roster { chars = JellyRoster.sanitised(roster) }
+        else {
+            let n = min(max(jellyCount, 1), JellyRoster.maxCount)
+            chars = Array(JellyRoster.current.prefix(n))
+            for c in 0..<JellyRoster.characterCount where chars.count < n && !chars.contains(c) { chars.append(c) }     // a short roster is padded
+            chars = JellyRoster.sanitised(chars)
+        }
+        let c0 = chars[0]
+        needs = c0 == 0 ? BlobNeeds() : BlobNeeds(defaults: defaults, key: JellyKeys.needs(c0), persists: persistent)
+        bath = BathFlow(grimeKey: c0 == 0 ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
         group = DiningGroup(dining: dining, shared: true)
         store = StoreBook(wallet: bath.wallet, persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
-        let v = voice ?? VoiceCoordinator()
+        let v = voice ?? VoiceCoordinator(training: c0 == 0 ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent))
         self.voice = v
         v.care = self
         bath.wallet.onEarn = { [weak self] _ in self?.brainFor(0)?.wantJoy() }          // drops earned: a jump for joy
-        let n = min(max(jellyCount, 1), JellyRoster.maxCount)
-        jellies = [JellyProfile(id: 0, name: JellyRoster.names[0], needs: needs, grime: bath.grime, training: v.training)]
-            + (1..<n).map { JellyProfile(id: $0, name: JellyRoster.names[$0], persists: persistent, defaults: defaults) }
-        if n > 1 { select.setBlobs(JellyRoster.selectBlobs(count: n)) }
+        let n = chars.count
+        let stats0: JellyStats? = c0 == 0 ? nil : JellyStats(persists: persistent, defaults: defaults, key: JellyKeys.stats(c0),
+                                                                seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
+        let perks0: JellyPerks? = c0 == 0 ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
+        jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.names[c0], needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
+            + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.names[$0.element], persists: persistent, defaults: defaults) }
+        if n > 1 { select.setBlobs(JellyRoster.selectBlobs(roster: chars)) }
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
         bath.success = { [weak self] in UINotificationFeedbackGenerator().notificationOccurred(.success); self?.soapFinished() }
         v.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter }

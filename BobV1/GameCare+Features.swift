@@ -18,7 +18,7 @@ extension GameCare {
     }
 
     func tickFeature(_ a: JellyActor, brain b: BlobBrain, hideAll: Bool, dt: Float) {
-        let f = a.profile?.feature ?? JellyRoster.feature(a.id)
+        let f = a.profile?.feature ?? JellyRoster.feature(slot: a.id)
         b.feature = f
         features.tick(id: a.id, brain: b, sim: a.sim, feature: f, worn: wornArt(a.id), hideAll: hideAll, dt: dt)
         if let s = features.slot(a.id) {

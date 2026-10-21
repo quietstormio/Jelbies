@@ -39,7 +39,8 @@ final class DiningGroupFoodTests: XCTestCase {
     }
 
     /// Four Jellies, three places: the three hungriest sit first, the fourth waits where he stands and eats at a second sitting of the same serving.
-    func testFourHungryJelliesEatInTwoSittingsOfThree() {
+    func testFourHungryJelliesEatInTwoSittingsOfThree() throws {
+        throw XCTSkip("the roster cap is 3 Jelbies (2026-10-21); the 4-diner queue code stays but cannot be reached from a room")
         let r = room(count: 4)
         hunger(r, [0.1, 0.1, 0.1, 0.1])
         r.run(1)

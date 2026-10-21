@@ -21,7 +21,7 @@ nonisolated enum JellyShare {
     static let groupID = "group.io.mgsllc.BobV1"
     static let snapshotFile = "jellies.json"
     static let scheme = "jelbies"
-    static let maxJellies = 4
+    static let maxJellies = 3
     static func portraitFile(_ id: Int) -> String { "portrait-\(id).png" }
     /// The shared container, or nil when the App Group is not available to this process.
     static var containerURL: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) }
@@ -52,7 +52,7 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int.self, forKey: .id)
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Jelly"
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Jelbie"
         color = try c.decodeIfPresent(String.self, forKey: .color) ?? "blue"
         var l = try c.decodeIfPresent([Float].self, forKey: .levels) ?? []
         while l.count < NeedKind.allCases.count { l.append(1) }

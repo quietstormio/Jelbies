@@ -588,7 +588,7 @@ final class TrackPanelTests: XCTestCase {
         XCTAssertTrue(care.raceBook.actors.isEmpty, "no stage yet (the panel was opened at launch)")
         for id in 0..<3 { XCTAssertTrue(care.canRace(jelly: id), "Go race for Jelly \(id)"); XCTAssertNil(care.raceBlocker(jelly: id)) }
         XCTAssertFalse(care.canRace(jelly: 7), "no such Jelly")
-        XCTAssertEqual(care.raceBlocker(jelly: 7), "No such Jelly.")
+        XCTAssertEqual(care.raceBlocker(jelly: 7), "No such Jelbie.")
     }
 
     func testTheReasonsAreInPlainWords() {

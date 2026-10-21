@@ -28,13 +28,15 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
 /// Where the entities come from: the snapshot (names the player sees), else the roster.
 nonisolated enum JelbieRoster {
     /// The Jelbies in the room right now (from the shared snapshot) or the default roster.
-    static func current(directory: URL? = JellyShare.containerURL, count: Int = JellyRoster.launchCount()) -> [JelbieEntity] {
+    /// `roster`: the characters by slot (the launch roster by default); `count` cuts it.
+    static func current(directory: URL? = JellyShare.containerURL, count: Int = JellyRoster.maxCount, roster: [Int] = JellyRoster.launchIDs()) -> [JelbieEntity] {
         if let snap = JellySnapshot.read(from: directory), !snap.jellies.isEmpty {
             return snap.jellies.sorted { $0.id < $1.id }.map { JelbieEntity(id: $0.id, name: $0.name, color: $0.color) }
         }
-        return (0..<min(max(count, 1), JellyRoster.maxCount)).map { JelbieEntity(id: $0, name: JellyRoster.names[$0], color: JelbieRoster.colorName($0)) }
+        return JellyRoster.sanitised(roster).prefix(min(max(count, 1), JellyRoster.maxCount)).enumerated()
+            .map { JelbieEntity(id: $0.offset, name: JellyRoster.names[$0.element], color: JelbieRoster.colorName($0.element)) }
     }
-    /// Roster id -> colour name (Bob blue, Pip yellow, Moss green, Lavender purple), the same as WidgetBridge.colorName (which is main-actor bound).
+    /// CHARACTER id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender), the same as WidgetBridge.colorName (which is main-actor bound).
     static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender"][min(max(id, 0), 3)] }
     /// A loose name match: case-insensitive, prefix or contained ("bob", "Bobby" -> Bob).
     static func match(_ text: String, in list: [JelbieEntity]) -> [JelbieEntity] {

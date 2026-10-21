@@ -94,8 +94,22 @@ final class JellyNames {
     static let maxNicknames = 5
     /// The app-wide registry (every Jelly's voice book uses it; tests with their own defaults make their own).
     static let shared = JellyNames()
-    /// Nicknames per Jelly id (normalised, 1-2 tokens).
+    /// Nicknames per CHARACTER id (normalised, 1-2 tokens). The `id` the API takes and gives is the SLOT in the room (JellyRoster.current):
+    /// a name resolves to the slot his character is in; a character who is not in the room resolves to `absentID` (never a slot), so the
+    /// callers' "not here" paths run as before. With the default roster slot == character.
     private(set) var nicknames: [Int: [String]] = [:]
+    /// The characters by slot (JellyRoster.current at creation; tests set their own).
+    var roster: [Int] = JellyRoster.current
+    /// The id handed out for a character who is not in the room: past every slot, so `care.jelly(id)` is nil.
+    static func absentID(_ character: Int) -> Int { JellyRoster.maxCount + character }
+    /// Slot of a character (or his absent id).
+    func id(ofCharacter c: Int) -> Int { roster.firstIndex(of: c) ?? Self.absentID(c) }
+    /// Character of a slot (or of an absent id; a slot past the roster is the same-numbered character, as before the roster existed).
+    func character(_ id: Int) -> Int {
+        if roster.indices.contains(id) { return roster[id] }
+        if id >= JellyRoster.maxCount, id - JellyRoster.maxCount < JellyRoster.characterCount, !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
+        return min(max(id, 0), JellyRoster.characterCount - 1)
+    }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String
     @ObservationIgnored private let persists: Bool
@@ -112,8 +126,8 @@ final class JellyNames {
         }
     }
 
-    func displayName(_ id: Int) -> String { JellyNameRoster.name(id)?.display ?? "Jelly" }
-    func nicknames(for id: Int) -> [String] { nicknames[id] ?? [] }
+    func displayName(_ id: Int) -> String { JellyNameRoster.name(character(id))?.display ?? "Jelbie" }
+    func nicknames(for id: Int) -> [String] { nicknames[character(id)] ?? [] }
     /// The words to hand the recogniser: every base name, pet form and nickname.
     var contextualWords: [String] {
         JellyNameRoster.all.flatMap { [$0.base] + $0.variants.sorted().prefix(6) } + nicknames.values.flatMap { $0 }
@@ -124,19 +138,21 @@ final class JellyNames {
     func addNickname(_ raw: String, for id: Int) -> Bool {
         let n = VoiceMatcher.normalise(raw)
         let toks = n.split(separator: " ")
-        guard JellyNameRoster.name(id) != nil, !toks.isEmpty, toks.count <= 2, n.count >= 2, n.count <= 16 else { return false }
+        let c = character(id)
+        guard JellyNameRoster.name(c) != nil, !toks.isEmpty, toks.count <= 2, n.count >= 2, n.count <= 16 else { return false }
         guard !nicknames(for: id).contains(n), nicknames(for: id).count < Self.maxNicknames else { return false }
         if toks.count == 1, let h = match(token: n), h.score >= 0.8 { return false }          // already one of the names
         if nicknames.values.contains(where: { $0.contains(n) }) { return false }               // another Jelly's nickname
-        nicknames[id, default: []].append(n)
+        nicknames[c, default: []].append(n)
         save()
         return true
     }
 
     func removeNickname(_ raw: String, for id: Int) {
         let n = VoiceMatcher.normalise(raw)
-        nicknames[id]?.removeAll { $0 == n }
-        if nicknames[id]?.isEmpty == true { nicknames[id] = nil }
+        let c = character(id)
+        nicknames[c]?.removeAll { $0 == n }
+        if nicknames[c]?.isEmpty == true { nicknames[c] = nil }
         save()
     }
 
@@ -157,12 +173,14 @@ final class JellyNames {
         let key = JellyNameRoster.phoneticKey(t)
         let stop = JellyNameRoster.stoplist.contains(t)
         for n in JellyNameRoster.all {
-            if t == n.base { offer(n.id, 1); continue }
-            if n.variants.contains(t) { offer(n.id, 0.9); continue }
-            if n.nearMisses.contains(t) { offer(n.id, 0.8); continue }
-            if !stop, t.count >= 3, abs(t.count - n.base.count) <= 1, key == JellyNameRoster.phoneticKey(n.base) { offer(n.id, 0.65) }
+            let id = self.id(ofCharacter: n.id)
+            if t == n.base { offer(id, 1); continue }
+            if n.variants.contains(t) { offer(id, 0.9); continue }
+            if n.nearMisses.contains(t) { offer(id, 0.8); continue }
+            if !stop, t.count >= 3, abs(t.count - n.base.count) <= 1, key == JellyNameRoster.phoneticKey(n.base) { offer(id, 0.65) }
         }
-        for (id, list) in nicknames {
+        for (c, list) in nicknames {
+            let id = self.id(ofCharacter: c)
             for nick in list where !nick.contains(" ") {
                 if t == nick { offer(id, 1) }
                 else if nick.count >= 5, t.count >= 4, VoiceMatcher.levenshtein(t, nick) <= 1 { offer(id, 0.85) }
@@ -176,8 +194,8 @@ final class JellyNames {
     /// Two-word nicknames ("mister bob") against a token pair.
     private func matchPair(_ a: String, _ b: String) -> NameHit? {
         let pair = a + " " + b
-        for (id, list) in nicknames { for nick in list where nick.contains(" ") {
-            if pair == nick || VoiceMatcher.levenshtein(pair, nick) <= (nick.count >= 8 ? 1 : 0) { return NameHit(id: id, score: pair == nick ? 1 : 0.85, width: 2) }
+        for (c, list) in nicknames { for nick in list where nick.contains(" ") {
+            if pair == nick || VoiceMatcher.levenshtein(pair, nick) <= (nick.count >= 8 ? 1 : 0) { return NameHit(id: id(ofCharacter: c), score: pair == nick ? 1 : 0.85, width: 2) }
         } }
         return nil
     }

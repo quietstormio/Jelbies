@@ -71,7 +71,7 @@ extension GameCare {
         }
         race.onPepDepleted = { [weak self] id in
             guard let self, let prof = self.jelly(id) else { return }
-            self.live?.pepDepleted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(id))
+            self.live?.pepDepleted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character))
         }
     }
 
@@ -88,7 +88,7 @@ extension GameCare {
     /// Why a race cannot start for this Jelly right now, in words for the Track panel (nil = it can). A stage that has not ticked yet (the panel was opened
     /// straight at launch, or the game is paused behind it) simply has no bodies listed: that is not a reason, the bodies exist as soon as the room runs.
     func raceBlocker(jelly id: Int) -> String? {
-        guard jelly(id) != nil else { return "No such Jelly." }
+        guard jelly(id) != nil else { return "No such Jelbie." }
         if race.active { return "A race is already on." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }
         if bath.active { return "The clean-up is going on." }
@@ -143,9 +143,9 @@ extension GameCare {
         let rivals = max(min(raceBook.actors.count, 3) - 1, 0)
         race.stats = prof.stats
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
-                   playerTint: JellyRoster.tint(id), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
+                   playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
         if race.active, race.kind == .race {           // the race Live Activity (one sprint: lap 1 of 1)
-            live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(id), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
+            live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
         }
     }
 

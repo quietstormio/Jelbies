@@ -62,7 +62,7 @@ nonisolated enum EyeMaskModel {
         var pivot = SIMD3<Float>.zero
     }
 
-    /// One mask palette per Jelly (JellyRoster.maxCount).
+    /// One mask palette per CHARACTER (JellyRoster.characterCount: Bob, Pip, Moss, Lavender); SleepMaskSet maps a slot to its character.
     static let paletteCount = 4
     /// Band and piping colours (linear) by Jelly id: contrast with the body (blue, yellow, green, lavender).
     static func palette(_ id: Int) -> (band: SIMD3<Float>, piping: SIMD3<Float>) {
@@ -346,7 +346,7 @@ final class SleepMaskSet {
         let op = RoomMeshBuilder(), tr = RoomMeshBuilder()
         op.material = .plain; tr.material = .plain
         guard !hidden else { return (op.mesh, tr.mesh) }
-        for (i, s) in slots.enumerated() where s.scale > 0.001 { EyeMaskModel.append(id: i, to: op, scale: s.scale, carry: s.carry) }
+        for (i, s) in slots.enumerated() where s.scale > 0.001 { EyeMaskModel.append(id: JellyRoster.character(i), to: op, scale: s.scale, carry: s.carry) }     // the mask palette is the character's
         for s in slots { Self.appendZ(s, to: tr) }
         if puffs.isActive {
             if sphereTint != theme.tint { puffSphere = DiningModels.puffSphere(theme: theme); sphereTint = theme.tint }

@@ -109,9 +109,10 @@ final class BathFlow {
     /// Called once, when a clean-up of Jelly `id` (> 0) is over and Bob's grime / look are back (with the wetness he leaves the tub with).
     @ObservationIgnored var onTargetEnd: (Int, Float) -> Void = { _, _ in }
 
-    init(persists: Bool? = nil, sound: BathSound? = nil) {
+    /// `grimeKey` / `grimeSeed`: the dirt this flow owns is slot 0's; with a character other than Bob in slot 0 it saves under HIS key (JellyKeys.grime).
+    init(persists: Bool? = nil, sound: BathSound? = nil, grimeKey: String? = nil, grimeSeed: UInt32 = 0xB47B) {
         let p = persists ?? (ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
-        grime = BlobGrime(persists: p)
+        grime = grimeKey.map { BlobGrime(persists: p, seed: grimeSeed, key: $0) } ?? BlobGrime(persists: p)
         wallet = DropsWallet(persists: p)
         self.sound = sound ?? BathSilence.shared
         look.sparkle = grime.sparkle

@@ -21,7 +21,7 @@ nonisolated enum WearInfo {
         let mood = t.count > 1 ? "\(t[0].capitalized) and \(t[1])." : "\(t.first?.capitalized ?? "Fun")."
         switch r.slot {
         case .feet: return "\(mood) Just for looks."
-        case .head: return "\(mood) A hat for your Jelly. Just for looks."
+        case .head: return "\(mood) A hat for your Jelbie. Just for looks."
         case .face: return "\(mood) Goes on his face, off while he sleeps. Just for looks."
         case .neck: return "\(mood) Round his middle. Just for looks."
         case .hands: return "\(mood) Goes on his arms. Just for looks."

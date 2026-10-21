@@ -98,7 +98,7 @@ struct WhoRow: View {
     var body: some View {
         HStack(spacing: 8) {
             ForEach(care.jellies, id: \.id) { j in
-                let t = JellyRoster.tint(j.id)
+                let t = JellyRoster.tint(j.character)
                 Button { AudioHub.shared.uiTap(); who = j.id } label: {
                     HStack(spacing: 7) {
                         Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 22, height: 22)

@@ -756,7 +756,8 @@ final class RaceTripTests: XCTestCase {
 
     /// Four Jellies, three lanes: the chosen one races with two of the others as the rivals' bodies; the fourth is parked far off the track
     /// and comes back to the room with everybody else.
-    func testFourthJellyParksOffTheTrackAndComesHome() {
+    func testFourthJellyParksOffTheTrackAndComesHome() throws {
+        throw XCTSkip("the roster cap is 3 Jelbies (2026-10-21): a fourth body never exists; the parking code stays")
         let room = Room(count: 4)
         Self.keep.append(room)
         let care = room.care

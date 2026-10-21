@@ -46,8 +46,8 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         backgroundColor = UIColor(red: 0xE2 / 255, green: 0xDF / 255, blue: 0xDA / 255, alpha: 1)
         clearColor = MTLClearColor(red: 0.886, green: 0.875, blue: 0.855, alpha: 1)
         isAccessibilityElement = true
-        accessibilityLabel = "Interactive 3D jelly character Bob. Drag him to squish, stretch and twist."
-        accessibilityHint = "Drag the jelly to stretch it, drag empty space to orbit, pinch to zoom, double tap to reset the view."
+        accessibilityLabel = "Interactive 3D Jelbie character Bob. Drag him to squish, stretch and twist."
+        accessibilityHint = "Drag the Jelbie to stretch it, drag empty space to orbit, pinch to zoom, double tap to reset the view."
         accessibilityIdentifier = "melon-stage"
 
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
@@ -317,7 +317,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Wires one brain into the room: it steers around the other Jellies (a standing Jelly is an obstacle to everybody; between two walkers the
     /// lower id gives way) and walks by the room's floor rules.
     private func wireRoster(_ b: BlobBrain, id: Int) {
-        b.feature = JellyRoster.feature(id)
+        b.feature = JellyRoster.feature(slot: id)
         guard actors.count > 1 else { return }
         b.steerID = id
         b.bus = eventBus
@@ -598,10 +598,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderMesh = rm
         WearBody.install(rm)
         actors = (0..<count).map {
-            JellyActor(id: $0, name: JellyRoster.names[$0], simMesh: sm, renderMesh: rm, embedding: emb, appearance: ap,
+            JellyActor(id: $0, name: model.care.jelly($0)?.name ?? JellyRoster.name(slot: $0), simMesh: sm, renderMesh: rm, embedding: emb, appearance: ap,
                        firmness: Float(model.firmness), damping: Float(model.damping), spawn: spots[$0])
         }
-        for a in actors { a.profile = model.care.jelly(a.id); a.care = model.care; a.appearance = JellyRoster.palette(a.id) }
+        for a in actors { a.profile = model.care.jelly(a.id); a.care = model.care; a.appearance = JellyRoster.palette(a.profile?.character ?? JellyRoster.character(a.id)) }
         let body = actors[0].sim
         massG = body.totalRestVolume * powf(bobScaleCm, 3) * bobDensity
         lastNudge = model.nudgeTick
@@ -633,7 +633,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
         }
         for a in actors { a.reset(drop: model.reduceMotion ? 0 : 0.35, shift: count > 1) }
-        for a in actors { a.brain?.feature = JellyRoster.feature(a.id) }
+        for a in actors { a.brain?.feature = a.profile?.feature ?? JellyRoster.feature(slot: a.id) }
         model.particles = body.n
         model.tets = body.nT
         model.seeds = rm.seedCount
@@ -656,7 +656,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         renderer = r
         if model.gameMode { model.care.fittingProvider = { [weak self] look, id in self?.fittingSnapshot(look: look, jelly: id) } }
-        for a in actors.dropFirst() { if let p = JellyRoster.palette(a.id) { r.setPalette(p, body: a.id) } }
+        for a in actors { if let p = a.appearance { r.setPalette(p, body: a.id) } }          // slot 0 too: a non-Bob character there wears his own colours
         view.delegate = self
     }
 
@@ -917,7 +917,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.raceCourse = model.care.race.course.tier
             renderer.raceVisible = model.care.race.trackVisible
             for a in actors {
-                renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.id == 0 ? nil : JellyRoster.palette(a.id), body: a.id)
+                renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
                 renderer.setHidden((bathRoom && a.id != washed) || (camIn && model.care.focusHides(a.id)), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
@@ -1040,7 +1040,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         fp.time = simTime
         fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
         fp.exposure = 1; fp.meshAlpha = 0
-        let pal = JellyRoster.palette(id) ?? model.palette.palette
+        let pal = JellyRoster.palette(slot: id) ?? model.palette.palette
         fp.bg = pal.matte ? melonCreamLinear : melonBackgroundLinear
         renderer.roomCacheEnabled = false
         renderer.resize(width: W, height: H)

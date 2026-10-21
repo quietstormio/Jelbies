@@ -41,15 +41,15 @@ final class WidgetSnapshotTests: XCTestCase {
         let json = #"{"version":1,"savedAt":10,"jellies":[{"id":2,"levels":[2,-1],"dirt":5}]}"#
         let s = try XCTUnwrap(JellySnapshot.decode(Data(json.utf8)))
         let r = try XCTUnwrap(s.jellies.first)
-        XCTAssertEqual(r.id, 2); XCTAssertEqual(r.name, "Jelly"); XCTAssertEqual(r.color, "blue")
+        XCTAssertEqual(r.id, 2); XCTAssertEqual(r.name, "Jelbie"); XCTAssertEqual(r.color, "blue")
         XCTAssertEqual(r.levels, [1, 0, 1], "short list padded with full, values clamped to 0...1")
         XCTAssertEqual(r.dirt, 1)
         XCTAssertNil(JellySnapshot.decode(Data("not json".utf8)))
     }
 
-    func testAtMostFourJelliesAndFileRoundTrip() throws {
+    func testAtMostThreeJelliesAndFileRoundTrip() throws {
         let many = JellySnapshot(savedAt: t0, jellies: (0..<6).map { rec($0, "J\($0)") })
-        XCTAssertEqual(many.jellies.count, 4, "the roster is four Jelbies since the characters round")
+        XCTAssertEqual(many.jellies.count, 3, "the roster cap is three Jelbies")
         let dir = try tempDir()
         XCTAssertNil(JellySnapshot.read(from: dir), "nothing written yet")
         XCTAssertTrue(many.write(to: dir))
@@ -160,7 +160,8 @@ final class WidgetSnapshotTests: XCTestCase {
     // MARK: deep link
 
     func testDeepLinkParsing() {
-        for id in 0..<4 { XCTAssertEqual(JellyLink.parse(JellyLink.url(for: id)), id) }
+        for id in 0..<JellyShare.maxJellies { XCTAssertEqual(JellyLink.parse(JellyLink.url(for: id)), id) }       // slots 0...2
+        XCTAssertNil(JellyLink.parse(URL(string: "jelbies://jelly/3")!), "past the roster cap")
         XCTAssertEqual(JellyLink.url(for: 1).absoluteString, "jelbies://jelly/1")
         XCTAssertEqual(JellyLink.parse(URL(string: "JELBIES://Jelly/2")!), 2)
         XCTAssertEqual(JellyLink.parse(URL(string: "jelbies://jelly/1/")!), 1)

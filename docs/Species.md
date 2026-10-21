@@ -10,6 +10,23 @@ Every species has one **signature silhouette feature**, so you can tell it apart
 
 **Colour note (2026-10-16):** the game's Bob is now **Baby blue** (existing palette) instead of blush pink, because pink read too close to Kirby. Starter colours are blue, yellow, green and purple; green and purple are still to be added as new pastel palettes. The species colours in the table below are the older kennel concept and are not what the game renders.
 
+## The Jelbies in the game (2026-10-21)
+
+Four characters exist, all on Bob's locked body (`JellyRoster`): **Bob** (baby blue, no feature), **Pip** (yellow, gummy spines), **Moss** (green, head daisy), **Lavender** (pastel lavender, wings + flap-hop). At most **three** live in the room at once (`JellyRoster.maxCount = 3`). The room is a *roster*: an ordered list of characters saved under `BlobRoster.v1`; everything in the game indexes by slot (0...2) and asks the roster which character sits there. Saved needs / dirt / words / stats / perks stay with the character (Bob on the legacy keys, the others on `.jelly<id>` keys), so a Jelbie can leave and return without losing anything.
+
+- A fresh install starts with **Bob, Pip and Moss** (the roster before the characters round), with their features attached.
+- Developer launch argument `-SetRoster pip,moss,lavender` replaces the saved roster with exactly those (in that order), keeping each one's saved data and initialising a newcomer fresh; it persists and is idempotent, so it is safe to leave in or drop. `-BlobCount 1|2|3` still cuts the roster for captures.
+
+## Adoption (planned, not built)
+
+How the roster is meant to fill once there is a start-of-game flow. Nothing of this exists in code yet; the roster machinery above is what it will drive.
+
+- **Max 3 at a time.** The room, the dining places, the race lanes and the widget are all sized for three.
+- **New players start with only Bob (blue).** Pip, Moss and Lavender are met in the game (rivals on the Jelly Circuit, entrants in the Jelly Show) before they can be adopted.
+- **Earn Drops in competitions to adopt Pip, Moss and Lavender.** Drops are earn-only (no purchase). Adoption is bought like a trick page, from the store or an "Adopt" card on the roster.
+- **Suggested prices: 120 / 180 / 240 Drops** for the first, second and third adoption (a range of roughly 120–250). Rationale: a race pays 12–22 for first place and the show is designed to pay the same, so 120 is about 6–8 wins (a couple of sessions), well above the dearest trick page (55) and the biggest decor piece (90), so a new Jelbie feels like the biggest thing you can earn without becoming a grind. Escalating prices let the roster fill over weeks rather than one evening and keep the third adoption as a long-term goal. The order is the player's choice; Lavender need not be last.
+- When the third Jelbie is adopted the room is full; swapping or re-homing is out of scope for now (one roster, no outings).
+
 ## Shipping in v1
 
 | Species | Colour | Signature feature | Per-individual variation |

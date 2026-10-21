@@ -25,7 +25,7 @@ extension VoiceCoordinator {
     /// Runs one command now (called from `tick` once the hold is over). `brain` is Bob's.
     func execute(_ c: JellyCommand, care: GameCare, brain: BlobBrain) {
         let ids = ids(for: c.who)
-        let names: (Int) -> String = { [weak care] in care?.jelly($0)?.name ?? "Jelly" }
+        let names: (Int) -> String = { [weak care] in care?.jelly($0)?.name ?? "Jelbie" }
         if VoiceCoordinator.logging { NSLog("AILOG execute %@ ids=%@ object=%@", c.action.key, ids.description, c.object ?? "-") }
         guard !ids.isEmpty else { confused(ids: [], reason: nil); return }                 // a name for a Jelly that is not here
         if case .jellies = c.who, !care.focus.isActive, ids.count == 1 { (onSelect ?? { care.rosterPick($0, quietHop: true) })(ids[0]) }

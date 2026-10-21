@@ -78,18 +78,25 @@ final class FeatureTests: XCTestCase {
         XCTAssertLessThan(worst.0, 600)
     }
 
-    func testRosterHasFourStartersWithFeatures() {
-        XCTAssertEqual(JellyRoster.maxCount, 4)
+    func testFourCharactersAvailableThreeInTheRoom() {
+        XCTAssertEqual(JellyRoster.maxCount, 3, "three Jelbies in the room at once")
+        XCTAssertEqual(JellyRoster.characterCount, 4, "four characters to pick from")
         XCTAssertEqual(JellyRoster.names, ["Bob", "Pip", "Moss", "Lavender"])
         XCTAssertEqual((0..<4).map { JellyRoster.feature($0) }, [.none, .spines, .daisy, .wings])
-        XCTAssertEqual(JellyRoster.spawnSpots(count: 4).count, 4)
+        XCTAssertEqual(JellyRoster.spawnSpots(count: 3).count, 3)
         XCTAssertNotNil(JellyRoster.palette(3))
-        XCTAssertEqual(JellyRoster.selectBlobs(count: 4).count, 4)
+        XCTAssertEqual(JellyRoster.selectBlobs(count: 4).count, 3, "clamped to the cap")
+        XCTAssertEqual(JellyRoster.selectBlobs(roster: [1, 2, 3]).map(\.name), ["Pip", "Moss", "Lavender"])
         XCTAssertNotNil(JellyNameRoster.name(3))
         let care = GameCare(jellyCount: 4, persistent: false)
         Self.keep.append(care)
-        XCTAssertEqual(care.jellyCount, 4)
-        XCTAssertEqual(care.jelly(3)?.feature, .wings)
+        XCTAssertEqual(care.jellyCount, 3, "a count past the cap is clamped")
+        XCTAssertEqual(care.roster, [0, 1, 2])
+        let lav = GameCare(roster: [0, 1, 3], persistent: false)
+        Self.keep.append(lav)
+        XCTAssertEqual(lav.jelly(2)?.name, "Lavender")
+        XCTAssertEqual(lav.jelly(2)?.feature, .wings, "the feature follows the character in the slot")
+        XCTAssertEqual(lav.jelly(2)?.character, 3)
         // the widget snapshot: the feature field is optional in old files
         let old = #"{"version":1,"savedAt":1,"jellies":[{"id":1,"name":"Pip","color":"yellow","levels":[1,1,1],"dirt":0,"sparkle":0,"mood":"okay"}]}"#
         let snap = try? JSONDecoder().decode(JellySnapshot.self, from: Data(old.utf8))

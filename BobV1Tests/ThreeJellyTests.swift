@@ -167,14 +167,19 @@ final class ThreeJellyTests: XCTestCase {
         XCTAssertNotEqual(fl[0], fl[1]); XCTAssertNotEqual(fl[1], fl[2]); XCTAssertNotEqual(fl[0], fl[2])
         XCTAssertTrue(JellyRoster.palette(2)!.matte)
         XCTAssertTrue(care.needs(for: 2) === care.jellies[2].needs)
-        XCTAssertEqual(JellyRoster.launchCount(suite("count")), JellyRoster.maxCount, "default: the whole roster (4 with Lavender)")
+        XCTAssertEqual(JellyRoster.maxCount, 3, "at most three Jelbies live in the room")
+        XCTAssertEqual(JellyRoster.launchCount(suite("count")), 3, "default: the whole default roster (Bob, Pip, Moss)")
+        XCTAssertEqual(JellyRoster.launchIDs(suite("count")), [0, 1, 2])
         let d = suite("count1"); d.set(1, forKey: "BlobCount")
         XCTAssertEqual(JellyRoster.launchCount(d), 1)
         d.set(9, forKey: "BlobCount"); XCTAssertEqual(JellyRoster.launchCount(d), JellyRoster.maxCount)
         let care4 = GameCare(jellyCount: 4, persistent: false)
-        XCTAssertEqual(care4.select.blobs.map(\.name), ["Bob", "Pip", "Moss", "Lavender"], "all four are tappable")
+        XCTAssertEqual(care4.select.blobs.map(\.name), ["Bob", "Pip", "Moss"], "a count past the cap is clamped to three")
+        let lav = GameCare(roster: [1, 2, 3], persistent: false)
+        XCTAssertEqual(lav.select.blobs.map(\.name), ["Pip", "Moss", "Lavender"], "Lavender is tappable when she is in the roster")
+        XCTAssertEqual(lav.select.blobs.map(\.id), [0, 1, 2], "selection ids are slots")
         XCTAssertNotEqual(EyeMaskModel.palette(3).band, EyeMaskModel.palette(0).band, "Lavender has her own sleep mask")
-        XCTAssertEqual(EyeMaskModel.rests.count, 4)
+        XCTAssertEqual(EyeMaskModel.rests.count, 4, "one mask per available character")
         // the matte transform equals PaletteKey's for the same base
         var base = PaletteKey.blue.palette
         base.pale = SIMD3(repeating: 0.5); base.skin = base.pale; base.stripe = base.pale; base.extra = .zero

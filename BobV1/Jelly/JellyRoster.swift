@@ -1,12 +1,19 @@
 //
 //  JellyRoster.swift
-//  The Jellies of the room (1...3): who they are, what colour, where they spawn, and the UserDefaults keys of their saved state.
+//  The Jelbies of the room (1...3): who they are, what colour, where they spawn, and the UserDefaults keys of their saved state.
 //
-//  Launch flag: -BlobCount 1|2|3|4 (default 3). Jelly 0 is Bob (baby blue), 1 is Pip (yellow), 2 is Moss (green), 3 is Lavender (pastel lavender).
-//  Every body is Bob's; a Jelly differs only by colour and his FEATURE (JellyFeature: Pip's spines, Moss's daisy, Lavender's wings; Features/).
-//  Persistence is keyed by id. Jelly 0's keys ARE the pre-multi-Jelly keys ("BlobNeeds.v1", "BlobGrime.v1", "BlobWords.v1"), so the phone's
-//  existing Bob state (needs, dirt, his learned "come here") becomes Jelly 0's data with no copy and nothing lost; Jellies 1 and 2 get suffixed keys.
-//  DropsWallet ("BlobDrops.v1") and the voice tutorial flag ("VoiceTutorial.v1") stay shared on purpose.
+//  CHARACTERS (fixed ids, 4 available): 0 Bob (baby blue), 1 Pip (yellow, spines), 2 Moss (green, daisy), 3 Lavender (pastel lavender, wings).
+//  Every body is Bob's; a character differs only by colour and FEATURE (JellyFeature; Features/). Saved state is keyed by CHARACTER id (JellyKeys):
+//  character 0's keys ARE the pre-multi-Jelly keys ("BlobNeeds.v1", "BlobGrime.v1", "BlobWords.v1"), so the phone's existing Bob state became
+//  his data with no copy; the others get suffixed keys (".jelly1" ...). DropsWallet and the voice tutorial flag stay shared on purpose.
+//
+//  ROSTER (who is in the room, at most `maxCount` = 3): an ordered list of character ids saved under "BlobRoster.v1" (default Bob, Pip, Moss).
+//  Everything that runs the room (GameCare.jellies, the stage's actors, the renderer's bodies, selection, bubbles, intents, the widget) is
+//  indexed by SLOT = position in that list (0...2); slot 0 is the "primary" that the legacy Bob-only paths drive. `character(slot)` maps a
+//  slot to its character for colour / feature / name / saved keys. With the default roster slot == character, so nothing moved.
+//
+//  Launch flags: -BlobCount 1|2|3 (how many of the roster, default all); -SetRoster pip,moss,lavender (REPLACES the saved roster with exactly
+//  those, in that order; safe to leave in: applying it again is a no-op). Adoption (Bob only to start, Drops to adopt) is planned, not built: docs/Species.md.
 //
 
 import Foundation
@@ -21,7 +28,7 @@ enum JellyKeys {
     private static func suffixed(_ legacy: String, _ id: Int) -> String { id == 0 ? legacy : "\(legacy).jelly\(id)" }
 }
 
-/// What grows on a Jelly besides Bob's body (BobV1/Features): mapped from his colour. Saved nowhere: it follows the roster id.
+/// What grows on a Jelly besides Bob's body (BobV1/Features): mapped from his colour. Saved nowhere: it follows the character id.
 nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
     case none, spines, daisy, wings
     /// The feature art of the bundle (feature_<id>.bin); "" for none.
@@ -31,18 +38,85 @@ nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
 }
 
 nonisolated enum JellyRoster {
-    static let maxCount = 4
+    /// Jelbies in the room at once (the roster cap).
+    static let maxCount = 3
+    /// Characters available (Bob, Pip, Moss, Lavender).
+    static let characterCount = 4
     static let names = ["Bob", "Pip", "Moss", "Lavender"]
-    /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings.
+    /// A fresh install: Bob, Pip and Moss (the roster before the characters round; Lavender stays available).
+    static let defaultIDs = [0, 1, 2]
+    static let rosterKey = "BlobRoster.v1"
+    static let setRosterKey = "SetRoster"
+
+    /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings. (By CHARACTER id.)
     static func feature(_ id: Int) -> JellyFeature {
         switch id { case 1: return .spines; case 2: return .daisy; case 3: return .wings; default: return .none }
     }
 
-    /// `-BlobCount 1|2|3`; default 3 in this build.
-    static func launchCount(_ d: UserDefaults = .standard) -> Int {
-        guard d.object(forKey: "BlobCount") != nil else { return maxCount }
-        return min(max(d.integer(forKey: "BlobCount"), 1), maxCount)
+    // MARK: the roster (characters by slot)
+
+    /// Character name or id, case-insensitive ("pip", "Lavender", "2"); nil when unknown.
+    static func characterID(named raw: String) -> Int? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let i = names.firstIndex(where: { $0.lowercased() == t }) { return i }
+        if let n = Int(t), (0..<characterCount).contains(n) { return n }
+        return nil
     }
+    /// `-SetRoster pip,moss,lavender` -> [1, 2, 3]: unknown names dropped, repeats dropped, capped at `maxCount`; nil when nothing usable is left.
+    static func parseRoster(_ text: String) -> [Int]? {
+        var out: [Int] = []
+        for part in text.split(whereSeparator: { $0 == "," || $0 == " " || $0 == ";" }) {
+            if let c = characterID(named: String(part)), !out.contains(c) { out.append(c) }
+        }
+        guard !out.isEmpty else { return nil }
+        return Array(out.prefix(maxCount))
+    }
+    /// A saved / given list made valid: known characters, no repeats, 1...maxCount (empty -> the default roster).
+    static func sanitised(_ ids: [Int]) -> [Int] {
+        var out: [Int] = []
+        for c in ids where (0..<characterCount).contains(c) && !out.contains(c) { out.append(c) }
+        return out.isEmpty ? defaultIDs : Array(out.prefix(maxCount))
+    }
+    /// The roster saved in `d` (the default roster when none was saved).
+    static func savedIDs(_ d: UserDefaults = .standard) -> [Int] {
+        guard let a = d.array(forKey: rosterKey) as? [Int] else { return defaultIDs }
+        return sanitised(a)
+    }
+    /// Saves `ids` (sanitised) as the roster.
+    static func save(_ ids: [Int], to d: UserDefaults = .standard) { d.set(sanitised(ids), forKey: rosterKey) }
+
+    /// Applies `-SetRoster a,b,c` when the launch argument is present: the saved roster becomes exactly that list. Returns the roster now in force.
+    /// Each character keeps whatever is saved under his own keys (nothing is copied or cleared); a character with no saved data starts fresh
+    /// the first time his profile loads. Idempotent: the same argument again writes the same list; no argument leaves the saved roster alone.
+    @discardableResult
+    static func applySetRoster(_ d: UserDefaults = .standard) -> [Int] {
+        if let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
+            if savedIDs(d) != ids { save(ids, to: d) }
+            return ids
+        }
+        return savedIDs(d)
+    }
+    /// The characters in the room at launch, by slot: `-SetRoster` applied, then the saved roster, cut to `-BlobCount` when given.
+    static func launchIDs(_ d: UserDefaults = .standard) -> [Int] {
+        let ids = applySetRoster(d)
+        guard d.object(forKey: "BlobCount") != nil else { return ids }
+        return Array(ids.prefix(min(max(d.integer(forKey: "BlobCount"), 1), ids.count)))
+    }
+    /// How many Jelbies the room starts with (`launchIDs().count`).
+    static func launchCount(_ d: UserDefaults = .standard) -> Int { launchIDs(d).count }
+
+    /// The roster of this process (slot -> character), fixed at launch from `launchIDs()`. Tests may set it and must put it back.
+    @MainActor static var current: [Int] = launchIDs()
+    /// The character in `slot` (a slot past the roster falls back to the same-numbered character, as before the roster existed).
+    @MainActor static func character(_ slot: Int) -> Int {
+        current.indices.contains(slot) ? current[slot] : min(max(slot, 0), characterCount - 1)
+    }
+    /// The slot a character is in; nil when he is not in the room.
+    @MainActor static func slot(ofCharacter c: Int) -> Int? { current.firstIndex(of: c) }
+    @MainActor static func name(slot: Int) -> String { names[character(slot)] }
+    @MainActor static func feature(slot: Int) -> JellyFeature { feature(character(slot)) }
+    @MainActor static func palette(slot: Int) -> Palette? { palette(character(slot)) }
+    @MainActor static func tint(slot: Int) -> SIMD3<Float> { tint(character(slot)) }
 
     /// Floor spots (x, z) the Jellies start on, spread over the visible floor so nobody overlaps (the floor is only ~2.2 wide at the body's height on a
     /// portrait phone, so they zig-zag in depth). One Jelly stays at the origin like before.
@@ -51,11 +125,11 @@ nonisolated enum JellyRoster {
         case 1: return [SIMD2(0, 0)]
         case 2: return [SIMD2(0.1, 1.5), SIMD2(-0.2, -1.4)]
         case 3: return [SIMD2(-0.15, 1.6), SIMD2(-0.85, -1.7), SIMD2(0.85, -0.1)]
-        default: return [SIMD2(-0.15, 1.6), SIMD2(-1.1, -1.7), SIMD2(1.2, -0.3), SIMD2(1.15, 1.7)]
+        default: return [SIMD2(-0.15, 1.6), SIMD2(-1.1, -1.7), SIMD2(1.2, -0.3), SIMD2(1.15, 1.7)]       // 4: test rooms only (the roster cap is 3)
         }
     }
 
-    /// Body colours: Bob is the model's palette (baby blue in the game); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
+    /// Body colours by CHARACTER: Bob is the model's palette (baby blue in the game; nil); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
     static func palette(_ id: Int) -> Palette? {
         switch id {
         case 1: return PaletteKey.yellow.palette
@@ -65,7 +139,7 @@ nonisolated enum JellyRoster {
         }
     }
 
-    /// sRGB 0...1 swatch for the roster card / selection preview.
+    /// sRGB 0...1 swatch for the roster card / selection preview (by CHARACTER).
     static func tint(_ id: Int) -> SIMD3<Float> {
         switch id {
         case 1: return SIMD3(0.99, 0.90, 0.62)
@@ -75,9 +149,12 @@ nonisolated enum JellyRoster {
         }
     }
 
-    static func selectBlobs(count: Int) -> [SelectBlob] {
-        (0..<min(max(count, 1), maxCount)).map { SelectBlob(id: $0, name: names[$0], tint: tint($0)) }
+    /// Selection cards for a roster (slot ids, character names and tints).
+    static func selectBlobs(roster: [Int]) -> [SelectBlob] {
+        sanitised(roster).enumerated().map { SelectBlob(id: $0.offset, name: names[$0.element], tint: tint($0.element)) }
     }
+    /// The first `count` of the default roster.
+    static func selectBlobs(count: Int) -> [SelectBlob] { selectBlobs(roster: Array(defaultIDs.prefix(min(max(count, 1), maxCount)))) }
 }
 
 /// Colours that are not part of `PaletteKey` (that enum is hashed by the base-body lock, so it gets no new case).

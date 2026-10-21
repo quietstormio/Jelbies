@@ -518,8 +518,8 @@ final class MelonRenderer {
         u.shadowTint = SIMD4(palette.shadowTint, palette.matte ? 2 : 1)
     }
 
-    /// Sets the colours of Jelly `i` (0 is the palette given to `setUniforms`).
-    func setPalette(_ palette: Palette, body i: Int) { if i > 0, i < slots.count { slots[i].palette = palette } }
+    /// Sets the colours of Jelly `i` (body 0 defaults to the palette given to `setUniforms`; set it when a character other than Bob is in slot 0).
+    func setPalette(_ palette: Palette, body i: Int) { if i >= 0, i < slots.count { slots[i].palette = palette } }
     /// Jelly Circuit: a body wears a rival's colours on the track (any body, Bob's too) and its own again with nil (`own` = the roster colours, nil for Bob).
     func setRacePalette(_ palette: Palette?, own: Palette?, body i: Int) { if i < slots.count { slots[i].palette = palette ?? own } }
     /// The race track is drawn instead of the living room (the stage sets it each frame from the race flow).

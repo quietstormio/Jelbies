@@ -206,7 +206,7 @@ struct JellyWidgetContent: View {
     private var empty: some View {
         VStack(spacing: 6) {
             Text("Jelbies").font(WidgetTheme.font(18)).foregroundStyle(WidgetTheme.ink)
-            Text("Open the game to meet your Jelly").font(WidgetTheme.font(12, .medium)).foregroundStyle(WidgetTheme.inkSoft).multilineTextAlignment(.center)
+            Text("Open the game to meet your Jelbie").font(WidgetTheme.font(12, .medium)).foregroundStyle(WidgetTheme.inkSoft).multilineTextAlignment(.center)
         }
     }
 
