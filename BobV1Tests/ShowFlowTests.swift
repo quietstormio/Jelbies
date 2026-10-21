@@ -162,6 +162,10 @@ final class ShowFlowTests: XCTestCase {
     // MARK: the care glue
 
     func testCareReadsTheJelbieAndBorrowsBodies() {
+        // Bob's stats ride on UserDefaults.standard even in a non-persistent GameCare (JellyProfile's default), so a rerun on the same
+        // simulator would stack the dance proficiency past 0.6: start (and leave) clean.
+        func scrub() { for suffix in ["", ".cond", ".train", ".dances", ".meals"] { UserDefaults.standard.removeObject(forKey: JellyKeys.stats(0) + suffix) } }
+        scrub(); defer { scrub() }
         let care = GameCare(jellyCount: 3, persistent: false)
         let p = care.jelly(0)!
         p.stats.setCondition(.sparkle, 0.7); p.stats.setCondition(.cute, 0.3)
