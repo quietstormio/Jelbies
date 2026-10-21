@@ -162,9 +162,10 @@ nonisolated struct ShowSim: Sendable {
     /// Arms the Burst for the next trick (it fires with that trick's turn).
     mutating func armBurst() { guard burstReady, round == .trick, !tricksDone else { return }; burstArmed = true }
 
-    /// A trick card is tapped: the spotlight ring starts closing at `time`.
+    /// A trick card is tapped: the spotlight ring starts closing at `time`. A trick he has not learned is allowed (a brand-new Jelbie can enter):
+    /// its reliability is 0, so it is always the cute flop, which still scores.
     mutating func beginTurn(_ t: VoiceTrick, at time: Double) {
-        guard round == .trick, !tricksDone, ringTrick == nil, player.tricks[t] != nil else { return }
+        guard round == .trick, !tricksDone, ringTrick == nil else { return }
         ringTrick = t; ringStart = time
     }
     /// The player taps while the ring closes (or the flow judges a missed ring with `time` = start + ring + 0.3). `roll` decides the success

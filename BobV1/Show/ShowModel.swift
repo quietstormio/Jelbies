@@ -183,8 +183,8 @@ nonisolated enum ShowTrickInfo {
         case .run: return [.cool]
         }
     }
-    /// The tricks a Jelbie can show on stage: everything learned (the come is a walk, not a stage trick).
-    static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come }
+    /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
+    static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come && $0 != .run }
     static func symbol(_ t: VoiceTrick) -> String {
         switch t {
         case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"; case .roll: return "circle.dotted.circle"

@@ -88,7 +88,7 @@ struct TownFlow: View {
             case .track: TrackPanel(care: care, who: $who, back: { screen = .town }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { screen = .town }, card: { screen = .condition }, show: { screen = .show },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
-            case .condition: ConditionScreen(care: care, who: $who, back: { screen = .studio }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { screen = .studio } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
             case .show: ShowLobby(care: care, who: $who, back: { screen = .studio }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             }
         }

@@ -376,7 +376,8 @@ final class ShowFlow {
         case .pick:
             if auto, let s = sim, !s.tricksDone {
                 autoTrickWait += dt
-                if autoTrickWait > 1.2, let t = s.knownTricks.first(where: { !s.usedTricks.contains($0) }) ?? s.knownTricks.first {
+                if autoTrickWait > 1.2 {
+                    let t = s.knownTricks.first(where: { !s.usedTricks.contains($0) }) ?? s.knownTricks.first ?? .sit
                     autoTrickWait = 0
                     if s.burstReady { armBurst() }
                     pick(t)

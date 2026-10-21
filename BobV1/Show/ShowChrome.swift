@@ -135,7 +135,8 @@ struct LookRound: View {
     private var show: ShowFlow { care.show }
 
     var body: some View {
-        GeometryReader { g in
+        let _ = show.revision
+        return GeometryReader { g in
             let size = g.size
             let frame = ShowFrame.look
             let body = StageProject.body(ShowStage.playerSpot, frame: frame, size: size)
@@ -159,20 +160,20 @@ struct LookRound: View {
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
             }
-            .id(show.revision)
         }
     }
 
-    /// The scored slots as tap chips either side of him (the rank's slots: left column, then right).
+    /// The scored slots as tap chips either side of him (the rank's slots: left column, then right); a phone on its side keeps both columns on his left.
     private func slots(body: (centre: CGPoint, radius: CGFloat), size: CGSize) -> some View {
         let order = show.rank.slotOrder
         let outfit = care.store.outfit(show.playerID)
-        let left = Array(order.prefix((order.count + 1) / 2)), right = Array(order.dropFirst((order.count + 1) / 2))
+        var left = Array(order.prefix((order.count + 1) / 2)), right = Array(order.dropFirst((order.count + 1) / 2))
+        if compact { left = order; right = [] }
         let dx = max(body.radius + 74, 96)
         return ZStack {
             ForEach(Array(left.enumerated()), id: \.offset) { k, s in
                 SlotChip(slot: s, look: outfit[s], theme: show.theme) { tapSlot(s) }
-                    .position(x: max(44, body.centre.x - dx), y: body.centre.y - 30 + CGFloat(k) * 72)
+                    .position(x: max(44, body.centre.x - dx - (compact && k % 2 == 1 ? 64 : 0)), y: body.centre.y - (compact ? 60 : 30) + CGFloat(compact ? k / 2 : k) * 72 + (compact && k % 2 == 1 ? 36 : 0))
             }
             ForEach(Array(right.enumerated()), id: \.offset) { k, s in
                 SlotChip(slot: s, look: outfit[s], theme: show.theme) { tapSlot(s) }
@@ -418,7 +419,8 @@ struct TrickRound: View {
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
 
     var body: some View {
-        GeometryReader { g in
+        let _ = show.revision
+        return GeometryReader { g in
             let size = g.size
             let body = StageProject.body(ShowStage.playerSpot, frame: .trick, size: size)
             ZStack(alignment: .top) {
@@ -443,7 +445,6 @@ struct TrickRound: View {
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
             }
-            .id(show.revision)
         }
     }
 

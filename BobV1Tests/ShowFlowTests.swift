@@ -135,6 +135,18 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertFalse(f.active)
     }
 
+    /// A brand-new Jelbie (no tricks learned) can enter: every turn is a cute flop that still scores, and the show reaches its results.
+    func testNoTricksLearnedStillFinishesTheShow() {
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
+        var p = ShowPlayerInput(name: "Bob"); p.tricks = [:]
+        f.begin(playerID: 0, name: "Bob", character: 0, input: p, rank: .puddle, dayKey: 20261023, bodies: 1, seed: 2)
+        run(f, seconds: 90) { f.hasResults }
+        XCTAssertTrue(f.hasResults)
+        XCTAssertEqual(f.sim!.turns.count, 3)
+        for t in f.sim!.turns { XCTAssertFalse(t.success); XCTAssertGreaterThanOrEqual(t.points, 8) }
+        XCTAssertNotNil(f.sim!.playerPlace)
+    }
+
     func testAbortPutsEverythingBack() {
         let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         var swaps: [ShowFlow.Dest] = []; f.onSwap = { swaps.append($0) }

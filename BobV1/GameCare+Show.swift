@@ -158,7 +158,7 @@ extension GameCare {
     /// The rival bodies are out of the picture in the solo rounds (Look, Trick): they come on for the Dance and the results.
     func showHides(_ id: Int) -> Bool {
         guard show.onStage, id != show.playerID, showBook.performers.contains(id) else { return false }
-        return show.isPractice || !(show.round == .dance || show.round == .results)
+        return show.isPractice || !(show.round == .dance || (show.round == .results && show.trickStage != .performing))
     }
 
     // MARK: world swaps (under the white)
