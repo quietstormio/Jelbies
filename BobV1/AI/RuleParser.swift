@@ -6,7 +6,8 @@
 //  partner, not a target. Instant, no allocation to speak of, and it covers the same command set as the model.
 //
 //  Order of the verb tables matters: a question ("who's hungry") is checked before the feed words it contains; "put on" before the generic verbs;
-//  sleep before sit ("lie down"); feed / drink before come ("everyone come eat" is a meal); "play with Moss" before plain play.
+//  sleep before sit ("lie down"); feed / drink before come ("everyone come eat" is a meal); "play with Moss" before plain play. The store's trick
+//  pages (spin, hop, roll) parse as tricks like the starters; the legacy decision then checks the page is bought and the word learned.
 //
 
 import Foundation
@@ -47,7 +48,11 @@ enum RuleParser {
     private static let spinPhrases = ["spin around", "turn around", "do a spin", "spin round", "do a twirl"]
     private static let spinWords: Set<String> = ["spin", "twirl", "pirouette", "spinny", "spins"]
     private static let jacksPhrases = ["jumping jacks", "jumping jack", "jump up and down", "do some jumps", "star jumps"]
-    private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout", "hop", "bounce"]
+    private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout"]
+    private static let hopPhrases = ["hop hop", "do a hop", "hop up", "hop up and down", "bounce around"]
+    private static let hopWords: Set<String> = ["hop", "hops", "hopping", "bounce", "bouncy", "boing"]
+    private static let rollPhrases = ["roll over", "do a roll", "roly poly", "roll around", "rolly polly"]
+    private static let rollWords: Set<String> = ["roll", "rolls", "rolling", "rollover"]
     private static let flipPhrases = ["do a flip", "back flip", "do a backflip"]
     private static let flipWords: Set<String> = ["flip", "backflip", "somersault", "flips"]
     private static let runPhrases = ["go for a run", "run around", "run run", "do a lap", "go run"]
@@ -128,7 +133,7 @@ enum RuleParser {
             if let p = phrase { rest = strip(rest, phrase: p) }
             rest = rest.filter { !words.contains($0) }
             // the object: what is left, matched against the catalog (narrowed to the kind the action wants)
-            let kinds: Set<CatalogItem.Kind>? = action.objectKind.map { [$0] }
+            let kinds = action.objectKinds
             let objectTokens = rest.filter { !fillers.contains($0) }
             if !objectTokens.isEmpty {
                 if let it = catalog.match(objectTokens, kinds: kinds) {
@@ -177,12 +182,16 @@ enum RuleParser {
             }
         }
         // 8. moves: spin, jacks, flip, run, look, go to decor, sit
-        if let p = has(toks, spinPhrases) { return finish(.spin, strip: p, words: spinWords) }
-        if hasWord(toks, spinWords) { return finish(.spin, words: spinWords) }
+        if let p = has(toks, spinPhrases) { return finish(.trick(.spin), strip: p, words: spinWords) }
+        if hasWord(toks, spinWords) { return finish(.trick(.spin), words: spinWords) }
         if let p = has(toks, jacksPhrases) { return finish(.trick(.jacks), strip: p, words: jacksWords) }
         if let p = has(toks, flipPhrases) { return finish(.trick(.flip), strip: p, words: flipWords) }
         if hasWord(toks, flipWords) { return finish(.trick(.flip), words: flipWords) }
         if hasWord(toks, jacksWords) { return finish(.trick(.jacks), words: jacksWords) }
+        if let p = has(toks, hopPhrases) { return finish(.trick(.hop), strip: p, words: hopWords) }
+        if hasWord(toks, hopWords) { return finish(.trick(.hop), words: hopWords) }
+        if let p = has(toks, rollPhrases) { return finish(.trick(.roll), strip: p, words: rollWords) }
+        if hasWord(toks, rollWords) { return finish(.trick(.roll), words: rollWords) }
         if let p = has(toks, runPhrases) { return finish(.trick(.run), strip: p, words: runWords) }
         if hasWord(toks, runWords) { return finish(.trick(.run), words: runWords) }
         if let p = has(toks, lookPhrases) { return finish(.trick(.look), strip: p, words: lookWords) }
@@ -193,12 +202,12 @@ enum RuleParser {
         }
         if has(toks, sitPhrases) != nil || hasWord(toks, sitWords) {           // "sit on the beanbag" is a place; "sit down" the trick
             let p = has(toks, sitPhrases)
-            if catalog.match(toks.filter { !sitWords.contains($0) && !fillers.contains($0) }, kinds: [.decor]) != nil { return finish(.goTo, strip: p, words: sitWords) }
+            if catalog.match(toks.filter { !sitWords.contains($0) && !fillers.contains($0) }, kinds: [.decor, .toy]) != nil { return finish(.goTo, strip: p, words: sitWords) }
             return finish(.trick(.sit), strip: p, words: sitWords)
         }
         if hasWord(toks, lookWords) { return finish(.trick(.look), words: lookWords) }
         // 9. decor named with a place verb only ("on the beanbag")
-        if catalog.match(toks.filter { !fillers.contains($0) }, kinds: [.decor]) != nil { return finish(.goTo) }
+        if catalog.match(toks.filter { !fillers.contains($0) }, kinds: [.decor, .toy]) != nil { return finish(.goTo) }
         // 10. come, then the social phrases
         if let p = has(toks, comePhrases) { return finish(.come, strip: p, words: comeWords) }
         if hasWord(toks, comeWords) || VoiceMatcher.looksLikeCome(toks) { return finish(.come, words: comeWords) }
@@ -209,6 +218,7 @@ enum RuleParser {
             case .praise: return finish(.praise)
             case .scold: return finish(.scold)
             case .play: return finish(.play)
+            case .goodnight: return finish(.sleep)
             }
         }
         // a wearable / toy named alone

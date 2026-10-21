@@ -178,8 +178,8 @@ final class BlobBrain {
     /// Voice v1: the backflip trick, queued for the next tick. `flipCompact` = focus mode (lower apex so he stays in frame).
     var commandedFlip = false
     var flipCompact = false
-    /// Natural voice command "do a spin": the play spin (`startSpin`), queued for the next tick like the other commanded moves.
-    var commandedSpin = false
+    /// Natural voice command "go sit on the beanbag" / "play with the ball": a decor interaction with THAT kind of piece, queued for the next tick.
+    var commandedDecor: (kind: IdleKind, only: DecorKind)?
     var commandedNameHop = false
     /// Voice "goodnight": go to bed now (yawn, gather with the others, roll onto the back, sleep tucked in until morning or a tap).
     var commandedGoodnight = false
@@ -522,7 +522,7 @@ final class BlobBrain {
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
         if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
-        if commandedSpin { commandedSpin = false; startCommandedSpin(sim, skinner) }
+        if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
         if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         if flipTick(sim, skinner, dt) { return }

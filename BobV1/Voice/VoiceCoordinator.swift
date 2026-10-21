@@ -467,6 +467,8 @@ final class VoiceCoordinator {
         case .scold: legacy(.social(.scold))
         case .play: legacy(.social(.play))
         case .trick(let t): legacy(.trick(t))
+        case .sleep: legacy(.social(.goodnight))                        // bedtime is the existing goodnight (yawn, cuddle pile, tucked in)
+        case .playWith where c.object == nil: legacy(.social(.play))    // "play with Moss" and no toy named: the usual play
         default:
             if case .jellies(let ids) = c.who, !ids.allSatisfy(presentIDs.contains) { finish(VoiceDecision(reaction: .puzzled, target: .jelly(ids[0])), transcript: transcript); return }
             ai.commandQueue.append(c)

@@ -52,9 +52,13 @@ final class AITierBTests: XCTestCase {
             ("who is thirsty", .everyone, .whoIs(.thirst), nil, nil),
             ("who wants a cuddle", .everyone, .whoIs(.attention), nil, nil),
             ("anyone hungry", .everyone, .whoIs(.hunger), nil, nil),
-            ("Bob do a spin", .jellies([0]), .spin, nil, nil),
-            ("spin around", .selected, .spin, nil, nil),
-            ("Pippy twirl", .jellies([1]), .spin, nil, nil),
+            ("Bob do a spin", .jellies([0]), .trick(.spin), nil, nil),
+            ("spin around", .selected, .trick(.spin), nil, nil),
+            ("Pippy twirl", .jellies([1]), .trick(.spin), nil, nil),
+            ("hop hop Moss", .jellies([2]), .trick(.hop), nil, nil),
+            ("roll over", .selected, .trick(.roll), nil, nil),
+            ("go play with the ball", .selected, .playWith, "ball", nil),
+            ("go to the ball", .selected, .playWith, "ball", nil),              // a toy is played with (the same kick as "go to")
             ("put on the pirate hat", .selected, .wear, "pirate_hat", nil),
             ("Bob wear your hat", .jellies([0]), .wear, "pirate_hat", nil),
             ("Pip eat some pizza", .jellies([1]), .feed, "pizza", nil),
@@ -109,7 +113,6 @@ final class AITierBTests: XCTestCase {
         XCTAssertEqual(s.command.partner, 2)
         XCTAssertEqual(s.command.unknownObject, "soccer")
         XCTAssertTrue(s.command.isActionable, "a partner is enough; the game says soccer is not here yet")
-        XCTAssertFalse(s.command.action.supportedNow)
     }
 
     func testFreePhrasingIsNotConfident() {

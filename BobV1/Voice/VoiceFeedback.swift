@@ -254,7 +254,7 @@ struct VoiceBubble: View {
         let s: String
         switch a {
         case .feed: s = "fork.knife"; case .drink: s = CareMenu.waterSymbol; case .sleep: s = "moon.zzz.fill"; case .clean: s = CareMenu.cleanSymbol
-        case .come: s = "arrow.down.circle.fill"; case .spin: s = "arrow.triangle.2.circlepath"; case .goTo: s = "figure.walk"; case .wear: s = "tshirt.fill"
+        case .come: s = "arrow.down.circle.fill"; case .goTo: s = "figure.walk"; case .wear: s = "tshirt.fill"
         case .playWith: s = "soccerball"; case .race: s = "flag.checkered"; case .train: s = "dumbbell.fill"
         default: s = "star.fill"
         }

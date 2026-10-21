@@ -632,16 +632,16 @@ final class AIVoiceIntegrationTests: XCTestCase {
         r.voice.hear(words)
         await r.voice.intentTask?.value
         r.run(0.5)
+        r.run(4) { r.brain.idleState.kind != .look }           // a "?" look ends before the next phrase (a word said during it would teach "look")
     }
 
-    func testGoToSleepBecomesANap() async {
+    func testGoToSleepIsTheGoodnight() async {
         let r = make()
-        await say(r, "go to sleep")
+        await say(r, "take a nap")                                  // (a phrase the legacy goodnight table does not have: it goes through the router)
         XCTAssertEqual(r.voice.lastParse?.path, "rules")
-        XCTAssertEqual(r.voice.understood?.text, "sleep"); XCTAssertEqual(r.voice.understood?.ok, true)
-        XCTAssertTrue(r.run(12) { r.brain.isNapping }, "he sits down and the sit becomes a nap")
-        XCTAssertEqual(r.voice.ai.napsStarted, 1)
-        XCTAssertEqual(r.voice.feedbackLog.last, .command(.sleep))
+        XCTAssertEqual(r.voice.feedbackLog.last, .social(.goodnight), "bedtime is the existing goodnight")
+        XCTAssertEqual(r.voice.goodnightLog.last, [0])
+        XCTAssertTrue(r.run(14) { r.brain.isSleeping }, "he goes to bed")
     }
 
     func testEveryoneComeEatPutsTheTrayOut() async {
@@ -669,20 +669,50 @@ final class AIVoiceIntegrationTests: XCTestCase {
         XCTAssertEqual(r.voice.feedbackLog.last, .answer(.hunger, nil))
     }
 
-    func testDoASpinSpinsHim() async {
+    func testDoASpinNeedsTheTrickPageThenRuns() async {
         let r = make()
         await say(r, "do a spin")
-        XCTAssertEqual(r.voice.understood?.text, "spin"); XCTAssertEqual(r.voice.understood?.ok, true)
-        XCTAssertEqual(r.voice.feedbackLog.last, .command(.spin))
-        var spun = false
-        r.run(3) { if case .spin = r.brain.script { spun = true }; return spun }
-        XCTAssertTrue(spun, "the play spin runs")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "no spin page bought: the confused look")
+        r.care.store.grant("page-spin")
+        r.voice.training.debugLearn(.spin, word: "twirl")
+        r.run(1)
+        await say(r, "do a spin")
+        XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.spin))
+        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .tail }, "the spin trick runs")
     }
 
-    func testUnknownPlaceGetsTheNotYetPillAndTheConfusedLook() async {
+    func testGoSitOnThePlacedBeanbagAndWearAnOwnedHat() async {
+        let r = make()
+        r.care.store.grant("decor-beanbag")
+        XCTAssertNotNil(r.care.store.place("decor-beanbag"))
+        r.care.syncDecor()
+        defer { DecorField.shared.set([]) }
+        await say(r, "go sit on the beanbag")
+        XCTAssertEqual(r.voice.understood?.text, "go to beanbag"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertEqual(r.voice.feedbackLog.last, .command(.goTo))
+        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .decorSit }, "he heads for the beanbag")
+        // the wardrobe: an owned hat goes on; one he does not own is "not in the wardrobe"
+        await say(r, "put on the pirate hat")
+        XCTAssertEqual(r.voice.understood?.text, "No pirate hat in the wardrobe"); XCTAssertEqual(r.voice.understood?.ok, false)
+        r.care.store.grant("wear-pirate_hat")
+        r.run(1)
+        await say(r, "put on the pirate hat")
+        XCTAssertEqual(r.voice.understood?.text, "put on pirate hat"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertEqual(r.care.store.worn(0, .head), .pirateHat)
+    }
+
+    func testLetsRaceOpensTheTrack() async {
+        let r = make()
+        let before = r.care.townRequest
+        await say(r, "let's race")
+        XCTAssertEqual(r.voice.understood?.text, "race"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertEqual(r.care.townRequest, before + 1); XCTAssertEqual(r.care.townScreen, .track)
+    }
+
+    func testUnknownPlaceGetsTheMissingPillAndTheConfusedLook() async {
         let r = make()
         await say(r, "go to the beanbag")
-        XCTAssertEqual(r.voice.understood?.text, "No beanbag to go to yet"); XCTAssertEqual(r.voice.understood?.ok, false)
+        XCTAssertEqual(r.voice.understood?.text, "No beanbag in the room"); XCTAssertEqual(r.voice.understood?.ok, false)
         XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "the confused \"?\"")
     }
 

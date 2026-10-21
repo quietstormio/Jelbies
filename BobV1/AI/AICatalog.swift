@@ -2,8 +2,9 @@
 //  AICatalog.swift
 //  What a voice command may refer to: the Jellies in the room and the things they can act on (foods, drinks, placed decor, toys, wearables).
 //  Both tiers of the intent pipeline read it: Tier A lists the ids in its instructions and its output is validated against them; Tier B fuzzy-matches
-//  spoken words against the names. Foods and drinks come from `Consumables`. Decor, toys and wearables have no model in this tree yet, so
-//  other features plug theirs in through `AICatalogRegistry.providers` (no edit here): until then an object of those kinds is "not here".
+//  spoken words against the names. Foods and drinks come from `Consumables` (store foods only while the bag has some); decor and toys are the pieces
+//  PLACED in the room (one entry per kind; the Jelly picks the nearest free one); wearables are the looks the player OWNS (StoreBook). Tests add
+//  extra items through `AICatalogRegistry.providers`.
 //
 
 import Foundation
@@ -74,4 +75,34 @@ nonisolated enum AICatalogRegistry {
     static func catalog(jellies: [(id: Int, name: String)]) -> AICatalog {
         AICatalog(jellies: jellies.map { AICatalog.Jelly(id: $0.id, name: $0.name) }, items: items())
     }
+
+    /// The live room: free foods plus store foods in the bag, placed decor and toys, owned wearables, then the providers' items.
+    @MainActor static func catalog(jellies: [(id: Int, name: String)], store: StoreBook) -> AICatalog {
+        var out: [CatalogItem] = Consumables.all.filter { !$0.stored || store.count(food: $0.id) > 0 }.map {
+            CatalogItem(id: $0.id, name: $0.name, kind: $0.kind == .food ? .food : .drink, aliases: Self.foodAliases[$0.id] ?? [])
+        }
+        var kinds: [DecorKind] = []
+        for p in store.placedDecor where !kinds.contains(p.kind) { kinds.append(p.kind) }
+        out += kinds.map { CatalogItem(id: $0.storeID, name: $0.title, kind: $0.category == .toys ? .toy : .decor, aliases: Self.decorAliases[$0] ?? []) }
+        for it in StoreCatalog.items where it.isWearable {
+            guard let look = it.wear, store.ownsLook(look) else { continue }
+            var al: [String] = []
+            if let last = it.name.split(separator: " ").last.map({ String($0).lowercased() }), last != it.name.lowercased() { al.append(last) }
+            if it.kind == .shoes { al.append("shoes") }
+            out.append(CatalogItem(id: it.id, name: it.name, kind: .wearable, aliases: al))
+        }
+        for p in providers { out += p() }
+        var seen: Set<String> = []
+        return AICatalog(jellies: jellies.map { AICatalog.Jelly(id: $0.id, name: $0.name) }, items: out.filter { seen.insert($0.id).inserted })
+    }
+
+    /// Spoken forms of the decor (the id is "decor-beanbag", the name "Beanbag").
+    static let decorAliases: [DecorKind: [String]] = [
+        .beanbag: ["bean bag", "bag"], .cushion: ["cushion", "pillow"], .plant: ["plant"], .ball: ["ball"], .rug: ["rug"], .toybox: ["toy box", "box", "toys"],
+        .nightlight: ["night light", "light"], .bouncymat: ["mat", "bouncy mat", "trampoline"], .loveseat: ["sofa", "couch", "seat"], .petbed: ["bed", "pet bed"],
+        .pouf: ["pouffe", "stool"], .rockingchair: ["rocking chair", "rocker", "chair"], .armchair: ["arm chair", "chair"], .swing: ["swing"],
+        .diningset: ["table", "dining table", "dining set"], .bookshelf: ["shelf", "bookcase", "books"], .wardrobe: ["closet"], .divider: ["divider", "screen"],
+        .floorlamp: ["lamp", "floor lamp"], .slide: ["slide"], .monstera: ["monstera", "big plant"], .duck: ["duck", "ducky"], .blocks: ["blocks", "tower"],
+        .spintop: ["top", "spinning top"], .toycar: ["car", "toy car"], .yarnball: ["yarn", "wool", "yarn ball"], .drum: ["drum"], .football: ["football", "soccer ball", "soccer"],
+    ]
 }

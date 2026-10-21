@@ -8,13 +8,13 @@
 
 import Foundation
 
-/// Everything a Jelly can be asked for. Actions the room cannot do yet (go to decor, wear, play soccer, race, train: the store, wardrobe and
-/// Jelly Circuit live on another branch) still parse so the feedback can say "not yet" instead of "?"; `JellyAction.supportedNow` is the gate.
+/// Everything a Jelly can be asked for. `JellyAction.supportedNow` gates what the room can carry out (everything, since checkpoint 7c: decor, the
+/// wardrobe and the Track); an action whose object is missing ("go to the beanbag" with none placed) gets a "No beanbag in the room" line.
 nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     case come, stop, stopFighting, praise, scold, play
-    /// A learned trick (sit, jacks, run, flip, look; come is `.come`).
+    /// A learned trick (sit, jacks, run, flip, look, and the store pages spin, hop, roll; come is `.come`).
     case trick(VoiceTrick)
-    case spin
+    /// Bedtime: the legacy "goodnight" (yawn, cuddle pile, tucked in).
     case feed, drink, sleep, clean
     /// Go to / sit on a piece of decor (`object` = its id).
     case goTo
@@ -31,7 +31,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     var key: String {
         switch self {
         case .come: return "come"; case .stop: return "stop"; case .stopFighting: return "stopFighting"; case .praise: return "praise"
-        case .scold: return "scold"; case .play: return "play"; case .trick(let t): return t.rawValue; case .spin: return "spin"
+        case .scold: return "scold"; case .play: return "play"; case .trick(let t): return t.rawValue
         case .feed: return "feed"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "clean"
         case .goTo: return "goTo"; case .wear: return "wear"; case .playWith: return "playWith"; case .race: return "race"; case .train: return "train"
         case .whoIs(.hunger): return "whoIsHungry"; case .whoIs(.thirst): return "whoIsThirsty"; case .whoIs(.attention): return "whoWantsLove"
@@ -41,7 +41,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     init?(key: String) {
         switch key {
         case "come": self = .come; case "stop": self = .stop; case "stopFighting": self = .stopFighting; case "praise": self = .praise
-        case "scold": self = .scold; case "play": self = .play; case "spin": self = .spin; case "feed": self = .feed; case "drink": self = .drink
+        case "scold": self = .scold; case "play": self = .play; case "feed": self = .feed; case "drink": self = .drink
         case "sleep": self = .sleep; case "clean": self = .clean; case "goTo": self = .goTo; case "wear": self = .wear; case "playWith": self = .playWith
         case "race": self = .race; case "train": self = .train; case "whoIsHungry": self = .whoIs(.hunger); case "whoIsThirsty": self = .whoIs(.thirst)
         case "whoWantsLove": self = .whoIs(.attention); case "none": self = .none
@@ -49,13 +49,13 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         default: if let t = VoiceTrick(rawValue: key), t != .come { self = .trick(t) } else { return nil }
         }
     }
-    static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "feed", "drink",
+    static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "hop", "roll", "feed", "drink",
                                     "sleep", "clean", "goTo", "wear", "playWith", "race", "train", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
 
-    /// The object kind this action needs (nil = none; `.playWith` takes an optional toy).
-    var objectKind: CatalogItem.Kind? {
+    /// The object kinds this action takes (nil = none; `.playWith` takes an optional toy; "go to" takes furniture or a toy).
+    var objectKinds: Set<CatalogItem.Kind>? {
         switch self {
-        case .feed: return .food; case .drink: return .drink; case .goTo: return .decor; case .wear: return .wearable; case .playWith: return .toy
+        case .feed: return [.food]; case .drink: return [.drink]; case .goTo: return [.decor, .toy]; case .wear: return [.wearable]; case .playWith: return [.toy]
         default: return nil
         }
     }
@@ -63,18 +63,13 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     var needsObject: Bool { self == .goTo || self == .wear }
     var needsPartner: Bool { self == .playWith }
 
-    /// What this room can carry out today. The rest parse (and get a "not yet" pill) so the intent system is ready for soccer, decor, wardrobe and races.
-    var supportedNow: Bool {
-        switch self {
-        case .goTo, .wear, .playWith, .race, .train: return false
-        default: return true
-        }
-    }
+    /// What this room can carry out today (everything since checkpoint 7c; kept as the gate for actions a future branch parses before it runs them).
+    var supportedNow: Bool { true }
     /// The HUD's word for it.
     var title: String {
         switch self {
         case .come: return "come here"; case .stop: return "stop"; case .stopFighting: return "stop fighting"; case .praise: return "good job"
-        case .scold: return "no"; case .play: return "play"; case .trick(let t): return t.title.lowercased(); case .spin: return "spin"
+        case .scold: return "no"; case .play: return "play"; case .trick(let t): return t.title.lowercased()
         case .feed: return "eat"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "bath time"
         case .goTo: return "go to"; case .wear: return "put on"; case .playWith: return "play with"; case .race: return "race"; case .train: return "train"
         case .whoIs(.hunger): return "who's hungry?"; case .whoIs(.thirst): return "who's thirsty?"; case .whoIs(.attention): return "who wants love?"
@@ -116,11 +111,20 @@ nonisolated struct JellyCommand: Equatable, Sendable, Hashable {
         case .jellies(let ids): who = ids.map(names).joined(separator: " & ") + ": "
         }
         var what = action == .playWith ? "play" : action.title
-        if let o = object, let it = AICatalogRegistry.items().first(where: { $0.id == o }) { what += " \(it.name.lowercased())" }
-        else if let o = object { what += " \(o.replacingOccurrences(of: "_", with: " "))" }
+        if let o = object { what += " " + Self.objectName(o).lowercased() }
         else if let u = unknownObject { what += " \(u)" }
         if let p = partner { what += " with \(names(p))" }
         return who + what
+    }
+}
+
+extension JellyCommand {
+    /// The spoken name of a catalog id: a food, a store item (a wearable), a decor kind, else the id itself.
+    static func objectName(_ id: String) -> String {
+        if let c = Consumables.with(id: id) { return c.name }
+        if let it = StoreCatalog.item(id) { return it.name }
+        if let k = DecorKind(storeID: id) { return k.title }
+        return id.replacingOccurrences(of: "_", with: " ")
     }
 }
 
@@ -153,9 +157,9 @@ enum CommandValidation {
         // object
         let obj = VoiceMatcher.normalise(raw.object)
         if !obj.isEmpty, !["none", "nil", "null", "nothing"].contains(obj) {
-            let kinds: Set<CatalogItem.Kind>? = action.objectKind.map { [$0] }
+            let kinds = action.objectKinds
             guard let it = catalog.item(id: obj) ?? catalog.match(obj.split(separator: " ").map(String.init), kinds: kinds) else { return nil }
-            if let k = action.objectKind, it.kind != k { return nil }
+            if let k = kinds, !k.contains(it.kind) { return nil }
             cmd.object = it.id
         }
         // partner

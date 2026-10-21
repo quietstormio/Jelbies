@@ -143,7 +143,7 @@ final class AIRouterTests: XCTestCase {
         for f in ["targets", "action", "object", "partner"] { XCTAssertTrue(schema.contains(f), f) }
         let ins = SystemCommandModel.instructions(catalog)
         XCTAssertTrue(ins.contains("beanbag") && ins.contains("pirate_hat") && ins.contains("Moss"), "the instructions list the live ids")
-        XCTAssertLessThan(ins.count, 1400, "short prompt")
+        XCTAssertLessThan(ins.count, 1800, "short prompt")
     }
     #endif
 }

@@ -193,6 +193,9 @@ struct GameScreen: View {
         .task { await GameScreen.runStoreDemo(model: model) }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
+        .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly
+            if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
+        }
         .onAppear { model.care.select.gateDraw = true }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
