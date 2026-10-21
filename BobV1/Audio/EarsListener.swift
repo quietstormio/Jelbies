@@ -322,9 +322,13 @@ final class Ears {
                     return EarsEngineBox(engine: engine, pipe: pipe)
                 }.value
                 self.starting = false
+                // ON may have been switched off, or the app backgrounded, while the engine came up: let the session go again if it was OFF
+                guard self.isOn, self.foreground, !self.voiceHeld else {
+                    box.engine.inputNode.removeTap(onBus: 0); box.engine.stop()
+                    if !self.isOn { if self.sessionUp { self.sessionUp = false }; self.sessionHook(false) }
+                    return
+                }
                 if !self.sessionUp { self.sessionUp = true; self.sessionHook(true) }
-                // ON may have been switched off, or the app backgrounded, while the engine came up
-                guard self.isOn, self.foreground, !self.voiceHeld else { box.engine.inputNode.removeTap(onBus: 0); box.engine.stop(); return }
                 self.engine = box.engine
                 self.pipeline = box.pipe
                 self.usesClassifier = box.pipe.usesClassifier

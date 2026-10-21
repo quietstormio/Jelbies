@@ -266,6 +266,16 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertEqual(c.media(EarEvent.heard(.clap)), .heard(.clap))
     }
 
+    /// The main path: the built-in classifier accepts the 0.5 s / 50 % window the pipeline asks for (else every phone would silently fall back to DSP only).
+    func testPipelineBuildsTheClassifierPath() throws {
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1) else { throw XCTSkip("no format") }
+        let p = EarsPipeline(format: fmt, classify: true)
+        XCTAssertTrue(p.usesClassifier, "SoundAnalysis v1 request rejected: the window / overlap must fit windowDurationConstraint")
+        XCTAssertNotNil(p.analyzer)
+        let d = EarsPipeline(format: fmt, classify: false)
+        XCTAssertFalse(d.usesClassifier)
+    }
+
     func testDspPipelineBeatOnAClickTrackLinesUpWithTheClicksInHostTime() throws {
         let sr = 16000.0
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 1) else { throw XCTSkip("no format") }
