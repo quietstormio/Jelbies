@@ -39,6 +39,7 @@ nonisolated enum JellyNameRoster {
         JellyName(id: 0, base: "bob", extraVariants: ["bobbob", "bobbo", "bobs"], nearMisses: ["bab", "bop", "bahb", "baub", "bawb", "bobb"]),
         JellyName(id: 1, base: "pip", extraVariants: ["pipsqueak", "pipsqueaks", "pippip"], nearMisses: ["pep", "pit", "pipp", "peep", "pib"]),
         JellyName(id: 2, base: "moss", extraVariants: ["mossmoss", "mossa"], nearMisses: ["moth", "mos", "mauss", "moz", "mawss"]),
+        JellyName(id: 3, base: "lavender", extraVariants: ["lav", "lavvy", "lavi", "lavenda"], nearMisses: ["lavander", "lavendar", "lavinder", "levender"]),
     ]
     static func name(_ id: Int) -> JellyName? { all.first { $0.id == id } }
 

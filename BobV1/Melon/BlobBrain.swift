@@ -191,6 +191,12 @@ final class BlobBrain {
     var commandedGoodnight = false
     /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
     var sleepLocked = false
+    /// Character features (Features/, BlobBrain+FlapHop.swift): what grows on him, whether his wings are folded under a back item (then the flap-hop is
+    /// a plain hop), the largest flap the worn items allow (deg), and the running flap-hop. The stage / GameCare set the first three.
+    var feature: JellyFeature = .none
+    var wingsFolded = false
+    var wingFlapLimit: Float = 75
+    var flapHop = FlapHopState()
     var nameHopping = false
     var flipArmA: Float = 0
     /// The flip's smoothed arm angles (rad). `commandedFlipFail` = the queued commanded flip is the funny faceplant.
@@ -535,6 +541,7 @@ final class BlobBrain {
         if flipTick(sim, skinner, dt) { return }
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }
+        if flapHopTick(sim, skinner, dt) { return }
         if idleBodyMoveTick(sim, skinner, dt) { return }
         if sleepBodyTick(sim, skinner, dt) { return }
         socialTick(sim, skinner, dt)

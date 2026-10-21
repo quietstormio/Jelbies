@@ -100,6 +100,7 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "antic: spin after his tail", game: true, seconds: 6, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.tail, $0.sim) }),
         Move(name: "antic: flop", game: true, seconds: 4, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.flop, $0.sim) }),
         Move(name: "antic: happy bounce", game: true, seconds: 4, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.bounce, $0.sim) }),
+        Move(name: "Lavender: flap-hop", game: true, seconds: 6, expectBeans: true, start: { $0.brain.feature = .wings; $0.brain.idleForced = true; _ = $0.brain.idleStart(.flapHop, $0.sim) }),
         Move(name: "antic: roll", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.roll, $0.sim) }),
         Move(name: "antic: window", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: stretch", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stretch, $0.sim) }),

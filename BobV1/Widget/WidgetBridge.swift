@@ -55,15 +55,15 @@ final class WidgetBridge {
 
     // MARK: building the snapshot
 
-    /// Roster id -> colour name (Bob blue, Pip yellow, Moss green: JellyRoster.palette).
-    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green"][min(max(id, 0), 2)] }
+    /// Roster id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender: JellyRoster.palette).
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender"][min(max(id, 0), 3)] }
     /// The body palette of a roster id (each Jelly's own colours).
     static func palette(_ id: Int) -> Palette { JellyRoster.palette(id) ?? PaletteKey.blue.palette }
 
     static func record(_ i: Input, look: String) -> JellyRecord {
         let lv = (0..<NeedKind.allCases.count).map { $0 < i.levels.count ? min(max(i.levels[$0], 0), 1) : 1 }
         return JellyRecord(id: i.id, name: i.name, color: i.color, levels: lv, dirt: min(max(i.dirt, 0), 1), sparkle: min(max(i.sparkle, 0), 1),
-                           mood: AwayMath.mood(of: lv).rawValue, look: look)
+                           mood: AwayMath.mood(of: lv).rawValue, look: look, feature: JellyRoster.feature(i.id).rawValue)
     }
     static func snapshot(_ inputs: [Input], at date: Date, looks: [Int: String] = [:]) -> JellySnapshot {
         JellySnapshot(savedAt: date, jellies: inputs.prefix(JellyShare.maxJellies).map { record($0, look: looks[$0.id] ?? "") })

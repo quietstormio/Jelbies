@@ -21,7 +21,7 @@ nonisolated enum JellyShare {
     static let groupID = "group.io.mgsllc.BobV1"
     static let snapshotFile = "jellies.json"
     static let scheme = "jelbies"
-    static let maxJellies = 3
+    static let maxJellies = 4
     static func portraitFile(_ id: Int) -> String { "portrait-\(id).png" }
     /// The shared container, or nil when the App Group is not available to this process.
     static var containerURL: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID) }
@@ -41,9 +41,12 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
     var mood: String
     /// What the portrait PNG currently shows (colour + coat), so the app re-renders only when the look changes meaningfully.
     var look: String = ""
+    /// His feature (JellyFeature raw value: "spines", "daisy", "wings"; "" / "none" = plain). Optional in the file: old snapshots have none.
+    var feature: String = ""
 
-    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "") {
+    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "", feature: String = "") {
         self.id = id; self.name = name; self.color = color; self.levels = levels; self.dirt = dirt; self.sparkle = sparkle; self.mood = mood; self.look = look
+        self.feature = feature
     }
     /// Tolerant decoding: a missing / short field falls back instead of losing the whole snapshot.
     init(from d: Decoder) throws {
@@ -58,6 +61,7 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
         sparkle = min(max(try c.decodeIfPresent(Float.self, forKey: .sparkle) ?? 0, 0), 1)
         mood = try c.decodeIfPresent(String.self, forKey: .mood) ?? BlobMood.okay.rawValue
         look = try c.decodeIfPresent(String.self, forKey: .look) ?? ""
+        feature = try c.decodeIfPresent(String.self, forKey: .feature) ?? ""
     }
 }
 

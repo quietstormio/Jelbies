@@ -54,6 +54,8 @@ final class JellyProfile: Identifiable {
     }
 
     var coat: BlobGrime.CoatTier { grime.coat }
+    /// What grows on him besides the body (Features/): Pip's spines, Moss's daisy, Lavender's wings. Follows the roster id, nothing to save.
+    var feature: JellyFeature { JellyRoster.feature(id) }
 
     /// One fixed sim step: needs drain, dirt builds with the floor he covered, the look follows the dirt.
     func step(dt: Float, position: SIMD2<Float>, exerting: Bool, drainScale: Float = 1) {

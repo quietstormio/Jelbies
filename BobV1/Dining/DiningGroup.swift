@@ -25,7 +25,9 @@ final class DiningGroup {
     private let shared: Bool
     /// Centre gap the diners keep from each other while they stand round the tray (the stands are 1.1 apart).
     static let diningGap: Float = 0.7
-    /// Per Jelly: his tier now (nil = everybody takes the whole serving, no plan), and a callback for each piece he has eaten (blob, count).
+    /// The tray has three places at most (DiningLayout): with four Jellies GameCare+Group seats three and the fourth eats at the next sitting.
+    static let maxDiners = 3
+    /// Per Jelly (by his ROSTER id, `memberIDs`): his tier now (nil = everybody takes the whole serving, no plan), and a callback for each piece he has eaten (jelly, count).
     var tierOf: ((Int) -> NeedTier)?
     var pay: ((Int, Int) -> Void)?
     /// Famished / Parched take their pieces faster (tests of the shared bite timing turn this off).
@@ -45,6 +47,8 @@ final class DiningGroup {
     private var origin = DiningSpot.preferred
     /// place index of Blob i
     private(set) var placeOf: [Int] = []
+    /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
+    private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
     private var requested = false
     private var settle: Float = 0
@@ -64,6 +68,8 @@ final class DiningGroup {
     var kind: NeedKind { serving.kind == .food ? .hunger : .thirst }
     /// Gap the diners keep from each other right now (nil = the room's usual one).
     var peerGapNow: Float? { isActive ? Self.diningGap : nil }
+    /// The diners' stands while a sitting runs (GameCare+Group moves the Jellies who are NOT at this sitting off them).
+    var standsNow: [SIMD2<Float>] { isActive ? stands : [] }
 
     private var stands: [SIMD2<Float>] { // the tray-less stand of each place (eating / sipping offset included)
         let layout = DiningLayout.make(n: n)
@@ -91,9 +97,10 @@ final class DiningGroup {
         return out
     }
 
-    func start(_ c: Consumable, brains bs: [BlobBrain], floor f: @escaping (Int) -> SIMD2<Float>) {
+    func start(_ c: Consumable, brains bs: [BlobBrain], floor f: @escaping (Int) -> SIMD2<Float>, ids: [Int]? = nil) {
         guard state == .idle, dining.phase == .absent, !bs.isEmpty else { return }
-        brains = Array(bs.prefix(3)); n = brains.count; serving = c; floor = f
+        brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
+        memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
         origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n))
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
@@ -167,7 +174,7 @@ final class DiningGroup {
         guard let pay, state == .serving || dining.phase != .absent else { return }
         for i in brains.indices {
             let k = min(eaten(i), piecesFor[i])
-            if k > paid[i] { pay(i, k - paid[i]); paid[i] = k }
+            if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k }
         }
     }
     /// Hooks, plan (from his tier) and request for blob `i` (the first serve, a retry and a re-serve).
@@ -194,7 +201,7 @@ final class DiningGroup {
                     state = .serving
                     for i in brains.indices {
                         idle[i] = 0; paid[i] = 0
-                        if let tierOf { tiers[i] = tierOf(i); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
+                        if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
                         startSitting(i)
                     }
                 }

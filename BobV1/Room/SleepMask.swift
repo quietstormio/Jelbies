@@ -62,13 +62,16 @@ nonisolated enum EyeMaskModel {
         var pivot = SIMD3<Float>.zero
     }
 
-    /// Band and piping colours (linear) by Jelly id: contrast with the body (blue, yellow, green).
+    /// One mask palette per Jelly (JellyRoster.maxCount).
+    static let paletteCount = 4
+    /// Band and piping colours (linear) by Jelly id: contrast with the body (blue, yellow, green, lavender).
     static func palette(_ id: Int) -> (band: SIMD3<Float>, piping: SIMD3<Float>) {
         let c = Consumables.self
-        switch ((id % 3) + 3) % 3 {
+        switch ((id % paletteCount) + paletteCount) % paletteCount {
         case 0:  return (c.srgb(0.15, 0.19, 0.46), c.srgb(0.50, 0.58, 0.90))        // navy on blue Bob
         case 1:  return (c.srgb(0.60, 0.48, 0.90), c.srgb(0.85, 0.78, 0.98))        // lavender on yellow Pip
-        default: return (c.srgb(0.90, 0.40, 0.55), c.srgb(0.99, 0.78, 0.84))        // rose on green Moss
+        case 2:  return (c.srgb(0.90, 0.40, 0.55), c.srgb(0.99, 0.78, 0.84))        // rose on green Moss
+        default: return (c.srgb(0.86, 0.62, 0.22), c.srgb(0.99, 0.88, 0.62))        // honey on lavender Lavender
         }
     }
 
@@ -76,7 +79,7 @@ nonisolated enum EyeMaskModel {
     static let padCentreY: Double = 0.828
 
     /// One rest mesh per palette (built once).
-    static let rests: [Rest] = (0..<3).map { build(id: $0) }
+    static let rests: [Rest] = (0..<paletteCount).map { build(id: $0) }
 
     // MARK: rest-space helpers (egg only: the eyes and the head are on it, the arms are far below)
 
@@ -184,7 +187,7 @@ nonisolated enum EyeMaskModel {
 
     /// Appends the mask at `scale` (about the pivot, in front of the eyes) to `b`.
     static func append(id: Int, to b: RoomMeshBuilder, scale s: Float, carry: Carry) {
-        let r = rests[((id % 3) + 3) % 3]
+        let r = rests[((id % paletteCount) + paletteCount) % paletteCount]
         let base = UInt32(b.mesh.vertices.count)
         let R = simd_float3x3(carry.rotation)
         b.mesh.vertices.reserveCapacity(b.mesh.vertices.count + r.pos.count)
@@ -289,7 +292,7 @@ final class SleepMaskSet {
         }
     }
     private func spawnZ(_ s: inout Slot, id: Int, size: Float) {
-        let pivot = EyeMaskModel.rests[((id % 3) + 3) % 3].pivot
+        let pivot = EyeMaskModel.rests[((id % EyeMaskModel.paletteCount) + EyeMaskModel.paletteCount) % EyeMaskModel.paletteCount].pivot
         let o = s.carry.world(pivot) + SIMD3(0.04 * Float(id % 3 - 1), 0.1, 0)
         s.zs.append(ZPuff(age: 0, origin: o, phase: rnd(&s) * 6.28, size: size * (0.85 + 0.3 * rnd(&s))))
         zSpawns += 1
@@ -314,7 +317,7 @@ final class SleepMaskSet {
         s.carry = EyeMaskModel.Carry(centroid: p.centroid, rotation: p.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
     }
     private func poof(_ id: Int, _ brain: BlobBrain, _ s: Slot) {
-        let pivot = EyeMaskModel.rests[((id % 3) + 3) % 3].pivot
+        let pivot = EyeMaskModel.rests[((id % EyeMaskModel.paletteCount) + EyeMaskModel.paletteCount) % EyeMaskModel.paletteCount].pivot
         puffs.spawn(at: s.carry.world(pivot), radius: SleepMaskTuning.puffRadius)
         puffSpawns += 1
         if soundOn { AudioHub.shared.play(.bubblepop, jelly: id, x: brain.px, volume: SleepMaskTuning.soundVolume) }

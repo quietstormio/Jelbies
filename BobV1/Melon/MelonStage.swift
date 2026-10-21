@@ -315,6 +315,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Wires one brain into the room: it steers around the other Jellies (a standing Jelly is an obstacle to everybody; between two walkers the
     /// lower id gives way) and walks by the room's floor rules.
     private func wireRoster(_ b: BlobBrain, id: Int) {
+        b.feature = JellyRoster.feature(id)
         guard actors.count > 1 else { return }
         b.steerID = id
         b.bus = eventBus
@@ -628,6 +629,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
         }
         for a in actors { a.reset(drop: model.reduceMotion ? 0 : 0.35, shift: count > 1) }
+        for a in actors { a.brain?.feature = JellyRoster.feature(a.id) }
         model.particles = body.n
         model.tets = body.nT
         model.seeds = rm.seedCount

@@ -57,6 +57,8 @@ enum IdleKind: String, CaseIterable, Sendable {
     case rollTrip      // rolls a short way along the leg (1...2.5 u) and pops up with a squish; a mid-walk flourish and an idle moment
     case sigh          // a slow inhale, a long exhale and a slump, sleepy / worried face
     case hmph          // grumpy puff: squash widens, angry brows, a quick turn-away and a small stomp
+    // characters (2026-10-20): Lavender's chicken-like flap-hop (BlobBrain+FlapHop.swift); the others' features only move with the body
+    case flapHop
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -178,7 +180,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick: return .walking
-        case .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip: return .playing
+        case .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -190,6 +192,7 @@ extension BlobBrain {
     func idleMaybeStart(_ sim: SoftBody) -> Bool {
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
+        if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
         guard idleState.kind == nil, !held, idleState.cooldown <= 0, attached else { return false }
         // the zoomies urge: a burst of energy every few minutes (not at night, never grumpy, one of the two fast Jellies at a time)
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 1 {
@@ -452,6 +455,14 @@ extension BlobBrain {
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
             idleScootHop(sim)
+        case .flapHop:
+            guard feature == .wings else { return false }
+            if wingsFolded {                                 // folded wings (a back item): the plain happy bounce, one hop
+                idleBegin(.bounce); idleState.target = here; idleState.reps = 1; idleState.hop = 0; idleState.landT = 0
+                script = .idle; activity = .playing; idleState.phase = 1; idleState.phaseT = 0
+                idleScootHop(sim); return true
+            }
+            return flapHopBegin(sim)
         case .flop:
             idleBegin(.flop)
             script = .idle; activity = .playing

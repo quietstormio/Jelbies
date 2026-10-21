@@ -267,7 +267,11 @@ extension GameCare {
         let arrived = greetPending.isEmpty && greetOthers.isEmpty && !greeting && !greetHop && book.homeAge > 1
         if arrived, book.won, !book.celebrated {      // a win: everybody bounces together once
             book.celebrated = true
-            for a in actors { if let b = a.brain { b.startHopPlay(sim: a.sim, distance: 0.0001); AudioHub.shared.chirp(jelly: a.id, .happy) } }
+            for a in actors {
+                guard let b = a.brain else { continue }
+                if b.feature == .wings, !b.wingsFolded, b.idleState.kind == nil { b.commandedIdle = .flapHop } else { b.startHopPlay(sim: a.sim, distance: 0.0001) }
+                AudioHub.shared.chirp(jelly: a.id, .happy)
+            }
             for a in actors where a.id > 0 { startGreetHearts(a.id) }
             touchPlay?.spawnHeart(now: CACurrentMediaTime())
         }

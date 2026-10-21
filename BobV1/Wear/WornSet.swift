@@ -67,6 +67,8 @@ final class WornSet {
         var bib: (team: WearTeam, number: Int)?
         var hideAll = false
         var arms: [ArmFrameWorld] = [ArmFrameWorld(), ArmFrameWorld()]
+        /// Worn art id -> the variant art drawn instead (the hat Moss's daisy sits on; GameCare+Features sets it from the feature fit).
+        var artOverride: [String: String] = [:]
     }
     private(set) var slots: [Slot] = []
     /// One world box per Jelly that wears something, from the last `frame` (the room cache re-shades them).
@@ -85,6 +87,9 @@ final class WornSet {
     // MARK: queries
 
     func item(_ id: Int, _ s: WearSlot) -> Item? { slots.indices.contains(id) ? slots[id].items[s] : nil }
+    func slot(_ id: Int) -> Slot? { slots.indices.contains(id) ? slots[id] : nil }
+    /// The variant art drawn for a worn piece on Jelly `id` (Features: the nopom / nobutton / short hats under Moss's daisy).
+    func setArtOverride(_ id: Int, _ o: [String: String]) { while slots.count <= id { slots.append(Slot()) }; if slots[id].artOverride != o { slots[id].artOverride = o } }
     /// The piece of this slot that is on screen (scale > 0) now.
     func shown(_ id: Int, _ s: WearSlot) -> WearLook? { item(id, s).flatMap { $0.scale > 0.001 ? $0.look : nil } }
     func jersey(_ id: Int) -> WearTeam? { slots.indices.contains(id) ? slots[id].jersey : nil }
@@ -230,7 +235,7 @@ final class WornSet {
                 }
             }
             for (slot, it) in s.items where it.scale > 0.001 {
-                guard let look = it.look, let body, let p = WearMeshes.prepare(look, body: body) else { continue }
+                guard let look = it.look, let body, let p = WearMeshes.prepare(look, body: body, art: s.artOverride[look.art]) else { continue }
                 if slot == .hands { Self.emitArms(p, into: &op, slot: s, scale: it.scale) }
                 else { Self.emit(p, into: &op, slot: s, skin: sk, scale: it.scale, time: time) }
             }
