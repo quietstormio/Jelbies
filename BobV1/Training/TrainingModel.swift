@@ -19,10 +19,25 @@ nonisolated enum DanceID: String, CaseIterable, Codable, Sendable {
     var title: String { switch self { case .sway: return "Sway" } }
 }
 
-/// The course the Jelly trains / races on. Only the first exists yet.
+/// The course the Jelly races on (Race/RaceCourse.swift has the shapes). Training is always on the Puddle's straight.
 nonisolated enum CourseTier: String, CaseIterable, Codable, Sendable {
-    case puddle
-    var title: String { switch self { case .puddle: return "Puddle" } }
+    case puddle, ripple, splash, wave
+    var title: String { switch self { case .puddle: return "Puddle"; case .ripple: return "Ripple"; case .splash: return "Splash"; case .wave: return "Wave" } }
+    /// The class a racer is in on this course.
+    var className: String { switch self { case .puddle: return "Starter"; case .ripple: return "Rookie"; case .splash: return "Pro"; case .wave: return "Champion" } }
+    /// What the course is like, for the Track panel.
+    var blurb: String {
+        switch self {
+        case .puddle: return "The straight. Tap left, right, left, right."
+        case .ripple: return "Two gentle curves. Ease off a little in the bends."
+        case .splash: return "S-bends and a couple of soft bumps. Keep your eyes on the track."
+        case .wave: return "Tight turns and two hairpins. Slow your taps for the corners."
+        }
+    }
+    var index: Int { CourseTier.allCases.firstIndex(of: self) ?? 0 }
+    /// The course below this one (nil for the Puddle).
+    var below: CourseTier? { index > 0 ? CourseTier.allCases[index - 1] : nil }
+    var above: CourseTier? { index + 1 < CourseTier.allCases.count ? CourseTier.allCases[index + 1] : nil }
 }
 
 nonisolated enum TrainingTuning {

@@ -232,8 +232,8 @@ struct TrackPanel: View {
     var train: () -> Void = {}
     /// The Train button and the Pep bar show (training exists).
     static let trainingExists = true
-    /// The course. Only the Puddle exists; harder courses come later.
-    var courseTier: CourseTier = .puddle
+    /// The course picked for the next race (Race/CoursePicker.swift sets it through GameCare.chooseCourse).
+    var courseTier: CourseTier { care.race.courseTier }
     @Environment(\.verticalSizeClass) private var vsc
 
     var body: some View {
@@ -254,19 +254,17 @@ struct TrackPanel: View {
                     HStack(alignment: .top, spacing: 14) {
                         VStack(spacing: 10) {
                             raceCard
-            HStack(spacing: 10) {
-                prize("1st", RaceTuning.drops(place: 1)); prize("2nd", RaceTuning.drops(place: 2)); prize("3rd", RaceTuning.drops(place: 3))
-            }
+                            courseCard
+                            prizes
                         }
                         statCard(prof)
                     }
                 } else {
                     VStack(spacing: 14) {
                         raceCard
+                        courseCard
                         statCard(prof)
-            HStack(spacing: 10) {
-                prize("1st", RaceTuning.drops(place: 1)); prize("2nd", RaceTuning.drops(place: 2)); prize("3rd", RaceTuning.drops(place: 3))
-            }
+                        prizes
                     }
                 }
             }
@@ -300,7 +298,7 @@ struct TrackPanel: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("\(prof?.name ?? "Bob") races").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                        Text("Class: \(courseTier.title)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("track-class")
+                        Text("Class: \(courseTier.className) (\(courseTier.title))").font(SK.font(13, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("track-class")
                     }
                     Spacer()
                     if care.jellies.count > 1 { Text("Switch").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase) }
@@ -347,13 +345,28 @@ struct TrackPanel: View {
                 .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.sky))
             VStack(alignment: .leading, spacing: 3) {
                 Text("Waddle Sprint").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                Text("You and two rivals on the straight. Tap the two foot buttons to waddle faster.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                Text("You and two rivals on the \(courseTier.title). Tap the two foot buttons to waddle faster.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
         .padding(12).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
         .accessibilityElement(children: .combine)
+    }
+
+    /// The course picker (Race/CoursePicker.swift): the four courses, their shapes, locks and classes.
+    private var courseCard: some View {
+        CoursePicker(care: care)
+            .padding(12).frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
+    }
+
+    /// The prizes of the picked course.
+    private var prizes: some View {
+        HStack(spacing: 10) {
+            prize("1st", RaceTuning.drops(place: 1, tier: courseTier)); prize("2nd", RaceTuning.drops(place: 2, tier: courseTier)); prize("3rd", RaceTuning.drops(place: 3, tier: courseTier))
+        }
+        .accessibilityIdentifier("track-prizes")
     }
 
     private func bar(_ name: String, _ v: Float, _ sub: String, _ c: Color) -> some View {

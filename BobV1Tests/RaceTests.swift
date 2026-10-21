@@ -397,13 +397,31 @@ final class RaceBodyRig {
     /// Distances travelled, by time.
     private(set) var log: [(t: Float, z: Float)] = []
 
-    init(waddle: Float, tapsPerSecond: Float, focus: Float = 1, seed: UInt64 = 3) {
+    /// The course he runs (nil: the straight from where the rig stands, the pre-course rig).
+    let course: RaceCourse?
+    let lane: Int
+
+    /// With a `course` the rig is put on the start line of `lane` and runs that lane (the glue's progress, not pz - startZ).
+    init(waddle: Float, tapsPerSecond: Float, focus: Float = 1, seed: UInt64 = 3, course: RaceCourse? = nil, lane: Int = RaceTuning.playerLane) {
         rig = MotionRig(game: true)
         rig.brain.amplitude = 1
         rig.brain.seed = 11
-        sim = RaceSim(player: RacerStats(waddle: waddle, focus: focus), playerName: "P", rivals: [], seed: seed)
+        self.course = course; self.lane = lane
+        sim = course.map { RaceSim(player: RacerStats(waddle: waddle, focus: focus), playerName: "P", rivals: [], seed: seed, course: $0) }
+            ?? RaceSim(player: RacerStats(waddle: waddle, focus: focus), playerName: "P", rivals: [], seed: seed)
         self.tapsPerSecond = tapsPerSecond
-        rig.brain.startRace(sim: rig.sim, skinner: rig.skinner, heading: 0, laneX: rig.root.x)
+        if let c = course {
+            let spot = c.lanePoint(lane, at: 0)
+            if simd_distance(spot, SIMD2(rig.brain.px, rig.brain.pz)) > 1e-3 {          // (a course placed where the rig stands keeps the rig's state as it is)
+                rig.sim.arenaRadius = .infinity
+                rig.sim.teleport(toXZ: spot)
+                for _ in 0..<60 { rig.sim.step() }
+                rig.brain.currentPose(rig.sim)
+            }
+            rig.brain.startRace(sim: rig.sim, skinner: rig.skinner, heading: c.pose(at: 0).heading, laneX: spot.x, course: c, lane: lane)
+        } else {
+            rig.brain.startRace(sim: rig.sim, skinner: rig.skinner, heading: 0, laneX: rig.root.x)
+        }
         startZ = rig.brain.pz
     }
 
@@ -414,7 +432,7 @@ final class RaceBodyRig {
             while tapsPerSecond > 0, tapT >= 1 / tapsPerSecond { tapT -= 1 / tapsPerSecond; sim.playerTap(foot: foot); foot = 1 - foot }
             if let e = stumbleEvery, sinceStumble >= e { sinceStumble = 0; sim.playerTap(foot: foot); sim.playerTap(foot: foot) }
         }
-        if sim.phase != .countdown { sim.setMeasured(0, dist: rig.brain.pz - startZ) }
+        if sim.phase != .countdown { sim.setMeasured(0, dist: course == nil ? rig.brain.pz - startZ : rig.brain.raceProgress) }
         sim.tick(dt: dt, bodyFree: { [rig] _ in rig.brain.raceStepFree }, bodyReady: { [rig] _ in rig.brain.raceBodyReady }, bodyBetween: { [rig] _ in rig.brain.raceBetweenSteps })
         for e in sim.takeEvents() { rig.brain.raceApply(e, sim: rig.sim) }
         rig.brain.raceKeepAlive()
@@ -501,6 +519,78 @@ final class RaceGaitTests: XCTestCase {
             XCTAssertLessThanOrEqual(arms.capMax, ArmCap.maximum * 1.02, "\(c.name): arms within the wave's maximum")
             XCTAssertGreaterThanOrEqual(arms.minDepth, 0.015, "\(c.name): arm bases stay buried")
             if c.taps >= 3 { XCTAssertNotNil(r.sim.racers[0].finishTime, "\(c.name): he crossed the line (the finish coast was measured too)") }
+        }
+    }
+
+    // MARK: curved courses (Race/RaceCourse.swift)
+
+    /// Every lane of the Wave: a body tap-stepped round both hairpins stays on its lane (lateral error small), its heading tracks the lane's, its
+    /// progress climbs monotonically (the glue's measured distance), and it crosses the line. The same for the Splash's S-bends and bumps.
+    func testBodiesFollowTheirLanesRoundTheBends() {
+        for (course, name) in [(RaceCourse.wave, "wave"), (RaceCourse.splash, "splash")] {
+            for lane in 0..<3 {
+                let r = RaceBodyRig(waddle: 0.7, tapsPerSecond: 6, focus: 1, seed: 5, course: course, lane: lane)
+                Self.keep.append(r)
+                r.rig.renderSamples = false
+                var worstLat: Float = 0, worstHead: Float = 0, lastS: Float = -1, backsteps = 0, n = 0
+                r.run(2.9 + course.length / 0.9 + 6) {
+                    n += 1
+                    guard n % 10 == 0, r.sim.phase == .running || r.sim.phase == .finishing, !r.sim.racers[0].finished else { return }
+                    let s = r.rig.brain.raceProgress
+                    let lat = abs(r.rig.brain.raceLateral)
+                    worstLat = max(worstLat, lat)
+                    if s > 1, s < course.length - 1 {
+                        let want = course.pose(at: s).heading
+                        worstHead = max(worstHead, abs(wrapAngle(r.rig.brain.yaw - want)))
+                    }
+                    if s < lastS - 0.3 { backsteps += 1 }
+                    lastS = max(lastS, s)
+                }
+                MotionLog.write(String(format: "RACE course %@ lane %d: worst lateral %.3f u, worst heading error %.3f rad, steps %d, finished %@", name, lane, worstLat, worstHead, r.rig.brain.race.steps, r.sim.racers[0].finishTime.map { String(format: "%.1f s", $0) } ?? "no"))
+                XCTAssertLessThan(worstLat, 0.7, "\(name) lane \(lane): stays on his lane (worst \(worstLat))")
+                XCTAssertLessThan(worstHead, 0.6, "\(name) lane \(lane): faces along the lane (worst \(worstHead))")
+                XCTAssertEqual(backsteps, 0, "\(name) lane \(lane): progress never jumps back")
+                XCTAssertNotNil(r.sim.racers[0].finishTime, "\(name) lane \(lane): he crossed the line")
+                XCTAssertGreaterThan(r.rig.brain.raceProgress, course.length - 0.5)
+            }
+        }
+    }
+
+    /// Feet attached and arms stubby round the Wave's hairpins: a fast trained Jelly with forced stumbles in the bends, and a starter who trips
+    /// in the corners by the course rule (the trip pose on a curve).
+    func testFeetAttachedAndArmsStubbyRoundTheHairpinsWithTrips() {
+        struct Case { let name: String; let waddle: Float; let focus: Float; let taps: Float; let stumbleEvery: Float?; let lane: Int }
+        let cases = [Case(name: "wave: max cadence with stumbles (lane 1)", waddle: 1, focus: 1, taps: 9, stumbleEvery: 2.2, lane: 1),
+                     Case(name: "wave: starter trips in the corners (lane 0)", waddle: 0.4, focus: 0.3, taps: 5, stumbleEvery: nil, lane: 0),
+                     Case(name: "wave: trained, outer lane (lane 2)", waddle: 0.85, focus: 0.75, taps: 7, stumbleEvery: nil, lane: 2)]
+        for c in cases {
+            let r = RaceBodyRig(waddle: c.waddle, tapsPerSecond: c.taps, focus: c.focus, seed: 9, course: .wave, lane: c.lane)
+            Self.keep.append(r)
+            r.stumbleEvery = c.stumbleEvery
+            r.rig.renderSamples = false
+            var feet = FeetAttachTests.FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
+            var arms = ArmCapTests.Stat()
+            var armFrames = 0, cornerTrips = 0, inCornerFrames = 0
+            r.run(2.9 + RaceCourse.wave.length / 0.8 + 4) {
+                if let f = FeetAttachTests.footFrame(r.rig) { FeetAttachTests.accumulate(&feet, f); frames += 1 }
+                if RaceCourse.wave.turnRadius(at: r.sim.racers[0].dist) != nil { inCornerFrames += 1 }
+                cornerTrips = r.sim.racers[0].cornerTrips
+                guard r.rig.brain.armG > 0.5 else { return }
+                for si in 0..<2 {
+                    let g = r.rig.brain.armLastGeom[si]
+                    arms.add(a: SIMD3<Double>(g.a), b: SIMD3<Double>(g.b), rawB: SIMD3<Double>(r.rig.brain.armLastRawTip[si]), r1: Double(g.r1), r2: Double(g.r2))
+                    armFrames += 1
+                }
+            }
+            XCTAssertGreaterThan(frames, 100, "\(c.name): the foot beans were out")
+            XCTAssertGreaterThan(armFrames, 100, "\(c.name): the walking arms were drawn")
+            XCTAssertGreaterThan(inCornerFrames, 200, "\(c.name): he went round the bends")
+            FeetAttachTests.check("race \(c.name)", feet, frames: frames)
+            MotionLog.write(String(format: "RACE arms %@: exposed max %.3f H (cap %.3f H), min root depth %.3f u, %d frames, %d corner trips", c.name, arms.capMax / ArmCapTests.H, ArmCap.maximum / ArmCapTests.H, arms.minDepth, armFrames, cornerTrips))
+            XCTAssertLessThanOrEqual(arms.capMax, ArmCap.maximum * 1.02, "\(c.name): arms within the wave's maximum")
+            XCTAssertGreaterThanOrEqual(arms.minDepth, 0.015, "\(c.name): arm bases stay buried")
+            XCTAssertNotNil(r.sim.racers[0].finishTime, "\(c.name): he crossed the line")
+            if c.name.contains("starter") { XCTAssertGreaterThan(cornerTrips + r.sim.racers[0].tap.trips, 0, "\(c.name): the starter tripped") }
         }
     }
 

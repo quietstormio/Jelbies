@@ -86,9 +86,18 @@ nonisolated final class RoomRenderer {
             if raceVisible { buildRaceMeshes() }
         }
     }
+    /// The course the track is built for (Race/RaceCourse.swift). A change drops the built track; it is rebuilt for the new course when shown.
+    var raceCourse: CourseTier = .puddle {
+        didSet {
+            guard raceCourse != oldValue else { return }
+            raceVB = nil; raceIB = nil; raceIndexCount = 0
+            staticVersion &+= 1
+            if raceVisible { buildRaceMeshes() }
+        }
+    }
     private func buildRaceMeshes() {
         guard raceVB == nil else { return }
-        let m = RaceModels.build()
+        let m = RaceModels.build(course: RaceCourse.course(raceCourse))
         raceIndexCount = m.indices.count
         raceVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
         raceIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
