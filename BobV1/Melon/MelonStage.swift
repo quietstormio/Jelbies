@@ -229,6 +229,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var lastCam = CameraState()
     private var drillFollow: SIMD3<Float>?
     private var haveCam = false
+    private var aspectChecked = false                 // the drawable-vs-bounds aspect log, once
     private let massG: Float
 
     // drag state
@@ -852,10 +853,22 @@ final class MelonController: NSObject, MTKViewDelegate {
             if let f = drillFollow, simd_distance(f, c) < 3 { drillFollow = f + (c - f) * min(1, dt * 8) } else { drillFollow = c }
             drillAt = drillFollow
         } else { drillFollow = nil }
-        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt) : rig.camera(viewSize: pts, safeRect: safe)
+        // The projection's aspect is the DRAWABLE's (the pixels actually rendered), never the view's point size: a drawable that lags the bounds
+        // (a rotation, a scale change, a new SDK laying the view out differently) would otherwise stretch the Jellies. The two agree whenever
+        // the drawable is bounds x scale; the first mismatch is logged once.
+        let drawAspect = Float(view.drawableSize.width / max(view.drawableSize.height, 1))
+        if !aspectChecked, pts.height > 1 {
+            aspectChecked = true
+            let ptAspect = Float(pts.width / pts.height)
+            NSLog("[melon] camera: drawable %.0fx%.0f (aspect %.4f), bounds %.1fx%.1f pt (aspect %.4f) @ %.2fx, safe %@ | eye (%.2f, %.2f, %.2f) target (%.2f, %.2f, %.2f) wide x%.2f lift %.1f, %d Jellies",
+                  view.drawableSize.width, view.drawableSize.height, drawAspect, pts.width, pts.height, ptAspect, Double(stage.contentScaleFactor), NSCoder.string(for: stage.safeAreaInsets),
+                  GameCamera.eye.x, GameCamera.eye.y, GameCamera.eye.z, GameCamera.target.x, GameCamera.target.y, GameCamera.target.z, GameCamera.roomWideScale, GameCamera.roomWideLift, actors.count)
+            if abs(drawAspect / ptAspect - 1) > 0.01 { NSLog("[melon] camera: WARNING drawable and bounds aspects differ by %.1f%%", Double(abs(drawAspect / ptAspect - 1) * 100)) }
+        }
+        let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
-        if game { syncRoam(aspect: Float(pts.width / max(pts.height, 1))) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
+        if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
         // Outlines (a projection of every skinned vertex + a hull, per Jelly) are only needed while a highlight is up; a double tap / touch-down
         // refreshes them on demand (`refreshOutlines`), so a roster of three no longer pays for them every frame.
         if game, model.care.select.isSelecting {
