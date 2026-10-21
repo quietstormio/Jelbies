@@ -22,7 +22,10 @@ final class FeetAttachTests: XCTestCase {
     static let maxRadius: Float = 0.52                  // foot centre from the body axis (the underside radius is ~0.4 at the rim, the arm-free footprint ~0.5)
     static let minOverlap: Float = -0.02                // the deepest foot vertex is at least this far inside the egg
 
-    struct FootFrame { var soleRise: Float, centreHeight: Float, radius: Float, overlap: Float }
+    struct FootFrame { var soleRise: Float, centreHeight: Float, radius: Float, overlap: Float
+        /// Embedded foot only: its extent (largest vertex distance from the foot's mean) over the rest extent. Squash barely changes it; a foot left on the
+        /// floor while the body moves on stretches the slab into a tongue (2026-10-21: 1.9 x). 0 for bean frames.
+        var stretch: Float = 0 }
     /// Worst of both feet this frame; nil while the beans are not out.
     static func footFrame(_ r: MotionRig) -> FootFrame? {
         guard r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return nil }
@@ -43,17 +46,51 @@ final class FeetAttachTests: XCTestCase {
         }
         return f
     }
+    /// The foot that is actually DRAWN this frame (2026-10-21, "when he rolled randomly his feet came off again"): the beans while they are out, else the
+    /// embedded foot's render vertices (`MotionRig.core`). `footFrame` is nil while the beans are in, so a move that never puts them out (the rolls, the
+    /// flip, the flop) was never measured at all. Same body-frame metrics; `beans` says which foot was measured.
+    static func drawnFootFrame(_ r: MotionRig) -> FootFrame {
+        r.render()
+        let beans = r.skinner.beansActive && r.skinner.beanBlend > 0.05
+        let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
+        var f = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity)
+        for s in 0..<2 {
+            let ids = beans ? r.bean[s] : r.core[s]
+            guard !ids.isEmpty else { continue }
+            var lo = Float.infinity, cx: Float = 0, cy: Float = 0, cz: Float = 0, deepest = Float.infinity
+            var wm = SIMD3<Float>.zero
+            for id in ids {
+                let o = 6 * Int(id)
+                let p = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2])
+                wm += p
+                let q = c0 + pose.rotation.inverse.act(p - pose.centroid)
+                lo = min(lo, q.y); cx += q.x; cy += q.y; cz += q.z
+                deepest = min(deepest, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z)))))
+            }
+            let n = Float(ids.count)
+            f.soleRise = max(f.soleRise, lo); f.centreHeight = max(f.centreHeight, cy / n)
+            f.radius = max(f.radius, hypotf(cx / n, cz / n)); f.overlap = max(f.overlap, deepest)
+            if !beans {
+                wm /= n
+                var ext: Float = 0
+                for id in ids { let o = 6 * Int(id); ext = max(ext, simd_distance(SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]), wm)) }
+                f.stretch = max(f.stretch, ext / coreRestExtent[s])
+            }
+        }
+        return f
+    }
     static func accumulate(_ w: inout FootFrame, _ f: FootFrame) {
         w.soleRise = max(w.soleRise, f.soleRise); w.centreHeight = max(w.centreHeight, f.centreHeight)
-        w.radius = max(w.radius, f.radius); w.overlap = max(w.overlap, f.overlap)
+        w.radius = max(w.radius, f.radius); w.overlap = max(w.overlap, f.overlap); w.stretch = max(w.stretch, f.stretch)
     }
-    static func check(_ name: String, _ w: FootFrame, frames: Int, throwing: Bool = false) {
-        MotionLog.write(String(format: "FEETATTACH %@: %d bean frames, max sole rise %.3f, max foot-centre height %.3f (limit %.3f), max radius %.3f, worst overlap %.3f", name, frames, w.soleRise, w.centreHeight, maxCentreHeight, w.radius, w.overlap))
+    static func check(_ name: String, _ w: FootFrame, frames: Int, throwing: Bool = false, core: Bool = false) {
+        MotionLog.write(String(format: "FEETATTACH %@: %d %@ frames, max sole rise %.3f, max foot-centre height %.3f (limit %.3f), max radius %.3f, worst overlap %.3f, stretch %.2f", name, frames, core ? "embedded-foot" : "bean", w.soleRise, w.centreHeight, maxCentreHeight, w.radius, w.overlap, w.stretch))
         guard frames > 0 else { return }
+        if core { XCTAssertLessThanOrEqual(w.stretch, maxCoreStretch, "\(name): the foot is stretched away from the body (a tongue)") }
         XCTAssertLessThanOrEqual(w.soleRise, maxSoleRise, "\(name): a foot is lifted too high")
         XCTAssertLessThanOrEqual(w.centreHeight, maxCentreHeight, "\(name): a foot rides up onto the belly")
         XCTAssertLessThanOrEqual(w.radius, throwing ? 0.7 : maxRadius, "\(name): a foot is not under the body")
-        XCTAssertLessThanOrEqual(w.overlap, minOverlap, "\(name): a foot is not fused to the body (gap)")
+        XCTAssertLessThanOrEqual(w.overlap, core ? minCoreOverlap : minOverlap, "\(name): a foot is not fused to the body (gap)")
     }
 
     struct Move {
@@ -163,6 +200,28 @@ final class FeetAttachTests: XCTestCase {
         }
     }
 
+    /// The embedded foot (beans in) is measured with the same limits; its overlap is the slab top against the egg: at rest ~-0.04, it may ride a hair
+    /// out under a hard squash or a fast tip (the fitted frame lags the deformed body), never more than this. A foot left on the floor while the body
+    /// rolls away (2026-10-21) reads +0.16.
+    static let minCoreOverlap: Float = 0.06
+    /// Embedded foot: extent over rest extent. The hop / jacks tuck and the sleep lie read up to ~1.15; the roll's tongue 1.9.
+    static let maxCoreStretch: Float = 1.3
+    /// Rest extent of each embedded foot (largest vertex distance from its mean, rest render mesh).
+    static let coreRestExtent: [Float] = {
+        let rm = MotionRig.renderMesh
+        let r = MotionRig(game: true, settle: 0)
+        return (0..<2).map { s in
+            let ids = r.core[s]
+            guard !ids.isEmpty else { return 1 }
+            var m = SIMD3<Float>.zero
+            for id in ids { let o = 3 * Int(id); m += SIMD3(rm.rest[o], rm.rest[o + 1], rm.rest[o + 2]) }
+            m /= Float(ids.count)
+            var ext: Float = 0
+            for id in ids { let o = 3 * Int(id); ext = max(ext, simd_distance(SIMD3(rm.rest[o], rm.rest[o + 1], rm.rest[o + 2]), m)) }
+            return ext > 0 ? ext : 1
+        }
+    }()
+
     func testFeetStayLowUnderAndAttachedInEveryScriptedMove() {
         defer { DecorField.shared.clear() }
         for m in Self.moves {
@@ -171,30 +230,41 @@ final class FeetAttachTests: XCTestCase {
             r.renderSamples = false
             m.start(r)
             var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
-            var worstInfo = "", clock: Float = 0
+            var wc = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), coreFrames = 0
+            var worstInfo = "", worstCore = "", clock: Float = 0
             r.run(m.seconds) {
                 m.each?(r)
                 clock += 1.0 / 60
                 if m.name.hasPrefix("soccer") { DecorField.shared.tick(dt: 1.0 / 60) }          // (the ball rolls: the stage ticks the field each step)
-                if let f = Self.footFrame(r) {
-                    if f.overlap > w.overlap { worstInfo = String(format: "t=%.2f kind=%@ stage=%d script=%@ gait=%@ feetActive=%d stepU=%.2f yaw=%.2f boost=%.3f runW=%.2f pos=(%.2f,%.2f) amp=%.2f", clock, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")", r.brain.idleState.bagStage, "\(r.brain.script)", "\(r.brain.gait.phase)", r.brain.feet.active ? 1 : 0, r.brain.feet.stepU, r.brain.yaw, r.brain.walkBoostK, r.brain.runW, r.brain.px, r.brain.pz, r.brain.amplitude) }
+                let f = Self.drawnFootFrame(r)
+                let info = { String(format: "t=%.2f kind=%@ stage=%d script=%@ gait=%@ feetActive=%d stepU=%.2f yaw=%.2f boost=%.3f runW=%.2f pos=(%.2f,%.2f) amp=%.2f targets=%d", clock, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")", r.brain.idleState.bagStage, "\(r.brain.script)", "\(r.brain.gait.phase)", r.brain.feet.active ? 1 : 0, r.brain.feet.stepU, r.brain.yaw, r.brain.walkBoostK, r.brain.runW, r.brain.px, r.brain.pz, r.brain.amplitude, r.sim.targets.count) }
+                if r.skinner.beansActive && r.skinner.beanBlend > 0.05 {
+                    if f.overlap > w.overlap { worstInfo = info() }
                     Self.accumulate(&w, f); frames += 1
+                } else {
+                    if f.overlap > wc.overlap || f.stretch > wc.stretch { worstCore = info() }
+                    Self.accumulate(&wc, f); coreFrames += 1
                 }
             }
             if w.overlap > Self.minOverlap { print("FEETWORST \(m.name): \(worstInfo)") }
+            if wc.overlap > Self.minCoreOverlap || wc.stretch > Self.maxCoreStretch { print("FEETWORST \(m.name) (embedded foot): \(worstCore)") }
             if m.expectBeans { XCTAssertGreaterThan(frames, 20, "\(m.name): the beans were out") }
+            XCTAssertGreaterThan(frames + coreFrames, 20, "\(m.name): a foot was measured in every frame")
             Self.check(m.name, w, frames: frames)
+            Self.check(m.name + " (embedded foot)", wc, frames: coreFrames, core: true)
         }
     }
 
     /// Shoes (store, cosmetic) are grown from the rendered bean vertices: in every scripted move they stay on the bean (within their thickness) and
-    /// obey the same low / under / attached limits as the bare foot.
+    /// obey the same low / under / attached limits as the bare foot. With shoes on the beans are out in EVERY move (`shoesWorn` keeps them live), so
+    /// every row is measured, the rolls and the flip included (2026-10-21: the rolls were skipped as "no beans").
     func testShoesStayAttachedInEveryScriptedMove() {
         defer { DecorField.shared.clear() }
-        for m in Self.moves where m.expectBeans {
+        for m in Self.moves {
             let r = MotionRig(game: m.game)
             Self.keep.append(r)
             r.renderSamples = false
+            r.brain.shoesWorn = true
             m.start(r)
             var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
             var worstOff: Float = 0

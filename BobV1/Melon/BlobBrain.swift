@@ -776,6 +776,11 @@ final class BlobBrain {
     }
 
     func startRoll(_ sim: SoftBody) {
+        // The planted feet were held by stiff world targets (the standing / walking feet drive): release them, and the rigid render feet, before the
+        // roll owns the body, exactly as the hop and the mid-walk rollTrip do. The roll's branch of `tick` returns before driveLimbs, so nothing else
+        // clears them: the pinned soles stayed on the floor while he tipped over and stretched into a tongue behind him (user, 2026-10-21, phone:
+        // "when he rolled randomly his feet came off again").
+        sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         gait.facingYaw = yaw
         gait.home = SIMD2(px, pz)
