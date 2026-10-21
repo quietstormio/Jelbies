@@ -2,7 +2,8 @@
 //  JellyRoster.swift
 //  The Jellies of the room (1...3): who they are, what colour, where they spawn, and the UserDefaults keys of their saved state.
 //
-//  Launch flag: -BlobCount 1|2|3 (default 3). Jelly 0 is Bob (baby blue), 1 is Pip (yellow), 2 is Moss (green).
+//  Launch flag: -BlobCount 1|2|3|4 (default 3). Jelly 0 is Bob (baby blue), 1 is Pip (yellow), 2 is Moss (green), 3 is Lavender (pastel lavender).
+//  Every body is Bob's; a Jelly differs only by colour and his FEATURE (JellyFeature: Pip's spines, Moss's daisy, Lavender's wings; Features/).
 //  Persistence is keyed by id. Jelly 0's keys ARE the pre-multi-Jelly keys ("BlobNeeds.v1", "BlobGrime.v1", "BlobWords.v1"), so the phone's
 //  existing Bob state (needs, dirt, his learned "come here") becomes Jelly 0's data with no copy and nothing lost; Jellies 1 and 2 get suffixed keys.
 //  DropsWallet ("BlobDrops.v1") and the voice tutorial flag ("VoiceTutorial.v1") stay shared on purpose.
@@ -20,9 +21,22 @@ enum JellyKeys {
     private static func suffixed(_ legacy: String, _ id: Int) -> String { id == 0 ? legacy : "\(legacy).jelly\(id)" }
 }
 
+/// What grows on a Jelly besides Bob's body (BobV1/Features): mapped from his colour. Saved nowhere: it follows the roster id.
+nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
+    case none, spines, daisy, wings
+    /// The feature art of the bundle (feature_<id>.bin); "" for none.
+    var art: String {
+        switch self { case .none: return ""; case .spines: return "pip_c_final"; case .daisy: return "moss_a_final"; case .wings: return "lav_a_final" }
+    }
+}
+
 nonisolated enum JellyRoster {
-    static let maxCount = 3
-    static let names = ["Bob", "Pip", "Moss"]
+    static let maxCount = 4
+    static let names = ["Bob", "Pip", "Moss", "Lavender"]
+    /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings.
+    static func feature(_ id: Int) -> JellyFeature {
+        switch id { case 1: return .spines; case 2: return .daisy; case 3: return .wings; default: return .none }
+    }
 
     /// `-BlobCount 1|2|3`; default 3 in this build.
     static func launchCount(_ d: UserDefaults = .standard) -> Int {
@@ -36,15 +50,17 @@ nonisolated enum JellyRoster {
         switch count {
         case 1: return [SIMD2(0, 0)]
         case 2: return [SIMD2(0.1, 1.5), SIMD2(-0.2, -1.4)]
-        default: return [SIMD2(-0.15, 1.6), SIMD2(-0.85, -1.7), SIMD2(0.85, -0.1)]
+        case 3: return [SIMD2(-0.15, 1.6), SIMD2(-0.85, -1.7), SIMD2(0.85, -0.1)]
+        default: return [SIMD2(-0.15, 1.6), SIMD2(-1.1, -1.7), SIMD2(1.2, -0.3), SIMD2(1.15, 1.7)]
         }
     }
 
-    /// Body colours: Bob is the model's palette (baby blue in the game); Pip is the existing yellow; Moss a green made the same way.
+    /// Body colours: Bob is the model's palette (baby blue in the game); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
     static func palette(_ id: Int) -> Palette? {
         switch id {
         case 1: return PaletteKey.yellow.palette
         case 2: return JellyPalettes.green
+        case 3: return JellyPalettes.lavender
         default: return nil
         }
     }
@@ -54,6 +70,7 @@ nonisolated enum JellyRoster {
         switch id {
         case 1: return SIMD3(0.99, 0.90, 0.62)
         case 2: return SIMD3(0.70, 0.90, 0.66)
+        case 3: return SIMD3(0.80, 0.72, 0.93)
         default: return SIMD3(0.70, 0.83, 0.945)
         }
     }
@@ -84,5 +101,13 @@ nonisolated enum JellyPalettes {
         return matte(Palette(name: "Mint green", flesh: [0.560, 0.870, 0.585], fleshDeep: [0.290, 0.650, 0.350],
                              pale: unused, skin: unused, stripe: unused, seed: PaletteKey.blue.palette.seed,
                              shadowTint: [0.500, 0.745, 0.530], uiFlesh: [0.470, 0.800, 0.505]))
+    }()
+
+    /// Lavender: the approved pastel lavender (#CDB8EC), the same treatment as Moss's green.
+    static let lavender: Palette = {
+        let unused = SIMD3<Float>(0.5, 0.5, 0.5)
+        return matte(Palette(name: "Lavender", flesh: [0.760, 0.665, 0.930], fleshDeep: [0.520, 0.410, 0.780],
+                             pale: unused, skin: unused, stripe: unused, seed: PaletteKey.blue.palette.seed,
+                             shadowTint: [0.640, 0.560, 0.800], uiFlesh: [0.780, 0.700, 0.920]))
     }()
 }

@@ -70,6 +70,8 @@ final class GameCare {
     /// The wardrobe on screen (Wear/WornSet.swift, GameCare+Wear.swift): hats, glasses, scarves, mitts, jerseys and the Circuit bibs.
     @ObservationIgnored let wardrobe = WornSet()
     @ObservationIgnored var wearDrawn = false
+    /// The character features on screen (Features/FeatureSet.swift, GameCare+Features.swift): Pip's spines, Moss's daisy, Lavender's wings.
+    @ObservationIgnored let features = FeatureSet()
     /// The fitting room's picture of Jelly `id` wearing a look, rendered by the stage with the game renderer (nil when no stage is running).
     @ObservationIgnored var fittingProvider: ((WearLook, Int) -> UIImage?)?
     @ObservationIgnored var wearOutfitRev = -1

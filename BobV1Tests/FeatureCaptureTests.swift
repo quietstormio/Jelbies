@@ -1,0 +1,307 @@
+//
+//  FeatureCaptureTests.swift
+//  Not a regression test: renders the character features (Pip's spines, Moss's daisy, Lavender's wings) with the REAL renderer when CHAR_CAP_DIR is
+//  set (TEST_RUNNER_CHAR_CAP_DIR). One body per pass like the other capture suites (each rig rendered alone and pasted over an empty-room render).
+//  CHAR_CAP_LAND=1 renders the lineup in landscape.
+//
+
+import XCTest
+import Metal
+import simd
+import UIKit
+@testable import BobV1
+
+@MainActor
+final class FeatureCaptureTests: XCTestCase {
+    var W = 603 * 2, H = 1311 * 2
+    nonisolated(unsafe) static var keep: [AnyObject] = []
+    typealias Outfit = [WearSlot: WearLook]
+
+    override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0) }
+    override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
+
+    private func dir() throws -> String {
+        guard let d = ProcessInfo.processInfo.environment["CHAR_CAP_DIR"], !d.isEmpty else { throw XCTSkip("CHAR_CAP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        return d
+    }
+
+    /// A character on a rig: the roster id (palette + feature) and what he wears.
+    struct Char { var id: Int; var outfit: Outfit = [:] }
+
+    private func renderer(_ lab: SocialTests.Lab) throws -> (MelonRenderer, MTLTexture) {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        let r0 = lab.rigs[0]
+        guard let ren = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: MotionRig.renderMesh, simEdges: r0.sim.edges, particleCount: r0.sim.n, game: true), ren.room != nil else { throw XCTSkip("no renderer") }
+        ren.resize(width: W, height: H)
+        let td = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: W, height: H, mipmapped: false)
+        td.usage = [.renderTarget, .shaderRead]; td.storageMode = .shared
+        ren.roomCacheEnabled = false
+        return (ren, device.makeTexture(descriptor: td)!)
+    }
+
+    private func setUpLab(_ positions: [SIMD2<Float>], chars: [Char], seed: UInt64 = 5) -> SocialTests.Lab {
+        let lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: true, seed: seed)
+        SocialTests.keep.append(lab)
+        for (k, r) in lab.rigs.enumerated() { r.skinner.autoBlink = false; r.brain.feature = JellyRoster.feature(chars[k].id) }
+        WearBody.install(MotionRig.renderMesh)
+        return lab
+    }
+
+    /// The wardrobe + feature of every rig (id 0 each: the renderer draws one body per pass).
+    final class Dressed { var worn: [WornSet] = [], feats: [FeatureSet] = [] }
+    private func dress(_ lab: SocialTests.Lab, _ chars: [Char]) -> Dressed {
+        let d = Dressed()
+        for (k, r) in lab.rigs.enumerated() {
+            let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
+            let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
+            d.worn.append(w); d.feats.append(f)
+            for _ in 0..<3 { tick(d, k, r, chars[k]) }
+        }
+        return d
+    }
+    private func tick(_ d: Dressed, _ k: Int, _ r: MotionRig, _ c: Char, dt: Float = 1.0 / 60) {
+        let w = d.worn[k], f = d.feats[k]
+        w.tick(id: 0, brain: r.brain, sim: r.sim, outfit: c.outfit, role: .none, hideAll: false, dt: dt)
+        var art: [String] = []
+        for s in WearSlot.allCases where s != .feet { if let l = w.shown(0, s), !l.art.isEmpty { art.append(l.art) } }
+        f.tick(id: 0, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(c.id), worn: art, hideAll: false, dt: dt)
+        if let s = f.slot(0) { w.setArtOverride(0, s.fit.hatVariant); r.brain.wingsFolded = s.fit.folded; r.brain.wingFlapLimit = s.fit.flapMax }
+    }
+
+    private func skin(_ r: MotionRig) -> [Float] {
+        var d = [Float](repeating: 0, count: MotionRig.renderMesh.vertexCount * 6)
+        r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &d)
+        return d
+    }
+
+    private func composite(_ lab: SocialTests.Lab, _ d: Dressed, _ chars: [Char], _ ren: MelonRenderer, _ target: MTLTexture, cam camOverride: CameraState? = nil, hour: Double? = 12) -> LockImage {
+        let cam = camOverride ?? GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+        ren.dayHourOverride = hour
+        func shot(only: Int?) -> LockImage {
+            let k = only ?? 0
+            let light = GameCamera.light(centroids: lab.rigs.map { $0.sim.centroid() })
+            ren.beginFrame()
+            let r = lab.rigs[k]
+            r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: ren.dynPointer)
+            if only == nil { for v in 0..<MotionRig.renderMesh.vertexCount { ren.dynPointer[6 * v + 1] -= 60 } }
+            if let o = only {
+                let sk = skin(r)
+                if d.worn[o].shown(0, .hands) != nil { d.worn[o].setArms(0, GameCare.armFrames(brain: r.brain, sim: r.sim)) }
+                var f = sk.withUnsafeBufferPointer { p in d.worn[o].frame(theme: ren.room!.theme, time: 0.4) { _ in p.baseAddress } }
+                let ff = sk.withUnsafeBufferPointer { p in d.feats[o].frame { _ in p.baseAddress } }
+                let base = UInt32(f.opaque.vertices.count)
+                f.opaque.vertices += ff.vertices; f.opaque.indices += ff.indices.map { $0 + base }
+                let sb = RoomMeshBuilder(); sb.material = .plain
+                if let look = chars[o].outfit[.feet], let beans = GameCare.footBeans(brain: r.brain, sim: r.sim, skinner: r.skinner) {
+                    for s in 0..<2 { ShoeModel.build(look, bean: beans[s], floorY: r.sim.floorY, time: 0.4, side: s, body: JellyRoster.palette(chars[o].id)?.flesh ?? SIMD3(0.35, 0.5, 0.9), gpuPaint: false, into: sb) }
+                }
+                ren.room!.setWear(opaque: f.opaque, translucent: f.translucent, bounds: [])
+                ren.room!.setShoes(sb.mesh)
+                ren.setJersey(d.worn[o].jersey(0), body: 0)
+            } else {
+                ren.room!.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); ren.room!.setShoes(RoomMesh()); ren.setJersey(nil, body: 0)
+            }
+            ren.setMouth(0, body: 0)
+            var fp = FrameParams()
+            fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
+            fp.exposure = 1; fp.meshAlpha = 0
+            let pal = JellyRoster.palette(chars[k].id) ?? PaletteKey.blue.palette
+            fp.bg = pal.matte ? melonCreamLinear : melonBackgroundLinear
+            ren.setUniforms(camera: cam, light: light, palette: pal, params: fp, viewSize: SIMD2<Float>(Float(W), Float(H)))
+            let cmd = ren.queue.makeCommandBuffer()!
+            ren.draw(to: target, commandBuffer: cmd, showMesh: false)
+            cmd.waitUntilCompleted()
+            var px = [UInt8](repeating: 0, count: W * H * 4)
+            px.withUnsafeMutableBytes { target.getBytes($0.baseAddress!, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0) }
+            return LockImage(w: W, h: H, bgra: px)
+        }
+        _ = shot(only: nil)
+        let empty = shot(only: nil)
+        var out = empty
+        for k in (0..<lab.rigs.count).sorted(by: { lab.rigs[$0].sim.centroid().z < lab.rigs[$1].sim.centroid().z }) {
+            let b = shot(only: k)
+            for p in 0..<(W * H) {
+                var dd = 0
+                for c in 0..<3 { dd = max(dd, abs(Int(b.bgra[4 * p + c]) - Int(empty.bgra[4 * p + c]))) }
+                if dd > 3 { for c in 0..<4 { out.bgra[4 * p + c] = b.bgra[4 * p + c] } }
+            }
+        }
+        return out
+    }
+
+    static func lookCamera(target: SIMD3<Float>, dir: SIMD3<Float>, dist: Float, aspect: Float, lift: Float = 0.1) -> CameraState {
+        let eye = target + dir * dist + SIMD3(0, dist * lift, 0)
+        var cam = CameraState()
+        cam.view = M4.lookAt(eye: eye, at: target, up: SIMD3(0, 1, 0))
+        cam.viewProj = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), cam.view)
+        cam.invViewProj = M4.invert(cam.viewProj)
+        cam.pos = eye; cam.fwd = simd_normalize(target - eye)
+        return cam
+    }
+
+    // MARK: sheets
+
+    private func labelled(_ img: UIImage, _ text: String) -> UIImage {
+        let w = img.size.width, h = img.size.height, bar: CGFloat = 40
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: w, height: h + bar), format: fmt).image { _ in
+            UIColor(white: 0.1, alpha: 1).setFill(); UIRectFill(CGRect(x: 0, y: 0, width: w, height: h + bar))
+            (text as NSString).draw(at: CGPoint(x: 10, y: 9), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 20), .foregroundColor: UIColor.white])
+            img.draw(in: CGRect(x: 0, y: bar, width: w, height: h))
+        }
+    }
+    private func hstack(_ imgs: [UIImage]) -> UIImage {
+        let h = imgs.map { $0.size.height }.max() ?? 0, w = imgs.reduce(0) { $0 + $1.size.width }
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
+            var x: CGFloat = 0
+            for i in imgs { i.draw(at: CGPoint(x: x, y: 0)); x += i.size.width }
+        }
+    }
+    private func vstack(_ imgs: [UIImage]) -> UIImage {
+        let w = imgs.map { $0.size.width }.max() ?? 0, h = imgs.reduce(0) { $0 + $1.size.height }
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
+            var y: CGFloat = 0
+            for i in imgs { i.draw(at: CGPoint(x: 0, y: y)); y += i.size.height }
+        }
+    }
+    private func write(_ img: UIImage, _ path: String) throws { try img.pngData()!.write(to: URL(fileURLWithPath: path)) }
+
+    /// The part of a room frame around the Jellies.
+    private func cropJellies(_ img: LockImage, _ lab: SocialTests.Lab, cam: CameraState, pad: Float = 0.09) -> UIImage? {
+        let pts = lab.rigs.map { r -> SIMD2<Float> in
+            let c = r.sim.centroid(); let k = cam.viewProj * SIMD4<Float>(c.x, c.y, c.z, 1)
+            return SIMD2((k.x / k.w * 0.5 + 0.5) * Float(W), (1 - (k.y / k.w * 0.5 + 0.5)) * Float(H))
+        }
+        let lo = pts.reduce(SIMD2<Float>(repeating: .infinity)) { simd_min($0, $1) }, hi = pts.reduce(SIMD2<Float>(repeating: -.infinity)) { simd_max($0, $1) }
+        let mid = (lo + hi) / 2
+        let hw = max((hi.x - lo.x) / 2 + Float(W) * pad, Float(W) * 0.2), hh = max((hi.y - lo.y) / 2 + Float(H) * 0.08, hw * 0.55)
+        let r = CGRect(x: CGFloat(mid.x - hw), y: CGFloat(mid.y - hh * 1.2), width: CGFloat(hw * 2), height: CGFloat(hh * 2)).intersection(CGRect(x: 0, y: 0, width: W, height: H))
+        guard let cg = img.cgImage(), let part = cg.cropping(to: r) else { return nil }
+        return UIImage(cgImage: part)
+    }
+
+    /// A 900 x 900 close-up of rig 0 of a one-character lab from `yaw` radians round his facing (0 front, pi back).
+    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
+        W = 900; H = 900
+        let chars = [c]
+        let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: seed)
+        let (ren, target) = try renderer(lab)
+        let d = dress(lab, chars)
+        prepare?(lab, d)
+        let r = lab.rigs[0]
+        let pose = r.sim.bodyPose(iterations: 3)
+        var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
+        fwd = simd_normalize(fwd)
+        let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
+        let cc = pose.centroid
+        let cam = Self.lookCamera(target: SIMD3(cc.x, cc.y + 0.25, cc.z), dir: dir, dist: 3.4, aspect: 1)
+        let img = composite(lab, d, chars, ren, target, cam: cam)
+        return labelled(img.uiImage()!, label)
+    }
+
+    func testCaptureFeaturesCloseup() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        var rows: [UIImage] = []
+        for (name, id) in [("Pip: two-tone spines", 1), ("Moss: daisy sprout", 2), ("Lavender: feathered wings", 3)] {
+            var cells: [UIImage] = []
+            for (label, yaw) in [("front", Float(0)), ("3/4", Float(0.7)), ("back", Float.pi)] {
+                cells.append(try closeup(Char(id: id), yaw: yaw, label: "\(name) \(label)"))
+            }
+            rows.append(hstack(cells))
+        }
+        try write(vstack(rows), d + "/features_closeup.png")
+    }
+
+    func testCaptureLineupInGame() throws {
+        let d = try dir()
+        let land = !(ProcessInfo.processInfo.environment["CHAR_CAP_LAND"] ?? "").isEmpty
+        if land { W = 1311 * 2; H = 603 * 2 } else { W = 603 * 2; H = 1311 * 2 }
+        DayClock.shared.forcedHour = 12
+        let chars = [Char(id: 0), Char(id: 1), Char(id: 2), Char(id: 3)]
+        let positions: [SIMD2<Float>] = land ? [SIMD2(-2.6, 0.6), SIMD2(-0.9, 0.9), SIMD2(0.9, 0.9), SIMD2(2.6, 0.6)] : [SIMD2(-1.6, 0.3), SIMD2(-0.55, 1.2), SIMD2(0.55, 1.2), SIMD2(1.6, 0.3)]
+        let lab = setUpLab(positions, chars: chars, seed: 9)
+        for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim); r.brain.idleState.goalYaw = r.faceYaw; r.brain.idleState.hold = 0.01 }
+        for _ in 0..<120 { lab.tick(watching: false) }
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+        let img = composite(lab, dd, chars, ren, target, cam: cam)
+        let crop = cropJellies(img, lab, cam: cam) ?? img.uiImage()!
+        try write(labelled(crop, "Bob, Pip (spines), Moss (daisy), Lavender (wings) in the room" + (land ? " (landscape)" : " (portrait)")), d + (land ? "/landscape_lineup.png" : "/lineup_ingame.png"))
+    }
+
+    func testCaptureDaisyHats() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let hats: [(String, WearLook)] = [("honey beanie (no pom)", .beanieHoney), ("sky team cap (no button)", .capTeamSky), ("party hat (short)", .partyHat),
+                                           ("mint bucket hat", .bucketHat), ("cat ears", .catEars), ("tiny top hat", .tophat),
+                                           ("chef hat", .chefHat), ("witch hat", .witchHat), ("flower crown", .flowerCrown)]
+        var cells: [UIImage] = []
+        for (name, look) in hats { cells.append(try closeup(Char(id: 2, outfit: [.head: look]), yaw: 0.55, label: "Moss + \(name)")) }
+        var rows: [UIImage] = []
+        var i = 0
+        while i < cells.count { rows.append(hstack(Array(cells[i..<min(i + 3, cells.count)]))); i += 3 }
+        try write(vstack(rows), d + "/daisy_hats.png")
+    }
+
+    func testCaptureOutfitsAlt() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let sets: [[Char]] = [
+            [Char(id: 1, outfit: [.body: .capeHero, .face: .sunglassesStar, .feet: .sneakerSun]), Char(id: 2, outfit: [.head: .bucketHatPink, .neck: .bowtiePink, .feet: .rainBoots]), Char(id: 3, outfit: [.body: .backpackSky, .face: .glassesRound, .feet: .balletPink])],
+            [Char(id: 1, outfit: [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .feet: .sneakerLightup]), Char(id: 2, outfit: [.head: .partyHat, .body: .tutuPink, .neck: .pearls, .feet: .glitterShoes]), Char(id: 3, outfit: [.head: .beaniePink, .neck: .scarfSky, .hands: .gloveSky, .feet: .frogBoots])],
+        ]
+        let labels = ["Alt 1: Pip cape+shades | Moss bucket hat+bow tie | Lavender backpack+glasses (wings up)",
+                      "Alt 2: Pip sweatband+whistle | Moss party hat+tutu+pearls | Lavender beanie+scarf (wings low)"]
+        var rows: [UIImage] = []
+        for (n, chars) in sets.enumerated() {
+            W = 603 * 2; H = 1311 * 2
+            let lab = setUpLab([SIMD2(-1.9, 0.5), SIMD2(0.1, 0.9), SIMD2(2.0, 0.4)], chars: chars, seed: UInt64(5 + n))
+            let (ren, target) = try renderer(lab)
+            let dd = dress(lab, chars)
+            let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+            let img = composite(lab, dd, chars, ren, target, cam: cam)
+            if let c = cropJellies(img, lab, cam: cam) { rows.append(labelled(c, labels[n])) }
+        }
+        try write(vstack(rows), d + "/outfits_alt.png")
+    }
+
+    func testCaptureLavenderHop() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        W = 900; H = 900
+        let chars = [Char(id: 3)]
+        let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: 3)
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let r = lab.rigs[0]
+        // face a little away from the camera so the lift and the drift read
+        r.brain.idleForced = true
+        XCTAssertTrue(r.brain.idleStart(.flapHop, r.sim))
+        let pose0 = r.sim.bodyPose(iterations: 3)
+        var fwd = pose0.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0; fwd = simd_normalize(fwd)
+        let yaw: Float = 0.9
+        let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
+        let c0 = pose0.centroid
+        let cam = Self.lookCamera(target: SIMD3(c0.x + fwd.x * 0.3, c0.y + 0.3, c0.z + fwd.z * 0.3), dir: dir, dist: 4.2, aspect: 1, lift: 0.12)
+        let times: [(Float, String)] = [(0.2, "crouch, wings tucked"), (0.62, "launch, big flap"), (1.2, "rising, feet dangle"), (1.8, "hover ~0.33 u, rapid flaps"), (2.9, "tiring, coming down"), (3.38, "PLOP: squash, wings flop")]
+        var frames: [UIImage] = []
+        var ti = 0
+        var t: Float = 0
+        while ti < times.count && t < 5 {
+            lab.tick(watching: false); t += 1.0 / 60
+            tick(dd, 0, r, chars[0])
+            if t >= times[ti].0 {
+                let img = composite(lab, dd, chars, ren, target, cam: cam)
+                frames.append(labelled(img.uiImage()!, String(format: "t=%.2fs lift %.2f: %@", t, r.brain.flapHop.lift, times[ti].1)))
+                ti += 1
+            }
+        }
+        XCTAssertEqual(frames.count, 6)
+        try write(vstack([hstack(Array(frames[0..<3])), hstack(Array(frames[3..<6]))]), d + "/lavender_hop.png")
+    }
+}

@@ -66,12 +66,13 @@ final class SocialTests: XCTestCase {
         var watch: [Watch]
         var minPair: Float = .infinity, minTag = ""
         var snapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
-        var aside = [Float](repeating: 0, count: 3), asideClock: Float = 0
+        var aside: [Float], asideClock: Float = 0
         nonisolated deinit {}
         /// Wired like the stage's `wireRoster`: peers from a snapshot (a standing Jelly has a huge id), keepApart under the floor rules, peerGap = jellyGap,
         /// and the stage's makeRoom every 0.25 s.
         init(n: Int = 3, positions: [SIMD2<Float>] = SocialTests.starts, quiet: Bool = true, seed: UInt64 = 11) {
             rigs = (0..<n).map { _ in MotionRig(game: true) }
+            aside = [Float](repeating: 0, count: max(n, JellyRoster.maxCount))
             roster = SocialRoster.link(rigs.map { $0.brain })
             events = Array(repeating: [], count: n)
             watch = Array(repeating: Watch(), count: n)

@@ -17,7 +17,7 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .flapHop]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float {
         switch k {
@@ -29,7 +29,10 @@ extension BlobBrain {
         }
     }
 
-    func kindCooldownStart(_ k: IdleKind) { let c = Self.kindCooldown(k); if c > 0 { kindCool[k] = c } }
+    func kindCooldownStart(_ k: IdleKind) {
+        if k == .flapHop { kindCool[k] = rand(Self.flapHopUrge.lowerBound, Self.flapHopUrge.upperBound); return }
+        let c = Self.kindCooldown(k); if c > 0 { kindCool[k] = c }
+    }
     /// Kinds that may not be picked now: on their own cooldown, or what the others are doing this moment (two Jellies do not do the same thing at once).
     var kindCooling: Set<IdleKind> {
         var s = Set(kindCool.keys)

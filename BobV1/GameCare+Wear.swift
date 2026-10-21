@@ -33,6 +33,7 @@ extension GameCare {
             var hide = bath.active
             if race.active, raceBook.parked.contains(a.id) { hide = true; role = .none }
             wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit(a.id), role: role, hideAll: hide, dt: dt)
+            tickFeature(a, brain: b, hideAll: hide, dt: dt)
         }
         wardrobe.stepPuffs(dt: dt)
     }
@@ -79,10 +80,19 @@ extension GameCare {
         if wardrobe.body == nil { wardrobe.body = WearBody.shared }
         for a in actors where wardrobe.shown(a.id, .hands) != nil { wardrobe.setArms(a.id, armFrames(a)) }
         for a in actors { renderer.setJersey(wardrobe.jersey(a.id), body: a.id) }
-        let active = wardrobe.isActive
+        let active = wardrobe.isActive || features.anyShown
         guard active || wearDrawn else { return }
-        let f = wardrobe.frame(theme: room.theme, hidden: room.bathVisible, time: time) { renderer.skinPointer(body: $0) }
-        room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: wearBoxes(f.opaque, actors.count))
+        var f = wardrobe.frame(theme: room.theme, hidden: room.bathVisible, time: time) { renderer.skinPointer(body: $0) }
+        var boxes = wearBoxes(f.opaque, actors.count)
+        if features.body == nil { features.body = WearBody.shared }
+        let ff = features.frame(hidden: room.bathVisible) { renderer.skinPointer(body: $0) }
+        if !ff.vertices.isEmpty {
+            let base = UInt32(f.opaque.vertices.count)
+            f.opaque.vertices += ff.vertices
+            f.opaque.indices += ff.indices.map { $0 + base }
+            boxes += features.lastBounds
+        }
+        room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: boxes)
         wearDrawn = active
     }
 

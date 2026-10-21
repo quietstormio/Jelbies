@@ -29,6 +29,7 @@ nonisolated enum WearMeshes {
     nonisolated(unsafe) private static var arts: [String: DecorMeshes.Art?] = [:]
     nonisolated(unsafe) private static var prepared: [WearLook: WearPrepared] = [:]
     nonisolated(unsafe) private static var bibs: [String: WearPrepared] = [:]
+    nonisolated(unsafe) private static var variants: [String: WearPrepared] = [:]
 
     /// The raw art of a piece ("bandana_coral", "digit_3").
     static func art(_ id: String) -> DecorMeshes.Art? {
@@ -53,7 +54,20 @@ nonisolated enum WearMeshes {
         return p
     }
 
-    static func clearCache() { lock.lock(); prepared = [:]; bibs = [:]; lock.unlock() }
+    static func clearCache() { lock.lock(); prepared = [:]; bibs = [:]; variants = [:]; lock.unlock() }
+
+    /// The look drawn from a VARIANT of its art (the hats Moss's daisy sits on: beanie_honey_nopom, party_hat_short ...; Features/Resources): the
+    /// look's own rules and anchor, the variant's mesh. Cached per look + art.
+    static func prepare(_ l: WearLook, body: WearBody, art variant: String?) -> WearPrepared? {
+        guard let variant, variant != l.art else { return prepare(l, body: body) }
+        let key = "\(l.rawValue)|\(variant)"
+        lock.lock(); let c = variants[key]; lock.unlock()
+        if let c { return c }
+        guard let a = art(variant) else { return prepare(l, body: body) }
+        let p = build(l, art: a, body: body, recolour: nil)
+        lock.lock(); variants[key] = p; lock.unlock()
+        return p
+    }
 
     static func build(_ l: WearLook, art a: DecorMeshes.Art, body: WearBody?, recolour: [(from: SIMD3<Float>, to: SIMD3<Float>)]?) -> WearPrepared {
         let p = WearPrepared(l)

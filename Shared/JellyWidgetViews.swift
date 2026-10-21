@@ -34,6 +34,7 @@ nonisolated enum WidgetTheme {
         case "yellow": return Color(.sRGB, red: 0.96, green: 0.80, blue: 0.30)
         case "green": return Color(.sRGB, red: 0.45, green: 0.78, blue: 0.50)
         case "purple": return Color(.sRGB, red: 0.68, green: 0.54, blue: 0.90)
+        case "lavender": return Color(.sRGB, red: 0.76, green: 0.66, blue: 0.93)
         case "pink": return Color(.sRGB, red: 0.95, green: 0.55, blue: 0.70)
         default: return Color(.sRGB, red: 0.96, green: 0.66, blue: 0.62)
         }

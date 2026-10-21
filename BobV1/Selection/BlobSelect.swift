@@ -37,6 +37,7 @@ enum SelectPreview {
         var l = [SelectBlob(id: 0, name: "Bob")]
         l.append(SelectBlob(id: 1, name: "Pip", floor: SIMD2(-0.95, 1.55), scale: 0.92, tint: SIMD3(0.99, 0.90, 0.62)))
         if n >= 3 { l.append(SelectBlob(id: 2, name: "Moss", floor: SIMD2(1.05, 0.1), scale: 0.85, tint: SIMD3(0.70, 0.88, 0.80))) }
+        if n >= 4 { l.append(SelectBlob(id: 3, name: "Lavender", floor: SIMD2(1.2, 1.6), scale: 0.95, tint: SIMD3(0.80, 0.72, 0.93))) }
         return l
         #else
         return nil
