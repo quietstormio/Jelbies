@@ -175,6 +175,7 @@ final class FeetAttachTests: XCTestCase {
             var worstOff: Float = 0
             var k = 0
             r.run(m.seconds) {
+                m.each?(r)
                 k += 1
                 guard k % 3 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return }
                 r.render()

@@ -497,6 +497,7 @@ final class AudioHub {
         layer?.player.volume = (layer?.fader.level ?? 0) * m * 1.1
         scene?.setLevel(m)
         if let l = layer, l.player.isPlaying { loud = max(loud, l.player.volume) }
+        if let sc = scene { loud = max(loud, sc.loudest) }       // the scene music (race, town, drill) counts too
         speakerMusicLevel = loud
         Ears.shared.speakerMusicLevel(loud)
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)

@@ -93,6 +93,8 @@ struct EarsButton: View {
 /// The Ears row in the sound panel: the switch and the privacy text.
 struct EarsSettingsRow: View {
     let ears: Ears
+    /// A phone on its side: smaller text, no extra spacing.
+    var tight = false
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
     private let tint = Color(red: 0.43, green: 0.70, blue: 0.82)
 
@@ -101,15 +103,16 @@ struct EarsSettingsRow: View {
 
     var body: some View {
         let on = Binding<Bool>(get: { ears.state.isOn }, set: { ears.setOn($0) })
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: tight ? 2 : 4) {
             Toggle(isOn: on) {
                 Label("Ears", systemImage: "ear.fill").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
             }
             .tint(tint)
+            .controlSize(tight ? .small : .regular)
             .disabled(ears.state == .denied)
             .accessibilityIdentifier("sound-ears-toggle")
             Text(ears.state == .denied ? Self.deniedText : Self.privacyText)
-                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .font(.system(size: tight ? 11 : 12, weight: .regular, design: .rounded))
                 .foregroundStyle(ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("sound-ears-privacy")

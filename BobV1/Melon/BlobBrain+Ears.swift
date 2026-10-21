@@ -102,6 +102,7 @@ final class EarsReactor {
     func anim(of id: Int) -> Anim? { anims[id]?.anim }
 
     init() {}
+    nonisolated deinit {}
 
     // MARK: locks
 
