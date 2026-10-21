@@ -129,6 +129,7 @@ final class GameCare {
     let select = BlobSelect()
     @ObservationIgnored var approachIdle: Float = 0
     @ObservationIgnored var approachRetries = 0
+    @ObservationIgnored var approachShort = 0
     @ObservationIgnored private var savedAutonomy = true
     @ObservationIgnored private var wantHop = false
     @ObservationIgnored var afterRelease: Consumable?        // Feed / Drink asked inside focus: release first, then the tray flow
@@ -652,6 +653,7 @@ final class GameCare {
             brain.idleMood = profile.needs.mood
             syncPerks(id: a.id, brain: brain)
             brain.idleBlocked = (bath.active || focusGroup.pauses(a.id, phase: focus.phase)) && !brain.commanded
+            brain.focusPaused = !bath.active && focusGroup.pauses(a.id, phase: focus.phase) && !brain.commanded          // (he may still step out of the called Jelly's way)
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
             if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil { brain.startHopPlay(sim: a.sim, distance: 0.0001) }
@@ -712,7 +714,11 @@ final class GameCare {
                 callRunning = false; retries = 0
                 if greeting { greeting = false; greetHop = true }
                 if UserDefaults.standard.integer(forKey: "GameFeedAfterCall") != 0 { feed() }          // capture aid: serve a meal once he has come
-                if focus.phase == .approaching, focusGroup.includes(0) { enterFocus(brain: brain) }
+                if focus.phase == .approaching, focusGroup.includes(0) {
+                    // short of the spot (someone stood on it and the floor rules dragged his target over the gap): ask again while that one steps aside
+                    if simd_length(brain.position - focusGroup.spot(of: 0)) > 0.5, approachShort < FocusGroup.shortRetries { approachShort += 1; approachIdle = 0; queued = [.come(to: focusGroup.spot(of: 0))] }
+                    else { enterFocus(brain: brain) }
+                }
             case .goTo:
                 voice.goFinished()                  // a voice walk ends facing the camera
             case .dine, .sip:

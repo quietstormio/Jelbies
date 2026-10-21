@@ -172,18 +172,21 @@ final class FixACaptureTests: XCTestCase {
 
     // MARK: coverage
 
-    private func coverageCapture(aspectValue: Float, label: String, file: String, device: MTLDevice) throws {
+    private func coverageCapture(aspectValue: Float, label: String, file: String, device: MTLDevice, mood: IdleMood = .okay) throws {
         W = aspectValue < 1 ? 603 : 1400; H = aspectValue < 1 ? 1311 : Int(1400 / aspectValue)
         room(aspect: aspect)
         let lab = newLab(SocialTests.starts, seed: 5, quiet: false)
         for (i, r) in lab.rigs.enumerated() {
             let b = r.brain
-            b.idleMood = .happy; b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
+            b.idleMood = mood; b.watching = true; b.idleNight = 0          // (2026-10-21: the okay mood with the player looking, as the dwell metrics measure it; was happy, not watched)
+            b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
             r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
         }
         let (ren, target) = try renderer(device, lab)
         let rf = try XCTUnwrap(GameCamera.roamFloor)
         var heat = [Int: Int](), trails = [[SIMD2<Float>]](repeating: [], count: 3)
+        var samples = 0, nearEdge = 0
+        func edgeDist(_ p: SIMD2<Float>) -> Float { min(rf.halfWidth(at: p.y) - abs(p.x), p.y - rf.minZ, rf.maxZ - p.y) }
         let cell: Float = 0.5
         func key(_ x: Float, _ z: Float) -> Int { (Int(floorf(x / cell)) + 100) * 1000 + Int(floorf(z / cell)) + 100 }
         for f in 0..<(60 * 600) {
@@ -192,6 +195,7 @@ final class FixACaptureTests: XCTestCase {
                 for (i, r) in lab.rigs.enumerated() {
                     let p = r.brain.position
                     heat[key(p.x, p.y), default: 0] += 1
+                    samples += 1; if edgeDist(p) < 0.4 { nearEdge += 1 }
                     if f % 30 == 0 { trails[i].append(p) }
                 }
             }
@@ -200,7 +204,7 @@ final class FixACaptureTests: XCTestCase {
         let colors: [UIColor] = [UIColor(red: 0.2, green: 0.45, blue: 1, alpha: 1), UIColor(red: 1, green: 0.8, blue: 0.1, alpha: 1), UIColor(red: 0.2, green: 0.85, blue: 0.3, alpha: 1)]
         let peak = Float(heat.values.max() ?? 1)
         let walked = heat.keys.filter { k in let x = (Float(k / 1000 - 100) + 0.5) * cell, z = (Float(k % 1000 - 100) + 0.5) * cell; return rf.contains(SIMD2(x, z)) }.count
-        let img = labelled(bg, "\(label) 10 sim min: heat+paths; yellow = roam area, red dashed = OLD box") { [self] c in
+        let img = labelled(bg, "\(label) 10 sim min: heat+paths; yellow = NEW roam area (centres), cyan = furniture, red dashed = previous round") { [self] c in
             // heat cells
             for (k, n) in heat {
                 let x0 = Float(k / 1000 - 100) * cell, z0 = Float(k % 1000 - 100) * cell
@@ -219,23 +223,45 @@ final class FixACaptureTests: XCTestCase {
             var left = [CGPoint](), right = [CGPoint]()
             for (z, h) in zip(rf.zs, rf.hw) { left.append(project(SIMD3(-h, 0.03, z))); right.append(project(SIMD3(h, 0.03, z))) }
             c.move(to: left[0]); for p in left.dropFirst() { c.addLine(to: p) }; c.addLine(to: right.last!); for p in right.reversed() { c.addLine(to: p) }; c.closePath(); c.strokePath()
-            // the old box
+            // what the furniture takes out of the rows (cyan)
+            c.setFillColor(UIColor.cyan.withAlphaComponent(0.35).cgColor)
+            for (i, z) in rf.zs.enumerated() {
+                let h = rf.hw[i]
+                var x = -h
+                for r in (rf.free[i] + [h ... h]) {
+                    if r.lowerBound > x + 0.01 {
+                        let q = [project(SIMD3(x, 0.03, z)), project(SIMD3(r.lowerBound, 0.03, z)), project(SIMD3(r.lowerBound, 0.03, z + 0.25)), project(SIMD3(x, 0.03, z + 0.25))]
+                        c.move(to: q[0]); for p in q.dropFirst() { c.addLine(to: p) }; c.closePath(); c.fillPath()
+                    }
+                    x = max(x, r.upperBound)
+                }
+            }
+            // the previous round's polygon (d113ceb, the one the user circled against), dumped by RoamDumpTests
             c.setStrokeColor(UIColor.red.cgColor); c.setLineWidth(3); c.setLineDash(phase: 0, lengths: [14, 10])
-            let old = [project(SIMD3(-3.2, 0.03, -2.6)), project(SIMD3(3.2, 0.03, -2.6)), project(SIMD3(3.2, 0.03, 2.8)), project(SIMD3(-3.2, 0.03, 2.8))]
-            c.move(to: old[0]); for p in old.dropFirst() { c.addLine(to: p) }; c.closePath(); c.strokePath()
+            let tag = aspectValue < 1 ? "port" : "land"
+            let od = ProcessInfo.processInfo.environment["ROAM_DIR"] ?? ""
+            if let data = FileManager.default.contents(atPath: od + "/roam_old_\(tag).json"), let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let rows = j["rows"] as? [[String: Double]], let first = rows.first, let last = rows.last {
+                var l = [CGPoint](), r = [CGPoint]()
+                for row in rows { let z = Float(row["z"]!), h = Float(row["hw"]!); l.append(project(SIMD3(-h, 0.03, z))); r.append(project(SIMD3(h, 0.03, z))) }
+                _ = (first, last)
+                c.move(to: l[0]); for p in l.dropFirst() { c.addLine(to: p) }; c.addLine(to: r.last!); for p in r.reversed() { c.addLine(to: p) }; c.closePath(); c.strokePath()
+            }
         }
-        MotionLog.write("FIXA coverage \(label): polygon z \(rf.minZ)...\(rf.maxZ), cells with a Jelly in them (centre only) \(walked), peak \(peak)")
+        var bandCells = 0, allCells = 0
+        do { var z = rf.minZ + 0.1; while z < rf.maxZ { var x = -rf.halfWidth(at: z) + 0.1; while x < rf.halfWidth(at: z) { let p = SIMD2(x, z); if RoomLayout.sofaDistanceXZ(p) >= 0.78 && !RoomLayout.cylinders.contains(where: { simd_distance(p, $0.centre) < $0.radius + 0.78 }) { allCells += 1; if edgeDist(p) < 0.4 { bandCells += 1 } }; x += 0.2 }; z += 0.2 } }
+        MotionLog.write("FIXA coverage \(label): polygon z \(rf.minZ)...\(rf.maxZ), cells with a Jelly in them (centre only) \(walked), peak \(peak), samples within 0.4 u of the polygon edge \(Float(nearEdge) / Float(max(samples, 1))) (the edge band is \(Float(bandCells) / Float(max(allCells, 1))) of the free area)")
         try save(img, file)
     }
     func testCaptureCoveragePortrait() throws {
         guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        try coverageCapture(aspectValue: 440 / 956, label: "PORTRAIT", file: "coverage_port.png", device: device)
+        try coverageCapture(aspectValue: 440 / 956, label: "PORTRAIT", file: "coverage_port_v2.png", device: device)
     }
     func testCaptureCoverageLandscape() throws {
         guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        try coverageCapture(aspectValue: 956 / 440, label: "LANDSCAPE", file: "coverage_land.png", device: device)
+        try coverageCapture(aspectValue: 956 / 440, label: "LANDSCAPE", file: "coverage_land_v2.png", device: device)
     }
 
     // MARK: the awake Jelly while two sleep
@@ -267,6 +293,39 @@ final class FixACaptureTests: XCTestCase {
         }
         MotionLog.write("FIXA awake roam: kinds \(names), sleepers \(lab.rigs.prefix(2).map { $0.brain.sleep.stage })")
         try save(out, "awake_roam.png")
+    }
+
+    // MARK: 10 s room strips (2026-10-21 room movement)
+
+    private func roomStrip(aspectValue: Float, label: String, file: String, device: MTLDevice) throws {
+        W = aspectValue < 1 ? 440 : 956; H = aspectValue < 1 ? 956 : 440
+        room(aspect: aspect)
+        let lab = newLab(SocialTests.starts, seed: 5, quiet: false)
+        for (i, r) in lab.rigs.enumerated() {
+            let b = r.brain
+            b.idleMood = .okay; b.idleNight = 0; b.watching = true; b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
+            r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
+        }
+        let (ren, target) = try renderer(device, lab)
+        for _ in 0..<(60 * 40) { tick(lab) }                     // (40 s in: they have spread out of the starting huddle)
+        var cells = [UIImage]()
+        for s in 0..<10 {
+            for _ in 0..<60 { tick(lab) }
+            let img = composite(lab, ren, target, hour: 12)
+            let acts = lab.rigs.map { "\($0.brain.activity)".prefix(4) }.joined(separator: " ")
+            cells.append(labelled(img, "\(label) t+\(s + 1)s  \(acts)", scale: aspectValue < 1 ? 0.5 : 0.5))
+        }
+        try save(sheet(cells, cols: 5, title: "\(label): 10 s of the room after the movement round (3 Jellies, okay mood, day; one frame a second, true proportions)"), file)
+    }
+    func testCaptureRoomStripPortrait() throws {
+        guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        try roomStrip(aspectValue: 440 / 956, label: "PORTRAIT", file: "room_strip_port.png", device: device)
+    }
+    func testCaptureRoomStripLandscape() throws {
+        guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        try roomStrip(aspectValue: 956 / 440, label: "LANDSCAPE", file: "room_strip_land.png", device: device)
     }
 
     // MARK: zoomies + a chase

@@ -213,6 +213,86 @@ final class BehaviourRoundTests: XCTestCase {
     func testRoomCoveragePortrait() { coverage(aspect: 440 / 956, label: "portrait") }
     func testRoomCoverageLandscape() { coverage(aspect: 956 / 440, label: "landscape") }
 
+    // MARK: 3b. the whole room, by DWELL (2026-10-21 "they stay in the centre too much, they need to move a lot more")
+
+    /// 10 sim minutes, okay mood, by day: cells walked (centre-only, 0.5 u), the share of all samples within the rug-centre circle (r 1.5), the share spent
+    /// walking, and whether each Jelly visited every quadrant and the front band of the visible floor.
+    struct DwellReport { var cells: Float; var centre: Float; var walking: Float; var moving: Float = 0; var quadrants: [Int]; var front: [Bool]; var polygonHW: Float; var maxZ: Float; var overshoot: Float = 0; var sofaGap: Float = 9; var cylGap: Float = 9 }
+    private func dwell(aspect: Float, label: String, seed: UInt64 = 7) -> DwellReport {
+        let lab = roomLab(aspect: aspect, mood: .okay, seed: seed)
+        for r in lab.rigs { r.brain.watching = true }          // (the player is looking, as on the phone: the waits between behaviours are halved)
+        guard let rf = GameCamera.roamFloor else { XCTFail("no roaming polygon"); return DwellReport(cells: 0, centre: 1, walking: 0, quadrants: [], front: [], polygonHW: 0, maxZ: 0) }
+        let cell: Float = 0.5
+        func key(_ x: Float, _ z: Float) -> Int { (Int(floorf(x / cell)) + 100) * 1000 + Int(floorf(z / cell)) + 100 }
+        var walkable = Set<Int>()
+        var z = rf.minZ + cell / 2
+        while z < rf.maxZ {
+            var x = -rf.halfWidth(at: z) + cell / 2
+            while x < rf.halfWidth(at: z) {
+                let rv = lab.rigs[0].brain.resolve(SIMD3(x, 0, z), 0.7)
+                if rf.contains(SIMD2(x, z)), simd_distance(SIMD2(rv.x, rv.z), SIMD2(x, z)) < 0.2 { walkable.insert(key(x, z)) }
+                x += cell
+            }
+            z += cell
+        }
+        let midZ = (rf.minZ + rf.maxZ) / 2, frontZ = rf.maxZ - (rf.maxZ - rf.minZ) * 0.25
+        var seen = Set<Int>(), samples = 0, centre = 0, walking = 0, moving = 0, edge = 0
+        var overshoot: Float = 0, sofaGap: Float = 9, cylGap: Float = 9, beyond = 0
+        var quads = [Set<Int>](repeating: [], count: 3), front = [Bool](repeating: false, count: 3)
+        var hist = [[SIMD2<Float>]](repeating: [], count: 3)
+        var acts = [String: Int](), turning = 0
+        for f in 0..<(60 * 600) {
+            tick(lab)
+            if f % 6 != 0 { continue }
+            for (i, r) in lab.rigs.enumerated() {
+                let p = r.brain.position
+                samples += 1
+                acts["\(r.brain.activity)" + (r.brain.idleState.kind.map { "/" + $0.rawValue } ?? "") + (r.brain.social != nil ? "/social" : ""), default: 0] += 1
+                if r.brain.activity == .walking || r.brain.activity == .coming, hist[i].count == 5, simd_distance(p, hist[i][0]) <= 0.12 { turning += 1 }
+                // in motion: the body travelled over the last half second (a leg, a run, a travelling antic or social: what the player sees as "moving";
+                // the root only moves per foot step, so a per-sample delta undercounts a walk)
+                hist[i].append(p); if hist[i].count > 5 { hist[i].removeFirst() }
+                if hist[i].count == 5, simd_distance(p, hist[i][0]) > 0.12 { moving += 1 }
+                // the body covers its own radius, as the first coverage test counts it
+                let n = Int(ceilf(GameCamera.bobRadius / cell))
+                for dx in -n...n { for dz in -n...n {
+                    let q = SIMD2(p.x + Float(dx) * cell, p.y + Float(dz) * cell)
+                    if simd_distance(q, p) <= GameCamera.bobRadius { seen.insert(key(q.x, q.y)) }
+                } }
+                if simd_distance(p, RoomLayout.rugCentre) < IdleTuning.centreRadius { centre += 1 }
+                if min(rf.halfWidth(at: p.y) - abs(p.x), p.y - rf.minZ, rf.maxZ - p.y) < 0.4 { edge += 1 }          // (hugging the polygon's border)
+                let out = max(abs(p.x) - rf.halfWidth(at: p.y), rf.minZ - p.y, p.y - rf.maxZ)          // (how far outside the polygon: a body pushed by a mate)
+                overshoot = max(overshoot, out); if out > 0.3 { beyond += 1 }
+                sofaGap = min(sofaGap, RoomLayout.sofaDistanceXZ(p)); cylGap = min(cylGap, RoomLayout.cylinders.map { simd_distance(p, $0.centre) - $0.radius }.min() ?? 9)
+                if r.brain.activity == .walking || r.brain.activity == .coming { walking += 1 }
+                quads[i].insert((p.x < 0 ? 0 : 1) + (p.y < midZ ? 0 : 2))
+                if p.y >= frontZ { front[i] = true }
+            }
+        }
+        let rep = DwellReport(cells: Float(seen.intersection(walkable).count) / Float(max(walkable.count, 1)), centre: Float(centre) / Float(max(samples, 1)),
+                              walking: Float(walking) / Float(max(samples, 1)), moving: Float(moving) / Float(max(samples, 1)), quadrants: quads.map(\.count), front: front, polygonHW: rf.hw.max() ?? 0, maxZ: rf.maxZ, overshoot: overshoot, sofaGap: sofaGap, cylGap: cylGap)
+        let top = acts.sorted { $0.value > $1.value }.prefix(24).map { "\($0.key)=\(String(format: "%.3f", Float($0.value) / Float(max(samples, 1))))" }
+        MotionLog.write("BEHAV dwell \(label): cells \(rep.cells), centre share \(rep.centre), walking share \(rep.walking), moving share \(rep.moving), walking-but-still \(Float(turning) / Float(max(samples, 1))), within 0.4 u of the polygon edge \(Float(edge) / Float(max(samples, 1))), max overshoot outside the polygon \(overshoot) (\(beyond) samples over 0.3), min gap to the sofa \(sofaGap) and to the plant/table \(cylGap), quadrants per Jelly \(rep.quadrants), front band \(rep.front), polygon hw \(rep.polygonHW) z \(rf.minZ)...\(rf.maxZ), time by activity \(top), counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
+        return rep
+    }
+    private func assertDwell(_ rep: DwellReport, _ label: String) {
+        // (2026-10-21 the roam area reaches the furniture and the screen edges: a Jelly never stands in the sofa, plant or table, nor far outside the polygon)
+        XCTAssertGreaterThan(rep.sofaGap, 0.55, "\(label): never in the sofa (the closest a centre came to its edge)")
+        XCTAssertGreaterThan(rep.cylGap, 0.55, "\(label): never in the plant or the side table")
+        XCTAssertLessThan(rep.overshoot, 0.6, "\(label): never far outside the roaming polygon")
+        XCTAssertGreaterThanOrEqual(rep.cells, 0.8, "\(label): at least 80 % of the visible floor's cells are visited")
+        for (i, q) in rep.quadrants.enumerated() { XCTAssertEqual(q, 4, "\(label): Jelly \(i) visited every quadrant") }
+        for (i, f) in rep.front.enumerated() { XCTAssertTrue(f, "\(label): Jelly \(i) visited the front band") }
+        XCTAssertLessThanOrEqual(rep.centre, 0.25, "\(label): the rug centre (r \(IdleTuning.centreRadius)) holds at most a quarter of the dwell")
+        // 2026-10-21 measured (okay mood, watched, 10 min): moving 0.29...0.31 and walking 0.38...0.41 (were 0.26...0.29 and 0.30...0.34): the rest is naps, the
+        // standing socials and antics (their rates are pinned by AnticsLabTests) and the turn on the spot that starts every leg. The task's example of 55 % is not
+        // reachable without thinning those; the floors below hold what the round reached.
+        XCTAssertGreaterThanOrEqual(rep.moving, 0.25, "\(label): they are in motion at least a quarter of the time in the okay mood by day")
+        XCTAssertGreaterThanOrEqual(rep.walking, 0.35, "\(label): and on a plain walk or run at least 35 % of it (the antics and socials, whose rates AnticsLabTests pin, take the rest; was 0.30...0.34 before 2026-10-21)")
+    }
+    func testRoomDwellPortrait() { assertDwell(dwell(aspect: 440 / 956, label: "portrait"), "portrait") }
+    func testRoomDwellLandscape() { assertDwell(dwell(aspect: 956 / 440, label: "landscape"), "landscape") }
+
     // MARK: 4. zoomies and runs in the okay mood
 
     func testZoomiesAndRunsEveryFewMinutesInOkayMood() {

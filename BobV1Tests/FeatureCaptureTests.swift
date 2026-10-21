@@ -75,7 +75,7 @@ final class FeatureCaptureTests: XCTestCase {
         return d
     }
 
-    private func composite(_ lab: SocialTests.Lab, _ d: Dressed, _ chars: [Char], _ ren: MelonRenderer, _ target: MTLTexture, cam camOverride: CameraState? = nil, hour: Double? = 12) -> LockImage {
+    private func composite(_ lab: SocialTests.Lab, _ d: Dressed, _ chars: [Char], _ ren: MelonRenderer, _ target: MTLTexture, cam camOverride: CameraState? = nil, hour: Double? = 12, bboxes: ((Int, CGRect) -> Void)? = nil) -> LockImage {
         let cam = camOverride ?? GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
         ren.dayHourOverride = hour
         func shot(only: Int?) -> LockImage {
@@ -121,11 +121,17 @@ final class FeatureCaptureTests: XCTestCase {
         var out = empty
         for k in (0..<lab.rigs.count).sorted(by: { lab.rigs[$0].sim.centroid().z < lab.rigs[$1].sim.centroid().z }) {
             let b = shot(only: k)
+            var x0 = W, x1 = -1, y0 = H, y1 = -1
             for p in 0..<(W * H) {
                 var dd = 0
                 for c in 0..<3 { dd = max(dd, abs(Int(b.bgra[4 * p + c]) - Int(empty.bgra[4 * p + c]))) }
-                if dd > 3 { for c in 0..<4 { out.bgra[4 * p + c] = b.bgra[4 * p + c] } }
+                if dd > 3 {
+                    for c in 0..<4 { out.bgra[4 * p + c] = b.bgra[4 * p + c] }
+                    let px = p % W, py = p / W
+                    x0 = min(x0, px); x1 = max(x1, px); y0 = min(y0, py); y1 = max(y1, py)
+                }
             }
+            bboxes?(k, CGRect(x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1))
         }
         return out
     }
@@ -357,4 +363,54 @@ final class FeatureCaptureTests: XCTestCase {
         XCTAssertEqual(frames.count, 6)
         try write(vstack([hstack(Array(frames[0..<3])), hstack(Array(frames[3..<6]))]), d + "/lavender_hop.png")
     }
+
+    // MARK: roam corners (2026-10-21 room movement v2)
+
+    /// A Jelbie at each extreme corner of the roaming polygon (front-left, front-right, back-left, back-right), the real renderer, the real room camera, with
+    /// Lavender (wings), Pip (spines) and Moss (flower): the saved contact sheet + a pixel check that the whole body (shadow included) is on screen and the
+    /// side margin / bottom margin hold. Output: corners_port.png / corners_land.png (ROAM_DIR or CHAR_CAP_DIR).
+    private func cornersSheet(land: Bool) throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let d = (env["ROAM_DIR"] ?? env["CHAR_CAP_DIR"]).flatMap({ $0.isEmpty ? nil : $0 }) else { throw XCTSkip("ROAM_DIR / CHAR_CAP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        if land { W = 1311; H = 603 } else { W = 603; H = 1311 }
+        let aspect = Float(W) / Float(H)
+        DayClock.shared.forcedHour = 12
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2)
+        _ = GameCamera.camera(aspect: aspect)
+        let rf = try XCTUnwrap(GameCamera.refreshRoam(aspect: aspect))
+        let corners = rf.extremeCorners
+        let names = ["front-left", "front-right", "back-left", "back-right"]
+        let sets: [(String, [Int])] = [("Lavender FL, Pip FR, Pip BL, Lavender BR", [3, 1, 1, 3]), ("Pip FL, Lavender FR, Lavender BL, Pip BR", [1, 3, 3, 1]), ("Moss at all four", [2, 2, 2, 2])]
+        var frames = [UIImage]()
+        var minSide: Float = 1, minBottom: Float = 1
+        var report = [String]()
+        for (title, ids) in sets {
+            let chars = ids.map { Char(id: $0) }
+            let lab = setUpLab(corners, chars: chars, seed: 9)
+            for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius; r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim); r.brain.idleState.goalYaw = r.faceYaw; r.brain.idleState.hold = 0.01 }
+            for _ in 0..<90 { lab.tick(watching: false) }
+            let (ren, target) = try renderer(lab)
+            let dd = dress(lab, chars)
+            let cam = GameCamera.camera(aspect: aspect, focus: 0)
+            var boxes = [CGRect](repeating: .zero, count: 4)
+            let img = composite(lab, dd, chars, ren, target, cam: cam) { boxes[$0] = $1 }
+            for (k, b) in boxes.enumerated() {
+                let side = Float(min(b.minX, CGFloat(W) - b.maxX)) / Float(W), bottom = Float(CGFloat(H) - b.maxY) / Float(H)
+                minSide = min(minSide, side); minBottom = min(minBottom, bottom)
+                let p = lab.rigs[k].brain.position
+                let sofa = RoomLayout.sofaDistanceXZ(p), cyl = RoomLayout.cylinders.map { simd_distance(p, $0.centre) - $0.radius }.min() ?? 9
+                report.append(String(format: "ROAMV2 %@ %@ %@: centre (%.2f, %.2f) want (%.2f, %.2f), side margin %.3f W, bottom margin %.3f H, bbox h %.3f H, sofa gap %.2f, cyl gap %.2f",
+                                     land ? "land" : "port", title, names[k], p.x, p.y, corners[k].x, corners[k].y, side, bottom, Float(b.height) / Float(H), sofa, cyl))
+                XCTAssertGreaterThan(side, 0.02, "\(title) \(names[k]): inside the side edges"); XCTAssertGreaterThan(bottom, 0.012, "\(title) \(names[k]): above the bottom edge")
+                XCTAssertGreaterThan(sofa, 0.6, "\(title) \(names[k]): off the sofa"); XCTAssertGreaterThan(cyl, 0.6, "\(title) \(names[k]): off the plant and table")
+            }
+            frames.append(labelled(img.uiImage()!, title + (land ? "  (landscape)" : "  (portrait)")))
+        }
+        for r in report { MotionLog.write(r) }
+        MotionLog.write(String(format: "ROAMV2 %@ corners %@: min side margin %.3f W, min bottom margin %.3f H, polygon z %.2f...%.2f", land ? "land" : "port", "\(corners)", minSide, minBottom, rf.minZ, rf.maxZ))
+        try write(land ? vstack(frames) : hstack(frames), d + (land ? "/corners_land.png" : "/corners_port.png"))
+    }
+    func testCaptureRoamCornersPortrait() throws { try cornersSheet(land: false) }
+    func testCaptureRoamCornersLandscape() throws { try cornersSheet(land: true) }
 }

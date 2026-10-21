@@ -31,6 +31,12 @@ enum IdleTuning {
     nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 60...120
     /// The first urge, seconds after he starts roaming (a Jelly that is not first waits longer: `zoomUrge` = this + 35 s per Jelly id once he is wired).
     nonisolated(unsafe) static var zoomUrgeFirst: Float = 30
+    /// Room coverage (2026-10-21, "they stay in the centre too much"): the rug-centre circle counted as "the centre", the seconds near it after which the
+    /// roam goal score pushes him fully to the edges, the stand after a leg (x `idleLively`), and the wait after a wander pick that started no special.
+    static let centreRadius: Float = 1.5
+    static let centreDwellFull: Float = 15
+    static let restAfterLeg: ClosedRange<Float> = 1.5...3.5
+    static let wanderPickWait: ClosedRange<Float> = 3...6
 }
 
 enum IdleKind: String, CaseIterable, Sendable {
@@ -209,7 +215,7 @@ extension BlobBrain {
                                                  cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: anticsEnabled && !sleepLocked ? Self.decorOffers() : [])
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
-        if kind == .wander { idleState.cooldown = rand(5, 9) * idleLively; return false }
+        if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively; return false }          // (was 5...9)
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
         if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once
         let started = idleStart(kind, sim)
