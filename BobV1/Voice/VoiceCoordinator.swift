@@ -243,6 +243,7 @@ final class VoiceCoordinator {
         session = training.newSession()
         glowLatencyMs = nil; audioLatencyMs = nil
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
+        Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         input.warmUp()
         intentModel?.prewarm()                         // the first request must not pay the model load
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update

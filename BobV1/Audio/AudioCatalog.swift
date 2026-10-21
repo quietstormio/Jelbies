@@ -72,6 +72,8 @@ nonisolated enum AudioMix {
     /// The race crowd loop: level in the mix and the crossfade at the loop point (the file is not seamless).
     static let crowd: Float = 0.22
     static let crowdCrossfade: Double = 1.0
+    /// The app's own music while the Jellies dance to music from outside (Ears): down to this, so the mic stops hearing it.
+    static let danceDuck: Float = 0.15
 }
 
 /// Music and Sound Effects, separately on/off with a volume each. Persisted in UserDefaults; `-Mute 1` (and the test host) silences everything.

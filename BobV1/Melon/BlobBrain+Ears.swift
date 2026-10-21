@@ -115,17 +115,20 @@ final class EarsReactor {
         l.bath = care.bath.active
         l.voice = care.voice.mode.phase != .idle
         l.training = care.voice.nickLesson != nil || care.voice.teachPrompt != nil
-        l.race = extraLock()
+        // Jelly Circuit / Rhythm Steps: from the moment a race or drill is asked (even while he is still rolling up) until the trip is over
+        l.race = care.race.active || care.raceWait != nil || extraLock()
         locks = l
     }
 
     // MARK: events
 
     func handle(_ e: EarEvent, jellies: [Jelly], now: Double) {
-        if extraLock() { locks.race = true }
+        locks.race = extraLock()
         guard !locks.blocksAll else { note("blocked \(e)"); return }
-        let awake = jellies.filter { !$0.brain.isNapping }
-        let asleep = jellies.filter { $0.brain.isNapping }
+        // a reserved / held Jelly (his meal is coming, the close-up, the bath) waits where he stands: no reaction at all
+        let free = jellies.filter { !$0.brain.held }
+        let awake = free.filter { !$0.brain.isNapping }
+        let asleep = free.filter { $0.brain.isNapping }
         switch e {
         case .heard(.clap), .heard(.snap):
             for j in asleep { start(.stir, j) }
@@ -162,7 +165,7 @@ final class EarsReactor {
         case .bang(let level):
             for j in awake { start(.startle(level: level), j) }
             for j in asleep {
-                if level >= EarsTuning.veryLoud { j.brain.interruptScript = true; start(.startle(level: level), j); note("bang woke \(j.id)") }
+                if level >= EarsTuning.veryLoud { j.brain.sleepWake(groggy: true, fast: true); start(.startle(level: level), j); note("bang woke \(j.id)") }
                 else { start(.stir, j) }
             }
         case .heard(.speech), .heard(.music), .heard(.loudBang):
@@ -203,7 +206,7 @@ final class EarsReactor {
         let b = EarsDance.bump(ph)
         for j in jellies where j.brain.ears.dancing {
             let brain = j.brain
-            if brain.isNapping || anims[j.id] != nil { continue }
+            if brain.isNapping || brain.held || anims[j.id] != nil { continue }
             // stay for the song: no wander legs or idle specials start while dancing
             brain.restTimer = max(brain.restTimer, 1.5)
             brain.idleState.cooldown = max(brain.idleState.cooldown, 1.5)

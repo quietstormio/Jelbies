@@ -1,13 +1,14 @@
 //
 //  SoundSettingsView.swift
-//  The sound panel: Music (with the room ambience) and Sound Effects, each with an on/off switch and a volume. Opened from the speaker button
-//  next to the studio gear. Persisted by AudioHub (UserDefaults).
+//  The sound panel: Music (with the room ambience) and Sound Effects, each with an on/off switch and a volume, and the Ears switch with its
+//  privacy text (Audio/EarsHUD.swift). Opened from the speaker button next to the studio gear. Persisted by AudioHub / Ears (UserDefaults).
 //
 
 import SwiftUI
 
 struct SoundSettingsPanel: View {
     @Bindable var hub: AudioHub
+    var ears: Ears = .shared
     var close: () -> Void
 
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
@@ -24,6 +25,8 @@ struct SoundSettingsPanel: View {
             }
             row("Music", symbol: "music.note", on: $hub.settings.musicOn, volume: $hub.settings.musicVolume, id: "music")
             row("Sound effects", symbol: "speaker.wave.2.fill", on: $hub.settings.sfxOn, volume: $hub.settings.sfxVolume, id: "sfx")
+            Divider().overlay(ink.opacity(0.2))
+            EarsSettingsRow(ears: ears)
         }
         .padding(16)
         .frame(width: 270)

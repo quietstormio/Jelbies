@@ -7,6 +7,11 @@
 //  `micSessionBegan()` / `micSessionEnded()`. While the mic's session is up the hub never touches the category; when it ends the hub puts
 //  `.ambient` back (instead of the old `setActive(false)`). While Bob LISTENS (voice.mode onOpen/onClose -> `micListening`) music, ambience and
 //  effects duck to silence (DuckState) and come back after a short settle, so the speaker cannot leak into dictation.
+//  EARS (Audio/EarsListener.swift) is the third session user: while it is on the category is `.playAndRecord` + mixWithOthers (`earsSession`,
+//  the hub keeps off the category), it pauses for the voice mic (`micSessionBegan` -> `Ears.voicePause`, `micSessionEnded` -> resume), every
+//  effect the hub fires is noted (`Ears.noteAppSound`: the app's own boops must not read as claps), the speaker music level is reported each
+//  tick (the detector's app-music exclusion), and while the Jellies dance to someone else's music the app's own music ducks (`earsDancing`),
+//  which breaks the speaker -> mic feedback loop.
 //
 //  Everything is AVAudioPlayer based (music/ambience stream, effects are tiny pooled players, per-effect rate limits, no immediate variant
 //  repeat, optional pan by the Jelly's screen x). Muted (`-Mute 1`, or the XCTest host) the hub creates nothing and every call returns at once.
@@ -37,6 +42,11 @@ final class AudioHub {
     @ObservationIgnored private var lastTick = CACurrentMediaTime()
     @ObservationIgnored private var micSession = false
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
+    @ObservationIgnored private var earsSession = false
+    @ObservationIgnored private var danceGain: Float = 1
+    @ObservationIgnored private var danceTarget: Float = 1
+    /// How loud the app's own music is on the speaker right now (0...1; the ear's music exclusion reads it).
+    @ObservationIgnored private(set) var speakerMusicLevel: Float = 0
     // music
     private struct Deck { var player: AVAudioPlayer; var fader = Fader(); var track: MusicTrack }
     @ObservationIgnored private var decks: [Deck] = []
@@ -98,7 +108,7 @@ final class AudioHub {
     }
 
     private func setUpSession() {
-        guard !micSession else { return }
+        guard !micSession, !earsSession else { return }
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.ambient, mode: .default, options: [])
         try? s.setActive(true)
@@ -161,24 +171,43 @@ final class AudioHub {
 
     // MARK: mic (single session owner)
 
-    /// SpeechInput brought its `.playAndRecord` session up: hands off.
-    func micSessionBegan() { micSession = true }
-    /// SpeechInput's engine is down: put the ambient session back. Returns false when the hub is not running (the caller then deactivates as before).
+    /// SpeechInput brought its `.playAndRecord` session up: hands off (and Ears lets go of the input).
+    func micSessionBegan() { micSession = true; Ears.shared.voicePause() }
+    /// SpeechInput's engine is down: put the ambient session back (or hand the session back to Ears). Returns false when the hub is not running
+    /// (the caller then deactivates as before).
     @discardableResult
     func micSessionEnded() -> Bool {
         micSession = false
+        if earsSession { Ears.shared.voiceResume() }
         guard started else { return false }
         setUpSession()
         return true
     }
     /// Bob starts / stops listening: everything ducks to silence and returns after a short settle.
     func micListening(_ on: Bool) {
-        if on { duck.micOpened() } else { duck.micClosed() }
+        if on { duck.micOpened(); Ears.shared.voicePause() }
+        else {
+            duck.micClosed()
+            // the voice engine normally ends through `micSessionEnded`; if it never came up (cancelled before the session) Ears resumes here
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                guard let self, !self.micSession else { return }
+                Ears.shared.voiceResume()
+            }
+        }
     }
     var isDucked: Bool { duck.isDucked || duck.listening }
 
     /// Music is on and audible (the Jellies sway to it).
     var musicAudible: Bool { started && !muted && settings.musicLevel > 0.05 }
+    // MARK: ears (Audio/EarsListener.swift)
+
+    /// Ears set its `.playAndRecord` + mixWithOthers session: the hub keeps off the category until `earsSessionEnded`.
+    func earsSessionBegan() { earsSession = true }
+    func earsSessionEnded() { earsSession = false; if started, !micSession { setUpSession() } }
+    /// The Jellies dance to music from outside: the app's own music fades down (and the mic stops hearing it).
+    func earsDancing(_ on: Bool) { danceTarget = on ? AudioMix.danceDuck : 1 }
+    var isDanceDucked: Bool { danceTarget < 1 }
 
     // MARK: situation (from the stage, once per sim step; cheap)
 
@@ -267,6 +296,7 @@ final class AudioHub {
         p.rate = rate
         p.currentTime = 0
         p.play()
+        Ears.shared.noteAppSound()
     }
 
     /// Plays a random variant of `sfx` (never the same twice in a row). `x`: the Jelly's floor x for a gentle pan.
@@ -439,6 +469,10 @@ final class AudioHub {
         guard active else { return }
         DayClock.shared.refresh()
         duck.update(dt: dt)
+        if danceGain != danceTarget {
+            let step = Float(dt) / (danceTarget < danceGain ? 1.0 : 2.0)
+            danceGain = danceTarget < danceGain ? max(danceTarget, danceGain - step) : min(danceTarget, danceGain + step)
+        }
         var inp = input
         inp.phase = DayPhase.of(hour: DayClock.shared.hour)
         perform(director.update(dt: dt, input: inp))
@@ -456,11 +490,15 @@ final class AudioHub {
 
     private func applyLevels() {
         guard started else { return }
-        let m = settings.musicLevel * duck.gain * AudioMix.music
+        let m = settings.musicLevel * duck.gain * AudioMix.music * danceGain
         let main = Float(director.mainGain(playing: input.playing))
-        for d in decks { d.player.volume = d.fader.level * main * m }
+        var loud: Float = 0
+        for d in decks { d.player.volume = d.fader.level * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }
         layer?.player.volume = (layer?.fader.level ?? 0) * m * 1.1
         scene?.setLevel(m)
+        if let l = layer, l.player.isPlaying { loud = max(loud, l.player.volume) }
+        speakerMusicLevel = loud
+        Ears.shared.speakerMusicLevel(loud)
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)
         let b = DayClock.shared.blend
         let a = settings.musicLevel * duck.gain * AudioMix.ambience
