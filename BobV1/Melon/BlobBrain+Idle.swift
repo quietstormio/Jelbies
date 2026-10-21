@@ -147,6 +147,8 @@ struct IdleState {
     var decorBooped = false
     /// The beanbag sit (hop on, rest on top, hop off): 0 turn to the bag, 1 hopping on, 2 on top, 3 hopping off.
     var bagStage = 0
+    /// Walks to a seat re-planned after a given-up leg (BlobBrain+Decor decorArrived).
+    var decorRetry = 0
     /// Which seat of a multi-seat piece he is on, and how far the rocking seat has carried him (so he follows it by the difference).
     var seat = 0
     var seatShift = SIMD2<Float>.zero

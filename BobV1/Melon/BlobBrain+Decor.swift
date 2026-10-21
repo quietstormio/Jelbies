@@ -140,7 +140,7 @@ extension BlobBrain {
                   reachable(here, stand) else { decorIgnore = exiting; continue }
             idleBegin(kind)
             idleState.decorUID = f.uid; idleState.decorGo = true; idleState.decorKicked = false; idleState.decorBooped = false
-            idleState.target = stand
+            idleState.target = stand; idleState.decorRetry = 0
             idleState.seat = seat; idleState.seatShift = .zero; idleState.cuddle = 0
             idleState.slideStage = 0; idleState.slideS = 0; idleState.slideStep = 0
             idleState.soccer = kind == .soccerKick ? soccerPlan : SoccerIdle()
@@ -179,9 +179,23 @@ extension BlobBrain {
         }
     }
 
+    /// How far from his stand the walk to a seat may end and still count as arriving (a step's worth).
+    static let standTolerance: Float = 0.6
+    /// How many times the walk to a seat is re-planned after a given-up leg before the sit is dropped.
+    static let standRetries = 3
+
     /// The walk to the piece is over.
     func decorArrived(_ sim: SoftBody, _ skinner: Skinner) {
         guard let kind = idleState.kind, let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
+        // a walk to a seat that was given up short (a blocked leg ends the walk too) is not an arrival: a hop from here would sail across the
+        // room (3+ u) through whoever stands in between. He walks the rest of the way (a few tries, each waiting its turn on the blocked leg:
+        // the blocker is usually the friend about to hop onto the other seat), else drops the sit.
+        if kind == .decorSit, f.kind == .beanbag || f.kind.hopSit, simd_distance(position, idleState.target) > Self.standTolerance {
+            guard idleState.decorRetry < Self.standRetries else { idleFinish(skinner); return }
+            idleState.decorRetry += 1
+            script = .walk(target: idleState.target, then: .none); activity = .walking
+            return
+        }
         idleState.decorGo = false
         idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.steps = 0
         script = .idle; activity = .lookingAround
@@ -306,6 +320,9 @@ extension BlobBrain {
     static let bagApexUp: Float = 0.18, bagApexDown: Float = 0.14
 
     /// The piece he is using is one he hops onto (the beanbag, the pouf, the chairs, the sofa, the stools, the swing; the cushion keeps the old sit).
+    /// On a seat right now (the hop up, or sat on top; not the hop down): the piece stands in for him on the floor (BlobBrain.steerPeers).
+    var isPerched: Bool { isBagSit && (idleState.bagStage == 1 || idleState.bagStage == 2) }
+
     var isBagSit: Bool {
         guard idleState.kind == .decorSit, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         return f.kind.hopSit
@@ -370,13 +387,28 @@ extension BlobBrain {
     func runBagSit(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
         let c = f.centre
+        // From the hop up until he is down again the gait and the seat have the body, not a pose: his floor spot (px, pz: what the others steer
+        // around, GameCare.floorPos) follows the body, or they would see him where he stood BEFORE the hop and walk straight over the seat.
+        if idleState.bagStage >= 1, poseW <= 0 { let cen = sim.centroid(); px = cen.x; pz = cen.z }
         switch idleState.bagStage {
         case 0:
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if !turning && !feet.active && idleState.phaseT > 0.1 {
-                idleState.bagStage = 1; idleState.phaseT = 0; idleState.decorBooped = false
                 let g = seatGoal(f)
+                // the seat must be clear of anyone walking past (a Jelly sitting on, or coming to, this piece - the other seat - does not count); he waits a
+                // little for them to pass, else the sit is given up: nobody lands beside a passer-by
+                let here = position
+                let others = socialOthers().filter { o in o !== self && !(o.idleState.kind == .decorSit && o.idleState.decorUID == f.uid) && !(social.map { $0.a === o || $0.b === o } ?? false) }          // (the other seat's sitter, seated or on his way, and the partner of a sit-together are no passers-by)
+                let crowded = others.contains { o in
+                    if simd_distance(o.position, g.xz) < peerGap { return true }
+                    // on the hop line (point-to-segment distance under 0.6 x the peer gap)
+                    let d = g.xz - here, l2 = simd_length_squared(d)
+                    let t = l2 > 1e-6 ? max(0, min(1, simd_dot(o.position - here, d) / l2)) : 0
+                    return simd_distance(o.position, here + d * t) < peerGap * 0.6
+                }
+                if crowded { if idleState.phaseT > 3 { idleFinish(skinner) }; return }
+                idleState.bagStage = 1; idleState.phaseT = 0; idleState.decorBooped = false
                 bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.kind.seatFacing(idleState.seat))
             }
         case 2:
@@ -484,6 +516,7 @@ extension BlobBrain {
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
+        if poseW <= 0 { let cen = sim.centroid(); px = cen.x; pz = cen.z }          // his floor spot follows the hop (what the others steer around, GameCare.floorPos)
         if idleState.bagStage == 1 {
             if gait.phase == .land, !bagFloorOn {
                 // landed ON TOP: his floor is the seat's top from now on; it squishes, wobbles, settles
