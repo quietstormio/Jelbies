@@ -8,7 +8,54 @@ metadata:
   modified: 2026-10-21T12:00:00.000Z
 ---
 
-## Current state (2026-10-21)
+## START HERE: state at end of 2026-10-21
+
+**Everything is on branch `release` (pushed). That is the build for the phone.** `main` is still checkpoint 6; merge `release` into `main` when the user OKs it.
+
+`release` = final-touches + integrate + these, in merge order:
+1. **rename-app**: home-screen name "Jelbies" (INAlternativeAppNames "My Jelbies", "Bob"). The app still has NO icon (empty AppIcon set); offer to design one.
+2. **lavender-wings**: wings 15% smaller, periodic flap bursts every 4–9 s (quieter in race/training, off when asleep/eating/bathing).
+3. **roll-feet**: `startRoll` releases foot targets, so the feet no longer come off on a random roll. FeetAttachTests now measure the drawn foot.
+4. **jelly-show**: the Jelly Show (BobV1/Show/*): Studio, Condition jars, lobby, Look/Dance/Trick rounds, results, Puddle→Ocean ranks, Drops payouts.
+5. **room-movement** (9c4f443):
+   - Come-here: blocking peers step aside (`clearWay`). Others no longer freeze after you interact with one.
+   - Roam area is derived from the camera projection and spans almost the whole visible floor: 4% side margin, 3% bottom margin, furniture cut-outs around the sofa, plant and lamp.
+   - A goal pick that avoids parking in front of a mate. Grime per roam unit retuned so dirt/minute is unchanged.
+
+**Signed Release app:** ~/BobV1_backups/release_app/BobV1.app. Install it with:
+`xcrun devicectl device install app --device 00008150-000261C63ED8401C ~/BobV1_backups/release_app/BobV1.app`
+The phone's roster is already saved as Pip/Moss/Lavender, so no `-SetRoster` is needed.
+
+### Open items / known issues
+- **Walk speed +10% (user asked): NOT done.** Faster cadence pushed the FeetAttach gap past −0.020 and the run speed past its cap. Doing it needs a deeper hidden foot crown or tighter foot follow first. The gait itself is locked.
+- In portrait, a Jelbie at the very front can sit under the bottom-corner HUD buttons and the go-out pill (the HUD trim was removed so they use the full floor). Pull the front margin in if the user dislikes it.
+- Landscape sides are wall-limited (x ±5). Going wider needs a camera change, which has not been touched.
+- Pre-existing test failures (they also fail on base commits, likely Xcode 27.1 sim drift):
+  - AnticsLab seed-7 soak
+  - BathSootSeedZero pixel hash
+  - JellyJiggle settles-to-zero
+  - MotionFootRender slab tets 0.0476 against 0.05
+  - DecorTests BedAndDiningRoom min gap
+  - IdleBehaviourTests ×3
+  - StoreFood tossed-into-mouth
+  - BlobBrain autonomy soak has a seed-sensitive stumble inversion.
+- Other nits:
+  - stage-light banding at the top of the Show
+  - Show music unverified on device
+  - chirp voice is per slot (Pip in slot 0 sounds like Bob)
+- The full suite was not re-run after the final room-movement merge. Only targeted classes ran on room-movement itself.
+
+### Next-batch candidates (user picks; no diary, no walks/outings)
+- Adoption shop: buy Pip/Moss/Lavender with Drops; new players start with Bob only. See docs/Species.md.
+- A third, trainable earning game.
+- Camera games with a selfie preview bubble.
+- App icon.
+- Walk speed +10% (needs the foot work above).
+- More Feature Bible items (Claude Doc "Bob — Feature Bible").
+
+---
+
+## Earlier state (2026-10-21 morning)
 
 All seven work-in-progress branches are merged on **`integrate`** (1e8dea5), plus a camera fix. `main` is still checkpoint 6. Merge order was liveliness → characters → curvy courses → on-device AI → Ears → Apple extras → camera-fix-27 → soccer. A regression run on `integrate` happens in the main tree; `final-touches` (this branch, from 1e8dea5) carries the user decisions below and merges onto it.
 
