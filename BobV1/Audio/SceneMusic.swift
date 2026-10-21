@@ -59,6 +59,8 @@ nonisolated enum Jingle: String, Sendable {
 /// What a screen wants to hear (the director picks the files). `results` = the screen's music stops (a jingle plays) and the room music stays out.
 nonisolated enum MusicScene: Equatable, Sendable {
     case none, race, raceFinal, training, shop, town, results
+    /// The Jelly Show (Show/): the Studio and its dance drill play studio_practice_1, the stage plays contest_stage_2.
+    case studio, show
 
     var track: SceneTrack? {
         switch self {
@@ -67,6 +69,8 @@ nonisolated enum MusicScene: Equatable, Sendable {
         case .training: return .training
         case .shop: return .shop
         case .town: return .town
+        case .studio: return .studioPractice
+        case .show: return .contestStage
         case .none, .results: return nil
         }
     }

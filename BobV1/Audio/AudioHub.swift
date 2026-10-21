@@ -244,8 +244,31 @@ final class AudioHub {
         guard !muted, started, active else { return nil }
         return scene?.songTime(of: .training)
     }
+    /// Song time (seconds, as heard) of a scene track, nil while it is not playing (muted, still decoding): the Jelly Show's dance clock
+    /// (contest_stage_2 on stage, studio_practice_1 in the Studio drill).
+    func songTime(of t: SceneTrack) -> Double? {
+        guard !muted, started, active else { return nil }
+        return scene?.songTime(of: t)
+    }
     /// The track of this scene is decoded and playing.
     func scenePlaying(_ s: MusicScene) -> Bool { s.track.map { scene?.isPlaying($0) ?? false } ?? false }
+
+    /// The Jelly Show's sounds (Show/ShowFlow.swift): existing effects under the show's names.
+    func showCue(_ c: ShowCue) {
+        switch c {
+        case .perfect: play(.tick, volume: 0.9)
+        case .good: play(.goodStep)
+        case .slip: play(.wobble, volume: 0.6)
+        case .countdown: play(.countdownBeep)
+        case .go: play(.whistle)
+        case .ring: play(.tick, volume: 0.5)
+        case .land: play(.statUp, volume: 0.8); play(.cheerSmall, volume: 0.6)
+        case .flop: play(.wobble); play(.boop, volume: 0.5)
+        case .burst: play(.perkSparkle); play(.sparkle)
+        case .applause: play(.cheerSmall)
+        case .jingle(let win): playJingle(win ? .win : .lose)
+        }
+    }
 
     /// A result jingle (trimmed, faded at its end). Follows the music setting.
     func playJingle(_ j: Jingle) {

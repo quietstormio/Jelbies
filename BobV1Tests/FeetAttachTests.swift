@@ -116,6 +116,9 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "antic: roll", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.roll, $0.sim) }),
         Move(name: "antic: window", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: stretch", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stretch, $0.sim) }),
+        // the Jelly Show (2026-10-21): the dances (Sway = sway, Bop = bounce, Twirl = tail, above) and the stage tricks (sit / jacks / run / look / tail / bounce / roll / flip)
+        Move(name: "show dance: sway", game: true, seconds: 8, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sway, $0.sim) }),
+        Move(name: "show trick: look", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.look, $0.sim) }),
         // the "too bland" round (2026-10-20): mid-walk flourishes, the jump for joy and the reaction moves (standalone; the mid-walk versions are in LivelyLabTests)
         Move(name: "flourish: skip-hop", game: true, seconds: 4, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.skipHop, $0.sim) }),
         Move(name: "flourish: hopscotch", game: true, seconds: 5, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.hopscotch, $0.sim) }),

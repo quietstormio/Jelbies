@@ -436,7 +436,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if (stageView?.activeTouches ?? 0) > 0 || touchHolds(a.id) || mode != .none { return true }
         if game {
             let c = model.care
-            if c.focus.isActive || c.trayOut || c.bath.active || c.race.active || c.select.isSelecting || c.select.confirmed == a.id { return true }
+            if c.focus.isActive || c.trayOut || c.bath.active || c.tripActive || c.select.isSelecting || c.select.confirmed == a.id { return true }
         }
         return false
     }
@@ -450,7 +450,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Called once before each fixed sim step.
     private func hopTick(reduce: Bool) {
         publishPeers()
-        let racing = game && model.care.race.active
+        let racing = game && model.care.tripActive
         if actors.count > 1, !racing {
             asideClock += sim.stepDt
             if asideClock >= 0.25 { Self.makeRoom(snapshot: peerSnapshot, brains: actors.map(\.brain), cooldown: &asideCooldown, dt: asideClock); asideClock = 0 }
@@ -463,6 +463,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if game { model.care.tickOthers(actors, dt: sim.stepDt) }
         }
         if game { model.care.tickRace(actors, dt: sim.stepDt) }          // Jelly Circuit: the trip to the track and the race (every Jelly is ticked by now)
+        if game { model.care.tickShow(actors, dt: sim.stepDt) }          // Jelly Show: the trip to the stage, the rounds, the Studio's dance drill
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball
     }
@@ -510,7 +511,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         let napping = brains.map { $0?.isNapping ?? false }
         let moods = actors.indices.map { model.care.jelly($0)?.needs.mood ?? .okay }
         AudioHub.shared.raceCrowd(model.care.race.active && model.care.race.trackVisible && model.care.race.kind == .race)
-        AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: model.care.race.musicScene)
+        let raceScene = model.care.race.musicScene
+        AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene)
     }
 
     /// The other Jellies' brain, jelly follow-through and mouth (their needs, mood and greeting are GameCare.tickOthers).
@@ -655,7 +657,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             return
         }
         renderer = r
-        if model.gameMode { model.care.fittingProvider = { [weak self] look, id in self?.fittingSnapshot(look: look, jelly: id) } }
+        if model.gameMode {
+            model.care.fittingProvider = { [weak self] look, id in self?.fittingSnapshot(look: look, jelly: id) }
+            model.care.portraitProvider = { [weak self] id in self?.fittingSnapshot(look: nil, jelly: id) }
+        }
         for a in actors { if let p = a.appearance { r.setPalette(p, body: a.id) } }          // slot 0 too: a non-Bob character there wears his own colours
         view.delegate = self
     }
@@ -757,7 +762,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         if game {
             let b = model.care.focus.blend
-            active = active || (b > 0.001 && b < 0.999) || model.care.trayOut || model.care.select.isSelecting || model.care.race.active
+            active = active || (b > 0.001 && b < 0.999) || model.care.trayOut || model.care.select.isSelecting || model.care.tripActive
         }
         var e: Float? = nil
         if sim.totalMass > 0 { var m: Float = 0; for a in actors { m = max(m, a.sim.kineticEnergy() / a.sim.totalMass) }; e = m }
@@ -882,7 +887,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                   GameCamera.eye.x, GameCamera.eye.y, GameCamera.eye.z, GameCamera.target.x, GameCamera.target.y, GameCamera.target.z, GameCamera.roomWideScale, GameCamera.roomWideLift, actors.count)
             if abs(drawAspect / ptAspect - 1) > 0.01 { NSLog("[melon] camera: WARNING drawable and bounds aspects differ by %.1f%%", Double(abs(drawAspect / ptAspect - 1) * 100)) }
         }
-        let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt, raceFollow: raceFollow) : rig.camera(viewSize: pts, safeRect: safe)
+        let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
         if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
@@ -916,9 +921,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             let camIn = model.care.focus.blend > 0.25          // the close-up is (nearly) on: the Jellies it does not frame are out of the picture
             renderer.raceCourse = model.care.race.course.tier
             renderer.raceVisible = model.care.race.trackVisible
+            renderer.showVisible = model.care.show.onStage
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
-                renderer.setHidden((bathRoom && a.id != washed) || (camIn && model.care.focusHides(a.id)), body: a.id)
+                renderer.setHidden((bathRoom && a.id != washed) || (camIn && model.care.focusHides(a.id)) || model.care.showHides(a.id), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
         }
@@ -988,13 +994,14 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Jelly `id` wearing `look`, drawn by the game renderer itself (the room, the real body shader, the real wardrobe / shoe meshes, the jersey) into an
     /// offscreen target between two frames, from a close 3/4 camera in front of him. nil when there is no game renderer to ask.
-    func fittingSnapshot(look: WearLook, jelly id: Int) -> UIImage? {
+    /// `look` nil: a plain portrait of him as he is (what he wears now), for the Studio and the Condition card.
+    func fittingSnapshot(look: WearLook?, jelly id: Int) -> UIImage? {
         guard game, let renderer, let room = renderer.room, actors.indices.contains(id) else { return nil }
         // the size of the last frame (nil until the stage has drawn one: the caller asks again)
         let W = lastRW, H = lastRH
         guard W > 8, H > 8, firstFrameDone else { return nil }
         let care = model.care, a = actors[id]
-        care.store.fitting = (id, look)
+        care.store.fitting = look.map { (id, $0) }
         defer {
             care.store.fitting = nil
             room.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); room.setShoes(RoomMesh())
@@ -1005,6 +1012,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         for o in actors { renderer.setHidden(o.id != id, body: o.id) }
         renderer.raceVisible = false
         room.raceVisible = false
+        renderer.showVisible = false
+        room.showVisible = false
         a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id))
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
@@ -1020,11 +1029,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let c = pose.centroid
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
-        let yaw: Float = 0.5
+        let yaw: Float = look == nil ? 0.3 : 0.5
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
-        let head = look.slot == .head || look.slot == .face || look.slot == .neck
-        let focusY: Float = head ? c.y + (look.slot == .head ? 0.5 : 0.3) : c.y + 0.1
-        let span: Float = look.slot == .feet ? 1.5 : (head ? 1.9 : 2.0)
+        let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
+        let focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
+        let span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
         let aspect = Float(W) / Float(H)
         let th = tanf(GameCamera.fovY / 2)
         let dist = (span / 2) / min(th, th * aspect)
@@ -1089,7 +1098,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Double tap in the game: select the Blob under the finger (roaming only; with one Blob there is no select step).
     func gameDoubleTap(_ p: CGPoint) {
-        guard game, !model.care.focus.isActive, !model.care.race.active else { return }
+        guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
         if let id = model.care.select.hit(p) { model.care.select.doubleTap(id); return }          // a Jelly under the finger: unchanged
@@ -1098,7 +1107,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// The placed decor piece under a screen point, unless a Jelly drawn there is nearer the camera (he wins: his tap / pet / select is unchanged).
     func decorUnderFinger(_ p: CGPoint) -> Int? {
-        guard game, haveCam, !model.care.arranging, !model.care.focus.isActive, !model.care.bath.active, !model.care.race.active, !model.care.store.placedDecor.isEmpty, let size = stageView?.bounds.size, size.width > 1,
+        guard game, haveCam, !model.care.arranging, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.store.placedDecor.isEmpty, let size = stageView?.bounds.size, size.width > 1,
               let d = model.care.decorHit(screen: p, size: size) else { return nil }
         let jd = pickJelly(p, size).map { simd_distance($0.hit, lastCam.pos) }
         return GameCare.decorWins(pieceT: d.t, jellyDistance: jd) ? d.piece.uid : nil
@@ -1115,7 +1124,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     func gameSingleTap(_ p: CGPoint) {
         let sel = model.care.select
         if game, sel.isSelecting, sel.hit(p) == nil { sel.cancel() }
-        if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.race.active, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
+        if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()
         }
@@ -1429,7 +1438,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
-        if game, model.care.race.active { return }          // on the track the screen is the two foot buttons: no touch play, no selection, no voice
+        if game, model.care.tripActive { return }          // on the track (or the show's stage) the screen is the buttons: no touch play, no selection, no voice
         if game, model.care.bath.acceptsTouch {
             // the clean-up: every touch is a scrub (no gesture classifier: no pick up, throw or cheeks), starting anywhere
             if mode == .none, !model.paused { mode = .pet; dragID = id; last = p; petPoint = p; touchSize = size }

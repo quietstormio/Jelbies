@@ -32,6 +32,7 @@ extension GameCare {
             var role = wearRole(for: a.id)
             var hide = bath.active
             if race.active, raceBook.parked.contains(a.id) { hide = true; role = .none }
+            if showHidesWear(a.id) { hide = true; role = .none }          // the show: rival bodies and the parked wear nothing of ours
             let worn = outfit(a.id)
             let sig = worn.map { $0.key.rawValue.hashValue ^ $0.value.rawValue.hashValue }.reduce(0, ^) &+ worn.count
             if let was = outfitSeen[a.id], was != sig, !worn.isEmpty, !hide { b.postEvent(.newOutfit); b.blushBump(hold: 2.4, peak: 0.55) }          // a new outfit: the others admire it

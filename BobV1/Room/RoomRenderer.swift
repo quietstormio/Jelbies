@@ -95,6 +95,22 @@ nonisolated final class RoomRenderer {
             if raceVisible { buildRaceMeshes() }
         }
     }
+    // Jelly Show (Show/ShowStage.swift): the stage set replaces the living room while `showVisible`. Same pipeline and vertex format as the room.
+    private var showVB: MTLBuffer?, showIB: MTLBuffer?, showIndexCount = 0
+    /// The stage is drawn instead of the living room. Changing it bumps `staticVersion`, which invalidates the room cache.
+    var showVisible = false {
+        didSet {
+            guard showVisible != oldValue else { return }
+            staticVersion &+= 1
+            if showVisible, showVB == nil {
+                let m = ShowModels.build()
+                showIndexCount = m.indices.count
+                showVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+                showIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
+                showVB?.label = "show stage vertices"; showIB?.label = "show stage indices"
+            }
+        }
+    }
     private func buildRaceMeshes() {
         guard raceVB == nil else { return }
         let m = RaceModels.build(course: RaceCourse.course(raceCourse))
@@ -402,13 +418,16 @@ nonisolated final class RoomRenderer {
             }
             return
         }
-        if raceVisible {
-            // the track replaces the room (static: cached like the room); no props, no dining tray out there
-            guard let vb = raceVB, let ib = raceIB, raceIndexCount > 0 else { return }
+        if raceVisible || showVisible {
+            // the track (or the show's stage) replaces the room (static: cached like the room); no props, no dining tray out there
+            let onStage = showVisible && !raceVisible
+            guard let vb = onStage ? showVB : raceVB, let ib = onStage ? showIB : raceIB, (onStage ? showIndexCount : raceIndexCount) > 0 else { return }
+            let indexCount = onStage ? showIndexCount : raceIndexCount
             var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
-            u.pal2 = SIMD4(RaceModels.swatch2, 1); u.pal3 = SIMD4(RaceModels.swatch3, 1); u.pal4 = SIMD4(RaceModels.swatch4, 1)
+            if onStage { u.pal2 = SIMD4(ShowModels.swatch2, 1); u.pal3 = SIMD4(ShowModels.swatch3, 1); u.pal4 = SIMD4(ShowModels.swatch4, 1); u.fog = SIMD4(ShowModels.fog, 0) }
+            else { u.pal2 = SIMD4(RaceModels.swatch2, 1); u.pal3 = SIMD4(RaceModels.swatch3, 1); u.pal4 = SIMD4(RaceModels.swatch4, 1) }
             u.lamp.w = 0
-            enc.pushDebugGroup("race track")
+            enc.pushDebugGroup(onStage ? "show stage" : "race track")
             enc.setRenderPipelineState(pipeline)
             enc.setFragmentBuffer(shoeTable, offset: 0, index: 2)
             enc.setDepthStencilState(depthState)
@@ -420,7 +439,7 @@ nonisolated final class RoomRenderer {
             enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
             if parts != .diningOnly {
                 enc.setVertexBuffer(vb, offset: 0, index: 1)
-                enc.drawIndexedPrimitives(type: .triangle, indexCount: raceIndexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+                enc.drawIndexedPrimitives(type: .triangle, indexCount: indexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
             }
             if parts != .staticOnly {          // the racers' shoes and numbered bibs, hats and the rest of what they wear stand on the track too
                 for (label, d) in [("shoes", shoeMesh), ("wardrobe", wearOpaque)] where d.indexCount > 0 {
@@ -497,7 +516,7 @@ nonisolated final class RoomRenderer {
     /// on top of him. Sets its own pipeline / depth / cull state and buffers.
     func encodeBlended(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                        lightViewProj: simd_float4x4?, shadowTex: MTLTexture?, topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil) {
-        for d in (bathVisible || raceVisible) ? [diningTranslucent, wearTranslucent] : [diningTranslucent, maskTranslucent, wearTranslucent] {
+        for d in (bathVisible || raceVisible || showVisible) ? [diningTranslucent, wearTranslucent] : [diningTranslucent, maskTranslucent, wearTranslucent] {
         if d.indexCount > 0, let dv = d.vb[d.slot], let di = d.ib[d.slot] {
             var u = makeUniforms(viewProj: viewProj, camPos: camPos, lightViewProj: lightViewProj, shadowTex: shadowTex, topViewProj: topViewProj)
             enc.pushDebugGroup("dining puff")

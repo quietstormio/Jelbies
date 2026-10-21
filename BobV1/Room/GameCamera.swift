@@ -78,7 +78,8 @@ enum GameCamera {
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
-    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil, raceFollow: RaceFollowPose? = nil) -> CameraState {
+    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil, raceFollow: RaceFollowPose? = nil,
+                       show: Float = 0, showFrame: ShowFrame? = nil) -> CameraState {
         self.aspect = aspect
         if roomWideScale != 1 {
             let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
@@ -105,6 +106,11 @@ enum GameCamera {
                 e += (p.eye - e) * race
                 t += (p.target - t) * race
             }
+        }
+        if show != 0 {                                      // the Jelly Show's stage: the focus close-up's maths on the stage spots, snapped under the white fade
+            let p = showPose(aspect: aspect, frame: showFrame ?? .look)
+            e += (p.eye - e) * show
+            t += (p.target - t) * show
         }
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: up)
@@ -230,6 +236,29 @@ enum GameCamera {
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
         let t = SIMD3<Float>(mid.x, ty, callSpot.y)
+        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
+        return (e, t)
+    }
+
+    // MARK: The Jelly Show's stage
+
+    /// Eye / target framing the show's spots: the row's width (plus a body) fills `frame.fill` of the screen width, the bodies' middle sits at
+    /// `frame.screenY`; the camera stays as low as the close-up so the backdrop fills the picture. A phone on its side keeps the portrait height.
+    static func showPose(aspect: Float, frame: ShowFrame) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let spots = frame.spots.isEmpty ? [ShowStage.playerSpot] : frame.spots
+        var lo = spots[0], hi = spots[0]
+        for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
+        let mid = (lo + hi) * 0.5
+        // a phone on its side: the bodies are drawn bigger (the screen is short), the solo rounds put him on the left third so the cards have the right
+        let land = aspect >= 1.2
+        let fill = land ? frame.landFill : frame.fill
+        let screenY = land ? frame.landScreenY : frame.screenY
+        let visW = (hi.x - lo.x + 2 * BobShape.R) / max(fill, 0.2)
+        let visH = visW / max(framingAspect(aspect), 0.2)
+        let dist = visH / (2 * tanf(fovY / 2))
+        let ty = 0.5 * BobShape.H - (0.5 - screenY) * visH
+        let tx = mid.x + (land && frame.landLeft ? 0.22 * visH * aspect : 0)
+        let t = SIMD3<Float>(tx, ty, hi.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
     }

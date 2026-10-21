@@ -90,6 +90,7 @@ extension GameCare {
     func raceBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if race.active { return "A race is already on." }
+        if show.active { return "He is at the Jelly Show." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }
@@ -126,8 +127,8 @@ extension GameCare {
     /// "Train": Jelly `id` practises Rhythm Steps alone on the track.
     func startDrill(jelly id: Int, seed: UInt64? = nil) { startRace(jelly: id, seed: seed, drill: true) }
 
-    /// True from the moment Race is asked (even while a sleeper is still rolling up) until the trip is over: no bedtime, no sleep.
-    var raceBusy: Bool { race.active || raceWait != nil }
+    /// True from the moment Race is asked (even while a sleeper is still rolling up) until the trip is over: no bedtime, no sleep. The show's trip too.
+    var raceBusy: Bool { race.active || raceWait != nil || show.active }
 
     private func beginRace(jelly id: Int, seed: UInt64?, drill: Bool = false) {
         guard let prof = jelly(id) else { return }
@@ -157,8 +158,8 @@ extension GameCare {
         return true
     }
 
-    /// The body colour a Jelly wears on the track (nil = his own).
-    func racePalette(for id: Int) -> Palette? { raceBook.palettes[id] }
+    /// The body colour a Jelly wears on the track or the show's stage (nil = his own).
+    func racePalette(for id: Int) -> Palette? { raceBook.palettes[id] ?? showBook.palettes[id] }
 
     // MARK: world swaps (under the white)
 

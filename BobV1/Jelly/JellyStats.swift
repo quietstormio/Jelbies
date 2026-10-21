@@ -13,7 +13,17 @@ import Observation
 /// Persistent "condition" of a Jelly (what he has been eating and wearing: for the beauty contest later). Each 0...1, decays slowly, capped.
 nonisolated enum ConditionKey: Int, CaseIterable, Codable, Sendable {
     case cute, cool, sparkle, sweet, sporty
-    var title: String { ["Cute", "Cool", "Sparkle", "Sweet", "Sporty"][rawValue] }
+    /// The one name used everywhere (the stat and the wear tag are both "Sparkly").
+    var title: String { ["Cute", "Cool", "Sparkly", "Sweet", "Sporty"][rawValue] }
+}
+
+/// One meal in a Jelly's food diary (the Condition card's "last 8 meals").
+nonisolated struct MealEntry: Codable, Equatable, Sendable {
+    var food: String
+    var at: Double
+    /// What it raised, by stat index (ConditionKey.rawValue), in stat units.
+    var gains: [Int: Float]
+    var date: Date { Date(timeIntervalSince1970: at) }
 }
 
 nonisolated enum ConditionTuning {
@@ -49,6 +59,9 @@ final class JellyStats {
     @ObservationIgnored private var condStamp: Date
     /// Bumped on a change (UI).
     private(set) var conditionRevision = 0
+    /// The last `mealsKept` meals, newest first (the Condition card's food diary; the Jelly Show's "+1" droplets read the newest).
+    private(set) var meals: [MealEntry] = []
+    static let mealsKept = 8
     @ObservationIgnored private let now: () -> Date
     /// The calendar day as one number (DayClock.dayKey): Pep refills when it changes, not after 24 hours.
     @ObservationIgnored private let dayKey: () -> Int
@@ -86,6 +99,7 @@ final class JellyStats {
         if persists, let dd = defaults.dictionary(forKey: key + ".dances") as? [String: Double] {
             for (k, v) in dd { if let id = DanceID(rawValue: k) { dances[id] = min(max(Float(v), 0), 1) } }
         }
+        if persists, let md = defaults.data(forKey: key + ".meals"), let m = try? JSONDecoder().decode([MealEntry].self, from: md) { meals = Array(m.prefix(Self.mealsKept)) }
     }
 
     // MARK: training (Pep, practice, dances)
@@ -119,11 +133,33 @@ final class JellyStats {
 
     func proficiency(_ d: DanceID) -> Float { dances[d] ?? 0 }
     var knownDances: [DanceID] { DanceID.allCases.filter { (dances[$0] ?? 0) > 0 } }
+    /// The dance he shows on stage: the one he knows best (nil = none learned, freestyle).
+    var bestDance: DanceID? { knownDances.max { proficiency($0) < proficiency($1) } }
+    /// A dance is open in the Studio: the starter always, the others once the one before is half known.
+    func danceOpen(_ d: DanceID) -> Bool { d.opensAfter.map { proficiency($0.dance) >= $0.skill } ?? true }
     /// Learning / practising a dance: raises its proficiency (capped at 1).
     func learn(_ d: DanceID, add: Float) {
         dances[d] = min(max((dances[d] ?? 0) + add, 0), 1)
         trainingRevision += 1
         saveTraining()
+    }
+    /// What a dance drill of this accuracy would add now (the Rhythm Steps gain curve, with Pep). A first drill always teaches at least a little.
+    func dancePracticeGain(_ d: DanceID, accuracy: Float) -> Float {
+        let g = TrainingTuning.gain(stat: proficiency(d), accuracy: accuracy, sessionsToday: sessionsToday) * TrainingTuning.danceShare
+        return max(g, proficiency(d) == 0 && accuracy > 0 ? 0.05 : 0)
+    }
+    /// A dance drill is over: the gain goes on the dance, one Pep is used. Returns what was added.
+    @discardableResult
+    func finishDancePractice(_ d: DanceID, accuracy: Float) -> Float {
+        let g = dancePracticeGain(d, accuracy: accuracy)
+        let before = proficiency(d)
+        dances[d] = min(1, before + g)
+        let today = dayKey()
+        if pepDay != today { pepDay = today; pepSessions = 0 }
+        pepSessions += 1; practices += 1
+        trainingRevision += 1
+        saveTraining()
+        return proficiency(d) - before
     }
     private func saveTraining() {
         guard persists else { return }
@@ -139,17 +175,41 @@ final class JellyStats {
         return min(max(cond[k.rawValue] - ConditionTuning.decayPerHour * hours, 0), ConditionTuning.cap)
     }
     /// Eating (or wearing) nudges the stats up by `d`; capped at 1. Everything first takes its decay so the stamp can move.
-    func nudge(_ d: [ConditionKey: Float]) {
+    /// `food`: the meal's name, for the food diary (nil = not a meal: wearing shoes, tests).
+    func nudge(_ d: [ConditionKey: Float], food: String? = nil) {
         let t = now()
         for k in ConditionKey.allCases { cond[k.rawValue] = condition(k) }
         condStamp = t
-        for (k, v) in d { cond[k.rawValue] = min(max(cond[k.rawValue] + v, 0), ConditionTuning.cap) }
+        var gains: [Int: Float] = [:]
+        for (k, v) in d {
+            let was = cond[k.rawValue]
+            cond[k.rawValue] = min(max(cond[k.rawValue] + v, 0), ConditionTuning.cap)
+            if cond[k.rawValue] - was > 1e-5 { gains[k.rawValue] = cond[k.rawValue] - was }
+        }
+        if let food {
+            // the same food within a minute (one serving, several bites) is one diary line
+            if let first = meals.first, first.food == food, t.timeIntervalSince(first.date) < 60 {
+                meals[0].gains.merge(gains, uniquingKeysWith: +); meals[0].at = t.timeIntervalSince1970
+            } else {
+                meals.insert(MealEntry(food: food, at: t.timeIntervalSince1970, gains: gains), at: 0)
+                if meals.count > Self.mealsKept { meals.removeLast(meals.count - Self.mealsKept) }
+            }
+        }
         conditionRevision += 1
         saveCondition()
     }
     private func saveCondition() {
         guard persists else { return }
         defaults.set(cond.map { Double($0) } + [condStamp.timeIntervalSince1970], forKey: key + ".cond")
+        if let d = try? JSONEncoder().encode(meals) { defaults.set(d, forKey: key + ".meals") }
+    }
+    /// Test / tuning hook: sets a condition stat outright.
+    func setCondition(_ k: ConditionKey, _ v: Float) {
+        for c in ConditionKey.allCases { cond[c.rawValue] = condition(c) }
+        condStamp = now()
+        cond[k.rawValue] = min(max(v, 0), ConditionTuning.cap)
+        conditionRevision += 1
+        saveCondition()
     }
 
     func save() {

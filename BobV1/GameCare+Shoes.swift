@@ -30,6 +30,7 @@ extension GameCare {
     /// Does this actor wear shoes on screen right now?
     func shoeLook(for a: JellyActor) -> WearLook? {
         if race.active, a.id != race.playerID { return nil }
+        if show.active, a.id != show.playerID { return nil }          // a borrowed rival body on the stage is somebody else's Jelbie: no shoes of ours
         if bath.active, bath.targetID == a.id { return nil }
         return store.worn(a.id, .feet)
     }

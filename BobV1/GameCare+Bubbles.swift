@@ -122,7 +122,7 @@ extension GameCare {
             if let id = BubbleRotation.pick(cs, shownAt: hub.shownAt, turn: hub.turn), id != hub.owner { hub.setOwner(id) }
         }
         // each other Jelly's schedules run every step; only the owner is unsuppressed (the rest wait, frozen)
-        let base = focus.isActive || select.isSelecting || bath.active || race.active
+        let base = focus.isActive || select.isSelecting || bath.active || tripActive
         for p in jellies where p.id > 0 {
             let id = p.id
             let owner = hub.owner == id
