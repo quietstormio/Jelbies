@@ -122,6 +122,14 @@ final class BlobBrain {
     var race = RaceDrive()
     /// Idle behaviours (BlobBrain+Idle.swift): run, stumble, jumping jacks, sit, look, yawn-stretch. State, mood source and the run blend.
     var idleState = IdleState()
+    /// The face (BlobBrain+Expression.swift), the mid-walk flourish roll of the current leg and the pending jump for joy (BlobBrain+Flourish.swift), the reactions (BlobBrain+React.swift).
+    var expr = ExpressionState()
+    var leg = LegState()
+    var joyWanted = false, joyAge: Float = 0
+    var hmphWanted = false, hmphAge: Float = 0
+    var react = ReactState()
+    var startingReaction = false
+    weak var bus: ReactionBus?
     var idleMood: IdleMood = .okay
     /// Time of day (DayClock): 0...1 night / morning weights. Night makes him sleepier (naps, yawns), morning makes him stretch and wake.
     var idleNight: Float = 0
@@ -492,8 +500,10 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        defer { expressionTick(sim, skinner, dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
-        sinceWave += dt; sincePlay += dt
+        sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
+        reactTick(sim, skinner, dt)
         snuggleCool = max(0, snuggleCool - dt)
         awakeMin = max(0, awakeMin - dt); sleepTryCool = max(0, sleepTryCool - dt)
         // a finger on a sleeper: a tap wakes him gently (he rolls back over and stretches, groggy); a long hold is a real pick up (below)
@@ -725,7 +735,7 @@ final class BlobBrain {
                 nearest = min(nearest, simd_distance(o.position, cand))
                 if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
             }
-            let score = 0.5 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand()
+            let score = 0.5 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + (anticsEnabled ? 0.35 * min(d, 2.6) : 0)          // (the lively room prefers legs long enough for a flourish)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
@@ -1057,7 +1067,7 @@ final class BlobBrain {
         case .walk(let target, let then):
             poseOn = true; ensureFeet(sim)
             if simd_distance(SIMD2(px, pz), stallRoot) > 0.04 || abs(wrapAngle(yaw - stallYaw)) > 0.05 { stallRoot = SIMD2(px, pz); stallYaw = yaw; steerStall = 0 } else { steerStall += dt }
-            if scriptT <= dt * 1.5 { walkStallRoot = SIMD2(px, pz); walkStallT = 0; steerWait = 0; steerGiveUp = false }       // a new leg starts clean
+            if scriptT <= dt * 1.5 { walkStallRoot = SIMD2(px, pz); walkStallT = 0; steerWait = 0; steerGiveUp = false; flourishLegStart(target: target) }       // a new leg starts clean (and rolls its flourish)
             // stuck detector: an autonomous walk whose root has not moved 0.12 u in 3 s (a half turn on the spot takes ~1.7 s) is dropped and re-picked
             if simd_distance(SIMD2(px, pz), walkStallRoot) > 0.12 { walkStallRoot = SIMD2(px, pz); walkStallT = 0 } else { walkStallT += dt }
             if walkStallT > 3.0, job == nil, !commanded, pending == nil {
@@ -1067,6 +1077,7 @@ final class BlobBrain {
             }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
+                if flourishMaybe(sim, skinner, target: target) { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)
                 guard let eff = steerTarget(to: target) else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
@@ -1204,7 +1215,7 @@ final class BlobBrain {
         if poseOn { poseW = min(1, poseW + dt / 0.25) } else { poseW = max(0, poseW - dt / 0.3) }
         guard poseW > 0 else { if sim.attractor.strength > 0 && !gait.isBusy { sim.attractor.strength = 0 }; return }
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
-        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll, axis: SIMD3(0, 0, 1))
+        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
         let sq = squash * touchSquash * socialBook.squash
         sim.attractor.squash = sq
@@ -2040,6 +2051,8 @@ final class BlobBrain {
         skinner.browCounterOn = false
         if dine.forkHeld { dineHooks?.releaseFork(); dine.forkHeld = false }
         dineEnd(sim)
+        postEvent(.ateTreat)          // (a friend may look over, hopeful; nobody leaves a spot)
+        wantJoy()                     // a meal finished: a jump for joy once the meal lock is off
         finishScript(sim, after: true)
     }
 

@@ -599,10 +599,15 @@ final class TouchPlay {
     // MARK: composing the reactions
 
     private var outPitch: Float = 0, outRoll: Float = 0, outSquash: Float = 1
+    private var wasEnjoying = false
 
     /// The brain gets the sum of every reaction (pet lean / jiggle, purr, phone tilt, whoa).
     private func compose(_ brain: BlobBrain?) {
         guard let brain else { return }
+        let en = enjoying
+        if en { brain.blushBump(hold: 2.2, peak: 0.7) }          // petted into a happy squint: a blush
+        if en && !wasEnjoying { brain.postEvent(.petted) }
+        wasEnjoying = en
         let p = outPitch + whoaPitch + annoyPitch, r = outRoll + tiltRoll + annoyRoll, q = outSquash * annoySquash
         if p == 0 && r == 0 && q == 1 { brain.clearTouch() } else { brain.applyTouch(pitch: p, roll: r, squash: q) }
     }

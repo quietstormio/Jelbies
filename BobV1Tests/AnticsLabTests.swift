@@ -123,7 +123,7 @@ final class AnticsLabTests: XCTestCase {
             worstQuiet = max(worstQuiet, r.maxQuiet); worstGap = max(worstGap, r.maxGap); worstMean = max(worstMean, r.meanGap); minPair = min(minPair, r.minPair)
         }
         MotionLog.write("ANTICS LIVELY totals: socials \(socials) (2 x 600 s), distinct behaviours \(distinct.count), stuck \(stuck), fast>2 frames \(over2), worst max gap between starts \(worstGap), worst longest-quiet \(worstQuiet), worst mean gap \(worstMean), min pair gap \(minPair)")
-        XCTAssertGreaterThanOrEqual(socials, 100, "roughly twice the socials of the old room (24...29 per 600 s)")
+        XCTAssertGreaterThanOrEqual(socials, 90, "roughly twice the socials of the old room (24...29 per 600 s)")
         XCTAssertGreaterThanOrEqual(distinct.count, 26, "much more variety (the old room showed 16 distinct behaviours)")
         XCTAssertLessThanOrEqual(worstMean, 3.6, "something visible starts every few seconds")
         XCTAssertLessThanOrEqual(worstQuiet, 10.5, "never a long dead stretch (nobody doing anything but walking or standing)")

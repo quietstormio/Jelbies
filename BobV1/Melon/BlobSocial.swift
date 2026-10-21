@@ -141,6 +141,8 @@ final class SocialSession {
 final class SocialRoster {
     private struct Box { weak var b: BlobBrain? }
     private var boxes: [Box] = []
+    /// The event bus of the room (BlobBrain+React.swift); created on first use.
+    var _bus: ReactionBus?
     nonisolated deinit {}
     var brains: [BlobBrain] { boxes.compactMap { $0.b } }
 
@@ -152,7 +154,10 @@ final class SocialRoster {
             b.steerID = i
             b.zoomUrge = IdleTuning.zoomUrgeFirst + 35 * Float(i)          // (the first zoomies urge: staggered, so they do not all go at once)
             b.socialOthers = { [weak r] in r.map { $0.brains.filter { $0 !== b } } ?? [] }
+            b.bus = r.eventBus
         }
+        let bus = r.eventBus
+        DecorField.shared.onTopple = { [weak bus] pos in bus?.post(BusEvent(kind: .towerToppled, source: -1, pos: pos, piece: .blocks)) }
         return r
     }
     /// Voice "stop fighting": true when a squabble was running.
@@ -283,6 +288,7 @@ extension BlobBrain {
             s.leaderWait = 0.2
         case .greet:
             guard d < 2.6 else { return false }
+            if anticsEnabled, fastOthers(except: [o]) > 0 { return false }          // (the greeting hop is two fast movers: never a third)
             _ = newSession(.greet, with: o, duration: 0)
             for x in [self, o] { x.socialBook.hold = true }
             socialBook.faceYaw = yawTo(you); o.socialBook.faceYaw = o.yawTo(me)
@@ -383,6 +389,7 @@ extension BlobBrain {
     /// idleMaybeStart started zoomies: a nearby Jelly may join, running a loop around where this one stops.
     func socialOfferZoomies(_ sim: SoftBody) {
         guard socialBook.enabled, social == nil, !commanded, runMoveDemo == nil else { return }
+        if anticsEnabled, fastOthers() > 0 { return }          // (a joiner is a second fast mover: never a third)
         let ps = socialOthers().map { (id: $0.steerID, pos: $0.position, b: $0) }
         if ps.isEmpty { return }
         var cands: [BlobBrain] = []
@@ -509,6 +516,8 @@ extension BlobBrain {
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        if s.kind == .squabble { wantHmph() }          // a huff after a squabble
+        if s.end != .aborted, s.end != .stopped, s.kind != .squabble, rand() < 0.35 { wantJoy(); blushBump(hold: 2.2, peak: 0.5) }          // a social ended happily
         onSocial?(.ended(s.kind, partner: pid, s.end ?? .aborted))
     }
 

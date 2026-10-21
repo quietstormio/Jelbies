@@ -89,6 +89,9 @@ final class ArmCapTests: XCTestCase {
         note("sleep roll"); rows.append(("sleep (yawn, roll onto the back and up)", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 2 }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
         note("sleep hand-hold"); rows.append(("sleep hand-hold (arm reaches sideways)", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 5; r.brain.sleep.holdForce = true }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
         note("sleep hand-hold + cuddle"); rows.append(("sleep hand-hold + cuddle lean", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 5; r.brain.sleep.holdForce = true; r.brain.sleep.mode = .cuddle }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
+        for (n, k) in [("skip-hop", IdleKind.skipHop), ("hopscotch", .hopscotch), ("mid-leg spin", .legSpin), ("bounce-trot", .trot), ("stop and look", .stopLook), ("jump for joy", .joy), ("giggle", .giggle), ("startle hop", .startle), ("roll along the leg", .rollTrip), ("big sigh", .sigh), ("hmph puff", .hmph)] {
+            note(n); rows.append((n, capsuleStat(10, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
         for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway", .sway)] {
             note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }

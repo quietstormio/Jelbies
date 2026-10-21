@@ -94,6 +94,8 @@ final class BodySlot {
     func staticChanged() { staticGen += 1; syncStatic() }
     /// 0...1 mouth opening (uniform byte 460).
     var mouthOpen: Float = 0
+    /// 0...1 blush (uniform byte 476, `seed.w`, which no shader reads for the body): a soft pink cheek tint, 0 = none (pixel-identical).
+    var blush: Float = 0
     /// Not drawn this frame (for example the bath close-up shows Bob alone).
     var hidden = false
     /// This body's colours; nil = the palette the renderer-wide `setUniforms` was given.
@@ -192,6 +194,8 @@ final class MelonRenderer {
     var mouthOpen: Float { get { slots[0].mouthOpen } set { slots[0].mouthOpen = newValue } }
     /// DEBUG/screenshot override: launch argument -MelonMouth <0...1>.
     private let forcedMouth: Float? = UserDefaults.standard.object(forKey: "MelonMouth") != nil ? Float(UserDefaults.standard.double(forKey: "MelonMouth")) : nil
+    /// DEBUG/screenshot override: launch argument -MelonBlush <0...1>.
+    private let forcedBlush: Float? = UserDefaults.standard.object(forKey: "MelonBlush") != nil ? Float(UserDefaults.standard.double(forKey: "MelonBlush")) : nil
     /// What the bath does to Bob's look this frame (suds, soot, wet, sparkle, held tool, spray, bubbles, bathroom on/off).
     /// `.dry` (the default) draws exactly the pre-bath frame. The stage sets this once per frame.
     var bathLook: BathLook { get { slots[bathBody].bathLook } set { slots[bathBody].bathLook = newValue } }
@@ -525,6 +529,9 @@ final class MelonRenderer {
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     func setMouth(_ m: Float, body i: Int) { if i < slots.count { slots[i].mouthOpen = m } }
+    func setBlush(_ b: Float, body i: Int) { if i < slots.count { slots[i].blush = b } }
+    /// Test / capture access: the blush a body is drawn with this frame.
+    func blush(body i: Int) -> Float { i < slots.count ? slots[i].blush : 0 }
 
     /// `p` points at particleCount * 3 floats.
     func uploadParticles(_ p: UnsafePointer<Float>) {
@@ -903,6 +910,7 @@ final class MelonRenderer {
         // mouthOpen rides in `stripe.w` (byte 460 of MelonUniforms); written here so it is always current for this frame.
         for (i, slot) in slots.enumerated() {
             slot.uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? slot.mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
+            slot.uboBuf.contents().storeBytes(of: min(max(forcedBlush ?? slot.blush, 0), 1), toByteOffset: 476, as: Float.self)          // seed.w
             _ = i
         }
         let m = mesh

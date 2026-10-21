@@ -86,7 +86,7 @@ final class AnticsTests: XCTestCase {
         for _ in 0..<(60 * 300) {
             lab.tick(watching: false)
             for (i, r) in lab.rigs.enumerated() {
-                let k = r.brain.social == nil ? r.brain.idleState.kind : nil          // (the moves a social session starts - the chase's runs, the dance - are not his own picks)
+                let k = (r.brain.social == nil && r.brain.idleState.reaction == nil && r.brain.idleState.resume == nil) ? r.brain.idleState.kind : nil          // (the moves a social session starts - the chase's runs, the dance - and the reactions / mid-walk flourishes of 2026-10-20 are not his own picks)
                 if let k, k != prev[i] { seq[i].append(k) }
                 prev[i] = k
             }

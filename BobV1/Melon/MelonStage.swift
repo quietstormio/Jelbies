@@ -299,6 +299,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         set { actors[0].brain = newValue; if let b = newValue { wireRoster(b, id: 0); b.currentPose(sim) } }
     }
 
+    /// The room's event bus (BlobBrain+React.swift): the brains post what they do, the others may react.
+    lazy var eventBus: ReactionBus = {
+        let bus = ReactionBus()
+        bus.brains = { [weak self] in self?.actors.compactMap(\.brain) ?? [] }
+        DecorField.shared.onTopple = { [weak bus] pos in bus?.post(BusEvent(kind: .towerToppled, source: -1, pos: pos, piece: .blocks)) }
+        return bus
+    }()
+
     /// Centre distance the Jellies keep from each other in the room (a body is ~1.4 wide; they may touch a little, never sit inside each other).
     static let jellyGap: Float = 1.4
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
@@ -309,6 +317,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private func wireRoster(_ b: BlobBrain, id: Int) {
         guard actors.count > 1 else { return }
         b.steerID = id
+        b.bus = eventBus
         b.peerGap = Self.jellyGap
         // Jellies interacting (BlobSocial.swift): the other brains, and what a social does outside the brain (a heart, a light haptic for the one the player has)
         b.socialOthers = { [weak self, weak b] in self?.actors.compactMap(\.brain).filter { $0 !== b } ?? [] }
@@ -511,6 +520,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
         a.skinner.jelly.tick(brain: brain, sim: a.sim, dt: a.sim.stepDt)
         renderer?.setMouth(brain.mouthOpen, body: a.id)
+        renderer?.setBlush(brain.blushNow, body: a.id)
     }
 
     private func bobTick(reduce: Bool) {
@@ -533,6 +543,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             dbgBrain += CACurrentMediaTime() - b0
             skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt)   // jelly follow-through (JellyJiggle.swift)
             renderer?.mouthOpen = brain.mouthOpen
+            renderer?.setBlush(brain.blushNow, body: 0)
             if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt, sim: sim) }
             return
         }

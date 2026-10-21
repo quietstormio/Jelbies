@@ -75,18 +75,22 @@ nonisolated func lockSHA(_ s: String) -> String { SHA256.hash(data: Data(s.utf8)
 // MARK: - Shader text chunks
 
 nonisolated enum ShaderChunks {
-    /// Removes the mouth block (`float mo = u.stripe.w;` + the `if (...) { ... }` that follows) from fsSoftMatte's text.
+    /// Removes the mouth block (`float mo = u.stripe.w;` + the `if (...) { ... }` that follows) and the blush block (`float bl = u.seed.w;` + its `if`) from fsSoftMatte's text.
+    /// Both decals only exist while their uniform is above zero, so the shader is pixel-identical to the locked one without them (2026-10-20: the blush is a user-approved addition).
     static func stripMouth(_ t: String) -> String {
-        guard let r = t.range(of: "float mo = u.stripe.w;"), let open = t.range(of: "{", range: r.upperBound..<t.endIndex) else { return t }
-        var depth = 0, i = open.lowerBound
-        while i < t.endIndex {
-            if t[i] == "{" { depth += 1 } else if t[i] == "}" { depth -= 1; if depth == 0 { break } }
-            i = t.index(after: i)
+        func strip(_ marker: String, _ t: String) -> String {
+            guard let r = t.range(of: marker), let open = t.range(of: "{", range: r.upperBound..<t.endIndex) else { return t }
+            var depth = 0, i = open.lowerBound
+            while i < t.endIndex {
+                if t[i] == "{" { depth += 1 } else if t[i] == "}" { depth -= 1; if depth == 0 { break } }
+                i = t.index(after: i)
+            }
+            guard i < t.endIndex else { return t }
+            var out = t
+            out.removeSubrange(r.lowerBound...i)
+            return out
         }
-        guard i < t.endIndex else { return t }
-        var out = t
-        out.removeSubrange(r.lowerBound...i)
-        return out
+        return strip("float bl = u.seed.w;", strip("float mo = u.stripe.w;", t))
     }
     /// Top-level definitions of the .metal file keyed by name, each hashed after comment stripping + whitespace folding.
     static func hashes(of text: String) -> [String: String] {

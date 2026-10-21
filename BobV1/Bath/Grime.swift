@@ -23,8 +23,10 @@ final class DropsWallet {
         if persists { count = UserDefaults.standard.integer(forKey: Self.key) }
     }
     nonisolated deinit {}
+    /// Drops earned (not silent top-ups): the care glue lets a Jelly jump for joy.
+    @ObservationIgnored var onEarn: ((Int) -> Void)?
     func add(_ n: Int = 1, silent: Bool = false) {
-        if n > 0, !silent { AudioHub.shared.play(.coin) }
+        if n > 0, !silent { AudioHub.shared.play(.coin); onEarn?(n) }
         count += n
         if persists { UserDefaults.standard.set(count, forKey: Self.key) }
     }

@@ -108,5 +108,14 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
         float3 mc = mix(eyeC, tongue, tg * 0.85);
         col = mix(col, mc, cover);
     }
+    // Blush (rest space, follows the body): a soft pink cheek tint below and outside each eye, clear of the mouth; only exists while u.seed.w (blush) > 0.
+    float bl = u.seed.w;
+    if (bl > 0.002 && Q.z > 0.15) {
+        float2 bc = float2(abs(Q.x) - 0.315, Q.y - 0.69);
+        float bd = length(bc / float2(0.078, 0.050));
+        float bk = (1.0 - smoothstep(0.30, 1.0, bd)) * clamp(bl, 0.0, 1.0);
+        float lum = dot(col, float3(0.299, 0.587, 0.114));
+        col = mix(col, float3(0.95, 0.40, 0.50) * (0.55 + lum), bk * 0.62);
+    }
     return float4(col / max(u.misc.x, 1e-3), 0.0);
 }

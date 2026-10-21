@@ -179,6 +179,7 @@ extension BlobBrain {
                 }
                 DecorField.shared.kick(f.uid, 0.6)
                 jellyKick = max(jellyKick, 1.4)
+                if f.kind != .blocks { postEvent(.booped, piece: f.kind, at: ball) }
             }
         }
     }
@@ -261,6 +262,7 @@ extension BlobBrain {
                 idleState.decorBooped = true
                 jellyKick = max(jellyKick, 1.6)
                 DecorField.shared.kick(uid, 1)
+                postEvent(.booped, piece: DecorField.shared.foot(uid)?.kind)
                 switch DecorField.shared.foot(uid)?.kind {
                 case .duck?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 1.9); AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.35, rate: 1.8)     // a rubber squeak
                 case .drum?: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9, rate: Float(0.5 + 0.08 * Double(Int(rand() * 4)))); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.4, rate: 0.6)

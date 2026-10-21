@@ -323,6 +323,7 @@ extension BlobBrain {
     /// The walk to the spot is over (script .none). Short of it (the leg was given up: somebody stood in the way) he tries again, up to three times,
     /// then lies down where he is. On to the turn + yawn.
     func sleepArrived(_ sim: SoftBody, _ skinner: Skinner) {
+        postEvent(.fellAsleep)
         if sleep.bed >= 0 {          // at the foot of the pet bed: turn to it, then the hop over the rim (`sleepBodyTick`)
             sleep.bedHop = 1; sleep.t = 0
             if let f = DecorField.shared.foot(sleep.bed) { let d = f.centre - position; sleep.lieYawHop = atan2f(d.x, d.y) }
@@ -353,6 +354,7 @@ extension BlobBrain {
 
     /// Wake now: roll back and stretch. `groggy` = a tap (a slower, sleepier stretch); `fast` = something needs him (a meal, a command): no stretch.
     func sleepWake(groggy: Bool, fast: Bool = false) {
+        if idleState.kind == .sleep { postEvent(.wokeUp) }
         guard idleState.kind == .sleep else { return }
         if sleep.stage <= 1 { idleState.yielding = true; return }          // not down yet: the usual yield ends it
         if sleep.stage >= 4 { return }

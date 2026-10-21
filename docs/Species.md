@@ -1,6 +1,8 @@
 # Blob Species
 
-**Naming (2026-10-16):** the app is called **Jelbies**, and that is the species name. Babies are **Jelbies**; grown-ups are **Jellies**. "Blob" in these docs and the code is the old working name.
+**Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
+
+**2026-10-20: one size, called Jelbies; no growth stages.**
 
 Every species has one **signature silhouette feature**, so you can tell it apart even as a shadow. Each individual Blob in the kennel varies that feature (size, count, curl, etc.) along with shade, size, marking and personality.
 

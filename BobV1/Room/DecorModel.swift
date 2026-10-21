@@ -585,7 +585,10 @@ final class DecorField {
                                    yaw: 0, yawV: (r() - 0.5) * 9, roll: 0, rollV: (r() - 0.5) * 12))
         }
         anim[uid]!.blocks = out; anim[uid]!.tumbleT = 0
+        onTopple?(f.centre)
     }
+    /// The reaction bus hook (SocialRoster.link): the block tower was knocked over, at this floor spot.
+    var onTopple: ((SIMD2<Float>) -> Void)?
     func kick(_ uid: Int, _ amount: Float = 1) { guard anim[uid] != nil else { return }; anim[uid]!.kick = max(anim[uid]!.kick, amount); anim[uid]!.kickT = 0 }
     func peek(_ uid: Int, _ k: Float) { guard let w = anim[uid]?.peekWant else { return }; anim[uid]?.peekWant = max(w, k) }
     func kickBall(_ uid: Int, direction d: SIMD2<Float>, speed: Float) {

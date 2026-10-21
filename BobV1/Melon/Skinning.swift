@@ -232,6 +232,15 @@ nonisolated final class Skinner {
     private var browFrameRest = simd_float3x3(1)
     private var browEyeRest: [SIMD3<Float>] = [SIMD3(0, 0, 0), SIMD3(0, 0, 0)]
     var browsPrepared: Bool { !browRest[0].isEmpty }
+    /// Expression brows (BlobBrain+Expression.swift): per brow (0 = -x) a raise along the face's up axis (rest units) and a tilt about the brow's own centre
+    /// (rad, + = inner end up). Both 0 = exactly the existing brows (the rigid path runs only while `browsRigid` or an expression is on; off, `browW` decays to 0
+    /// and the plain skinned brows are untouched). Ignored while the dining counter-rotation runs.
+    var browRaise: [Float] = [0, 0]
+    var browTilt: [Float] = [0, 0]
+    var browExpressionOn: Bool { !browCounterOn && (browRaise[0] != 0 || browRaise[1] != 0 || browTilt[0] != 0 || browTilt[1] != 0) }
+    /// Current blend of the rigid-brow path (tests).
+    var browRigidBlend: Float { browW }
+    private var browCentreOff: [SIMD3<Float>] = [.zero, .zero]
     /// Orthonormal frame (columns x, y, z) of the face: x along the eye line, y toward the brows (perpendicular to x), z = x cross y.
     private static func browFaceFrame(_ e0: SIMD3<Float>, _ e1: SIMD3<Float>, _ bm: SIMD3<Float>) -> simd_float3x3 {
         let xa = simd_normalize(e1 - e0)
@@ -251,6 +260,8 @@ nonisolated final class Skinner {
         let bm = (mean(browRest[0]) + mean(browRest[1])) / 2
         browEyeRest = [e0, e1]
         browFrameRest = Self.browFaceFrame(e0, e1, bm)
+        let mid = (e0 + e1) / 2
+        browCentreOff = [mean(browRest[0]) - mid, mean(browRest[1]) - mid]
     }
     /// While he walks (set by the brain): a short 0.08 s blink about every 2 s, never a double blink, never two within 1 s.
     var walkingBlinks = false
@@ -702,7 +713,8 @@ nonisolated final class Skinner {
                     return (px, py, pz)
                 }
                 // rigid brows (W1c): the eye pair's frame carries the rest brows
-                browW += ((browsRigid ? 1 : 0) - browW) * 0.12
+                let exprOn = browExpressionOn
+                browW += (((browsRigid || exprOn) ? 1 : 0) - browW) * 0.12
                 if browW > 0.002 && browsPrepared {
                     // frame: the two eyes' SURFACE centres (mean of their skinned vertices; the anchor points sit inside the body) and the anchors' up direction
                     func mean(_ ids: [Int32]) -> SIMD3<Float> {
@@ -718,8 +730,21 @@ nonisolated final class Skinner {
                     let R = cur * browFrameRest.transpose
                     do {
                         for sd in 0..<2 {
+                            // expression: the brow's rest offset is turned about its own centre (tilt) and lifted along the face's up axis (raise); both 0 skips this
+                            let rise = exprOn ? browFrameRest.columns.1 * browRaise[sd] : SIMD3<Float>.zero
+                            let tiltA = exprOn ? (sd == 0 ? browTilt[sd] : -browTilt[sd]) : 0
+                            let tc = cosf(tiltA), ts = sinf(tiltA)
                             for (k, vi) in browIdx[sd].enumerated() {
-                                let off: SIMD3<Float> = browRest[sd][k] - (browEyeRest[0] + browEyeRest[1]) / 2
+                                var off: SIMD3<Float> = browRest[sd][k] - (browEyeRest[0] + browEyeRest[1]) / 2
+                                if exprOn {
+                                    if tiltA != 0 {
+                                        let d = off - browCentreOff[sd]
+                                        let fx = browFrameRest.columns.0, fy = browFrameRest.columns.1, fz = browFrameRest.columns.2
+                                        let dx = simd_dot(d, fx), dy = simd_dot(d, fy), dz = simd_dot(d, fz)
+                                        off = browCentreOff[sd] + fx * (dx * tc - dy * ts) + fy * (dx * ts + dy * tc) + fz * dz
+                                    }
+                                    off += rise
+                                }
                                 let t: SIMD3<Float> = m + R * off
                                 let o = 6 * Int(vi)
                                 dyn[o] += (t.x - dyn[o]) * browW; dyn[o + 1] += (t.y - dyn[o + 1]) * browW; dyn[o + 2] += (t.z - dyn[o + 2]) * browW

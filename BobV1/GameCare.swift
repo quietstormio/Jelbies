@@ -188,6 +188,7 @@ final class GameCare {
         let v = voice ?? VoiceCoordinator()
         self.voice = v
         v.care = self
+        bath.wallet.onEarn = { [weak self] _ in self?.brainFor(0)?.wantJoy() }          // drops earned: a jump for joy
         let n = min(max(jellyCount, 1), JellyRoster.maxCount)
         jellies = [JellyProfile(id: 0, name: JellyRoster.names[0], needs: needs, grime: bath.grime, training: v.training)]
             + (1..<n).map { JellyProfile(id: $0, name: JellyRoster.names[$0], persists: persistent, defaults: defaults) }
@@ -255,6 +256,7 @@ final class GameCare {
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: false, silent: bath.active)   // no puff when a clean-up starts
             case .fixed(let n, _):
                 AudioHub.shared.chirp(jelly: id, .happy, x: id == 0 ? bodyFloor.x : 0)
+                brainFor(id)?.wantJoy()          // a need fixed: a jump for joy
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: true)
             }
         }
@@ -358,7 +360,10 @@ final class GameCare {
         voice.cancel()
         bath.start(brain: brain)
     }
+    @ObservationIgnored var outfitSeen: [Int: Int] = [:]
     @ObservationIgnored weak var lastBrain: BlobBrain?
+    /// The brain of Jelly `id` (0 = Bob).
+    func brainFor(_ id: Int) -> BlobBrain? { id == 0 ? lastBrain : bathPlug.actors[id]?.actor?.brain }
     @ObservationIgnored weak var lastSim: SoftBody?
     /// "Come here": calls him to the front spot, then focus mode starts (camera close-up, actions dock, release button).
     /// A meal in progress is dropped first: the tray poofs, the piece he held goes with it.

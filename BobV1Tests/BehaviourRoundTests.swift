@@ -17,7 +17,7 @@ final class BehaviourRoundTests: XCTestCase {
     }
     override func tearDown() {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
-        IdleTuning.zoomUrge = 180...300; IdleTuning.zoomUrgeFirst = 70
+        IdleTuning.zoomUrge = 60...120; IdleTuning.zoomUrgeFirst = 30
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
@@ -230,7 +230,7 @@ final class BehaviourRoundTests: XCTestCase {
         MotionLog.write("BEHAV okay mood 10 min: solo runs+zoomies per Jelly \(perBrain), all counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
         XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 3, "at least 3 runs or zoomies in 10 sim minutes")
         XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 1, "everybody gets some energy")
-        XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 7, "but it is not constant")
+        XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 12, "but it is not constant (2026-10-20 \"too bland\": more runs, was 7 per 10 min; now at most about one a minute)")
     }
 
     // MARK: 8. a floor under the socials

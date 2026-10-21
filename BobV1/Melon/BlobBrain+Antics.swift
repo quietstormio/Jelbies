@@ -17,12 +17,19 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .rollTrip]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float {
         switch k {
         case .jacks, .zoomies, .slide, .tail, .roll, .flop, .peek: return 30
         case .sit, .look, .wander: return 8
+        case .skipHop: return 12
+        case .hopscotch: return 25
+        case .legSpin, .joy, .hmph: return 20
+        case .rollTrip, .sigh: return 30
+        case .trot: return 15
+        case .stopLook: return 10
+        case .giggle, .startle: return 8
         case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow: return 25
         case .sleep: return 0
         default: return 20
@@ -136,6 +143,6 @@ extension BlobBrain {
 extension SocialKind {
     /// The kinds that are fast play (counted by the cap on fast moves).
     var isFast: Bool {
-        switch self { case .chase, .dance, .keepAway, .zoomies: return true; default: return false }
+        switch self { case .chase, .dance, .keepAway, .zoomies, .greet: return true; default: return false }          // (.greet: the two hop together, so it is two fast movers for the cap)
     }
 }

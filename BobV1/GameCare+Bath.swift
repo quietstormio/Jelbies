@@ -51,7 +51,9 @@ extension GameCare {
     }
     func finishClean(jelly id: Int? = nil) {
         guard let (brain, sim) = washer(id) else { return }
+        let shined = bath.phase == .finish
         bath.done(brain: brain, sim: sim)
+        if shined { brain.postEvent(.shined); brain.blushBump(hold: 2.8, peak: 0.6); brain.wantJoy() }          // the others admire the shine
     }
     /// The brain and body of the clean-up that is running (must be `id` when one is given).
     private func washer(_ id: Int?) -> (BlobBrain, SoftBody?)? {

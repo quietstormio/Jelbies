@@ -40,6 +40,7 @@ In code, the locked body is the `BobForm` constants and the rest shape (`Contrac
 - **Accessories** sit on top of the body.
 - **New pastel colours** can be added. The existing ones don't change.
 - **The mouth** appears only while he eats or drinks, then disappears completely.
+- **Expressions (2026-10-20, user-approved: "expressions with eyes and eyebrows", blush yes, smile arc NO).** The face may move while he lives: eyes squint, per-brow raise and tilt (the rigid-brow path, `Skinner.browRaise` / `browTilt`, raise clamped under the head-top wearables), an open mouth ("o", open happy; never a closed smile line), and a soft pink **blush** on the cheeks (below and outside the eyes, clear of the mouth keep-out). The blush is a second decal block in `fsSoftMatte` (and the fast and jersey copies) driven by `seed.w`, which no shader read; at blush 0 and zero brow offsets the render and the skinned mesh are identical to the locked body (`BaseBodyLockTests` compares the shader without its mouth AND blush blocks; `ExpressionTests` checks the brows bit-for-bit). The REST face (eyes, brows, no mouth, no blush) is unchanged.
 
 ## How it's enforced
 
