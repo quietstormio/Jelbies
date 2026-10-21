@@ -320,6 +320,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         b.steerID = id
         b.bus = eventBus
         b.peerGap = Self.jellyGap
+        model.care.voice.ai.register(b, id: id)            // AI hub: his naps / socials for the diary, and "go to sleep" for him
         // Jellies interacting (BlobSocial.swift): the other brains, and what a social does outside the brain (a heart, a light haptic for the one the player has)
         b.socialOthers = { [weak self, weak b] in self?.actors.compactMap(\.brain).filter { $0 !== b } ?? [] }
         b.onSocial = { [weak self] e in

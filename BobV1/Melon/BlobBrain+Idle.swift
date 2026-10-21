@@ -359,6 +359,20 @@ extension BlobBrain {
         if idleStart(kind, sim) { restTimer = max(restTimer, 1) } else { commanded = false }
     }
 
+    /// Voice: a decor interaction with a named kind of piece ("go sit on the beanbag"), like a commanded trick: aborts what he was doing, runs
+    /// although autonomy is off, and `decorStart` picks the nearest free piece of that kind (false = none free / reachable: the caller shows "?").
+    @discardableResult
+    func startCommandedDecor(_ kind: IdleKind, only: DecorKind, _ sim: SoftBody, _ skinner: Skinner) -> Bool {
+        var busy = idleState.kind != nil
+        if case .none = script {} else { busy = true }
+        if busy { abortAll(sim, skinner) }
+        pending = nil
+        commanded = true
+        if decorStart(kind, sim, only: only) { restTimer = max(restTimer, 1); return true }
+        commanded = false
+        return false
+    }
+
     // MARK: starting
 
     func idleBegin(_ kind: IdleKind) {

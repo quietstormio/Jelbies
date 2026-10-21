@@ -52,8 +52,10 @@ final class VoiceIntentTests: XCTestCase {
 
     func testRegistryIsPerJellyIdNotBobOnly() {
         let n = names()
-        XCTAssertEqual(JellyNameRoster.all.map(\.id), [0, 1, 2])
-        XCTAssertEqual(JellyNameRoster.all.map(\.display), ["Bob", "Pip", "Moss"])
+        XCTAssertEqual(JellyNameRoster.all.map(\.id), [0, 1, 2, 3])
+        XCTAssertEqual(JellyNameRoster.all.map(\.display), ["Bob", "Pip", "Moss", "Lavender"])          // Lavender joined with the characters round
+        XCTAssertEqual(n.displayName(3), "Lavender")
+        XCTAssertEqual(n.resolve(tokens: ["lavender", "come", "here"]).rest, ["come", "here"])
         XCTAssertEqual(n.displayName(1), "Pip")
         XCTAssertEqual(n.resolve(tokens: ["pip", "come", "here"]).rest, ["come", "here"])
     }

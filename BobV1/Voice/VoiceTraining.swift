@@ -60,6 +60,8 @@ nonisolated enum VoiceReaction: Equatable, Sendable {
     /// A nickname lesson rep (the player is teaching a nickname by voice) / the rep that completed it.
     case nicknameStep(reps: Int)
     case nicknameLearned
+    /// A natural command was understood and handed to the game (a meal, a nap, a bath ...): a blink and the ear-perk, no move of its own.
+    case acknowledged
 }
 
 /// `decide`'s full answer: the reaction, who it is for, and whether NOTHING matched (the model fallback may then try).
