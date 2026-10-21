@@ -88,8 +88,13 @@ final class VoiceCoordinator {
     @ObservationIgnored private(set) var goodnightLog: [[Int]] = []
     @ObservationIgnored private var queue: [(r: VoiceReaction, kind: VoiceFeedback.Kind?, ids: [Int], target: VoiceTarget)] = []
     // MARK: multi-Jelly hooks (phase B wires these; the lab has one real Jelly, Bob = id 0)
-    /// The on-device language model fallback (nil = none: the deterministic result stands).
+    /// The legacy language-model fallback, used only when one is INJECTED (the fake in tests). The shipped app routes free phrasing through `ai.router`.
     @ObservationIgnored let intentModel: VoiceIntentModel?
+    /// Natural commands (Tier A / Tier B), the event log, the diary and the thought lines (AI/AIHub.swift). Ticked from `tick`.
+    let ai: AIHub
+    /// The understood command (or why it could not be done), as a pill on the HUD (`VoiceFeedbackView`, id `voice-understood`).
+    private(set) var understood: VoiceUnderstood?
+    @ObservationIgnored private var understoodSeq = 0
     /// The Jelly ids in the room (default: the selection model's blobs).
     @ObservationIgnored var jellyIDs: (() -> [Int])?
     /// A Jelly was NAMED: select it (default: `care.rosterPick(id)`, the same outline highlight a tap gives).
@@ -162,7 +167,7 @@ final class VoiceCoordinator {
     static let promptTime: Double = 8
     func now() -> Double { clock() }
 
-    private func emitFeedback(_ r: VoiceReaction, override: VoiceFeedback.Kind?) {
+    func emitFeedback(_ r: VoiceReaction, override: VoiceFeedback.Kind?) {
         let kind: VoiceFeedback.Kind?
         if let o = override { kind = o == .silent ? nil : o }          // .silent: a demonstration (trick-book row), not a command
         else {
@@ -176,7 +181,7 @@ final class VoiceCoordinator {
             case .nicknameStep(let n): kind = .nameRep(n)
             case .nicknameLearned: kind = .nameLearned
             case .social(let s): kind = .social(s)
-            case .nameHeard: kind = nil
+            case .nameHeard, .acknowledged: kind = nil
             }
         }
         guard let kind else { return }
@@ -206,9 +211,12 @@ final class VoiceCoordinator {
     nonisolated deinit {}
 
     init(training: VoiceTraining? = nil, input: SpeechInput? = nil, tutorial: VoiceTutorial? = nil, intentModel: VoiceIntentModel? = nil,
-         now: @escaping () -> Double = { Date.timeIntervalSinceReferenceDate }) {
-        // The real model only in the shipped app (not in unit tests, which pass a fake or nothing; `-VoiceNoModel 1` turns it off).
-        self.intentModel = intentModel ?? (NSClassFromString("XCTestCase") == nil && !UserDefaults.standard.bool(forKey: "VoiceNoModel") ? VoiceIntentModels.make() : nil)
+         ai: AIHub? = nil, now: @escaping () -> Double = { Date.timeIntervalSinceReferenceDate }) {
+        // Free phrasing: the legacy model only when injected (tests). The shipped app uses the AI hub's router (Apple Intelligence when the phone has
+        // it, the rule parser otherwise; `-VoiceNoModel 1` pins the rules). Unit tests get an in-memory hub with no model.
+        let testing = NSClassFromString("XCTestCase") != nil
+        self.intentModel = intentModel
+        self.ai = ai ?? AIHub(persists: !testing, model: testing ? nil : AIModels.commandModel(), writer: testing ? nil : AIModels.textWriter())
         self.training = training ?? VoiceTraining()
         self.tutorial = tutorial ?? VoiceTutorial()
         self.clock = now
@@ -245,6 +253,7 @@ final class VoiceCoordinator {
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
         input.warmUp()
         intentModel?.prewarm()                         // the first request must not pay the model load
+        if let care { ai.router.prewarm(catalog: ai.catalog(care: care)) }      // Apple Intelligence: availability re-read, the next session built now
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
         openCount += 1
@@ -320,7 +329,13 @@ final class VoiceCoordinator {
         if mode.phase != .idle { mode.cancel(); mode.finish(); Task { [input] in await st?.value; await input.abort() } }
     }
 
-    private func enqueue(_ r: VoiceReaction, _ kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected) { queue.append((r, kind, ids, target)) }
+    func enqueue(_ r: VoiceReaction, _ kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected) { queue.append((r, kind, ids, target)) }
+
+    /// The HUD's understood line ("Pip: go to sleep"; `ok` false = why it could not be done).
+    func showUnderstood(_ text: String, ok: Bool) {
+        understoodSeq += 1
+        understood = VoiceUnderstood(id: understoodSeq, text: text, ok: ok, born: clock())
+    }
 
     /// The Jelly ids in the room.
     var presentIDs: [Int] { jellyIDs?() ?? care?.jellies.map(\.id) ?? [0] }
@@ -348,11 +363,15 @@ final class VoiceCoordinator {
         if nickLesson != nil { nicknameListen(transcript); return }
         let t0 = CACurrentMediaTime()
         let d = training.decideFull(transcript: transcript, runningMove: runningAtOpen, mood: moodMeant(by: transcript), session: session)
-        if d.noMatch, !VoiceMatcher.tokens(transcript).isEmpty, let model = intentModel {
-            guard model.availability.isAvailable else {
-                recordParse("unavailable", t0, transcript); finish(d, transcript: transcript); return
+        if d.noMatch, !VoiceMatcher.tokens(transcript).isEmpty {
+            if let model = intentModel {                                   // the legacy injected model (tests)
+                guard model.availability.isAvailable else {
+                    recordParse("unavailable", t0, transcript); finish(d, transcript: transcript); return
+                }
+                askModel(model, transcript: transcript, deterministic: d, t0: t0)
+                return
             }
-            askModel(model, transcript: transcript, deterministic: d, t0: t0)
+            askRouter(transcript, deterministic: d, t0: t0)                // natural commands: Tier A when the phone has it, else the rules
             return
         }
         recordParse("det", t0, transcript)
@@ -400,6 +419,42 @@ final class VoiceCoordinator {
         }
     }
 
+    /// Natural commands (AI/IntentRouter.swift): the rule parser, then the on-device model for free phrasing, validated against the live catalog.
+    /// Legacy actions (come, social, learned tricks) go through the usual decision; the new ones are queued for `execute` once the hold is over.
+    private func askRouter(_ transcript: String, deterministic d: VoiceDecision, t0: Double) {
+        guard let care else { finish(d, transcript: transcript); return }
+        let catalog = ai.catalog(care: care)
+        let names = training.names
+        let selected = selectedJellyID
+        intentTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let r = await self.ai.router.route(transcript, names: names, catalog: catalog, selected: selected)
+            guard let care = self.care else { return }
+            self.recordParse(r.path, t0, transcript)
+            self.apply(r.command, deterministic: d, transcript: transcript, care: care)
+        }
+    }
+
+    func apply(_ c: JellyCommand, deterministic d: VoiceDecision, transcript: String, care: GameCare) {
+        var target: VoiceTarget = c.who.asVoiceTarget
+        if case .jellies(let ids) = c.who, ids.count > 1 { target = .jelly(ids[0]) }
+        func mood() -> BlobMood { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }
+        func legacy(_ a: VoiceAction) { finish(training.decide(model: a, target: target, mood: mood()), transcript: transcript) }
+        switch c.action {
+        case .none: finish(d, transcript: transcript)
+        case .come: legacy(.come)
+        case .stop: legacy(.social(.stop))
+        case .stopFighting: legacy(.social(.stopFighting))
+        case .praise: legacy(.social(.praise))
+        case .scold: legacy(.social(.scold))
+        case .play: legacy(.social(.play))
+        case .trick(let t): legacy(.trick(t))
+        default:
+            if case .jellies(let ids) = c.who, !ids.allSatisfy(presentIDs.contains) { finish(VoiceDecision(reaction: .puzzled, target: .jelly(ids[0])), transcript: transcript); return }
+            ai.commandQueue.append(c)
+        }
+    }
+
     nonisolated static func withBudget<T: Sendable>(_ seconds: Double, _ op: @escaping @MainActor @Sendable () async throws -> T) async throws -> T {
         try await withThrowingTaskGroup(of: T.self) { g in
             g.addTask { try await op() }
@@ -410,7 +465,7 @@ final class VoiceCoordinator {
     }
 
     /// A decision becomes feedback + a queued reaction (with who it is for), and a named Jelly is selected.
-    private func finish(_ d: VoiceDecision, transcript: String) {
+    func finish(_ d: VoiceDecision, transcript: String) {
         guard let care else { return }
         var r = d.reaction
         if r == .perform(.come) { comeCommands += 1 }
@@ -570,6 +625,9 @@ final class VoiceCoordinator {
 
         if let tp = care.touchPlay { tp.pruneHearts(now: CACurrentMediaTime()) }
         flipFeedbackTick(care: care, brain: brain)
+        // natural commands, the event log, the diary schedule, the thought lines (AI/AIHub.swift)
+        let voiceBusy = mode.phase != .idle || heard.map { clock() - $0.born < VoiceFeedbackView.heardLife } ?? false || feedback.map { clock() - $0.born < $0.kind.life } ?? false
+        ai.tick(care: care, bob: brain, dt: dt, listening: listening, voiceBusy: voiceBusy)
         // flip haptics (the driver is warm only in focus mode, so roaming is silent): a light tick at take-off, a strong soft thump on landing
         if brain.flipTakeoffs != seenTakeoffs || brain.flipLandings != seenLandings {
             let now = CACurrentMediaTime()
@@ -631,6 +689,7 @@ final class VoiceCoordinator {
 
         // one reaction at a time, once the hold is over
         if !listening, !queue.isEmpty { let q = queue.removeFirst(); run(q.r, kind: q.kind, ids: q.ids, target: q.target, care: care, brain: brain) }
+        else if !listening, !ai.commandQueue.isEmpty { execute(ai.commandQueue.removeFirst(), care: care, brain: brain) }
     }
 
     // MARK: flip
@@ -716,9 +775,17 @@ final class VoiceCoordinator {
         currentIDs = ids.isEmpty ? [0] : ids
         let trickRunning = Self.running(brain) != nil
         emitFeedback(r, override: kind)
+        // the day's log (AI/EventLog.swift): tricks done and words learned
+        switch r {
+        case .perform(let t): for id in currentIDs { ai.log.record(t == .come ? .obeyed : .trick, jelly: id, detail: t == .come ? "come" : t.title.lowercased()) }
+        case .trickLearned(let t): for id in currentIDs { ai.log.record(.trained, jelly: id, detail: t.title.lowercased()) }
+        default: break
+        }
         switch r {
         case .perform(let t), .wrongTrick(_, let t):
             doTrick(t, care: care, brain: brain, focused: focused)
+        case .acknowledged:
+            brain.blinkRequested = true; perkLeft = 0.6                // he heard and is on it: a blink and the small ear-perk tilt
         case .learnedStep, .nicknameStep:
             brain.blinkRequested = true                              // a nod: he noticed (plus the small ear-perk tilt, see `perkLeft`)
         case .trickLearned:

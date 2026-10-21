@@ -68,6 +68,8 @@ struct GameScreen: View {
 
             RefusalLabel(care: model.care)
 
+            ThoughtLineView(care: model.care)          // the rare tiny thought line (AI/ThoughtLineView.swift)
+
             // HUD
             ZStack {
                 VStack {
@@ -192,6 +194,12 @@ struct GameScreen: View {
         }
         .task { await GameScreen.runStoreDemo(model: model) }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
+        .onChange(of: diaryOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen }
+        .sheet(isPresented: $diaryOpen) {
+            DiaryView(care: model.care, jelly: model.care.targetJelly) { diaryOpen = false }
+                .presentationDetents([.large])
+                .presentationBackground(FocusStyle.cream)
+        }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onAppear { model.care.select.gateDraw = true }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen) }   // on the root: the HUD's pieces come and go with focus mode
@@ -313,6 +321,9 @@ struct GameScreen: View {
             if parts.count == 2, let t = VoiceTrick(rawValue: String(parts[0])), let n = Int(parts[1]) { care.voice.training.debugReps(t, word: t.suggestion, reps: n) }
         }
         if d.integer(forKey: "VoiceBook") != 0 { await sleep(2); book.wrappedValue = true }
+        // capture aids: -DiaryDemo 1 writes today's entries now (sample events when the log is empty); -ThoughtDemo 1 shows a thought line at once
+        if d.integer(forKey: "DiaryDemo") != 0 { care.voice.ai.diary.demo(log: care.voice.ai.log, jellies: care.jellies.map { ($0.id, $0.name) }) }
+        if d.integer(forKey: "ThoughtDemo") != 0 { care.voice.ai.thoughts.debugShowNow() }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
             await care.voice.simulate(words, teach: d.string(forKey: "VoiceTeach").flatMap(VoiceTrick.init(rawValue:)))

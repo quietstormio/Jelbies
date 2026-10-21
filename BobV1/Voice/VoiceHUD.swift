@@ -220,6 +220,7 @@ struct VoiceTrickBook: View {
             .padding(.leading, 6)
             ScrollView {
                 VStack(spacing: 10) {
+                    smartVoiceRow
                     ForEach(voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
                     ForEach(VoiceTrick.allCases.filter { tr.unlocked($0) }, id: \.rawValue) { t in trickRow(t, tr) }
                 }
@@ -230,6 +231,30 @@ struct VoiceTrickBook: View {
         .padding(16)
         .background(FocusStyle.cream.ignoresSafeArea())
         .accessibilityIdentifier("voice-trickbook")
+    }
+
+    /// Settings: "Smart voice: On (Apple Intelligence)" when the phone understands free phrasing on device, else "Basic" (the rule parser), with why.
+    private var smartVoiceRow: some View {
+        let state = voice.ai.router.state
+        let on = voice.ai.router.smartVoiceOn
+        return HStack(spacing: 10) {
+            Image(systemName: on ? "sparkles" : "waveform").font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(on ? FocusStyle.pink : FocusStyle.brown).frame(width: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Smart voice: \(on ? "On (Apple Intelligence)" : "Basic")")
+                    .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                Text(on ? state.detail : state.detail)
+                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("smart-voice")
+        .accessibilityLabel("Smart voice: \(on ? "On, Apple Intelligence" : "Basic")")
+        .accessibilityValue(state.detail)
     }
 
     private func dots(_ n: Int) -> some View {

@@ -12,6 +12,8 @@ import simd
 nonisolated struct VoiceHeard: Equatable, Sendable { let id: Int; let text: String; let born: Double }
 nonisolated struct VoiceToast: Equatable, Sendable { let id: Int; let text: String; let born: Double }
 nonisolated struct TeachPrompt: Equatable, Sendable { let trick: VoiceTrick; let until: Double }
+/// The understood natural command ("Pip: go to sleep"), or why it could not be done (`ok` false: "No beanbag to go to yet").
+nonisolated struct VoiceUnderstood: Equatable, Sendable { let id: Int; let text: String; let ok: Bool; let born: Double }
 
 nonisolated struct VoiceFeedback: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
@@ -35,6 +37,10 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
         case social(VoiceSocial)
         /// Internal: a demonstration (trick-book row, debug teach): no feedback at all.
         case silent
+        /// A natural command was understood (feed, drink, sleep, clean): a check with the action's glyph.
+        case command(JellyAction)
+        /// "Who's hungry?": the need's glyph, with a check when somebody is (`Int` = who) or a thumbs-up when nobody.
+        case answer(NeedKind, Int?)
 
         /// Accessibility value / log name.
         var name: String {
@@ -50,13 +56,15 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
             case .nameLearned: return "name learned"
             case .social(let s): return "social \(s.rawValue)"
             case .silent: return "silent"
+            case .command(let a): return "command \(a.key)"
+            case .answer(let k, let who): return "answer \(k.rawValue) \(who.map(String.init) ?? "nobody")"
             }
         }
         /// Seconds the bubble stays.
         var life: Double {
             switch self {
             case .learned: return 2.6
-            case .rep, .missed, .nameRep, .nameLearned: return 2.2
+            case .rep, .missed, .nameRep, .nameLearned, .command, .answer: return 2.2
             default: return 1.6
             }
         }
@@ -71,6 +79,7 @@ struct VoiceFeedbackView: View {
     let voice: VoiceCoordinator
     let care: GameCare
     static let heardLife = 2.2
+    static let understoodLife = 2.6
 
     var body: some View {
         // 20 Hz only while something is on screen; otherwise a slow poll (nothing to animate, so the full-screen overlay stays cheap)
@@ -99,6 +108,9 @@ struct VoiceFeedbackView: View {
                     if let l = voice.nickLesson, !voice.isListening {
                         pill("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))", id: "voice-nick-prompt", fade: 0, life: 99, accent: false)
                     }
+                    if let u = voice.understood, now - u.born < Self.understoodLife {
+                        understoodPill(u, fade: now - u.born)
+                    }
                     if let h = voice.heard, now - h.born < Self.heardLife {
                         pill(h.text, id: "voice-heard", fade: now - h.born, life: Self.heardLife, accent: false)
                     }
@@ -115,6 +127,28 @@ struct VoiceFeedbackView: View {
         let mid = care.headWorld - SIMD3(0, H * 0.5, 0)
         let w = SIMD3<Float>(mid.x + 1.0, mid.y - 0.64 + 0.8 * H, mid.z)           // beside the crown, like the touch hearts
         return ThoughtBubbleView.project(w, size: size, focus: care.focus.blend)
+    }
+
+    /// The understood command: a small check (or a question mark) and the line, in the cream pill.
+    private func understoodPill(_ u: VoiceUnderstood, fade: Double) -> some View {
+        let out = max(0, min(1, (Self.understoodLife - fade) / 0.4))
+        return HStack(spacing: 7) {
+            Image(systemName: u.ok ? "checkmark.circle.fill" : "questionmark.circle.fill")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(u.ok ? Color(red: 0.36, green: 0.68, blue: 0.45) : FocusStyle.pink)
+            Text(u.text)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(FocusStyle.brown)
+                .lineLimit(2).multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        .opacity(out)
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("voice-understood")
+        .accessibilityLabel(u.text)
+        .accessibilityValue(u.ok ? "understood" : "cannot")
     }
 
     private func pill(_ text: String, id: String, fade: Double, life: Double, accent: Bool) -> some View {
@@ -203,9 +237,28 @@ struct VoiceBubble: View {
             case .stop, .stopFighting: sym("hand.raised.fill", FocusStyle.brown, 28)
             case .goodnight: sym("moon.zzz.fill", Color(red: 0.45, green: 0.50, blue: 0.85), 30)
             }
+        case .command(let a):
+            HStack(spacing: 6) { sym("checkmark", Color(red: 0.36, green: 0.68, blue: 0.45), 24); sym(Self.commandSymbol(a), FocusStyle.brown, 24) }
+        case .answer(let k, let who):
+            HStack(spacing: 6) {
+                NeedGlyph(kind: k, size: 26)
+                if who != nil { sym("checkmark", Color(red: 0.36, green: 0.68, blue: 0.45), 24) } else { sym("hand.thumbsup.fill", FocusStyle.brown, 22) }
+            }
         case .grumpy, .silent:
             EmptyView()
         }
+    }
+
+    /// SF Symbol for a natural command's bubble.
+    static func commandSymbol(_ a: JellyAction) -> String {
+        let s: String
+        switch a {
+        case .feed: s = "fork.knife"; case .drink: s = CareMenu.waterSymbol; case .sleep: s = "moon.zzz.fill"; case .clean: s = CareMenu.cleanSymbol
+        case .come: s = "arrow.down.circle.fill"; case .spin: s = "arrow.triangle.2.circlepath"; case .goTo: s = "figure.walk"; case .wear: s = "tshirt.fill"
+        case .playWith: s = "soccerball"; case .race: s = "flag.checkered"; case .train: s = "dumbbell.fill"
+        default: s = "star.fill"
+        }
+        return UIImage(systemName: s) != nil ? s : "star.fill"
     }
 
     private var sparkles: some View {
