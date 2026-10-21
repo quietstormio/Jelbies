@@ -35,7 +35,7 @@ enum IdleTuning {
     /// roam goal score pushes him fully to the edges, the stand after a leg (x `idleLively`), and the wait after a wander pick that started no special.
     static let centreRadius: Float = 1.5
     static let centreDwellFull: Float = 15
-    static let restAfterLeg: ClosedRange<Float> = 0.6...1.8
+    static let restAfterLeg: ClosedRange<Float> = 1.5...3.5
     static let wanderPickWait: ClosedRange<Float> = 3...6
 }
 

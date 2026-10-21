@@ -669,7 +669,7 @@ final class BlobBrain {
         if reserved && !commanded { waitPose(sim); return }
         if socialMaybeStart(sim) { return }
         if idleMaybeStart(sim) { return }
-        var w: [(Int, Float)] = [(0, 8), (1, 1.0), (2, 0.6)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
+        var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
         if sinceWave > 18 { w.append((3, 2)) }
         if sincePlay > 10, !(anticsEnabled && fastOthers() >= 2) { w.append((4, 2)) }
         idleShapeWander(&w)
