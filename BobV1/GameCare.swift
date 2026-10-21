@@ -221,6 +221,7 @@ final class GameCare {
         jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.names[c0], needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
             + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.names[$0.element], persists: persistent, defaults: defaults) }
         if n > 1 { select.setBlobs(JellyRoster.selectBlobs(roster: chars)) }
+        store.characterOf = { [weak self] slot in self?.jelly(slot)?.character ?? slot }       // outfits are saved by character
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
         bath.success = { [weak self] in UINotificationFeedbackGenerator().notificationOccurred(.success); self?.soapFinished() }
         v.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter }

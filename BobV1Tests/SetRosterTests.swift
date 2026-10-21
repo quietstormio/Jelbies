@@ -97,6 +97,16 @@ final class SetRosterTests: XCTestCase {
         XCTAssertEqual(WidgetBridge.record(ins[2], look: "").feature, "wings")
         XCTAssertEqual(WidgetBridge.record(ins[0], look: "").feature, "spines")
         XCTAssertEqual(WidgetBridge.palette(color: "green").flesh, JellyPalettes.green.flesh)
+        // outfits are saved by character: what slot 0 wears is Pip's, not "whoever is in slot 0"
+        XCTAssertEqual(care.store.characterOf(0), 1)
+        XCTAssertEqual(care.store.characterOf(2), 3)
+        XCTAssertTrue(care.store.awardMedal(), "the winner medal: an owned look to try")
+        let look = WearLook.medalGold
+        XCTAssertTrue(care.store.wear(look, on: 0))
+        XCTAssertEqual(care.store.worn(0, look.slot), look)
+        XCTAssertEqual(care.store.saved.worn.keys.sorted(), ["1"], "saved under Pip's character id, not slot 0")
+        care.store.takeOff(look.slot, from: 0)
+        XCTAssertNil(care.store.worn(0, look.slot))
     }
 
     func testVoiceNamesResolveToSlotsAndNicknamesFollowTheCharacter() {

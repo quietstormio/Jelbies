@@ -41,7 +41,8 @@ All seven work-in-progress branches are merged on **`integrate`** (1e8dea5), plu
 ### Known caveats
 - Backpack + any neck item folds Lavender's wings (characters branch).
 - The 4-diner dining queue and the race "fourth Jelbie parks off the track" code are unreachable with the cap at 3; their two tests are skipped (`XCTSkip`), not deleted.
-- Slot 0 drives the Bob-only paths (meals, Clean, voice, close-up). With a non-Bob character in slot 0 those paths drive that character; it is tested in SetRosterTests but not yet seen on a phone.
+- Slot 0 drives the Bob-only paths (meals, Clean, voice, close-up). With a non-Bob character in slot 0 those paths drive that character; it is tested in SetRosterTests but not yet seen on a phone. The stage-level roster paths (sleep-mask palette, fitting-room palette, brain feature) read `JellyRoster.current`, which `GameCare(roster:)` does not set, so they are exercised only by the default roster in tests.
+- Still per SLOT, not per character: the chirp / babble voice files (`AudioHub`: `chirp_jelly<slot+1>`), so Pip in slot 0 sounds like Bob; and `BlobSelect`'s single-Jelbie fallback card is hard-coded "Bob" (reachable only with `-BlobCount 1`). Outfits (`StoreBook.worn`) ARE saved by character.
 - The curvy-courses branch merged with three known failing tests listed in its commit report (puddle golden start-z, Wave camera halfWidth, seed-19 timeout).
 - AI prompts still say "jelly pets" to the model (not user-visible); "Jelly Soap" (Clean chrome) was kept as a product name.
 - Old stale worktrees (agent-a0bab…, a0ebcb…, a1811…, a52d4…, a5839…, a8881…, a89c1…, ab713…, ae999…) can be cleaned up only after the user OKs it.

@@ -145,16 +145,20 @@ final class StoreBook {
     /// The fitting room: a piece tried on one Jelly before it is bought (never saved, never owned). Every reader of `worn` sees it, so the real
     /// renderers draw the try-on with no extra render code.
     @ObservationIgnored var fitting: (jelly: Int, look: WearLook)?
+    /// Slot in the room -> CHARACTER (JellyRoster): what a Jelbie wears is saved by character, so it follows him when the roster changes.
+    /// GameCare sets it from its profiles; identity (the default roster) otherwise.
+    @ObservationIgnored var characterOf: (Int) -> Int = { $0 }
+    private func wornKey(_ jelly: Int) -> String { "\(characterOf(jelly))" }
 
     func worn(_ jelly: Int, _ slot: WearSlot) -> WearLook? {
         if let f = fitting, f.jelly == jelly, f.look.slot == slot { return f.look }
-        return saved.worn["\(jelly)"]?[slot.rawValue].flatMap(WearLook.init(rawValue:))
+        return saved.worn[wornKey(jelly)]?[slot.rawValue].flatMap(WearLook.init(rawValue:))
     }
     /// Puts a look on a Jelly (must be owned). Replaces whatever he wore in that slot.
     @discardableResult
     func wear(_ look: WearLook, on jelly: Int) -> Bool {
         guard ownsLook(look) else { return false }
-        saved.worn["\(jelly)", default: [:]][look.slot.rawValue] = look.rawValue
+        saved.worn[wornKey(jelly), default: [:]][look.slot.rawValue] = look.rawValue
         save()
         return true
     }
@@ -165,7 +169,7 @@ final class StoreBook {
         return o
     }
     func takeOff(_ slot: WearSlot, from jelly: Int) {
-        saved.worn["\(jelly)"]?[slot.rawValue] = nil
+        saved.worn[wornKey(jelly)]?[slot.rawValue] = nil
         save()
     }
 
