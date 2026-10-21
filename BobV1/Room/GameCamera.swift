@@ -296,7 +296,9 @@ enum GameCamera {
         var q = RoomLayout.resolve(position: p, radius: radius, lowPropScale: lowPropScale, ignoreDecor: ignoreDecor)
         q.z = min(max(q.z, walkMinZ), roamMaxZ)          // (the roaming polygon's front when the room camera set one: RoamFloor.swift)
         if openSides { return q }                    // the wide close-up row: the camera is pulled back, the sides are on screen there
-        let hw = max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
+        // the roaming polygon's width when the room camera built one (RoamFloor.swift; it already holds the body extent), else the one-Jelly rule
+        let hw = roamFloor.map { max($0.halfWidth(at: q.z) + bodyHalfExtent - max(bodyHalfExtent, radius * 0.9), 0) }
+            ?? max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)
         return q
     }

@@ -4,10 +4,12 @@
 //  much more floor is on screen than the old fixed box (x +-3.2, z -2.6...3.5) let them use: the front half of a portrait screen was empty floor.
 //
 //  `GameCamera.refreshRoam(aspect:)` projects the screen through `floorPoint` (the bottom edge inset for the HUD and the body's own depth) and the
-//  per-depth width rule of `constrain` (`visibleHalfWidthAtBody * screenFill - bodyHalfExtent`, clipped by the side walls) into one walkable
-//  polygon (rows of `step` in z). Goals are sampled by AREA over it, some picks are ZONE picks (front / back / left / right), and the sim's
-//  safety arena, the front wall and `constrain` follow it. Call it whenever the aspect changes (a rotation); with no refresh (the headless suites, one
-//  Jelly) everything keeps the old box.
+//  per-depth width rule (`visibleHalfWidthAtBody * roamScreenFill - bodyHalfExtent`, clipped by the side walls; the front rows that share the screen
+//  with the HUD buttons are trimmed to the buttons' inner edges) into one walkable polygon (rows of `step` in z). Goals are sampled by AREA over it, some
+//  picks are ZONE picks (front / back / left / right and the four corners), and the sim's safety arena, the front wall and `constrain` follow it. Call it
+//  whenever the aspect changes (a rotation); with no refresh (the headless suites, one Jelly) everything keeps the old box.
+//  2026-10-21 (user: "they stay in the centre too much"): the fill went 0.90 -> 0.97 (the body extent is the only side inset), corner zones were added,
+//  and `constrain` reads the polygon's width (it used to clamp edge goals back in, so the wider polygon gained nothing).
 //
 
 import simd
@@ -20,6 +22,8 @@ extension GameCamera {
         /// Row z values (minZ, minZ + step ...) and the half width allowed at each.
         var zs: [Float], hw: [Float]
         static let step: Float = 0.25
+        /// Zones of `sampleZone`: 0 front, 1 back, 2 left, 3 right, 4 front-left, 5 front-right, 6 back-left, 7 back-right.
+        static let zoneCount = 8
 
         func halfWidth(at z: Float) -> Float {
             guard let first = zs.first, let last = zs.last else { return 0 }
@@ -42,7 +46,8 @@ extension GameCamera {
             for (i, w) in hw.enumerated() { if x < w { row = i; break }; x -= w }
             return SIMD2((u2 * 2 - 1) * hw[row], zs[row] + u3 * Self.step)
         }
-        /// A point in a zone: 0 front (the nearest third of the depth), 1 back (the farthest quarter), 2 left, 3 right (the outer thirds of the width).
+        /// A point in a zone: 0 front (the nearest third of the depth), 1 back (the farthest quarter), 2 left, 3 right (the outer thirds of the width),
+        /// 4...7 the corners (the outer 40 % of the width in the front 30 % / back 25 % of the depth: front-left, front-right, back-left, back-right).
         func sampleZone(_ zone: Int, _ u1: Float, _ u2: Float, _ u3: Float) -> SIMD2<Float> {
             let depth = maxZ - minZ
             switch zone {
@@ -52,11 +57,17 @@ extension GameCamera {
             case 1:
                 let z = minZ + u1 * depth * 0.25
                 let h = halfWidth(at: z); return SIMD2((u2 * 2 - 1) * h, z)
-            default:
+            case 2, 3:
                 let z = minZ + (0.05 + 0.9 * u1) * depth
                 let h = halfWidth(at: z)
                 let x = h * (0.55 + 0.45 * u2)
                 return SIMD2(zone == 2 ? -x : x, z)
+            default:
+                let front = zone == 4 || zone == 5, left = zone == 4 || zone == 6
+                let z = front ? maxZ - u1 * depth * 0.30 : minZ + u1 * depth * 0.25
+                let h = halfWidth(at: z)
+                let x = h * (0.6 + 0.4 * u2)
+                return SIMD2(left ? -x : x, z)
             }
         }
         /// The sim's circular safety arena that holds the whole polygon.
@@ -72,10 +83,17 @@ extension GameCamera {
     nonisolated(unsafe) static var roamFloor: RoamFloor?
     /// The front limit of a roaming centre: the polygon's, else the old `walkMaxZ`.
     static var roamMaxZ: Float { roamFloor?.maxZ ?? walkMaxZ }
-    /// How much of the bottom of the screen the HUD keeps (fraction of the height): portrait has the mic / book / care row, landscape the same row shorter.
-    static func roamBottomInset(aspect: Float) -> Float { 0.20 - 0.04 * portraitAmount(aspect) }
+    /// How much of the bottom of the screen the HUD keeps at the CENTRE (fraction of the height): the "go out" pill and the home bar, the same in both
+    /// orientations (landscape kept 0.20 and its front quarter of floor went unused; 2026-10-21).
+    static func roamBottomInset(aspect: Float) -> Float { _ = aspect; return 0.16 }
+    /// The HUD's side buttons (mic + book / bag on the left, the care slot on the right): the band they take from the bottom (fraction of the height) and the
+    /// width they take from each side (fraction of the width). Front rows inside the band keep their bodies inside the buttons' inner edges.
+    static func roamButtonBand(aspect: Float) -> Float { 0.30 - 0.14 * portraitAmount(aspect) }
+    static func roamSideInset(aspect: Float) -> Float { 0.085 + 0.10 * portraitAmount(aspect) }
     /// A body's depth toward the camera (its front edge is this much nearer than its centre).
     static let roamBodyDepth: Float = 0.75
+    /// The fraction of the visible half width the polygon uses (the body's own extent is subtracted on top): nearly all of it (was `screenFill` 0.9).
+    static let roamScreenFill: Float = 0.97
     /// Never roam nearer the camera than this (a wild aspect), nor further back than the old front.
     static let roamMaxZCap: Float = 7.0
 
@@ -89,10 +107,17 @@ extension GameCamera {
         let bottom = (1 - roamBottomInset(aspect: aspect)) * 1000
         let zb = floorPoint(screen: CGPoint(x: size.width / 2, y: CGFloat(bottom)), size: size)?.y ?? walkMaxZ
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
+        let bandTop = (1 - roamButtonBand(aspect: aspect)) * 1000
+        let sideX = roamSideInset(aspect: aspect) * Float(size.width)
         var zs = [Float](), hw = [Float]()
         var z = walkMinZ
         while z <= maxZ + 1e-4 {
-            let wide = visibleHalfWidthAtBody(z: z, aspect: aspect) * screenFill - bodyHalfExtent
+            var wide = visibleHalfWidthAtBody(z: z, aspect: aspect) * roamScreenFill - bodyHalfExtent
+            // the row's bodies share the screen with the side buttons: keep them inside the buttons' inner edges
+            if let sp = screenPoint(floor: SIMD2(0, z + roamBodyDepth), size: size), sp.y > CGFloat(bandTop),
+               let edge = floorPoint(screen: CGPoint(x: CGFloat(sideX), y: sp.y), size: size) {
+                wide = min(wide, abs(edge.x) - bodyHalfExtent)
+            }
             zs.append(z); hw.append(max(min(wide, RoomLayout.maxX - 0.7), 0.6))
             z += RoamFloor.step
         }

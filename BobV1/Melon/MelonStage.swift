@@ -394,11 +394,14 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Call a few times a second; `cooldown` holds one timer per Jelly.
     static func makeRoom(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains: [BlobBrain?], cooldown: inout [Float], dt: Float) {
         for i in cooldown.indices { cooldown[i] = max(0, cooldown[i] - dt) }
-        func free(_ i: Int) -> Bool {
-            guard let b = brains[i], b.enabled, b.autonomy, !b.commanded, !b.held, b.pending == nil, !b.isSocial, b.idleState.kind == nil, cooldown[i] <= 0 else { return false }
-            if case .none = b.script {} else { return false }
+        // a Jelly held still only by another Jelly's close-up (`focusPaused`) is free to step aside too: frozen in the called one's path he blocked it (2026-10-21)
+        let freeBrain: (Int) -> Bool = { i in
+            guard let b = brains[i], b.enabled, b.autonomy || b.focusPaused, !b.commanded, !b.held || (b.focusPaused && !b.reserved), b.pending == nil, !b.isSocial, b.idleState.kind == nil, !b.race.active else { return false }
+            switch b.script { case .none, .look, .stepInPlace: break; default: return false }
             return b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace
         }
+        func free(_ i: Int) -> Bool { cooldown[i] <= 0 && freeBrain(i) }
+        clearWay(snapshot: snapshot, brains: brains, cooldown: &cooldown, free: freeBrain)
         for i in 0..<snapshot.count {
             for j in (i + 1)..<snapshot.count where simd_distance(snapshot[i].pos, snapshot[j].pos) < jellyGap && !snapshot[i].walking && !snapshot[j].walking {
                 let mover = free(j) ? j : (free(i) ? i : -1)
@@ -420,6 +423,54 @@ final class MelonController: NSObject, MTKViewDelegate {
                     }
                 }
                 if let spot = best?.p { b.requestNow(.goTo(spot)); cooldown[mover] = stepAsideCooldown }
+            }
+        }
+    }
+    /// A Jelly on a REQUESTED walk (come here, a meal, a step-aside: `job` set) whose straight way to his next waypoint runs through a standing Jelly: that
+    /// Jelly steps out of the lane, sideways, to a spot over the gap from the lane and from everybody else (and off the walker's goal). Standing Jellies
+    /// used to be waited for (6 s) and then walked into, and the paused ones of a close-up never moved (2026-10-21: "they are stuck blocking him").
+    static func clearWay(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains: [BlobBrain?], cooldown: inout [Float], free: (Int) -> Bool) {
+        for w in 0..<snapshot.count {
+            guard let wb = brains[w], wb.enabled, wb.job != nil, case .walk(let scriptGoal, _) = wb.script else { continue }
+            // the goal he was ASKED for: the walk's own target is the spot after the floor rules, and keepApart drags it over the gap away from a Jelly who stands
+            // on the spot, so the walk ends short of it (the call spot with someone on it: the close-up never started, 2026-10-21). The stander near the real spot
+            // is in the way too.
+            let goal: SIMD2<Float>
+            switch wb.job { case .come(let p), .goTo(let p): goal = p; default: goal = scriptGoal }
+            let a = snapshot[w].pos, target = wb.route.first ?? scriptGoal
+            let legTo = simd_distance(target, goal) > 0.3 ? target : goal
+            let leg = legTo - a, L = simd_length(leg)
+            guard L > 0.3 else { continue }
+            let dir = leg / L, perp = SIMD2<Float>(-dir.y, dir.x)
+            let clear = jellyGap * 1.05
+            // out of the walker's corridor: over the gap beside the lane, or over the gap past its end (and never behind the walker, across his body)
+            func outOfTheWay(_ q: SIMD2<Float>) -> Bool {
+                let tq = simd_dot(q - a, dir), sq = abs(simd_dot(q - a, perp))
+                return (sq >= clear || tq >= L + clear) && tq > -clear * 0.5 && simd_distance(q, goal) >= clear && simd_distance(q, scriptGoal) >= clear
+            }
+            for j in 0..<snapshot.count where j != w && !snapshot[j].walking {
+                let p = snapshot[j].pos
+                let t = simd_dot(p - a, dir)
+                let side = simd_dot(p - a, perp)
+                let inLane = t > -0.2 && t < L + jellyGap * 0.5 && abs(side) < jellyGap
+                guard inLane || simd_distance(p, goal) < jellyGap, cooldown[j] <= 0, free(j), let b = brains[j] else { continue }           // beside or behind the walker: not in the way
+                let foot = inLane ? a + dir * max(0, min(L, t)) : goal
+                var best: (cost: Float, p: SIMD2<Float>)?
+                for k in 0..<12 {
+                    let ang = Float(k) * (.pi / 6)
+                    let d = perp * cosf(ang) * (side >= 0 ? 1 : -1) + dir * sinf(ang)          // k = 0: straight out on the side he already leans to
+                    for r: Float in [1.15, 1.45, 1.8] {
+                        let c = foot + d * (jellyGap * r)
+                        let rc = b.resolve(SIMD3(c.x, 0, c.y), b.footprint)
+                        let q = SIMD2(rc.x, rc.z)
+                        guard simd_distance(q, c) < 0.05, outOfTheWay(q),
+                              snapshot.enumerated().allSatisfy({ $0.offset == j || $0.offset == w || simd_distance($0.element.pos, q) >= clear }) else { continue }
+                        let crosses = (simd_dot(q - a, perp) >= 0) != (side >= 0)
+                        let cost = simd_distance(p, q) + (crosses ? 0.6 : 0)
+                        if best == nil || cost < best!.cost { best = (cost, q) }
+                    }
+                }
+                if let spot = best?.p { b.requestNow(.goTo(spot)); cooldown[j] = stepAsideCooldown }
             }
         }
     }
@@ -540,6 +591,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut || model.care.bath.active) && !brain.commanded
+                brain.focusPaused = model.care.focusGroup.pauses(0, phase: model.care.focus.phase) && !model.care.trayOut && !model.care.bath.active && !brain.commanded
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
             let b0 = CACurrentMediaTime()

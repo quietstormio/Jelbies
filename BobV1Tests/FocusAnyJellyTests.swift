@@ -14,7 +14,13 @@ final class FocusAnyRun {
     let care: GameCare
     let actors: [JellyActor]
     let rm: RenderMesh
-    init(count: Int = 3, voice: VoiceCoordinator? = nil) {
+    /// `peers`: wired like the stage's `wireRoster` (peer snapshot with a huge id for a standing Jelly, keepApart under the floor rules, makeRoom every 0.25 s),
+    /// autonomy ON: the bodies block each other as in the room (RoomMovementTests). Default off: the older focus tests walk through each other.
+    let peersWired: Bool
+    var snapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
+    var aside: [Float] = [], asideClock: Float = 0
+    init(count: Int = 3, voice: VoiceCoordinator? = nil, peers: Bool = false) {
+        peersWired = peers
         let rm = buildRenderMesh(); self.rm = rm
         let care = GameCare(voice: voice, jellyCount: count, persistent: false, defaults: UserDefaults(suiteName: "FocusAny.\(count)")!)
         let sm = buildSimMesh()
@@ -26,7 +32,7 @@ final class FocusAnyRun {
             a.profile = care.jelly($0); a.care = care
             a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
             let b = BlobBrain.forGame()
-            b.demo = nil; b.runMoveDemo = nil; b.autonomy = false
+            b.demo = nil; b.runMoveDemo = nil; b.autonomy = peers
             b.seed = UInt64(7 + $0)
             care.wireWorld(b, isBob: $0 == 0)
             b.attach(renderMesh: rm, synchronous: true)
@@ -35,11 +41,44 @@ final class FocusAnyRun {
             return a
         }
         care.touchPlay = nil
+        if peers {
+            aside = [Float](repeating: 0, count: max(count, JellyRoster.maxCount))
+            snapshot = actors.map { (pos: $0.floor, walking: false) }
+            for (i, a) in actors.enumerated() {
+                let b = a.brain!
+                b.steerID = i; b.peerGap = MelonController.jellyGap
+                b.socialOthers = { [unowned self] in self.actors.compactMap(\.brain).filter { $0 !== b } }
+                let floorRules = b.resolve
+                b.resolve = { [unowned self] p, rad in floorRules(MelonController.keepApart(floorRules(p, rad), id: i, peers: self.snapshot), rad) }
+                b.peers = { [unowned self] in self.snapshot.enumerated().filter { $0.offset != i }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }
+                b.restTimer = 1.0 + Float(i); b.idleState.cooldown = 1e6; b.socialBook.cooldown = 1e6          // (plain wandering: no specials, no socials)
+            }
+        }
+    }
+    /// Puts Jelly `id` down at `xz`, standing (the body settles, the brain re-reads its pose).
+    func place(_ id: Int, at xz: SIMD2<Float>, rest: Float = 1e6) {
+        let a = actors[id]
+        guard let b = a.brain else { return }
+        b.abortScript(a.sim, a.skinner)
+        b.restTimer = rest
+        a.sim.teleport(toXZ: xz)
+        for _ in 0..<120 { a.sim.step() }
+        b.currentPose(a.sim)
+        if peersWired { snapshot = actors.map { (pos: $0.floor, walking: false) } }
     }
     func tick() {
         let dt = actors[0].sim.stepDt
+        if peersWired {
+            snapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }
+            asideClock += dt
+            if asideClock >= 0.25 { MelonController.makeRoom(snapshot: snapshot, brains: actors.map(\.brain), cooldown: &aside, dt: asideClock); asideClock = 0 }
+        }
         for a in actors {
             guard let b = a.brain else { continue }
+            if peersWired, a.id == 0 {          // (the stage's per-frame flags for Jelly 0; the care sets the others' in `tickOthers`)
+                b.idleBlocked = (care.focus.isActive || care.trayOut || care.bath.active) && !b.commanded
+                b.focusPaused = care.focusGroup.pauses(0, phase: care.focus.phase) && !care.trayOut && !care.bath.active && !b.commanded
+            }
             b.tick(sim: a.sim, skinner: a.skinner, dt: dt, touched: false)
             a.skinner.jelly.tick(brain: b, sim: a.sim, dt: dt)
             if a.id == 0 { care.tick(brain: b, renderer: nil, dt: dt, sim: a.sim) }

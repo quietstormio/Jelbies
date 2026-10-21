@@ -19,7 +19,10 @@ final class FocusGroup {
     private(set) var arrived: Set<Int> = []
     /// Autonomy to hand back (Jellies whose wandering the focus paused), by id.
     var saved: [Int: Bool] = [:]
-    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var hopped = false }
+    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false }
+    /// A come walk that ended SHORT of the spot (someone stood on it and the floor rules dragged the target over the gap: he turned to wave 1.4 u early) is
+    /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
+    static let shortRetries = 6
     var approach: [Int: Approach] = [:]
     /// Jellies whose `.come` walk has just finished (reported by their brain).
     var came: Set<Int> = []
@@ -91,9 +94,12 @@ extension GameCare {
         if ids.isEmpty { ids = [0] }                  // an id outside the roster (a selection of a Jelly this game does not have): Bob
         greeting = false
         select.cancel()
+        // a close-up that has just ended hands the paused Jellies' wandering back one brain per step (`driveFocus`); a call landing inside that window used
+        // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
+        for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
         focusGroup.begin(ids: ids, front: front)
         focus.beginApproach()
-        approachIdle = 0; approachRetries = 0
+        approachIdle = 0; approachRetries = 0; approachShort = 0
         if ids.contains(0) { queued = [.come(to: focusGroup.spot(of: 0))] }
     }
 
@@ -129,6 +135,10 @@ extension GameCare {
             let act = brain.activity
             let calm = act == .idle || act == .lookingAround || act == .steppingInPlace
             s.calm = (calm && s.age > 0.5) ? s.calm + dt : 0
+            // the walk is over (he is turning / waving) but short of the spot: ask again now, the spot re-reads the floor once the stander has moved
+            if s.age > 0.3, brain.isCome, !brain.isWalkScript, s.short < FocusGroup.shortRetries, simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) > 0.5 {
+                s.short += 1; s.age = 0; g.came.remove(id); brain.requestNow(.come(to: g.spot(of: id))); return
+            }
             if g.came.contains(id) || s.calm > 0.3 {
                 s.calm = 0; g.came.remove(id)
                 let here = Self.floorPos(brain, sim)

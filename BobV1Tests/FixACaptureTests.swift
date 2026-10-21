@@ -172,13 +172,14 @@ final class FixACaptureTests: XCTestCase {
 
     // MARK: coverage
 
-    private func coverageCapture(aspectValue: Float, label: String, file: String, device: MTLDevice) throws {
+    private func coverageCapture(aspectValue: Float, label: String, file: String, device: MTLDevice, mood: IdleMood = .okay) throws {
         W = aspectValue < 1 ? 603 : 1400; H = aspectValue < 1 ? 1311 : Int(1400 / aspectValue)
         room(aspect: aspect)
         let lab = newLab(SocialTests.starts, seed: 5, quiet: false)
         for (i, r) in lab.rigs.enumerated() {
             let b = r.brain
-            b.idleMood = .happy; b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
+            b.idleMood = mood; b.watching = true; b.idleNight = 0          // (2026-10-21: the okay mood with the player looking, as the dwell metrics measure it; was happy, not watched)
+            b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
             r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
         }
         let (ren, target) = try renderer(device, lab)
@@ -267,6 +268,39 @@ final class FixACaptureTests: XCTestCase {
         }
         MotionLog.write("FIXA awake roam: kinds \(names), sleepers \(lab.rigs.prefix(2).map { $0.brain.sleep.stage })")
         try save(out, "awake_roam.png")
+    }
+
+    // MARK: 10 s room strips (2026-10-21 room movement)
+
+    private func roomStrip(aspectValue: Float, label: String, file: String, device: MTLDevice) throws {
+        W = aspectValue < 1 ? 440 : 956; H = aspectValue < 1 ? 956 : 440
+        room(aspect: aspect)
+        let lab = newLab(SocialTests.starts, seed: 5, quiet: false)
+        for (i, r) in lab.rigs.enumerated() {
+            let b = r.brain
+            b.idleMood = .okay; b.idleNight = 0; b.watching = true; b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
+            r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
+        }
+        let (ren, target) = try renderer(device, lab)
+        for _ in 0..<(60 * 40) { tick(lab) }                     // (40 s in: they have spread out of the starting huddle)
+        var cells = [UIImage]()
+        for s in 0..<10 {
+            for _ in 0..<60 { tick(lab) }
+            let img = composite(lab, ren, target, hour: 12)
+            let acts = lab.rigs.map { "\($0.brain.activity)".prefix(4) }.joined(separator: " ")
+            cells.append(labelled(img, "\(label) t+\(s + 1)s  \(acts)", scale: aspectValue < 1 ? 0.5 : 0.5))
+        }
+        try save(sheet(cells, cols: 5, title: "\(label): 10 s of the room after the movement round (3 Jellies, okay mood, day; one frame a second, true proportions)"), file)
+    }
+    func testCaptureRoomStripPortrait() throws {
+        guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        try roomStrip(aspectValue: 440 / 956, label: "PORTRAIT", file: "room_strip_port.png", device: device)
+    }
+    func testCaptureRoomStripLandscape() throws {
+        guard dir != nil else { throw XCTSkip("FIXA_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        try roomStrip(aspectValue: 956 / 440, label: "LANDSCAPE", file: "room_strip_land.png", device: device)
     }
 
     // MARK: zoomies + a chase

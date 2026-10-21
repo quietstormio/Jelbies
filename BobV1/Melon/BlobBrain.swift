@@ -166,6 +166,11 @@ final class BlobBrain {
     var napping = false
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
+    /// Held still only because ANOTHER Jelly's close-up is on (GameCare / the stage set it every frame, with `idleBlocked`). He is free to step aside for the
+    /// Jelly who was called (`MelonController.makeRoom`): 2026-10-21 the paused Jellies stood frozen in the called one's path and he could not get through.
+    var focusPaused = false
+    /// Seconds (eased) he has recently stood or walked within `IdleTuning.centreRadius` of the rug centre: the roam goal score pushes him out (room coverage).
+    var centreDwell: Float = 0
     /// A reserved Jelly (a meal is coming for him, GameCare / DiningGroup): he waits where he stands. Unlike `idleBlocked` (rewritten by the stage every frame)
     /// nobody else touches it. Every autonomous starter respects `held`; `pickAutonomous` only allows the wait pose (look at the tray / a neighbour, step in place, a bounce, a blink).
     var reserved = false
@@ -304,6 +309,9 @@ final class BlobBrain {
     let gaitW: Float = 1
     /// Gait tuning (motion table, REF2 walk): steps/s, single-step length (world units; speed = stride * rate), swing lift arc (0.11 H).
     // 2026-10-18: the roam walk is x1.143 stride (same cadence) on top of these (BlobBrain.walkBoost, ground speed 1.144 -> ~1.30 u/s); the run is unchanged
+    // 2026-10-21: a +10 % speed-up (stride 0.3355, or stride 0.320 x rate 3.93) was tried and backed out: the 2026-10-18 boost had spent the feet-attached margin
+    // (FeetAttach worst overlap walk -0.021 / zoomies -0.021 / call -0.020 at the -0.020 bound) and both variants left the LANDING foot's hidden crown 0.002...0.006
+    // short of fused (half-way through its ball-to-boot morph, 0.11 u ahead of a body 0.07 u behind its attractor). Needs a deeper hidden crown or a tighter follow first.
     var stepRate: Float = 3.75     // 3.5 -> 3.75 (Build B, user: a little faster: walk 1.016 -> 1.144 u/s, run 1.350 -> 1.435; the ground speed steps in whole frames of step time); was 3.2 before the 20 % speed-up
     var stride: Float = 0.305      // was 0.27 (measured ground speed 0.853 -> 1.021 u/s)
     var stepLift: Float = 0.035          // was 0.115: a shuffle, the foot stays in the bottom band under the belly (feet-lab 2026-10-17)
@@ -513,6 +521,7 @@ final class BlobBrain {
         defer { expressionTick(sim, skinner, dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
+        centreDwellTick(dt)
         reactTick(sim, skinner, dt)
         snuggleCool = max(0, snuggleCool - dt)
         awakeMin = max(0, awakeMin - dt); sleepTryCool = max(0, sleepTryCool - dt)
@@ -660,7 +669,7 @@ final class BlobBrain {
         if reserved && !commanded { waitPose(sim); return }
         if socialMaybeStart(sim) { return }
         if idleMaybeStart(sim) { return }
-        var w: [(Int, Float)] = [(0, 5), (1, 2), (2, 1.5)]
+        var w: [(Int, Float)] = [(0, 8), (1, 1.0), (2, 0.6)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
         if sinceWave > 18 { w.append((3, 2)) }
         if sincePlay > 10, !(anticsEnabled && fastOthers() >= 2) { w.append((4, 2)) }
         idleShapeWander(&w)
@@ -677,8 +686,8 @@ final class BlobBrain {
             var target = here
             var fallback: SIMD2<Float>?
             var roamed = false
-            if let rf = roamProvider?() {          // the whole visible floor: zone picks first (30 %), else an area sample; spread from the others
-                if rand() < 0.3, let g = pickRoamGoal(rf, from: here, zone: Int(rand() * 4) % 4) { target = g; roamed = true }
+            if let rf = roamProvider?() {          // the whole visible floor: zone picks first (50 %, the edges and corners), else an area sample; spread from the others
+                if rand() < 0.5, let g = pickRoamGoal(rf, from: here, zone: Int(rand() * Float(GameCamera.RoamFloor.zoneCount)) % GameCamera.RoamFloor.zoneCount) { target = g; roamed = true }
                 else if let g = pickRoamGoal(rf, from: here, zone: nil) { target = g; roamed = true }
             }
             for _ in 0..<(roamed ? 0 : 40) {
@@ -729,13 +738,15 @@ final class BlobBrain {
         }
     }
 
-    /// A wander goal on the roaming polygon: `zone` (0 front, 1 back, 2 left, 3 right: legs of at least 2.5 u) or a uniform sample by area. Of up to six valid
-    /// candidates the best wins: far from the other Jellies (and from where they are heading) and from the cells he picked before.
+    /// A wander goal on the roaming polygon: `zone` (RoamFloor.sampleZone: the edges and corners, legs of at least 2.5 u) or a uniform sample by area (legs of
+    /// at least 1.2 u). Of up to six valid candidates the best wins: far from the other Jellies (and from where they are heading), from the cells he picked
+    /// before, a long leg, and away from the rug centre the longer he has just spent there (`centreDwell`; 2026-10-21 "they stay in the centre too much").
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let maxL = idleLegMax(maxWanderLeg)
-        let lo: Float = zone != nil ? 2.5 : 0.8
+        let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
+        let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
         for _ in 0..<48 {
@@ -743,18 +754,25 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             let d = simd_length(cand - here)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
-            var nearest: Float = 4
+            var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
                 if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
             }
-            let score = 0.5 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + (anticsEnabled ? 0.35 * min(d, 2.6) : 0)          // (the lively room prefers legs long enough for a flourish)
+            let central = max(0, 1 - simd_distance(cand, RoomLayout.rugCentre) / (IdleTuning.centreRadius * 1.6))
+            let score = 0.6 * nearest + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
         }
         if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; return b.0 }
         return nil
+    }
+
+    /// Every tick: how long he has lately been near the rug centre (grows there, fades twice as slowly away from it; `pickRoamGoal` reads it).
+    func centreDwellTick(_ dt: Float) {
+        if simd_distance(SIMD2(px, pz), RoomLayout.rugCentre) < IdleTuning.centreRadius { centreDwell = min(IdleTuning.centreDwellFull * 2, centreDwell + dt) }
+        else { centreDwell = max(0, centreDwell - dt * 0.5) }
     }
     private func roamKey(_ p: SIMD2<Float>) -> Int { (Int(floorf(p.x)) + 50) * 1000 + Int(floorf(p.y)) + 50 }
 
@@ -793,7 +811,7 @@ final class BlobBrain {
 
     func finishScript(_ sim: SoftBody, after served: Bool) {
         script = .none
-        restTimer = rand(1.5, 4.0) * idleLively
+        restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
@@ -1221,6 +1239,8 @@ final class BlobBrain {
         }
     }
     var isCome: Bool { if case .some(.come) = job { return true }; return false }
+    /// The script is still the walk itself (not the turn / wave / stand that follows it).
+    var isWalkScript: Bool { if case .walk = script { return true }; return false }
 
     // MARK: pose
 
