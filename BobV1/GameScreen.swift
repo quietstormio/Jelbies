@@ -6,6 +6,7 @@
 
 import SwiftUI
 import QuartzCore
+import AppIntents
 
 struct GameScreen: View {
     @State private var model = GameScreen.makeGameModel()
@@ -17,6 +18,10 @@ struct GameScreen: View {
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
+    @State private var extrasOpen = false                     // Siri & Lock Screen panel (Live Activity toggles, Siri tip)
+    /// Every way into the game (widget links, Siri, the App Group queue) lands here; `apply` runs the routes on the care flows.
+    private let router = GameRouter.shared
+    private var jellyNames: [String] { model.care.jellies.map(\.name) }
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
@@ -85,12 +90,18 @@ struct GameScreen: View {
                             .transition(.opacity)
                             GameCircleButton(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { soundOpen.toggle() }
+                                withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false } }
                             }
                             .accessibilityIdentifier("sound-button")
                             .transition(.opacity)
                             EarsButton(ears: Ears.shared)                  // "Ears on" (Audio/EarsHUD.swift)
                                 .transition(.opacity)
+                            GameCircleButton(systemName: extrasOpen ? "sparkles.rectangle.stack.fill" : "sparkles.rectangle.stack", label: "Siri and Lock Screen") {
+                                AudioHub.shared.uiTap()
+                                withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false } }
+                            }
+                            .accessibilityIdentifier("extras-button")
+                            .transition(.opacity)
                         }
                         Spacer()
                         if !focus.isActive, !cleaning, !racing {
@@ -156,6 +167,12 @@ struct GameScreen: View {
                     .padding(.leading, 16).padding(.top, 52)
                     .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
             }
+            if extrasOpen {
+                AppleExtrasPanel(live: LiveActivities.shared) { withAnimation(CareMenu.spring) { extrasOpen = false } }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 16).padding(.top, 52)
+                    .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
+            }
         }
         .background(Color.black)
         .onAppear {
@@ -165,19 +182,34 @@ struct GameScreen: View {
             AudioHub.shared.setTownScene(town == .shop ? .shop : town == nil ? .none : .town)
             Ears.shared.launch(care: model.care)
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
+            LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
+            let care = model.care
+            let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
+                guard !care.raceBusy, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
+                care.rosterPick(id, quietHop: true); care.requestTown(.track)
+            }
+            router.onRace = toTrack; router.onTrain = toTrack
+            router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
+            router.apply(care: model.care)                                                             // a Siri route that launched the app cold
+            JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Bob"
         }
-        .onOpenURL { url in if let id = JellyLink.parse(url) { model.care.openJelly(id) } }          // widget tap: jelbies://jelly/<id>
+        .onOpenURL { url in _ = router.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|train|pet
+        .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
         .onChange(of: scenePhase) { _, p in
             if p == .active {
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
                 AudioHub.shared.setForeground(true)
                 Ears.shared.setForeground(true)
                 if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }      // away > 1 h: sweep the window light from then to now
+                LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning
+                router.drainQueued()                                                                   // the widget's Water button / an intent run while away
+                router.apply(care: model.care)
             } else {
                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()
                 DayClock.shared.leaving()
                 AudioHub.shared.setForeground(false)
                 Ears.shared.setForeground(false)
+                LiveActivities.shared.leftActive(names: jellyNames)                                    // at night (or tucked in): the nap card
             }
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead

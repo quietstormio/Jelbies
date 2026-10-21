@@ -47,9 +47,9 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertNil(JellySnapshot.decode(Data("not json".utf8)))
     }
 
-    func testAtMostThreeJelliesAndFileRoundTrip() throws {
-        let many = JellySnapshot(savedAt: t0, jellies: (0..<5).map { rec($0, "J\($0)") })
-        XCTAssertEqual(many.jellies.count, 3)
+    func testAtMostFourJelliesAndFileRoundTrip() throws {
+        let many = JellySnapshot(savedAt: t0, jellies: (0..<6).map { rec($0, "J\($0)") })
+        XCTAssertEqual(many.jellies.count, 4, "the roster is four Jelbies since the characters round")
         let dir = try tempDir()
         XCTAssertNil(JellySnapshot.read(from: dir), "nothing written yet")
         XCTAssertTrue(many.write(to: dir))
@@ -66,12 +66,12 @@ final class WidgetSnapshotTests: XCTestCase {
             let p = s.project(at: t0.addingTimeInterval(h * hour))[0]
             XCTAssertEqual(p.levels, BlobNeeds.awayLevels(start, seconds: h * hour), "levels at +\(h) h")
         }
-        // and through a real BlobNeeds returning from an absence
+        // and through a real BlobNeeds returning from an absence (it counts night hours at half weight, so compare the night-aware projection)
         let d = UserDefaults(suiteName: "widget.test.\(UUID().uuidString)")!
         let n = BlobNeeds(defaults: d, now: { self.t0 }); Self.keep.append(n)
         for k in NeedKind.allCases { n.set(k, start[k.rawValue]) }
         n.leaveActive(at: t0); n.returnActive(at: t0.addingTimeInterval(4 * hour))
-        let p = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob", levels: start)]).project(at: t0.addingTimeInterval(4 * hour))[0]
+        let p = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob", levels: start)]).projectNightAware(at: t0.addingTimeInterval(4 * hour), calendar: .current)[0]
         for k in NeedKind.allCases { XCTAssertEqual(p.levels[k.rawValue], n.level(k), accuracy: 1e-6, "\(k)") }
     }
 
@@ -160,11 +160,11 @@ final class WidgetSnapshotTests: XCTestCase {
     // MARK: deep link
 
     func testDeepLinkParsing() {
-        for id in 0..<3 { XCTAssertEqual(JellyLink.parse(JellyLink.url(for: id)), id) }
+        for id in 0..<4 { XCTAssertEqual(JellyLink.parse(JellyLink.url(for: id)), id) }
         XCTAssertEqual(JellyLink.url(for: 1).absoluteString, "jelbies://jelly/1")
         XCTAssertEqual(JellyLink.parse(URL(string: "JELBIES://Jelly/2")!), 2)
         XCTAssertEqual(JellyLink.parse(URL(string: "jelbies://jelly/1/")!), 1)
-        for bad in ["jelbies://jelly", "jelbies://jelly/3", "jelbies://jelly/-1", "jelbies://jelly/x", "jelbies://jelly/1/2", "jelbies://pet/1", "https://jelly/1", "jelbies://", "other://jelly/0"] {
+        for bad in ["jelbies://jelly", "jelbies://jelly/4", "jelbies://jelly/-1", "jelbies://jelly/x", "jelbies://jelly/1/2", "jelbies://pet/1", "https://jelly/1", "jelbies://", "other://jelly/0"] {
             XCTAssertNil(JellyLink.parse(URL(string: bad)!), bad)
         }
     }

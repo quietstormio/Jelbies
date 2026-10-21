@@ -99,6 +99,15 @@ nonisolated struct JellySnapshot: Codable, Equatable, Sendable {
         let away = date.timeIntervalSince1970 - savedAt
         return jellies.map { JellyState(record: $0, awaySeconds: away) }
     }
+
+    /// Like `project(at:)` but with the night hours (21:00-06:00) at half weight on the needs, exactly as `BlobNeeds.applyAway(endingAt:)` does
+    /// when the player comes back: the Lock Screen / StandBy entries then match what the game will show on open, hours ahead.
+    func projectNightAware(at date: Date, calendar: Calendar = .current) -> [JellyState] {
+        let away = TimeAway.clamp(date.timeIntervalSince1970 - savedAt)
+        let from = date.addingTimeInterval(-away)
+        let needSeconds = AwayMath.needSeconds(from: from, to: date, calendar: calendar)
+        return jellies.map { JellyState(record: $0, awaySeconds: away, needSeconds: needSeconds) }
+    }
 }
 
 // MARK: - Care items and projected state
@@ -121,10 +130,11 @@ nonisolated struct JellyState: Identifiable, Equatable, Sendable {
     let sparkle: Float
     let mood: BlobMood
 
-    init(record r: JellyRecord, awaySeconds: TimeInterval) {
+    /// `needSeconds`: the away seconds the NEEDS feel (night hours at half weight); defaults to the wall-clock away time.
+    init(record r: JellyRecord, awaySeconds: TimeInterval, needSeconds: TimeInterval? = nil) {
         id = r.id; name = r.name; color = r.color
         let away = TimeAway.clamp(awaySeconds)
-        let lv = AwayMath.needLevels(r.levels, seconds: away)
+        let lv = AwayMath.needLevels(r.levels, seconds: needSeconds ?? away)
         let c = AwayMath.coat(dirt: r.dirt, sparkle: r.sparkle, awaySeconds: away)
         levels = lv; dirt = c.dirt; sparkle = c.sparkle
         mood = AwayMath.mood(of: lv)
