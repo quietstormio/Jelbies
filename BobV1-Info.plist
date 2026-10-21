@@ -18,6 +18,20 @@
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<false/>
+	<!-- Siri: "Jelbies" also names the app in App Shortcut phrases (the display name is "Bob" today). -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Jelbies</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>jell bees</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>My Jelbies</string>
+		</dict>
+	</array>
 	<!-- The widget's deep link: jelbies://jelly/<id> opens the game and selects that Jelly. -->
 	<key>CFBundleURLTypes</key>
 	<array>

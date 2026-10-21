@@ -66,12 +66,12 @@ final class WidgetSnapshotTests: XCTestCase {
             let p = s.project(at: t0.addingTimeInterval(h * hour))[0]
             XCTAssertEqual(p.levels, BlobNeeds.awayLevels(start, seconds: h * hour), "levels at +\(h) h")
         }
-        // and through a real BlobNeeds returning from an absence
+        // and through a real BlobNeeds returning from an absence (it counts night hours at half weight, so compare the night-aware projection)
         let d = UserDefaults(suiteName: "widget.test.\(UUID().uuidString)")!
         let n = BlobNeeds(defaults: d, now: { self.t0 }); Self.keep.append(n)
         for k in NeedKind.allCases { n.set(k, start[k.rawValue]) }
         n.leaveActive(at: t0); n.returnActive(at: t0.addingTimeInterval(4 * hour))
-        let p = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob", levels: start)]).project(at: t0.addingTimeInterval(4 * hour))[0]
+        let p = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob", levels: start)]).projectNightAware(at: t0.addingTimeInterval(4 * hour), calendar: .current)[0]
         for k in NeedKind.allCases { XCTAssertEqual(p.levels[k.rawValue], n.level(k), accuracy: 1e-6, "\(k)") }
     }
 

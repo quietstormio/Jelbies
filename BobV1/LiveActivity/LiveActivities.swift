@@ -98,12 +98,13 @@ nonisolated struct RaceActivityPolicy: Sendable {
 
     /// True when `new` should be published; remembers it if so.
     mutating func shouldPublish(_ new: JelbiesState) -> Bool {
-        defer { if publish { last = new } }
-        var publish = false
-        guard let l = last else { publish = true; return true }
-        if new.phase != l.phase || new.position != l.position || new.lap != l.lap { publish = true; return true }
-        if Self.milestones.contains(where: { l.progress < $0 && new.progress >= $0 }) { publish = true; return true }
-        return false
+        let publish: Bool
+        if let l = last {
+            publish = new.phase != l.phase || new.position != l.position || new.lap != l.lap
+                || Self.milestones.contains(where: { l.progress < $0 && new.progress >= $0 })
+        } else { publish = true }
+        if publish { last = new }
+        return publish
     }
     mutating func reset() { last = nil }
 }
@@ -247,12 +248,15 @@ final class LiveActivities {
             switch a.attributes.kind {
             case .race:
                 driver.end(id: a.id, state: .finished(place: max(a.state.position, 1), racers: a.state.racers, drops: 0, laps: a.state.laps), dismissAt: t)
+                if raceID == a.id { raceID = nil; raceAttrs = nil; racePolicy.reset() }
             case .nap:
                 let over = !napOn || (a.state.untilDate.map { $0 <= t } ?? true)
-                if over { driver.end(id: a.id, state: .awake(a.state.sleepers), dismissAt: t) } else if napID == nil { napID = a.id }
+                if over { driver.end(id: a.id, state: .awake(a.state.sleepers), dismissAt: t); if napID == a.id { napID = nil } }
+                else if napID == nil { napID = a.id }
             case .pep:
                 let over = !pepOn || (a.state.untilDate.map { $0 <= t } ?? true)
-                if over { driver.end(id: a.id, state: .refilled, dismissAt: t) } else if pepID == nil { pepID = a.id; pepAttrs = a.attributes; pepRefillAt = a.state.untilDate }
+                if over { driver.end(id: a.id, state: .refilled, dismissAt: t); if pepID == a.id { pepID = nil; pepAttrs = nil; pepRefillAt = nil } }
+                else if pepID == nil { pepID = a.id; pepAttrs = a.attributes; pepRefillAt = a.state.untilDate }
             }
         }
         if let r = pepRefillAt, r <= t { pepRefilled() }

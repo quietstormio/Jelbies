@@ -161,7 +161,7 @@ struct JellyIslandCompactTrailing: View {
         case (.nap, _): Image(systemName: "sun.max.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(JellyPalette.moon)
         case (.pep, .refilling):
             if let d = state.untilDate {
-                Text(timerInterval: Date.now...max(d, .now), countsDown: true, showsHours: true).font(JellyPalette.font(13)).monospacedDigit().foregroundStyle(.white).frame(width: 52)
+                Text(timerInterval: Date.now...max(d, .now), countsDown: true, showsHours: true).font(JellyPalette.font(13)).monospacedDigit().foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6).frame(minWidth: 44)
             } else { Image(systemName: "bolt.slash.fill").foregroundStyle(.white) }
         case (.pep, _): Image(systemName: "bolt.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(JellyPalette.body("yellow"))
         }

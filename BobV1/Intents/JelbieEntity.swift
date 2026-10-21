@@ -32,8 +32,10 @@ nonisolated enum JelbieRoster {
         if let snap = JellySnapshot.read(from: directory), !snap.jellies.isEmpty {
             return snap.jellies.sorted { $0.id < $1.id }.map { JelbieEntity(id: $0.id, name: $0.name, color: $0.color) }
         }
-        return (0..<min(max(count, 1), JellyRoster.maxCount)).map { JelbieEntity(id: $0, name: JellyRoster.names[$0], color: WidgetBridge.colorName($0)) }
+        return (0..<min(max(count, 1), JellyRoster.maxCount)).map { JelbieEntity(id: $0, name: JellyRoster.names[$0], color: JelbieRoster.colorName($0)) }
     }
+    /// Roster id -> colour name (Bob blue, Pip yellow, Moss green), the same as WidgetBridge.colorName (which is main-actor bound).
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green"][min(max(id, 0), 2)] }
     /// A loose name match: case-insensitive, prefix or contained ("bob", "Bobby" -> Bob).
     static func match(_ text: String, in list: [JelbieEntity]) -> [JelbieEntity] {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

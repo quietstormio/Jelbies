@@ -9,7 +9,7 @@
 import AppIntents
 import WidgetKit
 
-nonisolated struct WaterQuickIntent: AppIntent {
+struct WaterQuickIntent: AppIntent {
     static let title: LocalizedStringResource = "Water a Jelbie"
     static let description = IntentDescription("Queues a drink of water; it is poured when the game opens.")
     static let isDiscoverable = false
@@ -17,7 +17,7 @@ nonisolated struct WaterQuickIntent: AppIntent {
     @Parameter(title: "Jelbie")
     var jellyID: Int
 
-    init() { jellyID = 0 }
+    nonisolated init() { jellyID = 0 }
     init(jellyID: Int) { self.jellyID = jellyID }
 
     func perform() async throws -> some IntentResult {
