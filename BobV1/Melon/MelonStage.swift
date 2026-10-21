@@ -455,6 +455,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         bobTick(reduce: reduce)
         audioSituation()
+        if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }      // sound reactions (Audio/EarsListener.swift)
         if actors.count > 1 {
             for a in actors.dropFirst() { otherTick(a, reduce: reduce) }
             if game { model.care.tickOthers(actors, dt: sim.stepDt) }

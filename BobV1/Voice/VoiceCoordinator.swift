@@ -251,6 +251,7 @@ final class VoiceCoordinator {
         session = training.newSession()
         glowLatencyMs = nil; audioLatencyMs = nil
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
+        Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         input.warmUp()
         intentModel?.prewarm()                         // the first request must not pay the model load
         if let care { ai.router.prewarm(catalog: ai.catalog(care: care)) }      // Apple Intelligence: availability re-read, the next session built now

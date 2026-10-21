@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import QuartzCore
 
 struct GameScreen: View {
     @State private var model = GameScreen.makeGameModel()
@@ -13,7 +14,7 @@ struct GameScreen: View {
     @State private var menuOpen = UserDefaults.standard.integer(forKey: "GameMenuOpen") != 0
     @State private var rosterOpen = false
     @State private var bookOpen = false                       // Voice v1 trick book
-    @State private var soundOpen = false                      // sound settings panel
+    @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
     @State private var openPicker: ConsumableKind?
@@ -88,6 +89,8 @@ struct GameScreen: View {
                             }
                             .accessibilityIdentifier("sound-button")
                             .transition(.opacity)
+                            EarsButton(ears: Ears.shared)                  // "Ears on" (Audio/EarsHUD.swift)
+                                .transition(.opacity)
                         }
                         Spacer()
                         if !focus.isActive, !cleaning, !racing {
@@ -160,6 +163,7 @@ struct GameScreen: View {
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(town == .shop ? .shop : town == nil ? .none : .town)
+            Ears.shared.launch(care: model.care)
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
         }
         .onOpenURL { url in if let id = JellyLink.parse(url) { model.care.openJelly(id) } }          // widget tap: jelbies://jelly/<id>
@@ -167,11 +171,13 @@ struct GameScreen: View {
             if p == .active {
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
                 AudioHub.shared.setForeground(true)
+                Ears.shared.setForeground(true)
                 if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }      // away > 1 h: sweep the window light from then to now
             } else {
                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()
                 DayClock.shared.leaving()
                 AudioHub.shared.setForeground(false)
+                Ears.shared.setForeground(false)
             }
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
@@ -279,6 +285,25 @@ struct GameScreen: View {
             for _ in 0..<100 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startDrill(jelly: who)
+        }
+        // capture aid: -EarsDemo on|hearing:<kind>|denied|paused shows the ear button's state (no engine), and after -EarsDelay s (default 4) plays
+        // the reaction: -EarsEvent clap|double|dance|whistle|bark|laugh|meow|bang (dance = 110 BPM from then on)
+        if d.string(forKey: "EarsDemo") != nil {
+            let spec = d.string(forKey: "EarsDemo") ?? ""
+            let event = d.string(forKey: "EarsEvent")
+            await sleep(d.double(forKey: "EarsDelay") > 0 ? d.double(forKey: "EarsDelay") : 4)
+            if spec.hasPrefix("hearing:"), let k = EarKind(rawValue: String(spec.dropFirst(8))) { Ears.shared.showHearing(k, seconds: 30) }
+            switch event {
+            case "clap": Ears.shared.inject(.heard(.clap)); Ears.shared.showHearing(.clap, seconds: 30)
+            case "double": Ears.shared.inject(.doubleClap); Ears.shared.showHearing(.clap, seconds: 30)
+            case "dance": Ears.shared.inject(.musicStarted(EarBeat(bpm: 110, anchor: CACurrentMediaTime(), strength: 3))); Ears.shared.showHearing(.music, seconds: 120)
+            case "whistle": Ears.shared.inject(.heard(.whistle)); Ears.shared.showHearing(.whistle, seconds: 30)
+            case "bark": Ears.shared.inject(.heard(.dogBark)); Ears.shared.showHearing(.dogBark, seconds: 30)
+            case "laugh": Ears.shared.inject(.heard(.laugh)); Ears.shared.showHearing(.laugh, seconds: 30)
+            case "meow": Ears.shared.inject(.heard(.catMeow)); Ears.shared.showHearing(.catMeow, seconds: 30)
+            case "bang": Ears.shared.inject(.bang(level: 0.6)); Ears.shared.showHearing(.loudBang, seconds: 30)
+            default: break
+            }
         }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {

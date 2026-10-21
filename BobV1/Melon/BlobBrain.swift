@@ -88,6 +88,8 @@ final class BlobBrain {
     var touchPitch: Float = 0
     var touchRoll: Float = 0
     var touchSquash: Float = 1
+    /// "Ears on" (BlobBrain+Ears.swift): the sound-reaction pose channel (dance bounce, giggle, startle, curious tilt), eased in `tick`, added in `drivePose`.
+    var ears = EarsPose()
 
     var walkSpeed: Float = 0.7          // world units / s (~0.6 body widths per second)
     var turnRate: Float = 1.9             // rad / s while turning with small steps (reference: 110-120 deg/s)
@@ -520,6 +522,7 @@ final class BlobBrain {
             if touched, sleep.stage >= 2, sleep.stage <= 4, sleep.touchT < SleepTuning.tapTime { sleep.touchT += dt; sleepWake(groggy: true); touched = false }
             else if !touched { sleep.touchT = 0 }
         }
+        ears.ease(dt: dt)
 
         if touched {
             if activity != .touched { abortAll(sim, skinner) }
@@ -1225,9 +1228,9 @@ final class BlobBrain {
         if poseOn { poseW = min(1, poseW + dt / 0.25) } else { poseW = max(0, poseW - dt / 0.3) }
         guard poseW > 0 else { if sim.attractor.strength > 0 && !gait.isBusy { sim.attractor.strength = 0 }; return }
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
-        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll, axis: SIMD3(0, 0, 1))
+        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
-        let sq = squash * touchSquash * socialBook.squash
+        let sq = squash * touchSquash * socialBook.squash * ears.squash
         sim.attractor.squash = sq
         if geom.valid {
             // pivot on his feet: the middle of both soles (or one foot, for the wave's lean) stays on the floor at its world spot

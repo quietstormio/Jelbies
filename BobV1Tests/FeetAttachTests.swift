@@ -59,6 +59,17 @@ final class FeetAttachTests: XCTestCase {
     struct Move {
         let name: String, game: Bool, seconds: Float, expectBeans: Bool
         let start: (MotionRig) -> Void
+        /// Per frame, after the step (the Ears reactions are driven from outside the brain).
+        var each: ((MotionRig) -> Void)? = nil
+    }
+    /// The Ears moves: a reactor per rig, ticked every frame (BlobBrain+Ears.swift).
+    nonisolated(unsafe) static var earsReactors: [ObjectIdentifier: EarsReactor] = [:]
+    static func ears(_ r: MotionRig, _ e: EarEvent) {
+        let re = EarsReactor(); earsReactors[ObjectIdentifier(r)] = re
+        re.handle(e, jellies: [EarsReactor.Jelly(id: 0, brain: r.brain, sim: r.sim)], now: Double(r.t))
+    }
+    static func earsTick(_ r: MotionRig) {
+        earsReactors[ObjectIdentifier(r)]?.tick(jellies: [EarsReactor.Jelly(id: 0, brain: r.brain, sim: r.sim)], dt: r.sim.stepDt, now: Double(r.t))
     }
     /// The second decor batch: every interaction (name, piece, where, move, seconds, beans expected, forced throw fate).
     static let batch2Decor: [(String, DecorKind, SIMD2<Float>, IdleKind, Float, Bool, Int?)] = [
@@ -130,6 +141,10 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "decor: kick the ball", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .ball, SIMD2(0.9, 0.9), .decorKick) }),
         Move(name: "decor: hop on the mat", game: true, seconds: 16, expectBeans: true, start: { decorStart($0, .bouncymat, SIMD2(-1.1, 0.9), .decorHop) }),
         Move(name: "decor: peek in the toy box", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .toybox, SIMD2(1.1, 0.9), .decorPeek) }),
+        // Ears (sound reactions): the beat dance with its hop (beat 8) and spin (beat 16), the startle flinch + hop + turn, the giggle
+        Move(name: "ears dance", game: true, seconds: 12, expectBeans: true, start: { ears($0, .musicStarted(EarBeat(bpm: 120, anchor: Double($0.t), strength: 3))) }, each: earsTick),
+        Move(name: "ears startle", game: true, seconds: 4, expectBeans: true, start: { ears($0, .bang(level: 0.8)) }, each: earsTick),
+        Move(name: "ears giggle", game: true, seconds: 3, expectBeans: false, start: { ears($0, .heard(.laugh)) }, each: earsTick),
     ]
     /// Puts one piece in the field and starts the Jelly's behaviour with it.
     static func decorStart(_ r: MotionRig, _ kind: DecorKind, _ at: SIMD2<Float>, _ move: IdleKind) {
@@ -147,6 +162,7 @@ final class FeetAttachTests: XCTestCase {
             var w = FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity), frames = 0
             var worstInfo = "", clock: Float = 0
             r.run(m.seconds) {
+                m.each?(r)
                 clock += 1.0 / 60
                 if let f = Self.footFrame(r) {
                     if f.overlap > w.overlap { worstInfo = String(format: "t=%.2f kind=%@ stage=%d script=%@ gait=%@ feetActive=%d stepU=%.2f yaw=%.2f boost=%.3f runW=%.2f pos=(%.2f,%.2f) amp=%.2f", clock, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")", r.brain.idleState.bagStage, "\(r.brain.script)", "\(r.brain.gait.phase)", r.brain.feet.active ? 1 : 0, r.brain.feet.stepU, r.brain.yaw, r.brain.walkBoostK, r.brain.runW, r.brain.px, r.brain.pz, r.brain.amplitude) }
@@ -172,6 +188,7 @@ final class FeetAttachTests: XCTestCase {
             var worstOff: Float = 0
             var k = 0
             r.run(m.seconds) {
+                m.each?(r)
                 k += 1
                 guard k % 3 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return }
                 r.render()

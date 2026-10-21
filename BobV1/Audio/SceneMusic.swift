@@ -157,6 +157,8 @@ final class SceneMusicEngine {
     nonisolated deinit {}
 
     var current: SceneTrack? { voices.last(where: { !$0.stopping })?.track }
+    /// The loudest playing voice's volume now (Ears: how much of the app's own music is on the speaker).
+    var loudest: Float { voices.filter { $0.started && $0.node.isPlaying }.map { $0.node.volume }.max() ?? 0 }
     /// A voice is decoded and playing.
     func isPlaying(_ t: SceneTrack) -> Bool { voices.contains { $0.track == t && !$0.stopping && $0.ready && $0.node.isPlaying } }
 

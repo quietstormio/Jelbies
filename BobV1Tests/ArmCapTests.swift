@@ -47,7 +47,7 @@ final class ArmCapTests: XCTestCase {
     }
 
     /// Run a move on a fresh rig and collect the capsule stats whenever a walking capsule is drawn.
-    func capsuleStat(_ seconds: Float, game: Bool = true, start: (MotionRig) -> Void, until: ((MotionRig) -> Bool)? = nil) -> Stat {
+    func capsuleStat(_ seconds: Float, game: Bool = true, start: (MotionRig) -> Void, until: ((MotionRig) -> Bool)? = nil, each: ((MotionRig) -> Void)? = nil) -> Stat {
         let r = MotionRig(game: game)
         Self.keep.append(r)
         r.brain.seed = 11
@@ -55,6 +55,7 @@ final class ArmCapTests: XCTestCase {
         start(r)
         var st = Stat()
         r.run(seconds, until: until.map { u in { u(r) } }) {
+            each?(r)
             guard r.brain.armG > 0.5 else { return }
             for si in 0..<2 {
                 let g = r.brain.armLastGeom[si]
@@ -109,6 +110,10 @@ final class ArmCapTests: XCTestCase {
         note("flip clean"); rows.append(("flip clean", capsuleStat(4, start: { $0.brain.startFlip(sim: $0.sim) })))
         note("faceplant"); rows.append(("faceplant", capsuleStat(5, start: { $0.brain.startFlip(sim: $0.sim, fail: true) })))
         note("thrown tumble"); rows.append(("thrown tumble", capsuleStat(3, start: { $0.rig_launch() })))
+        // Ears (sound reactions), driven from outside the brain like the stage does (FeetAttachTests holds the reactors)
+        note("ears dance"); rows.append(("ears dance", capsuleStat(12, start: { FeetAttachTests.ears($0, .musicStarted(EarBeat(bpm: 120, anchor: Double($0.t), strength: 3))) }, each: FeetAttachTests.earsTick)))
+        note("ears startle"); rows.append(("ears startle", capsuleStat(4, start: { FeetAttachTests.ears($0, .bang(level: 0.8)) }, each: FeetAttachTests.earsTick)))
+        note("ears giggle"); rows.append(("ears giggle", capsuleStat(3, start: { FeetAttachTests.ears($0, .heard(.laugh)) }, each: FeetAttachTests.earsTick)))
         MotionLog.write("ARMCAP table (H = \(Self.H) u; cap = \(String(format: "%.3f", cap / Self.H)) H = \(String(format: "%.4f", cap)) u)")
         MotionLog.write("ARMCAP move | frames | exposed before (H) | exposed after (H) | base width (H) | min root depth (u)")
         for (n, s) in rows {
