@@ -60,31 +60,32 @@ final class FeetAttachTests: XCTestCase {
         let name: String, game: Bool, seconds: Float, expectBeans: Bool
         let start: (MotionRig) -> Void
     }
-    /// The second decor batch: every interaction (name, piece, where, move, seconds, beans expected, forced throw fate).
-    static let batch2Decor: [(String, DecorKind, SIMD2<Float>, IdleKind, Float, Bool, Int?)] = [
-        ("decor2: sit on the pouf", .pouf, SIMD2(1.3, 0.9), .decorSit, 26, true, nil),
-        ("decor2: sit in the armchair", .armchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
-        ("decor2: sit on the loveseat", .loveseat, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
-        ("decor2: sit on a dining stool", .diningset, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
-        ("decor2: rock in the rocking chair", .rockingchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil),
-        ("decor2: sway on the swing", .swing, SIMD2(1.1, 0.9), .decorSit, 28, true, nil),
-        ("decor2: peek at the bookshelf", .bookshelf, SIMD2(1.1, 0.9), .decorPeek, 14, false, nil),
-        ("decor2: peek in the wardrobe", .wardrobe, SIMD2(0.0, -0.8), .decorPeek, 14, false, nil),
-        ("decor2: boop the duck", .duck, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
-        ("decor2: boop the drum", .drum, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
-        ("decor2: boop the monstera", .monstera, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil),
-        ("decor2: boop the spinning top", .spintop, SIMD2(1.1, 0.9), .decorBoop, 16, false, nil),
-        ("decor2: kick the block tower", .blocks, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
-        ("decor2: kick the toy car", .toycar, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
-        ("decor2: kick the yarn ball", .yarnball, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
-        ("decor2: kick the football", .football, SIMD2(0.9, 0.9), .decorKick, 14, false, nil),
-        ("decor2: throw the football", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 0),
-        ("decor2: throw the football (bonks off his head)", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 1),
-        ("decor2: throw the football (drops it)", .football, SIMD2(0.9, 0.9), .decorThrow, 16, false, 2),
-        ("decor2: climb the slide, sit, ride, exit", .slide, SIMD2(1.0, 1.2), .decorSlide, 30, true, nil),
+    /// The second decor batch and soccer: every interaction (name, piece, where, move, seconds, beans expected, forced soccer mode, a goal placed at).
+    static let batch2Decor: [(String, DecorKind, SIMD2<Float>, IdleKind, Float, Bool, Int?, SIMD2<Float>?)] = [
+        ("decor2: sit on the pouf", .pouf, SIMD2(1.3, 0.9), .decorSit, 26, true, nil, nil),
+        ("decor2: sit in the armchair", .armchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil, nil),
+        ("decor2: sit on the loveseat", .loveseat, SIMD2(1.1, 0.9), .decorSit, 26, true, nil, nil),
+        ("decor2: sit on a dining stool", .diningset, SIMD2(1.1, 0.9), .decorSit, 26, true, nil, nil),
+        ("decor2: rock in the rocking chair", .rockingchair, SIMD2(1.1, 0.9), .decorSit, 26, true, nil, nil),
+        ("decor2: sway on the swing", .swing, SIMD2(1.1, 0.9), .decorSit, 28, true, nil, nil),
+        ("decor2: peek at the bookshelf", .bookshelf, SIMD2(1.1, 0.9), .decorPeek, 14, false, nil, nil),
+        ("decor2: peek in the wardrobe", .wardrobe, SIMD2(0.0, -0.8), .decorPeek, 14, false, nil, nil),
+        ("decor2: boop the duck", .duck, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil, nil),
+        ("decor2: boop the drum", .drum, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil, nil),
+        ("decor2: boop the monstera", .monstera, SIMD2(1.1, 0.9), .decorBoop, 14, false, nil, nil),
+        ("decor2: boop the spinning top", .spintop, SIMD2(1.1, 0.9), .decorBoop, 16, false, nil, nil),
+        ("decor2: kick the block tower", .blocks, SIMD2(0.9, 0.9), .decorKick, 14, false, nil, nil),
+        ("decor2: kick the toy car", .toycar, SIMD2(0.9, 0.9), .decorKick, 14, false, nil, nil),
+        ("decor2: kick the yarn ball", .yarnball, SIMD2(0.9, 0.9), .decorKick, 14, false, nil, nil),
+        ("decor2: climb the slide, sit, ride, exit", .slide, SIMD2(1.0, 1.2), .decorSlide, 30, true, nil, nil),
+        // soccer (BlobBrain+Soccer.swift): the stomp kick, a dribble to the goal's kick spot and the shot, the shot and the celebration bounce, a stuck ball's rescue
+        ("soccer: stomp-kick the ball", .soccerball, SIMD2(0.9, 0.9), .soccerKick, 16, true, 0, nil),
+        ("soccer: dribble the ball to the goal and shoot", .soccerball, SIMD2(1.4, 1.2), .soccerKick, 34, true, 1, SIMD2(0.0, -1.6)),
+        ("soccer: shoot at the goal and celebrate", .soccerball, SIMD2(0.5, 0.1), .soccerKick, 22, true, 2, SIMD2(0.0, -1.6)),
+        ("soccer: dribble a stuck ball back to open floor", .soccerball, SIMD2(-2.2, -2.2), .soccerKick, 30, true, 3, nil),
     ]
     static let moves: [Move] = batch2Decor.map { d in
-        Move(name: d.0, game: true, seconds: d.4, expectBeans: d.5, start: { $0.brain.throwFateForce = d.6; decorStart($0, d.1, d.2, d.3) })
+        Move(name: d.0, game: true, seconds: d.4, expectBeans: d.5, start: { $0.brain.soccerModeForce = d.6; decorStart($0, d.1, d.2, d.3, goal: d.7) })
     } + [
         Move(name: "walk", game: false, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo($0.root + SIMD2(0, 2.4))) }),
         Move(name: "walk (game)", game: true, seconds: 7, expectBeans: true, start: { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }),
@@ -118,9 +119,13 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "decor: hop on the mat", game: true, seconds: 16, expectBeans: true, start: { decorStart($0, .bouncymat, SIMD2(-1.1, 0.9), .decorHop) }),
         Move(name: "decor: peek in the toy box", game: true, seconds: 14, expectBeans: false, start: { decorStart($0, .toybox, SIMD2(1.1, 0.9), .decorPeek) }),
     ]
-    /// Puts one piece in the field and starts the Jelly's behaviour with it.
-    static func decorStart(_ r: MotionRig, _ kind: DecorKind, _ at: SIMD2<Float>, _ move: IdleKind) {
-        DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: at.x, z: at.y)])
+    /// Puts one piece in the field (and a mini goal at `goal`) and starts the Jelly's behaviour with it.
+    static func decorStart(_ r: MotionRig, _ kind: DecorKind, _ at: SIMD2<Float>, _ move: IdleKind, goal: SIMD2<Float>? = nil) {
+        var placed = [PlacedDecor(uid: 7, kind: kind, x: at.x, z: at.y)]
+        if let goal { placed.append(PlacedDecor(uid: 8, kind: .minigoal, x: goal.x, z: goal.y)) }
+        DecorField.shared.set(placed)
+        SoccerState.shared.reset()
+        if move == .soccerKick, r.brain.soccerModeForce == 3 { DecorField.shared.tick(dt: 0); SoccerState.shared.setStuck(7, SoccerTuning.stuckAfter) }          // (a stuck ball: the 20 s have passed)
         r.brain.idleForced = true; _ = r.brain.idleStart(move, r.sim)
     }
 
@@ -135,6 +140,7 @@ final class FeetAttachTests: XCTestCase {
             var worstInfo = "", clock: Float = 0
             r.run(m.seconds) {
                 clock += 1.0 / 60
+                if m.name.hasPrefix("soccer") { DecorField.shared.tick(dt: 1.0 / 60) }          // (the ball rolls: the stage ticks the field each step)
                 if let f = Self.footFrame(r) {
                     if f.overlap > w.overlap { worstInfo = String(format: "t=%.2f kind=%@ stage=%d script=%@ gait=%@ feetActive=%d stepU=%.2f yaw=%.2f boost=%.3f runW=%.2f pos=(%.2f,%.2f) amp=%.2f", clock, "\(r.brain.idleState.kind.map { $0.rawValue } ?? "-")", r.brain.idleState.bagStage, "\(r.brain.script)", "\(r.brain.gait.phase)", r.brain.feet.active ? 1 : 0, r.brain.feet.stepU, r.brain.yaw, r.brain.walkBoostK, r.brain.runW, r.brain.px, r.brain.pz, r.brain.amplitude) }
                     Self.accumulate(&w, f); frames += 1
@@ -160,6 +166,7 @@ final class FeetAttachTests: XCTestCase {
             var k = 0
             r.run(m.seconds) {
                 k += 1
+                if m.name.hasPrefix("soccer") { DecorField.shared.tick(dt: 1.0 / 60) }
                 guard k % 3 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.05 else { return }
                 r.render()
                 let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid

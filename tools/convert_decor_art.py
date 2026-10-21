@@ -12,7 +12,7 @@ import json, struct, sys, os
 
 IDS = ("cushion ball rug plant nightlight toybox beanbag bouncymat "
        "loveseat petbed pouf rockingchair armchair swing diningset bookshelf wardrobe divider floorlamp slide monstera "
-       "duck blocks spintop toycar yarnball drum football").split()
+       "duck blocks spintop toycar yarnball drum soccerball minigoal").split()
 # the pieces whose exported frame came out inside-out (see below); every other piece is trusted as exported (open surfaces such as the slide chute or the ropes
 # have a legitimately negative signed volume)
 FLIP_FIX = {"bouncymat"}

@@ -47,7 +47,7 @@ final class ArmCapTests: XCTestCase {
     }
 
     /// Run a move on a fresh rig and collect the capsule stats whenever a walking capsule is drawn.
-    func capsuleStat(_ seconds: Float, game: Bool = true, start: (MotionRig) -> Void, until: ((MotionRig) -> Bool)? = nil) -> Stat {
+    func capsuleStat(_ seconds: Float, game: Bool = true, start: (MotionRig) -> Void, until: ((MotionRig) -> Bool)? = nil, field: Bool = false) -> Stat {
         let r = MotionRig(game: game)
         Self.keep.append(r)
         r.brain.seed = 11
@@ -55,6 +55,7 @@ final class ArmCapTests: XCTestCase {
         start(r)
         var st = Stat()
         r.run(seconds, until: until.map { u in { u(r) } }) {
+            if field { DecorField.shared.tick(dt: 1.0 / 60) }          // (soccer: the ball rolls)
             guard r.brain.armG > 0.5 else { return }
             for si in 0..<2 {
                 let g = r.brain.armLastGeom[si]
@@ -98,7 +99,7 @@ final class ArmCapTests: XCTestCase {
             note(n); rows.append((n, capsuleStat(26, start: { FeetAttachTests.decorStart($0, kind, at, move) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
         for d in FeetAttachTests.batch2Decor {
-            note(d.0); rows.append((d.0, capsuleStat(d.4, start: { $0.brain.throwFateForce = d.6; FeetAttachTests.decorStart($0, d.1, d.2, d.3) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+            note(d.0); rows.append((d.0, capsuleStat(d.4, start: { $0.brain.soccerModeForce = d.6; FeetAttachTests.decorStart($0, d.1, d.2, d.3, goal: d.7) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 }, field: d.0.hasPrefix("soccer"))))
         }
         note("hop"); rows.append(("hop", capsuleStat(2, start: { $0.brain.startHopPlay(sim: $0.sim) })))
         note("name hop"); rows.append(("name hop", capsuleStat(2, start: { $0.brain.startNameHop($0.sim, $0.skinner) })))

@@ -65,6 +65,8 @@ enum DecorModels {
     }
     /// How far the toy box's lid is thrown back past its exported pose while he peeks in, and how high the toys jump.
     static func toyLift(_ a: DecorAnim) -> Float { 0.08 * a.peek + 0.10 * a.kick * abs(sinf(a.kickT * 11)) }
+    /// The goal net's bulge amount now (0...1, signed: it rings past neutral a little): a goal's `kick` decaying at 2.5 Hz.
+    static func netBulge(_ a: DecorAnim) -> Float { min(a.kick, 1) * cosf(2 * .pi * SoccerTuning.netHz * a.kickT) }
 
     private static func addArt(_ kind: DecorKind, _ art: DecorMeshes.Art, at p: SIMD2<Float>, lift: Float, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) -> Bool {
         var o = SIMD3<Float>(p.x, lift, p.y)
@@ -247,11 +249,17 @@ enum DecorModels {
                 let c = SIMD3<Float>(0, sp.y, 0)
                 return (c + yaw.act(v - c), yaw.act(n))
             })
-        case .football:
+        case .soccerball:
             guard let ball = art.part("ball") else { return false }
             let q = a.rot, pv = ball.pivot
-            var oo = o; oo.y += a.air
-            DecorMeshes.emit(ball, into: b, offset: oo, pose: { v, n, _ in rotated(v, n, about: pv, q) })
+            DecorMeshes.emit(ball, into: b, offset: o, pose: { v, n, _ in rotated(v, n, about: pv, q) })
+        case .minigoal:
+            guard let frame = art.part("frame"), let net = art.part("net") else { return false }
+            DecorMeshes.emit(frame, into: b, offset: o)
+            // the net puffs toward the back (-z) by w * 0.16 * amount and rings down at ~2.5 Hz (the decaying `kick` is the spring back)
+            let puff = netBulge(a)
+            if abs(puff) < 1e-4 { DecorMeshes.emit(net, into: b, offset: o) }
+            else { DecorMeshes.emit(net, into: b, offset: o, pose: { v, n, w in (SIMD3(v.x, v.y, v.z - SoccerTuning.netPush * puff * w), n) }) }
         case .blocks:
             if a.tumbleT < 0 || a.blocks.isEmpty { all(); return true }
             let back: Float = a.tumbleT > 20 ? smooth(20, 21.5, a.tumbleT) : 0           // eases back into the stack

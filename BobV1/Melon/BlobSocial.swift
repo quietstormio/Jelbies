@@ -41,7 +41,6 @@ enum SocialKind: String, CaseIterable, Sendable {
     case bagSit         // sit together on the beanbag / cushion (a second piece each, else one on it and one beside it)
     // 2026-10-20 (batch 2): BlobSocial+Toss.swift
     case cuddle         // two Jellies on the two cushions of the loveseat: both settle, then lean toward each other
-    case toss           // football: one throws (hug, squat, fling, or a fumble), the other tries to catch it by hugging it, or misses comically; then they swap
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -294,7 +293,7 @@ extension BlobBrain {
             socialBook.lookHold = rand(1.4, 2.2)
             o.socialBook.glanceDelay = rand(0.5, 1.1)
             if !idleStart(.look, sim) { social = nil; o.social = nil; return false }
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle, .toss:
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle:
             return socialStartPlay(kind, with: o, sim)
         case .zoomies:
             guard d < 6 else { return false }
@@ -496,9 +495,8 @@ extension BlobBrain {
         social = nil
         socialBook.drought = 0
         guard let s else { return }
-        if (s.kind == .pass || s.kind == .toss), s.uid >= 0 {          // (the ball is free again; a hugged one is let go)
+        if s.kind == .pass, s.uid >= 0 {          // (the ball is free again)
             if DecorField.shared.occupant[s.uid] == s.idA || DecorField.shared.occupant[s.uid] == s.idB { DecorField.shared.occupant[s.uid] = nil }
-            if DecorField.shared.anim[s.uid]?.held == true { DecorField.shared.fling(s.uid, vh: SIMD2(sinf(yaw), cosf(yaw)) * 0.8, vy: 0, kind: 2) }
         }
         let pid = s.idA == steerID ? s.idB : s.idA
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
@@ -590,7 +588,7 @@ extension BlobBrain {
         case .zoomies: driveZoomies(s, o, isA)
         case .greet: driveGreet(s, o, isA, sim, dt)
         case .look: driveLook(s, o, isA, sim, dt)
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle, .toss: drivePlay(s, o, isA, sim, skinner, dt)
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
         }
         if let e = s.end, isA { _ = e }
     }

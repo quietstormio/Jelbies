@@ -51,7 +51,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case decorHop      // walks onto the bouncy mat and bounces on it (the happy bounce)
     case decorPeek     // goes to the toy box and leans over to peek in
     case decorSlide    // (batch 2) climbs the slide's steps, sits on the platform, rides down and exits with a squash
-    case decorThrow    // (batch 2) hugs the football, squats, flings it (or fumbles it)
+    case soccerKick    // (soccer) walks up behind the soccer ball and stomp-kicks it; dribbles it; shoots at the mini goal and celebrates: BlobBrain+Soccer.swift
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -146,10 +146,8 @@ struct IdleState {
     var slideStage = 0
     var slideS: Float = 0
     var slideStep = 0
-    /// The throw: 0 walk, 1 hug, 2 wind up, 3 fling, 4 settle; and how it will end (0 plain, 1 bonk, 2 drop).
-    var throwStage = 0
-    var throwFate = 0
-    var throwDir = SIMD2<Float>(0, 1)
+    /// Soccer (BlobBrain+Soccer.swift): the mode, stage, kick line and target of the running kick / dribble / shot.
+    var soccer = SoccerIdle()
 }
 
 extension BlobBrain {
@@ -166,7 +164,7 @@ extension BlobBrain {
 
     var idleActivity: Activity {
         switch idleState.kind {
-        case .run, .stumble, .zoomies, .decorKick: return .walking
+        case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
         case .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop: return .playing
         default: return .lookingAround
         }
@@ -256,7 +254,7 @@ extension BlobBrain {
                 if idleState.bagStage == 2 { idleState.hold = 0 } else if idleState.bagStage == 0 { abortAll(sim, skinner); return }
             case .decorSit where !idleState.decorGo, .decorBoop where !idleState.decorGo, .decorPeek where !idleState.decorGo: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSlide where !idleState.decorGo && idleState.slideStage == 0: abortAll(sim, skinner); return          // (still turning on the floor: just stop)
-            case .decorSlide where !idleState.decorGo, .decorThrow where !idleState.decorGo: idleState.yielding = true          // (they finish: the slide hurries its ride, the throw its flight)
+            case .decorSlide where !idleState.decorGo, .soccerKick where !idleState.decorGo: idleState.yielding = true          // (they finish: the slide hurries its ride, the kick its stomp)
             case .sleep where sleep.stage >= 2 && sleep.stage <= 4: idleState.yielding = true; sleepWake(groggy: false, fast: true)
             default: abortAll(sim, skinner); return
             }
@@ -436,7 +434,7 @@ extension BlobBrain {
             script = .walk(target: spot, then: .none); activity = .walking
         case .sleep:
             return sleepBegin(sim, night: idleNight > SleepTuning.nightEdge || idleDeepNight > 0.5)
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow:
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick:
             return decorStart(kind, sim)
         }
         return true
@@ -481,7 +479,7 @@ extension BlobBrain {
         case .look, .window, .decorBoop, .decorPeek: runLook(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
-        case .decorThrow: runThrow(sim, skinner, dt)
+        case .soccerKick: runSoccer(sim, skinner, dt)
         case .yawn, .stretch: runYawn(sim, skinner, dt)
         case .flop, .peek: runPosePlay(sim, skinner, dt)
         case .sleep: runSleep(sim, skinner, dt)

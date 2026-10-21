@@ -17,13 +17,13 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .soccerKick]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float {
         switch k {
         case .jacks, .zoomies, .slide, .tail, .roll, .flop, .peek: return 30
         case .sit, .look, .wander: return 8
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow: return 25
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return 25
         case .sleep: return 0
         default: return 20
         }

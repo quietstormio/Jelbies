@@ -73,9 +73,9 @@ final class BlobBrain {
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
     var slideY: Float = 0
     /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
-    var throwFateForce: Int?
-    /// A toss: where the football is aimed (the catcher's spot); nil = a solo throw.
-    var throwAim: SIMD2<Float>?
+    /// Soccer (BlobBrain+Soccer.swift): the plan the stand-spot pick made for the kick about to start, and the tests' forced mode (0 kick, 1 dribble, 2 shoot, 3 rescue).
+    var soccerPlan = SoccerIdle()
+    var soccerModeForce: Int?
     /// 1 = full motion; lower for reduce-motion.
     var amplitude: Float = 1
     /// Called when a requested job (goTo / eat / drink / come / wave) has finished.

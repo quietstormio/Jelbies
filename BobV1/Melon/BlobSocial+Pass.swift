@@ -26,7 +26,7 @@ extension BlobBrain {
     func socialStartPass(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
         let me = position, you = o.position
         let d = simd_distance(me, you)
-        if kind == .cuddle || kind == .toss { return socialStartToss(kind, with: o, sim) }
+        if kind == .cuddle { return socialStartToss(kind, with: o, sim) }
         guard !sleepLocked, d > 1.6, d < 5.5 || kind == .bagSit else { return false }
         if kind == .pass {
             guard let ball = freeBall() else { return false }
@@ -78,12 +78,14 @@ extension BlobBrain {
             if !iKick { socialBook.hold = true; socialBook.faceYaw = yawTo(ball); if t > 2.5 { s.setPhase(2) }; return }
             socialBook.hold = true; socialBook.faceYaw = yawTo(o.position)
             socialBook.wantPitch = 0.16 * pulse(t - 0.15, up: 0.14, down: 0.30)
+            if f.kind == .soccerball { soccerPassStomp(s, t) }          // (the soccer ball is kicked with the stomp step)
             if !s.impacted, t >= 0.38 {
                 s.impacted = true
                 let to = o.position
                 var dir = to - ball; let L = simd_length(dir); dir = L > 1e-3 ? dir / L : SIMD2(0, 1)
                 let roll = max(L - 1.0, 0.45)           // (the ball slows by e^-1.15 t: it stops about `roll` on, a body-length short of him)
-                field.kickBall(s.uid, direction: dir, speed: min(1.15 * roll + 0.1, 4.2))
+                if f.kind == .soccerball { soccerPassKick(s.uid, direction: dir, roll: roll) }
+                else { field.kickBall(s.uid, direction: dir, speed: min(1.15 * roll + 0.1, 4.2)) }
                 field.kick(s.uid, 0.6)
                 jellyKick = max(jellyKick, 1.4)
                 AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.7)

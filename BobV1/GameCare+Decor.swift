@@ -32,6 +32,7 @@ extension GameCare {
         syncDecor()
         let f = DecorField.shared
         guard !f.feet.isEmpty else { return }
+        f.bodies = raceBook.actors.compactMap { a in a.brain.map { (id: $0.steerID, pos: $0.position) } }          // (the soccer ball bumps off them gently)
         f.tick(dt: dt)
         if var w = arrangeWait {                 // a double tap on a piece in use: wait for the Jelly to hop off (at most ~4 s), then pick it up
             w.left -= dt
