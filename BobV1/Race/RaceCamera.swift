@@ -26,6 +26,11 @@ struct RaceFollowPose: Equatable {
     /// The target sits this share of the way from the player toward the leader, but never more than `maxGap` from the player.
     static let leaderShare: Float = 0.4, maxGap: Float = 4.5
     static let targetHeight: Float = 0.45
+    /// The final stretch: over the last `finishEase` u the target slides up to `finishPush` u past the line, so the racers ride up the frame and
+    /// the finish banner (3.5 u up, between the eye and them) passes ABOVE their heads instead of across them (measured: heads 0.22-0.28 ndc, the
+    /// banner 0.31-0.49 in portrait at full push; without it the banner crossed at head height for the last 3-4 s). The ease starts 10 u out so
+    /// the push is well in by the time the gantry is close.
+    static let finishEase: Float = 10, finishPush: Float = 6
     /// Bank per unit of curvature (1 / radius) at the target, capped.
     static let bankGain: Float = 0.11, bankMax: Float = 4.5 * .pi / 180
     /// Smoothing rates (per second) of the target, the direction and the bank.
@@ -44,7 +49,10 @@ struct RaceFollowPose: Equatable {
         let d = simd_length(t - player.pos)
         if d > maxGap { t = player.pos + (t - player.pos) * (maxGap / d) }
         let sFront = max(player.s, leader.s)
-        let anchor = course.pose(at: sFront + lead).pos
+        let k = max(0, min(1, (sFront - (course.length - finishEase)) / finishEase))
+        let push = finishPush * k
+        if k > 0 { t += RaceCourse.forward(course.pose(at: course.length).heading) * push }
+        let anchor = course.pose(at: sFront + lead + push).pos                       // the anchor moves with the push: the eye stays `lead` ahead of the target
         var dir = anchor - t
         let len = simd_length(dir)
         dir = len > 0.5 ? dir / len : RaceCourse.forward(course.pose(at: sFront).heading)
