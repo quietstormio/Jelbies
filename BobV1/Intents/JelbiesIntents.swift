@@ -5,9 +5,8 @@
 //      (night hours at half weight, like the widget) and speaks one sentence per Jelbie, with the snippet card (JelbiesSnippetView).
 //    - Feed / GiveWater / Goodnight / StartRace / Train open the game (`openAppWhenRun`) and hand GameRouter a route; the game performs it
 //      through its normal care flows on the next `apply` (GameScreen), so every lock (tray, bath, focus) still applies.
-//  App Shortcuts: every phrase must contain `\(.applicationName)` (Apple rejects phrases without it). The display name is "Bob" today, so they
-//  read "... in Bob"; INAlternativeAppNames in BobV1-Info.plist lets Siri also accept "Jelbies" as the app's name. If the display name becomes
-//  Jelbies the phrases follow automatically.
+//  App Shortcuts: every phrase must contain `\(.applicationName)` (Apple rejects phrases without it). The display name is "Jelbies", so they
+//  read "... in Jelbies"; INAlternativeAppNames in BobV1-Info.plist lets Siri also accept "My Jelbies" and the old name "Bob" for the app.
 //
 
 import AppIntents
@@ -144,8 +143,8 @@ struct TrainJelbieIntent: AppIntent {
 
 // MARK: - App Shortcuts
 
-/// The phrases Siri listens for without any set-up. `\(.applicationName)` is required by Apple in every phrase; with the display name "Bob" they
-/// read "Check on the Jelbies in Bob". INAlternativeAppNames (Info.plist) adds "Jelbies" as a spoken name for the app.
+/// The phrases Siri listens for without any set-up. `\(.applicationName)` is required by Apple in every phrase; with the display name "Jelbies" they
+/// read "Check on the Jelbies in Jelbies". INAlternativeAppNames (Info.plist) adds "My Jelbies" and the old name "Bob" as spoken names for the app.
 nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
