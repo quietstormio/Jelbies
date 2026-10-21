@@ -16,6 +16,7 @@ final class StoreFoodTests: XCTestCase {
         let perks = m.care.jelly(0)!.perks
         let perk = Consumables.with(id: id)!.perk!
         perks.clear(perk)
+        m.brain.expr.enabled = false          // (the expression layer's own faces - the open happy mouth of the sugar-rush zoomies after a taco - are not chomps; ExpressionTests covers the layer)
         m.moveAway()
         m.meal(id)
         let d = m.dineFrames, dt = m.rig.sim.stepDt, grabS = Float(ArmPath.nubGrabS)
