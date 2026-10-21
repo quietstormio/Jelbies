@@ -17,7 +17,7 @@ final class AITierBTests: XCTestCase {
     override func tearDown() { for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }; suites = [] }
 
     /// Foods and drinks from the game plus a beanbag, a ball and a pirate hat (the kinds other features will register).
-    static let catalog: AICatalog = {
+    nonisolated static let catalog: AICatalog = {
         var c = AICatalogRegistry.catalog(jellies: [(0, "Bob"), (1, "Pip"), (2, "Moss")])
         c.items += [CatalogItem(id: "beanbag", name: "Beanbag", kind: .decor, aliases: ["bean bag"]),
                     CatalogItem(id: "rug", name: "Rug", kind: .decor),
@@ -26,7 +26,7 @@ final class AITierBTests: XCTestCase {
         return c
     }()
     /// The shipped catalog: no decor / toys / wearables yet.
-    static let bare = AICatalogRegistry.catalog(jellies: [(0, "Bob"), (1, "Pip"), (2, "Moss")])
+    nonisolated static let bare = AICatalogRegistry.catalog(jellies: [(0, "Bob"), (1, "Pip"), (2, "Moss")])
 
     private func parse(_ s: String, catalog: AICatalog = AITierBTests.catalog) -> RuleParser.Result { RuleParser.parse(s, names: names(), catalog: catalog) }
 
@@ -113,7 +113,7 @@ final class AITierBTests: XCTestCase {
     }
 
     func testFreePhrasingIsNotConfident() {
-        for said in ["the weather is nice", "banana", "what a lovely creature you are", "I had a long day"] {
+        for said in ["the weather is nice", "banana", "what a lovely creature you are", "I had a long day", "I think the green one looks tired", "very slow phrase"] {
             let r = parse(said)
             XCTAssertFalse(r.confident, said)
             XCTAssertEqual(r.command.action, .none, said)

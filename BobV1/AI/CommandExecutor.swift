@@ -1,8 +1,8 @@
 //
 //  CommandExecutor.swift
 //  A validated JellyCommand becomes game actions: existing GameCare calls (feed / drink / clean / come here / roster pick) and existing brain
-//  moves (sit, the nap). Locks are respected: a meal out, the bath, an approaching close-up. Anything the room cannot do yet (spin, decor, wardrobe,
-//  soccer, races) gets the confused head tilt and a "not yet" line, never a half-done move. Feedback: the Jelly reacts (perk / move / tilt + "?"),
+//  moves (sit, the nap, the play spin). Locks are respected: a meal out, the bath, an approaching close-up. Anything the room cannot do yet (decor,
+//  wardrobe, soccer, races: on another branch) gets the confused head tilt and a "not yet" line, never a half-done move. Feedback: the Jelly reacts (perk / move / tilt + "?"),
 //  and the HUD shows the understood command briefly (`understood`).
 //  The legacy actions (come, stop, praise, scold, play, learned tricks) never reach here: `VoiceCoordinator.apply` turns them into the usual
 //  VoiceDecision so the reliability roll, grumpy rules and multi-Jelly hooks stay exactly as they were.
@@ -41,12 +41,17 @@ extension VoiceCoordinator {
             let jelly: Int? = (c.who == .everyone && care.jellyCount > 1) ? nil : ids[0]
             if isFood { care.feed(id, jelly: jelly) } else { care.drink(id, jelly: jelly) }
             understand(c.summary(names: names), kind: .command(c.action), ids: ids)
-            for i in ids { ai.log.record(.obeyed, jelly: i, detail: isFood ? "eat" : "drink") }
         case .sleep:
             guard !locked, !care.focus.isActive else { confused(ids: ids, reason: nil); return }
             for i in ids { ai.requestNap(i) }
             understand(c.summary(names: names), kind: .command(.sleep), ids: ids)
-            for i in ids { ai.log.record(.obeyed, jelly: i, detail: "sleep") }
+        case .spin:
+            // the play spin he already does on his own (BlobBrain.startSpin), on request; every named Jelly spins
+            guard !locked, !(care.touchPlay?.holdsBrain ?? false) else { confused(ids: ids, reason: care.trayOut ? "A meal is already out" : nil); return }
+            let brains = ids.compactMap { ai.brain($0) }
+            guard !brains.isEmpty else { confused(ids: ids, reason: nil); return }
+            for b in brains { b.commandedSpin = true }
+            understand(c.summary(names: names), kind: .command(.spin), ids: ids)
         case .clean:
             let id = ids[0]
             guard care.canClean(jelly: id) else { confused(ids: ids, reason: nil); return }
@@ -62,7 +67,7 @@ extension VoiceCoordinator {
             } else {
                 understand(Self.nobodyLine(k), kind: .answer(k, nil), ids: ids)
             }
-        case .come, .stop, .stopFighting, .praise, .scold, .play, .trick, .none, .spin, .goTo, .wear, .playWith, .race, .train:
+        case .come, .stop, .stopFighting, .praise, .scold, .play, .trick, .none, .goTo, .wear, .playWith, .race, .train:
             confused(ids: ids, reason: nil)          // legacy actions never get here (see `apply`); the unsupported ones were caught above
         }
     }
@@ -70,7 +75,6 @@ extension VoiceCoordinator {
     /// The "not yet" line for a parsed-but-unsupported command.
     static func notYetLine(_ c: JellyCommand, names: (Int) -> String) -> String {
         switch c.action {
-        case .spin: return "No spin move yet"
         case .goTo: return "No \(c.unknownObject ?? "furniture") to go to yet"
         case .wear: return "No \(c.unknownObject ?? "outfit") in the wardrobe yet"
         case .playWith: return c.unknownObject.map { "\($0.prefix(1).uppercased() + $0.dropFirst()) isn't here yet" } ?? "Playing together is coming soon"

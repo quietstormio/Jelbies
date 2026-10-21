@@ -1,12 +1,10 @@
 //
 //  TierA.swift
 //  Apple Intelligence on the phone (FoundationModels): availability, and the one place the framework is called. Everything the game needs sits
-//  behind protocols so unit tests (and phones without the model) never touch it:
+//  behind a protocol so unit tests (and phones without the model) never touch it:
 //    `AICommandModel`  free phrasing -> RawCommand (guided generation, `JellyCommandOut`), validated by the caller against the live catalog
-//    `AITextWriter`    the diary entry and the thought lines (short, capped, filtered by the caller)
 //  Rules: no network, no keys; the session runs in an actor (off the main thread); a fresh single-turn session per request (a long-lived one
-//  would grow its transcript); prewarm when the mic opens. The model never writes text the player sees except the diary / thought lines, which
-//  are built from game events only and pass the safety filter in Diary.swift.
+//  would grow its transcript); prewarm when the mic opens. The model never writes text the player sees: its only output is the command structure.
 //
 
 import Foundation
@@ -93,15 +91,6 @@ protocol AICommandModel: AnyObject, Sendable {
     func interpret(_ text: String, catalog: AICatalog, selected: String) async throws -> RawCommand
 }
 
-/// Short game text (a diary entry, a handful of thought lines) from facts the game gives it.
-protocol AITextWriter: AnyObject, Sendable {
-    var state: SmartVoiceState { get }
-    /// One short paragraph for the diary. `facts` are the day's events as plain lines.
-    func diary(name: String, personality: String, facts: [String]) async throws -> String
-    /// Up to `count` tiny lines (3-6 words) fitting a moment.
-    func thoughts(name: String, personality: String, moment: String, count: Int) async throws -> [String]
-}
-
 nonisolated enum AIError: Error, Equatable { case unavailable, timedOut, invalid }
 
 // MARK: - the real thing
@@ -120,16 +109,9 @@ struct JellyCommandOut {
     var partner: String
 }
 
-@available(iOS 26.0, *)
-@Generable(description: "Tiny thoughts of a jelly pet")
-struct ThoughtLinesOut {
-    @Guide(description: "3 to 6 words each, cute, kid-friendly, first person, no names", .count(4))
-    var lines: [String]
-}
-
 extension RawCommand {
     @available(iOS 26.0, *)
-    init(out: JellyCommandOut) { self.init(targets: out.targets, action: out.action, object: out.object, partner: out.partner) }
+    nonisolated init(out: JellyCommandOut) { self.init(targets: out.targets, action: out.action, object: out.object, partner: out.partner) }
 }
 
 /// The session lives in an actor: `respond` inherits the caller's executor, so every request runs off the main thread.
@@ -154,17 +136,6 @@ actor FoundationSession {
         let s = take(instructions)
         let r = try await s.respond(to: prompt, generating: JellyCommandOut.self, options: GenerationOptions(temperature: 0))
         return RawCommand(out: r.content)
-    }
-    func text(instructions: String, prompt: String, maxTokens: Int) async throws -> String {
-        let s = take(instructions)
-        var o = GenerationOptions(temperature: 0.8)
-        o.maximumResponseTokens = maxTokens
-        return try await s.respond(to: prompt, options: o).content
-    }
-    func lines(instructions: String, prompt: String) async throws -> [String] {
-        let s = take(instructions)
-        let r = try await s.respond(to: prompt, generating: ThoughtLinesOut.self, options: GenerationOptions(temperature: 0.9))
-        return r.content.lines
     }
 }
 
@@ -199,27 +170,6 @@ final class SystemCommandModel: AICommandModel, @unchecked Sendable {
     }
 }
 
-@available(iOS 26.0, *)
-final class SystemTextWriter: AITextWriter, @unchecked Sendable {
-    private let session = FoundationSession()
-    var state: SmartVoiceState { AIAvailability.read() }
-    static let diaryInstructions = """
-        You write a jelly pet's diary for a children's game. First person, as the pet. 2 to 4 short sentences, under 60 words, warm and simple, \
-        no emoji. Use ONLY the events given; never invent events, people, places or names that are not in them. No dates, no headings, no quotes.
-        """
-    static let thoughtInstructions = """
-        You write tiny thoughts for a jelly pet in a children's game: 3 to 6 words each, first person, cute, simple words, no names, no emoji, no punctuation except an exclamation mark.
-        """
-    func diary(name: String, personality: String, facts: [String]) async throws -> String {
-        guard state.isAvailable else { throw AIError.unavailable }
-        let f = facts.isEmpty ? "- a quiet day at home, nothing special happened" : facts.map { "- " + $0 }.joined(separator: "\n")
-        return try await session.text(instructions: Self.diaryInstructions, prompt: "Pet: \(name) (\(personality)).\nToday's events:\n\(f)\nWrite today's diary entry.", maxTokens: 120)
-    }
-    func thoughts(name: String, personality: String, moment: String, count: Int) async throws -> [String] {
-        guard state.isAvailable else { throw AIError.unavailable }
-        return try await session.lines(instructions: Self.thoughtInstructions, prompt: "Pet: \(name) (\(personality)). Moment: \(moment). Write \(count) thoughts.")
-    }
-}
 #endif
 
 enum AIModels {
@@ -227,12 +177,6 @@ enum AIModels {
     @MainActor static func commandModel() -> AICommandModel? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) { return SystemCommandModel() }
-        #endif
-        return nil
-    }
-    @MainActor static func textWriter() -> AITextWriter? {
-        #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) { return SystemTextWriter() }
         #endif
         return nil
     }

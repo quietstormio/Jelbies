@@ -108,14 +108,15 @@ Code: `Voice/VoiceNames.swift` (registry), `Voice/VoiceIntent.swift` (intents, p
   - The context window is small (about 4K tokens), so each request is kept tiny.
 - **Rating impact:** low, because the output is restricted to moods, animations and emoji. In the App Store age-rating questionnaire we disclose the AI feature and explain that it can't produce text content. Apple's built-in safety guardrails also apply.
 
-### 4. Daily diary
-- **What it is:** each day, every Blob gets one cute diary line about what really happened: *"Mochi ate two berries, napped on the rug and waved at you three times."* It's a gentle reason to check in daily (the research showed daily surprises drive Nintendogs-style retention). Adults will enjoy reading these too.
-- **Apple tech:** Foundation Models, fed *only* facts from the game's own event log, via tool calling or structured input.
-- **Safety:**
-  - The text comes only from game events, never from what the player says.
-  - Output is length-limited and filtered.
-  - A template-based fallback covers non-Apple-Intelligence phones.
-- **Rating impact:** low. It's generated text, but from fixed game facts with no player input. Disclose it in the questionnaire.
+#### Natural voice commands: what is built (2026-10-20, wip AI branch)
+Code in `BobV1/AI/`. Everything on device, no network, no keys. Built on checkpoint 6: the store, decor, wardrobe and Jelly Circuit live on `circuit-v1`, so those commands say "not yet" here (see below). The diary and thought-line features that were started on this branch were REMOVED the same day at the user's request ("No diary"); the planned diary below is dropped too.
+- **Two tiers.** `IntentRouter` runs the rule parser first (`RuleParser`, Tier B: names, "everyone", verb synonym tables, catalog objects, "with <name>" partners, "who's hungry" questions). A confident verb stands at once (synchronously, `routeNow`). Only free phrasing goes to Apple Intelligence (`TierA.swift`, Tier A: `SystemLanguageModel` + `@Generable JellyCommandOut` {targets, action, object, partner}, temperature 0, one fresh prewarmed single-turn session per request, in an actor off the main thread). The model's answer is **validated** against the live `AICatalog` (Jellies in the room, owned foods / drinks, registered decor / toys / wearables): unknown names or ids are rejected. Unavailable, not ready, timeout (`VoiceTuning.modelBudget`, 1.5 s), error or an invalid answer fall back to the rule result. `AILOG route path=rules|model|model-timeout|model-error|model-unavailable|model-invalid|model-none ms=N` with `-VoiceLog 1`. The model never writes text the player sees.
+- **Legacy path unchanged.** `VoiceTraining.decideFull` (names, taught words, come, social phrases, teaching) is still primary; the router only sees what it did not match, plus one override: a loose "come" inside a meal / drink / nap / bath / question sentence ("everyone come eat") goes to the router so the meal wins over come-here. An injected legacy `VoiceIntentModel` (the tests' `FakeIntentModel`) still works as before.
+- **Commands that run today** (`CommandExecutor.swift`): feed / drink (an object picks the food, "everyone" is the group meal), sleep (his sit becomes the night nap, `AIHub.requestNap`), clean (the bath), spin (the play spin, `BlobBrain.commandedSpin`), who's hungry / thirsty / wants love (the neediest Jelly answers: roster highlight, Bob's bubble, the pill), and the legacy come / stop / praise / scold / play / learned tricks. Locks: tray out, bath, approaching close-up, held. **Not yet** (parse and get a "not yet" pill + the confused "?"): go to / sit on decor, wear, play soccer / play with a toy, race, train. After the merge with `circuit-v1`: register the decor / wardrobe / toy items through `AICatalogRegistry.providers` and fill those cases in `execute` (the interactions, the wardrobe put-on, the Track panel); flip `supportedNow`.
+- **HUD:** the understood pill (`voice-understood`: a check + "Pip: go to sleep", or a "?" + why not) above the mic, 2.6 s; the Jelly blinks and perks (`.acknowledged`) and his bubble shows the command glyph. Trick book: "Smart voice: On (Apple Intelligence) / Basic" row (`smart-voice`) with the reason (not eligible / not enabled / downloading). `-SmartVoiceState available|notEnabled|...` pins it for captures; `-VoiceNoModel 1` = Basic.
+- **Tests:** `AITierBTests` (50-phrase table), `AIRouterTests`, `AIVoiceIntegrationTests` (sleep -> nap, "everyone come eat" -> tray, "who's hungry" -> pill, spin, the not-yet pill, legacy words still deterministic). Needs on-device verification: Tier A latency and answer quality, the availability states on a real phone (the simulator has no model assets).
+
+### 4. Daily diary (dropped 2026-10-20: the user does not want a diary)
 
 ### 5. Sound awareness (later)
 - **What it is:** the Blob reacts to claps, whistles or laughter. For example, it jumps when you clap, or the clap becomes a "come here" signal.
@@ -141,7 +142,6 @@ Code: `Voice/VoiceNames.swift` (registry), `Voice/VoiceIntent.swift` (intents, p
 
 ## Keeping the rating low (checklist)
 - No free-text output from AI to the player. Use moods, animations and emoji only.
-- Diary text is generated from game events only, never from player input.
 - No open chat between players. Playdates use emoji and animations only.
 - Everything runs on device: no accounts, no ads or analytics SDKs that track kids.
 - Disclose the AI features honestly in App Store Connect's age-rating questionnaire. It has required questions about AI assistants and chatbots.
@@ -151,5 +151,5 @@ Code: `Voice/VoiceNames.swift` (registry), `Voice/VoiceIntent.swift` (intents, p
 1. Body, then animations *(in progress)*.
 2. Voice name and tricks (#1) and wave-back (#2): cheap, work on every phone, core nostalgia.
 3. Squish haptics. Small effort, big feel.
-4. Foundation Models reactions (#3) with fallback, then the daily diary (#4).
+4. Foundation Models reactions (#3) with fallback. (The daily diary, #4, was dropped.)
 5. Real-steps walks, Live Activities, Siri, AR mode.

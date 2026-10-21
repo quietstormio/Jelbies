@@ -107,6 +107,7 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "turn", game: false, seconds: 3.5, expectBeans: true, start: { $0.brain.startTurn(to: $0.poseYaw + 2.4, sim: $0.sim) }),
         Move(name: "wave", game: true, seconds: 4, expectBeans: true, start: { $0.brain.request(.wave) }),
         Move(name: "hop", game: false, seconds: 3, expectBeans: true, start: { $0.brain.startHopPlay(sim: $0.sim) }),
+        Move(name: "spin (voice)", game: true, seconds: 3, expectBeans: false, start: { $0.brain.startCommandedSpin($0.sim, $0.skinner) }),
         Move(name: "call", game: true, seconds: 12, expectBeans: true, start: { $0.brain.requestNow(.come(to: SIMD2(0, 1.4))) }),
         Move(name: "flip", game: true, seconds: 3, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim) }),
         Move(name: "faceplant", game: true, seconds: 4, expectBeans: false, start: { $0.brain.startFlip(sim: $0.sim, fail: true) }),

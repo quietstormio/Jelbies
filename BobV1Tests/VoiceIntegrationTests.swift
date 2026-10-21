@@ -609,3 +609,86 @@ extension VoiceIntegrationTests {
         XCTAssertEqual(r.voice.training.lesson(.sit).reps, 1)
     }
 }
+
+// MARK: - natural commands (AI/IntentRouter.swift -> CommandExecutor.swift) through the real VoiceCoordinator + GameCare
+
+@MainActor
+final class AIVoiceIntegrationTests: XCTestCase {
+    override func setUp() { RoomLayout.dynamicBoxes = [] }
+    override func tearDown() { RoomLayout.dynamicBoxes = [] }
+
+    private func make() -> VoiceRun {
+        let r = VoiceRun()
+        VoiceIntegrationTests.keep.append(r)
+        r.brain.autonomy = false                      // no wander move running that a word could be taught on
+        r.run(0.5)
+        return r
+    }
+    /// One listen that goes through the router (rules, no model in tests), then lets the queued command run.
+    private func say(_ r: VoiceRun, _ words: String) async {
+        r.run(0.1)
+        XCTAssertTrue(r.voice.begin())
+        r.run(0.3)
+        r.voice.hear(words)
+        await r.voice.intentTask?.value
+        r.run(0.5)
+    }
+
+    func testGoToSleepBecomesANap() async {
+        let r = make()
+        await say(r, "go to sleep")
+        XCTAssertEqual(r.voice.lastParse?.path, "rules")
+        XCTAssertEqual(r.voice.understood?.text, "sleep"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertTrue(r.run(12) { r.brain.isNapping }, "he sits down and the sit becomes a nap")
+        XCTAssertEqual(r.voice.ai.napsStarted, 1)
+        XCTAssertEqual(r.voice.feedbackLog.last, .command(.sleep))
+    }
+
+    func testEveryoneComeEatPutsTheTrayOut() async {
+        let r = make()
+        XCTAssertFalse(r.care.trayOut)
+        await say(r, "everyone come eat")
+        XCTAssertEqual(r.voice.lastParse?.path, "rules", "the meal beats the loose come")
+        XCTAssertEqual(r.voice.understood?.text, "Everyone: eat")
+        XCTAssertTrue(r.care.trayOut, "the meal is ordered")
+        XCTAssertEqual(r.voice.feedbackLog.last, .command(.feed))
+        XCTAssertNotEqual(r.care.focus.phase, .focused, "no come-here close-up")
+    }
+
+    func testWhoIsHungryAnswersWithThePill() async {
+        let r = make()
+        r.care.needs.set(.hunger, 0.1)
+        await say(r, "who's hungry")
+        XCTAssertEqual(r.voice.understood?.text, "Bob is hungry"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertEqual(r.voice.feedbackLog.last, .answer(.hunger, 0))
+        // nobody: the thumbs-up answer
+        r.care.needs.set(.hunger, 1)
+        r.run(3)
+        await say(r, "who's hungry")
+        XCTAssertEqual(r.voice.understood?.text, "Nobody's hungry")
+        XCTAssertEqual(r.voice.feedbackLog.last, .answer(.hunger, nil))
+    }
+
+    func testDoASpinSpinsHim() async {
+        let r = make()
+        await say(r, "do a spin")
+        XCTAssertEqual(r.voice.understood?.text, "spin"); XCTAssertEqual(r.voice.understood?.ok, true)
+        XCTAssertEqual(r.voice.feedbackLog.last, .command(.spin))
+        var spun = false
+        r.run(3) { if case .spin = r.brain.script { spun = true }; return spun }
+        XCTAssertTrue(spun, "the play spin runs")
+    }
+
+    func testUnknownPlaceGetsTheNotYetPillAndTheConfusedLook() async {
+        let r = make()
+        await say(r, "go to the beanbag")
+        XCTAssertEqual(r.voice.understood?.text, "No beanbag to go to yet"); XCTAssertEqual(r.voice.understood?.ok, false)
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "the confused \"?\"")
+    }
+
+    func testLegacyWordsStillTakeTheDeterministicPath() async {
+        let r = make()
+        for w in ["come here", "good boy", "stop fighting"] { await say(r, w); XCTAssertEqual(r.voice.lastParse?.path, "det", w); r.run(1) }
+        XCTAssertNil(r.voice.understood)
+    }
+}

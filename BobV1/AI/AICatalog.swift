@@ -33,11 +33,18 @@ nonisolated struct AICatalog: Equatable, Sendable {
     func match(_ tokens: [String], kinds: Set<CatalogItem.Kind>? = nil) -> CatalogItem? {
         guard !tokens.isEmpty else { return nil }
         let pool = items.filter { kinds?.contains($0.kind) ?? true }
+        // Stricter than the trick matcher: an object is only "heard" exactly, or with ONE edit in a word of 5+ letters ("pizzas", "berrys").
+        // The loose rule (two edits, or one in a short word) made "what" a hat, "think" a drink and "weather" water.
+        let cands = VoiceMatcher.candidates(tokens)
         var best: (item: CatalogItem, score: Float)?
         for it in pool {
             let words = ([it.id, it.name] + it.aliases).map(VoiceMatcher.normalise).filter { !$0.isEmpty }
-            if let h = VoiceMatcher.best(in: tokens, among: words), h.score >= 0.8 {
-                if h.score > (best?.score ?? 0) { best = (it, h.score) }
+            for w in words {
+                for c in cands {
+                    let s = VoiceMatcher.score(heard: c, stored: w)
+                    guard s == 1 || (s >= 0.9 && w.count >= 5) else { continue }
+                    if s > (best?.score ?? 0) { best = (it, s) }
+                }
             }
         }
         return best?.item

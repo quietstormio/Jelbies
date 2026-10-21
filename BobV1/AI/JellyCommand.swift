@@ -8,8 +8,8 @@
 
 import Foundation
 
-/// Everything a Jelly can be asked for. Actions the room cannot do yet (spin, go to decor, wear, play soccer, race, train) still parse so the
-/// feedback can say "not yet" instead of "?"; `JellyAction.supportedNow` is the gate.
+/// Everything a Jelly can be asked for. Actions the room cannot do yet (go to decor, wear, play soccer, race, train: the store, wardrobe and
+/// Jelly Circuit live on another branch) still parse so the feedback can say "not yet" instead of "?"; `JellyAction.supportedNow` is the gate.
 nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     case come, stop, stopFighting, praise, scold, play
     /// A learned trick (sit, jacks, run, flip, look; come is `.come`).
@@ -66,7 +66,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     /// What this room can carry out today. The rest parse (and get a "not yet" pill) so the intent system is ready for soccer, decor, wardrobe and races.
     var supportedNow: Bool {
         switch self {
-        case .spin, .goTo, .wear, .playWith, .race, .train: return false
+        case .goTo, .wear, .playWith, .race, .train: return false
         default: return true
         }
     }

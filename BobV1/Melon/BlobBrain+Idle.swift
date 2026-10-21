@@ -335,6 +335,16 @@ extension BlobBrain {
         if idleStart(kind, sim) { restTimer = max(restTimer, 1) } else { commanded = false }
     }
 
+    /// Voice: the play spin on request (aborts what he was doing, like a commanded trick; the spin script itself is unchanged).
+    func startCommandedSpin(_ sim: SoftBody, _ skinner: Skinner) {
+        var busy = idleState.kind != nil
+        if case .none = script {} else { busy = true }
+        if busy { abortAll(sim, skinner) }
+        pending = nil
+        restTimer = max(restTimer, 1)
+        startSpin(sim: sim)
+    }
+
     // MARK: starting
 
     func idleBegin(_ kind: IdleKind) {

@@ -28,9 +28,11 @@ final class AIRouterTests: XCTestCase {
             let r = IntentRouter(model: fake, availability: availability(state))
             XCTAssertFalse(r.smartVoiceOn)
             XCTAssertEqual(r.state.label, "Basic")
-            let out = await r.route("hmm what a lovely day for a nap", names: names(), catalog: catalog, selected: 0)
+            let out = await r.route("hmm what a lovely day", names: names(), catalog: catalog, selected: 0)
             XCTAssertEqual(out.path, "model-unavailable", "\(state)")
-            XCTAssertEqual(out.command.action, .sleep, "the rules still read 'nap'")
+            XCTAssertEqual(out.command.action, JellyAction.none, "free phrasing: nothing without the model")
+            let nap = await r.route("hmm what a lovely day for a nap", names: names(), catalog: catalog, selected: 0)
+            XCTAssertEqual(nap.path, "rules"); XCTAssertEqual(nap.command.action, .sleep, "the rules still read 'nap'")
             XCTAssertTrue(fake.calls.isEmpty)
             r.prewarm(catalog: catalog)
             XCTAssertEqual(fake.prewarms, 0, "no session is built when the model is unavailable")
@@ -78,7 +80,7 @@ final class AIRouterTests: XCTestCase {
         let p = CommandValidation.validate(RawCommand(targets: ["Pip"], action: "playWith", object: "ball", partner: "Moss"), catalog: catalog, names: n)
         XCTAssertEqual(p?.partner, 2); XCTAssertEqual(p?.object, "ball")
         // unknown action = none (the router falls back); "jumpingJacks" alias
-        XCTAssertEqual(CommandValidation.validate(RawCommand(action: "teleport"), catalog: catalog, names: n)?.action, .none)
+        XCTAssertEqual(CommandValidation.validate(RawCommand(action: "teleport"), catalog: catalog, names: n)?.action, JellyAction.none)
         XCTAssertEqual(CommandValidation.validate(RawCommand(action: "jumpingJacks"), catalog: catalog, names: n)?.action, .trick(.jacks))
         for k in JellyAction.allKeys { XCTAssertEqual(JellyAction(key: k)?.key, k, k) }
     }
@@ -88,8 +90,8 @@ final class AIRouterTests: XCTestCase {
         let r = IntentRouter(model: fake, availability: availability(.available))
         let n = names()
         fake.result = RawCommand(targets: ["Lavender"], action: "come")
-        var out = await r.route("hey purple one get over here", names: n, catalog: catalog, selected: 0)
-        XCTAssertEqual(out.path, "model-invalid"); XCTAssertEqual(out.command.action, .none)
+        var out = await r.route("hey purple one you are wanted", names: n, catalog: catalog, selected: 0)
+        XCTAssertEqual(out.path, "model-invalid"); XCTAssertEqual(out.command.action, JellyAction.none)
         fake.result = RawCommand(action: "none")
         out = await r.route("the weather is nice", names: n, catalog: catalog, selected: 0)
         XCTAssertEqual(out.path, "model-none")
@@ -100,7 +102,7 @@ final class AIRouterTests: XCTestCase {
         let old = VoiceTuning.modelBudget; VoiceTuning.modelBudget = 0.1
         defer { VoiceTuning.modelBudget = old }
         out = await r.route("very slow phrase", names: n, catalog: catalog, selected: 0)
-        XCTAssertEqual(out.path, "model-timeout"); XCTAssertEqual(out.command.action, .none)
+        XCTAssertEqual(out.path, "model-timeout"); XCTAssertEqual(out.command.action, JellyAction.none)
         XCTAssertEqual(r.modelCalls, 4)
     }
 
@@ -108,7 +110,7 @@ final class AIRouterTests: XCTestCase {
         let fake = FakeCommandModel()
         fake.result = RawCommand(action: "sleep")                       // the model dropped the name
         let r = IntentRouter(model: fake, availability: availability(.available))
-        let out = await r.route("Moss you look exhausted buddy", names: names(), catalog: catalog, selected: 0)
+        let out = await r.route("Moss seems really worn out buddy", names: names(), catalog: catalog, selected: 0)
         XCTAssertEqual(out.path, "model")
         XCTAssertEqual(out.command.who, .jellies([2]))
     }

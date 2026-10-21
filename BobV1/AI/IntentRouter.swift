@@ -27,8 +27,10 @@ final class IntentRouter {
     private(set) var last: RoutedCommand?
     private(set) var modelCalls = 0
 
-    init(model: AICommandModel? = nil, availability: AIAvailability = .shared) {
-        self.model = model; self.availability = availability
+    nonisolated deinit {}           // an isolated deinit hops executors on release: the project keeps deinits nonisolated (it aborts in the 26.2 runtime)
+
+    init(model: AICommandModel? = nil, availability: AIAvailability? = nil) {
+        self.model = model; self.availability = availability ?? .shared
     }
 
     /// Current Apple Intelligence state (refreshed), as the settings show it.
@@ -39,6 +41,22 @@ final class IntentRouter {
     func prewarm(catalog: AICatalog) {
         guard let model, availability.refresh().isAvailable else { return }
         model.prewarm(catalog: catalog)
+    }
+
+    /// The synchronous answer when the model will not be asked: a confident rule parse, no model, or Apple Intelligence unavailable. Nil = free
+    /// phrasing for the model (`route`). The coordinator uses this first so Tier B stays as instant as the legacy path (no Task hop).
+    func routeNow(_ text: String, names: JellyNames, catalog: AICatalog) -> RoutedCommand? {
+        let t0 = CACurrentMediaTime()
+        let rules = RuleParser.parse(text, names: names, catalog: catalog)
+        let path: String
+        if rulesFirst, rules.confident, rules.command.isActionable { path = "rules" }
+        else if model == nil { path = "rules" }
+        else if !availability.refresh().isAvailable { path = "model-unavailable" }
+        else { return nil }
+        let r = RoutedCommand(command: rules.command, path: path, ms: Int((CACurrentMediaTime() - t0) * 1000))
+        last = r
+        if VoiceCoordinator.logging { NSLog("AILOG route path=%@ ms=%d action=%@ text=\"%@\"", path, r.ms, rules.command.action.key, text) }
+        return r
     }
 
     func route(_ text: String, names: JellyNames, catalog: AICatalog, selected: Int) async -> RoutedCommand {
@@ -83,21 +101,5 @@ final class FakeCommandModel: AICommandModel, @unchecked Sendable {
         if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1e9)) }
         if let error { throw error }
         return result
-    }
-}
-
-/// Test double for the diary / thought writer.
-final class FakeTextWriter: AITextWriter, @unchecked Sendable {
-    var state: SmartVoiceState = .available
-    var diaryText = "I had a lovely day."
-    var thoughtLines = ["so comfy here", "snack time soon"]
-    var error: Error?
-    private(set) var diaryCalls: [[String]] = []
-    private(set) var thoughtCalls: [String] = []
-    func diary(name: String, personality: String, facts: [String]) async throws -> String {
-        diaryCalls.append(facts); if let error { throw error }; return diaryText
-    }
-    func thoughts(name: String, personality: String, moment: String, count: Int) async throws -> [String] {
-        thoughtCalls.append(moment); if let error { throw error }; return thoughtLines
     }
 }
