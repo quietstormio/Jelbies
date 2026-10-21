@@ -23,7 +23,7 @@ final class BathPlug {
 extension GameCare {
     /// Menu row "Clean" is available for this Jelly: no tray, no clean-up running, not in the come-here close-up, and a body to wash.
     func canClean(jelly id: Int) -> Bool {
-        guard !trayOut, !bath.active, !race.active, !focus.isActive else { return false }
+        guard !trayOut, !bath.active, !tripActive, !focus.isActive else { return false }
         if id == 0 { return true }
         return bathPlug.actors[id]?.actor?.brain != nil
     }

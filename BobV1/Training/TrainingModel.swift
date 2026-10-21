@@ -13,10 +13,18 @@
 
 import Foundation
 
-/// Dances a Jelly can learn. Proficiency 0...1 lives on JellyStats (nothing teaches one yet; the shape is here for the beauty contest).
+/// Dances a Jelly can learn. Proficiency 0...1 lives on JellyStats; the Studio's dance drill teaches them (Show/), the Jelly Show's Dance round
+/// reads the one he shows. Each is built from an existing move: Sway sits and sways, Bop is the happy bounce, Twirl the tail spin.
 nonisolated enum DanceID: String, CaseIterable, Codable, Sendable {
-    case sway
-    var title: String { switch self { case .sway: return "Sway" } }
+    case sway, bop, twirl
+    var title: String { switch self { case .sway: return "Sway"; case .bop: return "Bop"; case .twirl: return "Twirl" } }
+    /// The body move the dance is danced with.
+    var move: IdleKind { switch self { case .sway: return .sway; case .bop: return .bounce; case .twirl: return .tail } }
+    /// The starter dance.
+    static let starter: DanceID = .sway
+    /// A dance opens in the Studio once the one before it is known this well (the starter is always open).
+    var opensAfter: (dance: DanceID, skill: Float)? { switch self { case .sway: return nil; case .bop: return (.sway, 0.5); case .twirl: return (.bop, 0.5) } }
+    var blurb: String { switch self { case .sway: return "Sits and sways to the beat"; case .bop: return "Happy hops on the spot"; case .twirl: return "Spins after his own tail" } }
 }
 
 /// The course the Jelly races on (Race/RaceCourse.swift has the shapes). Training is always on the Puddle's straight.
@@ -74,6 +82,8 @@ nonisolated enum TrainingTuning {
     /// Waddle per full-accuracy session at stat 0 with Pep. Focus gets `focusShare` of it.
     static let baseGain: Float = 0.14
     static let focusShare: Float = 0.45
+    /// A dance drill (the Studio) teaches its dance at this share of the Waddle gain: nothing -> half known in about six good sessions (two days of Pep).
+    static let danceShare: Float = 1.25
     /// Gains shrink as the stat grows: 0.2 -> 0.4 takes ~3 sessions, 0.8 -> 0.9 about a dozen.
     static func diminishing(_ stat: Float) -> Float { powf(max(0, 1 - min(max(stat, 0), 1)), 1.5) }
     /// Sessions a day at full value, and what later ones are worth.

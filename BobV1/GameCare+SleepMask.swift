@@ -10,7 +10,7 @@ extension GameCare {
     func tickMasks(_ actors: [JellyActor], dt: Float) {
         for a in actors {
             guard let b = a.brain else { continue }
-            sleepMasks.tick(id: a.id, brain: b, sim: a.sim, raceBusy: race.active, dt: dt)
+            sleepMasks.tick(id: a.id, brain: b, sim: a.sim, raceBusy: tripActive, dt: dt)
         }
         sleepMasks.stepPuffs(dt: dt)
     }

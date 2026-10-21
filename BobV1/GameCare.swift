@@ -78,6 +78,8 @@ final class GameCare {
     @ObservationIgnored let features = FeatureSet()
     /// The fitting room's picture of Jelly `id` wearing a look, rendered by the stage with the game renderer (nil when no stage is running).
     @ObservationIgnored var fittingProvider: ((WearLook, Int) -> UIImage?)?
+    /// A plain portrait of Jelly `id` as he is now (the Studio, the Condition card, the show lobby).
+    @ObservationIgnored var portraitProvider: ((Int) -> UIImage?)?
     @ObservationIgnored var wearOutfitRev = -1
     @ObservationIgnored var wearOutfits: [Int: [WearSlot: WearLook]] = [:]
     @ObservationIgnored var shoesDrawn = false
@@ -116,6 +118,11 @@ final class GameCare {
     let race = RaceFlow()
     @ObservationIgnored let raceBook = RaceBook()
     @ObservationIgnored var raceWait: RaceWait?
+    /// The Jelly Show (Show/ShowFlow.swift, GameCare+Show.swift): the trip to the stage and back, the three rounds, the Studio's dance drill.
+    let show = ShowFlow()
+    @ObservationIgnored let showBook = ShowBook()
+    /// A trip is on: the race track or the show stage (the room's care, close-up and roaming wait).
+    var tripActive: Bool { race.active || show.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -227,6 +234,7 @@ final class GameCare {
         v.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter }
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
+        wireShow()
         DecorField.shared.set(store.placedDecor)
     }
 
@@ -310,7 +318,7 @@ final class GameCare {
         // a bubble is held back in focus mode and while a highlight is up; it stays while his meal for that need is on
         var pinned = false
         if let n = needs.wantedNeed, trayOut, mealJelly == 0, let k = servingKind { pinned = (k == .food && n == .hunger) || (k == .drink && n == .thirst) }
-        let suppressed = ((focus.isActive || select.isSelecting || bath.active || race.active) && !pinned) || bubbleHub.owner != 0
+        let suppressed = ((focus.isActive || select.isSelecting || bath.active || tripActive) && !pinned) || bubbleHub.owner != 0
         // the one bubble slot: whoever is up keeps it; a Filthy coat takes it over from a need unless some need is Famished / Parched / Neglected
         let coat = bath.grime.coat
         let famished = NeedKind.allCases.contains { needs.tier($0) == .famished }
@@ -364,7 +372,7 @@ final class GameCare {
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
-        trayOut || meal != nil || wanted != nil || groupActive || bath.active || race.active || focus.isActive || focus.phase != .roaming
+        trayOut || meal != nil || wanted != nil || groupActive || bath.active || tripActive || focus.isActive || focus.phase != .roaming
             || voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow
     }
     func greetIfAway(_ away: TimeInterval) {
@@ -377,7 +385,7 @@ final class GameCare {
         greetings += 1
     }
 
-    func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !race.active { queued = [.wave] } }
+    func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !tripActive { queued = [.wave] } }
     /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
     var canClean: Bool { canClean(jelly: 0) }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
@@ -414,7 +422,7 @@ final class GameCare {
             release()
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
-        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active, !race.active, !groupActive else { return }
+        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active, !tripActive, !groupActive else { return }
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
             mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0
             return
@@ -745,7 +753,7 @@ final class GameCare {
         if out != trayOut { trayOut = out }
         if !out, servingKind != nil { servingKind = nil }
         if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers
-        if !bath.active, !race.active { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
+        if !bath.active, !tripActive { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
     }
 }
 

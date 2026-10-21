@@ -94,7 +94,7 @@ final class ArmCapTests: XCTestCase {
         for (n, k) in [("skip-hop", IdleKind.skipHop), ("hopscotch", .hopscotch), ("mid-leg spin", .legSpin), ("bounce-trot", .trot), ("stop and look", .stopLook), ("jump for joy", .joy), ("giggle", .giggle), ("startle hop", .startle), ("roll along the leg", .rollTrip), ("big sigh", .sigh), ("hmph puff", .hmph)] {
             note(n); rows.append((n, capsuleStat(10, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
-        for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway", .sway)] {
+        for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway (show dance)", .sway)] {
             note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
         for (n, kind, move, at) in [("decor: hop onto the beanbag, sit on top, hop off", DecorKind.beanbag, IdleKind.decorSit, SIMD2<Float>(1.1, 0.9)), ("decor: sit on a cushion", .cushion, .decorSit, SIMD2(-1.1, 0.9)),

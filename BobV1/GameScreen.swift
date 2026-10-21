@@ -27,7 +27,7 @@ struct GameScreen: View {
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
     private var cleaning: Bool { model.care.bath.active }
-    private var racing: Bool { model.care.race.active }
+    private var racing: Bool { model.care.tripActive }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -81,6 +81,11 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
+                            GameCircleButton(systemName: "rectangle.portrait.on.rectangle.portrait.angled", label: "Condition card") {
+                                AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
+                            }
+                            .accessibilityIdentifier("focus-card")
+                            .transition(.opacity)
                         } else if !focus.isActive, !cleaning, !racing {
                             GameCircleButton(systemName: "gearshape", label: "Studio") {
                                 model.paused = true
@@ -149,6 +154,8 @@ struct GameScreen: View {
 
             RaceChrome(care: model.care)          // Jelly Circuit: numerals, foot buttons, placings card, the white fade
 
+            ShowChrome(care: model.care)          // Jelly Show: the Look / Dance / Trick rounds and the results on the stage, the white fade
+
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
             if town != nil {                     // Go out: Town / Shop / Track
@@ -179,7 +186,7 @@ struct GameScreen: View {
             setUpSelect(); model.care.touchPlay = model.touch; model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
-            AudioHub.shared.setTownScene(town == .shop ? .shop : town == nil ? .none : .town)
+            AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
@@ -220,7 +227,7 @@ struct GameScreen: View {
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
                 .presentationBackground(FocusStyle.cream)
         }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(t == .shop ? .shop : t == nil ? .none : .town) }
+        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: model.care.targetJelly) { bagOpen = false }
@@ -318,6 +325,14 @@ struct GameScreen: View {
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startDrill(jelly: who)
         }
+        // capture aid: -ShowStart 1 sends Jelly 0 (or -RaceJelly n) to the Jelly Show at the chosen rank (-ShowRank) as soon as the room is up; -ShowAuto 1 plays it
+        // for him (dress, dance, tricks, results); -ShowSeed n, -ShowDay yyyymmdd. -PracticeStart sway|bop|twirl runs the Studio's dance drill instead.
+        if d.integer(forKey: "ShowStart") != 0 || d.string(forKey: "PracticeStart") != nil {
+            let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
+            for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
+            await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            if let p = d.string(forKey: "PracticeStart") { care.startDancePractice(jelly: who, dance: DanceID(rawValue: p) ?? .sway) } else { care.startShow(jelly: who) }
+        }
         // capture aid: -EarsDemo on|hearing:<kind>|denied|paused shows the ear button's state (no engine), and after -EarsDelay s (default 4) plays
         // the reaction: -EarsEvent clap|double|dance|whistle|bark|laugh|meow|bang (dance = 110 BPM from then on)
         if d.string(forKey: "EarsDemo") != nil {
@@ -405,17 +420,50 @@ struct GameScreen: View {
         }
     }
 
-    /// Capture aid: `-StoreOpen town|shop|item|bag` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
+    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
+    static func townMusic(_ t: TownScreen?) -> MusicScene {
+        switch t {
+        case nil: return .none
+        case .shop?: return .shop
+        case .studio?, .condition?, .show?: return .studio
+        default: return .town
+        }
+    }
+    /// Capture aid: `-StoreOpen town|shop|item|bag|studio|condition|show` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
     static func launchTown() -> TownScreen? {
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop
         case "track": return .track
+        case "studio": return .studio
+        case "condition": return .condition
+        case "show": return .show
         default: return nil
         }
     }
     @MainActor static func runStoreDemo(model: MelonModel) async {
         let d = UserDefaults.standard
+        // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
+        // bought and every trick learned, the wardrobe owned and dressed to the theme
+        if d.integer(forKey: "ShowSeedGoods") != 0 {
+            let care = model.care
+            let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
+            for id in ["page-spin", "page-hop", "page-roll"] { care.store.grant(id) }
+            for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
+            for j in care.jellies {
+                j.training.unlocked = { t in care.store.hasPage(t) }
+                for t in VoiceTrick.allCases { j.training.debugLearn(t, word: t.suggestion, reliability: t == .spin ? 0.6 : t == .roll ? 0.82 : 0.75) }
+                for t in WearTag.allCases { j.stats.setCondition(t.condition, t == theme.main ? 0.71 : t == theme.friend ? 0.62 : 0.4) }
+                j.stats.nudge([theme.main.condition: 0.08, theme.friend.condition: 0.04], food: "Sushi")
+                j.stats.learn(.sway, add: 0.4)
+                j.grime.sparkle = 0.6; j.grime.dirt = 0
+            }
+            let wear: [WearLook] = WearLook.allCases.filter { $0.tags.contains(theme.main) }
+            var dressed: Set<WearSlot> = []
+            for l in wear where !dressed.contains(l.slot) && l.slot != .face { care.store.wear(l, on: 0); dressed.insert(l.slot) }
+            if !dressed.contains(.neck), let bow = WearLook.allCases.first(where: { $0.slot == .neck && $0.tags.contains(theme.friend) }) { care.store.wear(bow, on: 0) }
+            care.bath.wallet.add(max(0, 106 - care.bath.wallet.count), silent: true)
+        }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()

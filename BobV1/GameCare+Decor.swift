@@ -85,7 +85,7 @@ extension GameCare {
     /// Double tap on a placed piece: arrange mode starts with it picked up. A piece a Jelly is using is never moved from under him: he is asked to hop off first,
     /// and the pick-up happens when he has (`tickDecor`).
     func pickUpDecor(_ uid: Int) {
-        guard !arranging, store.placedDecor.contains(where: { $0.uid == uid }), !race.active, !bath.active, !focus.isActive else { return }
+        guard !arranging, store.placedDecor.contains(where: { $0.uid == uid }), !tripActive, !bath.active, !focus.isActive else { return }
         if !decorBusy(uid) { startArrange(on: uid); return }
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         if let f = DecorField.shared.foot(uid) {

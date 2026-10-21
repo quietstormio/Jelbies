@@ -526,6 +526,8 @@ final class MelonRenderer {
     var raceVisible = false
     /// The course the track is built for (Race/RaceCourse.swift); the stage sets it with `raceVisible`.
     var raceCourse: CourseTier = .puddle
+    /// The Jelly Show's stage set is drawn instead of the room (Show/ShowStage.swift).
+    var showVisible = false
     /// The jersey band colour of a body (nil = none: the locked body shader draws him).
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
@@ -947,6 +949,7 @@ final class MelonRenderer {
         if let room {
             room.raceCourse = raceCourse
             room.raceVisible = raceVisible
+            room.showVisible = showVisible
             room.fog = raceVisible ? SIMD3(45, 150, 0.5) : SIMD3(14, 32, 0.3)
             let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
             room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)

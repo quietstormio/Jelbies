@@ -72,7 +72,7 @@ struct PerkBadgeRow: View {
 
 // MARK: - Town
 
-enum TownScreen: Equatable { case town, shop, track }
+enum TownScreen: Equatable { case town, shop, track, studio, condition, show }
 
 struct TownFlow: View {
     let care: GameCare
@@ -86,6 +86,10 @@ struct TownFlow: View {
             case .town: TownView(care: care, go: { screen = $0 }, home: goHome)
             case .shop: ShopScreen(care: care, who: who) { screen = .town }
             case .track: TrackPanel(care: care, who: $who, back: { screen = .town }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
+            case .studio: StudioScreen(care: care, who: $who, back: { screen = .town }, card: { screen = .condition }, show: { screen = .show },
+                                       practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { screen = .studio } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
+            case .show: ShowLobby(care: care, who: $who, back: { screen = .studio }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             }
         }
         .transition(.opacity)
@@ -164,7 +168,7 @@ struct TownView: View {
         VStack(spacing: 10) {
             destination("Shop", "Snacks, shoes, tricks and more", "bag.fill", SK.pink, id: "town-shop") { go(.shop) }
             destination("Track", "Race for Drops", "flag.checkered", SK.sky, id: "town-track") { go(.track) }
-            destination("Studio", "Coming soon", "sparkles", SK.honey, id: "town-studio", enabled: false) {}
+            destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
         }
     }
 
@@ -206,6 +210,7 @@ struct MapStrip: View {
                 place("house.fill", "Home", SK.honeyDeep, x: w * 0.14, y: h * 0.52)
                 place("bag.fill", "Shop", SK.pink, x: w * 0.5, y: h * 0.46)
                 place("flag.checkered", "Track", SK.cream, x: w * 0.86, y: h * 0.52)
+                place("sparkles", "Studio", SK.honey, x: w * 0.68, y: h * 0.30)
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
