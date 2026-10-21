@@ -201,6 +201,53 @@ final class AppleExtrasCaptureTests: XCTestCase {
         try save(minimal, "di_minimal_nap", expect: CGSize(width: 65, height: 65))
     }
 
+    /// A race Live Activity driven from a REAL race sim: RaceFlow runs headless with the player auto-tapping, GameCare+Race's standing
+    /// (RaceSim.playerStanding) feeds LiveActivities each step through the update policy, and the banner is rendered from what the
+    /// (mock) driver last received mid-race and at the end.
+    func testLiveActivityFromARealRace() throws {
+        struct Rivals: RivalSource {
+            func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64) -> [Rival] {
+                (0..<count).map { Rival(name: ["Dot", "Fizz", "Kip"][$0 % 3], tint: LocalRivalSource.hsv(Float($0) * 0.3 + 0.1, 0.3, 0.95), stats: RacerStats(waddle: 0.55, focus: 0.7)) }
+            }
+        }
+        let mock = MockActivityDriver()
+        let live = LiveActivities(driver: mock, defaults: UserDefaults(suiteName: "extras.realrace.cap")!)
+        var clock = t0
+        live.now = { clock }
+        let f = RaceFlow()
+        f.rivalSource = Rivals(); f.cue = { _ in }; f.autoRate = 6
+        f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.6, focus: 0.9), playerTint: JellyRoster.tint(0), rivalCount: 3, seed: 11)
+        live.raceStarted(jellyID: 0, name: "Bob", color: "blue", racers: f.sim!.racers.count, laps: 1)
+        XCTAssertTrue(live.raceLive)
+        var mid: JelbiesState?
+        var lastEarned = 0
+        for _ in 0..<(60 * 80) {
+            clock = clock.addingTimeInterval(1 / 60)
+            let ev = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true })
+            if let sim = f.sim, f.phase == .racing, sim.phase != .results {
+                let st = sim.playerStanding
+                live.raceProgress(position: st.position, progress: st.progress, lap: 1)
+                if mid == nil, st.progress >= 0.5, let id = live.raceID { mid = mock.live[id]?.1 }
+            }
+            if ev.contains(where: { if case .results = $0 { return true }; return false }) {
+                lastEarned = f.earned
+                live.raceFinished(place: f.sim?.playerPlace ?? 0, drops: f.earned)
+            }
+            if f.hasResults { break }
+        }
+        XCTAssertTrue(f.hasResults, "the race ran to the placings")
+        XCTAssertFalse(live.raceLive)
+        let midState = try XCTUnwrap(mid, "a mid-race update went out")
+        XCTAssertGreaterThanOrEqual(midState.progress, 0.5)
+        XCTAssertEqual(midState.racers, 4)
+        guard case .end(_, let final) = try XCTUnwrap(mock.calls.last) else { return XCTFail("the race ended the card") }
+        XCTAssertEqual(final.phase, .finished); XCTAssertEqual(final.drops, lastEarned)
+        XCTAssertGreaterThan(mock.updates, 0); XCTAssertLessThan(mock.updates, 60, "the policy keeps the updates few")
+        try save(banner(raceAttrs, midState), "la_race_sim_mid_lock")
+        try save(banner(raceAttrs, final), "la_race_sim_final_lock")
+        print("APPLECAP real race: \(mock.updates) updates, place \(final.position), drops \(final.drops)")
+    }
+
     // MARK: Siri snippet
 
     func testSiriSnippet() throws {

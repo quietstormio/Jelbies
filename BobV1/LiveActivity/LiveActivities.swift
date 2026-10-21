@@ -39,6 +39,7 @@ protocol ActivityDriver: AnyObject {
 final class ActivityKitDriver: ActivityDriver {
     var enabled: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
     nonisolated init() {}
+    nonisolated deinit {}
     func start(_ attributes: JelbiesActivityAttributes, state: JelbiesState, staleDate: Date?) throws -> String {
         let a = try Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: staleDate), pushType: nil)
         return a.id
@@ -69,6 +70,7 @@ final class MockActivityDriver: ActivityDriver {
     private var n = 0
     var failStart = false
     nonisolated init() {}
+    nonisolated deinit {}
     func start(_ attributes: JelbiesActivityAttributes, state: JelbiesState, staleDate: Date?) throws -> String {
         if failStart { throw NSError(domain: "mock", code: 1) }
         n += 1
@@ -217,6 +219,7 @@ final class LiveActivities {
     func returnedActive(names: [String]) {
         let tucked = Bedtime.read(from: directory, now: now())
         if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names) }
+        if let r = pepRefillAt, r <= now() { pepRefilled() }          // midnight went by while away: the Pep is back
     }
 
     // MARK: pep

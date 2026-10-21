@@ -34,7 +34,19 @@ final class RaceBook {
     var homeAge: Float = 0
     var returnerHopped = false
     var celebrated = false
+    /// The Live Activities the race glue drives (the race card, the Pep countdown). Swap for a test double / nil headless.
+    var live: LiveActivities? = LiveActivities.shared
     nonisolated deinit {}
+}
+
+extension RaceSim {
+    /// The player's live standing for the race card: his place (final once he is over the line, else by distance) and 0...1 of the course run.
+    var playerStanding: (position: Int, progress: Double) {
+        let p = player
+        let position = p.place ?? (1 + racers.dropFirst().filter { $0.place != nil || $0.dist > p.dist }.count)
+        let progress = RaceTuning.length > 0 ? Double(min(max(p.dist / RaceTuning.length, 0), 1)) : 0
+        return (position, progress)
+    }
 }
 
 extension GameCare {
@@ -50,6 +62,20 @@ extension GameCare {
         race.onLapReset = { [weak self] in self?.drillLapReset() }
         if d.object(forKey: "TrainAuto") != nil { race.drillAuto = true; race.autoReturnAfter = 7 }
         if d.object(forKey: "RaceAuto") != nil { race.autoRate = Float(d.double(forKey: "RaceAuto")) > 0 ? Float(d.double(forKey: "RaceAuto")) : 4; race.autoReturnAfter = 7 }
+        race.onPepDepleted = { [weak self] id in
+            guard let self, let prof = self.jelly(id) else { return }
+            self.live?.pepDepleted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(id))
+        }
+    }
+
+    /// The Live Activities (race card, Pep countdown); nil in headless setups that want none.
+    var live: LiveActivities? { raceBook.live }
+
+    /// Siri / the widget: "goodnight" goes through the voice goodnight flow (every Jelly to bed), with its guards.
+    func goodnight() {
+        guard !raceBusy, !trayOut, !bath.active else { return }
+        let ids = jellies.map(\.id)
+        if let f = voice.onGoodnight { f(ids) } else { for id in ids { selectBrain(id)?.commandedGoodnight = true } }
     }
 
     /// Why a race cannot start for this Jelly right now, in words for the Track panel (nil = it can). A stage that has not ticked yet (the panel was opened
@@ -103,6 +129,7 @@ extension GameCare {
         voice.cancel()
         if drill {
             race.stats = prof.stats
+            if let l = live, l.pepLive, prof.stats.pepLeft > 0 { l.pepRefilled() }          // a new day: the Pep is back before he practises
             race.beginDrill(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus), seed: seed ?? Self.raceSeed)
             return
         }
@@ -110,6 +137,9 @@ extension GameCare {
         race.stats = prof.stats
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
                    playerTint: JellyRoster.tint(id), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost())
+        if race.active, race.kind == .race {           // the race Live Activity (one sprint: lap 1 of 1)
+            live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(id), racers: race.sim?.racers.count ?? rivals + 1, laps: 1)
+        }
     }
 
     /// The body colour a Jelly wears on the track (nil = his own).
@@ -194,6 +224,7 @@ extension GameCare {
             } else { raceWait = w }
         }
         raceHome(actors, dt: dt)
+        if !race.active, let l = live, l.raceLive { l.raceFinished(place: 0, drops: 0) }          // a trip that ended without results (abort): the card goes quietly
         guard race.active else { return }
         let book = raceBook
         func body(_ i: Int) -> JellyActor? { book.racers.indices.contains(i) && actors.indices.contains(book.racers[i]) ? actors[book.racers[i]] : nil }
@@ -212,8 +243,13 @@ extension GameCare {
             case .stumble(let i), .trip(let i):
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
             case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
+            case .results: if race.kind == .race { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
             default: break
             }
+        }
+        if race.kind == .race, race.phase == .racing, let sim = race.sim, sim.phase != .results {
+            let st = sim.playerStanding
+            live?.raceProgress(position: st.position, progress: st.progress, lap: 1)          // the policy only publishes a change of place / a quarter of the course
         }
     }
 

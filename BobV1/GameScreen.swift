@@ -179,6 +179,13 @@ struct GameScreen: View {
             AudioHub.shared.setTownScene(town == .shop ? .shop : town == nil ? .none : .town)
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
+            let care = model.care
+            let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
+                guard !care.raceBusy, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
+                care.rosterPick(id, quietHop: true); care.requestTown(.track)
+            }
+            router.onRace = toTrack; router.onTrain = toTrack
+            router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
             JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Bob"
         }
@@ -218,6 +225,9 @@ struct GameScreen: View {
         .task { await GameScreen.runStoreDemo(model: model) }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
+        .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly
+            if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
+        }
         .onAppear { model.care.select.gateDraw = true }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {

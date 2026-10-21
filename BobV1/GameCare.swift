@@ -18,6 +18,10 @@ import simd
 final class GameCare {
     /// A tray is out (or about to be): Feed and Drink are disabled until it has poofed away.
     private(set) var trayOut = false
+    /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
+    private(set) var townRequest = 0
+    @ObservationIgnored private(set) var townScreen: TownScreen?
+    func requestTown(_ s: TownScreen) { townScreen = s; townRequest += 1 }
     /// Mirrors the brain's activity for the menu / tests.
     private(set) var busy = false
     var foodOut: Bool { trayOut && servingKind == .food }

@@ -77,6 +77,8 @@ final class RaceFlow {
     @ObservationIgnored var onSwap: (Dest) -> Void = { _ in }
     /// The trip is over and the room is back (`won`: the player placed first): the welcome home.
     @ObservationIgnored var onReturned: (_ playerID: Int, _ won: Bool) -> Void = { _, _ in }
+    /// A drill used up the day's last Pep (`playerID`): the Pep Live Activity (GameCare+Race wires it).
+    @ObservationIgnored var onPepDepleted: (_ playerID: Int) -> Void = { _ in }
     /// Money and stats: set by the care glue (the wallet and the player's JellyStats).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var stats: JellyStats?

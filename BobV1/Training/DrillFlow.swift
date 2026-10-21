@@ -182,6 +182,7 @@ extension RaceFlow {
         waddleGain = gain.waddle
         cardAge = 0
         cueSerial += 1
+        if st.pepLeft == 0 { onPepDepleted(playerID) }          // the last Pep of the day went on this session
         drillCue(d.accuracy >= 0.5 ? .statUp : .tired)
         drillCue(.jingle(win: d.accuracy >= 0.5))
         publishDrill()
