@@ -10,7 +10,9 @@ import simd
 @testable import BobV1
 
 final class CameraAspectTests: XCTestCase {
-    override func tearDown() { GameCamera.configureRoom(count: 1); super.tearDown() }
+    // (the projection aspect is process-wide state - Skinning reads GameCamera.aspect - so the default phone's is put back too, as FurnitureFitTests does;
+    //  left at the last drawable's, the social walks of SocialTests ran a different seeded path and failed on the plain-walk overlap)
+    override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); super.tearDown() }
 
     /// Point sizes of every current iPhone (and the SE as the squarest phone), with their native scale.
     static let phones: [(name: String, w: CGFloat, h: CGFloat, scale: CGFloat)] = [
