@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import AppIntents
 
 struct GameScreen: View {
     @State private var model = GameScreen.makeGameModel()
@@ -88,7 +89,7 @@ struct GameScreen: View {
                             .transition(.opacity)
                             GameCircleButton(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { soundOpen.toggle() }
+                                withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false } }
                             }
                             .accessibilityIdentifier("sound-button")
                             .transition(.opacity)
@@ -179,6 +180,7 @@ struct GameScreen: View {
             if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
+            JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Bob"
         }
         .onOpenURL { url in _ = router.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|train|pet
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
