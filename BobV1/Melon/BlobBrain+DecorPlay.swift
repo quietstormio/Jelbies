@@ -1,10 +1,8 @@
 //
 //  BlobBrain+DecorPlay.swift
-//  The two bigger toys of the second decor batch, built from the existing moves (hops, the bottom-sit, squash and lean). The arms stay thumbs and the feet
-//  stay attached in both:
+//  The slide of the second decor batch, built from the existing moves (hops, the bottom-sit, squash and lean). The arms stay thumbs and the feet stay attached:
 //    decorSlide   walks round behind the slide, hops up the two steps, sits on the platform, rides the exported `slide_path` and gets up with a squash
-//    decorThrow   walks to the football, hugs it against his belly (between the stubby arm tips), squats, springs up and flings it a short arc, or fumbles it
-//                 (40 %: it bonks off his head, or slips and drops); then the ball rolls on like a kick. No arm reach: the ball moves by the body's squash and spring.
+//  (The football throw that lived here was removed with the football, 2026-10-20: the soccer ball is kicked instead, BlobBrain+Soccer.swift.)
 //
 
 import Foundation
@@ -153,112 +151,6 @@ extension BlobBrain {
                 idleFinish(skinner)
             }
         default: break
-        }
-    }
-}
-
-// MARK: - the football
-
-extension BlobBrain {
-    func throwArrived(_ sim: SoftBody, _ skinner: Skinner, _ f: DecorFoot) {
-        let d = (throwAim ?? DecorField.shared.position(f)) - position
-        idleState.goalYaw = atan2f(d.x, d.y)
-        idleState.throwStage = 0; idleState.phase = 0; idleState.phaseT = 0
-        idleState.throwFate = throwFateForce ?? { let u = rand(); return u < 0.6 ? 0 : (u < 0.8 ? 1 : 2) }()
-        script = .idle; activity = .lookingAround
-    }
-
-    /// Where the ball hangs when hugged: 0.55 in front of him, 0.45 up (its resting centre is 0.105).
-    func holdPoint() -> SIMD2<Float> { position + SIMD2(sinf(yaw), cosf(yaw)) * Self.holdForward }
-    /// How far in front of his root the ball's centre hangs: its centre at his belly's surface (measured with the body SDF, the ball 0.05 sunk in at the winding up).
-    static let holdForward: Float = 0.36
-    static let holdLift: Float = 0.45 - 0.105
-
-    /// A direction to throw: toward the open floor, within the visible room, with a little wobble.
-    func throwDirection(range: Float) -> SIMD2<Float> {
-        let fwd = SIMD2<Float>(sinf(yaw), cosf(yaw))
-        var best = fwd
-        for k in 0..<8 {
-            let a = rand(-0.5, 0.5) + Float(k) * 0.5 * (k % 2 == 0 ? 1 : -1)
-            let u = SIMD2(fwd.x * cosf(a) - fwd.y * sinf(a), fwd.x * sinf(a) + fwd.y * cosf(a))
-            let p = position + u * (range + 0.8)
-            let q = fixed(p)
-            if simd_distance(p, q) < 0.15 { best = u; break }
-        }
-        return best
-    }
-
-    func runThrow(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        guard let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
-        let uid = f.uid, field = DecorField.shared
-        let t = idleState.phaseT
-        let fwd = SIMD2<Float>(sinf(yaw), cosf(yaw))
-        gaitPose(sway: 0.03, bob: 0.0, rock: 0.1)
-        switch idleState.throwStage {
-        case 0:
-            if field.anim[uid]?.held == true { field.hold(uid, at: holdPoint(), lift: Self.holdLift) }          // (a ball he caught: it stays against his belly while he turns)
-            let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
-            if !turning && !feet.active && t > 0.1 { idleState.throwStage = 1; idleState.phaseT = 0 }
-        case 1:   // hug: the ball is scooped up against the belly (0.35 s of squash 0.92)
-            let k = smooth01(t / 0.35)
-            let from = field.position(f)
-            field.hold(uid, at: from + (holdPoint() - from) * k, lift: Self.holdLift * k)
-            squash *= 1 - 0.08 * k
-            pitch += 0.04 * k
-            if t > 0.55 { idleState.throwStage = 2; idleState.phaseT = 0; AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.4) }
-        case 2:   // wind up: squat, lean back, the ball pressed in
-            let k = smooth01(t / 0.3)
-            field.hold(uid, at: holdPoint() - fwd * 0.04 * k, lift: Self.holdLift - 0.04 * k)
-            squash *= 1 - 0.08 - 0.14 * k
-            pitch += 0.04 - 0.14 * k
-            if t > 0.34 {
-                idleState.throwStage = 3; idleState.phaseT = 0; idleState.decorBooped = false
-                var range = rand(0.8, 1.5)
-                idleState.throwDir = idleState.throwFate == 0 ? throwDirection(range: range) : fwd
-                if let aim = throwAim {          // a toss: straight at the friend, landing about on him
-                    let d = aim - position, L = simd_length(d)
-                    if L > 1e-3 { idleState.throwDir = d / L; range = min(max(L - 0.1, 0.8), 1.5) }
-                }
-                idleState.reps = Int(range * 100)
-            }
-        case 3:   // spring up and let go (squash 1.12, lean forward)
-            let k = smooth01(t / 0.12)
-            squash *= 0.78 + (1.12 - 0.78) * k
-            pitch += -0.10 + 0.22 * k
-            if t < 0.06 { field.hold(uid, at: holdPoint(), lift: Self.holdLift + 0.05 * (t / 0.06)) }
-            else if !idleState.decorBooped {
-                idleState.decorBooped = true
-                jellyKick = max(jellyKick, 1.6)
-                AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
-                let range = Float(idleState.reps) / 100
-                switch idleState.throwFate {
-                case 1:      // bonk: straight up, it comes down on his head
-                    field.fling(uid, vh: -fwd * (Self.holdForward / 0.76), vy: 3.2, kind: 1, bonkDir: fwd)
-                case 2:      // drop: it slips and falls at the front
-                    field.fling(uid, vh: fwd * rand(0.5, 0.9), vy: 0, kind: 2)
-                default:     // a short wobbly arc
-                    field.fling(uid, vh: idleState.throwDir * (range / 0.8) , vy: 2.4, kind: 0)
-                }
-                field.kick(uid, 0.5)
-            }
-            if t > 0.22 { idleState.throwStage = 4; idleState.phaseT = 0 }
-        case 4:   // settle (the existing damped jelly settle), and the bonk when the ball meets his head
-            squash *= 1 + 0.10 * expf(-t * 7) * cosf(t * 16)
-            pitch += 0.12 * expf(-t * 6)
-            if field.takeBonk(uid) {
-                squash *= 0.9
-                jellyKick = max(jellyKick, 2.0)
-                AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.8)
-            }
-            let a = field.anim[uid]
-            if throwAim != nil { if t > 0.8 { idleFinish(skinner) } }          // (a toss: the friend takes over)
-            else if t > 0.6, a?.flying != true, a?.moving != true { if t > 1.0 { idleFinish(skinner) } }
-            else if t > 7 { idleFinish(skinner) }
-        default: break
-        }
-        if idleState.throwStage != 4, field.takeBonk(uid) {      // (the head is hit while he is still springing)
-            squash *= 0.9; jellyKick = max(jellyKick, 2.0)
-            AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.8)
         }
     }
 }

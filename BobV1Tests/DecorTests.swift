@@ -47,10 +47,10 @@ final class DecorTests: XCTestCase {
 
     // MARK: catalogue and capacity
 
-    func testCatalogueHasTwentyEightDecorItemsInTheRightPriceBand() {
+    func testCatalogueHasTwentyNineDecorItemsInTheRightPriceBand() {
         let items = StoreCatalog.items(.decor)
-        XCTAssertEqual(items.count, 28)
-        XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, 28, "every piece is on exactly one tab")
+        XCTAssertEqual(items.count, 29)          // (28 + the mini goal: the football became the soccer ball)
+        XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, 29, "every piece is on exactly one tab")
         XCTAssertFalse(items.contains { $0.id == "decor-eggchair" }, "the swing replaces the egg chair")
         for i in items {
             XCTAssertTrue((25...120).contains(i.price), "\(i.name) \(i.price)")
@@ -59,14 +59,14 @@ final class DecorTests: XCTestCase {
             XCTAssertTrue((1...3).contains(i.roomUnits))
         }
         XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases))
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat])
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat, .minigoal])
         XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .slide, .swing], "the 1.25x swing, slide and pet bed count 3 spots")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
         // prices and spots come from the Blender exports' JSON
         let json: [DecorKind: (Int, Int)] = [.loveseat: (120, 2), .petbed: (90, 3), .pouf: (40, 1), .rockingchair: (80, 1), .armchair: (70, 1), .swing: (100, 3), .diningset: (85, 2),
                                              .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 3), .monstera: (70, 1), .duck: (25, 1),
-                                             .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .football: (40, 1)]
+                                             .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .soccerball: (35, 1), .minigoal: (70, 2)]
         for (k, v) in json { XCTAssertEqual(StoreCatalog.item(k.storeID)?.price, v.0, "\(k) price"); XCTAssertEqual(k.spec.units, v.1, "\(k) spots") }
     }
 

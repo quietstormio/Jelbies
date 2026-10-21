@@ -1,7 +1,7 @@
 //
 //  FurnCaptureTests.swift
 //  Not a regression test: renders the second batch of furniture and toys with the REAL renderer when FURN_CAP_DIR is set
-//  (pass it as TEST_RUNNER_FURN_CAP_DIR): furniture_ingame.png, toys_ingame.png, uses_1.png, football.png, room_full_land.png.
+//  (pass it as TEST_RUNNER_FURN_CAP_DIR): furniture_ingame.png, toys_ingame.png, uses_1.png, room_full_land.png (soccer: SoccerCaptureTests.swift).
 //
 
 import XCTest
@@ -155,7 +155,7 @@ final class FurnCaptureTests: XCTestCase {
         r.sim.teleport(toXZ: from)
         for _ in 0..<120 { r.sim.step() }
         r.brain.currentPose(r.sim)
-        r.brain.throwFateForce = fate
+        r.brain.soccerModeForce = fate
         r.brain.idleForced = true
         if start == .sleep { XCTAssertTrue(r.brain.idleStart(.sleep, r.sim)); r.brain.sleep.hold = 600 } else { XCTAssertTrue(r.brain.idleStart(start, r.sim)) }
         return r
@@ -239,67 +239,6 @@ final class FurnCaptureTests: XCTestCase {
             cells.append((closeUp(ren, t, rigs: [r], focus: f, dist: 6.0, w: w, h: h), "Slide 3: mid-slide"))
         }
         try save(sheet(cells, cols: 3, title: "Furniture uses (arms stay stubby, feet stay under him)"), "uses_1.png")
-    }
-
-    func testCaptureFootball() throws {
-        guard dir != nil else { throw XCTSkip("FURN_CAP_DIR not set") }
-        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        let w = 520, h = 560
-        var cells: [(LockImage, String)] = []
-        let c = SIMD2<Float>(0.9, 0.9)
-        func shotAt(_ r: MotionRig, _ ren: MelonRenderer, _ t: MTLTexture, _ label: String) {
-            let p = r.sim.centroid()
-            cells.append((closeUp(ren, t, rigs: [r], focus: SIMD3(p.x, 0.55, p.z), dist: 3.6, w: w, h: h), label))
-        }
-        // a plain throw: hug, squat, fling
-        do {
-            let r = scene(.football, at: c, start: .decorThrow, from: SIMD2(-1.0, 1.3), fate: 0)
-            let (ren, t) = try makeRenderer(device, r, w: w, h: h)
-            var n = 0
-            while !(r.brain.idleState.throwStage == 1 && r.brain.idleState.phaseT > 0.45) && n < 9000 { step(r); n += 1 }
-            shotAt(r, ren, t, "1. hug: the ball against his belly, between the stubby arms")
-            while !(r.brain.idleState.throwStage == 2 && r.brain.idleState.phaseT > 0.28) && n < 9000 { step(r); n += 1 }
-            shotAt(r, ren, t, "2. squat: down and back, ball pressed in")
-            while !(r.brain.idleState.throwStage == 3 && DecorField.shared.anim[7]!.flying && DecorField.shared.anim[7]!.airV > 1.0) && n < 9000 { step(r); n += 1 }
-            for _ in 0..<12 { step(r) }
-            shotAt(r, ren, t, "3. fling: springs up, the ball leaves in a short arc")
-        }
-        // a fumble: bonk off the head
-        do {
-            let r = scene(.football, at: c, start: .decorThrow, from: SIMD2(-1.0, 1.3), fate: 1)
-            let (ren, t) = try makeRenderer(device, r, w: w, h: h)
-            var n = 0
-            while !(DecorField.shared.anim[7]!.headHit) && n < 9000 { step(r); n += 1 }
-            for _ in 0..<4 { step(r) }
-            shotAt(r, ren, t, "4. fumble: it bonks off his head")
-        }
-        do {
-            let r = scene(.football, at: c, start: .decorThrow, from: SIMD2(-1.0, 1.3), fate: 2)
-            let (ren, t) = try makeRenderer(device, r, w: w, h: h)
-            var n = 0
-            while !(r.brain.idleState.throwStage == 3 && DecorField.shared.anim[7]!.flying) && n < 9000 { step(r); n += 1 }
-            for _ in 0..<10 { step(r) }
-            shotAt(r, ren, t, "5. fumble: it slips and drops")
-        }
-        // the two-Jelly toss
-        do {
-            DecorField.shared.clear()
-            DecorField.shared.set([PlacedDecor(uid: 7, kind: .football, x: 0.2, z: 1.0)])
-            let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-1.3, 1.4), SIMD2(1.6, 1.8)], quiet: true, seed: 5)
-            for r in lab.rigs { r.skinner.autoBlink = false }
-            XCTAssertTrue(lab.rigs[0].brain.socialStart(.toss, with: lab.rigs[1].brain, lab.rigs[0].sim))
-            let (ren, t) = try makeRenderer(device, lab.rigs[0], w: w, h: h)
-            var n = 0
-            while !(DecorField.shared.anim[7]!.flying && DecorField.shared.anim[7]!.air > 0.4) && n < 9000 { stepLab(lab); n += 1 }
-            let mid = (lab.rigs[0].sim.centroid() + lab.rigs[1].sim.centroid()) / 2
-            cells.append((closeUp(ren, t, rigs: lab.rigs, focus: SIMD3(mid.x, 0.55, mid.z), dist: 7.0, w: w, h: h), "6. toss: the ball in flight toward his friend"))
-            while !(lab.rigs[0].brain.social?.phase == 2) && n < 12000 { stepLab(lab); n += 1 }
-            for _ in 0..<14 { stepLab(lab) }
-            let mid2 = (lab.rigs[0].sim.centroid() + lab.rigs[1].sim.centroid()) / 2
-            let caught = lab.rigs[0].brain.social?.fastMoves == 1
-            cells.append((closeUp(ren, t, rigs: lab.rigs, focus: SIMD3(mid2.x, 0.55, mid2.z), dist: 7.0, w: w, h: h), caught ? "7. toss: caught, a hug" : "7. toss: missed, a comic lunge"))
-        }
-        try save(sheet(cells, cols: 3, title: "Football: hug, squat, fling, fumbles, and a two-Jelly toss (arms stay stubs)"), "football.png")
     }
 
     func testCaptureRoomFullLandscape() throws {

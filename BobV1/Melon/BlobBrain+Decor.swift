@@ -14,13 +14,13 @@ import Foundation
 import simd
 
 extension BlobBrain {
-    static let decorKinds: Set<IdleKind> = [.decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorThrow]
+    static let decorKinds: Set<IdleKind> = [.decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick]
 
     /// The interactions the room offers right now (a piece nobody is using).
     static func decorOffers() -> Set<IdleKind> {
         let f = DecorField.shared
         var s = Set<IdleKind>()
-        for p in f.feet where f.available(p) { if let k = p.kind.activeInteraction { s.insert(k) }; if p.kind.offers(.decorKick) { s.insert(.decorKick) } }
+        for p in f.feet where f.available(p) { if let k = p.kind.activeInteraction { s.insert(k) } }
         return s
     }
 
@@ -29,8 +29,6 @@ extension BlobBrain {
         let uid = idleState.decorUID
         if uid >= 0 {
             DecorField.shared.leave(uid, by: steerID)
-            // a football he was still hugging is let go (it drops and rolls a little)
-            if idleState.kind == .decorThrow, DecorField.shared.anim[uid]?.held == true { DecorField.shared.fling(uid, vh: SIMD2(sinf(yaw), cosf(yaw)) * 0.8, vy: 0, kind: 2) }
             idleState.decorUID = -1
         }
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
@@ -103,17 +101,7 @@ extension BlobBrain {
             let p = c + SIMD2(0, -DecorKind.slideApproach)
             let q = fixed(p)
             return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil
-        case .decorThrow:
-            // a body's length from the football, on the side he comes from
-            var u = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
-            if let aim = throwAim, simd_length(c - aim) > 1e-3 { u = simd_normalize(c - aim) }          // (a toss: on the far side of the ball from the friend)
-            for a in [Float(0), 0.6, -0.6, 1.2, -1.2] {
-                let v = SIMD2(u.x * cosf(a) - u.y * sinf(a), u.x * sinf(a) + u.y * cosf(a))
-                let p = c + v * 0.75
-                let q = fixed(p)
-                if simd_distance(p, q) < 0.06, peerFree(q) { return q }
-            }
-            return nil
+        case .soccerKick: return soccerStand(f, from: here)
         case .decorSit where f.kind == .beanbag, .decorBoop, .decorPeek:
             if !DecorKind.original.contains(f.kind) { return edgeStand(f, from: here, gap: max(0.8, footprint * f.spec.reach + 0.06)) }
             // a spot just outside the piece, on the side he comes from (he walks straight up to it and turns little); the beanbag: close enough to hop up
@@ -144,18 +132,18 @@ extension BlobBrain {
         // nearest first, with a little luck in it, then the first one he can walk to
         let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6)) }.sorted { $0.1 < $1.1 }
         for (f, _) in ranked {
-            if kind == .decorKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
-            if kind == .decorThrow || (kind == .decorKick && f.kind == .football), field.anim[f.uid]?.moving == true || field.anim[f.uid]?.flying == true { continue }
+            if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
             decorIgnore = (kind == .decorSit || kind == .decorHop || kind == .decorSlide) ? f.uid : exiting
             guard let stand = decorStand(kind, f, from: here, seat: seat),
-                  simd_distance(here, stand) > 0.35 || kind == .decorHop || (kind == .decorSit && f.kind.hopSit) || kind == .decorThrow,
+                  simd_distance(here, stand) > 0.35 || kind == .decorHop || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   reachable(here, stand) else { decorIgnore = exiting; continue }
             idleBegin(kind)
             idleState.decorUID = f.uid; idleState.decorGo = true; idleState.decorKicked = false; idleState.decorBooped = false
             idleState.target = stand
             idleState.seat = seat; idleState.seatShift = .zero; idleState.cuddle = 0
-            idleState.slideStage = 0; idleState.slideS = 0; idleState.slideStep = 0; idleState.throwStage = 0; throwAim = nil
+            idleState.slideStage = 0; idleState.slideS = 0; idleState.slideStep = 0
+            idleState.soccer = kind == .soccerKick ? soccerPlan : SoccerIdle()
             idleState.reps = kind == .decorKick && f.kind.rolls ? 1 + (rand() < 0.5 ? 1 : 0) : 0
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.occupant[f.uid] = steerID }
             script = .walk(target: stand, then: .none); activity = .walking
@@ -168,6 +156,7 @@ extension BlobBrain {
     /// Every step while a decor behaviour runs (before the gait): the kick lands when the ball is within reach.
     func decorTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let kind = idleState.kind, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return }
+        if kind == .soccerKick { soccerTick(sim, skinner, dt, f); return }
         if kind == .decorKick, idleState.decorGo, !idleState.decorKicked {
             let ball = DecorField.shared.position(f)
             let d = simd_distance(position, ball)
@@ -180,7 +169,7 @@ extension BlobBrain {
                     AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.8, rate: 0.8)
                     AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5)
                 } else {
-                    DecorField.shared.kickBall(f.uid, direction: SIMD2(sinf(a), cosf(a)), speed: f.kind == .football ? rand(1.8, 2.6) : rand(2.5, 3.3))
+                    DecorField.shared.kickBall(f.uid, direction: SIMD2(sinf(a), cosf(a)), speed: rand(2.5, 3.3))
                     AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.7)
                 }
                 DecorField.shared.kick(f.uid, 0.6)
@@ -204,7 +193,7 @@ extension BlobBrain {
             if f.kind == .beanbag { let d = c - position; idleState.goalYaw = atan2f(d.x, d.y); idleState.bagStage = 0 }
             else if f.kind.hopSit, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) { let d = SIMD2(sw.x, sw.z) - position; idleState.goalYaw = atan2f(d.x, d.y); idleState.bagStage = 0 }
         case .decorSlide: slideArrived(sim, skinner, f)
-        case .decorThrow: throwArrived(sim, skinner, f)
+        case .soccerKick: soccerArrived(sim, skinner, f)
         case .decorBoop:
             idleState.hold = 2.6
             let d = c - position
@@ -297,11 +286,12 @@ extension IdleTable {
     static func decorWeights(_ m: IdleMood, offers: Set<IdleKind>) -> [(kind: IdleKind, weight: Float)] {
         let table: [(IdleKind, Float)]
         switch m {
-        case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.decorThrow, 1.8)]
-        case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.decorThrow, 0.7)]
+        case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.soccerKick, 2.6)]
+        case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.soccerKick, 1.1)]
         case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)]
         }
-        return table.filter { offers.contains($0.0) }.map { (kind: $0.0, weight: $0.1) }
+        // a stuck soccer ball (20 s against a wall / under furniture) wants rescuing: the soccer pick dominates until it is out
+        return table.filter { offers.contains($0.0) }.map { (kind: $0.0, weight: $0.0 == .soccerKick && SoccerState.shared.anyStuck ? BlobBrain.soccerRescueWeight : $0.1) }
     }
 }
 

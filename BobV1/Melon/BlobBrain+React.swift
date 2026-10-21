@@ -123,6 +123,36 @@ final class ReactionBus {
     }
 }
 
+extension ReactionBus {
+    /// Soccer (Room/SoccerEvents.swift) on the bus: a goal is cheered, a fumble giggled at, a ball rolling past startles the one it passed,
+    /// a near miss shows on the kicker's face. The kicks themselves post nothing (they are frequent; the ball rolling is reaction enough).
+    func handleSoccer(_ e: SoccerEvent) {
+        let brains = self.brains()
+        func brain(_ id: Int) -> BlobBrain? { brains.first { $0.steerID == id } }
+        func ballPos(_ fallback: SIMD2<Float>) -> SIMD2<Float> {
+            DecorField.shared.feet.first { $0.kind == .soccerball }.flatMap { DecorField.shared.anim[$0.uid]?.pos } ?? fallback
+        }
+        switch e {
+        case .goal(let scorer, let goal):
+            let pos = DecorField.shared.foot(goal)?.centre ?? ballPos(brain(scorer)?.position ?? .zero)
+            post(BusEvent(kind: .scoredGoal, source: scorer, pos: pos, piece: .minigoal))
+        case .fumble(let j):
+            guard let b = brain(j) else { return }
+            post(BusEvent(kind: .missedKick, source: j, pos: b.position, piece: .soccerball))
+            b.face(.oh, hold: 1.0)
+        case .rolledPast(let j, let kicker):
+            guard let b = brain(j) else { return }
+            let ev = BusEvent(kind: .booped, source: kicker, pos: ballPos(b.position), piece: .soccerball, t: clock)
+            if b.canObserve(ev), b.anticsEnabled, b.idleState.kind == nil { _ = b.accept(.startle, ev, delay: 0.05) }
+        case .nearMiss(let j, _):
+            guard let b = brain(j) else { return }
+            b.face(b.idleMood == .happy ? .excited : .worried, hold: 1.4)          // "so close!": a happy one is thrilled, the others fret
+        case .kick:
+            break
+        }
+    }
+}
+
 extension SocialRoster {
     /// The roster's bus (created with it; the brains post through `BlobBrain.postEvent`).
     var eventBus: ReactionBus { if let b = _bus { return b }; let b = ReactionBus(); b.brains = { [weak self] in self?.brains ?? [] }; _bus = b; return b }

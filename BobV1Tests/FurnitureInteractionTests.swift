@@ -1,8 +1,8 @@
 //
 //  FurnitureInteractionTests.swift
 //  The second decor batch's interactions: each starts, completes, leaves the Jelly on the room's floor and lets go of the piece; the seat variants (hop-on sit,
-//  rock, sway, cuddle), the boops, the kicks and rolls, the spinning top, the slide and the football throw each do what they say. FeetAttach / ArmCap run the
-//  same moves (FeetAttachTests.batch2Decor).
+//  rock, sway, cuddle), the boops, the kicks and rolls, the spinning top and the slide each do what they say. FeetAttach / ArmCap run the same moves
+//  (FeetAttachTests.batch2Decor). Soccer (the ball, the goal, the stomp kick, the dribble, the pass, the shot) is SoccerTests.
 //
 
 import XCTest
@@ -37,7 +37,7 @@ final class FurnitureInteractionTests: XCTestCase {
     func play(_ kind: DecorKind, _ move: IdleKind, at p: SIMD2<Float> = FurnitureInteractionTests.at, from: SIMD2<Float> = SIMD2(-1.0, 1.0), seconds: Float = 40, fate: Int? = nil,
               each: ((MotionRig) -> Void)? = nil, file: StaticString = #filePath, line: UInt = #line) -> MotionRig {
         let r = installed(kind, at: p, from: from)
-        r.brain.throwFateForce = fate
+        r.brain.soccerModeForce = fate
         r.brain.idleForced = true
         XCTAssertTrue(r.brain.idleStart(move, r.sim), "\(kind) \(move) starts", file: file, line: line)
         XCTAssertNotNil(DecorField.shared.occupant[7], "\(kind) \(move) holds the piece", file: file, line: line)
@@ -165,7 +165,7 @@ final class FurnitureInteractionTests: XCTestCase {
     }
 
     func testToyCarRollsFollowsItsHeadingAndSpinsItsWheelsAndYarnTrails() {
-        for kind in [DecorKind.toycar, .yarnball, .football] {
+        for kind in [DecorKind.toycar, .yarnball, .soccerball] {
             DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: 0.8, z: 0.8)])
             DecorField.shared.kickBall(7, direction: SIMD2(1, 0), speed: 3)
             for _ in 0..<30 { DecorField.shared.tick(dt: 1.0 / 60) }
@@ -184,7 +184,7 @@ final class FurnitureInteractionTests: XCTestCase {
     }
 
     func testEveryRollerStartsAndFinishesAsAKick() {
-        for kind in [DecorKind.toycar, .yarnball, .football] { play(kind, .decorKick, at: SIMD2(0.8, 0.8), seconds: 30) }
+        for kind in [DecorKind.toycar, .yarnball] { play(kind, .decorKick, at: SIMD2(0.8, 0.8), seconds: 30) }
     }
 
     // MARK: slide
@@ -206,39 +206,6 @@ final class FurnitureInteractionTests: XCTestCase {
         XCTAssertLessThan(floorErr, 0.02, "his floor follows the chute")
         XCTAssertEqual(lastZ, c.y + 1.75 * DecorKind.slide.scale, accuracy: 0.4, "he ends 0.35 beyond the chute")
         _ = endPz
-    }
-
-    // MARK: football
-
-    func testTheFootballHugsFlingsAndRollsOnAndFumbles() {
-        for fate in 0...2 {
-            var sawHeld = false, sawFlight = false, maxAir: Float = 0, minSquash: Float = 9, maxSquash: Float = 0, bonked = false, maxBallHeight: Float = 0
-            let r = installed(.football, at: SIMD2(0.8, 0.8))
-            r.brain.throwFateForce = fate
-            r.brain.idleForced = true
-            XCTAssertTrue(r.brain.idleStart(.decorThrow, r.sim))
-            var rolled = false
-            r.run(40, until: { r.brain.idleState.kind == nil && r.t > 1 }) {
-                DecorField.shared.tick(dt: 1.0 / 60)
-                guard let a = DecorField.shared.anim[7] else { return }
-                if a.held || a.flying { XCTAssertNil(DecorField.shared.restingBall(), "a hugged / flying ball is not 'at rest' (its saved spot stays put)") }
-                if a.held { sawHeld = true; minSquash = min(minSquash, r.brain.squash) }
-                if a.flying { sawFlight = true; maxAir = max(maxAir, a.air); maxBallHeight = max(maxBallHeight, a.air + 0.105) }
-                if a.headHit { bonked = true }
-                if a.moving { rolled = true }
-                if r.brain.idleState.throwStage == 3 { maxSquash = max(maxSquash, r.brain.squash) }
-            }
-            XCTAssertTrue(sawHeld, "fate \(fate): he hugs the ball")
-            XCTAssertTrue(sawFlight, "fate \(fate): it leaves his belly")
-            XCTAssertLessThan(minSquash, 0.95, "fate \(fate): he squats")
-            XCTAssertGreaterThan(maxSquash, 1.0, "fate \(fate): and springs up")
-            XCTAssertTrue(rolled, "fate \(fate): the ball rolls on like a kick")
-            if fate == 0 { XCTAssertGreaterThan(maxAir, 0.3); XCTAssertLessThan(maxBallHeight, 1.0, "a short arc") }
-            if fate == 1 { XCTAssertTrue(bonked, "it bonks off his head"); XCTAssertGreaterThan(maxBallHeight, 1.3) }
-            XCTAssertNil(r.brain.idleState.kind, "fate \(fate) finished")
-            XCTAssertFalse(DecorField.shared.anim[7]!.held)
-            XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5)
-        }
     }
 
     // MARK: the pet bed
@@ -299,54 +266,5 @@ final class FurnitureInteractionTests: XCTestCase {
         for r in lab.rigs { XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5); XCTAssertNil(r.brain.idleState.kind) }
         XCTAssertNil(DecorField.shared.occupant[7])
         XCTAssertTrue((lab.events[0] + lab.events[1]).contains { if case .ended(.cuddle, _, .done) = $0 { return true }; return false }, "the cuddle ended well")
-    }
-
-    func testTwoJelliesTossTheFootballAndOneCatchesOrMissesComically() {
-        for seed in [UInt64(5), 9, 21] {
-            DecorField.shared.clear()
-            DecorField.shared.set([PlacedDecor(uid: 7, kind: .football, x: 0.2, z: 1.0)])
-            let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-1.3, 1.4), SIMD2(1.6, 1.8)], quiet: true, seed: seed)
-            let a = lab.rigs[0], b = lab.rigs[1]
-            XCTAssertTrue(a.brain.socialStart(.toss, with: b.brain, a.sim), "the toss starts")
-            var flights = 0, wasFlying = false, caught = false, thrower = Set<Int>(), done = false
-            for _ in 0..<(60 * 80) {
-                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
-                for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
-                let an = DecorField.shared.anim[7]!
-                if an.flying && !wasFlying { flights += 1 }
-                wasFlying = an.flying
-                if an.held, a.brain.idleState.kind != .decorThrow, b.brain.idleState.kind != .decorThrow { caught = true }
-                for (i, r) in lab.rigs.enumerated() where r.brain.idleState.kind == .decorThrow { thrower.insert(i) }
-                if a.brain.social == nil, b.brain.social == nil, flights > 0 { done = true; break }
-            }
-            XCTAssertTrue(done, "seed \(seed): the toss ended")
-            XCTAssertGreaterThanOrEqual(flights, 2, "seed \(seed): thrown at least twice")
-            XCTAssertEqual(thrower, [0, 1], "seed \(seed): they swap")
-            _ = caught
-            XCTAssertFalse(DecorField.shared.anim[7]!.held, "seed \(seed): the ball is let go")
-            for r in lab.rigs { XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5); XCTAssertNil(r.brain.idleState.kind) }
-            XCTAssertNil(DecorField.shared.occupant[7])
-        }
-    }
-
-    /// The hugged ball sits against the belly (its centre at the body's surface or a touch inside), not out in front of it.
-    func testTheHuggedFootballSitsAgainstTheBelly() {
-        let r = installed(.football, at: SIMD2(0.8, 0.8))
-        r.brain.throwFateForce = 0
-        r.brain.idleForced = true
-        XCTAssertTrue(r.brain.idleStart(.decorThrow, r.sim))
-        var sdf: Float = .nan
-        r.run(30, until: { r.brain.idleState.throwStage >= 3 }) {
-            DecorField.shared.tick(dt: 1.0 / 60)
-            guard r.brain.idleState.throwStage == 2, r.brain.idleState.phaseT > 0.25, let a = DecorField.shared.anim[7], a.held else { return }
-            let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
-            let w = SIMD3<Float>(a.pos.x, 0.105 + a.air, a.pos.y)
-            let q = c0 + pose.rotation.inverse.act(w - pose.centroid)
-            sdf = Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z))))
-        }
-        print("HUGSDF ball centre signed distance to the body surface: \(sdf)")
-        XCTAssertFalse(sdf.isNaN)
-        XCTAssertLessThan(sdf, 0.08, "the ball is against the belly, not floating out in front")
-        XCTAssertGreaterThan(sdf, -0.2, "and not buried in it")
     }
 }

@@ -143,7 +143,7 @@ extension BlobBrain {
         }
         if let k = idleState.kind {
             switch k {
-            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .decorThrow, .tail: return true
+            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail: return true
             default: break
             }
         }

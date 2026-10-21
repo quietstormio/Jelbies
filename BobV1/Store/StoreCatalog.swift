@@ -88,7 +88,9 @@ nonisolated enum StoreCatalog {
         (.armchair, 70, "chair.lounge.fill"), (.swing, 100, "figure.play"), (.diningset, 85, "fork.knife"), (.bookshelf, 65, "books.vertical.fill"),
         (.wardrobe, 75, "cabinet.fill"), (.divider, 60, "rectangle.split.3x1.fill"), (.floorlamp, 55, "lamp.floor.fill"), (.slide, 110, "arrow.down.right.circle.fill"),
         (.monstera, 70, "leaf.fill"), (.duck, 25, "bird.fill"), (.blocks, 35, "cube.fill"), (.spintop, 30, "tornado"), (.toycar, 50, "car.fill"),
-        (.yarnball, 25, "scribble.variable"), (.drum, 45, "drum.fill"), (.football, 40, "football.fill"),
+        (.yarnball, 25, "scribble.variable"), (.drum, 45, "drum.fill"),
+        // soccer (2026-10-20, replaces the football): the ball and the mini goal
+        (.soccerball, 35, "soccerball"), (.minigoal, 70, "sportscourt.fill"),
     ].map { StoreItem(id: $0.0.storeID, name: $0.0.title, kind: .decor, price: $0.1, perk: nil, description: $0.0.use, symbol: $0.2, roomUnits: $0.0.spec.units) }
 
     private static let base: [StoreItem] = [

@@ -103,6 +103,6 @@ nonisolated enum AICatalogRegistry {
         .pouf: ["pouffe", "stool"], .rockingchair: ["rocking chair", "rocker", "chair"], .armchair: ["arm chair", "chair"], .swing: ["swing"],
         .diningset: ["table", "dining table", "dining set"], .bookshelf: ["shelf", "bookcase", "books"], .wardrobe: ["closet"], .divider: ["divider", "screen"],
         .floorlamp: ["lamp", "floor lamp"], .slide: ["slide"], .monstera: ["monstera", "big plant"], .duck: ["duck", "ducky"], .blocks: ["blocks", "tower"],
-        .spintop: ["top", "spinning top"], .toycar: ["car", "toy car"], .yarnball: ["yarn", "wool", "yarn ball"], .drum: ["drum"], .football: ["football", "soccer ball", "soccer"],
+        .spintop: ["top", "spinning top"], .toycar: ["car", "toy car"], .yarnball: ["yarn", "wool", "yarn ball"], .drum: ["drum"], .soccerball: ["football", "soccer ball", "soccer"], .minigoal: ["goal", "mini goal", "net"],
     ]
 }

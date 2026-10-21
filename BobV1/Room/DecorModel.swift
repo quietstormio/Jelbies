@@ -24,7 +24,9 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     // the second batch (2026-10-20): furniture ...
     case loveseat, petbed, pouf, rockingchair, armchair, swing, diningset, bookshelf, wardrobe, divider, floorlamp, slide, monstera
     // ... and toys
-    case duck, blocks, spintop, toycar, yarnball, drum, football
+    case duck, blocks, spintop, toycar, yarnball, drum
+    // soccer (2026-10-20, replaces the football): the ball is kicked with a stomp step, dribbled and passed; the goal is shot at (Room/DecorField+Soccer.swift)
+    case soccerball, minigoal
 
     /// The first eight pieces (circle placement geometry, as they were built).
     static let original: [DecorKind] = [.beanbag, .cushion, .plant, .ball, .rug, .toybox, .nightlight, .bouncymat]
@@ -33,18 +35,18 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     enum Category: String, Sendable { case furniture, toys }
     var category: Category {
         switch self {
-        case .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .football: return .toys
+        case .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
         default: return .furniture
         }
     }
     /// Pieces that roll when kicked (the ball and its cousins).
-    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .football }
+    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .soccerball }
     /// Round things a pair of Jellies may pass to each other.
-    var isBallLike: Bool { self == .ball || self == .yarnball || self == .football }
+    var isBallLike: Bool { self == .ball || self == .yarnball || self == .soccerball }
     /// Radius of the rolling piece for the wall bounce and the roll angle.
     var rollRadius: Float {
         switch self {
-        case .ball: return 0.27; case .yarnball: return 0.30; case .football: return 0.16; case .toycar: return 0.42
+        case .ball: return 0.27; case .yarnball: return 0.30; case .soccerball: return SoccerTuning.radius; case .toycar: return 0.42
         default: return 0.27
         }
     }
@@ -110,7 +112,9 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .toycar: return DecorSpec(half: SIMD2(0.38, 0.55), height: 0.69, solid: false, units: 1, corner: 0.2, reach: 1, box: true)
         case .yarnball: return DecorSpec(half: SIMD2(0.3, 0.3), height: 0.6, solid: false, units: 1, corner: 0.3, reach: 1, box: true)
         case .drum: return DecorSpec(half: SIMD2(0.42, 0.42), height: 0.55, solid: true, units: 1, corner: 0.42, reach: 1, box: true)
-        case .football: return DecorSpec(half: SIMD2(0.16, 0.16), height: 0.21, solid: false, units: 1, corner: 0.16, reach: 1, box: true)
+        case .soccerball: return DecorSpec(half: SIMD2(0.18, 0.18), height: 0.36, solid: false, units: 1, corner: 0.18, reach: 1, box: true)
+        // the goal is a wall for walkers; the ball alone passes its mouth (DecorField+Soccer.swift handles its posts, side nets and back net)
+        case .minigoal: return DecorSpec(half: SIMD2(0.8, 0.35), height: 0.9, solid: true, units: 2, corner: 0.05, reach: 1, box: true)
         }
     }
     /// What it does, in a sentence (shop and bag).
@@ -143,7 +147,8 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .toycar: return "A little car. Kick it and it rolls along."
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
-        case .football: return "A football to hug, fling and fumble. Or just kick it."
+        case .soccerball: return "A soccer ball. Jellies kick it with their stubby legs, dribble it and pass it."
+        case .minigoal: return "A little goal with a net. Jellies line up and shoot; a goal puffs the net."
         }
     }
     var title: String {
@@ -154,7 +159,8 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .armchair: return "Armchair"; case .swing: return "Swing"; case .diningset: return "Dining set"; case .bookshelf: return "Bookshelf"
         case .wardrobe: return "Wardrobe"; case .divider: return "Room divider"; case .floorlamp: return "Floor lamp"; case .slide: return "Slide"
         case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block tower"; case .spintop: return "Spinning top"
-        case .toycar: return "Toy car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"; case .football: return "Football"
+        case .toycar: return "Toy car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"
+        case .soccerball: return "Soccer ball"; case .minigoal: return "Mini goal"
         }
     }
 }
@@ -188,8 +194,8 @@ extension DecorKind {
     static let wired: Set<DecorKind> = Set(DecorKind.allCases)
     /// What a Jelly may actually pick with it right now (`interaction` for a wired piece).
     var activeInteraction: IdleKind? { Self.wired.contains(self) ? interaction : nil }
-    /// Does a Jelly's `move` apply to this piece? (The football is thrown, and kicked as a fallback.)
-    func offers(_ move: IdleKind) -> Bool { activeInteraction == move || (self == .football && move == .decorKick && Self.wired.contains(self)) }
+    /// Does a Jelly's `move` apply to this piece?
+    func offers(_ move: IdleKind) -> Bool { activeInteraction == move }
     /// The interaction a Jelly may pick with it (nil = none).
     var interaction: IdleKind? {
         switch self {
@@ -199,8 +205,8 @@ extension DecorKind {
         case .toybox, .bookshelf, .wardrobe: return .decorPeek
         case .bouncymat: return .decorHop
         case .slide: return .decorSlide
-        case .football: return .decorThrow
-        case .petbed, .rug, .nightlight, .divider, .floorlamp: return nil
+        case .soccerball: return .soccerKick
+        case .petbed, .rug, .nightlight, .divider, .floorlamp, .minigoal: return nil          // (the goal is shot at through the soccer ball's own behaviour)
         }
     }
 }
@@ -278,7 +284,7 @@ enum DecorPlacement {
     static func xLimit(_ kind: DecorKind, z: Float) -> Float {
         let s = kind.spec
         let seen = visibleHalf(z: z) - (s.box ? s.half.x : s.radius)
-        guard kind.interaction != nil || kind == .petbed else { return seen }
+        guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return seen }
         return min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - kind.standOffsetX)
     }
 
@@ -332,7 +338,7 @@ enum DecorPlacement {
 
     static func isValid(_ kind: DecorKind, at p: SIMD2<Float>, among others: [PlacedDecor], ignoring uid: Int? = nil) -> Bool {
         let s = kind.spec
-        let walked = kind.interaction != nil || kind == .petbed          // (a Jelly walks to it: the pet bed too)
+        let walked = kind.interaction != nil || kind == .petbed || kind == .minigoal          // (a Jelly walks to it: the pet bed too; the goal is shot at from in front)
         // A big deep piece (swing, slide, pet bed at 1.25x) may stand far back: it is its FRONT (where a Jelly stands for it, or the slide's climb behind it) that has to be on walkable floor
         let deep = s.box && s.half.y > 0.9
         let lowZ = walked ? (deep ? minZ : max(minZ, GameCamera.walkMinZ)) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
@@ -429,23 +435,15 @@ struct DecorAnim: Equatable, Sendable {
     /// The block tower: nil = stacked. Time since it was knocked over.
     var blocks: [TumbleBlock] = []
     var tumbleT: Float = -1
-    /// Football: lifted off the floor (hugged / in the air).
-    var held = false
-    var air: Float = 0
-    var airV: Float = 0
-    var airH = SIMD2<Float>.zero
-    var flying = false
-    var bounces = 0
-    /// Set by the thrower: what to do when the flight comes down (0 plain arc, 1 bonk on the head, 2 drop).
-    var flightKind = 0
-    var headHit = false
-    var bonkDir = SIMD2<Float>.zero
-    /// Set when a bonked ball met the head (the thrower squashes and boops, then clears it).
-    var bonked = false
+    /// Soccer ball: who kicked it last (steer id, -1 none) and seconds since; the kicker is not bumped by his own ball as it leaves his toe.
+    var kicker = -1
+    var kickAge: Float = 99
+    /// Soccer ball: inside a goal's mouth (its uid; -1 none): a crossing scores once, until it has rolled back out.
+    var inGoal = -1
     var tumbling: Bool { tumbleT >= 0 }
     var active: Bool {
         sink > 0.002 || sinkWant > 0 || kick > 0.002 || peek > 0.002 || peekWant > 0 || moving || seatSink != .zero || seatWant != .zero
-            || rockAmp > 0.002 || rockWant > 0 || spin > 0 || fallT >= 0 || tumbleT >= 0 || held || flying || air > 0.001
+            || rockAmp > 0.002 || rockWant > 0 || spin > 0 || fallT >= 0 || tumbleT >= 0
     }
 }
 
@@ -515,7 +513,7 @@ final class DecorField {
         for p in list {
             var x = anim[p.uid] ?? DecorAnim()
             if p.kind == .yarnball, anim[p.uid] == nil { x.heading = .pi / 4 }          // (its strand as exported, until it rolls)
-            if p.kind.rolls, !x.moving, !x.held, !x.flying { x.pos = p.at }
+            if p.kind.rolls, !x.moving { x.pos = p.at }
             a[p.uid] = x
         }
         anim = a
@@ -591,13 +589,15 @@ final class DecorField {
     var onTopple: ((SIMD2<Float>) -> Void)?
     func kick(_ uid: Int, _ amount: Float = 1) { guard anim[uid] != nil else { return }; anim[uid]!.kick = max(anim[uid]!.kick, amount); anim[uid]!.kickT = 0 }
     func peek(_ uid: Int, _ k: Float) { guard let w = anim[uid]?.peekWant else { return }; anim[uid]?.peekWant = max(w, k) }
-    func kickBall(_ uid: Int, direction d: SIMD2<Float>, speed: Float) {
+    func kickBall(_ uid: Int, direction d: SIMD2<Float>, speed: Float, by kicker: Int = -1) {
         guard anim[uid] != nil else { return }
         anim[uid]!.vel = d * speed
+        anim[uid]!.kicker = kicker; anim[uid]!.kickAge = 0
     }
 
     /// One step: eases the sits, decays the kicks, rolls the ball (it stays on the visible floor and bounces off solid pieces and the sofa).
     func tick(dt: Float) {
+        SoccerState.shared.advance(dt)
         for uid in Array(anim.keys) {
             guard var a = anim[uid], let f = foot(uid) else { continue }
             if a.active {
@@ -619,8 +619,8 @@ final class DecorField {
                 a.rockWant = 0
                 if f.kind == .spintop { Self.tickTop(&a, dt: dt) }
                 if f.kind == .blocks { Self.tickBlocks(&a, dt: dt, uid: uid, held: held == uid) }
-                if f.kind == .football, a.flying || a.air > 0 { Self.tickFlight(&a, dt: dt) }
-                if f.kind.rolls, a.moving, !a.held, !a.flying { Self.roll(&a, dt: dt, ignoring: uid, feet: feet, kind: f.kind) }
+                if f.kind == .soccerball, a.moving { Self.rollSoccer(&a, dt: dt, uid: uid, feet: feet, bodies: bodies) }
+                else if f.kind.rolls, a.moving { Self.roll(&a, dt: dt, ignoring: uid, feet: feet, kind: f.kind) }
                 if f.kind == .toycar, a.moving {
                     let want = atan2f(-a.vel.x, -a.vel.y)
                     var d = want - a.heading
@@ -636,25 +636,14 @@ final class DecorField {
                 }
                 anim[uid] = a
             }
+            if f.kind == .soccerball { soccerRestTick(uid, dt: dt) }
         }
     }
 
-    /// The thrower hugs the ball: it hangs at `pos`, `height` above its resting centre.
-    func hold(_ uid: Int, at p: SIMD2<Float>, lift: Float) {
-        guard anim[uid] != nil else { return }
-        anim[uid]!.held = true; anim[uid]!.flying = false; anim[uid]!.vel = .zero
-        anim[uid]!.pos = p; anim[uid]!.air = lift
-    }
-    /// Lets go: a short arc (`kind` 0 plain, 1 bonk on the head, 2 drop).
-    func fling(_ uid: Int, vh: SIMD2<Float>, vy: Float, kind: Int, bonkDir: SIMD2<Float> = .zero) {
-        guard anim[uid] != nil else { return }
-        anim[uid]!.held = false; anim[uid]!.flying = true
-        anim[uid]!.airH = vh; anim[uid]!.airV = vy; anim[uid]!.bounces = 0
-        anim[uid]!.flightKind = kind; anim[uid]!.headHit = false; anim[uid]!.bonkDir = bonkDir; anim[uid]!.bonked = false
-    }
-    /// The thrower saw the bonk (true once per bonk).
-    func takeBonk(_ uid: Int) -> Bool { guard anim[uid]?.bonked == true else { return false }; anim[uid]!.bonked = false; return true }
-    func dropHeld(_ uid: Int) { guard anim[uid] != nil else { return }; anim[uid]!.held = false }
+    /// The Jellies' floor positions (steer id, xz) this step, for the soccer ball's gentle bumps (the stage sets it in `tickDecor`; the tests set it by hand).
+    var bodies: [(id: Int, pos: SIMD2<Float>)] = []
+    /// (DecorField+Soccer.swift writes a piece's animation back.)
+    func setAnim(_ uid: Int, _ a: DecorAnim) { if anim[uid] != nil { anim[uid] = a } }
 
     /// The top: spins down, wobbling more as it slows, tips over, lies a moment, rights itself.
     static func tickTop(_ a: inout DecorAnim, dt: Float) {
@@ -707,26 +696,6 @@ final class DecorField {
             a.blocks[i] = b
         }
     }
-    /// The football in the air: gravity 6 (`airV` up), horizontal `airH`; one bounce (e = 0.4), then it rolls like a kick.
-    static func tickFlight(_ a: inout DecorAnim, dt: Float) {
-        guard a.flying else { return }
-        a.airV -= 6 * dt
-        if a.flightKind == 1, !a.headHit, a.airV < 0, a.air + 0.105 <= 1.35 {          // the ball comes down on his head
-            a.headHit = true; a.bonked = true
-            a.airV = 1.6; a.airH = a.bonkDir * 0.9
-        }
-        a.air += a.airV * dt
-        let step = a.airH * dt
-        a.pos += step
-        let dist = simd_length(step)
-        if dist > 1e-6 { a.rot = simd_normalize(simd_quatf(angle: 9 * dt, axis: SIMD3(1, 0, 0)) * a.rot) }     // tumbles about its long axis
-        if a.air <= 0 {
-            a.air = 0
-            if a.bounces == 0 && a.airV < -0.8 { a.bounces = 1; a.airV = -a.airV * 0.4 }
-            else { a.flying = false; a.vel = a.airH * 0.55; a.airV = 0; a.airH = .zero }
-        }
-    }
-
     static func roll(_ a: inout DecorAnim, dt: Float, ignoring uid: Int, feet: [DecorFoot], kind: DecorKind = .ball) {
         let r = kind.rollRadius
         a.vel *= expf(kind == .toycar ? -1.4 * dt : -1.15 * dt)
@@ -770,7 +739,7 @@ final class DecorField {
     /// The ball came to rest somewhere else: the piece's saved position follows.
     func restingBall() -> (uid: Int, at: SIMD2<Float>)? {
         for f in feet where f.kind.rolls {
-            if let a = anim[f.uid], !a.moving, !a.held, !a.flying, simd_distance(a.pos, f.centre) > 0.05 { return (f.uid, a.pos) }
+            if let a = anim[f.uid], !a.moving, simd_distance(a.pos, f.centre) > 0.05 { return (f.uid, a.pos) }
         }
         return nil
     }

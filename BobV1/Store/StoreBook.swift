@@ -44,7 +44,7 @@ final class StoreBook {
 
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
-        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
+        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s) }
     }
 
     private func save() {

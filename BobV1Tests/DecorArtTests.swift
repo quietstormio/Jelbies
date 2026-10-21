@@ -17,8 +17,8 @@ final class DecorArtTests: XCTestCase {
         .swing: ["stand", "seat"], .diningset: ["table", "stool_l", "stool_r"], .bookshelf: ["shelf", "plant"], .wardrobe: ["wardrobe", "door_l", "clothes"],
         .divider: ["screen"], .floorlamp: ["stand", "shade"], .slide: ["slide"], .monstera: ["pot", "leaves"], .duck: ["duck"],
         .blocks: ["block0", "block1", "block2", "block3", "block4"], .spintop: ["top"], .toycar: ["body", "wheel_fl", "wheel_rl", "wheel_fr", "wheel_rr"],
-        .yarnball: ["ball", "strand"], .drum: ["body", "head"], .football: ["ball"]]
-    private static let big: Set<DecorKind> = [.beanbag, .bouncymat, .toybox, .loveseat, .diningset]
+        .yarnball: ["ball", "strand"], .drum: ["body", "head"], .soccerball: ["ball"], .minigoal: ["frame", "net"]]
+    private static let big: Set<DecorKind> = [.beanbag, .bouncymat, .toybox, .loveseat, .diningset, .minigoal]
     /// Parts that stick out past the footprint on purpose (a canopy, an open door, a trailing strand, a lamp shade).
     private static let canopy: Set<String> = ["leaves", "strand", "door_l", "shade", "clothes"]
     /// The old procedural pieces' half extents (x, z) and heights.

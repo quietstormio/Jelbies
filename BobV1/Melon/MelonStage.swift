@@ -305,6 +305,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let bus = ReactionBus()
         bus.brains = { [weak self] in self?.actors.compactMap(\.brain) ?? [] }
         DecorField.shared.onTopple = { [weak bus] pos in bus?.post(BusEvent(kind: .towerToppled, source: -1, pos: pos, piece: .blocks)) }
+        SoccerEvents.sink = { [weak bus] e in bus?.handleSoccer(e) }          // soccer: goals cheered, fumbles giggled at, a ball rolling past startles (BlobBrain+React.swift)
         return bus
     }()
 
