@@ -115,7 +115,7 @@ final class BlobSelect {
     // MARK: setup
 
     func setBlobs(_ list: [SelectBlob]) {
-        blobs = list.isEmpty ? [SelectBlob(id: 0, name: "Bob")] : Array(list.prefix(3))
+        blobs = list.isEmpty ? [SelectBlob(id: 0, name: "Bob")] : Array(list.prefix(JellyRoster.maxCount))
         phase = .none; confirmed = nil
     }
 

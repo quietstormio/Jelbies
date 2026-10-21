@@ -534,14 +534,14 @@ final class RaceTripTests: XCTestCase {
         let care: GameCare
         let actors: [JellyActor]
         var t: Float = 0
-        init() {
+        init(count: Int = 3) {
             let d = UserDefaults(suiteName: "RaceTrip.\(UUID().uuidString)")!
-            let care = GameCare(jellyCount: 3, persistent: false, defaults: d)
+            let care = GameCare(jellyCount: count, persistent: false, defaults: d)
             self.care = care
             let sm = MotionRig.simMesh, rm = MotionRig.renderMesh
             let emb = embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest)
-            let spots = JellyRoster.spawnSpots(count: 3)
-            actors = (0..<3).map {
+            let spots = JellyRoster.spawnSpots(count: count)
+            actors = (0..<count).map {
                 let a = JellyActor(id: $0, name: JellyRoster.names[$0], simMesh: sm, renderMesh: rm, embedding: emb, appearance: .berry, firmness: 0.95, damping: 0.45, spawn: spots[$0])
                 a.profile = care.jelly($0); a.care = care
                 a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
@@ -640,6 +640,51 @@ final class RaceTripTests: XCTestCase {
             XCTAssertLessThan(simd_distance(p, spots[aid]!), 1.3, "Jelly \(aid) waddled over to the returner")
         }
         XCTAssertTrue(care.canRace(jelly: 1), "back to normal: Race is available again")
+    }
+
+    /// Four Jellies, three lanes: the chosen one races with two of the others as the rivals' bodies; the fourth is parked far off the track
+    /// and comes back to the room with everybody else.
+    func testFourthJellyParksOffTheTrackAndComesHome() {
+        let room = Room(count: 4)
+        Self.keep.append(room)
+        let care = room.care
+        care.jelly(3)!.stats.set(waddle: 0.95)
+        care.race.rivalSource = LocalRivalSourceFixed(waddle: 0.2)
+        care.race.autoRate = 8; care.race.autoReturnAfter = 0.5
+        XCTAssertTrue(care.canRace(jelly: 3), "Lavender can race")
+        care.startRace(jelly: 3, seed: 11)
+        room.run(3) { care.race.trackVisible }
+        XCTAssertTrue(care.race.trackVisible)
+        XCTAssertEqual(care.raceBook.racers.count, 3, "three on the track")
+        XCTAssertEqual(care.raceBook.racers.first, 3)
+        XCTAssertEqual(care.raceBook.parked.count, 1, "one parked")
+        let parked = care.raceBook.parked[0]
+        XCTAssertFalse(care.raceBook.racers.contains(parked))
+        XCTAssertGreaterThan(room.actors[parked].sim.centroid().x, 30, "parked far off the track")
+        XCTAssertTrue(room.actors[parked].brain!.race.active, "the race script keeps the room's floor rules off him")
+        room.run(8, until: { care.race.sim?.phase == .running })
+        XCTAssertEqual(care.race.sim?.phase, .running)
+        let px = room.actors[parked].sim.centroid().x
+        room.run(3)
+        XCTAssertEqual(room.actors[parked].sim.centroid().x, px, accuracy: 0.3, "he just stands there")
+        room.run(40, until: { care.race.hasResults })
+        XCTAssertTrue(care.race.hasResults)
+        room.run(10, until: { !care.race.active })
+        XCTAssertFalse(care.race.active)
+        XCTAssertTrue(care.raceBook.parked.isEmpty)
+        var floors: [SIMD2<Float>] = []
+        for a in room.actors {
+            XCTAssertFalse(a.brain!.race.active)
+            XCTAssertEqual(a.sim.arenaRadius, GameCamera.arenaRadius, accuracy: 1e-3)
+            let f = a.floor
+            XCTAssertLessThan(simd_distance(f, GameCamera.arenaCenter), GameCamera.arenaRadius + 0.5, "Jelly \(a.id) is back in the room")
+            for g in floors { XCTAssertGreaterThan(simd_distance(f, g), 1.0, "Jelly \(a.id) has his own spot") }
+            floors.append(f)
+        }
+        XCTAssertEqual(care.raceBook.returner, 3)
+        room.run(25, until: { care.raceBook.returner == nil })
+        XCTAssertNil(care.raceBook.returner, "the welcome home is over")
+        XCTAssertTrue(care.canRace(jelly: 0), "back to normal")
     }
 
     // MARK: room life is off for racers; sleep rolls up first

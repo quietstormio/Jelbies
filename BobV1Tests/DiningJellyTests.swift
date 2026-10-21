@@ -22,6 +22,7 @@ final class DiningJellyTests: XCTestCase {
         var t: Float = 0
         var sawEating: [Bool] = [false, false, false]
         init(count: Int = 3, wander: Bool = false) {
+            sawEating = [Bool](repeating: false, count: count)
             let suite = UserDefaults(suiteName: "DiningJelly.\(UUID().uuidString)")!
             care = GameCare(jellyCount: count, persistent: false, defaults: suite)
             let sm = buildSimMesh(), rm = buildRenderMesh()

@@ -10,6 +10,8 @@ import XCTest
 import simd
 @testable import BobV1
 
+private extension SIMD4 where Scalar == Float { var xyz: SIMD3<Float> { SIMD3(x, y, z) } }
+
 @MainActor
 final class FeatureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
@@ -192,9 +194,8 @@ final class FeatureTests: XCTestCase {
 
     func testCompatRulesHoldForEveryWearable() {
         let body = WearBody.shared
-        // a grazing contact up to 2 cm passes; the on-hat flower head may rest its lower petals into the hat tip by 3.5 cm (it "sits on the tip" by design:
-        // the lab's daisy_xf placements for the party hat / top hat were approved like that; the petals are thin and the dip is behind the flower face)
-        let tol: Float = 0.02, tolOnHat: Float = 0.035
+        // a grazing contact up to 2 cm passes (on a hat too: the daisy is PLACED clear of the hat, with its stem rooted in it)
+        let tol: Float = 0.02
         var rows: [String] = []
         for look in WearLook.pieces where !WearRules.isArm(look) {
             for f in Self.features {
@@ -212,7 +213,7 @@ final class FeatureTests: XCTestCase {
                 if f == .daisy { poses.append(("closed", Self.restSlot(f, fit: fit, close: 1))) }
                 // every feature edge that CROSSES the wearable's surface is a pierce; its depth = how far the deeper end sits past the surface. The stem
                 // (and on a hat the leaves at its root) are sunk into the hat by design; hidden spines are not drawn.
-                var worstDepth: Float = 0, worstPose = "", pierces = 0, deep = 0
+                var worstDepth: Float = 0, worstPose = "", pierces = 0, deep = 0, stemPierces = 0
                 for (pn, s) in poses {
                     guard let (m, p) = Self.mesh(s) else { continue }
                     var t = 0
@@ -220,7 +221,11 @@ final class FeatureTests: XCTestCase {
                         let ids = [m.indices[t], m.indices[t + 1], m.indices[t + 2]]
                         t += 3
                         let part = p.parts[p.partOfVertex[Int(ids[0])]]
-                        if part.name == "stem" || (fit.onHat && part.name.hasPrefix("leaf")) { continue }
+                        if part.name == "stem" {
+                            if fit.onHat, pn == "rest" { for e in 0..<3 where soup.pierce(m.vertices[Int(ids[e])].pos.xyz, m.vertices[Int(ids[(e + 1) % 3])].pos.xyz) != nil { stemPierces += 1 } }
+                            continue
+                        }
+                        if fit.onHat && part.name.hasPrefix("leaf") { continue }
                         if fit.hiddenParts.contains(part.name) { continue }
                         for e in 0..<3 {
                             let a = m.vertices[Int(ids[e])].pos, b = m.vertices[Int(ids[(e + 1) % 3])].pos
@@ -228,13 +233,14 @@ final class FeatureTests: XCTestCase {
                             guard let hit = soup.pierce(pa, pb) else { continue }
                             pierces += 1
                             let depth = max(abs(simd_dot(pa - hit.x, hit.n)), abs(simd_dot(pb - hit.x, hit.n)))
-                            if depth > (fit.onHat ? tolOnHat : tol) { deep += 1 }
+                            if depth > tol { deep += 1 }
                             if depth > worstDepth { worstDepth = depth; worstPose = pn + " " + part.name }
                         }
                     }
                 }
-                rows.append(String(format: "%@ + %@: %@ pierces %d (deeper than %.2f: %d) worst %.3f (%@)", look.art, "\(f)", fit.folded ? "FOLDED" : (fit.onHat ? "on-hat" : "fit"), pierces, tol, deep, worstDepth, worstPose))
+                rows.append(String(format: "%@ + %@: %@ pierces %d (deeper than %.2f: %d) worst %.3f (%@) stem-in-hat %d", look.art, "\(f)", fit.folded ? "FOLDED" : (fit.onHat ? "on-hat" : "fit"), pierces, tol, deep, worstDepth, worstPose, stemPierces))
                 XCTAssertEqual(deep, 0, "\(look.art) + \(f): the feature pierces the wearable deeper than \(tol) (worst \(worstDepth) at \(worstPose))")
+                if fit.onHat { XCTAssertGreaterThan(stemPierces, 0, "\(look.art): the on-hat daisy is rooted (its stem enters the hat), not floating") }
             }
         }
         for r in rows { MotionLog.write("FEATURECOMPAT " + r) }
@@ -267,6 +273,41 @@ final class FeatureTests: XCTestCase {
         // the variant hats are only for Moss
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["beanie_honey"]).hatVariant.isEmpty)
         XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["party_hat"]).hatVariant.isEmpty)
+    }
+
+    /// A back item with a neck item (bow tie, pearls, scarf ...) or a small head item: the wings ride up over the backpack instead of folding (the neck
+    /// items and the ear / clip hats are measured at every shift, wing_limits4.json), and nothing pierces either item through the flap range.
+    func testWingsStayUpWithABackpackAndANeckItem() {
+        let body = WearBody.shared
+        let tol: Float = 0.02
+        for (back, other) in [("backpack_sky", "bowtie_pink"), ("backpack_sky", "pearls"), ("backpack_sky", "medal_gold"), ("backpack_sky", "scarf_sky"),
+                              ("backpack_sky", "bandana_mint"), ("backpack_sky", "whistle_coach"), ("backpack_sky", "cat_ears"), ("backpack_sky", "party_hat"),
+                              ("cape_hero", "bowtie_sky"), ("cape_hero", "pearls"), ("cape_hero", "frog_ears"), ("cape_hero", "tophat")] {
+            let fit = FeatureCompat.solve(.wings, worn: [back, other])
+            XCTAssertFalse(fit.folded, "\(back) + \(other): the wings do not fold")
+            XCTAssertGreaterThanOrEqual(fit.wingDY, 0.08, "\(back) + \(other): the wings ride up")
+            XCTAssertGreaterThanOrEqual(fit.flapMax, 70, "\(back) + \(other): a full flap")
+            for art in [back, other] {
+                guard let look = WearLook.pieces.first(where: { $0.art == art }), let wp = WearMeshes.prepare(look, body: body) else { XCTFail(art); continue }
+                let soup = TriSoup(wp.rest, wp.idx)
+                for k in 0...4 {
+                    let flap = fit.flapMin + (fit.flapMax - fit.flapMin) * Float(k) / 4
+                    guard let (m, _) = Self.mesh(Self.restSlot(.wings, fit: fit, flap: flap, spread: min(fit.spreadMax, 0.4 * max(flap, 0)))) else { continue }
+                    var deep = 0, t = 0
+                    while t + 2 < m.indices.count {
+                        for e in 0..<3 {
+                            let a = m.vertices[Int(m.indices[t + e])].pos, b = m.vertices[Int(m.indices[t + (e + 1) % 3])].pos
+                            let pa = SIMD3(a.x, a.y, a.z), pb = SIMD3(b.x, b.y, b.z)
+                            if let hit = soup.pierce(pa, pb), max(abs(simd_dot(pa - hit.x, hit.n)), abs(simd_dot(pb - hit.x, hit.n))) > tol { deep += 1 }
+                        }
+                        t += 3
+                    }
+                    XCTAssertEqual(deep, 0, "\(back) + \(other): the wings pierce \(art) at flap \(Int(flap)) (dy \(fit.wingDY))")
+                }
+            }
+        }
+        // the solver still folds what really does not fit
+        XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["cape_hero", "bucket_hat"]).folded)
     }
 
     // MARK: the flap-hop

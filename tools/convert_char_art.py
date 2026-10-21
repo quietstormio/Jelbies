@@ -123,7 +123,7 @@ def main():
 
     # ---- the measured wing clearance per wearable and vertical shift (the runtime intersection for worn combinations, work/wingsolve.py)
     T = {}
-    for f in ("wing_limits.json", "wing_limits2.json", "wing_limits3.json"):
+    for f in ("wing_limits.json", "wing_limits2.json", "wing_limits3.json", "wing_limits4.json"):
         path = os.path.join(art, f)
         if not os.path.exists(path): continue
         for w, d in json.load(open(path)).items():

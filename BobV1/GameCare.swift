@@ -92,6 +92,10 @@ final class GameCare {
     @ObservationIgnored let group: DiningGroup
     @ObservationIgnored var groupWanted: Consumable?
     @ObservationIgnored var groupAge: Float = 0
+    /// Four Jellies, three places: the ids waiting for the NEXT sitting of `groupNext`, and what `reserved` was on each before he was asked to wait.
+    @ObservationIgnored var groupQueue: [Int] = []
+    @ObservationIgnored var groupNext: Consumable?
+    @ObservationIgnored var groupWaitSaved: [Int: GroupWaiter] = [:]
     /// Focus mode (Come here): phase, dock selection and the camera spring. See TouchMode.swift.
     let focus = BlobFocus()
     /// Which Jellies the close-up is on, where they stand, and their approach / touch bookkeeping (GameCare+Focus.swift).

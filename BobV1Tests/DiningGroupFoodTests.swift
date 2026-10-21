@@ -38,6 +38,41 @@ final class DiningGroupFoodTests: XCTestCase {
         for i in 0..<3 { XCTAssertGreaterThanOrEqual(r.level(i, .hunger), 0.85, "Jelly \(i) is at or near Full: \(r.level(i, .hunger))") }
     }
 
+    /// Four Jellies, three places: the three hungriest sit first, the fourth waits where he stands and eats at a second sitting of the same serving.
+    func testFourHungryJelliesEatInTwoSittingsOfThree() {
+        let r = room(count: 4)
+        hunger(r, [0.1, 0.1, 0.1, 0.1])
+        r.run(1)
+        r.care.feed()
+        XCTAssertTrue(r.care.groupActive)
+        XCTAssertEqual(GameCare.seating([0, 1, 2, 3], level: { [0.5, 0.1, 0.3, 0.2][$0] }).now, [1, 2, 3])
+        XCTAssertEqual(GameCare.seating([0, 1, 2, 3], level: { [0.5, 0.1, 0.3, 0.2][$0] }).later, [0])
+        var places = 0, spawns = 0, wasPresent = false, firstSitting: [Int] = [], waiterMoved: Float = 0, waiterStart: SIMD2<Float>?
+        r.run(150) {
+            if r.care.dining.isPresent {
+                places = max(places, r.care.dining.n)
+                if !wasPresent { spawns += 1; if spawns == 1 { firstSitting = r.care.group.memberIDs } }
+            }
+            wasPresent = r.care.dining.isPresent
+            if spawns == 1, let w = r.care.groupQueue.first {
+                let p = r.actors[w].floor
+                if waiterStart == nil { waiterStart = p }
+                waiterMoved = max(waiterMoved, simd_distance(p, waiterStart!))
+                XCTAssertTrue(r.actors[w].brain!.reserved, "the waiter is reserved")
+            }
+            return r.t > 2 && !r.care.trayOut
+        }
+        XCTAssertFalse(r.care.trayOut, "the serving went away when all were done")
+        XCTAssertFalse(r.care.groupActive); XCTAssertTrue(r.care.groupQueue.isEmpty); XCTAssertNil(r.care.groupNext)
+        XCTAssertEqual(places, 3, "three places at most")
+        XCTAssertEqual(spawns, 2, "two sittings")
+        XCTAssertEqual(firstSitting.count, 3)
+        XCTAssertTrue(r.sawEating.allSatisfy { $0 }, "all four ate \(r.sawEating)")
+        XCTAssertLessThan(waiterMoved, 0.6, "the waiter stayed put while the first three ate")
+        for i in 0..<4 { XCTAssertGreaterThanOrEqual(r.level(i, .hunger), 0.85, "Jelly \(i) is at or near Full: \(r.level(i, .hunger))") }
+        for a in r.actors { XCTAssertFalse(a.brain!.reserved, "Jelly \(a.id) was let go"); XCTAssertNil(a.brain!.waitFocus) }
+    }
+
     func testFullJellyRefusesAndTiersTakeDifferentAmounts() {
         let r = room()
         hunger(r, [0.1, 1.0, 0.6])
