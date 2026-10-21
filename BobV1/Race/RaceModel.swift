@@ -46,6 +46,9 @@ nonisolated enum RaceTuning {
     static let goFlash: Float = 0.6
     /// After the first racer finishes the others get this long to cross, then the placings are made from where they are.
     static let finishGrace: Float = 5.0
+    /// A player who has not stepped for this long once someone has finished is not racing any more: the window is the plain 2 x finishGrace,
+    /// not the course's longer one (RaceCourse.stragglerGrace). Longer than a trip (0.6 s) or a look-around (1.3 s).
+    static let stragglerStall: Float = 2.5
     /// The race is called off this long after GO (a Jelly that never moves).
     static let timeout: Float = 45
     /// The final-stretch music starts when the leader is this close to the line (world units).
@@ -75,8 +78,19 @@ nonisolated enum RaceTuning {
     static let tripFreeSteps = 2
 
     // MARK: payout
-    /// Drops by place (1-based). Races pay the most: 1st 12, 2nd 7, 3rd 4 (care pays 1 at a time).
-    static func drops(place: Int) -> Int { switch place { case ...1: return 12; case 2: return 7; default: return 4 } }
+    /// Drops by place (1-based) on the Puddle. Races pay the most: 1st 12, 2nd 7, 3rd 4 (care pays 1 at a time).
+    static func drops(place: Int) -> Int { drops(place: place, tier: .puddle) }
+    /// Drops by place and course: Puddle 12 / 7 / 4, Ripple 15 / 9 / 5, Splash 18 / 11 / 7, Wave 22 / 13 / 8.
+    static func drops(place: Int, tier: CourseTier) -> Int {
+        let table: [Int]
+        switch tier {
+        case .puddle: table = [12, 7, 4]
+        case .ripple: table = [15, 9, 5]
+        case .splash: table = [18, 11, 7]
+        case .wave: table = [22, 13, 8]
+        }
+        return table[min(max(place, 1), 3) - 1]
+    }
 
     static func clamp01(_ v: Float) -> Float { min(max(v, 0), 1) }
 }
@@ -100,6 +114,14 @@ nonisolated struct Rival: Equatable, Sendable {
 nonisolated protocol RivalSource: Sendable {
     /// `count` rivals for a race against a player with `player` stats and body tint `playerTint`. Deterministic for one `seed`.
     func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64) -> [Rival]
+    /// The same for a course: higher courses field better-trained rivals (rank-scaled stats). Defaults to the plain rivals.
+    func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64, tier: CourseTier) -> [Rival]
+}
+
+extension RivalSource {
+    func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64, tier: CourseTier) -> [Rival] {
+        rivals(count: count, player: player, playerTint: playerTint, seed: seed)
+    }
 }
 
 /// v1 rivals: names and pastel tints from small pools, stats near the player's.
@@ -109,19 +131,33 @@ nonisolated struct LocalRivalSource: RivalSource {
     static let hues: [Float] = [0.93, 0.05, 0.76, 0.50, 0.68, 0.22]
     /// How far (waddle / focus) a rival may be from the player.
     static let waddleSpread: Float = 0.12, focusSpread: Float = 0.18
+    /// The least waddle / focus a rival brings to each course (the field is better trained up the ranks; none on the Puddle).
+    static func floor(_ tier: CourseTier) -> RacerStats {
+        switch tier {
+        case .puddle: return RacerStats(waddle: 0, focus: 0)
+        case .ripple: return RacerStats(waddle: 0.45, focus: 0.40)
+        case .splash: return RacerStats(waddle: 0.60, focus: 0.55)
+        case .wave: return RacerStats(waddle: 0.72, focus: 0.65)
+        }
+    }
 
     func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64) -> [Rival] {
+        rivals(count: count, player: player, playerTint: playerTint, seed: seed, tier: .puddle)
+    }
+
+    func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64, tier: CourseTier) -> [Rival] {
         var g = RaceRNG(seed: seed &* 0x9E3779B97F4A7C15 &+ 0x51ED)
         let playerHue = Self.hue(of: playerTint)
         var hues = Self.hues.filter { abs($0 - playerHue) > 0.09 && abs($0 - playerHue) < 0.91 }
         var names = Self.names
         var out: [Rival] = []
+        let fl = Self.floor(tier)
         for _ in 0..<max(count, 0) {
             let name = names.remove(at: Int(g.next() * Float(names.count)) % names.count)
             let hue = hues.remove(at: Int(g.next() * Float(hues.count)) % hues.count)
             let w = RaceTuning.clamp01(player.waddle + (g.next() * 2 - 1) * Self.waddleSpread)
             let f = RaceTuning.clamp01(player.focus + (g.next() * 2 - 1) * Self.focusSpread)
-            out.append(Rival(name: name, tint: Self.hsv(hue, 0.34, 0.96), stats: RacerStats(waddle: min(max(w, 0.1), 0.95), focus: min(max(f, 0.15), 0.95))))
+            out.append(Rival(name: name, tint: Self.hsv(hue, 0.34, 0.96), stats: RacerStats(waddle: max(min(max(w, 0.1), 0.95), fl.waddle), focus: max(min(max(f, 0.15), 0.95), fl.focus))))
         }
         return out
     }
@@ -282,6 +318,8 @@ nonisolated struct RaceRacer: Sendable {
     var finishTime: Float?
     var place: Int?
     var coast = 0
+    /// Trips taken in a turn (of `tap.trips`).
+    var cornerTrips = 0
     // AI
     var aiTimer: Float = 0
     var effort: Float = 0.9
@@ -309,6 +347,8 @@ nonisolated struct RaceSim: Sendable {
     private(set) var placings: [RacePlacing] = []
     private(set) var events: [RaceEvent] = []
     let seed: UInt64
+    /// The course (Race/RaceCourse.swift): `dist` is an arc length along it. The Puddle by default: the straight, exactly the race before courses.
+    let course: RaceCourse
     /// The player's racer (always index 0).
     static let playerIndex = 0
 
@@ -318,9 +358,12 @@ nonisolated struct RaceSim: Sendable {
     var goFlashing: Bool { phase != .countdown && clock < RaceTuning.goFlash }
     /// 3, 2, 1, then 0 = GO (the view shows the number or GO).
     var countdownNumber: Int { phase == .countdown ? beat : 0 }
+    /// The racer is in a turn (the HUD's "ease off" hint).
+    func inTurn(_ i: Int) -> Bool { racers.indices.contains(i) && course.turnRadius(at: racers[i].dist) != nil }
 
-    init(player: RacerStats, playerName: String, rivals: [Rival], seed: UInt64, playerBoost: RaceBoost = .none) {
+    init(player: RacerStats, playerName: String, rivals: [Rival], seed: UInt64, playerBoost: RaceBoost = .none, course: RaceCourse = .puddle) {
         self.seed = seed
+        self.course = course
         var rs = [RaceRacer(name: playerName, stats: player, isPlayer: true, lane: RaceTuning.playerLane)]
         rs[0].boost = playerBoost; rs[0].tap.grace = playerBoost.grace
         // lanes: the player in the middle, the rivals either side
@@ -367,9 +410,11 @@ nonisolated struct RaceSim: Sendable {
         if phase == .running, racers.contains(where: { $0.finished }) { phase = .finishing; firstFinishAt = clock }
         if phase == .finishing {
             let since = clock - (firstFinishAt ?? clock)
-            if racers.allSatisfy({ $0.finished }) || (racers[0].finished && since >= RaceTuning.finishGrace) || since >= 2 * RaceTuning.finishGrace { endRace() }
+            // the stragglers' window: the course's (a tapping player always gets to finish), or the old 10 s when the player has stopped tapping
+            let window = racers[0].sinceStep > RaceTuning.stragglerStall ? 2 * RaceTuning.finishGrace : course.stragglerGrace
+            if racers.allSatisfy({ $0.finished }) || (racers[0].finished && since >= RaceTuning.finishGrace) || since >= window { endRace() }
         }
-        if phase != .results, clock >= RaceTuning.timeout { endRace() }
+        if phase != .results, clock >= course.timeout { endRace() }
     }
 
     private mutating func tickRacer(_ i: Int, dt: Float, free: Bool, ready: Bool, between: Bool) {
@@ -381,7 +426,7 @@ nonisolated struct RaceSim: Sendable {
         // distance: the body's own measurement when it has one
         let before = r.measured ?? r.dist
         if let m = r.measured { r.dist = m }
-        if !r.finished, r.dist >= RaceTuning.length { cross(&r, i, before: before, dt: dt) }
+        if !r.finished, r.dist >= course.length { cross(&r, i, before: before, dt: dt) }
         if r.finished { coastTick(&r, i, free: free); return }
 
         // focus pause
@@ -392,7 +437,7 @@ nonisolated struct RaceSim: Sendable {
         }
         r.pauseCooldown -= dt
         // a look-around comes up at random (by focus) and begins at the next moment the body is between steps
-        if !r.pauseWanted, r.pauseCooldown <= 0, clock > RaceTuning.pauseFreeStart, r.dist < RaceTuning.length - RaceTuning.pauseFreeFinish,
+        if !r.pauseWanted, r.pauseCooldown <= 0, clock > RaceTuning.pauseFreeStart, r.dist < course.length - RaceTuning.pauseFreeFinish,
            r.rng.next() < RaceTuning.pauseHazard(focus: r.stats.focus) * dt { r.pauseWanted = true }
         if r.pauseWanted {
             // no new step is taken: the one under way ends, then he stops (the feet start a committed step the tick the last one ends, so a pause
@@ -406,10 +451,13 @@ nonisolated struct RaceSim: Sendable {
         }
         // rivals tap on their own
         if !r.isPlayer { aiTap(&r, dt: dt) }
-        // take the buffered step when the body is free
+        // take the buffered step when the body is free; first the trip roll: his own feet, plus the corner he is in at the pace he is going
+        // (stride over the time since his last step: slower taps are safer) and any bump underfoot. One draw, so the straight rolls as it always did.
         if r.stepLeft <= 0, !r.tap.stumbling, free, r.tap.pending != nil {
-            if r.stepCount >= RaceTuning.tripFreeSteps, r.dist < RaceTuning.length - RaceTuning.pauseFreeFinish,
-               r.rng.next() < RaceTuning.tripChance(waddle: r.stats.waddle, focus: r.stats.focus) {
+            let pace = r.stride / max(r.sinceStep, 1 / r.rate)
+            if r.stepCount >= RaceTuning.tripFreeSteps, r.dist < course.length - RaceTuning.pauseFreeFinish,
+               r.rng.next() < RaceTuning.tripChance(waddle: r.stats.waddle, focus: r.stats.focus) + CourseTuning.hazard(course: course, at: r.dist, pace: pace, stats: r.stats) {
+                if course.turnRadius(at: r.dist) != nil { r.cornerTrips += 1 }
                 r.tap.trip(); r.sinceStep = 0
                 events.append(.trip(racer: i))
                 return
@@ -430,13 +478,16 @@ nonisolated struct RaceSim: Sendable {
         if r.aiTimer <= 0 {
             _ = r.tap.tap(r.aiFoot, canStep: !r.paused)
             r.aiFoot = 1 - r.aiFoot
-            r.aiTimer += (1 / (r.rate * r.effort)) * r.rng.range(0.92, 1.12)
+            // a focused rival eases off for a bend (the step period stretches toward his safe speed); on a straight the period is as it always was
+            let brake = CourseTuning.rivalBrake(course: course, at: r.dist, stats: r.stats, nominal: r.stride * r.rate * r.effort)
+            let period = brake == 1 ? 1 / (r.rate * r.effort) : brake / (r.rate * r.effort)
+            r.aiTimer += period * r.rng.range(0.92, 1.12)
         }
     }
 
     private mutating func cross(_ r: inout RaceRacer, _ i: Int, before: Float, dt: Float) {
         let span = max(r.dist - before, 1e-4)
-        let f = min(max((RaceTuning.length - before) / span, 0), 1)
+        let f = min(max((course.length - before) / span, 0), 1)
         r.finishTime = clock - dt * (1 - f)
         r.place = racers.compactMap(\.place).count + 1
         r.coast = 0
@@ -476,7 +527,7 @@ nonisolated struct RaceSim: Sendable {
     // MARK: results
 
     var playerPlace: Int? { placings.first(where: \.isPlayer)?.place }
-    /// Drops the player earns (0 until the results are in).
-    var playerDrops: Int { playerPlace.map { RaceTuning.drops(place: $0) } ?? 0 }
+    /// Drops the player earns on this course (0 until the results are in).
+    var playerDrops: Int { playerPlace.map { RaceTuning.drops(place: $0, tier: course.tier) } ?? 0 }
     var playerWon: Bool { playerPlace == 1 }
 }

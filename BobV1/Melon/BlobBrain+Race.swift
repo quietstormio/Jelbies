@@ -14,9 +14,14 @@ import simd
 /// The race state of one brain (the race model decides WHEN to step; this is how the body does it).
 struct RaceDrive {
     var active = false
-    /// Heading of the track (world yaw; 0 = toward +z, the camera) and the lane's x.
+    /// Heading of the track at the start (world yaw; 0 = toward +z, the camera) and the lane's x there.
     var heading: Float = 0
     var laneX: Float = 0
+    /// The course and his lane on it (Race/RaceCourse.swift): each step heads along the lane where he is. A straight from the start spot by default.
+    var course = RaceCourse.puddle
+    var lane = RaceTuning.playerLane
+    /// His arc length along the course at the last step (the projection's starting guess).
+    var lastS: Float = 0
     /// The committed step waiting for the feet to be free (at most one).
     var pendingFoot: Int?
     var pendingStride: Float = 0.34
@@ -51,14 +56,20 @@ extension BlobBrain {
     /// Back on the track after a look-around (or never left).
     var raceBodyReady: Bool { race.active && idleState.kind == nil && !commanded }
 
-    /// Takes the track: stands square on lane `x`, facing `heading` (0 = toward the camera).
-    func startRace(sim: SoftBody, skinner: Skinner, heading: Float = 0, laneX x: Float) {
+    /// Takes the track: stands square on lane `x`, facing `heading` (0 = toward the camera). With a `course` and `lane` his steps follow that lane
+    /// round its bends; without, a straight along `heading` from where he stands (the drill, the parked Jellies, the tests).
+    func startRace(sim: SoftBody, skinner: Skinner, heading: Float = 0, laneX x: Float, course: RaceCourse? = nil, lane: Int = RaceTuning.playerLane) {
         abortScript(sim, skinner)
         pending = nil; interruptScript = false
         race = RaceDrive(active: true, heading: heading, laneX: x)
         autonomy = false; idleBlocked = false
         runW = 0; zoomW = 0; hurry = false
         currentPose(sim)
+        // the course after the pose: a straight from where he now STANDS (the pz the pre-course race measured progress from), so the straight's
+        // progress is exactly pz - startZ
+        if let course { race.course = course; race.lane = lane }
+        else { race.course = RaceCourse.straight(from: SIMD2(x, pz), heading: heading, length: RaceTuning.length); race.lane = RaceTuning.playerLane }
+        race.lastS = 0
         yaw = heading
         nextSwing = 0
         script = .race; activity = .walking
@@ -145,20 +156,41 @@ extension BlobBrain {
         pitch += 0.05 * env
     }
 
-    /// One step of the locked gait toward the track heading: the stance foot's lead plus half a stride ahead (the walk's regular step), with the
-    /// stride, rate and foot given by the race.
+    /// One step of the locked gait along the lane: the stance foot's lead plus half a stride ahead (the walk's regular step), with the stride, rate
+    /// and foot given by the race. Only the HEADING comes from the course: the lane's direction half a stride ahead of where he is, and a small
+    /// drift back onto the lane's line. On a straight this is exactly the pre-course step (heading 0, drift toward laneX).
     private func raceStartStep(foot: Int, stride L: Float, rate: Float, final: Bool) {
-        let u = SIMD2<Float>(sinf(race.heading), cosf(race.heading))
+        let root = SIMD2(px, pz)
+        let at = race.course.progress(of: root, lane: race.lane, near: race.lastS)
+        race.lastS = at
+        let heading = race.course.pose(at: at + 0.5 * L).heading
+        let u = SIMD2<Float>(sinf(heading), cosf(heading))
+        let right = RaceCourse.right(race.course.pose(at: at).heading)
         nextSwing = foot
         let stance = 1 - foot
-        let root = SIMD2(px, pz)
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)
-        var r = 0.5 * L, a: Float
-        if final { a = max(0, s); r = 0 } else { a = min(max(s + r, 0.3 * L), 1.5 * L) }
         let m = turnRate * min(max(amplitude, 0.5), 1) * (1 / rate)
-        let dyaw = max(-m, min(m, wrapAngle(race.heading - yaw)))
-        let drift = max(-0.04, min(0.04, (race.laneX - px) * 0.5))
+        let err = wrapAngle(heading - yaw)
+        // a curved course only (the straight keeps the pre-course step to the bit): back from a look-around in a bend he can face far from the
+        // lane (on the straight a look faces the camera, which IS the way he runs); a stride then would plant the swing foot out to his side, off
+        // the body. So he turns on the spot first, feet under him, then strides.
+        if !race.course.isStraight, abs(err) > 0.5 {
+            race.steps += 1
+            startStep(dyaw: max(-1.5 * m, min(1.5 * m, err)), peak: turnLift * amplitude, rate: rate)
+            return
+        }
+        let dyaw = max(-m, min(m, err))
+        // in a bend the reach and the sideways swing shorten a little with the turn of the step, so the feet stay fused to the egg (the body turns
+        // under a foot in flight); zero on the straight, so its step is exactly the pre-course one
+        let turnK: Float = race.course.isStraight ? 0 : min(1, abs(dyaw) / 0.1)
+        var r = 0.5 * L * (1 - 0.2 * turnK), a: Float
+        if final { a = max(0, s); r = 0 } else { a = min(max(s + r, 0.3 * L), 1.5 * L) }
+        let drift = max(-0.04, min(0.04, -race.course.lateral(of: root, lane: race.lane, at: at) * 0.5))
         race.steps += 1
-        startStep(rootD: u * a + SIMD2(drift, 0), dyaw: dyaw, reach: u * r, peak: stepLift * amplitude, rate: rate, outScale: 0.6)
+        startStep(rootD: u * a + right * drift, dyaw: dyaw, reach: u * r, peak: stepLift * amplitude, rate: rate, outScale: 0.6 * (1 - 0.6 * turnK))
     }
+
+    /// How far he is along his lane now (arc length), and how far off its line (positive = to the right). For the glue's progress and the tests.
+    var raceProgress: Float { race.course.progress(of: SIMD2(px, pz), lane: race.lane, near: race.lastS) }
+    var raceLateral: Float { race.course.lateral(of: SIMD2(px, pz), lane: race.lane, at: raceProgress) }
 }

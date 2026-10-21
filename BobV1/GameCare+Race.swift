@@ -34,6 +34,8 @@ final class RaceBook {
     var homeAge: Float = 0
     var returnerHopped = false
     var celebrated = false
+    /// The follow camera's smoothed state on a curved course (Race/RaceCamera.swift); nil until the track is up.
+    var follow: RaceFollowPose?
     nonisolated deinit {}
 }
 
@@ -50,6 +52,11 @@ extension GameCare {
         race.onLapReset = { [weak self] in self?.drillLapReset() }
         if d.object(forKey: "TrainAuto") != nil { race.drillAuto = true; race.autoReturnAfter = 7 }
         if d.object(forKey: "RaceAuto") != nil { race.autoRate = Float(d.double(forKey: "RaceAuto")) > 0 ? Float(d.double(forKey: "RaceAuto")) : 4; race.autoReturnAfter = 7 }
+        // capture aid: -RaceCourse puddle|ripple|splash|wave picks the course for the next race, with every course below it won (open); the ones above stay locked
+        if let c = d.string(forKey: "RaceCourse"), let t = CourseTier(rawValue: c.lowercased()) {
+            for b in CourseTier.allCases where b.index < t.index { race.progress.records[b] = CourseProgress.Record(races: 1, wins: 1, topTwo: 1) }
+            race.courseTier = t
+        }
     }
 
     /// Why a race cannot start for this Jelly right now, in words for the Track panel (nil = it can). A stage that has not ticked yet (the panel was opened
@@ -109,7 +116,15 @@ extension GameCare {
         let rivals = max(min(raceBook.actors.count, 3) - 1, 0)
         race.stats = prof.stats
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
-                   playerTint: JellyRoster.tint(id), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost())
+                   playerTint: JellyRoster.tint(id), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
+    }
+
+    /// Picks the course for the next race (the Track panel): only an open one.
+    @discardableResult
+    func chooseCourse(_ t: CourseTier) -> Bool {
+        guard race.progress.unlocked(t) else { return false }
+        race.courseTier = t
+        return true
     }
 
     /// The body colour a Jelly wears on the track (nil = his own).
@@ -137,6 +152,8 @@ extension GameCare {
                 brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: px)          // (the race script keeps the room's floor rules off him, and he just stands there)
                 a.skinner.jelly.reset()
             }
+            let course = sim.course
+            book.follow = nil
             for (k, aid) in book.racers.enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
@@ -145,9 +162,9 @@ extension GameCare {
                 book.autonomy[aid] = brain.autonomy
                 book.arena[aid] = a.sim.arenaRadius
                 a.sim.arenaRadius = .infinity
-                let x = RaceTuning.laneX(r.lane)
-                a.sim.teleport(toXZ: SIMD2(x, RaceTuning.startZ))
-                brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: x)
+                let spot = course.lanePoint(r.lane, at: 0)                  // on the start line of his lane, facing down the course
+                a.sim.teleport(toXZ: spot)
+                brain.startRace(sim: a.sim, skinner: a.skinner, heading: course.pose(at: 0).heading, laneX: spot.x, course: course, lane: r.lane)
                 a.skinner.jelly.reset()
                 if k > 0, k - 1 < race.rivals.count { book.palettes[aid] = LocalRivalSource.palette(for: race.rivals[k - 1].tint, name: race.rivals[k - 1].name) }
             }
@@ -175,7 +192,24 @@ extension GameCare {
             }
             book.parked = []
             book.palettes = [:]
+            book.follow = nil
         }
+    }
+
+    /// The follow camera of a curved course this frame (nil: the Puddle's fixed frame, the drill's own follow, or no race): the leader and the
+    /// player framed together from a little way down the track, smoothed by `dt`. See Race/RaceCamera.swift.
+    func raceFollow(_ actors: [JellyActor], dt: Float) -> RaceFollowPose? {
+        let book = raceBook
+        guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight else { book.follow = nil; return nil }
+        var spots: [RaceFollowPose.Racer] = []
+        for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
+            guard let b = actors[aid].brain else { continue }
+            spots.append(RaceFollowPose.Racer(pos: SIMD2(b.px, b.pz), s: sim.racers[k].dist, isPlayer: k == 0))
+        }
+        guard !spots.isEmpty else { return book.follow }
+        let want = RaceFollowPose.aim(course: sim.course, racers: spots)
+        book.follow = book.follow.map { $0.smoothed(toward: want, dt: dt) } ?? want
+        return book.follow
     }
 
     // MARK: per fixed step (the stage calls it every step, with every Jelly)
@@ -201,7 +235,7 @@ extension GameCare {
             for i in book.racers.indices {
                 guard let a = body(i), let b = a.brain else { continue }
                 b.raceKeepAlive()
-                if race.kind == .race { race.setMeasured(i, dist: b.pz - RaceTuning.startZ) }
+                if race.kind == .race { race.setMeasured(i, dist: b.raceProgress) }          // his arc length along his lane (pz - startZ on the straight)
             }
         }
         let events = race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
@@ -225,7 +259,7 @@ extension GameCare {
         let x = RaceTuning.laneX(RaceTuning.playerLane)
         brain.endRace()
         a.sim.teleport(toXZ: SIMD2(x, RaceTuning.startZ))
-        brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: x)
+        brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: x, course: .puddle, lane: RaceTuning.playerLane)          // the drill is always on the straight
         a.skinner.jelly.reset()
     }
 

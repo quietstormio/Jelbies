@@ -44,7 +44,7 @@ struct RaceChrome: View {
 
     private var topBar: some View {
         VStack(spacing: 8) {
-            Text("Waddle Sprint")
+            Text(race.ui.course == .puddle ? "Waddle Sprint" : "Waddle Sprint · \(race.ui.course.title)")
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
@@ -55,6 +55,8 @@ struct RaceChrome: View {
                 hint("Oops! Left, right, left, right")
             } else if race.ui.stalled {
                 hint("Keep tapping!")
+            } else if race.ui.inTurn {
+                hint("Bend! Ease off a little")
             } else if race.ui.phase == .countdown {
                 hint("Tap left, right, left, right")
             }
@@ -203,6 +205,12 @@ struct RacePlacingsCard: View {
                 Text("Waddle got a little quicker")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(CareMenu.brown.opacity(0.7))
+            }
+            if let t = race.unlockedNow {
+                Text("\(t.title) course unlocked!")
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(FocusStyle.pink)
+                    .accessibilityIdentifier("race-unlocked")
             }
             Button {
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()

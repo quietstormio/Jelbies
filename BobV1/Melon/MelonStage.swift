@@ -865,7 +865,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             if let f = drillFollow, simd_distance(f, c) < 3 { drillFollow = f + (c - f) * min(1, dt * 8) } else { drillFollow = c }
             drillAt = drillFollow
         } else { drillFollow = nil }
-        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt) : rig.camera(viewSize: pts, safeRect: safe)
+        let raceFollow = game ? model.care.raceFollow(actors, dt: dt) : nil          // a curved course: the follow camera (Race/RaceCamera.swift); nil on the Puddle
+        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt, raceFollow: raceFollow) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
         if game { syncRoam(aspect: Float(pts.width / max(pts.height, 1))) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
@@ -897,6 +898,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let washed = bathRoom ? min(model.care.bath.targetID, actors.count - 1) : 0
             renderer.bathBody = washed
             let camIn = model.care.focus.blend > 0.25          // the close-up is (nearly) on: the Jellies it does not frame are out of the picture
+            renderer.raceCourse = model.care.race.course.tier
             renderer.raceVisible = model.care.race.trackVisible
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.id == 0 ? nil : JellyRoster.palette(a.id), body: a.id)

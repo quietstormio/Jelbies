@@ -78,14 +78,14 @@ enum GameCamera {
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
-    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil) -> CameraState {
+    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil, raceFollow: RaceFollowPose? = nil) -> CameraState {
         self.aspect = aspect
         if roomWideScale != 1 {
             let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
             target = roomTarget + lift
             eye = roomTarget + (roomEye - roomTarget) * (1 + (roomWideScale - 1) * pa) + lift
         }
-        var e = eye, t = target
+        var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
             let p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
             e += (p.eye - e) * focus
@@ -97,12 +97,17 @@ enum GameCamera {
             t += (p.target - t) * bath
         }
         if race != 0 {                                      // the Waddle Sprint track: a fixed wide frame, snapped under the white fade (0 or 1)
-            let p = drillAt.map { drillPose(aspect: aspect, at: $0) } ?? racePose(aspect: aspect)      // the practice drill follows its Jelly closer
-            e += (p.eye - e) * race
-            t += (p.target - t) * race
+            if let f = raceFollow, drillAt == nil {          // a curved course: the follow camera (Race/RaceCamera.swift), banking into the bends
+                let p = f.camera(aspect: aspect)
+                e += (p.eye - e) * race; t += (p.target - t) * race; up = p.up
+            } else {
+                let p = drillAt.map { drillPose(aspect: aspect, at: $0) } ?? racePose(aspect: aspect)      // the practice drill follows its Jelly closer
+                e += (p.eye - e) * race
+                t += (p.target - t) * race
+            }
         }
         var c = CameraState()
-        c.view = M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0))
+        c.view = M4.lookAt(eye: e, at: t, up: up)
         c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: race != 0 ? 260 : 60), c.view)      // the track's far hills and sky wall are ~100 u away
         c.invViewProj = M4.invert(c.viewProj)
         c.pos = e

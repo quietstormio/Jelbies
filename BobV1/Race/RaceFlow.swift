@@ -24,8 +24,15 @@ final class RaceFlow {
 
     private(set) var phase: Phase = .off
     private(set) var kind: Kind = .race
-    /// The course (only the Puddle exists yet).
-    var courseTier: CourseTier = .puddle
+    /// The course the next race is on (Race/RaceCourse.swift). The Track panel's picker sets it; `progress` says which are open.
+    var courseTier: CourseTier {
+        get { progress.chosen }
+        set { progress.chosen = newValue }
+    }
+    /// What has been won on each course, the unlocks, and the chosen course (saved outside tests).
+    var progress = CourseProgress(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+    /// The course of the race under way (the chosen one when none is).
+    var course: RaceCourse { sim?.course ?? RaceCourse.course(courseTier) }
     /// 0...1 white overlay opacity (the view draws it).
     private(set) var wipe: Float = 0
     /// The track is shown instead of the room (0 / 1: snapped under the white, never blended on screen).
@@ -41,6 +48,8 @@ final class RaceFlow {
     /// What the player earned and gained, once settled.
     private(set) var earned = 0
     var waddleGain: Float = 0
+    /// A course this race opened (the placings card says so), nil when none.
+    private(set) var unlockedNow: CourseTier?
     /// Rivals of this race (names / tints / stats), for the lane labels and the body colours.
     private(set) var rivals: [Rival] = []
     private(set) var playerName = ""
@@ -124,25 +133,28 @@ final class RaceFlow {
         guard let s = sim else { return .none }
         if s.phase == .results || s.racers[0].finished { return .results }
         if s.phase == .countdown { return .race }
-        return s.racers.map(\.dist).max().map { $0 >= RaceTuning.length - RaceTuning.finalStretch } == true ? .raceFinal : .race
+        return s.racers.map(\.dist).max().map { $0 >= s.course.length - RaceTuning.finalStretch } == true ? .raceFinal : .race
     }
 
     // MARK: start
 
-    /// "Race": player `id` goes to the track with `rivals` (made by the rival source). Ignored while a trip is running.
-    func begin(playerID id: Int, name: String, player: RacerStats, playerTint: SIMD3<Float>, rivalCount: Int, seed: UInt64, boost: RaceBoost = .none) {
+    /// "Race": player `id` goes to the track with `rivals` (made by the rival source) on `course` (the chosen one by default; a locked one falls back
+    /// to the Puddle). Ignored while a trip is running.
+    func begin(playerID id: Int, name: String, player: RacerStats, playerTint: SIMD3<Float>, rivalCount: Int, seed: UInt64, boost: RaceBoost = .none, course tier: CourseTier? = nil) {
         guard phase == .off else { return }
-        let rs = rivalSource.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed)
+        var t = tier ?? courseTier
+        if !progress.unlocked(t) { t = .puddle }
+        let rs = rivalSource.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
         kind = .race; drill = nil; drillResult = nil; drillUI = DrillUI(); dip = 0
         rivals = rs; playerName = name; playerID = id
-        sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost)
+        sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0
+        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil
         started += 1
     }
 
-    /// "Train": Jelly `id` practises alone on the track (Rhythm Steps). Ignored while a trip is running.
+    /// "Train": Jelly `id` practises alone on the track (Rhythm Steps), always on the Puddle's straight. Ignored while a trip is running.
     func beginDrill(playerID id: Int, name: String, player: RacerStats, seed: UInt64) {
         guard phase == .off else { return }
         kind = .drill; drill = nil; drillResult = nil; drillUI = DrillUI(); drillState = DrillRun(); dip = 0
@@ -219,6 +231,8 @@ final class RaceFlow {
         u.stalled = s.phase != .countdown && s.racers[0].stalled && u.live && s.clock > 1.2
         u.stumbling = s.racers[0].tap.stumbling
         u.tripped = s.racers[0].tap.tripped
+        u.inTurn = kind == .race && u.live && s.inTurn(0)
+        u.course = s.course.tier
         u.placings = s.placings
         u.earned = earned
         u.waddleGain = waddleGain
@@ -244,6 +258,9 @@ final class RaceFlow {
         if let place = s.playerPlace {
             wallet?.add(earned)
             waddleGain = stats?.afterRace(place: place) ?? 0
+            let open = progress.unlockedTiers
+            progress.record(tier: s.course.tier, place: place)
+            unlockedNow = progress.unlockedTiers.first { !open.contains($0) }
             drillCue(.jingle(win: place <= 2))
         }
         cueSerial += 1
@@ -304,6 +321,9 @@ struct RaceUI: Equatable {
     var stalled = false
     var stumbling = false
     var tripped = false
+    /// The player is in a bend (the "ease off" hint).
+    var inTurn = false
+    var course: CourseTier = .puddle
     var placings: [RacePlacing] = []
     var earned = 0
     var waddleGain: Float = 0
