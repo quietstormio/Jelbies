@@ -27,6 +27,7 @@ final class IdleBehaviourTests: XCTestCase {
     private func play(_ kind: IdleKind, stumble: Bool = false, seed: UInt64 = 11, maxT: Float = 45, game: Bool = true) -> Run {
         let r = MotionRig(game: game)
         r.brain.seed = seed
+        r.brain.expr.enabled = false          // (the expression layer picks its own faces - a "^^" squint is not the behaviour leaving something behind; ExpressionTests covers it)
         r.brain.idleForced = true
         r.brain.amplitude = 1
         if !game { r.brain.wanderCenter = .zero; r.brain.wanderRadius = 2.0 }
@@ -244,8 +245,8 @@ final class IdleBehaviourTests: XCTestCase {
     // MARK: mood and scheduler
 
     func testMoodWeightsSelectTheRightSet() {
-        XCTAssertEqual(IdleTable.set(.happy), [.run, .jacks, .look, .zoomies, .slide, .scoot])      // Build B: + the body-led running actions
-        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn, .scoot, .zoomies, .run])      // 2026-10-20: + zoomies / run (the happy table alone almost never came up)
+        XCTAssertEqual(IdleTable.set(.happy), [.run, .jacks, .look, .zoomies, .slide, .scoot, .joy])      // Build B: + the body-led running actions; liveliness: + the jump for joy
+        XCTAssertEqual(IdleTable.set(.okay), [.sit, .look, .yawn, .scoot, .zoomies, .run, .joy])      // 2026-10-20: + zoomies / run (the happy table alone almost never came up), + joy
         XCTAssertEqual(IdleTable.set(.grumpy), [.slump])
         for m in [IdleMood.happy, .okay, .grumpy] {
             var seen: Set<IdleKind> = []
@@ -287,7 +288,12 @@ final class IdleBehaviourTests: XCTestCase {
             XCTAssertLessThanOrEqual(starts.count, 14, "\(mood): not constantly")
             let allowed = IdleTable.set(mood).union(mood == .happy ? [.stumble] : [])
             for k in kinds { XCTAssertTrue(allowed.contains(k), "\(mood): \(k) is not in its set") }
-            for g in gaps { XCTAssertGreaterThanOrEqual(g, 10, "\(mood): cooldown between specials"); XCTAssertLessThanOrEqual(g, 75) }
+            // (the liveliness round lets the flourishes - a jump for joy, a skip - start from standing with no scheduler cooldown of their own, so a gap next to one may be short)
+            for ((ta, ka), (tb, _)) in zip(starts, starts.dropFirst()) {
+                let g = tb - ta
+                if !BlobBrain.flourishKinds.contains(ka) { XCTAssertGreaterThanOrEqual(g, 10, "\(mood): cooldown between specials") }
+                XCTAssertLessThanOrEqual(g, 75)
+            }
             if IdleTable.set(mood).count > 1 { for (a, b) in zip(kinds, kinds.dropFirst()) where a != .stumble && b != .stumble { XCTAssertNotEqual(a, b, "\(mood): same behaviour back to back") } }
             XCTAssertFalse(r.sim.hasNonFinite())
         }

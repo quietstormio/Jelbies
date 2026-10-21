@@ -910,11 +910,20 @@ final class BlobBrain {
     var steerStallSeconds: Float { steerStall }
     var steerRoute: [SIMD2<Float>] { route }
 
+    /// The peers the steering sees. A Jelly perched on a seat (the hop up, the sit on top) is the furniture's business - the piece is the
+    /// obstacle - not a body on the floor: a leg past the sofa must not wait on the one sitting on it.
+    func steerPeers() -> [(id: Int, pos: SIMD2<Float>)] {
+        let all = peers()
+        let perched = socialOthers().filter { $0 !== self && $0.isPerched }.map(\.position)
+        guard !perched.isEmpty else { return all }
+        return all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
+    }
+
     /// How deep (u) a floor point is inside something he must not stand in, with `margin` extra clearance (0 = free).
     func intrusion(_ p: SIMD2<Float>, margin: Float) -> Float {
         let r = resolve(SIMD3(p.x, 0, p.y), footprint + margin)
         var d = simd_length(SIMD2(r.x, r.z) - p)
-        for o in peers() where o.id > steerID { d = max(d, socialGap(at: o.pos) + margin * 0.5 - simd_distance(o.pos, p)) }
+        for o in steerPeers() where o.id > steerID { d = max(d, socialGap(at: o.pos) + margin * 0.5 - simd_distance(o.pos, p)) }
         return max(d, 0)
     }
 
@@ -975,7 +984,7 @@ final class BlobBrain {
         if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
-        let standing = peers().contains { $0.id >= Int.max / 4 }
+        let standing = steerPeers().contains { $0.id >= Int.max / 4 }
         // Autonomous legs (a wander / run / social walk: no job, no voice command) do not wait for a Jelly that blocks them: after a beat they give the leg up
         // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
         let requested = job != nil || commanded || pending != nil
@@ -995,19 +1004,19 @@ final class BlobBrain {
     var stuckRepicks = 0
     /// A wander goal is no closer than `peerGap` to any other Blob (always true without peers: a lone Blob picks exactly as before).
     func peerFree(_ p: SIMD2<Float>) -> Bool {
-        let others = peers()
+        let others = steerPeers()
         if others.isEmpty { return true }
         return !others.contains { simd_distance($0.pos, p) < peerGap }
     }
     /// A goal he can really get to: the straight leg is clear, or a route of at most two corners goes round whatever stands in it (a goal behind a
     /// standing Jelly in a narrow strip of floor is not a goal: he would wait there and give up).
     func reachable(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
-        if peers().isEmpty { return true }
+        if steerPeers().isEmpty { return true }
         return legClear(a, b, margin: steerMargin) || planRoute(a, b, depth: 2) != nil
     }
     /// A Blob with a higher id stands within the gap of the straight leg a -> b.
     func peerOnLeg(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
-        let others = peers().filter { $0.id > steerID }
+        let others = steerPeers().filter { $0.id > steerID }
         if others.isEmpty { return false }
         let d = b - a, n = max(2, Int(simd_length(d) / 0.1))
         for i in 0...n { let p = a + d * (Float(i) / Float(n)); if others.contains(where: { simd_distance($0.pos, p) < socialGap(at: $0.pos) }) { return true } }

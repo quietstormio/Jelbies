@@ -110,7 +110,7 @@ final class SocialTests: XCTestCase {
         func sampleGaps() {
             for i in 0..<rigs.count { for j in (i + 1)..<rigs.count {
                 let paired = rigs[i].brain.social != nil && rigs[i].brain.social === rigs[j].brain.social && rigs[i].brain.social!.closeOK
-                if !paired { let g = centreGap(i, j); if g < minPair { minPair = g; minTag = "t \(rigs[0].t) \(i)-\(j) act \(rigs[i].brain.activity)/\(rigs[j].brain.activity) idle \(String(describing: rigs[i].brain.idleState.kind))/\(String(describing: rigs[j].brain.idleState.kind)) social \(String(describing: rigs[i].brain.socialKind))/\(String(describing: rigs[j].brain.socialKind)) brainGap \(brainGap(i, j))" } }
+                if !paired { let g = centreGap(i, j); if g < minPair { let a = rigs[i].root, b = rigs[j].root; minPair = g; minTag = "t \(rigs[0].t) \(i)-\(j) act \(rigs[i].brain.activity)/\(rigs[j].brain.activity) idle \(String(describing: rigs[i].brain.idleState.kind))/\(String(describing: rigs[j].brain.idleState.kind)) social \(String(describing: rigs[i].brain.socialKind))/\(String(describing: rigs[j].brain.socialKind)) brainGap \(brainGap(i, j)) brainPos \(rigs[i].brain.position)/\(rigs[j].brain.position) root \(a)/\(b) poseW \(rigs[i].brain.poseW)/\(rigs[j].brain.poseW) script \(rigs[i].brain.script)/\(rigs[j].brain.script)" } }
             } }
         }
         var anySocial: Bool { rigs.contains { $0.brain.isSocial } }
