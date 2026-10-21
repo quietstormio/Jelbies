@@ -126,8 +126,9 @@ final class EarsReactor {
     func handle(_ e: EarEvent, jellies: [Jelly], now: Double) {
         locks.race = extraLock()
         guard !locks.blocksAll else { note("blocked \(e)"); return }
-        // a reserved / held Jelly (his meal is coming, the close-up, the bath) waits where he stands: no reaction at all
-        let free = jellies.filter { !$0.brain.held }
+        // a reserved Jelly (his meal is coming) waits where he stands: no reaction at all. (`idleBlocked` is NOT a reason: the close-up
+        // sets it on everybody, and there the small reactions still land, see `Locks.focus`.)
+        let free = jellies.filter { !$0.brain.reserved }
         let awake = free.filter { !$0.brain.isNapping }
         let asleep = free.filter { $0.brain.isNapping }
         switch e {
@@ -207,7 +208,7 @@ final class EarsReactor {
         let b = EarsDance.bump(ph)
         for j in jellies where j.brain.ears.dancing {
             let brain = j.brain
-            if brain.isNapping || brain.held || anims[j.id] != nil { continue }
+            if brain.isNapping || brain.reserved || anims[j.id] != nil { continue }
             // stay for the song: no wander legs or idle specials start while dancing
             brain.restTimer = max(brain.restTimer, 1.5)
             brain.idleState.cooldown = max(brain.idleState.cooldown, 1.5)

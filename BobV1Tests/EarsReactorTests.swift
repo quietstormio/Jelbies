@@ -134,6 +134,13 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertEqual(room.came, [1], "the free one comes")
         room.handle(.musicStarted(EarBeat(bpm: 120, anchor: room.now, strength: 3)))
         XCTAssertFalse(room.rigs[0].brain.ears.dancing); XCTAssertTrue(room.rigs[1].brain.ears.dancing)
+        // idleBlocked alone (the close-up sets it on everybody) is not a reservation: in the close-up a clap still gives the giggle
+        room.run(2.0)
+        room.rigs[1].brain.idleBlocked = true
+        room.reactor.locks = { var l = EarsReactor.Locks(); l.focus = true; return l }()
+        room.handle(.heard(.clap))
+        XCTAssertEqual(room.reactor.anim(of: 1), .giggle, "idleBlocked in the close-up still giggles")
+        XCTAssertNil(room.reactor.anim(of: 0), "reserved never reacts")
     }
 
     func testClapBringsTheNearestOneHurryingAndADoubleClapEveryone() {
