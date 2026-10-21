@@ -409,6 +409,166 @@ final class FeatureTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(r.brain.flapHop.urge, 20, "and re-armed for 25...40 s")
     }
 
+    // MARK: the smaller wings and the flap bursts (2026-10-21)
+
+    /// The wings are built 15 % smaller about their hinges: every wing vertex's reach from its hinge is 0.85 x the art's, the hinge itself stays put.
+    func testWingsAreFifteenPercentSmallerAboutTheirHinges() throws {
+        let spec = FeatureSpec.shared
+        let art = try XCTUnwrap(FeatureMeshes.art("lav_a_final"))
+        XCTAssertEqual(FeatureMeshes.wingScale, 0.85, accuracy: 1e-6)
+        let p = try XCTUnwrap(FeatureMeshes.prepare(.wings, body: WearBody.shared))
+        var rawReach: Float = 0, reach: Float = 0, lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for (pi, part) in art.parts.enumerated() {
+            let side = part.name.hasPrefix("wing_l") ? "l" : "r"
+            let hinge = try XCTUnwrap(spec.wings.sides[side]).hinge.v3
+            XCTAssertEqual(simd_distance(p.parts[pi].pivot, hinge), 0, accuracy: 1e-6, "\(part.name): the hinge is where the art lab put it")
+            for v in part.positions { rawReach = max(rawReach, simd_distance(spec.wings.anchor.v3 + v, hinge)) }
+        }
+        for (i, q) in p.rest.enumerated() { reach = max(reach, simd_length(p.off[i])); lo = simd_min(lo, q); hi = simd_max(hi, q) }
+        XCTAssertEqual(reach / rawReach, 0.85, accuracy: 0.005, "the reach from the hinge is 85 %")
+        // and against the full-size build: the bounds shrink about the hinges, not about the body
+        let was = FeatureMeshes.wingScale
+        FeatureMeshes.wingScale = 1; FeatureMeshes.clearCache()
+        defer { FeatureMeshes.wingScale = was; FeatureMeshes.clearCache() }
+        let full = try XCTUnwrap(FeatureMeshes.prepare(.wings, body: WearBody.shared))
+        var flo = SIMD3<Float>(repeating: .infinity), fhi = SIMD3<Float>(repeating: -.infinity)
+        for q in full.rest { flo = simd_min(flo, q); fhi = simd_max(fhi, q) }
+        let span = hi - lo, fspan = fhi - flo
+        MotionLog.write(String(format: "WINGS2 span %.3f x %.3f x %.3f (full %.3f x %.3f x %.3f)", span.x, span.y, span.z, fspan.x, fspan.y, fspan.z))
+        for a in 1..<3 { XCTAssertLessThan(span[a] / fspan[a], 0.9, "axis \(a): smaller"); XCTAssertGreaterThan(span[a] / fspan[a], 0.8, "axis \(a): not too small") }
+        // sideways the body between the hinges does not shrink: the reach past each hinge does
+        let hx = abs(spec.wings.sides["r"]!.hinge[0])
+        XCTAssertEqual((hi.x - hx) / (fhi.x - hx), 0.85, accuracy: 0.02, "the tip reach past the hinge is 85 %")
+        XCTAssertEqual(full.rest.count, p.rest.count)
+    }
+
+    /// A rig with wings and a feature set ticked together for `seconds`; returns the slot and the largest |burst| seen.
+    private func runWings(_ r: MotionRig, _ f: FeatureSet, seconds: Float, worn: [String] = [], hideAll: Bool = false, each: ((FeatureSet.Slot) -> Void)? = nil) -> (FeatureSet.Slot, Float) {
+        var peak: Float = 0
+        r.run(seconds) {
+            f.tick(id: 0, brain: r.brain, sim: r.sim, feature: .wings, worn: worn, hideAll: hideAll, dt: 1.0 / 60)
+            if let s = f.slot(0) { peak = max(peak, abs(s.burstDeg)); each?(s) }
+        }
+        return (f.slot(0)!, peak)
+    }
+
+    func testWingBurstsEveryFourToNineSecondsWhileAwake() {
+        let r = MotionRig(game: true)
+        Self.keep.append(r)
+        r.brain.feature = .wings; r.brain.autonomy = false; r.brain.anticsEnabled = false
+        r.brain.expr.enabled = false; r.brain.expr.kind = .neutral
+        let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
+        var maxFlap: Float = -1e9, minFlap: Float = 1e9, flutterOnly: Float = 0, crossings = 0, lastSign: Float = 0, inBurst = false
+        let (s, peak) = runWings(r, f, seconds: 60) { s in
+            if s.burstActive {
+                maxFlap = max(maxFlap, s.flap); minFlap = min(minFlap, s.flap)
+                let sg: Float = s.burstDeg > 0 ? 1 : (s.burstDeg < 0 ? -1 : 0)
+                if sg != 0, lastSign != 0, sg != lastSign { crossings += 1 }
+                if sg != 0 { lastSign = sg }
+                inBurst = true
+            } else {
+                if inBurst { inBurst = false; lastSign = 0 }
+                flutterOnly = max(flutterOnly, abs(s.flap))
+            }
+        }
+        MotionLog.write(String(format: "WINGBURST 60 s: %d bursts, onsets %@, peak %.1f, flap %.1f...%.1f, flutter %.1f", s.bursts, s.burstOnsets.map { String(format: "%.1f", $0) }.joined(separator: " "), peak, minFlap, maxFlap, flutterOnly))
+        XCTAssertGreaterThanOrEqual(s.bursts, 5, "about every 4...9 s over a minute")
+        XCTAssertLessThanOrEqual(s.bursts, 15)
+        for i in 1..<s.burstOnsets.count {
+            let gap = s.burstOnsets[i] - s.burstOnsets[i - 1]
+            XCTAssertGreaterThanOrEqual(gap, 4 + 2.0 / 8 - 0.05, "gap \(i): the wait plus the burst itself")
+            XCTAssertLessThanOrEqual(gap, 9 + 4.0 / 6 + 0.05, "gap \(i)")
+        }
+        XCTAssertGreaterThanOrEqual(peak, 30, "a real flap (35...50 deg under the envelope)")
+        XCTAssertLessThanOrEqual(peak, 50.5)
+        XCTAssertLessThanOrEqual(maxFlap, 75.5, "within the free flap range"); XCTAssertGreaterThanOrEqual(minFlap, -40.5)
+        XCTAssertLessThan(flutterOnly, 6, "between bursts the gentle flutter")
+        // 2...4 flaps at 6...8 Hz: two sign changes per flap
+        XCTAssertGreaterThanOrEqual(crossings, s.bursts * 2 - 2); XCTAssertLessThanOrEqual(crossings, s.bursts * 8)
+        XCTAssertFalse(s.burstActive)
+        XCTAssertEqual(r.brain.idleState.kind, nil, "a wing-only animation: the body did nothing")
+    }
+
+    func testWingBurstsNeverAsleepAtAMealInTheWashOrFolded() {
+        let r = MotionRig(game: true)
+        Self.keep.append(r)
+        r.brain.feature = .wings; r.brain.autonomy = false; r.brain.anticsEnabled = false
+        let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
+        // a meal (reserved)
+        r.brain.reserved = true
+        f.primeBurst(0)
+        var (s, peak) = runWings(r, f, seconds: 20)
+        XCTAssertEqual(s.bursts, 0, "reserved: no burst"); XCTAssertEqual(peak, 0, accuracy: 1e-6)
+        r.brain.reserved = false
+        // dining script
+        r.brain.script = .dine
+        f.primeBurst(0)
+        (s, peak) = runWings(r, f, seconds: 12)
+        XCTAssertEqual(s.bursts, 0, "dining: no burst")
+        r.brain.script = .none
+        // the wash
+        f.primeBurst(0)
+        (s, peak) = runWings(r, f, seconds: 12, hideAll: true)
+        XCTAssertEqual(s.bursts, 0, "in the bath: no burst")
+        // folded under a cape + bucket hat
+        f.primeBurst(0)
+        (s, peak) = runWings(r, f, seconds: 12, worn: ["cape_hero", "bucket_hat"])
+        XCTAssertTrue(s.folded); XCTAssertEqual(s.bursts, 0, "folded: no burst"); XCTAssertEqual(s.flap, 0, accuracy: 1e-3)
+        // and it works again when free (the primed wait fires on the first tick)
+        f.primeBurst(0)
+        (s, peak) = runWings(r, f, seconds: 2)
+        XCTAssertEqual(s.bursts, 1, "free again: the primed burst fires")
+        XCTAssertGreaterThan(peak, 30)
+        // asleep (every stage, from the lie-down on)
+        r.brain.idleForced = true
+        XCTAssertTrue(r.brain.idleStart(.sleep, r.sim)); r.brain.sleep.hold = 500
+        let before = f.slot(0)!.bursts
+        f.primeBurst(0)
+        var sawSleep = false
+        (s, peak) = runWings(r, f, seconds: 30) { _ in if r.brain.idleState.kind == .sleep { sawSleep = true } }
+        XCTAssertTrue(sawSleep)
+        XCTAssertEqual(s.bursts, before, "asleep: no burst"); XCTAssertEqual(peak, 0, accuracy: 1e-6)
+    }
+
+    func testWingBurstsSmallerInARaceAndSoonerWhenHappy() {
+        let r = MotionRig(game: true)
+        Self.keep.append(r)
+        r.brain.feature = .wings; r.brain.autonomy = false; r.brain.anticsEnabled = false
+        r.brain.expr.enabled = false; r.brain.expr.kind = .neutral
+        let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
+        // a race: the bursts stay (he is awake) but at half amplitude
+        r.brain.race.active = true
+        f.primeBurst(0)
+        var (s, peak) = runWings(r, f, seconds: 1)
+        XCTAssertEqual(s.bursts, 1)
+        XCTAssertGreaterThan(peak, 15); XCTAssertLessThanOrEqual(peak, 25.5, "half size in a race")
+        r.brain.race.active = false
+        // a lesson too
+        r.brain.trainingLock = true
+        f.primeBurst(0)
+        (s, peak) = runWings(r, f, seconds: 1)
+        XCTAssertEqual(s.bursts, 2); XCTAssertLessThanOrEqual(peak, 25.5, "half size in a lesson")
+        r.brain.trainingLock = false
+        // happy / excited: the wait runs 1.5 x faster
+        let n0 = f.slot(0)!.bursts
+        r.brain.expr.kind = .happy
+        (s, _) = runWings(r, f, seconds: 60)
+        let happy = s.bursts - n0
+        let r2 = MotionRig(game: true); Self.keep.append(r2)
+        r2.brain.feature = .wings; r2.brain.autonomy = false; r2.brain.anticsEnabled = false; r2.brain.expr.enabled = false; r2.brain.expr.kind = .neutral
+        let f2 = FeatureSet(); f2.body = WearBody.shared; Self.keep.append(f2)
+        let (s2, _) = runWings(r2, f2, seconds: 60)
+        MotionLog.write("WINGBURST happy \(happy) in 60 s vs neutral \(s2.bursts)")
+        XCTAssertGreaterThan(happy, s2.bursts, "happy: more bursts than neutral over a minute")
+        // a cheer starts one right away
+        let n1 = s.bursts
+        r.brain.expr.kind = .neutral
+        r.brain.idleState.reaction = .cheer
+        (s, peak) = runWings(r, f, seconds: 0.2)
+        XCTAssertEqual(s.bursts, n1 + 1, "a cheer: a burst at once")
+        r.brain.idleState.reaction = nil
+    }
+
     // MARK: hide rules
 
     func testFeaturesHideInTheWashAndSpinesWingsOffWhileLyingDaisyCloses() {

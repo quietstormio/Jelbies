@@ -8,7 +8,9 @@
 //    daisy    stem + leaves sway about the stem root (a spring lagging the body's acceleration + a slow idle sway); the flower head lags the stem
 //             by 0.08 s about the flower centre; asleep (or deep night) the petals close toward the flower normal and the stem droops forward.
 //    wings    rigid per side on the hinge: spread (about y) x flap (about the flap axis), from the flap-hop while it runs, else a gentle idle
-//             flutter; shifted by dy and clamped to the flap / spread range the worn items allow; folded flat when nothing fits.
+//             flutter plus a short periodic FLAP BURST (2...4 quick flaps at 6...8 Hz, 35...50 deg, every 4...9 s while awake; sooner when he is
+//             happy / excited or cheering; half size in a race / a lesson; never asleep, at a meal, in the wash or folded); shifted by dy and
+//             clamped to the flap / spread range the worn items allow; folded flat when nothing fits. The burst is a wing sub-mesh animation only.
 //  Hide rules: everything off in the wash (hideAll); spines and wings off while he lies on his back (sleep stages 2...4, the hat rule) and during
 //  flips / rolls (they would clip the floor); the daisy stays through sleep (it closes). A racer keeps his feature (rivals keep theirs too).
 //
@@ -25,6 +27,10 @@ nonisolated enum FeatureTuning {
     static let swayHz: Float = 2.2, swayZeta: Float = 0.4, swayGain: Float = 1.6, swayMax: Float = 12
     /// Wing idle flutter (deg) and its rates (Hz); how fast the wing angles chase their targets (1/s).
     static let flutterA: Float = 2.5, flutterB: Float = 1.5, flutterHzA: Float = 1.1, flutterHzB: Float = 0.37, wingChase: Float = 18
+    /// Wing flap bursts: the wait between bursts (s), flaps per burst, stroke rate (Hz), amplitude (deg); the wait runs faster when he is happy /
+    /// excited or cheering; the amplitude scale in a race / a lesson.
+    static let burstWait: ClosedRange<Float> = 4...9, burstFlaps: ClosedRange<Int> = 2...4, burstHz: ClosedRange<Float> = 6...8, burstAmp: ClosedRange<Float> = 35...50
+    static let burstHappyRate: Float = 1.5, burstCalmScale: Float = 0.5
     static let accelHistory = 30
 }
 
@@ -51,9 +57,20 @@ final class FeatureSet {
         var partScale: [String: Float] = [:]
         /// Daisy: sway (deg about x = nod, z = side) and rate; the lagged head sway; the close blend 0...1; the idle clock.
         var sway = SIMD2<Float>.zero, swayV = SIMD2<Float>.zero, headSway = SIMD2<Float>.zero, close: Float = 0, clock: Float = 0
-        /// Wings: the current flap / spread (deg) and the target.
-        var flap: Float = 0, spread: Float = 0
+        /// Wings: the current flap / spread (deg) as drawn; `flapBase` / `spreadBase` = the chased flutter / flap-hop under the burst.
+        var flap: Float = 0, spread: Float = 0, flapBase: Float = 0, spreadBase: Float = 0
         var folded = false
+        /// Wings: the flap burst. `burstWait` = seconds until the next may start; while one runs `burstT` counts up to `burstN / burstHz`.
+        var burstWait: Float = 6, burstT: Float = -1, burstN = 3, burstHz: Float = 7, burstAmp: Float = 42, burstDeg: Float = 0
+        var burstActive: Bool { burstT >= 0 }
+        var bursts = 0, burstOnsets: [Float] = [], cheerSeen = false
+        /// The slot's own random stream (the brain's seeded `rand()` sequence is never consumed here).
+        var rngS: UInt64 = 0x9E3779B97F4A7C15
+        mutating func rnd() -> Float {
+            rngS ^= rngS << 13; rngS ^= rngS >> 7; rngS ^= rngS << 17
+            return Float(rngS >> 40) / Float(1 << 24)
+        }
+        mutating func rnd(_ a: Float, _ b: Float) -> Float { a + (b - a) * rnd() }
     }
     private(set) var slots: [Slot] = []
     private(set) var lastBounds: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
@@ -67,7 +84,14 @@ final class FeatureSet {
     func slot(_ id: Int) -> Slot? { slots.indices.contains(id) ? slots[id] : nil }
     func shown(_ id: Int) -> JellyFeature? { slot(id).flatMap { $0.scale > 0.001 ? $0.feature : nil } }
     var anyShown: Bool { slots.contains { $0.scale > 0.001 && $0.feature != .none } }
-    func reset() { slots = slots.map { _ in Slot() } }
+    func reset() { slots = slots.indices.map { Self.newSlot($0) } }
+    /// A fresh slot with its own (non-zero) random seed per Jelly.
+    static func newSlot(_ id: Int) -> Slot {
+        var n = Slot()
+        n.rngS = 0x9E3779B97F4A7C15 &+ UInt64(id + 1) &* 0xBF58476D1CE4E5B9
+        if n.rngS == 0 { n.rngS = 0x2545F4914F6CDD1D }
+        return n
+    }
 
     // MARK: hide rules
 
@@ -85,7 +109,7 @@ final class FeatureSet {
 
     /// Once per fixed step for Jelly `id`. `worn` = the wearable art ids the wardrobe SHOWS on him now (FeatureCompat reads them).
     func tick(id: Int, brain: BlobBrain, sim: SoftBody, feature: JellyFeature, worn: [String], hideAll: Bool, dt: Float, spec: FeatureSpec = .shared) {
-        while slots.count <= id { slots.append(Slot()) }
+        while slots.count <= id { slots.append(Self.newSlot(slots.count)) }
         var s = slots[id]
         let pose = sim.bodyPose(iterations: 3)
         s.carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
@@ -184,6 +208,54 @@ final class FeatureSet {
         s.close = s.primed ? s.close + max(-dt / d.closeTime, min(dt / d.closeTime, wantClose - s.close)) : wantClose
     }
 
+    // MARK: wings
+
+    /// No flap burst now: asleep (any sleep stage), at a meal (reserved / dining), in the wash, folded, mid pop, or while the flap-hop owns the wings.
+    static func burstBlocked(_ s: Slot, _ b: BlobBrain) -> Bool {
+        if s.folded || s.hideAll || s.scale < 0.999 || b.flapHop.active { return true }
+        if b.idleState.kind == .sleep || b.reserved { return true }
+        switch b.script { case .dine, .eat: return true; default: return false }
+    }
+    /// Smaller bursts: a race (the drill is a race too) or a voice lesson (GameCare sets `trainingLock`).
+    static func burstCalm(_ b: BlobBrain) -> Bool { b.race.active || b.trainingLock }
+    /// The wait runs faster while the face is happy / excited or he is cheering.
+    static func burstEager(_ b: BlobBrain) -> Bool {
+        b.expr.kind == .happy || b.expr.kind == .excited || b.expr.kind == .joyArc || b.idleState.reaction == .cheer
+    }
+
+    /// Test / capture hook: the next burst starts on the next tick (if nothing blocks it).
+    func primeBurst(_ id: Int) { while slots.count <= id { slots.append(Self.newSlot(slots.count)) }; slots[id].burstWait = 0 }
+
+    private func stepBurst(_ s: inout Slot, brain: BlobBrain, dt: Float) {
+        let blocked = Self.burstBlocked(s, brain)
+        if blocked { s.burstT = -1; s.burstDeg = 0; s.cheerSeen = false; return }
+        // a cheer that just began: a burst right away (once per cheer)
+        let cheer = brain.idleState.reaction == .cheer
+        if cheer, !s.cheerSeen, !s.burstActive { s.burstWait = 0 }
+        s.cheerSeen = cheer
+        if s.burstActive {
+            s.burstT += dt
+            let dur = Float(s.burstN) / s.burstHz
+            if s.burstT >= dur {
+                s.burstT = -1; s.burstDeg = 0
+                s.burstWait = s.rnd(FeatureTuning.burstWait.lowerBound, FeatureTuning.burstWait.upperBound)
+            } else {
+                let amp = s.burstAmp * (Self.burstCalm(brain) ? FeatureTuning.burstCalmScale : 1)
+                s.burstDeg = amp * sinf(2 * .pi * s.burstHz * s.burstT) * sinf(.pi * s.burstT / dur)
+            }
+            return
+        }
+        s.burstWait -= dt * (Self.burstEager(brain) ? FeatureTuning.burstHappyRate : 1)
+        if s.burstWait <= 0 {
+            s.burstT = 0; s.burstDeg = 0
+            s.burstN = FeatureTuning.burstFlaps.lowerBound + min(FeatureTuning.burstFlaps.count - 1, max(0, Int(s.rnd() * Float(FeatureTuning.burstFlaps.count))))
+            s.burstHz = s.rnd(FeatureTuning.burstHz.lowerBound, FeatureTuning.burstHz.upperBound)
+            s.burstAmp = s.rnd(FeatureTuning.burstAmp.lowerBound, FeatureTuning.burstAmp.upperBound)
+            s.bursts += 1
+            if s.burstOnsets.count < 512 { s.burstOnsets.append(s.clock) }
+        }
+    }
+
     private func stepWings(_ s: inout Slot, brain: BlobBrain, dt: Float) {
         s.clock += dt
         var flap: Float, spread: Float
@@ -197,8 +269,12 @@ final class FeatureSet {
         flap = min(max(flap, s.fit.flapMin), s.fit.flapMax)
         spread = min(max(spread, 0), s.fit.spreadMax)
         let k = min(1, FeatureTuning.wingChase * dt)
-        s.flap += (flap - s.flap) * k; s.spread += (spread - s.spread) * k
-        if !s.primed { s.flap = flap; s.spread = spread }
+        s.flapBase += (flap - s.flapBase) * k; s.spreadBase += (spread - s.spreadBase) * k
+        if !s.primed { s.flapBase = flap; s.spreadBase = spread }
+        // the burst rides on top of the chased flutter (too quick for the chase), clamped last so the worn items' clearance holds
+        stepBurst(&s, brain: brain, dt: dt)
+        s.flap = min(max(s.flapBase + s.burstDeg, s.fit.flapMin), s.fit.flapMax)
+        s.spread = min(max(s.burstDeg != 0 ? max(0.4 * max(s.flap, 0), s.spreadBase) : s.spreadBase, 0), s.fit.spreadMax)
     }
 
     // MARK: frame

@@ -270,6 +270,59 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack(rows), d + "/outfits_alt.png")
     }
 
+    /// wings_v2: the wings before (full size) / after (0.85 about the hinges) from the front 3/4 and the back, and a 6-frame strip of one flap burst.
+    func testCaptureWingsV2() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let was = FeatureMeshes.wingScale
+        defer { FeatureMeshes.wingScale = was; FeatureMeshes.clearCache() }
+        var rows: [UIImage] = []
+        for (name, scale) in [("BEFORE (full size)", Float(1)), ("AFTER (0.85 about the hinge)", Float(0.85))] {
+            FeatureMeshes.wingScale = scale; FeatureMeshes.clearCache()
+            var cells: [UIImage] = []
+            for (label, yaw) in [("front 3/4", Float(0.7)), ("back", Float.pi), ("back 3/4", Float(2.4))] {
+                cells.append(try closeup(Char(id: 3), yaw: yaw, label: "Lavender wings \(name): \(label)") { lab, _ in lab.rigs[0].brain.autonomy = false })
+            }
+            rows.append(hstack(cells))
+        }
+        try write(vstack(rows), d + "/wings_size_before_after.png")
+        // the burst strip (the smaller wings)
+        FeatureMeshes.wingScale = 0.85; FeatureMeshes.clearCache()
+        W = 900; H = 900
+        let chars = [Char(id: 3)]
+        let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: 3)
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let r = lab.rigs[0]
+        r.brain.autonomy = false; r.brain.expr.enabled = false
+        let pose0 = r.sim.bodyPose(iterations: 3)
+        var fwd = pose0.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0; fwd = simd_normalize(fwd)
+        let yaw: Float = 2.3
+        let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
+        let c0 = pose0.centroid
+        let cam = Self.lookCamera(target: SIMD3(c0.x, c0.y + 0.25, c0.z), dir: dir, dist: 3.4, aspect: 1)
+        for _ in 0..<30 { lab.tick(watching: false); tick(dd, 0, r, chars[0]) }
+        dd.feats[0].primeBurst(0)
+        var frames: [UIImage] = []
+        let fracs: [Float] = [0.06, 0.22, 0.39, 0.56, 0.73, 0.9]
+        var fi = 0, ticks = 0, started = false
+        while fi < fracs.count && ticks < 600 {
+            lab.tick(watching: false); tick(dd, 0, r, chars[0]); ticks += 1
+            guard let s = dd.feats[0].slot(0) else { continue }
+            if s.burstActive { started = true }
+            if started, !s.burstActive { break }
+            guard s.burstActive else { continue }
+            let dur = Float(s.burstN) / s.burstHz
+            if s.burstT / dur >= fracs[fi] {
+                let img = composite(lab, dd, chars, ren, target, cam: cam)
+                frames.append(labelled(img.uiImage()!, String(format: "burst t=%.2f/%.2fs  %d flaps @ %.1f Hz  amp %.0f  flap %+.0f deg", s.burstT, dur, s.burstN, s.burstHz, s.burstAmp, s.flap)))
+                fi += 1
+            }
+        }
+        XCTAssertEqual(frames.count, 6, "six frames across one burst")
+        if frames.count == 6 { try write(vstack([hstack(Array(frames[0..<3])), hstack(Array(frames[3..<6]))]), d + "/wings_burst_strip.png") }
+    }
+
     func testCaptureLavenderHop() throws {
         let d = try dir()
         DayClock.shared.forcedHour = 12
