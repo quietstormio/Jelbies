@@ -109,10 +109,10 @@ enum IdleTable {
         switch m {
         case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.roll, 1.2), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
                               (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2), (.rollTrip, 0.8),
-                              (.cartwheel, 1.6), (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
+                              (.cartwheel, 3.6), (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
                              (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.rollTrip, 0.5), (.sigh, 0.8),
-                             (.cartwheel, 0.9), (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2)]
+                             (.cartwheel, 2.4), (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2)]
         case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
         }
         for (k, x) in extra where x > 0 { w.append((k, x * mul)) }
@@ -215,20 +215,23 @@ extension BlobBrain {
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
         if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
-        guard idleState.kind == nil, !held, idleState.cooldown <= 0, attached else { return false }
+        guard idleState.kind == nil, !held, attached else { return false }
+        // (W2: a due urge does not wait out the cooldown of the special before it: measured at 13 solo dashes per 10 min in the okay room with the cooldown in the way)
         // the zoomies urge: a burst of energy every few minutes (not at night, never grumpy, one of the two fast Jellies at a time)
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 2 {
             let ur = rand()
             var k: IdleKind = ur < 0.5 ? .zoomies : (ur < 0.85 ? .run : .slide)
             if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
-            let started = idleStart(k, sim)
-            zoomUrge = started ? rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) : 20
+            let blockedByFriend = anticsEnabled && kindCooling.contains(k)          // (no dash is free: a friend is in one right now - wait a moment, never start the same moment's twin)
+            let started = !blockedByFriend && idleStart(k, sim)
+            zoomUrge = started ? rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) : (blockedByFriend ? rand(1.5, 3) : 20)
             if started {
                 if anticsEnabled { kindCooldownStart(k) }
                 if k == .zoomies { socialOfferZoomies(sim) }
                 return true
             }
         }
+        guard idleState.cooldown <= 0 else { return false }
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
                                                  cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: anticsEnabled && !sleepLocked ? Self.decorOffers() : [], recent: anticsEnabled ? Set(idleState.recent) : [])

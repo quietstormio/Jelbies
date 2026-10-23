@@ -17,7 +17,7 @@ final class BehaviourRoundTests: XCTestCase {
     }
     override func tearDown() {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
-        IdleTuning.zoomUrge = 60...120; IdleTuning.zoomUrgeFirst = 30
+        IdleTuning.zoomUrge = 30...55; IdleTuning.zoomUrgeFirst = 10          // (the W2 defaults: the old 60...120 / 30 leaked into later suites)
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 

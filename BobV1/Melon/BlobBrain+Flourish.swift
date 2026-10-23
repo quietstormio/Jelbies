@@ -37,7 +37,7 @@ enum FlourishTuning {
         if night > 0.5 { return 0 }
         switch m { case .okay: return 0.62; case .happy: return 0.78; case .grumpy: return 0.15 }
     }
-    static let weights: [(IdleKind, Float)] = [(.skipHop, 3), (.hopscotch, 1.5), (.legSpin, 1), (.trot, 2), (.stopLook, 2), (.rollTrip, 1.2), (.chirp, 1.6), (.shake, 1.2), (.cartwheel, 1.0)]
+    static let weights: [(IdleKind, Float)] = [(.skipHop, 3), (.hopscotch, 1.5), (.legSpin, 1), (.trot, 2), (.stopLook, 2), (.rollTrip, 1.2), (.chirp, 1.6), (.shake, 1.2), (.cartwheel, 2.4)]
     static let minLeg: Float = 1.5, minRemaining: Float = 0.6
     /// Distance along the leg each flourish needs (the hop distance, a trot's two seconds).
     static func need(_ k: IdleKind) -> Float {

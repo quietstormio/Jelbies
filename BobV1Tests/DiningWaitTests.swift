@@ -13,7 +13,7 @@ import UIKit
 
 @MainActor
 final class DiningWaitTests: XCTestCase {
-    override func tearDown() { IdleTuning.zoomUrge = 60...120; IdleTuning.zoomUrgeFirst = 30; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DecorField.shared.clear() }
+    override func tearDown() { IdleTuning.zoomUrge = 30...55; IdleTuning.zoomUrgeFirst = 10; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DecorField.shared.clear() }          // (zoomUrge: the W2 defaults; the old 60...120 / 30 leaked into later suites)
     override func setUp() { DecorField.shared.clear(); RoomLayout.dynamicBoxes = [] }
 
     static func lively(_ r: DiningJellyTests.Room, seed: UInt64) {

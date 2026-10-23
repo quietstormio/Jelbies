@@ -10,6 +10,7 @@ import XCTest
 import Metal
 import simd
 import UIKit
+import SwiftUI
 @testable import BobV1
 
 @MainActor
@@ -176,5 +177,40 @@ final class W2CaptureTests: XCTestCase {
         for _ in 0..<(20 * 60) { r.tick(); if b.idleState.kind == .window, b.idleState.phase == 1, b.idleState.phaseT > 1.0 { break } }
         snap("window look")
         try BathCaptureTests.sheet(panels, to: URL(fileURLWithPath: Self.dir).appendingPathComponent("moves_strip.png"), columns: panels.count, panelHeight: 460)
+    }
+
+    /// The trick book of the training close-up (Pip, slot 1): its title must read "Pip's tricks" and show Pip's own book and the one name row, in portrait and on a phone on its side.
+    func testTrickBookInTheTrainingCloseUp() throws {
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        var now: Double = 100
+        let training = VoiceTraining(defaults: UserDefaults(suiteName: "W2CaptureTests")!, persists: false, random: { 0 })
+        let voice = VoiceCoordinator(training: training, input: FakeSpeechInput(), now: { now })
+        let r = FocusAnyRun(voice: voice)
+        Self.keep.append(r)
+        r.care.jelly(1)!.training.debugReps(.jacks, word: "boing", reps: 2)
+        r.run(1.0)
+        r.care.beginTraining(1)
+        XCTAssertTrue(r.run(30) { r.care.focus.isFocused })
+        r.run(0.5)
+        XCTAssertTrue(r.care.isTrainingCloseUp)
+        XCTAssertEqual(r.care.voice.subjectID, 1)
+        XCTAssertEqual(r.care.voice.book.names.displayName(1), "Pip", "the title reads \"Pip's tricks\"")
+        try FileManager.default.createDirectory(atPath: Self.dir, withIntermediateDirectories: true)
+        // (ImageRenderer leaves a ScrollView empty: host the view in a real window and snapshot that)
+        func render(_ size: CGSize, _ name: String, compact: Bool) throws {
+            let host = UIHostingController(rootView: VoiceTrickBook(voice: r.care.voice) {}.environment(\.colorScheme, .light))
+            if compact { host.traitOverrides.verticalSizeClass = .compact }
+            let win = UIWindow(frame: CGRect(origin: .zero, size: size))
+            win.rootViewController = host
+            win.makeKeyAndVisible()
+            host.view.frame = win.bounds
+            RunLoop.main.run(until: Date().addingTimeInterval(0.8))
+            host.view.layoutIfNeeded()
+            let img = UIGraphicsImageRenderer(size: size).image { _ in host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true) }
+            try XCTUnwrap(img.pngData()).write(to: URL(fileURLWithPath: "\(Self.dir)/\(name).png"))
+            win.isHidden = true
+        }
+        try render(CGSize(width: 440, height: 956), "trickbook_portrait_render", compact: false)
+        try render(CGSize(width: 932, height: 430), "trickbook_landscape", compact: true)
     }
 }

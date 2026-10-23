@@ -178,12 +178,15 @@ final class RoomMovementTests: XCTestCase {
         r.run(0.3)
         r.care.release()
         XCTAssertTrue(r.run(6) { r.care.focus.phase == .roaming })
-        XCTAssertLessThan(simd_distance(r.actors[2].floor, GameCamera.callSpot), 0.9, "Lavender is still near the call spot after her close-up (W2: she is free to wander off once released)")
+        // (W2: once released she is free to wander off the spot, as the others are: put her back on it, as the close-up left her, so the stand-on-the-spot case is what is tested)
+        r.actors[2].brain!.requestNow(.goTo(GameCamera.callSpot))
+        XCTAssertTrue(r.run(8) { simd_distance(r.actors[2].floor, GameCamera.callSpot) < 0.5 && r.actors[2].brain!.activity != .walking }, "Lavender stands on the call spot (\(simd_distance(r.actors[2].floor, GameCamera.callSpot)))")
         var t: Float = 0
         r.care.comeHere(jelly: 1)
-        let arrived = r.run(30) { t += 1.0 / 60; return r.care.focus.phase == .focused }
+        let arrived = r.run(20) { t += 1.0 / 60; return r.care.focus.phase == .focused }
+        print("ROOMMOVE arrival \(t) s")
         XCTAssertTrue(arrived, "Moss's close-up started")
-        XCTAssertLessThan(t, 20, "and within 20 s of the call (\(t) s; W2: the others now roam during the approach, so the lane is busier than when they were frozen)")
+        XCTAssertLessThan(t, 12, "and within 12 s of the call (\(t) s)")
         XCTAssertLessThan(simd_distance(r.actors[1].floor, GameCamera.callSpot), 0.6, "Moss stands on the spot")
     }
 }

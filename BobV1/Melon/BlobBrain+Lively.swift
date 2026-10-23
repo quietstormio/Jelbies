@@ -106,7 +106,6 @@ extension BlobBrain {
     func runLieDown(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         var k = idleState.k
         let phT = idleState.phaseT
-        let side = idleState.sign
         if idleState.yielding {
             idleState.yieldT += dt
             k = max(0, k - dt / 0.2)
@@ -143,7 +142,6 @@ extension BlobBrain {
         }
         gaitPose(sway: 0.04, bob: 0, rock: 0.2)
         lieDownPose(skinner, k)
-        _ = side
     }
 
     func lieDownPose(_ skinner: Skinner, _ k: Float) {
@@ -165,15 +163,27 @@ extension BlobBrain {
 
     // MARK: cartwheel
 
-    static let cartwheelApex: Float = 0.34, cartwheelTravel: Float = 0.8
+    static let cartwheelApex: Float = 0.34
 
-    /// Where a cartwheel toward `side` (+1 right / -1 left of `yawNow`) would land, or nil when it has no room.
-    func cartwheelLanding(side: Float, yawNow: Float, from here: SIMD2<Float>) -> SIMD2<Float>? {
+    /// Start attempts and refusals by reason (diagnostics: a minute of the 3-Jelly room logs them, LivelinessMinuteTests).
+    static var cartwheelStats = (tried: 0, floor: 0, leg: 0, peer: 0, started: 0)
+    /// Travels tried in turn: the full cartwheel, then shorter ones when a wall, a piece of furniture or a Jelly is in the way.
+    static var cartwheelTravels: [Float] = [0.8, 0.6, 0.45]
+
+    /// Where a cartwheel toward `side` (+1 right / -1 left of `yawNow`) would land and how far it travels, or nil when it has no room even for the shortest.
+    func cartwheelLanding(side: Float, yawNow: Float, from here: SIMD2<Float>, count: Bool = false) -> (to: SIMD2<Float>, travel: Float)? {
         let right = SIMD2<Float>(cosf(yawNow), -sinf(yawNow))
-        let raw = here + right * side * Self.cartwheelTravel
-        let to = fixed(raw)
-        guard simd_distance(to, raw) < 0.1, legClear(here, to, margin: steerMargin), peerFree(to) else { return nil }
-        return to
+        var why = 0
+        for travel in Self.cartwheelTravels {
+            let raw = here + right * side * travel
+            let to = fixed(raw)
+            if simd_distance(to, raw) >= 0.1 { why = max(why, 1); continue }
+            if !legClear(here, to, margin: steerMargin) { why = max(why, 2); continue }
+            if !peerFree(to) { why = max(why, 3); continue }
+            return (to, travel)
+        }
+        if count { if why == 1 { Self.cartwheelStats.floor += 1 } else if why == 2 { Self.cartwheelStats.leg += 1 } else { Self.cartwheelStats.peer += 1 } }
+        return nil
     }
 
     /// A cartwheel from standing (`resume` nil: he turns to the camera first, so it reads side-on) or in the middle of a walk (to the side of the leg, no turn).
@@ -181,10 +191,12 @@ extension BlobBrain {
         let here = position
         let yawFor = resume == nil ? faceCameraYaw() : yaw
         var side: Float = idleState.kind == nil ? (rand() < 0.5 ? -1 : 1) : 1
+        Self.cartwheelStats.tried += 1
         if cartwheelLanding(side: side, yawNow: yawFor, from: here) == nil {
             side = -side
-            if cartwheelLanding(side: side, yawNow: yawFor, from: here) == nil { return false }
+            if cartwheelLanding(side: side, yawNow: yawFor, from: here, count: true) == nil { return false }
         }
+        Self.cartwheelStats.started += 1
         idleBegin(.cartwheel)
         idleState.resume = resume
         idleState.sign = side
@@ -216,7 +228,8 @@ extension BlobBrain {
         gait.home = position
         poseW = 0; poseOn = false
         flipArmA = 0
-        gait.cartwheel(sim, apex: Self.cartwheelApex, side: idleState.sign, travel: Self.cartwheelTravel, reduceMotion: amplitude < 0.7)
+        let travel = cartwheelLanding(side: idleState.sign, yawNow: yaw, from: position)?.travel ?? Self.cartwheelTravels.last!
+        gait.cartwheel(sim, apex: Self.cartwheelApex, side: idleState.sign, travel: travel, reduceMotion: amplitude < 0.7)
         idleState.phase = 1; idleState.phaseT = 0; idleState.landT = 0
         idleState.hop = 0
         script = .idle; activity = .playing
