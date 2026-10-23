@@ -101,7 +101,8 @@ extension GameCamera {
         /// outermost one in its row).
         var extremeCorners: [SIMD2<Float>] {
             let last = zs.count - 1
-            var out = [SIMD2<Float>(-hw[last], zs[last]), SIMD2(hw[last], zs[last])]
+            let fl = intervals(last, side: -1, from: 0).map(\.lowerBound).min() ?? -hw[last], fr = intervals(last, side: 1, from: 0).map(\.upperBound).max() ?? hw[last]
+            var out = [SIMD2<Float>(fl, zs[last]), SIMD2(fr, zs[last])]
             for side in [-1, 1] {
                 var pick: SIMD2<Float>?
                 for i in zs.indices {
@@ -136,7 +137,7 @@ extension GameCamera {
     //   * BOTTOM: the front of the Jelbie (feet + shadow, `roamBodyDepth` in front of its centre) must stay `roamBottomMargin` of the screen height above the bottom edge.
     //   * BACK: the sofa, plant and side table, with `roamFurnitureClearance` between the body's centre and their edges (the body just touches them), and the back wall;
     //     the rows reach `roamMinZ` and the free spans of each row exclude the furniture, so the pockets beside the sofa are walkable and the strip in front of it is.
-    //   The HUD's corner buttons and the "go out" pill are NOT kept clear: they float over the scene (the user circled the whole floor, 2026-10-21).
+    //   In PORTRAIT the two bottom-corner button rails (`HUDLayout.railRects`) are cut out of the free spans, so no body sits under a button (2026-10-22: the rails stay at the bottom, the Jelbies keep out); the middle front stays usable. Landscape: none.
 
     /// How much of the screen width stays clear between the Jelbie's widest point and each side edge.
     static let roamSideMargin: Float = 0.04
@@ -162,6 +163,8 @@ extension GameCamera {
         let zb = floorPoint(screen: CGPoint(x: size.width / 2, y: CGFloat(bottom)), size: size)?.y ?? walkMaxZ
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
+        let cam = camera(aspect: aspect)
+        let rails = aspect < 1 ? HUDLayout.railRects : []          // (portrait: keep bodies out from under the bottom-corner button rails)
         let minZ = RoomLayout.minZ + c
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
         var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]]()
@@ -175,7 +178,7 @@ extension GameCamera {
             var x = -h
             while x <= h + 1e-4 {
                 let p = SIMD2(x, z)
-                let blocked = RoomLayout.sofaDistanceXZ(p) < c || RoomLayout.cylinders.contains { simd_distance(p, $0.centre) < $0.radius + c }
+                let blocked = HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: size, rails: rails) || RoomLayout.sofaDistanceXZ(p) < c || RoomLayout.cylinders.contains { simd_distance(p, $0.centre) < $0.radius + c }
                 if !blocked { if start == nil { start = x } }
                 else if let s = start { spans.append(s ... x - 0.05); start = nil }
                 x += 0.05

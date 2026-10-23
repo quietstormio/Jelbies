@@ -17,7 +17,6 @@ struct GameScreen: View {
     @State private var bookOpen = false                       // Voice v1 trick book
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
-    @State private var roomsOpen = false
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
     @State private var goOutOpen = false                      // the Go out menu (Track / Store / Jelly Show) is unfolded
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
@@ -133,17 +132,12 @@ struct GameScreen: View {
                     }
                     if !cleaning, !racing {
                         HStack(alignment: .bottom, spacing: 10) {
-                            // LEFT RAIL: the trick book, the bag and the mic (lifted above the front row of Jelbies)
+                            // LEFT RAIL: the trick book, the bag, Go out (a menu) and the mic (at the bottom)
                             VStack(spacing: HUDTuning.railGap) {
                                 VoiceBookButton { bookOpen = true }
                                 if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
                                 if !focus.isActive {
-                                    Button { AudioHub.shared.uiTap(); roomsOpen = true } label: {
-                                        Image(systemName: "house.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(SK.ink)
-                                            .frame(width: 48, height: 48)
-                                            .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                                            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-                                    }.buttonStyle(.plain).accessibilityLabel("Rooms").accessibilityIdentifier("rooms-button")
+                                    GoOutMenu(open: $goOutOpen, rail: true) { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }
                                 }
                                 VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                                     .overlay(alignment: .topLeading) {
@@ -151,15 +145,9 @@ struct GameScreen: View {
                                     }
                             }
                             Spacer()
-                            // RIGHT CLUSTER: Go out (a menu) and the one main control (group / individual)
+                            // RIGHT: the one main control (group / individual), alone
                             if !focus.isActive {
-                                HStack(alignment: .bottom, spacing: HUDTuning.railGap) {
-                                    if !menuOpen {
-                                        GoOutMenu(open: $goOutOpen) { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }
-                                            .transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
-                                    }
-                                    if !goOutOpen { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
-                                }
+                                careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
                             }
                         }
                         .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
@@ -251,12 +239,6 @@ struct GameScreen: View {
         }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
-        .onChange(of: roomsOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen || bagOpen }
-        .sheet(isPresented: $roomsOpen) {
-            RoomPickerSheet(care: model.care) { roomsOpen = false }
-                .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
-                .presentationBackground(SK.cream)
-        }
         .overlay { RoomSwitchVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }

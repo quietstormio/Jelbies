@@ -20,6 +20,15 @@ final class HUDMenuTests: XCTestCase {
     private func tickSelect(_ care: GameCare, _ sec: Float) { for _ in 0..<Int(sec * 60) { care.select.tick(dt: 1.0 / 60) } }
     private func room() -> FocusAnyRun { let r = FocusAnyRun(peers: true); Self.keep.append(r); r.run(1.0); r.care.tickRace(r.actors, dt: 1.0 / 60); return r }          // (the stage's tickRace registers the bodies for selectBrain)
 
+    func testRoomsLiveInTheBagAndTheRailHasNoRoomsButton() {
+        XCTAssertTrue(BagSheet.BagTab.allCases.contains(.rooms), "owned rooms are a Bag category")
+        XCTAssertEqual(BagSheet.BagTab.rooms.rawValue, "Rooms")
+        let care = care3()
+        XCTAssertTrue(care.store.ownsRoom(.home), "the home room is always in the Bag's Rooms")
+        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button with the Track / Store / Show menu)
+        XCTAssertFalse(GoOutDestination.visible.isEmpty)
+    }
+
     func testGroupModeWhenNothingHighlighted() {
         let care = care3()
         XCTAssertEqual(HUDMenu.mode(care), .group)
