@@ -39,7 +39,7 @@ private final class VoiceRun {
     }
     func tick() {
         brain.idleMood = care.mood
-        brain.idleBlocked = (care.focus.isActive || care.trayOut) && !brain.commanded
+        brain.idleBlocked = ((care.focus.isActive && care.focusGroup.includes(0)) || care.trayOut) && !brain.commanded
         brain.tick(sim: rig.sim, skinner: rig.skinner, dt: rig.sim.stepDt, touched: false)
         care.tick(brain: brain, renderer: nil, dt: rig.sim.stepDt, sim: rig.sim)
         rig.sim.step()

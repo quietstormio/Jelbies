@@ -17,7 +17,7 @@ final class BehaviourRoundTests: XCTestCase {
     }
     override func tearDown() {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
-        IdleTuning.zoomUrge = 60...120; IdleTuning.zoomUrgeFirst = 30
+        IdleTuning.zoomUrge = 30...55; IdleTuning.zoomUrgeFirst = 10          // (the W2 defaults: the old 60...120 / 30 leaked into later suites)
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
@@ -308,9 +308,9 @@ final class BehaviourRoundTests: XCTestCase {
             }
         }
         MotionLog.write("BEHAV okay mood 10 min: solo runs+zoomies per Jelly \(perBrain), all counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
-        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 3, "at least 3 runs or zoomies in 10 sim minutes")
-        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 1, "everybody gets some energy")
-        XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 12, "but it is not constant (2026-10-20 \"too bland\": more runs, was 7 per 10 min; now at most about one a minute)")
+        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 25, "at least 25 runs or zoomies in 10 sim minutes (W2 2026-10-22 \"they still don't run or do zoomies enough\": the urge is 30...55 s, the tables heavier)")
+        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 6, "everybody gets plenty of energy")
+        XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 40, "but it is not constant (at most about four a minute)")
     }
 
     // MARK: 8. a floor under the socials

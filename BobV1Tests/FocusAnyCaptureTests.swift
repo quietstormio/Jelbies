@@ -36,9 +36,9 @@ final class FocusAnyCaptureTests: XCTestCase {
             let aspect = Float(W) / Float(H)
             let blend = r.care.focus.blend
             let cam = GameCamera.camera(aspect: aspect, focus: blend)
-            let lit = r.actors.filter { !r.care.focusHides($0.id) }
+            let lit = r.actors
             let light = GameCamera.light(centroids: lit.map { $0.sim.centroid() })
-            for a in r.actors { if let p = JellyRoster.palette(a.id) { ren.setPalette(p, body: a.id) }; ren.setHidden(r.care.focusHides(a.id), body: a.id) }
+            for a in r.actors { if let p = JellyRoster.palette(a.id) { ren.setPalette(p, body: a.id) }; ren.setHidden(false, body: a.id) }
             for _ in 0..<2 {
                 ren.beginFrame()
                 for a in r.actors { a.skinner.update(x: a.sim.x, index: r.rm.index, into: ren.dynPointer(body: a.id)) }

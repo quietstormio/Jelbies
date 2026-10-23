@@ -66,6 +66,18 @@ final class ArmCapTests: XCTestCase {
         return st
     }
 
+    /// The liveliness round's new moves on their own (the full table above takes long): shake, lie down, chirp, cartwheel, the window walk and the mid-walk versions stay within the wave's thumb.
+    func testNewLivelyMovesStayWithinTheWaveThumb() {
+        func idle(_ k: IdleKind) -> (MotionRig) -> Void { { r in r.brain.idleForced = true; _ = r.brain.idleStart(k, r.sim) } }
+        let cap = ArmCap.maximum
+        for (n, k, secs) in [("shake", IdleKind.shake, 6 as Float), ("lie down", .lieDown, 14), ("chirp", .chirp, 6), ("cartwheel", .cartwheel, 8), ("window walk", .window, 16)] {
+            let s = capsuleStat(secs, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })
+            XCTAssertLessThanOrEqual(s.capMax, cap * 1.02, "\(n): exposed arm length within the wave's maximum")
+            if s.frames > 0 { XCTAssertGreaterThanOrEqual(s.minDepth, 0.015, "\(n): the arm base stays buried in the body") }
+            if s.ledFrames > 0 { XCTAssertLessThanOrEqual(s.ledMax, ArmCap.restNub * 1.10, "\(n): body-led, at or below the rest nub (+10 %)") }
+        }
+    }
+
     func testEveryMoveStaysWithinTheWaveThumb() {
         defer { DecorField.shared.clear() }
         let wave = waveStat()
@@ -94,6 +106,10 @@ final class ArmCapTests: XCTestCase {
         for (n, k) in [("skip-hop", IdleKind.skipHop), ("hopscotch", .hopscotch), ("mid-leg spin", .legSpin), ("bounce-trot", .trot), ("stop and look", .stopLook), ("jump for joy", .joy), ("giggle", .giggle), ("startle hop", .startle), ("roll along the leg", .rollTrip), ("big sigh", .sigh), ("hmph puff", .hmph)] {
             note(n); rows.append((n, capsuleStat(10, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
+        for (n, k) in [("shake", IdleKind.shake), ("lie down", .lieDown), ("chirp", .chirp), ("cartwheel", .cartwheel)] {
+            note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
+        note("window walk"); rows.append(("window walk", capsuleStat(16, start: idle(.window), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway (show dance)", .sway)] {
             note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }

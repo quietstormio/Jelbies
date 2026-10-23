@@ -35,6 +35,12 @@ final class VoiceCoordinator {
     private(set) var availability: VoiceAvailability = .unknown
     /// Bumped when the mic cannot be used and the trick book should open instead.
     private(set) var bookRequest = 0
+    /// W2: the close-up's "Train" opens the focused Jelly's trick book (the same request the unusable mic makes).
+    func requestTrickBook() { bookRequest += 1 }
+    /// W2: the book the last decision used (a Jelly other than slot 0 can be the subject), the brain the listening tilt sits on, and who the open listen was about.
+    @ObservationIgnored var lastBook: VoiceTraining?
+    @ObservationIgnored weak var tiltBrain: BlobBrain?
+    @ObservationIgnored var subjectAtOpen = 0
     /// How many listens have opened (the HUD's accessibility value; UI tests read it).
     private(set) var openCount = 0
     /// How many times the edge glow was drawn (the HUD's accessibility value; UI tests read it, since a press blocks the test while it holds).
@@ -163,7 +169,7 @@ final class VoiceCoordinator {
     private(set) var feedbackLog: [VoiceFeedback.Kind] = []
     @ObservationIgnored private var heardSeq = 0
     @ObservationIgnored private var feedbackSeq = 0
-    @ObservationIgnored private var perkLeft: Float = 0
+    @ObservationIgnored var perkLeft: Float = 0
     static let promptTime: Double = 8
     func now() -> Double { clock() }
 
@@ -173,9 +179,9 @@ final class VoiceCoordinator {
         else {
             switch r {
             case .learnedStep(let t, let n): kind = .rep(t, reps: n)
-            case .trickLearned(let t): kind = .learned(t, word: training.word(for: t) ?? "")
+            case .trickLearned(let t): kind = .learned(t, word: (lastBook ?? training).word(for: t) ?? "")
             case .perform(let t): kind = .obeyed(t)
-            case .wrongTrick(let said, _): kind = .missed(said, pct: Int((training.reliability(said) * 100).rounded()))
+            case .wrongTrick(let said, _): kind = .missed(said, pct: Int(((lastBook ?? training).reliability(said) * 100).rounded()))
             case .puzzled, .ignore: kind = .unknown
             case .grumpyIgnore: kind = .grumpy
             case .nicknameStep(let n): kind = .nameRep(n)
@@ -260,7 +266,8 @@ final class VoiceCoordinator {
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
         openCount += 1
-        runningAtOpen = brainRef.flatMap(Self.running)
+        subjectAtOpen = subjectID
+        runningAtOpen = brainRef.map { subjectBrain($0) }.flatMap(Self.running)
         poseDue = true
         input.onLevel = { [weak self] l in
             guard let self else { return }
@@ -268,7 +275,7 @@ final class VoiceCoordinator {
             self.levelCount += 1; self.levelMin = min(self.levelMin, l); self.levelMax = max(self.levelMax, l)
             self.mode.levelUpdate(l)
         }
-        let words = training.contextualWords
+        let words = Array(Set((care?.jellies ?? []).flatMap { $0.training.contextualWords } + training.contextualWords))          // (W2: every Jelly's learned words are listened for)
         let t0 = downAt
         startTask = Task { [weak self] in
             guard let self else { return }
@@ -365,7 +372,9 @@ final class VoiceCoordinator {
         teachPrompt = nil
         if nickLesson != nil { nicknameListen(transcript); return }
         let t0 = CACurrentMediaTime()
-        let d = training.decideFull(transcript: transcript, runningMove: runningAtOpen, mood: moodMeant(by: transcript), session: session)
+        let who = subject(for: transcript)
+        let bk = book(for: who); lastBook = bk
+        let d = bk.decideFull(transcript: transcript, runningMove: who == subjectAtOpen ? runningAtOpen : nil, mood: moodMeant(by: transcript), session: session)
         // "everyone come eat", "come have a drink", "come get a bath": the loose come rule would win, but the sentence is a meal / nap / bath /
         // question for the natural-command path. Only the rules' confident new-kind verbs override, so taught words and the social phrases stand.
         if !d.noMatch, intentModel == nil, VoiceMatcher.looksLikeCome(VoiceMatcher.tokens(transcript)) {
@@ -404,7 +413,7 @@ final class VoiceCoordinator {
 
     /// (b) the model fallback: free phrasing -> a structured intent, within `modelBudget` seconds. Never produces text for the player.
     private func askModel(_ model: VoiceIntentModel, transcript: String, deterministic d: VoiceDecision, t0: Double) {
-        let learned = training.learnedTricks.filter { $0 != .come }
+        let learned = book.learnedTricks.filter { $0 != .come }
         let names = JellyNameRoster.all.map(\.display)
         intentTask = Task { @MainActor [weak self] in
             var path = "model"
@@ -424,7 +433,7 @@ final class VoiceCoordinator {
                     case .selected: break
                     }
                 }
-                decision = self.training.decide(model: i.action, target: target, mood: { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }())
+                self.lastBook = self.book(for: { if case .jelly(let id) = target { return id }; return self.subjectID }()); decision = self.lastBook!.decide(model: i.action, target: target, mood: { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }())
             }
             self.finish(decision, transcript: transcript)
         }
@@ -460,7 +469,7 @@ final class VoiceCoordinator {
         var target: VoiceTarget = c.who.asVoiceTarget
         if case .jellies(let ids) = c.who, ids.count > 1 { target = .jelly(ids[0]) }
         func mood() -> BlobMood { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }
-        func legacy(_ a: VoiceAction) { finish(training.decide(model: a, target: target, mood: mood()), transcript: transcript) }
+        func legacy(_ a: VoiceAction) { let bk = book(for: { if case .jelly(let id) = target { return id }; return subjectID }()); lastBook = bk; finish(bk.decide(model: a, target: target, mood: mood()), transcript: transcript) }
         switch c.action {
         case .none: finish(d, transcript: transcript)
         case .come: legacy(.come)
@@ -499,9 +508,9 @@ final class VoiceCoordinator {
         switch r {
         case .ignore:
             if VoiceMatcher.tokens(transcript).isEmpty { kind = .nothing }
-            else if let m = training.lastMiss { kind = .missed(m, pct: Int((training.reliability(m) * 100).rounded())) }
+            else if let m = (lastBook ?? training).lastMiss { kind = .missed(m, pct: Int(((lastBook ?? training).reliability(m) * 100).rounded())) }
             else { kind = .unknown }
-        case .wrongTrick(let said, _): kind = .missed(said, pct: Int((training.reliability(said) * 100).rounded()))
+        case .wrongTrick(let said, _): kind = .missed(said, pct: Int(((lastBook ?? training).reliability(said) * 100).rounded()))
         default: break
         }
         // a name wakes ONLY that Jelbie (sleepy wake); selecting him wakes nobody. Any word counts as an interaction (the night-idle clock).
@@ -512,7 +521,7 @@ final class VoiceCoordinator {
             if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }
         }
         if d.target == .everyone { onEveryone?(ids) }
-        if r == .ignore, training.lastMiss == .flip, flipRoll() < 0.5 {            // he knew it but missed: sometimes it is a faceplant
+        if r == .ignore, (lastBook ?? training).lastMiss == .flip, flipRoll() < 0.5 {            // he knew it but missed: sometimes it is a faceplant
             flipFailQueued = true
             enqueue(.perform(.flip), kind, ids: ids); return
         }
@@ -567,8 +576,8 @@ final class VoiceCoordinator {
 
     /// The trick book row: do the trick now (so the next said word binds to it).
     func show(_ t: VoiceTrick) {
-        enqueue(.perform(t), .silent)
-        if !training.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }
+        enqueue(.perform(t), .silent, ids: [subjectID])
+        if !book.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }
     }
 
     // MARK: mapping
@@ -598,7 +607,7 @@ final class VoiceCoordinator {
         }
     }
     /// The trick-able move he is doing right now (nil = none).
-    private static func running(_ b: BlobBrain) -> VoiceTrick? {
+    static func running(_ b: BlobBrain) -> VoiceTrick? {
         if case .flipPlay = b.script { return .flip }
         if !b.idleState.yielding, let t = trick(for: b.idleState.kind) { return t }
         return nil
@@ -621,7 +630,8 @@ final class VoiceCoordinator {
         let listening = mode.isListening
         if poseDue, listening {
             poseDue = false
-            runningAtOpen = runningNow(brain)
+            subjectAtOpen = subjectID
+            runningAtOpen = runningNow(subjectBrain(brain))
             brain.blinkRequested = true
             let act = brain.activity
             let free = act == .idle || act == .walking || act == .lookingAround || act == .steppingInPlace || act == .turning
@@ -634,11 +644,14 @@ final class VoiceCoordinator {
         if listening { brain.restTimer = max(brain.restTimer, 1) }               // no new wander while he listens
         if !listening { faceLocked = false }
         let target: Float = (listening || holdLeft > 0 || nameTurning) ? Self.tiltLift : 0
-        if lift == 0 && target > 0 { basePitch = brain.attentionPitch }
+        let lb = subjectBrain(brain)          // (W2: the listening tilt sits on the Jelly the listen is about)
+        if lb !== tiltBrain, lift > 0, let old = tiltBrain { old.attentionPitch = basePitch; lift = 0; nod = 0 }          // (the subject changed mid-listen: the old one is put back)
+        tiltBrain = lb
+        if lift == 0 && target > 0 { basePitch = lb.attentionPitch }
         if lift != target {
             lift += max(-Self.tiltLift / Self.tiltTime * dt, min(Self.tiltLift / Self.tiltTime * dt, target - lift))
             if abs(lift - target) < 1e-4 { lift = target }
-            brain.attentionPitch = (lift == 0 ? basePitch : basePitch + lift) + nod
+            lb.attentionPitch = (lift == 0 ? basePitch : basePitch + lift) + nod
         }
         // tiny nod on speech bursts: a small extra tilt (body only) eased toward the live level while he listens
         if perkLeft > 0 { perkLeft = max(0, perkLeft - dt) }
@@ -646,7 +659,7 @@ final class VoiceCoordinator {
         if nod != nodTarget {
             let step = Self.nodMax / 0.12 * dt
             let new = nod + max(-step, min(step, nodTarget - nod))
-            brain.attentionPitch += new - nod
+            lb.attentionPitch += new - nod
             nod = abs(new) < 1e-5 && nodTarget == 0 ? 0 : new
         }
 
@@ -728,10 +741,10 @@ final class VoiceCoordinator {
     }
 
     /// Does this flip faceplant? A queued reliability miss always does; while the word is not learned about 1 in 3, never the first try, never twice running.
-    private func rollFlipFail() -> Bool {
+    func rollFlipFail() -> Bool {
         let fail: Bool
         if flipFailQueued { fail = true }
-        else if training.isLearned(.flip) { fail = false }
+        else if (lastBook ?? training).isLearned(.flip) { fail = false }
         else { fail = flipTries > 0 && !lastFlipFailed && flipRoll() < Self.flipFailChance }
         flipFailQueued = false
         flipTries += 1; lastFlipFailed = fail
@@ -806,6 +819,7 @@ final class VoiceCoordinator {
             }
             return
         }
+        if ids.count == 1, ids[0] != 0, runSubject(r, id: ids[0], kind: kind, care: care) { return }          // (W2: a trick, a lesson step or a shrug for a Jelly other than slot 0)
         let others = ids.filter { $0 != 0 }
         if !others.isEmpty { onRemote?(r, others) }
         if !ids.isEmpty, !ids.contains(0) { emitFeedback(r, override: kind); return }      // only other Jellies were meant: Bob does nothing
