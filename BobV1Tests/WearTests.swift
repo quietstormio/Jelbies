@@ -258,7 +258,7 @@ final class WearTests: XCTestCase {
         for i in ribbonIndices(p) {
             let r = p.rest[i]
             if r.z > 0.15 { XCTAssertGreaterThanOrEqual(Self.ellipse(r), 1.0, "ribbon at \(r) is over the mouth") }
-            if abs(r.x) > 0.55, abs(r.z) < 0.12 { XCTAssertGreaterThanOrEqual(r.y, 0.67, "ribbon at the side \(r) dips onto the arm root") }
+            if abs(r.x) > 0.45, r.z > -0.25 { XCTAssertGreaterThanOrEqual(r.y, 0.69, "ribbon at the side \(r) dips onto the arm root") }
             if abs(r.x) < 0.1, r.z < 0 { XCTAssertTrue((0.62...0.74).contains(r.y), "back-centre ribbon at height \(r.y)") }
         }
     }
@@ -283,7 +283,7 @@ final class WearTests: XCTestCase {
             guard m.vertices.count == p.rest.count else { return }
             for f in GameCare.armFrames(brain: r.brain, sim: r.sim) {
                 let ab = f.b - f.a, L2 = simd_length_squared(ab)
-                for i in rib where p.rest[i].z < 0.15 {   // the sides and back; a forward-reaching arm may cross the front legs (as it always did the old V) and draws over them
+                for i in rib {
                     let v = m.vertices[i].pos, q = SIMD3(v.x, v.y, v.z)
                     let t = L2 > 0 ? max(0, min(1, simd_dot(q - f.a, ab) / L2)) : 0
                     let r1 = Float(BobForm.armTopR)

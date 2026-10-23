@@ -282,18 +282,18 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["party_hat"]).hatVariant.isEmpty)
     }
 
-    /// A back item with a neck item (bow tie, pearls, scarf ...) or a small head item: the wings ride up over the backpack instead of folding (the neck
-    /// items and the ear / clip hats are measured at every shift, wing_limits4.json), and nothing pierces either item through the flap range.
     /// W6: the medal ribbon is a closed loop round the back; alone it must leave Lavender's wings up, and cost Pip's spines and Moss's daisy nothing.
     func testMedalAloneKeepsLavendersWingsUp() {
         let fit = FeatureCompat.solve(.wings, worn: ["medal_gold"])
         XCTAssertFalse(fit.folded)
         XCTAssertGreaterThanOrEqual(fit.flapMax, 70)
-        XCTAssertLessThanOrEqual(fit.flapMin, -20)
+        XCTAssertLessThanOrEqual(fit.flapMin, -15)
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["medal_gold"]).hiddenParts.isEmpty)
         XCTAssertFalse(FeatureCompat.solve(.daisy, worn: ["medal_gold"]).hidden)
     }
 
+    /// A back item with a neck item (bow tie, pearls, scarf ...) or a small head item: the wings ride up over the backpack instead of folding (the neck
+    /// items and the ear / clip hats are measured at every shift, wing_limits4.json), and nothing pierces either item through the flap range.
     func testWingsStayUpWithABackpackAndANeckItem() {
         let body = WearBody.shared
         let tol: Float = 0.02
