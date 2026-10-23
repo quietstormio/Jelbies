@@ -22,7 +22,7 @@ struct RaceChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact { footButtons }
                 }
@@ -45,7 +45,7 @@ struct RaceChrome: View {
     private var topBar: some View {
         VStack(spacing: 8) {
             Text(race.ui.course == .puddle ? "Waddle Sprint" : "Waddle Sprint · \(race.ui.course.title)")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .playFont(17, .bold)
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
@@ -67,7 +67,7 @@ struct RaceChrome: View {
 
     private func hint(_ s: String) -> some View {
         Text(s)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .playFont(15, .semibold)
             .foregroundStyle(CareMenu.brown)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .background(Capsule().fill(CareMenu.cream.opacity(0.92)))
@@ -81,33 +81,57 @@ struct RaceChrome: View {
             .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 5)
             .shadow(color: FocusStyle.shadow.opacity(0.35), radius: 10, y: 6)
             .id(race.cueSerial)
-            .transition(.scale(scale: 1.6).combined(with: .opacity))
+            .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 1.6).combined(with: .opacity))
             .allowsHitTesting(false)
             .accessibilityIdentifier("race-count")
             .offset(y: -60)
     }
 
     private var footButtons: some View {
-        HStack(spacing: 14) {
-            FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive) { press(0) }
-            FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive) { press(1) }
+        assistOrFeet(width: nil).frame(height: 170)
+    }
+
+    /// The input for the chosen assist (Settings > Accessibility): two feet, one Step button, or a Cheer button while he runs by himself.
+    @ViewBuilder
+    private func assistOrFeet(width: CGFloat?) -> some View {
+        switch race.assist {
+        case .oneButton:
+            FootButton(title: "Step", id: "race-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(-1) }
+        case .auto:
+            FootButton(title: "Cheer", id: "race-cheer", symbol: "hands.clap.fill", flip: false, live: true, key: .space) { cheer() }
+        default:
+            HStack(spacing: 14) {
+                FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
+                FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
+            }
         }
-        .frame(height: 170)
+    }
+
+    private func cheer() {
+        AudioHub.shared.chirp(jelly: race.playerID, .happy)
+        light.impactOccurred(intensity: 0.4)
     }
 
     /// Landscape: Left at the left edge, Right at the right edge, each big enough for a thumb; the middle is left for the track.
     private var sideButtons: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive) { press(0) }
-                .frame(width: 190, height: 170)
-            Spacer(minLength: 0)
-            FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive) { press(1) }
-                .frame(width: 190, height: 170)
+        Group {
+            if race.assist == .oneButton || race.assist == .auto {
+                assistOrFeet(width: nil).frame(height: 150).padding(.horizontal, 40)
+            } else {
+                HStack(alignment: .bottom, spacing: 0) {
+                    FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
+                        .frame(width: 190, height: 170)
+                    Spacer(minLength: 0)
+                    FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
+                        .frame(width: 190, height: 170)
+                }
+            }
         }
     }
 
+    /// `foot` -1 = the one-button Step (the feet alternate by themselves).
     private func press(_ foot: Int) {
-        let o = race.tap(foot: foot)
+        let o = foot < 0 ? race.stepOne() : race.tap(foot: foot)
         switch o {
         case .stumble: rigid.impactOccurred(intensity: 0.9)
         case .queued: light.impactOccurred(intensity: 0.5)
@@ -123,6 +147,7 @@ struct FootButton: View {
     let symbol: String
     let flip: Bool
     let live: Bool
+    var key: KeyEquivalent?
     let action: () -> Void
     @State private var down = false
 
@@ -133,7 +158,7 @@ struct FootButton: View {
                 .scaleEffect(x: flip ? -1 : 1, y: 1)
                 .rotationEffect(.degrees(flip ? 12 : -12))
             Text(title)
-                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .playFont(22, .heavy)
         }
         .foregroundStyle(CareMenu.brown)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -150,8 +175,12 @@ struct FootButton: View {
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { _ in if !down { down = true; action() } }
             .onEnded { _ in down = false })
+        .background {
+            if let key { Button("") { action() }.keyboardShortcut(key, modifiers: []).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }          // hardware keyboard / Full Keyboard Access
+        }
         .accessibilityElement()
-        .accessibilityLabel("\(title) foot")
+        .accessibilityLabel(title == "Left" || title == "Right" ? "\(title) foot" : title)
+        .accessibilityValue(live ? "" : "waiting")
         .accessibilityIdentifier(id)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
@@ -173,22 +202,22 @@ struct RacePlacingsCard: View {
     var body: some View {
         VStack(spacing: tight ? 6 : 14) {
             Text(race.ui.playerPlace == 1 ? "You won!" : "Finish!")
-                .font(.system(size: tight ? 24 : 30, weight: .heavy, design: .rounded))
+                .playFont(tight ? 24 : 30, .heavy)
                 .foregroundStyle(CareMenu.brown)
             VStack(spacing: tight ? 2 : 8) {
                 ForEach(race.ui.placings, id: \.racer) { p in
                     HStack(spacing: 12) {
                         Text(ordinal(p.place))
-                            .font(.system(size: 17, weight: .heavy, design: .rounded))
+                            .playFont(17, .heavy)
                             .foregroundStyle(CareMenu.brown)
-                            .frame(width: 52, height: 34)
+                            .frame(minWidth: 52, minHeight: 34)
                             .background(Capsule().fill(medal(p.place)))
                         Text(p.name)
-                            .font(.system(size: 20, weight: p.isPlayer ? .heavy : .semibold, design: .rounded))
+                            .playFont(20, p.isPlayer ? .heavy : .semibold)
                             .foregroundStyle(CareMenu.brown)
                         Spacer()
                         Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
-                            .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
+                            .playFont(18, .semibold).monospacedDigit()
                             .foregroundStyle(CareMenu.brown.opacity(0.8))
                     }
                     .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 5)
@@ -198,17 +227,23 @@ struct RacePlacingsCard: View {
             HStack(spacing: 8) {
                 Image(systemName: "drop.fill").foregroundStyle(FocusStyle.pink)
                 Text("+\(race.ui.earned) Drops")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .playFont(20, .bold)
                     .foregroundStyle(CareMenu.brown)
+            }
+            if race.assist == .auto {
+                Text("Auto run pays half the Drops")
+                    .playFont(14, .medium)
+                    .foregroundStyle(CareMenu.brown.opacity(0.8))
+                    .accessibilityIdentifier("race-auto-note")
             }
             if race.ui.waddleGain > 0.0005 {
                 Text("Waddle got a little quicker")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .playFont(14, .medium)
                     .foregroundStyle(CareMenu.brown.opacity(0.7))
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .playFont(15, .heavy)
                     .foregroundStyle(FocusStyle.pink)
                     .accessibilityIdentifier("race-unlocked")
             }
@@ -217,7 +252,7 @@ struct RacePlacingsCard: View {
                 home()
             } label: {
                 Text("Back home")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .playFont(20, .bold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
                     .background(Capsule().fill(FocusStyle.pink).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))

@@ -259,14 +259,14 @@ struct DanceRound: View {
                 Spacer(minLength: 0)
                 if compact {
                     HStack(alignment: .bottom, spacing: 12) {
-                        FootButton(title: "Left", id: "show-left", symbol: "shoeprints.fill", flip: false, live: show.buttonsLive) { press(0) }.frame(width: 170, height: 140)
+                        AssistFoot(side: 0, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
                         VStack(spacing: 8) {
                             cheer
                             ZStack { flash.padding(.bottom, 58); lane.padding(.top, 26) }.frame(height: 110)
                             stats
                             if show.beat == .danced { next }
                         }
-                        FootButton(title: "Right", id: "show-right", symbol: "shoeprints.fill", flip: true, live: show.buttonsLive) { press(1) }.frame(width: 170, height: 140)
+                        AssistFoot(side: 1, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
                     }
                 } else {
                     cheer
@@ -274,11 +274,8 @@ struct DanceRound: View {
                     stats
                     Text(show.rank.kindTiming ? "\(show.rank.title) timing is kind: Perfect within 80 ms." : "Perfect within 60 ms: tap right on the beat.").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
                     if show.beat == .danced { next } else {
-                        HStack(spacing: 14) {
-                            FootButton(title: "Left", id: "show-left", symbol: "shoeprints.fill", flip: false, live: show.buttonsLive) { press(0) }
-                            FootButton(title: "Right", id: "show-right", symbol: "shoeprints.fill", flip: true, live: show.buttonsLive) { press(1) }
-                        }
-                        .frame(height: 150)
+                        AssistFeetRow(prefix: "show", live: show.buttonsLive, press: press)
+                            .frame(height: 150)
                     }
                 }
             }
@@ -473,7 +470,9 @@ struct TrickRound: View {
             if show.trickStage == .ring {
                 Color.white.opacity(0.001).contentShape(Rectangle())
                     .onTapGesture { rigid.impactOccurred(intensity: 0.8); show.tapRing() }
-                    .accessibilityLabel("Tap when the ring hugs him").accessibilityIdentifier("trick-ring").accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Tap when the ring hugs \(show.playerName)").accessibilityHint("You will hear Now at the right moment")
+                    .accessibilityIdentifier("trick-ring").accessibilityAddTraits(.isButton)
+                    .accessibilityAction { rigid.impactOccurred(intensity: 0.8); show.tapRing() }
             }
         }
         .ignoresSafeArea()
@@ -592,6 +591,25 @@ struct Confetti: View {
     var at: CGPoint
     @State private var start = Date()
     var body: some View {
+        if A11ySettings.shared.reduceMotion { glowText } else { confetti }
+    }
+
+    /// Reduce Motion: a still "Glow Burst!" that fades, in place of the confetti.
+    private var glowText: some View {
+        TimelineView(.animation(minimumInterval: 0.1)) { ctx in
+            let t = ctx.date.timeIntervalSince(start)
+            Text("Glow Burst!").playFont(26, .black).foregroundStyle(ShowUI.gold)
+                .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+                .opacity(max(0, 1 - t / 1.8))
+                .position(x: at.x, y: at.y - 40)
+        }
+        .allowsHitTesting(false).accessibilityHidden(true)
+        .id(serial)
+        .onAppear { start = Date() }
+        .onChange(of: serial) { _, _ in start = Date() }
+    }
+
+    private var confetti: some View {
         TimelineView(.animation) { ctx in
             let t = ctx.date.timeIntervalSince(start)
             Canvas { g, _ in
@@ -804,18 +822,15 @@ struct PracticeChrome: View {
                     Spacer(minLength: 0)
                 } else if compact {
                     HStack(alignment: .bottom, spacing: 12) {
-                        FootButton(title: "Left", id: "show-left", symbol: "shoeprints.fill", flip: false, live: show.buttonsLive) { press(0) }.frame(width: 170, height: 140)
+                        AssistFoot(side: 0, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
                         ZStack { flash.padding(.bottom, 58); PromptLane(care: care).padding(.top, 26) }.frame(height: 110)
-                        FootButton(title: "Right", id: "show-right", symbol: "shoeprints.fill", flip: true, live: show.buttonsLive) { press(1) }.frame(width: 170, height: 140)
+                        AssistFoot(side: 1, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
                     }
                 } else {
                     stats
                     ZStack { flash; PromptLane(care: care).padding(.top, 34) }.frame(height: 120)
-                    HStack(spacing: 14) {
-                        FootButton(title: "Left", id: "show-left", symbol: "shoeprints.fill", flip: false, live: show.buttonsLive) { press(0) }
-                        FootButton(title: "Right", id: "show-right", symbol: "shoeprints.fill", flip: true, live: show.buttonsLive) { press(1) }
-                    }
-                    .frame(height: 150)
+                    AssistFeetRow(prefix: "show", live: show.buttonsLive, press: press)
+                        .frame(height: 150)
                 }
             }
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)

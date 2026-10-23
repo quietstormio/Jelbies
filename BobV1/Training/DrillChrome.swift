@@ -43,12 +43,19 @@ struct DrillChrome: View {
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: 12) {
-                    FootButton(title: "Left", id: "drill-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive) { press(0) }.frame(width: 170, height: 140)
-                    if race.drill != nil {
-                        ZStack { flash.padding(.bottom, 58); promptRow.padding(.top, 26) }.frame(height: 110)
-                    } else { Spacer(minLength: 0) }
-                    FootButton(title: "Right", id: "drill-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive) { press(1) }.frame(width: 170, height: 140)
+                if race.assist == .oneButton || race.assist == .auto {
+                    VStack(spacing: 6) {
+                        if race.drill != nil { ZStack { flash.padding(.bottom, 58); promptRow.padding(.top, 26) }.frame(height: 110) }
+                        drillInput(landscapeWidth: nil).frame(height: 110).padding(.horizontal, 60)
+                    }
+                } else {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        FootButton(title: "Left", id: "drill-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }.frame(width: 170, height: 140)
+                        if race.drill != nil {
+                            ZStack { flash.padding(.bottom, 58); promptRow.padding(.top, 26) }.frame(height: 110)
+                        } else { Spacer(minLength: 0) }
+                        FootButton(title: "Right", id: "drill-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }.frame(width: 170, height: 140)
+                    }
                 }
             }
         }
@@ -188,19 +195,38 @@ struct DrillChrome: View {
             .clipShape(Capsule())
         }
         .accessibilityElement().accessibilityLabel("Prompts").accessibilityIdentifier("drill-prompts")
+        .accessibilityValue(nextPromptWord)
+    }
+
+    /// "Next: left" for a screen reader (the lane is also cued by sound under VoiceOver / relaxed timing).
+    private var nextPromptWord: String {
+        guard let p = race.drill?.visible(at: race.drillState.song).first?.prompt else { return "" }
+        return race.assist == .oneButton ? "Next step" : "Next: \(p.foot == 0 ? "left" : "right")"
     }
 
     private var footButtons: some View {
-        HStack(spacing: 14) {
-            FootButton(title: "Left", id: "drill-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive) { press(0) }
-            FootButton(title: "Right", id: "drill-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive) { press(1) }
+        drillInput(landscapeWidth: nil).frame(height: 150)
+    }
+
+    /// The drill's input for the chosen assist: two feet, one Step button (judged on the beat whichever foot), or nothing to tap while he practises by himself.
+    @ViewBuilder
+    private func drillInput(landscapeWidth: CGFloat?) -> some View {
+        switch race.assist {
+        case .oneButton:
+            FootButton(title: "Step", id: "drill-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(0) }
+        case .auto:
+            FootButton(title: "Cheer", id: "drill-cheer", symbol: "hands.clap.fill", flip: false, live: true, key: .space) { AudioHub.shared.chirp(jelly: race.playerID, .happy) }
+        default:
+            HStack(spacing: 14) {
+                FootButton(title: "Left", id: "drill-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
+                FootButton(title: "Right", id: "drill-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
+            }
         }
-        .frame(height: 150)
     }
 
     private func press(_ foot: Int) {
         light.impactOccurred(intensity: 0.5)
-        race.tap(foot: foot)
+        race.tap(foot: foot)          // (the one-button Step is foot 0: the drill judges the beat whichever foot it is)
     }
 
     private func numeral(_ s: String) -> some View {

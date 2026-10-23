@@ -228,7 +228,7 @@ extension GameCare {
     /// player framed together from a little way down the track, smoothed by `dt`. See Race/RaceCamera.swift.
     func raceFollow(_ actors: [JellyActor], dt: Float) -> RaceFollowPose? {
         let book = raceBook
-        guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight else { book.follow = nil; return nil }
+        guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight, !A11ySettings.shared.reduceMotion else { book.follow = nil; return nil }          // (Reduce Motion: the wide fixed frame, no banking follow camera)
         var spots: [RaceFollowPose.Racer] = []
         for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
             guard let b = actors[aid].brain else { continue }

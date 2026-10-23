@@ -49,6 +49,7 @@ struct DrillRun {
     var goAge: Float = 0
     var flashAge: Float = 0
     var autoDone = 0                // prompts the auto-player has handled
+    var cued = 0                    // prompts whose left / right audio cue has played (accessibility)
     var settledResult = false
     static let dipDelay: Float = 0.7, dipOut: Float = 0.25, dipIn: Float = 0.4
 }
@@ -71,12 +72,12 @@ extension RaceFlow {
             sim!.tick(dt: dt)
             for e in sim!.takeEvents() {
                 switch e {
-                case .countdown: cueSerial += 1; cue(.countdownBeep)
-                case .go: cueSerial += 1; drillCue(.go)
+                case .countdown(let n): cueSerial += 1; cue(.countdownBeep); A11yEvents.say("\(n)", .high)
+                case .go: cueSerial += 1; drillCue(.go); A11yEvents.say("Go!", .high)
                 default: break
                 }
             }
-            if sim!.phase != .countdown { drill = DrillSim(seed: sim!.seed, songTime: song); publishDrill() }
+            if sim!.phase != .countdown { drill = DrillSim(seed: sim!.seed, songTime: song); applyAssistToDrill(); publishDrill() }
             refreshUI()
             return out
         }
@@ -86,8 +87,9 @@ extension RaceFlow {
         if drillState.flashAge > 0.7, drillUI.flash != nil { drillUI.flash = nil }
         tickDip(dt: dt)
         if drillResult == nil {
-            if drillAuto { autoPlay(song: song) }
+            if drillAuto { autoPlay(song: song) } else if assist == .auto { assistAutoPlay(song: song) }
             drill!.tick(songTime: song)
+            promptCues(song: song)
             out += handleDrill(drill!.takeEvents())
             publishDrill()
         } else {
@@ -131,11 +133,14 @@ extension RaceFlow {
                 out.append(.step(racer: 0, foot: foot, stride: RaceTuning.stride(waddle: w), rate: RaceTuning.maxRate(waddle: w), final: false))
                 drillUI.flash = grade; drillUI.flashSerial += 1; drillState.flashAge = 0
                 drillCue(grade == .perfect ? .perfect : .good)
+                announceDrill(e)
             case .miss:
                 out.append(.stumble(racer: 0))
                 drillUI.flash = .miss; drillUI.flashSerial += 1; drillState.flashAge = 0
+                announceDrill(e)
             case .streak: drillCue(.streak)
             case .lapEnd(let lap):
+                announceDrill(e)
                 if lap < TrainingTuning.laps, drillState.dipStage == 0 { drillState.dipStage = 1; drillState.dipT = 0 }
             case .lapStart: drillCue(.lap)
             case .finished: finishDrill()
@@ -175,7 +180,7 @@ extension RaceFlow {
         drillState.settledResult = true
         let before = (st.waddle, st.focus)
         let spent = st.pepFactor < 1
-        let gain = st.finishPractice(accuracy: d.accuracy, steadiness: d.steadiness)
+        let gain = st.finishPractice(accuracy: d.accuracy * assistGainFactor, steadiness: d.steadiness * assistGainFactor)
         drillResult = DrillResult(accuracy: d.accuracy, perfects: d.perfects, goods: d.goods, misses: d.misses, bestStreak: d.bestStreak,
                                   waddleBefore: before.0, waddleAfter: before.0 + gain.waddle, focusBefore: before.1, focusAfter: before.1 + gain.focus,
                                   pepLeft: st.pepLeft, pepSpent: spent)
@@ -185,6 +190,7 @@ extension RaceFlow {
         if st.pepLeft == 0 { onPepDepleted(playerID) }          // the last Pep of the day went on this session
         drillCue(d.accuracy >= 0.5 ? .statUp : .tired)
         drillCue(.jingle(win: d.accuracy >= 0.5))
+        announceDrillResult(d)
         publishDrill()
     }
 }

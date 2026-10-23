@@ -127,6 +127,7 @@ final class ShowFlow {
     /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the ring is tapped near its best.
     @ObservationIgnored var auto = false
     @ObservationIgnored private var autoDone = 0
+    @ObservationIgnored private var ringNowSaid = false
     @ObservationIgnored private var autoTrickWait: Float = 0
 
     /// Seconds of white (fade out / hold / fade in), the countdown beat, how long a trick holds the stage.
@@ -205,7 +206,8 @@ final class ShowFlow {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; danceGoSong = -10
         trickStage = .pick; ringAge = 0; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
-        autoDone = 0; autoTrickWait = 0
+        autoDone = 0; autoTrickWait = 0; ringNowSaid = false
+        ShowAssist.refresh()
         practiceSeed = UInt64(dayKey) &+ UInt64(playerID) &* 977
     }
     @ObservationIgnored private var practiceSeed: UInt64 = 1
@@ -230,6 +232,7 @@ final class ShowFlow {
     func finishLook() {
         guard var s = sim, s.round == .look, phase == .stage else { return }
         s.finishLook(); sim = s
+        A11yEvents.say("Round 2: Dance", .normal)
         beat = .countdown; countdown = 3; countdownLeft = Self.countdownBeat; audioWait = 0; cueSerial += 1; cue(.countdown)
         onDance(s.player.dance, true)
         revision += 1
@@ -264,7 +267,7 @@ final class ShowFlow {
         case .dancing:
             flashAge += dt
             if flashAge > 0.7, flash != nil { flash = nil }
-            if auto { autoPlay(now) }
+            if auto || ShowAssist.autoDance { autoPlay(now) }
             if kind == .practice {
                 guard var p = practice else { return }
                 p.tick(songTime: now)
@@ -303,8 +306,8 @@ final class ShowFlow {
     private func handle(_ events: [ShowDanceSim.Event]) {
         for e in events {
             switch e {
-            case .hit(_, _, let g): flash = g; flashSerial += 1; flashAge = 0; cue(g == .perfect ? .perfect : .good); onHit(g)
-            case .slip: flash = .miss; flashSerial += 1; flashAge = 0; cue(.slip); onHit(.miss)
+            case .hit(_, _, let g): flash = g; flashSerial += 1; flashAge = 0; cue(g == .perfect ? .perfect : .good); onHit(g); if flashSerial % 3 == 0 { A11yEvents.say(g == .perfect ? "Perfect" : "Good", .low) }
+            case .slip: flash = .miss; flashSerial += 1; flashAge = 0; cue(.slip); onHit(.miss); if flashSerial % 3 == 0 { A11yEvents.say("Miss", .low) }
             case .stray, .finished: break
             }
         }
@@ -315,11 +318,11 @@ final class ShowFlow {
         let prompts = kind == .practice ? (practice?.prompts ?? []) : (sim?.dance?.prompts ?? [])
         while autoDone < prompts.count {
             let p = prompts[autoDone]
-            let late: Double = autoDone % 5 == 3 ? 0.1 : (autoDone % 7 == 4 ? 0.02 : 0)
+            let late: Double = ShowAssist.autoDance ? 0.07 : (autoDone % 5 == 3 ? 0.1 : (autoDone % 7 == 4 ? 0.02 : 0))
             let at = p.time + ShowDanceSim.latencyOffset + late
             if at > now { break }
             autoDone += 1
-            if autoDone % 11 == 6 { continue }
+            if autoDone % 11 == 6, !ShowAssist.autoDance { continue }
             song = max(song, at)
             if kind == .practice { practice?.tap(foot: p.foot, at: at); if let p2 = practice { var q = p2; handle(q.takeEvents()); practice = q } }
             else if var s = sim { handle(s.tapDance(foot: p.foot, at: at)); sim = s }
@@ -330,6 +333,7 @@ final class ShowFlow {
     func finishDance() {
         guard var s = sim, s.round == .dance, phase == .stage, beat == .danced || s.danceDone else { return }
         s.finishDance(); sim = s
+        A11yEvents.say("Round 3: Trick", .normal)
         onDance(nil, false)
         beat = .idle
         trickStage = .pick
@@ -343,7 +347,7 @@ final class ShowFlow {
         guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
         s.beginTurn(t, at: clock); sim = s
         guard sim?.ringTrick != nil else { return }
-        trickStage = .ring; ringAge = 0; cue(.ring)
+        trickStage = .ring; ringAge = 0; ringNowSaid = false; cue(.ring); A11yEvents.say(ShowAssist.ringScale > 1 ? "Ring closing slowly. Tap when you hear now" : "Ring closing. Tap when you hear now", .normal)
         revision += 1
     }
     /// The Glow Burst button.
@@ -385,7 +389,8 @@ final class ShowFlow {
             }
         case .ring:
             ringAge += Double(dt)
-            if auto, ringAge >= ShowScoring.ringSeconds - 0.04 { tapRing(); return }
+            if !ringNowSaid, ringAge >= ShowScoring.ringSeconds - 0.06 { ringNowSaid = true; A11yEvents.say("Now", .high) }          // for VoiceOver: the moment the ring hugs him
+            if auto || ShowAssist.autoDance, ringAge >= ShowScoring.ringSeconds - 0.04 { tapRing(); return }
             if ringAge > ShowScoring.ringSeconds + Self.ringGrace, var s = sim, let turn = s.tapRing(at: clock) { sim = s; land(turn) }          // no tap: timing 0, still a turn
         case .performing:
             performLeft -= dt
@@ -409,6 +414,7 @@ final class ShowFlow {
                                  perfectDance: s.perfectDance, hatTrick: s.hatTrick)
         cardAge = 0
         cue(.jingle(win: place <= 2))
+        A11yEvents.say("\(playerName) placed \(A11yEvents.ordinal(place)) in the show. \(earned) Drops", .high)
         onResults(place)
         revision += 1
     }

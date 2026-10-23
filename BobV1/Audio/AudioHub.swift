@@ -349,6 +349,7 @@ final class AudioHub {
     /// Plays a random variant of `sfx` (never the same twice in a row). `x`: the Jelly's floor x for a gentle pan.
     /// `rate`: playback speed (1 = as recorded; a squeak is a boop at 1.7, a drum thump a boop at 0.55).
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
+        if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
@@ -440,6 +441,7 @@ final class AudioHub {
 
     /// The Jelly's own voice (by slot -> character): happy / sad / babble.
     func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
