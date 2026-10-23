@@ -65,6 +65,10 @@ struct GoOutButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
+        .accessibilityValue(open ? "expanded" : "collapsed").accessibilityHint("Shows the places to go: Track, Store, Jelly Show")
+        .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
+        .accessibilityShowsLargeContentViewer { Label("Go out", systemImage: "door.left.hand.open") }
+        .keyboardShortcut("o", modifiers: [])
     }
     @ViewBuilder private var classic: some View {
         let size = vsc == .compact ? HUDTuning.goOutSizeTight : HUDTuning.goOutSize
@@ -85,6 +89,8 @@ struct GoOutButton: View {
             if vsc != .compact && !open { Text("Go out").font(SK.font(10, .heavy)).foregroundStyle(SK.ink.opacity(0.75)).fixedSize().offset(y: 13) }
         }
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
+        .accessibilityValue(open ? "expanded" : "collapsed")
+        .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
     }
 }
 
@@ -156,6 +162,8 @@ struct BagButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(store.newCount > 0 ? "Bag, \(store.newCount) new" : "Bag").accessibilityIdentifier("bag-button")
+        .accessibilityShowsLargeContentViewer { Label("Bag", systemImage: "bag.fill") }
+        .keyboardShortcut("b", modifiers: [])
     }
 }
 
@@ -624,7 +632,7 @@ struct BagSheet: View {
                     } else {
                         pink("Move in", enabled: true) {
                             if let why = care.switchRoom(d.id) { roomRefusal = why.message } else { close() }
-                        }.accessibilityIdentifier("bag-room-movein-\(d.id.rawValue)")
+                        }.accessibilityLabel("Move in to \(d.title)").accessibilityIdentifier("bag-room-movein-\(d.id.rawValue)")
                     }
                 }
                 .padding(10)
@@ -679,29 +687,29 @@ struct BagSheet: View {
     private func actionButton(_ item: StoreItem) -> some View {
         switch item.kind {
         case .food, .treat:
-            pink("Feed", enabled: !care.trayOut && !care.bath.active && !care.race.active) {
+            pink("Feed", item, enabled: !care.trayOut && !care.bath.active && !care.race.active) {
                 close(); care.feedSnack(item.id, jelly: who)
             }
         case .shoes, .wear:
             let slot = item.wear?.slot ?? .feet
             let wearing = book.worn(who, slot) == item.wear
-            pink(wearing ? "Take off" : "Wear", enabled: true) {
+            pink(wearing ? "Take off" : "Wear", item, enabled: true) {
                 if wearing { book.takeOff(slot, from: who) }
                 else if let w = item.wear, book.wear(w, on: who) { AudioHub.shared.play(.shoeOn); care.jelly(who)?.stats.nudge([.cool: 0.02]) }
             }
         case .supply:
-            pink("Use", enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
+            pink("Use", item, enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
         case .decor:
             VStack(spacing: 6) {
-                pink("Place", enabled: book.canPlace(item)) { close(); care.placeDecor(item.id) }
+                pink("Place", item, enabled: book.canPlace(item)) { close(); care.placeDecor(item.id) }
                 if book.placedCount(item.id) > 0 {
                     Button {
                         AudioHub.shared.uiTap()
                         if let p = book.placedDecor.last(where: { $0.kind.storeID == item.id }) { care.putAwayDecor(p.uid) }
                     } label: {
-                        Text("Put away").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minWidth: 84, minHeight: 40)
+                        Text("Put away").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44)
                             .background(Capsule().fill(Color.white.opacity(0.9)))
-                    }.buttonStyle(.plain).accessibilityIdentifier("bag-action-put-away-\(item.id)")
+                    }.buttonStyle(.plain).accessibilityLabel("Put away \(item.name)").accessibilityIdentifier("bag-action-put-away-\(item.id)")
                 }
             }
         default:
@@ -709,12 +717,23 @@ struct BagSheet: View {
         }
     }
 
-    private func pink(_ title: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
-        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); action() } label: {
+    private func pink(_ title: String, _ item: StoreItem? = nil, enabled: Bool, _ action: @escaping () -> Void) -> some View {
+        let who = care.jelly(who)?.name
+        let spoken: String = {
+            guard let item else { return title }
+            switch title {
+            case "Feed": return who.map { "Feed \(item.name) to \($0)" } ?? "Feed \(item.name)"
+            case "Wear": return who.map { "Wear \(item.name) on \($0)" } ?? "Wear \(item.name)"
+            case "Take off": return who.map { "Take \(item.name) off \($0)" } ?? "Take off \(item.name)"
+            case "Use": return who.map { "Use \(item.name) on \($0)" } ?? "Use \(item.name)"
+            default: return "\(title) \(item.name)"
+            }
+        }()
+        return Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); action() } label: {
             Text(title).font(SK.font(16, .black)).foregroundStyle(.white).padding(.horizontal, 18).frame(minWidth: 84, minHeight: 46)
-                .background(Capsule().fill(enabled ? SK.pink : SK.muted.opacity(0.45)))
+                .background(Capsule().fill(enabled ? SK.pinkStrong : SK.muted.opacity(0.45)))
         }
-        .buttonStyle(.plain).disabled(!enabled).accessibilityLabel(title).accessibilityIdentifier("bag-action-\(title.lowercased())")
+        .buttonStyle(.plain).disabled(!enabled).accessibilityLabel(spoken).accessibilityIdentifier("bag-action-\(title.lowercased())")
     }
 
     private var roomMeter: some View {

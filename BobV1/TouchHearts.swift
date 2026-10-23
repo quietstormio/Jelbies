@@ -42,7 +42,8 @@ struct TouchHeartsView: View {
     }
 
     /// Where a heart sits (centre, points) for a head point and a heart age 0...1: beside the crown, rising with a sway, clamped into the visible area.
-    static func place(_ h: TouchPlay.Heart, age a: Double, anchor: CGPoint, size: CGSize, safeTop: CGFloat) -> CGPoint {
+    static func place(_ h: TouchPlay.Heart, age a: Double, anchor: CGPoint, size: CGSize, safeTop: CGFloat, calm: Bool = false) -> CGPoint {
+        let a = calm ? 0.25 : a          // Reduce Motion: the heart stays put beside the crown and only fades
         let r = halfExtent
         let e = CGFloat(1 - (1 - a) * (1 - a))
         var x = anchor.x + CGFloat(h.drift) * 14 * CGFloat(a) + CGFloat(h.start) * 6 + sway * CGFloat(sin(a * 2 * .pi * 1.3 + Double(h.drift) * 2)) * CGFloat(min(1, a * 4))
@@ -71,7 +72,7 @@ struct TouchHeartsView: View {
                     // 80 % of his height above his feet, a hair outside the silhouette on the heart's side
                     let w = SIMD3<Float>(mid.x + h.side * (0.80 + need), mid.y - 0.64 + 0.8 * H, mid.z)
                     guard let p0 = ThoughtBubbleView.project(w, size: size, focus: care.focus.blend) else { continue }
-                    let p = Self.place(h, age: a, anchor: p0, size: size, safeTop: top)
+                    let p = Self.place(h, age: a, anchor: p0, size: size, safeTop: top, calm: A11ySettings.shared.reduceMotion)
                     var c = ctx
                     c.opacity = Self.opacity(age: a)
                     let s = Self.scale(age: a) * Self.size(of: h) / Self.symbolSize

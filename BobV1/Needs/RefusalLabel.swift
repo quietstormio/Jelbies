@@ -13,7 +13,7 @@ struct RefusalLabel: View {
             if let text = care.notice,
                let h = ThoughtBubbleView.project(care.noticeHeadWorld + SIMD3(0, 0.1, 0), size: geo.size, focus: care.focus.blend) {
                 Text(text)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .jFont(15, .bold)
                     .foregroundStyle(FocusStyle.brown)
                     .padding(.horizontal, 14).padding(.vertical, 7)
                     .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 5, y: 2))
@@ -25,5 +25,6 @@ struct RefusalLabel: View {
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: care.notice)
+        .onChange(of: care.notice) { _, n in if let n { A11yAnnounce.say(n, priority: .normal) } }          // VoiceOver: "Not hungry"
     }
 }

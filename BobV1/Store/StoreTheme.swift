@@ -23,7 +23,8 @@ enum SK {
     static let honeyDeep = Color(hex: 0xF9CC59)
     static let mint = Color(hex: 0x9FD9B0)
     static let card = Color.white.opacity(0.78)
-    static func font(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font { .system(size: size, weight: weight, design: .rounded) }
+    /// Follows Dynamic Type (capped at 2x, see A11yFont.swift); a mid-session size change applies on the next re-render.
+    static func font(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font { JFont.scaled(size, weight) }
     static let shadow = Color(red: 0.3, green: 0.2, blue: 0.12)
 
     /// "3h 20m", "25m", "40s".

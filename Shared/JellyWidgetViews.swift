@@ -39,7 +39,10 @@ nonisolated enum WidgetTheme {
         default: return Color(.sRGB, red: 0.96, green: 0.66, blue: 0.62)
         }
     }
-    static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font { .system(size: size, weight: weight, design: .rounded) }
+    /// Follows Dynamic Type, capped at 1.3x because widget families are tight (the views keep their minimumScaleFactor).
+    static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .system(size: min(UIFontMetrics(forTextStyle: .body).scaledValue(for: size), size * 1.3), weight: weight, design: .rounded)
+    }
 }
 
 /// A care icon (berries / drop / heart / soap bubbles) tinted by tier, on a soft disc.
@@ -67,6 +70,7 @@ struct CareIcon: View {
             }
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true)          // the row says it in words
     }
 }
 
@@ -79,6 +83,8 @@ struct CareRow: View {
         HStack(spacing: spacing) {
             ForEach(JellyCare.allCases, id: \.self) { CareIcon(care: $0, tier: state.tier($0), size: size) }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(JellyStatus.sentence(state, sleeping: false))          // "Pip is hungry and a little lonely."
     }
 }
 
@@ -103,6 +109,7 @@ struct JellyPortraitTile: View {
             .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(.white.opacity(0.55), lineWidth: 1))
             .frame(width: g.size.width, height: g.size.height)
         }
+        .accessibilityHidden(true)          // decoration: the name and the words beside it are the content
     }
 }
 

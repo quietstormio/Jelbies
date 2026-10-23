@@ -18,7 +18,7 @@ struct AppleExtrasPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Siri & Lock Screen").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(ink)
+                Text("Siri & Lock Screen").jFont(17, .bold).foregroundStyle(ink)
                 Spacer()
                 Button(action: close) {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink).padding(6)
@@ -26,29 +26,29 @@ struct AppleExtrasPanel: View {
                 .buttonStyle(.plain).accessibilityLabel("Close Siri and Lock Screen settings")
             }
 
-            Text("Live Activities").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(ink.opacity(0.6))
+            Text("Live Activities").jFont(12, .bold).foregroundStyle(ink.opacity(0.6))
             Toggle(isOn: $live.napOn) {
                 Label { Text("Nap card at bedtime") } icon: { Image(systemName: "moon.zzz.fill") }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                    .jFont(15, .semibold).foregroundStyle(ink)
             }
             .tint(tint).accessibilityIdentifier("extras-nap-toggle")
             Text("When the Jelbies sleep (after 9 pm, or “goodnight”), a quiet card on the Lock Screen says when they are up.")
-                .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(ink.opacity(0.65))
+                .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
             Toggle(isOn: $live.pepOn) {
                 Label { Text("Pep refill countdown") } icon: { Image(systemName: "bolt.fill") }
-                    .font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                    .jFont(15, .semibold).foregroundStyle(ink)
             }
             .tint(tint).accessibilityIdentifier("extras-pep-toggle")
             Text("When training Pep runs out, a countdown to the midnight refill.")
-                .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(ink.opacity(0.65))
+                .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
 
             Divider().overlay(ink.opacity(0.15))
 
-            Text("Siri & Shortcuts").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(ink.opacity(0.6))
+            Text("Siri & Shortcuts").jFont(12, .bold).foregroundStyle(ink.opacity(0.6))
             SiriTipView(intent: CheckOnJelbiesIntent(), isVisible: $tipVisible)
                 .siriTipViewStyle(.automatic)
             Text("Feed, water, goodnight, race and train work too.")
-                .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(ink.opacity(0.65))
+                .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
             HStack { Spacer(); ShortcutsLink().shortcutsLinkStyle(.automatic).fixedSize() }
         }
         .padding(16)

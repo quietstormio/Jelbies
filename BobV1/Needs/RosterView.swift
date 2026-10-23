@@ -23,6 +23,7 @@ struct RosterButton: View {
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+                .frame(width: 44, height: 44).contentShape(Circle())
                 .overlay(alignment: .topTrailing) {
                     if wanting > 0 && !open {
                         Circle().fill(FocusStyle.pink).frame(width: 12, height: 12)
@@ -33,7 +34,11 @@ struct RosterButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("roster-button")
-        .accessibilityLabel("All Blobs")
+        .accessibilityLabel(wanting > 0 ? "All Jelbies, \(wanting) need\(wanting == 1 ? "s" : "") you" : "All Jelbies")
+        .accessibilityValue(open ? "expanded" : "collapsed")
+        .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
+        .accessibilityShowsLargeContentViewer { Label("All Jelbies", systemImage: "person.2.fill") }
+        .keyboardShortcut("r", modifiers: [])
     }
 }
 
@@ -51,8 +56,8 @@ struct RosterPanel: View {
                     .onTapGesture { withAnimation(CareMenu.spring) { open = false } }
                     .transition(.opacity)
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Your Blobs")
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                    Text("Your Jelbies")
+                        .jFont(17, .bold)
                         .foregroundStyle(FocusStyle.brown)
                         .padding(.leading, 6)
                     ScrollView {
@@ -83,6 +88,7 @@ struct RosterPanel: View {
 }
 
 struct BlobCard: View {
+    @Environment(\.dynamicTypeSize) private var dts
     let blob: SelectBlob
     let needs: BlobNeeds
     var coat: BlobGrime.CoatTier = .normal
@@ -103,16 +109,17 @@ struct BlobCard: View {
                     Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
                         .frame(width: 22, height: 22)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-                    Text(blob.name).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                        .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
+                    Text(blob.name).jFont(18, .bold).foregroundStyle(FocusStyle.brown)
                     Spacer()
                     Text(needs.mood.word)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                        .jFont(13, .semibold).foregroundStyle(FocusStyle.brown)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Capsule().fill(Self.moodColor(needs.mood)))
                 }
-                HStack(spacing: 12) {
-                    ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) }
-                }
+                let meters = dts.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 12))
+                meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }
                 status
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -137,12 +144,12 @@ struct BlobCard: View {
         return LazyVGrid(columns: cols, alignment: .leading, spacing: 3) {
             ForEach(statusItems, id: \.title) { item in
                 HStack(spacing: 4) {
-                    Text(item.title).foregroundStyle(FocusStyle.brown.opacity(0.55))
+                    Text(item.title).jMuted()
                     Text(item.word).foregroundStyle(FocusStyle.brown).fontWeight(.bold)
                         .accessibilityIdentifier("status-\(item.title.lowercased())-\(blob.id)")
                 }
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .jFont(12, .medium)
+                .lineLimit(dts.isAccessibilitySize ? nil : 1).minimumScaleFactor(dts.isAccessibilitySize ? 1 : 0.8)
             }
         }
     }
@@ -154,10 +161,12 @@ struct BlobCard: View {
             NeedGlyph(kind: k, size: 18)
             ZStack(alignment: .leading) {
                 Capsule().fill(FocusStyle.brown.opacity(0.12))
-                Capsule().fill(want ? FocusStyle.pink : Color(red: 0.62, green: 0.82, blue: 0.62))
+                Capsule().fill(want ? SK.pinkStrong : Color(red: 0.62, green: 0.82, blue: 0.62))
+                    .overlay { if want { StripePattern(color: .white.opacity(0.7)).clipShape(Capsule()) } }          // wanting = stripes + "!", not only pink vs green
                     .frame(width: max(5, 44 * v))
             }
             .frame(width: 44, height: 8)
+            if want { Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(SK.pinkStrong) }
         }
         .padding(.horizontal, 5).padding(.vertical, 4)
         .background(Capsule().fill(want ? FocusStyle.pink.opacity(0.16) : Color.clear))

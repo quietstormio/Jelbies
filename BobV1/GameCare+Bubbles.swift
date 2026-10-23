@@ -178,7 +178,7 @@ struct GreetHeartsView: View {
                     let mid = care.bubbleHead(id) - SIMD3(0, H * 0.5, 0)
                     let w = SIMD3<Float>(mid.x + h.side * 0.80, mid.y - 0.64 + 0.8 * H, mid.z)
                     guard let p0 = ThoughtBubbleView.project(w, size: size, focus: care.focus.blend) else { continue }
-                    let p = TouchHeartsView.place(h, age: a, anchor: p0, size: size, safeTop: TouchHeartsView.safeTop)
+                    let p = TouchHeartsView.place(h, age: a, anchor: p0, size: size, safeTop: TouchHeartsView.safeTop, calm: A11ySettings.shared.reduceMotion)
                     var c = ctx
                     c.opacity = TouchHeartsView.opacity(age: a)
                     let s = TouchHeartsView.scale(age: a) * TouchHeartsView.size(of: h) / TouchHeartsView.symbolSize

@@ -34,6 +34,9 @@ struct RaceTrackBar: View {
             }
         }
         .frame(height: height * 1.9)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Race progress")
+        .accessibilityValue("\(JelbiesActivityAttributes.ContentState.ordinal(state.position)) of \(state.racers), \(Int((min(max(state.progress, 0), 1) * 100).rounded())) percent")
     }
 }
 

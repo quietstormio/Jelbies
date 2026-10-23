@@ -10,6 +10,7 @@
 
 import SwiftUI
 import WidgetKit
+import UIKit
 
 /// The game palette the task names for the Apple extras (the Siri snippet, StandBy, the Live Activities).
 nonisolated enum JellyPalette {
@@ -18,7 +19,10 @@ nonisolated enum JellyPalette {
     static let inkSoft = Color(.sRGB, red: 0x4D / 255.0, green: 0x33 / 255.0, blue: 0x1F / 255.0).opacity(0.62)
     static let night = Color(.sRGB, red: 0.09, green: 0.09, blue: 0.14)
     static let moon = Color(.sRGB, red: 0.98, green: 0.93, blue: 0.78)
-    static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font { .system(size: size, weight: weight, design: .rounded) }
+    /// Follows Dynamic Type, capped at 1.3x because widget families are tight (the views keep their minimumScaleFactor).
+    static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .system(size: min(UIFontMetrics(forTextStyle: .body).scaledValue(for: size), size * 1.3), weight: weight, design: .rounded)
+    }
     /// A Jelbie's body colour (blue Bob, yellow Pip, green Moss, lavender).
     static func body(_ color: String) -> Color {
         switch color {

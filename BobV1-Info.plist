@@ -7,6 +7,9 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<!-- Game Mode (iOS 18 / 26): fewer background interruptions and lower Bluetooth latency while the game is up. -->
+	<!-- Assistive Access: the app offers a simplified scene (Accessibility/SimpleCareScene.swift). -->
+	<key>UISupportsAssistiveAccess</key>
+	<true/>
 	<key>GCSupportsGameMode</key>
 	<true/>
 	<key>LSSupportsGameMode</key>

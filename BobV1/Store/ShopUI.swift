@@ -36,6 +36,7 @@ struct ShopScreen: View {
     @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .snacks          // (-StoreTab decor: capture aid)
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
+    @Environment(\.dynamicTypeSize) private var dts
     /// The Wear tab's slot filter (nil = all).
     @State private var wearSlot: WearSlot? = WearSlot(rawValue: UserDefaults.standard.string(forKey: "StoreSlot") ?? "")          // (-StoreSlot head: capture aid)
     private var shown: [StoreItem] { tab == .wear ? tab.items.filter { wearSlot == nil || $0.wear?.slot == wearSlot } : tab.items }
@@ -51,7 +52,7 @@ struct ShopScreen: View {
                     .padding(.horizontal, 16).padding(.top, 8)
             }
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: wide ? 4 : 2), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
                     ForEach(shown) { item in card(item) }
                 }
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
@@ -115,7 +116,7 @@ struct ShopScreen: View {
         } label: {
             VStack(spacing: 8) {
                 ItemArt(item: item, size: wide ? 84 : 104)
-                Text(item.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(item.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
                 if let p = item.perk { PerkChip(kind: p) }
                 else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
@@ -241,6 +242,7 @@ struct ItemSheet: View {
                         .background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
+                .accessibilityLabel("Move in to \(item.name)")
                 .accessibilityIdentifier("item-movein")
             }
             if let refusal {
@@ -256,7 +258,7 @@ struct ItemSheet: View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             Image(systemName: symbol).font(.system(size: 18, weight: .black)).foregroundStyle(SK.ink)
                 .frame(width: 48, height: 48).background(Circle().fill(Color.white.opacity(0.9)))
-        }.buttonStyle(.plain).accessibilityLabel(symbol == "plus" ? "More" : "Fewer").accessibilityIdentifier("item-qty-\(symbol)")
+        }.buttonStyle(.plain).accessibilityLabel(symbol == "plus" ? "More \(item.name)" : "Fewer \(item.name)").accessibilityValue("\(qty)").accessibilityIdentifier("item-qty-\(symbol)")
     }
 
     private var buyButton: some View {
@@ -285,6 +287,7 @@ struct ItemSheet: View {
             .background(Capsule().fill(can ? SK.ink : SK.muted.opacity(0.55)))
         }
         .buttonStyle(.plain).disabled(!can)
+        .accessibilityLabel(owned ? "\(item.name), you have it" : left < 0 ? "Buy \(item.name), need \(-left) more Drops" : "Buy \(item.unique ? "" : "\(qty) ")\(item.name) for \(total) Drops")
         .accessibilityIdentifier("item-buy")
     }
 

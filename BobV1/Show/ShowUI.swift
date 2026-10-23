@@ -48,7 +48,7 @@ struct ShowHeader<Trailing: View>: View {
             }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier(backID)
             VStack(alignment: .leading, spacing: 0) {
                 if let k = kicker { Text(k).font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5) }
-                Text(title).font(SK.font(24, .black)).foregroundStyle(light ? SK.cream : SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(title).font(SK.font(24, .black)).foregroundStyle(light ? SK.cream : SK.ink).jLine(1, scale: 0.7)
             }
             Spacer(minLength: 4)
             trailing()
@@ -133,7 +133,7 @@ struct ShowBar: View {
                 }
             }.frame(height: 12)
             if let score { Text("\(score)").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 30, alignment: .trailing) }
-            if !note.isEmpty { Text(note).font(SK.font(11, .heavy)).foregroundStyle(SK.muted).frame(width: 104, alignment: .leading).lineLimit(2).minimumScaleFactor(0.8) }
+            if !note.isEmpty { Text(note).font(SK.font(11, .heavy)).foregroundStyle(SK.muted).frame(width: 104, alignment: .leading).jLine(2, scale: 0.8) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(name) \(score.map { "\($0)" } ?? "\(Int((value * 100).rounded()))"). \(note)")
@@ -152,7 +152,7 @@ struct ShowCTA: View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); action() } label: {
             HStack(spacing: 8) {
                 if let s = symbol { Image(systemName: s).font(.system(size: 20, weight: .black)) }
-                Text(title).font(SK.font(20, .black)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(title).font(SK.font(20, .black)).jLine(1, scale: 0.7)
             }
             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: height)
             .background(Capsule().fill(enabled ? ShowUI.gold : SK.muted.opacity(0.4)))
@@ -191,7 +191,7 @@ struct WardrobeStrip: View {
                         } label: {
                             VStack(spacing: 3) {
                                 if let item = StoreCatalog.item(wearing: look) { ItemArt(item: item, size: 34) } else { Image(systemName: look.slot.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink) }
-                                Text(look.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(look.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
                                 if let t = look.tags.first(where: { $0 == theme.main }) ?? look.tags.first(where: { $0 == theme.friend }) ?? look.tags.first { TagChip(tag: t, size: 10) }
                                 Text(worn ? "Wearing" : look.slot.title).font(SK.font(10, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted)
                             }
@@ -302,12 +302,12 @@ struct StudioScreen: View {
             }
             .padding(.horizontal, 16)
             VStack {
-                Text("\(ShowUI.dayName(day))'s theme: \(theme.main.title)").font(SK.font(14, .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
+                Text("\(ShowUI.dayName(day))'s theme: \(theme.main.title)").font(SK.font(14, .black)).foregroundStyle(ShowUI.brownGold).jLine(1, scale: 0.7)
                     .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(ShowUI.light))
                     .accessibilityIdentifier("studio-theme")
                 Spacer()
                 HStack(alignment: .bottom) {
-                    Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .heavy)).foregroundStyle(ShowUI.gold).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .heavy)).foregroundStyle(ShowUI.gold).jLine(1, scale: 0.7)
                     if care.jellies.count > 1 { Spacer(minLength: 6); whoChips }
                 }
                 .padding(.horizontal, 10)
@@ -834,7 +834,7 @@ struct ShowLobby: View {
                 StageBackdrop().opacity(0.9)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TODAY'S THEME").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
-                    Text(theme.title).font(SK.font(24, .black)).foregroundStyle(ShowUI.light).lineLimit(2).minimumScaleFactor(0.7)
+                    Text(theme.title).font(SK.font(24, .black)).foregroundStyle(ShowUI.light).jLine(2, scale: 0.7)
                     HStack(spacing: 6) { TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ") }
                     Text("\(theme.main.title) counts most").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
                 }
@@ -844,7 +844,7 @@ struct ShowLobby: View {
             .accessibilityElement(children: .combine).accessibilityIdentifier("show-theme")
             VStack(alignment: .leading, spacing: 4) {
                 Text("TOMORROW").font(SK.font(11, .black)).foregroundStyle(ShowUI.lilacPale).tracking(0.5)
-                Text(tomorrow.title).font(SK.font(17, .black)).foregroundStyle(SK.cream).lineLimit(2).minimumScaleFactor(0.7)
+                Text(tomorrow.title).font(SK.font(17, .black)).foregroundStyle(SK.cream).jLine(2, scale: 0.7)
                 Text("\(tomorrow.main.title) + \(tomorrow.friend.title)").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB58BDB))
                 Text("Get ready: feed and dress").font(SK.font(11, .bold)).foregroundStyle(ShowUI.lilacPale)
             }
@@ -861,7 +861,7 @@ struct ShowLobby: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Pick a rank").font(SK.font(16, .black)).foregroundStyle(SK.ink)
                 Spacer()
-                Text(prog.requirement(rank.above ?? .ocean) ?? "Every rank is open").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7)
+                Text(prog.requirement(rank.above ?? .ocean) ?? "Every rank is open").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).jLine(1, scale: 0.7)
             }
             HStack(spacing: 6) {
                 ForEach(ShowRank.allCases, id: \.rawValue) { r in
@@ -899,7 +899,7 @@ struct ShowLobby: View {
                 ForEach(Array(rivals.enumerated()), id: \.offset) { _, r in
                     VStack(spacing: 1) {
                         RivalBlob(tint: r.tint, size: 44)
-                        Text(r.name).font(SK.font(r.headliner ? 11 : 14, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(r.name).font(SK.font(r.headliner ? 11 : 14, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.6)
                         Text(r.persona.title).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 6).padding(.horizontal, 4)

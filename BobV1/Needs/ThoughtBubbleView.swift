@@ -59,7 +59,7 @@ struct ThoughtBubbleView: View {
         }
         .ignoresSafeArea()
         .onChange(of: care.bubbleIcon) { _, n in
-            if let n { shown = n; appeared = Date(); leaving = nil }
+            if let n { shown = n; appeared = Date(); leaving = nil; A11yAnnounce.say(spoken(n), priority: .low) }          // the cloud is transient: say it once
         }
         .onChange(of: care.bubbleEnd) { _, e in
             if e.silent { leaving = nil; shown = nil; return }       // the clean-up run-out: the cloud just goes, no puff over the room
@@ -73,10 +73,16 @@ struct ThoughtBubbleView: View {
         }
     }
 
+    private func spoken(_ i: BubbleIcon) -> String {
+        let who = care.bubbleJellyName
+        guard case .need(let n) = i else { return "\(who) is dirty" }
+        switch n { case .hunger: return "\(who) is hungry"; case .thirst: return "\(who) is thirsty"; case .attention: return "\(who) wants attention" }
+    }
+
     private func label(_ i: BubbleIcon) -> String {
         let who = care.bubbleJellyName
-        guard case .need(let n) = i else { return "\(who) is dirty. Tap to clean him" }
-        switch n { case .hunger: return "\(who) is hungry. Tap to feed him"; case .thirst: return "\(who) is thirsty. Tap to give a drink"; case .attention: return "\(who) wants attention. Tap to call him" }
+        guard case .need(let n) = i else { return "\(who) is dirty. Tap to clean \(who)" }
+        switch n { case .hunger: return "\(who) is hungry. Tap to feed \(who)"; case .thirst: return "\(who) is thirsty. Tap to give a drink"; case .attention: return "\(who) wants attention. Tap to call \(who)" }
     }
 
     private func headPoint(_ size: CGSize) -> CGPoint? {

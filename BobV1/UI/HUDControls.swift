@@ -79,6 +79,31 @@ enum HUDMenu {
         }
     }
 
+    /// Why a row is disabled, in words for VoiceOver (nil = it is enabled). Mirrors `enabled`.
+    static func disabledReason(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> String? {
+        guard !enabled(i, mode, care: care) else { return nil }
+        let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
+        switch i {
+        case .feed, .snacks, .drink: return care.trayOut ? "Food is already out" : "Not while cleaning"
+        case .clean:
+            if care.bath.active { return "Already cleaning" }
+            if care.trayOut { return "Not while food is out" }
+            if care.tripActive { return "Not while racing" }
+            if care.focus.isActive { return "Not in the close-up" }
+            return "Not available right now"
+        case .train:
+            if care.focus.isActive { return "Already in the close-up" }
+            if care.bath.active { return "Not while cleaning" }
+            return "Not while racing"
+        case .compete: return care.raceBlocker(jelly: id) ?? care.showBlocker(jelly: id) ?? "Not available right now"
+        case .bedtime:
+            if care.raceBusy { return "Already racing" }
+            if care.trayOut { return "Food is already out" }
+            return "Not while cleaning"
+        case .play, .decor, .dress: return nil
+        }
+    }
+
     /// Runs a care action, or returns the UI route the screen must open.
     @discardableResult
     static func perform(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> HUDRoute {
