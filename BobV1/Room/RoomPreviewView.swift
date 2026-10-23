@@ -34,6 +34,7 @@ struct RoomPreviewView: UIViewRepresentable {
             queue = dev.makeCommandQueue()
             room = RoomRenderer(device: dev, library: lib, colorFormat: v.colorPixelFormat, depthFormat: v.depthStencilPixelFormat,
                                 sampleCount: v.sampleCount, theme: theme)
+            room?.followsRoom = false
         }
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
         func draw(in view: MTKView) {

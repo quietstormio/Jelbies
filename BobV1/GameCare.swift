@@ -110,6 +110,8 @@ final class GameCare {
     let bath: BathFlow
     /// The store: what the player owns (Store/StoreBook.swift, GameCare+Store.swift). Bought with Drops from `bath.wallet`.
     let store: StoreBook
+    /// The fade between rooms (Room/RoomSwitch.swift, GameCare+Rooms.swift).
+    let roomSwitch = RoomSwitch()
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
     @ObservationIgnored var servingCharged = false
     @ObservationIgnored var zoomiesDue: Set<Int> = []
@@ -236,6 +238,7 @@ final class GameCare {
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()
+        applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }
 

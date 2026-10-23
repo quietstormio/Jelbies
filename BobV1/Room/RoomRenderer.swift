@@ -34,6 +34,9 @@ struct RoomUniforms {
     var ambCol = SIMD4<Float>(1, 1, 1, 1)
     var lamp = SIMD4<Float>(repeating: 0)
     var lampPos = SIMD4<Float>(repeating: 0)
+    // appended for the bought rooms (RoomDef): style x floor, y wall, z rug (0 = the living room's); win x = window bottom, y = window height
+    var style = SIMD4<Float>(repeating: 0)
+    var win = SIMD4<Float>(1.5, 2.8, 0, 0)
 }
 
 nonisolated final class RoomRenderer {
@@ -41,6 +44,16 @@ nonisolated final class RoomRenderer {
     static let defaultKeyDir = simd_normalize(SIMD3<Float>(-0.5, 0.8, 0.55))
 
     var theme: RoomTheme { didSet { if theme != oldValue { rebuild() } } }
+    /// The room the Jelbies live in (RoomLayout.current): the mesh, palette, window and styles follow it. Off for the standalone preview.
+    var followsRoom = true
+    private var builtRevision = -1
+    /// Rebuilds the room when `RoomLayout.apply` has swapped rooms since the last build. `encode` calls it first; public for tests.
+    func ensureBuilt() {
+        guard followsRoom, builtRevision != RoomLayout.revision else { return }
+        builtRevision = RoomLayout.revision
+        let t = RoomLayout.current.theme
+        if theme != t { theme = t } else { rebuild() }
+    }
     var keyDir = RoomRenderer.defaultKeyDir
     var keyIntensity: Float = 1.6
     /// Depth fog: start, end, max amount. The game camera is ~15 units from the room centre, so it pushes this out.
@@ -390,6 +403,12 @@ nonisolated final class RoomRenderer {
         u.fog = SIMD4(fog.x, fog.y, fog.z, 0)
         u.sky0 = daylight.sky0; u.sky1 = daylight.sky1; u.keyCol = daylight.keyCol; u.ambCol = daylight.ambCol
         u.lamp = daylight.lamp; u.lampPos = daylight.lampPos
+        if followsRoom {
+            let d = RoomLayout.current
+            u.lampPos = SIMD4(d.lamp, daylight.lampPos.w)
+            u.style = SIMD4(Float(d.floor.rawValue), Float(d.wall.rawValue), Float(d.rug.rawValue), 0)
+            u.win = SIMD4(d.windows.y0, d.windows.y1 - d.windows.y0, 0, 0)
+        }
         u.pal0 = SIMD4(sw[0], 1); u.pal1 = SIMD4(sw[1], 1); u.pal2 = SIMD4(sw[2], 1); u.pal3 = SIMD4(sw[3], 1); u.pal4 = SIMD4(sw[4], 1)
         return u
     }
@@ -400,6 +419,7 @@ nonisolated final class RoomRenderer {
     func encode(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                 lightViewProj: simd_float4x4?, shadowTex: MTLTexture?,
                 topViewProj: simd_float4x4? = nil, heightTex: MTLTexture? = nil, parts: Parts = .all) {
+        ensureBuilt()
         if bathVisible {
             // the bathroom replaces the living room (static: cached like the room); dining pieces do not exist in the bath
             if parts != .diningOnly, let pipe = bathOpaquePipeline, let vb = bathSetVB, let ib = bathSetIB, bathSetIndexCount > 0 {
@@ -427,6 +447,7 @@ nonisolated final class RoomRenderer {
             if onStage { u.pal2 = SIMD4(ShowModels.swatch2, 1); u.pal3 = SIMD4(ShowModels.swatch3, 1); u.pal4 = SIMD4(ShowModels.swatch4, 1); u.fog = SIMD4(ShowModels.fog, 0) }
             else { u.pal2 = SIMD4(RaceModels.swatch2, 1); u.pal3 = SIMD4(RaceModels.swatch3, 1); u.pal4 = SIMD4(RaceModels.swatch4, 1) }
             u.lamp.w = 0
+            u.style = .zero; u.win = SIMD4(1.5, 2.8, 0, 0)
             enc.pushDebugGroup(onStage ? "show stage" : "race track")
             enc.setRenderPipelineState(pipeline)
             enc.setFragmentBuffer(shoeTable, offset: 0, index: 2)

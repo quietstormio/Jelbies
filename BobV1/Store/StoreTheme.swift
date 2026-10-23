@@ -186,6 +186,7 @@ enum StoreThumb {
         return (0.55, 0.42)
     }
     static func image(for item: StoreItem) -> UIImage? {
+        if let r = item.room { return UIImage(named: "room_thumb_\(r.rawValue)") }
         guard let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
         return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch)
@@ -212,7 +213,7 @@ struct ItemArt: View {
     private var tint: Color {
         switch item.kind {
         case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .supply: return SK.sky.opacity(0.35)
-        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4)
+        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3)
         }
     }
 }

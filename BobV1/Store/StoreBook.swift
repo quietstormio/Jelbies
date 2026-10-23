@@ -28,6 +28,12 @@ final class StoreBook {
         var nextDecorUID: Int? = nil
         /// Wearables won rather than bought (the winner medal). Optional: a save from before the wardrobe decodes without it.
         var awarded: [String]? = nil
+        /// Rooms bought (RoomID raw values; home is always owned). Optional: an older save decodes without it.
+        var rooms: [String]? = nil
+        /// Where the Jelbies live now (nil = home).
+        var room: String? = nil
+        /// The placed decor of every room except the current one (`placedAt` is the current room's list).
+        var stash: [String: [PlacedDecor]]? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -76,6 +82,7 @@ final class StoreBook {
         switch item.kind {
         case .trickPage: return item.trick.map { saved.pages.contains($0.rawValue) } ?? false
         case .shoes, .wear: return item.wear.map { saved.wearables.contains($0.rawValue) } ?? false
+        case .room: return item.room.map { ownsRoom($0) } ?? false
         default: return count(item.id) > 0
         }
     }
@@ -99,6 +106,7 @@ final class StoreBook {
         switch item.kind {
         case .trickPage: if let t = item.trick { saved.pages.append(t.rawValue) }
         case .shoes, .wear: if let w = item.wear { saved.wearables.append(w.rawValue) }
+        case .room: if let r = item.room { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += 1
         }
         saved.newItems += 1
@@ -121,6 +129,7 @@ final class StoreBook {
         switch item.kind {
         case .trickPage: if let t = item.trick, !saved.pages.contains(t.rawValue) { saved.pages.append(t.rawValue) }
         case .shoes, .wear: if let w = item.wear, !saved.wearables.contains(w.rawValue) { saved.wearables.append(w.rawValue) }
+        case .room: if let r = item.room, !ownsRoom(r) { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += n
         }
         save()
@@ -177,7 +186,10 @@ final class StoreBook {
 
     var placedDecor: [PlacedDecor] { saved.placedAt ?? [] }
     var roomUnitsUsed: Int { placedDecor.reduce(0) { $0 + $1.kind.spec.units } }
-    func placedCount(_ id: String) -> Int { placedDecor.filter { $0.kind.storeID == id }.count }
+    /// How many of `id` stand in a room: this room and every other (a single owned cushion sits in one room at a time).
+    func placedCount(_ id: String) -> Int {
+        placedDecor.filter { $0.kind.storeID == id }.count + (saved.stash ?? [:]).values.reduce(0) { $0 + $1.filter { $0.kind.storeID == id }.count }
+    }
     /// Owned and not in the room.
     func unplaced(_ id: String) -> Int { max(count(id) - placedCount(id), 0) }
     func canPlace(_ item: StoreItem) -> Bool {
@@ -228,8 +240,31 @@ final class StoreBook {
         saved.placedAt = list
         save()
     }
-    /// Everything back into the bag.
+    /// Everything in THIS room back into the bag (the other rooms keep their furniture).
     func putAwayAll() { if !placedDecor.isEmpty { saved.placedAt = []; save() } }
     /// The beanbag perk is on.
     var beanbagPlaced: Bool { placedDecor.contains { $0.kind == .beanbag } }
+
+    // MARK: rooms
+
+    /// The room the Jelbies live in (home until they move).
+    var currentRoom: RoomID { saved.room.flatMap(RoomID.init(rawValue:)) ?? .home }
+    func ownsRoom(_ id: RoomID) -> Bool { id == .home || (saved.rooms ?? []).contains(id.rawValue) }
+    /// Home first, then the bought rooms in catalogue order.
+    var ownedRooms: [RoomID] { RoomID.allCases.filter { ownsRoom($0) } }
+    /// Moves the Jelbies into an owned room: this room's decor is stashed and the new room's comes back (an unvisited room is empty).
+    @discardableResult
+    func moveIn(_ id: RoomID) -> Bool {
+        guard ownsRoom(id) else { return false }
+        let cur = currentRoom
+        guard id != cur else { return true }
+        var stash = saved.stash ?? [:]
+        stash[cur.rawValue] = placedDecor
+        saved.placedAt = stash[id.rawValue] ?? []
+        stash[id.rawValue] = nil
+        saved.stash = stash.isEmpty ? nil : stash
+        saved.room = id == .home ? nil : id.rawValue
+        save()
+        return true
+    }
 }

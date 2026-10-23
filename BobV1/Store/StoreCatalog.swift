@@ -11,17 +11,17 @@
 import Foundation
 
 nonisolated enum StoreKind: String, CaseIterable, Codable, Sendable {
-    case food, treat, supply, trickPage, shoes, wear, decor
+    case food, treat, supply, trickPage, shoes, wear, decor, room
     var title: String {
         switch self {
         case .food: return "Food"; case .treat: return "Treats"; case .supply: return "Care"; case .trickPage: return "Tricks"
-        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"
+        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"
         }
     }
     var symbol: String {
         switch self {
         case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
-        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"
+        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"
         }
     }
 }
@@ -51,6 +51,9 @@ nonisolated enum StoreTuning {
     /// The beanbag's modest room perk ("Cozy-lite"): while one is placed, attention (love) drains at this fraction. Like every slowing perk the strongest
     /// wins (it does not stack with the Cozy snack's x0.5), and it applies while the game runs, not to the time away.
     static let beanbagAttentionDrain = 0.85
+    /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 12 and a Wave win 22, adoption costs 120 / 180 / 240 and the
+    /// loveseat 120, so a room is a long-term goal: about 15 to 25 race wins.
+    static let roomPrices: [RoomID: Int] = [.loft: 300, .cabin: 400]
 }
 
 nonisolated struct StoreItem: Identifiable, Sendable {
@@ -70,8 +73,10 @@ nonisolated struct StoreItem: Identifiable, Sendable {
     var wear: WearLook? = nil
     /// Decor (part B): room units it takes.
     var roomUnits = 0
-    /// Bought once and kept (pages, wearables, decor placement is part B) as opposed to stacked and used up.
-    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear }
+    /// A room to live in (Room/RoomDef.swift).
+    var room: RoomID? = nil
+    /// Bought once and kept (pages, wearables, rooms; decor placement is part B) as opposed to stacked and used up.
+    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear || kind == .room }
     /// A wearable that is earned, not sold (the winner medal): never listed in the shop.
     var awarded = false
     var isWearable: Bool { kind == .shoes || kind == .wear }
@@ -80,7 +85,13 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + wearItems
+    static let items: [StoreItem] = base + batch2 + wearItems + roomItems
+
+    /// The rooms for sale (home is never sold).
+    static let roomItems: [StoreItem] = [
+        StoreItem(id: "room-loft", name: RoomCatalog.loft.title, kind: .room, price: StoreTuning.roomPrices[.loft] ?? 300, perk: nil, description: RoomCatalog.loft.blurb, symbol: "sun.max.fill", room: .loft),
+        StoreItem(id: "room-cabin", name: RoomCatalog.cabin.title, kind: .room, price: StoreTuning.roomPrices[.cabin] ?? 400, perk: nil, description: RoomCatalog.cabin.blurb, symbol: "flame.fill", room: .cabin),
+    ]
 
     /// The second batch of furniture and toys (prices and spots from the Blender exports' JSON).
     private static let batch2: [StoreItem] = [

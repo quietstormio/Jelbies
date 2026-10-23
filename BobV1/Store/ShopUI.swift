@@ -8,11 +8,11 @@
 import SwiftUI
 
 enum ShopTab: String, CaseIterable, Identifiable {
-    case snacks = "Snacks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys"
+    case snacks = "Snacks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys", rooms = "Rooms"
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .snacks: return [.food, .treat]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]
+        case .snacks: return [.food, .treat]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
         }
     }
     var items: [StoreItem] {
@@ -32,6 +32,7 @@ struct ShopScreen: View {
     let care: GameCare
     var who: Int
     var back: () -> Void
+    var goHome: () -> Void = {}          // leaves the Town / Shop (a room move starts its fade at once)
     @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .snacks          // (-StoreTab decor: capture aid)
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
@@ -60,7 +61,7 @@ struct ShopScreen: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
-            ItemSheet(care: care, item: item, who: who) { selected = nil }
+            ItemSheet(care: care, item: item, who: who, goHome: goHome) { selected = nil }
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
@@ -116,6 +117,7 @@ struct ShopScreen: View {
                 ItemArt(item: item, size: wide ? 84 : 104)
                 Text(item.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.8)
                 if let p = item.perk { PerkChip(kind: p) }
+                else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : item.kind == .trickPage ? "New trick" : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
@@ -146,7 +148,9 @@ struct ItemSheet: View {
     let care: GameCare
     let item: StoreItem
     var who: Int
+    var goHome: () -> Void = {}
     var close: () -> Void
+    @State private var refusal: String?
     @State private var qty = 1
     @State private var bought = 0
     @Environment(\.verticalSizeClass) private var vsc
@@ -228,6 +232,22 @@ struct ItemSheet: View {
                 }
             }
             buyButton.padding(.horizontal, vsc == .compact ? 0 : 16)
+            if item.kind == .room, let r = item.room, book.owns(item), book.currentRoom != r {
+                Button {
+                    AudioHub.shared.uiTap()
+                    if let b = care.switchRoom(r) { refusal = b.message } else { close(); goHome() }
+                } label: {
+                    Text("Move in now").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Capsule().fill(SK.honey))
+                }
+                .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
+                .accessibilityIdentifier("item-movein")
+            }
+            if let refusal {
+                Text(refusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
+                    .accessibilityIdentifier("item-movein-refusal")
+            }
             Text(footer).font(SK.font(12, .bold)).foregroundStyle(SK.muted).padding(.bottom, 10)
         }
     }
@@ -249,7 +269,7 @@ struct ItemSheet: View {
                 AudioHub.shared.play(.buyCoins); AudioHub.shared.play(.unwrap, volume: 0.8)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 bought += ok; qty = 1
-                if item.unique { close() }
+                if item.unique, item.kind != .room { close() }
             } else { AudioHub.shared.play(.notEnough) }
         } label: {
             HStack(spacing: 8) {
@@ -269,9 +289,10 @@ struct ItemSheet: View {
     }
 
     private var footer: String {
+        if item.kind == .room && book.owns(item) { return "Live there from Rooms" }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win races to earn more Drops" }
-        let dest = item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : item.kind == .trickPage ? "Unlocks in the trick book" : "goes to your Bag"
+        let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : item.kind == .trickPage ? "Unlocks in the trick book" : "goes to your Bag"
         return "You'll have \(left) Drops left \u{00B7} \(dest)"
     }
 
@@ -282,17 +303,20 @@ struct ItemSheet: View {
     private var effectSymbol: String {
         if let p = item.perk { return p.symbol }
         if item.kind == .decor { return "chair.lounge.fill" }
+        if item.kind == .room { return "house.fill" }
         return item.wear.map { $0.slot.symbol } ?? "book.fill"
     }
     private var effectTitle: String {
         if let p = item.perk { return "\(p.title) \u{00B7} \(durationText(p))" }
         if item.isWearable { return "Looks only" }
         if item.kind == .decor { return item.roomUnits == 1 ? "Takes 1 spot" : "Takes \(item.roomUnits) spots" }
+        if item.kind == .room { return "A new room to live in" }
         return item.trick.map { "Unlocks \($0.title)" } ?? "Goodies"
     }
     private var effectBlurb: String {
         if let p = item.perk { return p.blurb }
         if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and on the track." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
+        if item.kind == .room { return "Your Jelbies move in and the room keeps its own furniture." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         return "Teach it with your own word in the trick book."
     }
