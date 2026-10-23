@@ -400,6 +400,20 @@ final class BobV1UITests: XCTestCase {
         XCTAssertLessThan(ms, 100, "second tap-down to glow visible: \(ms) ms (\(v))")
     }
 
+    /// A failed first-tap warm-up must not cost a second gesture: one double-tap-hold opens the listen.
+    @MainActor
+    func testVoiceDoubleTapHoldOpensOnFirstTryAfterWarmFailure() throws {
+        let app = voiceApp(["-VoiceFakeWarmFail", "1", "-BlobNoWander", "1"])
+        let mic = app.buttons["voice-mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 20))
+        let empty = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        empty.tap()
+        empty.press(forDuration: 0.9)
+        waitValue(mic, contains: "1 talks", "the first gesture opened a listen")
+        let heard = app.descendants(matching: .any)["voice-heard"]
+        XCTAssertTrue(heard.waitForExistence(timeout: 10), "the heard pill appears")
+    }
+
     /// A double-tap that does not hold (a quick second tap) cancels silently: no glow left behind, the listen is not sent.
     @MainActor
     func testVoiceQuickDoubleTapLeavesNoGlow() throws {

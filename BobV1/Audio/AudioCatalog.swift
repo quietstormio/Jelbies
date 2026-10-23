@@ -6,7 +6,7 @@
 import Foundation
 
 nonisolated enum SFX: String, CaseIterable, Sendable {
-    case squish, boop, wobble, footstep, zoomies, jump, chomp, slurp, setdown, splash, soapbubbles, bubblepop
+    case squish, boop, wobble, letgo, footstep, zoomies, jump, chomp, slurp, setdown, splash, soapbubbles, bubblepop
     case lintroller, sparkle, snore, uitap, uiconfirm, coin, select
     /// Jelly Circuit cues (files countdown_beep_N, race_go_N, race_finish_N, stumble_N).
     case countdownBeep = "countdown_beep", raceGo = "race_go", raceFinish = "race_finish", stumble
@@ -41,6 +41,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .tired: return 0.5
         case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
+        case .letgo: return 0.7
         case .uitap: return 0.6
         case .soapbubbles, .lintroller: return 0.7
         default: return 0.85
@@ -51,6 +52,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         switch self {
         case .footstep: return 0.2
         case .squish, .boop, .wobble: return 0.16
+        case .letgo: return 0.25
         case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45
         case .bubblepop: return 0.07
@@ -63,6 +65,32 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
 }
 
 nonisolated enum JellyVoice: String, Sendable { case happy, sad, babble }
+
+/// The voice set of a CHARACTER (0 Bob, 1 Pip, 2 Moss, 3 Lavender): files chirp_jelly{c+1}_happy/_sad, babble_jelly{c+1}.
+nonisolated enum JellyVoiceSet {
+    static let count = 4
+    static func index(character c: Int) -> Int { min(max(c, 0), count - 1) + 1 }
+    static func file(character c: Int, _ v: JellyVoice) -> String {
+        v == .babble ? "babble_jelly\(index(character: c))" : "chirp_jelly\(index(character: c))_\(v.rawValue)"
+    }
+}
+
+/// The let-go sound: one soft boing per release, however many squash peaks the settle has (the haptics still play at every peak).
+nonisolated enum TouchSound {
+    static let letGoRingGap: Double = 0.5
+    static let letGoBase: Float = 0.55
+    static let letGoSlope: Float = 0.8
+}
+
+/// A ring is a run of pulses less than `TouchSound.letGoRingGap` apart; only its first pulse sounds.
+nonisolated struct LetGoRing {
+    private var last: Double = -.infinity
+    init() {}
+    mutating func shouldSound(now: Double) -> Bool {
+        defer { last = now }
+        return now - last >= TouchSound.letGoRingGap
+    }
+}
 
 nonisolated enum AudioMix {
     static let music: Float = 0.5

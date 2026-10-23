@@ -405,6 +405,15 @@ final class HapticDriver {
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
+    /// A squash peak of a let-go settle: the same haptic as `transient`; the sound is the soft let-go boing (one per ring).
+    func jellyPulse(now: Double, intensity: Float, sharpness: Float) {
+        guard warm else { return }
+        AudioHub.shared.touch(kind: "letgo", intensity: intensity)
+        soundHook?("transient", intensity)
+        guard enabled else { return }
+        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
+    }
+
     /// Bounce / landing thump scaled by the impact speed; rate limited.
     func impact(now: Double, speed: Float) {
         guard warm, now - lastImpact >= Self.impactGap else { return }

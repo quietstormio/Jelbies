@@ -54,13 +54,28 @@ final class FakeSpeechInput: SpeechInput {
     private(set) var lastContextualWords: [String] = []
     private var timer: Timer?
     private var phase: Double = 0
+    /// Simulated failing warm-ups left (`-VoiceFakeWarmFail n`); exercises the same gate as the real input.
+    var warmFailures = UserDefaults.standard.integer(forKey: "VoiceFakeWarmFail")
+    private(set) var warmUps = 0
+    let gate = MicWarmGate()
 
     init() {}
     nonisolated deinit {}
 
     func prepare(contextualWords: [String]) async { availability = .ready }
 
+    private func fakeEngine() async -> Bool {
+        warmUps += 1
+        if warmFailures > 0 { warmFailures -= 1; return false }
+        return true
+    }
+
+    func warmUp() { gate.warm { [weak self] in await self?.fakeEngine() ?? false } }
+
     func start(contextualWords: [String]) async throws {
+        let ok = await gate.ready(stillRunning: { true }, { [weak self] in await self?.fakeEngine() ?? false }, beforeRetry: {})
+        gate.invalidate()
+        guard ok else { throw SpeechInputError.noFormat }
         lastContextualWords = contextualWords
         isStarted = true
         phase = 0
@@ -109,6 +124,8 @@ nonisolated enum VoiceAudioTuning {
     static let preRollSeconds: Double = 1.5
     /// A warm-up with no hold after it is torn down after this long.
     static let warmTimeout: TimeInterval = 2.5
+    /// A warm engine that failed (or died) is brought up again this many times inside `start` before the press gives up.
+    static let warmRetries = 1
 }
 
 nonisolated enum VoiceTranscriptLog {
@@ -239,7 +256,7 @@ final class DictationSpeechInput: SpeechInput {
     private var analyzer: SpeechAnalyzer?
     private var pipe: AudioPipe?
     private var collector: Task<String, Never>?
-    private var warmTask: Task<Bool, Never>?
+    private let gate = MicWarmGate()
     private var coolTask: Task<Void, Never>?
     private var isRunning = false
     private var starting = false
@@ -298,16 +315,15 @@ final class DictationSpeechInput: SpeechInput {
     func warmUp() {
         guard availability == .ready, !isRunning, !starting else { return }
         t0 = CACurrentMediaTime()
-        if warmTask == nil { warmTask = makeWarmTask() }
+        gate.warm { [weak self] in await self?.bringUpEngine(deactivateOnFail: true) ?? false }
         scheduleCool()
     }
 
     func coolDown() {
         guard !isRunning, !starting else { return }
         coolTask?.cancel(); coolTask = nil
-        let w = warmTask
         Task { [weak self] in
-            _ = await w?.value
+            _ = await self?.gate.value()
             guard let self, !self.isRunning, !self.starting else { return }
             self.teardownEngine()
         }
@@ -324,47 +340,45 @@ final class DictationSpeechInput: SpeechInput {
     }
 
     /// Session + engine + tap, off the main thread; audio flows into the pipe's ring from the first buffer.
-    private func makeWarmTask() -> Task<Bool, Never> {
-        let loc = locale
-        let cached = analyzerFormat
-        return Task { [weak self] in
-            var fmt = cached
-            if fmt == nil, let loc { fmt = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Self.makeTranscriber(loc)]) }
-            guard let self, let fmt else { return false }
-            let pipe = AudioPipe(format: fmt) { [weak self] level in
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level) } }
-            }
-            self.sessionActive = true
-            do {
-                let box = try await Task.detached { () -> EngineBox in
-                    try Self.activateSessionOffMain()
-                    let engine = AVAudioEngine()
-                    try Self.installTap(engine: engine, pipe: pipe)
-                    engine.prepare()
-                    try engine.start()
-                    return EngineBox(engine)
-                }.value
-                self.engine = box.engine
-                self.pipe = pipe
-                VoiceTranscriptLog.log("engine running \(Int((CACurrentMediaTime() - self.t0) * 1000)) ms after warm-up/start; analyzer format \(fmt); input format \(box.engine.inputNode.outputFormat(forBus: 0))")
-                return true
-            } catch {
-                VoiceTranscriptLog.log("engine start failed: \(error)")
-                self.deactivateSession()
-                return false
-            }
+    private func bringUpEngine(deactivateOnFail: Bool) async -> Bool {
+        var fmt = analyzerFormat
+        if fmt == nil, let loc = locale { fmt = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Self.makeTranscriber(loc)]) }
+        guard let fmt else { return false }
+        // Ears must let go of the input BEFORE the session switches (idempotent; resumed by micSessionEnded on teardown).
+        Ears.shared.voicePause()
+        let pipe = AudioPipe(format: fmt) { [weak self] level in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onLevel?(level) } }
+        }
+        sessionActive = true
+        do {
+            let box = try await Task.detached { () -> EngineBox in
+                try Self.activateSessionOffMain()
+                let engine = AVAudioEngine()
+                try Self.installTap(engine: engine, pipe: pipe)
+                engine.prepare()
+                try engine.start()
+                return EngineBox(engine)
+            }.value
+            engine = box.engine
+            self.pipe = pipe
+            VoiceTranscriptLog.log("warm ok: engine running \(Int((CACurrentMediaTime() - t0) * 1000)) ms after warm-up/start; analyzer format \(fmt); input format \(box.engine.inputNode.outputFormat(forBus: 0))")
+            return true
+        } catch {
+            VoiceTranscriptLog.log("warm-up failed: engine start failed: \(error)")
+            if deactivateOnFail { deactivateSession() }
+            return false
         }
     }
 
-    private func teardownEngine() {
+    private func teardownEngine(keepSession: Bool = false) {
         coolTask?.cancel(); coolTask = nil
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
         engine = nil
         pipe?.finish()
         pipe = nil
-        warmTask = nil
-        deactivateSession()
+        gate.invalidate()
+        if !keepSession { deactivateSession() }
     }
 
     // MARK: start / stop
@@ -376,8 +390,10 @@ final class DictationSpeechInput: SpeechInput {
         coolTask?.cancel(); coolTask = nil
         if availability == .unknown { await prepare(contextualWords: contextualWords) }
         guard availability == .ready, let locale else { throw SpeechInputError.notReady }
-        if warmTask == nil { t0 = CACurrentMediaTime(); warmTask = makeWarmTask() }
-        let ok = await warmTask?.value ?? false
+        if !gate.isWarming { t0 = CACurrentMediaTime() }
+        let ok = await gate.ready(stillRunning: { [weak self] in self?.engine?.isRunning == true }, { [weak self] in
+            await self?.bringUpEngine(deactivateOnFail: false) ?? false
+        }, beforeRetry: { [weak self] in self?.teardownEngine(keepSession: true) })
         guard ok, let pipe, engine != nil else {
             teardownEngine()
             throw SpeechInputError.noFormat

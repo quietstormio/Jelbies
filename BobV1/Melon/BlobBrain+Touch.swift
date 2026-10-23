@@ -902,7 +902,7 @@ final class TouchPlay {
             let a = jellyRest - jellyH[1]
             if a > 0.012 {
                 let p = HapticMap.jellyPulse(amplitude: a)
-                haptics.transient(now: now, intensity: p.intensity, sharpness: p.sharpness)
+                haptics.jellyPulse(now: now, intensity: p.intensity, sharpness: p.sharpness)
                 jellyPulses.append(JellyPulse(t: jellyT[1], amplitude: a))
             }
         }
