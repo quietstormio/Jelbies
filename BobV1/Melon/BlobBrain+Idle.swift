@@ -89,7 +89,6 @@ enum IdleTable {
         for i in w.indices where w[i].kind != .wander && w[i].kind != .sit && w[i].kind != .yawn && w[i].kind != .slump && w[i].kind != .sleep
             && w[i].kind != .stretch && w[i].kind != .window && w[i].kind != .sway && w[i].kind != .decorSit && w[i].kind != .sigh && w[i].kind != .hmph { w[i].weight *= BlobBrain.fastKinds.contains(w[i].kind) ? 1 - 0.75 * night : max(0.5, 1 - 0.75 * night) }          // (the calm ones keep half their weight: the one who is still up at night keeps doing things; the fast ones still fade)
         add(.sit, (sleep ? 1.5 : 4) * night)
-        if sleep { add(.sleep, 12 * night) }          // bedtime: asleep on his back (BlobBrain+Sleep.swift)
         add(.yawn, 2.5 * night + 3 * morning)
         if antics { add(.stretch, 1.5 * morning) }
         return w
@@ -274,7 +273,10 @@ extension BlobBrain {
         // woken (a tap / the selection / a request) before he lay down: the walk to bed or the yawn just ends (nothing else read `yielding` for stages 0 / 1: he used to lie down anyway)
         if kind == .sleep, idleState.yielding, sleep.stage <= 1 { abortAll(sim, skinner); return }
         if Self.decorKinds.contains(kind) { decorTick(sim, skinner, dt) }
-        if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
+        // a sleeper in the lying stages yields ONLY to a request meant for him (another Jelly's bath, meal or close-up never wakes him)
+        if kind == .sleep, sleep.stage >= 2, sleep.stage <= 4 {
+            if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true) }
+        } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway, .stopLook: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:

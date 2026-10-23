@@ -16,6 +16,8 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     case trick(VoiceTrick)
     /// Bedtime: the legacy "goodnight" (yawn, cuddle pile, tucked in).
     case feed, drink, sleep, clean
+    /// "Wake up" / "good morning": the sleepers wake (the named one, or everyone).
+    case wake
     /// Go to / sit on a piece of decor (`object` = its id).
     case goTo
     /// Put on a wearable (`object` = its id).
@@ -32,7 +34,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         switch self {
         case .come: return "come"; case .stop: return "stop"; case .stopFighting: return "stopFighting"; case .praise: return "praise"
         case .scold: return "scold"; case .play: return "play"; case .trick(let t): return t.rawValue
-        case .feed: return "feed"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "clean"
+        case .feed: return "feed"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "clean"; case .wake: return "wake"
         case .goTo: return "goTo"; case .wear: return "wear"; case .playWith: return "playWith"; case .race: return "race"; case .train: return "train"
         case .whoIs(.hunger): return "whoIsHungry"; case .whoIs(.thirst): return "whoIsThirsty"; case .whoIs(.attention): return "whoWantsLove"
         case .none: return "none"
@@ -42,7 +44,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         switch key {
         case "come": self = .come; case "stop": self = .stop; case "stopFighting": self = .stopFighting; case "praise": self = .praise
         case "scold": self = .scold; case "play": self = .play; case "feed": self = .feed; case "drink": self = .drink
-        case "sleep": self = .sleep; case "clean": self = .clean; case "goTo": self = .goTo; case "wear": self = .wear; case "playWith": self = .playWith
+        case "wake": self = .wake; case "sleep": self = .sleep; case "clean": self = .clean; case "goTo": self = .goTo; case "wear": self = .wear; case "playWith": self = .playWith
         case "race": self = .race; case "train": self = .train; case "whoIsHungry": self = .whoIs(.hunger); case "whoIsThirsty": self = .whoIs(.thirst)
         case "whoWantsLove": self = .whoIs(.attention); case "none": self = .none
         case "jumpingJacks": self = .trick(.jacks)
@@ -50,7 +52,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         }
     }
     static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "hop", "roll", "feed", "drink",
-                                    "sleep", "clean", "goTo", "wear", "playWith", "race", "train", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
+                                    "sleep", "wake", "clean", "goTo", "wear", "playWith", "race", "train", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
 
     /// The object kinds this action takes (nil = none; `.playWith` takes an optional toy; "go to" takes furniture or a toy).
     var objectKinds: Set<CatalogItem.Kind>? {
@@ -70,7 +72,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         switch self {
         case .come: return "come here"; case .stop: return "stop"; case .stopFighting: return "stop fighting"; case .praise: return "good job"
         case .scold: return "no"; case .play: return "play"; case .trick(let t): return t.title.lowercased()
-        case .feed: return "eat"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "bath time"
+        case .feed: return "eat"; case .drink: return "drink"; case .sleep: return "sleep"; case .wake: return "wake up"; case .clean: return "bath time"
         case .goTo: return "go to"; case .wear: return "put on"; case .playWith: return "play with"; case .race: return "race"; case .train: return "train"
         case .whoIs(.hunger): return "who's hungry?"; case .whoIs(.thirst): return "who's thirsty?"; case .whoIs(.attention): return "who wants love?"
         case .none: return "?"

@@ -101,7 +101,7 @@ nonisolated enum AIError: Error, Equatable { case unavailable, timedOut, invalid
 struct JellyCommandOut {
     @Guide(description: "Pet names that were addressed, or [\"everyone\"] when all were; empty when none was named")
     var targets: [String]
-    @Guide(description: "Exactly one of: come, stop, stopFighting, praise, scold, play, sit, jacks, run, flip, look, spin, hop, roll, feed, drink, sleep, clean, goTo, wear, playWith, race, train, whoIsHungry, whoIsThirsty, whoWantsLove, none")
+    @Guide(description: "Exactly one of: come, stop, stopFighting, praise, scold, play, sit, jacks, run, flip, look, spin, hop, roll, feed, drink, sleep, wake, clean, goTo, wear, playWith, race, train, whoIsHungry, whoIsThirsty, whoWantsLove, none")
     var action: String
     @Guide(description: "The id of the food, drink, decor, toy or wearable mentioned, from the lists given; empty when none")
     var object: String
@@ -149,7 +149,7 @@ final class SystemCommandModel: AICommandModel, @unchecked Sendable {
         Map what a pet owner said to their jelly pets onto ONE command. Never reply with words.
         Pets in the room: \(c.jellies.map(\.name).joined(separator: ", ")). targets: the pet names addressed, ["everyone"] if all are, [] if none.
         action: come (call over), stop, stopFighting, praise (compliments), scold (no, bad), play, sit, jacks (jump), run, flip, look, spin, hop, roll (roll over), \
-        feed (eat / a food), drink (a drink), sleep (bed, nap, goodnight), clean (bath, wash), goTo (go to / sit on decor), wear (put on), \
+        feed (eat / a food), drink (a drink), sleep (bed, nap, goodnight), wake (wake up, good morning), clean (bath, wash), goTo (go to / sit on decor), wear (put on), \
         playWith (play a game with another pet: partner), race, train, whoIsHungry, whoIsThirsty, whoWantsLove, none (anything else).
         """
         for k in [CatalogItem.Kind.food, .drink, .decor, .toy, .wearable] {

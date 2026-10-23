@@ -157,6 +157,17 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertTrue(room.rigs.allSatisfy { $0.brain.hurry })
     }
 
+    func testADoubleClapWithASleeperPresentBringsOnlyTheNearestAwakeOne() {
+        let room = Room(count: 2); Self.keep.append(room)
+        room.nap(1)
+        XCTAssertTrue(room.rigs[1].brain.isNapping)
+        room.handle(.doubleClap)
+        XCTAssertEqual(room.everyone, 0, "not comeEveryone: that would wake the sleeper")
+        XCTAssertEqual(room.came, [0], "exactly one came: the awake one")
+        XCTAssertEqual(room.reactor.anim(of: 1), .stir, "the sleeper only stirs")
+        XCTAssertFalse(room.rigs[1].brain.sleep.wakeAsked)
+    }
+
     func testLaughGigglesBarkStartlesMeowIsCuriousWhistleTiltsThenComes() {
         let room = Room(count: 1); Self.keep.append(room)
         room.handle(.heard(.laugh))
@@ -207,7 +218,11 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertEqual(room.reactor.anim(of: 1), .stir, "a modest bang: a stir")
         room.run(1.0, brains: false)
         room.handle(.bang(level: 0.9))
-        XCTAssertEqual(room.reactor.anim(of: 1), .startle(level: 0.9), "a very loud bang wakes him")
+        XCTAssertEqual(room.reactor.anim(of: 1), .stir, "a loud bang (0.9) is still only a stir: only a VERY loud one wakes a sleeper")
+        XCTAssertFalse(room.rigs[1].brain.sleep.wakeAsked)
+        room.run(1.0, brains: false)
+        room.handle(.bang(level: 0.95))
+        XCTAssertEqual(room.reactor.anim(of: 1), .startle(level: 0.95), "a very loud bang wakes him")
         XCTAssertTrue(room.rigs[1].brain.sleep.wakeAsked)
         XCTAssertFalse(room.rigs[1].brain.isNapping)
     }

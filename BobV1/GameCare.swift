@@ -343,6 +343,8 @@ final class GameCare {
     /// The other Jellies' greeting: ids still to be sent, and the ones on their way (id -> seconds so far, spot).
     /// The Jelly whose selection already woke him (one wake per selection).
     @ObservationIgnored var selectWokeFor: Int?
+    /// Bedtime / wake / idle clocks (GameCare+NightRest.swift).
+    @ObservationIgnored var nightRest = NightRestBook()
     @ObservationIgnored var greetPending: Set<Int> = []
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
@@ -369,19 +371,20 @@ final class GameCare {
     func launched() {
         guard !launchGreeted else { return }
         launchGreeted = true
-        greetIfAway(jellies.map(\.lastAway).max() ?? 0)
+        greetIfAway(jellies.map(\.lastAway).max() ?? 0, launching: true)
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
         trayOut || meal != nil || wanted != nil || groupActive || bath.active || tripActive || focus.isActive || focus.phase != .roaming
             || voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow
     }
-    func greetIfAway(_ away: TimeInterval) {
+    func greetIfAway(_ away: TimeInterval, launching: Bool = false) {
+        if awayBedtime(away, launching: launching) { return }          // back at night after a long time: already asleep, no greeting
         guard away >= TimeAway.greetAfter, !greetBlocked else { return }
         select.cancel()
         greeting = true; greetAge = 0; greetHop = false
-        queued = [.come(to: VoiceCoordinator.comeSpot)]          // the existing come-to-front walk (no close-up), then the happy hop
-        greetPending = Set(1..<max(jellies.count, 1)); greetOthers = [:]       // the other Jellies trot to the front too (tickOthers)
+        queued = (selectBrain(0)?.isSleeping ?? false) ? [] : [.come(to: VoiceCoordinator.comeSpot)]          // (a sleeper is not woken for it) the existing come-to-front walk (no close-up), then the happy hop
+        greetPending = Set((1..<max(jellies.count, 1)).filter { !(selectBrain($0)?.isSleeping ?? false) }); greetOthers = [:]       // the other Jellies trot to the front too (tickOthers)
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
         greetings += 1
     }
@@ -656,7 +659,7 @@ final class GameCare {
             brain.focusPaused = !bath.active && focusGroup.pauses(a.id, phase: focus.phase) && !brain.commanded          // (he may still step out of the called Jelly's way)
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
-            if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil { brain.startHopPlay(sim: a.sim, distance: 0.0001) }
+            if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil, !brain.isSleeping { brain.startHopPlay(sim: a.sim, distance: 0.0001) }          // (a highlighted sleeper does not hop)
             // greeting: walk to the front spot (the existing come-to-front walk), then the happy in-place hop
             if greetPending.contains(a.id), !greetBlocked, brain.activity != .coming, bubbleHub.greetClock >= BubbleHub.greetStagger(a.id) {
                 greetPending.remove(a.id)
@@ -681,13 +684,13 @@ final class GameCare {
         tickFocus(brain: brain, sim: sim, dt: dt)
         tickNeeds(brain: brain, sim: sim, dt: dt)
         widget.tick(dt: dt) { widgetInputs() }
-        // a pick on a sleeper wakes him ONCE per selection (edge-triggered: no wake on every tick), the draw waits until he is upright; and nobody who is picked goes to bed
+        // selecting / highlighting never wakes a sleeper (a poke does: `pokeSleeper`); the night-rest rules decide who goes to bed
         for a in raceBook.actors { a.brain?.selectedNow = (a.id == select.selectedID) }
-        if let sid = select.selectedID {
-            if selectWokeFor != sid { selectWokeFor = sid; if let b = selectBrain(sid), b.isSleeping, !b.sleep.wakeAsked { b.sleepWake(groggy: true) } }
-        } else { selectWokeFor = nil }
+        selectWokeFor = select.selectedID
+        tickNightRest(dt: dt)
+        LaunchGate.shared.stageTicked()
         select.tick(dt: dt)
-        if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)
+        if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive, !brain.isSleeping { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)
         if !hooked {
             hooked = true
             AudioHub.shared.onSnore = { [weak self] i in self?.sleepMasks.snore(i) }

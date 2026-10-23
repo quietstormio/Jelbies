@@ -35,7 +35,7 @@ enum RuleParser {
     ]
     private static let wearPhrases = ["put on", "wear", "wears", "dress up", "try on", "wear the", "put your"]
     private static let wearWords: Set<String> = ["wear", "wearing", "outfit", "costume", "hat", "cap", "crown", "bow", "scarf", "glasses"]
-    private static let sleepPhrases = ["go to sleep", "go to bed", "time for bed", "lie down", "lay down", "night night", "good night", "nighty night", "sleep tight",
+    private static let sleepPhrases = ["go to sleep", "go to bed", "time for bed", "night night", "good night", "nighty night", "sleep tight",
                                        "take a nap", "have a nap", "go night night", "off to bed", "sweet dreams", "time to sleep", "get some rest", "go sleep"]
     private static let sleepWords: Set<String> = ["sleep", "sleepy", "bed", "bedtime", "nap", "naptime", "goodnight", "snooze", "zzz", "rest"]
     private static let feedPhrases = ["come eat", "come and eat", "time to eat", "eat up", "dinner time", "lunch time", "breakfast time", "snack time", "have some", "here s some",
@@ -158,6 +158,7 @@ enum RuleParser {
         if let p = has(toks, wearPhrases) { return finish(.wear, strip: p, words: wearWords.subtracting(["hat", "cap", "crown", "bow", "scarf", "glasses"])) }
         if hasWord(toks, ["wear", "wearing"]) { return finish(.wear, words: ["wear", "wearing"]) }
         // 4. sleep
+        if VoicePhrases.isWake(toks) { return finish(.wake) }          // before the sleep words ("wake up" has none, but "good morning" would otherwise be praise)
         if let p = has(toks, sleepPhrases) { return finish(.sleep, strip: p, words: sleepWords) }
         if hasWord(toks, sleepWords) { return finish(.sleep, words: sleepWords) }
         // 5. meals (a named food / drink alone is a meal too: "Bob, pizza!")
@@ -219,6 +220,7 @@ enum RuleParser {
             case .scold: return finish(.scold)
             case .play: return finish(.play)
             case .goodnight: return finish(.sleep)
+            case .wakeUp: return finish(.wake)
             }
         }
         // a wearable / toy named alone
