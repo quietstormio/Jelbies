@@ -371,15 +371,15 @@ final class GameCare {
     func launched() {
         guard !launchGreeted else { return }
         launchGreeted = true
-        greetIfAway(jellies.map(\.lastAway).max() ?? 0)
+        greetIfAway(jellies.map(\.lastAway).max() ?? 0, launching: true)
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
         trayOut || meal != nil || wanted != nil || groupActive || bath.active || tripActive || focus.isActive || focus.phase != .roaming
             || voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow
     }
-    func greetIfAway(_ away: TimeInterval) {
-        if awayBedtime(away) { return }          // back at night after a long time: already asleep, no greeting
+    func greetIfAway(_ away: TimeInterval, launching: Bool = false) {
+        if awayBedtime(away, launching: launching) { return }          // back at night after a long time: already asleep, no greeting
         guard away >= TimeAway.greetAfter, !greetBlocked else { return }
         select.cancel()
         greeting = true; greetAge = 0; greetHop = false

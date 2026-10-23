@@ -11,7 +11,7 @@ extension BlobBrain {
     /// The nearest point on a 0.25 grid that he can stand on, that is clear of decor and of the others (asleep or not), and that he can reach.
     func forceSpot() -> SIMD2<Float>? {
         let L = RoomLayout.self
-        var best: (SIMD2<Float>, Float)?
+        var cands: [(SIMD2<Float>, Float)] = []
         var x: Float = -3.2
         while x <= 3.2001 {
             var z: Float = -2.6
@@ -25,13 +25,13 @@ extension BlobBrain {
                     if simd_distance(o.position, p) < SleepTuning.minGap { clash = true; break }
                     if o.idleState.kind == .sleep, simd_distance(o.sleep.spot, p) < SleepTuning.minGap { clash = true; break }
                 }
-                guard !clash, reachable(position, p) else { continue }
-                let d = simd_distance(position, p)
-                if best == nil || d < best!.1 { best = (p, d) }
+                if !clash { cands.append((p, simd_distance(position, p))) }
             }
             x += 0.25
         }
-        return best?.0
+        cands.sort { $0.1 < $1.1 }
+        for c in cands where reachable(position, c.0) { return c.0 }          // nearest first: the route is planned only until one works
+        return nil
     }
 
     /// Asleep on his back at once, in place (no walk, no yawn, no flop squish): the player came back at night after a long time away.

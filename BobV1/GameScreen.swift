@@ -183,9 +183,10 @@ struct GameScreen: View {
         }
         .background(Color.black)
         .onAppear {
-            setUpSelect(); model.care.touchPlay = model.touch; model.care.launched()
+            setUpSelect(); model.care.touchPlay = model.touch
+            DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
+            model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
-            DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep)
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
@@ -204,8 +205,8 @@ struct GameScreen: View {
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
         .onChange(of: scenePhase) { _, p in
             if p == .active {
+                DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
-                DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the director sees the foreground
                 AudioHub.shared.setForeground(true)
                 Ears.shared.setForeground(true)
                 LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning

@@ -33,9 +33,15 @@ final class LaunchGate {
     /// Show it again for the away-asleep arrival. A plain resume never calls this.
     func hold(_ r: Reason) {
         let t = clock()
+        if visible {
+            // The launch curtain is still up: keep its clock and its wait for the stage's first tick.
+            settleStart = t; settleOK = false
+            minNow = max(minNow, r == .launch ? Self.minShow : Self.resumeMin)
+            return
+        }
         shownAt = t; settleStart = t; ticked = true; settleOK = false
         minNow = r == .launch ? Self.minShow : Self.resumeMin
-        if !visible { visible = true }
+        visible = true
     }
     /// The stage ran a step (it has built and drawn).
     func stageTicked() {

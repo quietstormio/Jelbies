@@ -157,6 +157,17 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertTrue(room.rigs.allSatisfy { $0.brain.hurry })
     }
 
+    func testADoubleClapWithASleeperPresentBringsOnlyTheNearestAwakeOne() {
+        let room = Room(count: 2); Self.keep.append(room)
+        room.nap(1)
+        XCTAssertTrue(room.rigs[1].brain.isNapping)
+        room.handle(.doubleClap)
+        XCTAssertEqual(room.everyone, 0, "not comeEveryone: that would wake the sleeper")
+        XCTAssertEqual(room.came, [0], "exactly one came: the awake one")
+        XCTAssertEqual(room.reactor.anim(of: 1), .stir, "the sleeper only stirs")
+        XCTAssertFalse(room.rigs[1].brain.sleep.wakeAsked)
+    }
+
     func testLaughGigglesBarkStartlesMeowIsCuriousWhistleTiltsThenComes() {
         let room = Room(count: 1); Self.keep.append(room)
         room.handle(.heard(.laugh))

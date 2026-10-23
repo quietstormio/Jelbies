@@ -79,9 +79,9 @@ extension GameCare {
         if let b = selectBrain(id), b.isSleeping, !b.sleep.wakeAsked {
             b.commandedGoodnight = false
             b.sleepWake(groggy: groggy)
-            nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)
             if isBedtimeHours { nightRest.nightWoken.insert(id) }
         }
+        nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)          // a named command also cancels a pending bedtime for an awake one
         noteInteraction(jelly: id)
     }
     /// A deliberate poke on a sleeper (W3 wires the gesture).
@@ -105,7 +105,7 @@ extension GameCare {
 
     /// Back at night after a long time: they are already asleep (applied on the first tick that has bodies). True = handled, no greeting.
     @discardableResult
-    func awayBedtime(_ away: TimeInterval) -> Bool {
+    func awayBedtime(_ away: TimeInterval, launching: Bool = false) -> Bool {
         #if DEBUG
         let demo = UserDefaults.standard.integer(forKey: "BedtimeAwayDemo") == 1 && !nightRest.debugRead
         if demo { nightRest.debugRead = true }
@@ -114,7 +114,7 @@ extension GameCare {
         #endif
         guard demo || (away >= NightRestTuning.awayAsleepAfter && isBedtimeHours), canBedtime else { return false }
         nightRest.arrivalAsleep = true
-        LaunchGate.shared.hold(.resume)
+        LaunchGate.shared.hold(launching ? .launch : .resume)
         return true
     }
 

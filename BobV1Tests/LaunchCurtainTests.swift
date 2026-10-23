@@ -55,6 +55,18 @@ final class LaunchCurtainTests: XCTestCase {
         XCTAssertFalse(g.visible, "settled")
     }
 
+    func testHoldDuringTheLaunchCurtainStillWaitsForTheFirstStageTick() {
+        let c = Clock()
+        let g = gate(c)
+        g.hold(.launch)          // greetIfAway on a cold launch, before the stage has run
+        g.settled(false)
+        c.t += LaunchGate.settleCap + 0.5; g.evaluate()
+        XCTAssertTrue(g.visible, "the room has not built or drawn yet: the settle cap must not lift it")
+        g.stageTicked()
+        c.t += LaunchGate.settleCap + 0.1; g.stageTicked()
+        XCTAssertFalse(g.visible)
+    }
+
     func testSettleCapEndsTheWait() {
         let c = Clock()
         let g = gate(c)

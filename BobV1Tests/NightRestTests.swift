@@ -55,10 +55,12 @@ final class NightRestTests: XCTestCase {
     // MARK: the night alone does nothing
 
     func testNightAloneDoesNotPutAnyoneToSleep() {
+        NightRestTuning.idleBedtime = 90          // a long rule so the quiet stretch runs right up to it (restored in tearDown)
         make()
         var asleep = false
-        for _ in 0..<(25 * 60) { step(); if brains.contains(where: { $0.isSleeping }) { asleep = true; break } }
-        XCTAssertFalse(asleep, "23:00 with the player idle for less than the bedtime rule: nobody chose bed by himself")
+        for _ in 0..<(85 * 60) { step(); if brains.contains(where: { $0.isSleeping }) { asleep = true; break } }
+        XCTAssertFalse(asleep, "23:00 with the player idle until just before the bedtime rule: nobody chose bed by himself")
+        XCTAssertTrue(go(60, until: { self.brains.contains { $0.isSleeping } }), "control: the idle rule does send them once it fires")
     }
 
     func testIdleAtNightPutsAllThreeToBed() {
