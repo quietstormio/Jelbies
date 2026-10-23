@@ -520,6 +520,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if game { model.care.tickOthers(actors, dt: sim.stepDt) }
         }
         if game { model.care.tickRace(actors, dt: sim.stepDt) }          // Jelly Circuit: the trip to the track and the race (every Jelly is ticked by now)
+        if game { model.care.tickCafe(actors, dt: sim.stepDt) }          // the café outing: the fade, the swaps, the serving, the cheer
         if game { model.care.tickShow(actors, dt: sim.stepDt) }          // Jelly Show: the trip to the stage, the rounds, the Studio's dance drill
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball

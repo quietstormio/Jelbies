@@ -100,9 +100,9 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(r.care.focusGroup.ids, [2])
     }
 
-    func testGoOutMenuHooksStayHidden() {
-        XCTAssertEqual(GoOutDestination.visible, [.track, .store, .show])
-        XCTAssertFalse(GoOutDestination.visible.contains(.eatOut))
+    func testGoOutMenuListsTheCafe() {
+        XCTAssertEqual(GoOutDestination.visible, [.track, .store, .show, .cafe])
+        XCTAssertNil(GoOutDestination.cafe.screen)
         XCTAssertEqual(GoOutDestination.track.screen, .track); XCTAssertEqual(GoOutDestination.store.screen, .shop)
     }
 

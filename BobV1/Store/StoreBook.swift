@@ -255,7 +255,7 @@ final class StoreBook {
     /// Moves the Jelbies into an owned room: this room's decor is stashed and the new room's comes back (an unvisited room is empty).
     @discardableResult
     func moveIn(_ id: RoomID) -> Bool {
-        guard ownsRoom(id) else { return false }
+        guard id != .cafe, ownsRoom(id) else { return false }          // the café is a visit, never a home
         let cur = currentRoom
         guard id != cur else { return true }
         var stash = saved.stash ?? [:]

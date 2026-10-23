@@ -137,7 +137,7 @@ struct GameScreen: View {
                                 VoiceBookButton { bookOpen = true }
                                 if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
                                 if !focus.isActive {
-                                    GoOutMenu(open: $goOutOpen, rail: true) { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }
+                                    GoOutMenu(open: $goOutOpen, rail: true, go: { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }, cafe: { model.care.requestCafe() })
                                 }
                                 VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                                     .overlay(alignment: .topLeading) {
@@ -164,6 +164,8 @@ struct GameScreen: View {
             RaceChrome(care: model.care)          // Jelly Circuit: numerals, foot buttons, placings card, the white fade
 
             ShowChrome(care: model.care)          // Jelly Show: the Look / Dance / Trick rounds and the results on the stage, the white fade
+
+            CafeChrome(care: model.care)          // the café outing: the menu card, Head home, the white fade
 
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
@@ -202,7 +204,7 @@ struct GameScreen: View {
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
             let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
-                guard !care.raceBusy, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
+                guard !care.raceBusy, !care.cafe.active, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
                 care.rosterPick(id, quietHop: true); care.requestTown(.track)
             }
             router.onRace = toTrack; router.onTrain = toTrack
@@ -237,6 +239,7 @@ struct GameScreen: View {
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
                 .presentationBackground(FocusStyle.cream)
         }
+        .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
@@ -392,6 +395,23 @@ struct GameScreen: View {
         if d.string(forKey: "HUDGoOut") == "open" {
             await sleep(5)
             withAnimation(CareMenu.spring) { goOut.wrappedValue = true }
+        }
+        // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
+        if let m = d.string(forKey: "CafeAuto") {
+            await sleep(4)
+            care.requestCafe()
+            if m == "order" || m == "refuse" {
+                for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
+                await sleep(2)
+                let ids = care.cafeDinerIDs
+                if m == "refuse" {
+                    care.bath.wallet.add(9 - care.bath.wallet.count, silent: true)
+                    care.cafe.cardRefusal = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.map { ($0, CafeTreatID.sundae) })))
+                } else {
+                    let menu: [CafeTreatID] = [.swirl, .pancakes, .sundae]
+                    care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
+                }
+            }
         }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {

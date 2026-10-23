@@ -47,7 +47,7 @@ extension GameCare {
     /// Night enough that nobody chooses bed alone and the idle rule is armed.
     var isBedtimeHours: Bool { DayClock.shared.nightFactor > NightRestTuning.nightEdge || DayClock.shared.deepNightFactor > 0.5 }
     /// A group Bedtime is allowed now (no race / show / meal / clean-up going on).
-    var canBedtime: Bool { !raceBusy && !show.active && !trayOut && !bath.active && meal == nil }
+    var canBedtime: Bool { !raceBusy && !show.active && !cafe.active && !trayOut && !bath.active && meal == nil }
     /// Somebody is still on their feet.
     var anyAwake: Bool { raceBook.actors.contains { $0.brain.map { !$0.isSleeping } ?? false } }
     private var presentActorIDs: [Int] { raceBook.actors.filter { $0.brain != nil }.map(\.id) }

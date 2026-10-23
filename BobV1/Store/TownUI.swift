@@ -11,20 +11,20 @@ import SwiftUI
 
 /// Where "Go out" can lead. The player goes alone; only Compete (Track / Show) takes a Jelbie out.
 enum GoOutDestination: String, CaseIterable {
-    case track = "goout-track", store = "goout-store", rooms = "goout-rooms", show = "goout-show", eatOut = "goout-eatout"
+    case track = "goout-track", store = "goout-store", rooms = "goout-rooms", show = "goout-show", cafe = "goout-cafe"
     /// HOOK (W5): the room shop. The integrator flips it and routes it to the Shop's rooms tab.
     static let roomsEnabled = false
-    /// HOOK: the user floated "go out to eat, something that costs money". PENDING the user's OK. Do NOT build it; the row stays hidden.
-    static let eatOutEnabled = false
+    /// The café outing (the user chose it 2026-10-23: go out to eat, treats cost Drops). The easy kill switch.
+    static let cafeEnabled = true
 
     static var visible: [GoOutDestination] {
         var l: [GoOutDestination] = [.track, .store, .show]
         if roomsEnabled { l.append(.rooms) }
-        if eatOutEnabled { l.append(.eatOut) }
+        if cafeEnabled { l.append(.cafe) }
         return l
     }
     var title: String {
-        switch self { case .track: return "Track"; case .store: return "Store"; case .rooms: return "Rooms"; case .show: return "Jelly Show"; case .eatOut: return "Eat out" }
+        switch self { case .track: return "Track"; case .store: return "Store"; case .rooms: return "Rooms"; case .show: return "Jelly Show"; case .cafe: return "Café" }
     }
     var symbol: String {
         switch self {
@@ -32,12 +32,12 @@ enum GoOutDestination: String, CaseIterable {
         case .store: return "bag.fill"
         case .rooms: return UIImage(systemName: "house.fill") != nil ? "house.fill" : "square.grid.2x2"
         case .show: return "sparkles"
-        case .eatOut: return "fork.knife"
+        case .cafe: return UIImage(systemName: "cup.and.saucer.fill") != nil ? "cup.and.saucer.fill" : "fork.knife"
         }
     }
     /// The screen it opens (nil: a hook with no screen yet).
     var screen: TownScreen? {
-        switch self { case .track: return .track; case .store, .rooms: return .shop; case .show: return .studio; case .eatOut: return nil }
+        switch self { case .track: return .track; case .store, .rooms: return .shop; case .show: return .studio; case .cafe: return nil }
     }
 }
 
@@ -94,6 +94,8 @@ struct GoOutMenu: View {
     /// In the left rail: the button is the cream rail style and the rows pop up over the rail above it, icon first, leading edge aligned.
     var rail = false
     var go: (TownScreen) -> Void
+    /// The Café row (it opens no Town screen: the trip starts in the game itself).
+    var cafe: (() -> Void)? = nil
     @Environment(\.verticalSizeClass) private var vsc
     var body: some View {
         let tight = vsc == .compact
@@ -105,7 +107,7 @@ struct GoOutMenu: View {
                     Button {
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                         withAnimation(CareMenu.spring) { open = false }
-                        if let s = d.screen { go(s) }
+                        if d == .cafe { cafe?() } else if let s = d.screen { go(s) }
                     } label: {
                         HStack(spacing: 10) {
                             if rail { icon(d, tight: tight) }

@@ -67,10 +67,17 @@ extension GameCare {
             let sorted = actors.filter { seats.now.contains($0.id) }.sorted { $0.id < $1.id }
             let brains = sorted.compactMap(\.brain)
             let floors: [() -> SIMD2<Float>] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero } }
-            group.eager = eagerWhenFamished
-            group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
-            group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
+            if let cafeHooks = cafeBook.hooks {          // the café: everybody eats the whole treat, paid by the café's own hooks
+                group.eager = false
+                group.tierOf = { _ in .famished }
+                group.pay = cafeHooks.pay
+            } else {
+                group.eager = eagerWhenFamished
+                group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
+                group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
+            }
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
+            if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
             if !group.isActive { groupQueueClear() }
             return

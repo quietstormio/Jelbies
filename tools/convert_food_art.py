@@ -9,7 +9,7 @@ GAIN tweaks colours after the fact (per food, linear multipliers) so the in-game
 """
 import json, struct, sys, os
 
-IDS = "nuggets nuggets_1 nuggets_2 fries sushi sandwich minipizza taco donut popsicle onigiri cookie".split()
+IDS = "nuggets nuggets_1 nuggets_2 fries sushi sandwich minipizza taco donut popsicle onigiri cookie swirl pancakes sundae fizzmac cafetable_1 cafetable_2 cafetable_3".split()
 GAIN = {}  # id -> (r, g, b) linear multiplier, filled in after looking at the in-game captures
 
 def convert(src, dst):
@@ -29,6 +29,7 @@ def main():
     exp, out = sys.argv[1], sys.argv[2]
     os.makedirs(out, exist_ok=True)
     for i in IDS:
+        if not os.path.exists(os.path.join(exp, i + ".obj")): continue          # convert only what the export has
         pos, nrm, col, ao, tris = convert(os.path.join(exp, i + ".obj"), None)
         g = GAIN.get(i, (1, 1, 1))
         data = struct.pack("<II", len(pos), len(tris))

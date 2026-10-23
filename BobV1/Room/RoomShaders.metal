@@ -333,6 +333,17 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
             albedo = roomFloorRough(P.xz, u.pal2.rgb, u.pal3.rgb, seam);
             albedo *= mix(0.62, 1.0, seam);
             gloss = 0.25 * seam;
+        } else if (fst == 3) {
+            // cafe tile: square tiles 0.45 u, a very low contrast checker of pal2 / pal3, grout seams, a few percent of variation per tile
+            float2 tq = P.xz / 0.45;
+            float2 tid = floor(tq);
+            float2 tf = fract(tq);
+            float chk = fmod(tid.x + tid.y + 1000.0, 2.0);
+            seam = smoothstep(0.0, 0.022, min(min(tf.x, 1.0 - tf.x), min(tf.y, 1.0 - tf.y)) * 0.45);
+            albedo = mix(u.pal2.rgb, u.pal3.rgb, chk * 0.22);
+            albedo *= 0.97 + 0.06 * roomHash(tid + 11.3);
+            albedo = mix(u.pal1.rgb * 0.9, albedo, seam);
+            gloss = 0.5 * seam;
         } else {
             albedo = roomFloor(u, P.xz, u.pal2.rgb, u.pal3.rgb, seam);
             albedo *= mix(0.78, 1.0, seam);
@@ -371,6 +382,18 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
             float tw = roomHash(float2(floor(ang * 24.0 + ring), ring));
             float within = abs(fract(r / 0.12) - 0.5) * 2.0;
             albedo = rc * (0.93 + 0.10 * tw) * mix(1.0, 0.86, smoothstep(0.7, 1.0, within));
+        } else if (rst == 3) {                                                    // terrazzo inlay: pal4 ground, pal2 / pal3 chips, a thin pal2 border ring
+            float2 cg = (P.xz - u.rug.xy) * 7.0;
+            float2 cid = floor(cg);
+            float hh = roomHash(cid + 5.5);
+            float2 cc = (fract(cg) - 0.5) - (float2(roomHash(cid + 2.7), roomHash(cid + 9.1)) - 0.5) * 0.5;
+            float chip = step(0.965, hh) * smoothstep(0.2, 0.12, length(cc));
+            float chip2 = step(0.94, hh) * (1.0 - step(0.965, hh)) * smoothstep(0.16, 0.09, length(cc));
+            albedo = u.pal4.rgb;
+            albedo = mix(albedo, u.pal2.rgb, chip);
+            albedo = mix(albedo, u.pal3.rgb, chip2);
+            float ringD = smoothstep(0.02, 0.0, abs(r - (R - 0.15)) - 0.012);
+            albedo = mix(albedo, u.pal2.rgb, ringD * 0.9);
         }
         albedo *= 0.96 + 0.04 * roomHash(floor(P.xz * 90.0));                    // fibre speckle
     } else {

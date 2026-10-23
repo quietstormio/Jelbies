@@ -8,12 +8,13 @@ import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from convert_decor_art import convert
 
-IDS = ["loft", "cabin"]
+IDS = ["loft", "cabin", "cafe"]
 
 def main():
     exp, out = sys.argv[1], sys.argv[2]
     os.makedirs(out, exist_ok=True)
     for i in IDS:
+        if not os.path.exists(os.path.join(exp, "room_%s.obj" % i)): continue          # convert only what the export has
         meta = json.load(open(os.path.join(exp, "room_%s.json" % i)))
         data, nv, nt, names = convert(os.path.join(exp, "room_%s.obj" % i), meta)
         assert nv < 65536 and nt <= 15000, (i, nv, nt)

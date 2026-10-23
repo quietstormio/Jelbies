@@ -61,7 +61,7 @@ final class HUDUITests: XCTestCase {
             }
             app.buttons["go-out"].tap()
             XCTAssertTrue(app.buttons["goout-track"].waitForExistence(timeout: 5) && app.buttons["goout-store"].exists, "Go out menu (\(name))")
-            XCTAssertFalse(app.buttons["goout-eatout"].exists, "the eat-out hook stays hidden")
+            XCTAssertTrue(app.buttons["goout-cafe"].exists, "the café row is in the Go out menu")
             save("\(name)_5_goout")
             app.buttons["go-out"].tap()
         }
