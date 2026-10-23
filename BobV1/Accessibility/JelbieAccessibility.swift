@@ -70,7 +70,10 @@ nonisolated enum JelbieA11yText {
     /// "Living room. Day. 3 Jelbies: Pip on the left, Moss in the middle, Lavender on the right."
     static func room(phase: String, placed: [(name: String, x: Double)]) -> String {
         guard !placed.isEmpty else { return "\(phase). No Jelbies in the room" }
-        let who = placed.sorted { $0.x < $1.x }.map { "\($0.name) on the \(column($0.x).lowercased())" }.joined(separator: ", ")
+        let who = placed.sorted { $0.x < $1.x }.map { p -> String in
+            let c = column(p.x).lowercased()
+            return "\(p.name) \(c == "middle" ? "in the middle" : "on the \(c)")"
+        }.joined(separator: ", ")
         return "\(phase). \(placed.count) Jelbie\(placed.count == 1 ? "" : "s"): \(who)"
     }
 }

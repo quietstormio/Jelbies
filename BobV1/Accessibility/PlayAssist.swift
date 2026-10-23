@@ -175,3 +175,44 @@ struct AssistFoot: View {
         }
     }
 }
+
+// MARK: - arranging the room without a drag
+
+enum ArrangeDirection: String, CaseIterable, Sendable {
+    case left, right, forward, back
+    /// A step on the floor (x, z): forward is toward the camera.
+    var delta: SIMD2<Float> {
+        switch self { case .left: return SIMD2(-ArrangeAssist.step, 0); case .right: return SIMD2(ArrangeAssist.step, 0)
+        case .forward: return SIMD2(0, ArrangeAssist.step); case .back: return SIMD2(0, -ArrangeAssist.step) }
+    }
+    var symbol: String { switch self { case .left: return "arrow.left"; case .right: return "arrow.right"; case .forward: return "arrow.down"; case .back: return "arrow.up" } }
+    var title: String { switch self { case .left: return "Move left"; case .right: return "Move right"; case .forward: return "Move closer"; case .back: return "Move back" } }
+}
+
+@MainActor
+enum ArrangeAssist {
+    static let step: Float = 0.35
+
+    /// Moves piece `uid` one step (the same drag + drop the finger makes, so the snap and obstacle rules are the finger's). True when it moved.
+    @discardableResult
+    static func move(_ uid: Int, _ dir: ArrangeDirection, care: GameCare) -> Bool {
+        guard let p = care.store.placedDecor.first(where: { $0.uid == uid }) else { return false }
+        let moved = care.dragDecor(uid, to: p.at + dir.delta)
+        if moved { care.dropDecor(uid) }
+        let name = p.kind.title
+        A11yAnnounce.say(moved ? "\(name) moved \(dir.rawValue == "forward" ? "closer" : dir.rawValue)" : "\(name) can't go there", priority: .high)
+        return moved
+    }
+
+    /// Selects the next piece (wrapping); nil when the room has none.
+    @discardableResult
+    static func next(care: GameCare) -> Int? {
+        let ids = care.store.placedDecor.map(\.uid)
+        guard !ids.isEmpty else { return nil }
+        let i = care.arrangingUID.flatMap { ids.firstIndex(of: $0) }.map { ($0 + 1) % ids.count } ?? 0
+        care.arrangingUID = ids[i]
+        let title = care.store.placedDecor[i].kind.title
+        A11yAnnounce.say("\(title) selected", priority: .normal)
+        return ids[i]
+    }
+}

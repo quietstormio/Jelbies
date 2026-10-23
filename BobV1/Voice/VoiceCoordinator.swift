@@ -199,6 +199,7 @@ final class VoiceCoordinator {
         case .learned(let t, let w): perkLeft = 0.6; toast = VoiceToast(id: feedbackSeq, text: "Learned \u{201C}\(w)\u{201D} \u{2192} \(t.title)", born: clock())
         default: break
         }
+        announceFeedback(kind)          // a11y: VoiceOver hears "Moss learned Sit" (VoiceCoordinator+A11y.swift)
     }
 
     static let tiltLift: Float = 0.06                          // 0.28 -> 0.34 with the game's default tilt
@@ -345,6 +346,7 @@ final class VoiceCoordinator {
     func showUnderstood(_ text: String, ok: Bool) {
         understoodSeq += 1
         understood = VoiceUnderstood(id: understoodSeq, text: text, ok: ok, born: clock())
+        A11yEvents.say(ok ? text : "Could not: \(text)", .normal)
     }
 
     /// The Jelly ids in the room.
@@ -369,6 +371,7 @@ final class VoiceCoordinator {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
+        if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
         teachPrompt = nil
         if nickLesson != nil { nicknameListen(transcript); return }
         let t0 = CACurrentMediaTime()
@@ -554,6 +557,19 @@ final class VoiceCoordinator {
             nickLesson = l
             enqueue(.nicknameStep(reps: l.reps), nil, ids: [l.id])
         }
+    }
+
+    /// Typed teaching (accessibility): the same step a heard phrase gets, with no microphone. The rep rules are identical (each submit is one listen of
+    /// its own). While a trick-book move is the prompt (`show(_:)`), the word binds to THAT trick even after the move has finished.
+    func typed(_ words: String) {
+        let text = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, mode.phase == .idle, !stopping, care != nil else { return }
+        let prompt = teachPrompt.flatMap { clock() < $0.until ? $0.trick : nil }
+        session = training.newSession()
+        subjectAtOpen = subjectID
+        runningAtOpen = prompt ?? brainRef.map { subjectBrain($0) }.flatMap(Self.running)
+        process(text)
+        if let t = prompt, !book.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }          // the next typed word is the next lesson
     }
 
     /// Debug / capture: a listen that "hears" `words` after `hold` seconds. `teach` starts that trick first and waits a second.

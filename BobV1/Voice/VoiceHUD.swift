@@ -18,6 +18,15 @@ struct VoiceMicButton: View {
     @State private var breathe = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    static func micLabel(slashed: Bool, name: String) -> String {
+        if slashed { return "Microphone unavailable. Open tricks" }
+        return VoiceCoordinator.tapMode ? "Talk to \(name)" : "Hold to talk to \(name)"
+    }
+    static func micHint(slashed: Bool) -> String {
+        if slashed { return "" }
+        return VoiceCoordinator.tapMode ? "Double tap to start talking, double tap again to stop" : "Press and hold, then say a word or a command"
+    }
+
     var body: some View {
         let slashed = voice.micUnusable
         let listening = voice.isListening || (down && !slashed)       // pressed state on the very frame of touch-down
@@ -61,22 +70,7 @@ struct VoiceMicButton: View {
             }
             .scaleEffect(listening ? 1.12 : 1)
             .contentShape(Circle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !down else { return }
-                    down = true
-                    if !slashed { voice.begin() }   // begin() warms the mic first thing
-                }
-                .onEnded { _ in
-                    down = false
-                    if slashed { openBook() } else { voice.release() }
-                })
-            .accessibilityElement()
-            .accessibilityIdentifier("voice-mic")
-            .accessibilityLabel(slashed ? "Microphone unavailable. Open tricks" : "Hold to talk to Bob")
-            .accessibilityValue(listening ? "listening" : "ready, \(voice.openCount) talks, \(voice.glowShown) glows, glow \(voice.glowLatencyMs ?? -1) ms")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { openBook() }                   // VoiceOver double-tap cannot hold: it opens the trick book
+            .modifier(MicInput(voice: voice, openBook: openBook, slashed: slashed, listening: listening, down: $down))
     }
 }
 
@@ -96,7 +90,7 @@ struct VoiceBars: View {
         .animation(.easeOut(duration: 0.08), value: level)
         .accessibilityElement()
         .accessibilityIdentifier(id)
-        .accessibilityValue("\(Int(level * 100))")
+        .accessibilityHidden(true)          // decoration of the "listening" state (the mic and the glow say it)
     }
 }
 
@@ -155,7 +149,7 @@ struct VoiceGlow: View {
                 .onAppear { voice.glowAppeared() }
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("voice-glow")
-                .accessibilityLabel("Bob is listening")
+                .accessibilityLabel("\(voice.subjectName) is listening")
             }
         }
         .allowsHitTesting(false)
@@ -174,13 +168,14 @@ struct VoiceBookButton: View {
             Image(systemName: "book.closed.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("voice-tricks")
         .accessibilityLabel("Tricks")
+        .accessibilityShowsLargeContentViewer { Label("Tricks", systemImage: "book.closed.fill") }
     }
 }
 
@@ -192,6 +187,8 @@ struct VoiceTrickBook: View {
     let voice: VoiceCoordinator
     var close: () -> Void
     @State private var drafts: [Int: String] = [:]
+    @State private var typing: VoiceTrick?
+    @State private var typedWord = ""
 
     static func symbol(_ t: VoiceTrick) -> String {
         let s: String
@@ -214,7 +211,7 @@ struct VoiceTrickBook: View {
                 Spacer()
                 Button { close() } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(FocusStyle.brown)
-                        .frame(width: 34, height: 34).background(Circle().fill(Color.white.opacity(0.75)))
+                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.75)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("voice-book-close").accessibilityLabel("Close tricks")
@@ -340,7 +337,8 @@ struct VoiceTrickBook: View {
         let word = tr.word(for: t)
         let n = tr.progress(t)
         let rel = Int((tr.reliability(t) * 100).rounded())
-        return HStack(spacing: 8) {
+        return VStack(spacing: 8) {
+        HStack(spacing: 8) {
             Button {
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                 voice.show(t)
@@ -380,7 +378,94 @@ struct VoiceTrickBook: View {
                 .accessibilityLabel("Forget the word for \(t.title)")
             }
         }
+        teachTyping(t, tr)
+        }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+    }
+
+    /// "Teach with typing" (no microphone, no speaking): he does the trick, you type the word, and each submit is one lesson (the same rules as three listens).
+    @ViewBuilder
+    private func teachTyping(_ t: VoiceTrick, _ tr: VoiceTraining) -> some View {
+        if typing == t {
+            HStack(spacing: 8) {
+                TextField("Type a word for \(t.title)", text: $typedWord)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .playFont(15, .medium)
+                    .padding(.horizontal, 12).frame(minHeight: 44)
+                    .background(Capsule().fill(FocusStyle.cream))
+                    .submitLabel(.send).onSubmit { submitTyped(t) }
+                    .accessibilityIdentifier("voice-typed-field-\(t.rawValue)")
+                Button { submitTyped(t) } label: {
+                    Image(systemName: "paperplane.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44).background(Circle().fill(FocusStyle.pink))
+                }
+                .buttonStyle(.plain).disabled(VoiceMatcher.normalise(typedWord).isEmpty)
+                .accessibilityIdentifier("voice-typed-send-\(t.rawValue)").accessibilityLabel("Teach this word")
+            }
+        } else if !tr.isLearned(t) {
+            Button {
+                AudioHub.shared.uiTap()
+                voice.show(t)                                 // he does it now; the typed word binds to this trick
+                typedWord = ""; typing = t
+            } label: {
+                Label("Teach with typing", systemImage: "keyboard").playFont(14, .bold).foregroundStyle(FocusStyle.brown)
+                    .padding(.horizontal, 14).frame(minHeight: 44)
+                    .background(Capsule().fill(FocusStyle.brown.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("voice-teach-typing-\(t.rawValue)")
+            .accessibilityHint("Type a word instead of saying it. Each time counts as one lesson.")
+        }
+    }
+
+    private func submitTyped(_ t: VoiceTrick) {
+        let w = typedWord
+        typedWord = ""
+        voice.typed(w)
+        if voice.book.isLearned(t) { typing = nil }
+    }
+}
+
+/// The mic's input and accessibility (hold, or tap-to-talk; VoiceOver / Switch Control activate; Space on a keyboard).
+private struct MicInput: ViewModifier {
+    let voice: VoiceCoordinator
+    var openBook: () -> Void
+    let slashed: Bool
+    let listening: Bool
+    @Binding var down: Bool
+
+    private var gesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                guard !down else { return }
+                down = true
+                if VoiceCoordinator.tapMode {                            // tap-to-talk: a tap starts, the next tap stops
+                    if !slashed { voice.toggleListening() }
+                } else if !slashed { voice.begin() }                     // begin() warms the mic first thing
+            }
+            .onEnded { _ in
+                down = false
+                if slashed { openBook() } else if !VoiceCoordinator.tapMode { voice.release() }
+            }
+    }
+
+    private func toggle() { if slashed { openBook() } else { voice.toggleListening() } }
+
+    func body(content: Content) -> some View {
+        content
+            .gesture(gesture)
+            .background {
+                Button("") { toggle() }.keyboardShortcut(.space, modifiers: []).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)          // hardware keyboard
+            }
+            .accessibilityElement()
+            .accessibilityIdentifier("voice-mic")
+            .accessibilityLabel(VoiceMicButton.micLabel(slashed: slashed, name: voice.subjectName))
+            .accessibilityValue(listening ? "listening" : "ready")
+            .accessibilityHint(VoiceMicButton.micHint(slashed: slashed))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { toggle() }                             // VoiceOver / Switch Control: a tap toggles (no hold needed)
+            .accessibilityAction(named: "Open trick book") { openBook() }
+            .accessibilityShowsLargeContentViewer { Label("Talk", systemImage: slashed ? "mic.slash.fill" : "mic.fill") }
     }
 }

@@ -52,6 +52,26 @@ struct ArrangeOverlay: View {
         .allowsHitTesting(false)
     }
 
+    /// Arranging without a drag (accessibility): pick the next piece, then step it left / right / closer / back (the same drag + drop as a finger).
+    private var moveControls: some View {
+        HStack(spacing: 8) {
+            Button { AudioHub.shared.uiTap(); ArrangeAssist.next(care: care) } label: {
+                Text(selected == nil ? "Pick a piece" : "Next piece").playFont(15, .black).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 48)
+                    .background(Capsule().fill(SK.cream.opacity(0.96)))
+            }.buttonStyle(.plain).accessibilityIdentifier("arrange-next")
+            if let s = selected {
+                ForEach(ArrangeDirection.allCases, id: \.rawValue) { d in
+                    Button { ArrangeAssist.move(s.uid, d, care: care) } label: {
+                        Image(systemName: d.symbol).font(.system(size: 18, weight: .black)).foregroundStyle(SK.ink)
+                            .frame(width: 48, height: 48).background(Circle().fill(SK.cream.opacity(0.96)))
+                    }
+                    .buttonStyle(.plain).accessibilityLabel("\(d.title), \(s.kind.title)").accessibilityIdentifier("arrange-\(d.rawValue)")
+                }
+            }
+        }
+        .padding(.bottom, 6)
+    }
+
     var body: some View {
         GeometryReader { g in
             let inset = g.safeAreaInsets
@@ -65,12 +85,19 @@ struct ArrangeOverlay: View {
                             dragging = nil; grab = nil; finger = nil
                         })
                     .accessibilityIdentifier("arrange-surface")
+                    .accessibilityLabel("Room floor").accessibilityHint("Drag a piece to move it, or use Next piece and the arrow buttons")
                 ring(size: g.size)
                 VStack {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Arrange the room").font(SK.font(18, .black)).foregroundStyle(SK.ink)
                             Text(selected.map { "\($0.kind.title): drag to move" } ?? "Touch a piece and drag it").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+                                .accessibilityIdentifier("arrange-selected")
+                                .accessibilityAction(named: "Move left") { if let s = selected { ArrangeAssist.move(s.uid, .left, care: care) } }
+                                .accessibilityAction(named: "Move right") { if let s = selected { ArrangeAssist.move(s.uid, .right, care: care) } }
+                                .accessibilityAction(named: "Move closer") { if let s = selected { ArrangeAssist.move(s.uid, .forward, care: care) } }
+                                .accessibilityAction(named: "Move back") { if let s = selected { ArrangeAssist.move(s.uid, .back, care: care) } }
+                                .accessibilityAction(named: "Put away") { if let s = selected { care.putAwayDecor(s.uid) } }
                         }
                         Spacer(minLength: 0)
                         Text("\(book.roomUnitsUsed)/\(StoreTuning.roomCapacity) spots").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
@@ -80,6 +107,7 @@ struct ArrangeOverlay: View {
                     .frame(maxWidth: 520)
                     .padding(.top, max(inset.top, 0) + 8)
                     Spacer()
+                    moveControls
                     HStack(spacing: 10) {
                         if let s = selected {
                             Button { UINotificationFeedbackGenerator().notificationOccurred(.success); care.putAwayDecor(s.uid) } label: {

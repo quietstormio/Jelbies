@@ -20,14 +20,14 @@ struct BathChrome: View {
     private var nextButton: some View {
         Button { care.nextCleanStep() } label: {
             Text("Next")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .playFont(18, .bold)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 30).frame(minHeight: 44)
                 .background(Capsule().fill(FocusStyle.pink).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
         }
         .buttonStyle(.plain)
-        .scaleEffect(pulse ? 1.06 : 1)
-        .onAppear { withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { pulse = true } }
+        .scaleEffect(pulse && !A11ySettings.shared.reduceMotion ? 1.06 : 1)          // (static under Reduce Motion)
+        .onAppear { guard !A11ySettings.shared.reduceMotion else { return }; withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { pulse = true } }
         .transition(.scale.combined(with: .opacity))
         .accessibilityIdentifier("bath-next")
     }
@@ -42,7 +42,7 @@ struct BathChrome: View {
                             Image(systemName: "xmark")
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(CareMenu.brown)
-                                .frame(width: 36, height: 36)
+                                .frame(width: 44, height: 44)
                                 .background(Circle().fill(CareMenu.cream).opacity(0.92))
                                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                         }
@@ -54,24 +54,26 @@ struct BathChrome: View {
                     VStack(spacing: 10) {
                         if let p = bath.prompt {
                             Text(p)
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .playFont(16, .semibold)
                                 .foregroundStyle(CareMenu.brown)
                                 .padding(.horizontal, 14).padding(.vertical, 6)
+                                .accessibilityIdentifier("bath-prompt")
                                 .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
                                 .transition(.scale.combined(with: .opacity))
                         }
                         if bath.phase == .finish {
                             Button { care.finishClean() } label: {
                                 Text("Done")
-                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .playFont(18, .bold)
                                     .foregroundStyle(CareMenu.brown)
-                                    .padding(.horizontal, 28).padding(.vertical, 10)
+                                    .padding(.horizontal, 28).padding(.vertical, 10).frame(minHeight: 44)
                                     .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
                         } else if vsc == .compact {
                             toolBar
+                            helpButton
                             HStack(spacing: 12) {
                                 ProgressBar(value: bath.progress).frame(height: 6).accessibilityIdentifier("bath-progress")
                                 if bath.stageComplete { nextButton }
@@ -79,6 +81,7 @@ struct BathChrome: View {
                             .padding(.horizontal, 24)
                         } else {
                             toolBar
+                            helpButton
                             ProgressBar(value: bath.progress)
                                 .frame(height: 6)
                                 .padding(.horizontal, 24)
@@ -100,6 +103,29 @@ struct BathChrome: View {
         }
     }
 
+    /// "Help me scrub": the scripted scrub for this stage, for a player who cannot rub the screen (VoiceOver, Switch Control, a motor difficulty).
+    /// It never presses Next for them.
+    @ViewBuilder
+    private var helpButton: some View {
+        if !bath.stageComplete {
+            Button { bath.assistScrub.toggle(); AudioHub.shared.uiTap() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: bath.assistScrub ? "hand.raised.slash.fill" : "hand.point.up.left.fill")
+                    Text(bath.assistScrub ? "Stop helping" : "Help me scrub")
+                }
+                .playFont(16, .bold)
+                .foregroundStyle(CareMenu.brown)
+                .padding(.horizontal, 22).frame(minHeight: 48)
+                .background(Capsule().fill(bath.assistScrub ? Color.white : CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("bath-help")
+            .accessibilityLabel(bath.assistScrub ? "Stop helping" : "Help me scrub")
+            .accessibilityValue(bath.assistScrub ? "On" : "Off")
+            .accessibilityHint("Scrubs for you on this step. You still tap Next.")
+        }
+    }
+
     private var toolBar: some View {
         HStack(spacing: 8) {
             ForEach(Array(Self.tools.enumerated()), id: \.offset) { _, t in
@@ -118,12 +144,16 @@ struct BathChrome: View {
                             }
                         }
                     Text(t.1)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .playFont(11, .semibold, relativeTo: .caption)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(CareMenu.cream))
                 }
                 .foregroundStyle(CareMenu.brown)
                 .opacity(on ? 1 : 0.7)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(t.1)
+                .accessibilityValue(on ? (bath.stageComplete ? "Current step, done" : "Current step") : "")
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .accessibilityElement(children: .contain)
@@ -133,7 +163,8 @@ struct BathChrome: View {
 
 private struct ProgressBar: View {
     let value: Float
-    var body: some View {
+    var body: some View { bar.accessibilityElement().accessibilityLabel("Progress").accessibilityValue("\(Int(min(1, max(0, value)) * 100)) percent") }
+    private var bar: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.55))
