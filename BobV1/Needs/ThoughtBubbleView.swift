@@ -16,6 +16,8 @@ struct ThoughtBubbleView: View {
     @State private var shown: BubbleIcon?
     @State private var appeared = Date.distantPast
     @State private var leaving: Leave?
+    @State private var lastSpokenAt = Date.distantPast
+    @State private var lastSpoken = ""          // VoiceOver hears a need once, not on every 20 s cycle
 
     private struct Leave { var need: BubbleIcon; var start: Date; var fixed: Bool; var shownBefore: Bool }
 
@@ -59,7 +61,7 @@ struct ThoughtBubbleView: View {
         }
         .ignoresSafeArea()
         .onChange(of: care.bubbleIcon) { _, n in
-            if let n { shown = n; appeared = Date(); leaving = nil; A11yAnnounce.say(spoken(n), priority: .low) }          // the cloud is transient: say it once
+            if let n { shown = n; appeared = Date(); leaving = nil; let t = spoken(n); if t != lastSpoken || Date().timeIntervalSince(lastSpokenAt) > 180 { lastSpokenAt = Date(); lastSpoken = t; A11yAnnounce.say(t, priority: .low) } }          // the cloud is transient: say it once
         }
         .onChange(of: care.bubbleEnd) { _, e in
             if e.silent { leaving = nil; shown = nil; return }       // the clean-up run-out: the cloud just goes, no puff over the room

@@ -25,7 +25,7 @@ struct AccessibilitySettingsView: View {
                 } header: { Text("Hearing") } footer: {
                     Text("Captions show sounds like \"Pip chirps\" under the top bar.")
                 }
-                Section {
+                if Self.partBLanded { Section {
                     Picker("Race controls", selection: $settings.raceAssist) {
                         ForEach(RaceAssist.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
@@ -33,12 +33,12 @@ struct AccessibilitySettingsView: View {
                     toggle("Relaxed rhythm timing", $settings.relaxedTiming, "a11y-relaxed-timing")
                 } header: { Text("Playing") } footer: {
                     Text(Self.raceFootnote(settings.raceAssist) + " Relaxed timing widens the windows in drills, the Show dance and the trick ring.")
-                }
-                Section {
+                } }
+                if Self.partBLanded { Section {
                     toggle("Tap to talk (instead of hold)", $settings.tapToTalk, "a11y-tap-to-talk")
                 } header: { Text("Talking") } footer: {
                     Text("Tap the mic once to start and once to stop.")
-                }
+                } }
                 Section {
                     Button("System accessibility settings") {
                         if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) }
@@ -56,6 +56,9 @@ struct AccessibilitySettingsView: View {
         }
         .accessibilityIdentifier("a11y-settings")
     }
+
+    /// The Playing and Talking rows drive code that ships in Accessibility part B; flip when B merges so no row does nothing.
+    static let partBLanded = false
 
     static func raceFootnote(_ a: RaceAssist) -> String {
         switch a {

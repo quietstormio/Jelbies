@@ -73,13 +73,18 @@ struct CareScroller<Content: View>: View {
     @Environment(\.a11yAvailableHeight) private var avail
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        // The scroll clips, so a menu taller than the space left really scrolls (it used to draw over the top bar). The shadows get a
+        // margin inside the clip, taken back outside it so the layout is the same as before.
+        let m: CGFloat = 12
+        return ScrollView(.vertical, showsIndicators: false) {
             content()
+                .fixedSize(horizontal: true, vertical: false)          // rows take their own width (never wrapped a letter a line by a narrow first proposal)
+                .padding(m)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { natural = $0 }
         }
         .scrollBounceBehavior(.basedOnSize)
         .defaultScrollAnchor(.bottom)
-        .scrollClipDisabled()
-        .frame(width: natural?.width, height: natural.map { min($0.height, max(120, avail - 24)) })
+        .frame(width: natural?.width, height: natural.map { min($0.height, max(120, avail) + 2 * m) })
+        .padding(-m)
     }
 }

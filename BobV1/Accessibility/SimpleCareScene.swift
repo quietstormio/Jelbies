@@ -10,6 +10,7 @@ struct SimpleCareScene: View {
     @State private var model = GameScreen.makeGameModel()
     @State private var selected: Int?
     @State private var petting = false
+    @Environment(\.scenePhase) private var scenePhase
     private var care: GameCare { model.care }
 
     var body: some View {
@@ -33,6 +34,18 @@ struct SimpleCareScene: View {
             care.launched()
             care.store.grantStarterIfNeeded()
             AudioHub.shared.start()
+        }
+        .onChange(of: scenePhase) { _, p in          // the same leave / return the full game does: time away is applied, state saved
+            if p == .active {
+                DayClock.shared.snapToNow()
+                care.returnedActive()
+                AudioHub.shared.setForeground(true)
+            } else {
+                if petting { care.release(); petting = false }
+                care.leftActive(); care.voice.training.save(); care.voice.cancel()
+                DayClock.shared.leaving()
+                AudioHub.shared.setForeground(false)
+            }
         }
         .accessibilityIdentifier("simple-care-scene")
     }

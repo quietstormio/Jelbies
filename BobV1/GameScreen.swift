@@ -31,6 +31,8 @@ struct GameScreen: View {
     private var jellyNames: [String] { model.care.jellies.map(\.name) }
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
+    @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
+    @State private var hudPerkH: CGFloat = 0          // measured: the perk badge row under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
@@ -130,14 +132,16 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 }
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     if !focus.isActive, !cleaning, !racing {
                         HStack { Spacer(); PerkBadgeRow(care: model.care) }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudPerkH = $0 }
                     }
                     Spacer()
                     if focus.showsDock {
-                        FocusHint()                       // no tabs: the gesture decides; a first-time hint that fades after 4 s
+                        FocusHint(interacted: { model.touch.contact || model.care.voice.mode.phase != .idle })                       // no tabs: the gesture decides; a first-time hint that fades after 4 s
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
@@ -173,7 +177,8 @@ struct GameScreen: View {
                 .padding(.vertical, 8)
             }
             .jHUDCap()
-            .environment(\.a11yAvailableHeight, g.size.height)
+            .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudPerkH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
+                - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
             }
 
             BathChrome(care: model.care)
@@ -877,7 +882,7 @@ struct CareMenu: View {
             .accessibilityHint(who.map { "Shows care actions for \($0)" } ?? "Shows care actions for everyone")
             .accessibilityAction(.escape) { withAnimation(Self.spring) { open = false } }
             .accessibilityShowsLargeContentViewer { Label(who.map { "\($0)'s menu" } ?? "Care menu", systemImage: "pawprint.fill") }
-            .keyboardShortcut("p", modifiers: [])
+            .keyboardShortcut("p", modifiers: .command)
         }
         .animation(Self.spring, value: who)
     }
@@ -927,10 +932,14 @@ struct FocusHint: View {
     static let key = "FocusHintSeen"
     @State private var shown = UserDefaults.standard.integer(forKey: FocusHint.key) < 3 || UIAccessibility.isVoiceOverRunning
     @State private var visible = true
+    /// True once the player has touched the Jelbie or used the mic (polled while the hint is sticky).
+    var interacted: () -> Bool = { false }
+    /// The VoiceOver wording names the pet / pat / toss rotor actions; flip to true when they exist (Accessibility part B).
+    static var petActionsInRotor = false
     /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
     private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
     private var text: String {
-        UIAccessibility.isVoiceOverRunning ? "Use the Actions rotor on a Jelbie to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
+        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelbie to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
     }
 
     var body: some View {
@@ -946,8 +955,12 @@ struct FocusHint: View {
                 .accessibilityIdentifier("focus-hint")
                 .task {
                     UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                    guard !sticky else { return }
-                    try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    if sticky {          // stays until the first touch or mic use (or 60 s, so it never lingers for good)
+                        var waited = 0.0
+                        while !Task.isCancelled, waited < 60, !interacted() { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
+                    } else {
+                        try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    }
                     withAnimation(.easeOut(duration: 0.5)) { visible = false }
                 }
         }

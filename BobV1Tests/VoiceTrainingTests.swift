@@ -83,7 +83,7 @@ final class VoiceTrainingTests: XCTestCase {
         XCTAssertEqual(v.progress(.sit), 2)
         XCTAssertEqual(v.decide(transcript: "Sit!", runningMove: .sit, mood: .happy, session: 3), .trickLearned(.sit))
         XCTAssertTrue(v.isLearned(.sit))
-        XCTAssertEqual(v.reliability(.sit), 0.35, accuracy: 0.0001)
+        XCTAssertEqual(v.reliability(.sit), 0.6, accuracy: 0.0001)
         XCTAssertEqual(v.progress(.sit), VoiceTuning.repsToLearn)
     }
 
@@ -99,7 +99,7 @@ final class VoiceTrainingTests: XCTestCase {
     func testReliabilityAtLearnCappedAndGrows() {
         let v = make()
         teach(v, "run", .run, sessions: [1, 2, 3])
-        XCTAssertEqual(v.reliability(.run), 0.35, accuracy: 0.0001)
+        XCTAssertEqual(v.reliability(.run), 0.6, accuracy: 0.0001)
         // successes grow it (reliability 0.95 stays at the cap; use a low one)
         let x = VoiceTraining(defaults: suite(), random: { 0 })      // roll 0 always succeeds
         teach(x, "run", .run, sessions: [1, 2, 3])
@@ -117,7 +117,7 @@ final class VoiceTrainingTests: XCTestCase {
         let trials = 3000
         let roll = VoiceTraining.seededRoll(42)
         for _ in 0..<trials {
-            // a fresh model each trial so reliability stays at its learn value (0.35): the miss rate is 65 %
+            // a fresh model each trial so reliability stays at its learn value (0.6): the miss rate is 40 %
             let v = VoiceTraining(defaults: suite(), persists: false, random: roll)
             teach(v, "sit", .sit, sessions: [1, 2, 3])
             teach(v, "run", .run, sessions: [1, 2, 3])
@@ -130,7 +130,7 @@ final class VoiceTrainingTests: XCTestCase {
             }
         }
         let miss = Double(wrong + ignored)
-        XCTAssertEqual(Double(performed) / Double(trials), 0.35, accuracy: 0.04)
+        XCTAssertEqual(Double(performed) / Double(trials), 0.6, accuracy: 0.04)
         XCTAssertEqual(Double(wrong) / miss, 0.5, accuracy: 0.05)
         XCTAssertEqual(Double(ignored) / miss, 0.5, accuracy: 0.05)
     }
@@ -156,7 +156,7 @@ final class VoiceTrainingTests: XCTestCase {
         let v = VoiceTraining(defaults: suite(), random: { 0 })          // would always succeed
         teach(v, "sit", .sit, sessions: [1, 2, 3])
         for _ in 0..<20 { XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .grumpy, session: 9), .grumpyIgnore) }
-        XCTAssertEqual(v.reliability(.sit), 0.35, accuracy: 0.0001, "no success counted")
+        XCTAssertEqual(v.reliability(.sit), 0.6, accuracy: 0.0001, "no success counted")
     }
 
     func testPartialWordAndUnknown() {

@@ -38,7 +38,7 @@ struct RosterButton: View {
         .accessibilityValue(open ? "expanded" : "collapsed")
         .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
         .accessibilityShowsLargeContentViewer { Label("All Jelbies", systemImage: "person.2.fill") }
-        .keyboardShortcut("r", modifiers: [])
+        .keyboardShortcut("r", modifiers: .command)
     }
 }
 

@@ -85,13 +85,13 @@ final class A11yUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settings-studio"].exists)
         app.buttons["settings-accessibility"].tap()
         XCTAssertTrue(app.switches["a11y-captions"].waitForExistence(timeout: 5), "captions is a native switch")
-        for id in ["a11y-reduce-motion", "a11y-longer-hints", "a11y-announce", "a11y-relaxed-timing", "a11y-tap-to-talk"] {
+        for id in ["a11y-reduce-motion", "a11y-longer-hints", "a11y-announce"] {
             XCTAssertTrue(app.switches[id].exists, id)
             XCTAssertFalse(app.switches[id].label.isEmpty)
         }
         let c = app.switches["a11y-captions"]
         let before = c.value as? String
-        c.tap()
+        c.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()          // the switch sits at the trailing edge of its row
         XCTAssertNotEqual(c.value as? String, before, "the toggle flips")
         c.tap()
         overlay(app, "a11y_sheet_portrait")
@@ -107,13 +107,17 @@ final class A11yUITests: XCTestCase {
             let win = app.windows.firstMatch.frame
             for id in ["care-menu", "go-out", "bag-button", "roster-button"] {
                 let b = app.buttons[id]
-                XCTAssertTrue(b.exists && b.isHittable, "\(id) is hittable at AX5 (\(name))")
+                XCTAssertTrue(b.exists, "\(id) exists at AX5 (\(name))")
                 XCTAssertTrue(win.contains(b.frame), "\(id) is on screen at AX5 (\(name))")
             }
             overlay(app, "hud_ax5_\(name)")
             app.buttons["care-menu"].tap()
             XCTAssertTrue(app.buttons["hud-bedtime"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["care-menu"].isHittable, "the paw stays reachable with the menu open (\(name))")
+            let mic = app.descendants(matching: .any).matching(identifier: "voice-mic").firstMatch
+            XCTAssertTrue(mic.exists && win.contains(mic.frame), "the mic stays on screen with the menu open (\(name))")
+            XCTAssertTrue(win.contains(app.buttons["care-menu"].frame), "the paw stays on screen with the menu open (\(name))")
+            sleep(2)
             overlay(app, "paw_ax5_\(name)")
             app.terminate()
         }

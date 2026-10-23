@@ -11,6 +11,15 @@ struct CaptionsView: View {
     var settings: A11ySettings = .shared
 
     var body: some View {
+        Group {
+            if settings.captions { timeline } else { Color.clear }          // no 0.5 s re-render while captions are off
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .accessibilityIdentifier("captions")
+    }
+
+    private var timeline: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
             let live = center.items.filter { ctx.date.timeIntervalSince($0.born) <= CaptionCenter.life }
             VStack(spacing: 6) {
@@ -27,9 +36,6 @@ struct CaptionsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .accessibilityIdentifier("captions")
     }
 }
 

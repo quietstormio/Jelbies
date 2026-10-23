@@ -75,7 +75,7 @@ nonisolated struct VoiceDecision: Equatable, Sendable {
 nonisolated enum VoiceTuning {
     /// The one rep count: a trick (or his name) is learned after this many listens that carry the word. Dots, docs and tests all read it.
     static let repsToLearn = 3
-    static let baseReliability: Float = 0.35
+    static let baseReliability: Float = 0.6          // (a just-learned trick obeys most of the time; practice takes it to 0.95)
     static let perExtraRep: Float = 0.15
     static let perSuccess: Float = 0.03
     static let maxReliability: Float = 0.95

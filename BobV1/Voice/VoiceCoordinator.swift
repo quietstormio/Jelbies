@@ -625,6 +625,8 @@ final class VoiceCoordinator {
         tutorial.update()
         if voiceGoing { goAge += dt; if goAge > 15 { voiceGoing = false } }      // a cancelled walk (he was grabbed) never reports back
         if mode.phase == .idle { runningAtOpen = nil }
+        if let p = teachPrompt, clock() > p.until, !mode.isListening { teachPrompt = nil }          // the prompt times out (it also lets a held teaching sit finish)
+        brain.trainingLock = nickLesson != nil || teachPrompt != nil          // (same value GameCare.tickFeature gives every actor; set here too for the primary brain)
 
         // listening pose
         let listening = mode.isListening

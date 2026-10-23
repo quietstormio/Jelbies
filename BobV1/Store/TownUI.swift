@@ -68,7 +68,7 @@ struct GoOutButton: View {
         .accessibilityValue(open ? "expanded" : "collapsed").accessibilityHint("Shows the places to go: Track, Store, Jelly Show")
         .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
         .accessibilityShowsLargeContentViewer { Label("Go out", systemImage: "door.left.hand.open") }
-        .keyboardShortcut("o", modifiers: [])
+        .keyboardShortcut("o", modifiers: .command)
     }
     @ViewBuilder private var classic: some View {
         let size = vsc == .compact ? HUDTuning.goOutSizeTight : HUDTuning.goOutSize
@@ -163,7 +163,7 @@ struct BagButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel(store.newCount > 0 ? "Bag, \(store.newCount) new" : "Bag").accessibilityIdentifier("bag-button")
         .accessibilityShowsLargeContentViewer { Label("Bag", systemImage: "bag.fill") }
-        .keyboardShortcut("b", modifiers: [])
+        .keyboardShortcut("b", modifiers: .command)
     }
 }
 
