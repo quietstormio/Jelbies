@@ -128,6 +128,8 @@ final class ShowFlow {
     @ObservationIgnored var auto = false
     @ObservationIgnored private var autoDone = 0
     @ObservationIgnored private var ringNowSaid = false
+    /// Dance prompts whose left / right audio cue has played (accessibility; PlayAssist.swift).
+    @ObservationIgnored var danceCued = 0
     @ObservationIgnored private var autoTrickWait: Float = 0
 
     /// Seconds of white (fade out / hold / fade in), the countdown beat, how long a trick holds the stage.
@@ -206,7 +208,7 @@ final class ShowFlow {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; danceGoSong = -10
         trickStage = .pick; ringAge = 0; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
-        autoDone = 0; autoTrickWait = 0; ringNowSaid = false
+        autoDone = 0; autoTrickWait = 0; ringNowSaid = false; danceCued = 0
         ShowAssist.refresh()
         practiceSeed = UInt64(dayKey) &+ UInt64(playerID) &* 977
     }
@@ -268,6 +270,7 @@ final class ShowFlow {
             flashAge += dt
             if flashAge > 0.7, flash != nil { flash = nil }
             if auto || ShowAssist.autoDance { autoPlay(now) }
+            promptCues(now: now)
             if kind == .practice {
                 guard var p = practice else { return }
                 p.tick(songTime: now)

@@ -127,7 +127,7 @@ final class JelbieA11yTests: XCTestCase {
         XCTAssertTrue(care.nightRest.wanted.contains(2) || care.nightRest.dayOnce.contains(2))
         XCTAssertFalse(care.nightRest.wanted.contains(1) || care.nightRest.dayOnce.contains(1))
         let b = care.selectBrain(1)!
-        b.idleState.kind = .sleep
+        b.idleState.kind = .sleep; b.sleep.stage = 3          // lying down, asleep
         XCTAssertTrue(JelbieActions.perform(.wake, id: 1, care: care, asleep: true))
         XCTAssertTrue(b.sleep.wakeAsked, "wake asked only for him")
         XCTAssertFalse(JelbieActions.perform(.wake, id: 2, care: care, asleep: false), "an awake one cannot be woken")

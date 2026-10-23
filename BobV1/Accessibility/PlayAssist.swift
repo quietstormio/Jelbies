@@ -216,3 +216,21 @@ enum ArrangeAssist {
         return ids[i]
     }
 }
+
+extension ShowFlow {
+    /// The left / right audio cue half a beat before each dance prompt (under relaxed timing or VoiceOver), like the drill's.
+    func promptCues(now: Double) {
+        guard A11ySettings.shared.relaxedTiming || UIAccessibility.isVoiceOverRunning || A11yEvents.forceActive else { return }
+        let prompts = kind == .practice ? (practice?.prompts ?? []) : (sim?.dance?.prompts ?? [])
+        let lead = ShowBeat.stage.period * 0.5
+        while danceCued < prompts.count {
+            let p = prompts[danceCued]
+            if p.time - lead > now - ShowDanceSim.latencyOffset { break }
+            danceCued += 1
+            if p.grade == nil {
+                RaceFlow.cueLog.append(p.foot)
+                AudioHub.shared.play(.tick, x: p.foot == 0 ? -5 : 5, volume: 0.8, rate: p.foot == 0 ? 1.25 : 1.7)
+            }
+        }
+    }
+}
