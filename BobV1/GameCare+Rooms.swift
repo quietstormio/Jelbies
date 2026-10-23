@@ -16,6 +16,11 @@ extension GameCare {
         if !store.ownsRoom(id) { return .notOwned }
         if id == store.currentRoom { return .same }
         if roomSwitch.active { return .busy }
+        return roomActivityBlocker()
+    }
+
+    /// Whatever else is going on that a room swap must not interrupt (checked at queue time, through the fade, and again just before the swap).
+    func roomActivityBlocker() -> RoomSwitchBlock? {
         if tripActive { return .trip }
         if bath.active { return .bath }
         if focus.isActive { return .focus }
@@ -40,6 +45,7 @@ extension GameCare {
         switch r.phase {
         case .off: return
         case .out:
+            if roomActivityBlocker() != nil { r.finish(); return }          // something started under the fade (a trip, a bath, a meal): stay put
             r.setWipe(r.wipe + dt / RoomSwitchTuning.fadeOut)
             if r.wipe >= 1 {
                 r.set(.hold); r.holdFrames = 0
@@ -56,7 +62,7 @@ extension GameCare {
 
     /// The world swap, on the main thread between sim steps (never from a SwiftUI action: the sims may be mid-step).
     func performRoomSwap() {
-        guard let dest = roomSwitch.dest, store.ownsRoom(dest) else { return }
+        guard let dest = roomSwitch.dest, store.ownsRoom(dest), roomActivityBlocker() == nil else { roomSwitch.finish(); return }
         store.moveIn(dest)
         RoomLayout.apply(RoomCatalog.def(dest))
         if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {

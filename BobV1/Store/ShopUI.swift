@@ -32,6 +32,7 @@ struct ShopScreen: View {
     let care: GameCare
     var who: Int
     var back: () -> Void
+    var goHome: () -> Void = {}          // leaves the Town / Shop (a room move starts its fade at once)
     @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .snacks          // (-StoreTab decor: capture aid)
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
@@ -60,7 +61,7 @@ struct ShopScreen: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
-            ItemSheet(care: care, item: item, who: who) { selected = nil }
+            ItemSheet(care: care, item: item, who: who, goHome: goHome) { selected = nil }
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
@@ -147,7 +148,9 @@ struct ItemSheet: View {
     let care: GameCare
     let item: StoreItem
     var who: Int
+    var goHome: () -> Void = {}
     var close: () -> Void
+    @State private var refusal: String?
     @State private var qty = 1
     @State private var bought = 0
     @Environment(\.verticalSizeClass) private var vsc
@@ -232,13 +235,18 @@ struct ItemSheet: View {
             if item.kind == .room, let r = item.room, book.owns(item), book.currentRoom != r {
                 Button {
                     AudioHub.shared.uiTap()
-                    if care.switchRoom(r) == nil { close() }
+                    if let b = care.switchRoom(r) { refusal = b.message } else { close(); goHome() }
                 } label: {
                     Text("Move in now").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
                         .background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
                 .accessibilityIdentifier("item-movein")
+            }
+            if let refusal {
+                Text(refusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
+                    .accessibilityIdentifier("item-movein-refusal")
             }
             Text(footer).font(SK.font(12, .bold)).foregroundStyle(SK.muted).padding(.bottom, 10)
         }

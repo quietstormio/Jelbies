@@ -30,9 +30,11 @@ struct RoomPickerSheet: View {
                     .accessibilityIdentifier("room-picker-refusal")
             }
             if wide {
-                HStack(alignment: .top, spacing: 12) { ForEach(RoomCatalog.all, id: \.id) { card($0) } }
-                    .padding(.horizontal, 16)
-                Spacer(minLength: 0)
+                ScrollView {
+                    HStack(alignment: .top, spacing: 12) { ForEach(RoomCatalog.all, id: \.id) { card($0) } }
+                        .padding(.horizontal, 16).padding(.bottom, 16)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             } else {
                 ScrollView {
                     VStack(spacing: 12) { ForEach(RoomCatalog.all, id: \.id) { card($0) } }

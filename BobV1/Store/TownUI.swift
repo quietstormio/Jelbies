@@ -84,7 +84,7 @@ struct TownFlow: View {
         ZStack {
             switch screen ?? .town {
             case .town: TownView(care: care, go: { screen = $0 }, home: goHome)
-            case .shop: ShopScreen(care: care, who: who) { screen = .town }
+            case .shop: ShopScreen(care: care, who: who, back: { screen = .town }, goHome: goHome)
             case .track: TrackPanel(care: care, who: $who, back: { screen = .town }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { screen = .town }, card: { screen = .condition }, show: { screen = .show },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })

@@ -35,6 +35,20 @@ final class RoomSwitchTests: XCTestCase {
         XCTAssertEqual(c.switchRoom(.loft), .busy)
     }
 
+    func testActivityStartedUnderTheFadeCancelsTheSwap() {
+        let c = care("blockedlate")
+        c.store.grant("room-loft")
+        XCTAssertNil(c.switchRoom(.loft))
+        c.arranging = true          // something starts after the move was queued (the Town had the stage paused)
+        var steps = 0
+        while c.roomSwitch.active && steps < 240 { c.tickRoomSwitch(dt: 1.0 / 60); steps += 1 }
+        XCTAssertFalse(c.roomSwitch.active)
+        XCTAssertEqual(RoomLayout.current.id, .home, "no swap while busy")
+        XCTAssertEqual(c.roomID, .home)
+        c.performRoomSwap()
+        XCTAssertEqual(RoomLayout.current.id, .home, "performRoomSwap re-checks too")
+    }
+
     func testFadeSwapsExactlyOnce() {
         let c = care("flow")
         c.store.grant("room-loft")
