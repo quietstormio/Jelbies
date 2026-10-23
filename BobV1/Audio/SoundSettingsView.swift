@@ -56,7 +56,8 @@ struct SoundSettingsPanel: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(np.line).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.8)
                 if showNote, let n = np.note {
-                    Text(n).font(.system(size: 11, design: .rounded)).foregroundStyle(ink.opacity(0.6)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(n).font(.system(size: 11, design: .rounded)).foregroundStyle(ink.opacity(0.6)).lineLimit(np.canSkip || tight ? 1 : 2).minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 4)

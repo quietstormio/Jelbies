@@ -122,11 +122,12 @@ nonisolated struct MusicDirector {
     }
 
     /// Volume of the main music for the situation (evening is quieter, the nap lo-fi is quiet, play at night lifts a little).
+    static let layerDuck = 0.12
     func mainGain(playing: Bool = false) -> Double {
         var g: Double
         switch mode { case .day: g = 1; case .evening: g = 0.7; case .night: g = 0.75; case .nap: g = 0.5 }
         if mode == .night, playing { g *= 1.18 }
-        if layerOn { g *= 0.12 }          // the play layer takes over; the playlist waits underneath
+        if layerOn { g *= Self.layerDuck }          // the play layer takes over; the playlist waits underneath
         return g
     }
     var layerGain: Double { layerOn ? 1 : 0 }
@@ -136,6 +137,7 @@ nonisolated struct MusicDirector {
             eveningIntro = false
             if eveningBag.isEmpty { eveningBag = shuffled(MusicTrack.eveningPool, avoiding: lastPlayed) }
             let t = eveningBag.removeFirst()
+            bag.removeAll { $0 == t }            // it must not come round again from the main bag
             lastPlayed = t
             return t
         }
@@ -144,6 +146,7 @@ nonisolated struct MusicDirector {
         if bag.isEmpty {
             bag = shuffled(pool, avoiding: lastPlayed)
         }
+        if bag.count > 1, bag[0] == lastPlayed { bag.swapAt(0, 1) }
         let t = bag.removeFirst()
         lastPlayed = t
         return t

@@ -124,10 +124,44 @@ final class MusicSkipTests: XCTestCase {
         XCTAssertFalse(hub.nowPlaying.canSkip); XCTAssertEqual(hub.nowPlaying.state, .musicOff)
         n = plays(); hub.skipTrack(); XCTAssertEqual(plays(), n)
         hub.settings.musicOn = true
-        if !hub.nowPlaying.canSkip { hub._forceGap(0); hub._tick(0.05) }
+        XCTAssertTrue(hub.nowPlaying.canSkip)
         n = plays(); hub.skipTrack()
         XCTAssertEqual(plays(), n + 1)
         if case .playTrack(_, let f)? = hub.eventLog.last(where: { if case .playTrack = $0 { return true }; return false }) { XCTAssertEqual(f, MusicDirector.skipFade) }
+    }
+
+    func testEveningIntroDoesNotRepeatAcrossScreenTrip() {
+        for _ in 0..<30 {
+            var d = make()
+            let ev = MusicInput(phase: .evening)
+            var seq: [BobV1.MusicTrack] = []
+            _ = run(&d, 6, input: ev); seq.append(d.current!)
+            for _ in 0..<12 {
+                var i = ev; i.scene = .shop
+                _ = run(&d, 2, input: i)
+                _ = run(&d, 2, input: ev)
+                if let c = d.current, c != seq.last { seq.append(c) }
+                let s = plays(d.skip()).map { $0.0 }
+                seq += s
+                _ = run(&d, 1, input: ev)
+            }
+            for i in 1..<seq.count { XCTAssertNotEqual(seq[i], seq[i - 1]) }
+        }
+    }
+
+    func testHubSkipWithPlayLayerDoesNotJumpLouder() {
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub._sceneEngineDisabled = true
+        hub.start()
+        hub._tick(0.05)
+        for _ in 0..<40 { hub.situation(napping: [false], playing: true, xs: [0], moods: [.happy]); hub._tick(0.25) }
+        XCTAssertTrue(hub.eventLog.contains { if case .layerOn = $0 { return true }; return false }, "layer should be on")
+        guard hub._deckEffective.isEmpty == false else { return XCTFail("no deck") }
+        let before = hub._deckEffective
+        hub.skipTrack()
+        hub._tick(0.05)
+        let after = hub._deckEffective
+        for (i, v) in before.enumerated() where i < after.count { XCTAssertLessThanOrEqual(v, before[i] + 0.0001 + 0, "old deck \(i) got louder") }
     }
 
     func testPlaylistsLoad() throws {

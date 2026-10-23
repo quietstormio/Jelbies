@@ -176,6 +176,8 @@ final class AudioHub {
     var _musicLevelNow: Float { musicLevelNow }
     func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on; applyLevels(); refreshNowPlaying() }
     var _sceneEngine: SceneMusicEngine? { scene }
+    /// Test seam: each live deck's effective volume (fader x main gain).
+    var _deckEffective: [Float] { decks.map { $0.fader.level * Float(director.mainGain(playing: input.playing)) } }
     func _tick(_ dt: Double) { _ = dt; tick() }
 
     /// Foreground / background (scenePhase).
@@ -499,7 +501,11 @@ final class AudioHub {
     func skipTrack() {
         refreshNowPlaying()
         guard nowPlaying.canSkip, started, active else { return }
+        let wasLayer = director.layerOn
+        let outgoing = decks.count
         perform(director.skip())
+        // The play layer ducked the playlist to x0.12 and skip() drops that duck; the song just skipped must not jump louder as it fades out.
+        if wasLayer { for i in 0..<min(outgoing, decks.count) { decks[i].fader.level = min(decks[i].fader.level, Float(MusicDirector.layerDuck)) } }
     }
 
     private func perform(_ events: [MusicEvent]) {
