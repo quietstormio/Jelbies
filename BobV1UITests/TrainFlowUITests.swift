@@ -36,18 +36,9 @@ final class TrainFlowUITests: XCTestCase {
 
     @MainActor
     private func flow(_ o: UIDeviceOrientation, _ tag: String) throws {
-        var app = launch(["-VoiceReset", "1", "-VoiceFakeSeq", "sit|sit|sit|sit"], orient: o)
-        let menu = app.buttons["care-menu"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 240))
-        sleep(3)
-        app.buttons["roster-button"].tap()
-        let card = app.buttons["roster-card-1"]
-        XCTAssertTrue(card.waitForExistence(timeout: 5)); card.tap(); sleep(2)
-        if el(app, "roster-panel").exists { app.buttons["roster-button"].tap(); sleep(1) }
-        menu.tap()
-        let train = app.buttons["hud-train"]
-        XCTAssertTrue(train.waitForExistence(timeout: 5)); train.tap()
-
+        // `-TrainJelly 1` = what paw -> Train does for slot 1 (Moss), a few seconds after launch (the menu route is covered by the HUD tests)
+        var app = launch(["-VoiceReset", "1", "-VoiceFakeSeq", "sit|sit|sit|sit", "-TrainJelly", "1"], orient: o)
+        XCTAssertTrue(app.buttons["voice-mic"].waitForExistence(timeout: 240))
         XCTAssertTrue(el(app, "train-card").waitForExistence(timeout: 300), "the Train card appears on arrival")
         XCTAssertTrue(waitStep(app, "pick"))
         save("\(tag)_01_pick")
