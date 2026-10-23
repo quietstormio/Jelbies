@@ -235,6 +235,8 @@ final class VoiceCoordinator {
         switch availability { case .unavailable, .denied: return true; default: return false }
     }
 
+    var _startTask: Task<Void, Never>? { startTask }        // test seam
+
     /// Speculative mic start (first tap of a double-tap on empty space, mic-button touch-down). Cheap, off the main thread, cancels itself.
     func warmUp() {
         guard mode.phase == .idle, !stopping, !micUnusable else { return }

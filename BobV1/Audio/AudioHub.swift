@@ -411,7 +411,10 @@ final class AudioHub {
         play(.footstep, jelly: i, x: x, volume: running ? 1.2 : 0.8)
     }
 
-    /// The Jelly's own voice: pitch by Jelly (1 mid, 2 high, 3 low), happy / sad / babble.
+    /// The voice file of the Jelly in a SLOT: its CHARACTER's set (Bob / Pip / Moss / Lavender each sound different).
+    @MainActor static func voiceFile(slot: Int, _ v: JellyVoice) -> String { JellyVoiceSet.file(character: JellyRoster.character(slot), v) }
+
+    /// The Jelly's own voice (by slot -> character): happy / sad / babble.
     func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
@@ -420,16 +423,22 @@ final class AudioHub {
         let now = CACurrentMediaTime()
         if now - lastVoice[i] < 2.2 { return }
         lastVoice[i] = now
-        let name = v == .babble ? "babble_jelly\(i + 1)" : "chirp_jelly\(i + 1)_\(v.rawValue)"
+        let name = Self.voiceFile(slot: jelly, v)
+        if UserDefaults.standard.bool(forKey: "AudioLog") { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
 
     /// Haptics' touch transients -> squish / boop / wobble (the pairing HapticDriver.soundHook promised).
+    private var letGoRing = LetGoRing()
+
     func touch(kind: String, intensity: Float) {
         guard !muted, started else { return }
         switch kind {
         case "wobble": play(.wobble, volume: 0.5 + 0.5 * min(1, intensity * 1.5))
         case "impact": play(.squish, volume: 0.6 + 0.4 * min(1, intensity))
+        case "letgo":
+            guard letGoRing.shouldSound(now: CACurrentMediaTime()) else { return }
+            play(.letgo, volume: min(1, TouchSound.letGoBase + TouchSound.letGoSlope * intensity))
         default:
             if intensity >= 0.85 { play(.boop, volume: 0.9) }
             else if intensity >= 0.28 { play(.squish, volume: 0.55 + 0.5 * intensity) }

@@ -368,7 +368,7 @@ final class DayNightSoundTests: XCTestCase {
         for t in MusicTrack.allCases { XCTAssertTrue(has(t.rawValue), t.rawValue) }
         for s in SFX.allCases { XCTAssertTrue(has("\(s.rawValue)_1"), "\(s.rawValue)_1") }
         XCTAssertTrue(has("day_room")); XCTAssertTrue(has("evening_room"))
-        for j in 1...3 {
+        for j in 1...JellyVoiceSet.count {
             XCTAssertTrue(has("babble_jelly\(j)"))
             for m in ["happy", "sad"] { XCTAssertTrue(has("chirp_jelly\(j)_\(m)")) }
         }

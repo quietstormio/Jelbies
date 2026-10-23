@@ -118,7 +118,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         claim()
         activeTouches += touches.count
         for t in touches {
-            controller?.pointerDown(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size)
+            controller?.pointerDown(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size, time: sane(t.timestamp))
         }
     }
 
@@ -131,8 +131,12 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { finish(touches) }
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { finish(touches) }
 
+    /// The touch's own timestamp (same uptime clock as CACurrentMediaTime) so delivery lag cannot eat the double-tap window; a stamp that is
+    /// not on that clock (synthesized events) falls back to the delivery time.
+    private func sane(_ ts: TimeInterval) -> Double? { abs(CACurrentMediaTime() - ts) < 1.0 ? ts : nil }
+
     private func finish(_ touches: Set<UITouch>) {
-        for t in touches { controller?.pointerUp(id: ObjectIdentifier(t)) }
+        for t in touches { controller?.pointerUp(id: ObjectIdentifier(t), time: sane(t.timestamp)) }
         activeTouches = max(0, activeTouches - touches.count)
         if activeTouches == 0 { release() }
     }
@@ -1488,7 +1492,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         grabSamples = []; liftHeight = 0
     }
 
-    func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
+    func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize, time: Double? = nil) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
         if game, model.care.tripActive { return }          // on the track (or the show's stage) the screen is the buttons: no touch play, no selection, no voice
         if game, model.care.bath.acceptsTouch {
@@ -1499,11 +1503,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game {
             // Voice: the second down of a double-tap on EMPTY space (no Blob under it) opens listen mode, in roaming and in focus
             if voiceTouch == nil, !model.paused {
-                let vnow = CACurrentMediaTime()
+                let vnow = time ?? CACurrentMediaTime()       // the touch's own timestamp: delivery lag (the warm-up work on the first tap) must not eat the 0.35 s window
                 let onBlob = pickBody(p, size) != nil || { refreshOutlines(); return model.care.select.hit(p) != nil }() || decorUnderFinger(p) != nil          // (a piece counts: a double tap on it is not a call to listen)
-                if voiceGesture.touchDown(time: vnow, point: p, hitBlob: onBlob) == .beginVoice, mode == .none {
+                let decision = voiceGesture.touchDown(time: vnow, point: p, hitBlob: onBlob)
+                if VoiceTranscriptLog.on { NSLog("[voice] gesture down t=%.3f lag=%.0f ms onBlob=%d -> %@", vnow, (CACurrentMediaTime() - vnow) * 1000, onBlob ? 1 : 0, decision == .beginVoice ? "BEGIN" : "none") }
+                if decision == .beginVoice, mode == .none {
                     voiceTouch = id; emptyDown = nil
-                    model.care.voice.begin()
+                    let opened = model.care.voice.begin()
+                    if VoiceTranscriptLog.on { NSLog("[voice] begin() -> %d", opened ? 1 : 0) }
                     return
                 }
                 emptyDown = onBlob ? nil : (id, vnow, p)
@@ -1587,12 +1594,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
     }
 
-    func pointerUp(id: ObjectIdentifier) {
+    func pointerUp(id: ObjectIdentifier, time: Double? = nil) {
         if id == voiceTouch { voiceTouch = nil; model.care.voice.release(); return }
         if let e = emptyDown, e.id == id {
             emptyDown = nil
-            let vnow = CACurrentMediaTime()
-            if vnow - e.t < 0.3 { voiceGesture.tapUp(time: vnow, point: e.p, hitBlob: false) }        // a short tap on empty space arms the gesture
+            let vnow = time ?? CACurrentMediaTime()
+            if VoiceTranscriptLog.on { NSLog("[voice] gesture up t=%.3f held=%.0f ms", vnow, (vnow - e.t) * 1000) }
+            voiceGesture.tapUp(time: vnow, downTime: e.t, point: e.p, hitBlob: false)        // a short tap on empty space arms the gesture
         }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
