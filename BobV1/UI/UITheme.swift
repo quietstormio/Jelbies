@@ -22,9 +22,9 @@ enum UITheme {
     static let inkSoft = Color(.sRGB, red: 0.40, green: 0.24, blue: 0.20).opacity(0.65)
     static let spring = Animation.spring(response: 0.38, dampingFraction: 0.68)
 
-    static func title(_ size: CGFloat = 28) -> Font { .system(size: size, weight: .bold, design: .rounded) }
-    static func body(_ size: CGFloat = 16) -> Font { .system(size: size, weight: .semibold, design: .rounded) }
-    static func caption(_ size: CGFloat = 13) -> Font { .system(size: size, weight: .medium, design: .rounded) }
+    static func title(_ size: CGFloat = 28) -> Font { JFont.scaled(size, .bold, style: .title2) }
+    static func body(_ size: CGFloat = 16) -> Font { JFont.scaled(size, .semibold) }
+    static func caption(_ size: CGFloat = 13) -> Font { JFont.scaled(size, .medium, style: .footnote) }
 }
 
 extension BreedID {

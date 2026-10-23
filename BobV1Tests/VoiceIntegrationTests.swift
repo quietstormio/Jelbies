@@ -100,6 +100,40 @@ final class VoiceIntegrationTests: XCTestCase {
         XCTAssertEqual(r.care.focus.phase, .roaming)
     }
 
+    /// The user path: tap the Sit row in the trick book (`show`), wait a realistic beat, hold the mic and say a word. Three times, then command it from a wander.
+    /// A daytime sit lasts only 3...6 s on its own; the "say a word" prompt keeps it down until the prompt times out, so a slower player still gets the rep.
+    func testTeachSitFromTheBookRowWithRealTiming() {
+        let r = make()
+        r.brain.idleReset(r.rig.skinner)
+        for i in 0..<VoiceTuning.repsToLearn {
+            r.voice.show(.sit)
+            XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit }, "the row starts the sit (rep \(i + 1))")
+            r.run(6.0)          // longer than a daytime sit's 3...6 s (plus 1.15 s sitting down), still inside the 8 s prompt
+            XCTAssertEqual(r.brain.idleState.kind, .sit, "the taught sit is held while the prompt is up")
+            r.say("sit", settle: 0.1)
+            XCTAssertEqual(r.voice.training.lesson(.sit).reps, i + 1, "rep \(i + 1) counted")
+            r.run(8)            // the prompt is gone: the sit ends on its own
+            if r.brain.idleState.kind == .sit { r.run(8) }
+        }
+        XCTAssertTrue(r.voice.training.isLearned(.sit))
+        XCTAssertNil(r.voice.teachPrompt)
+        r.brain.idleReset(r.rig.skinner)
+        r.brain.requestNow(.goTo(SIMD2(1.5, 0.6)))
+        XCTAssertTrue(r.run(2) { r.brain.activity == .walking })
+        r.say("sit", settle: 0)
+        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .sit }, "the learned word sits him from a wander")
+    }
+
+    /// An unanswered prompt times out, so the held sit is not stuck forever.
+    func testTeachPromptTimesOutAndReleasesTheSit() {
+        let r = make()
+        r.brain.idleReset(r.rig.skinner)
+        r.voice.show(.sit)
+        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit })
+        XCTAssertTrue(r.run(30) { r.brain.idleState.kind != .sit }, "after the prompt expires the sit ends")
+        XCTAssertNil(r.voice.teachPrompt)
+    }
+
     func testCommandWorksInFocus() {
         let r = make()
         r.voice.training.debugLearn(.sit, word: "sit")

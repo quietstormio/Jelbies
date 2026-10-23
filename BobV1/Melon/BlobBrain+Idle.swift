@@ -733,7 +733,9 @@ extension BlobBrain {
                 if phT >= 1.15 && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
             case 2:     // hold
                 k = 1
-                if phT >= idleState.hold { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
+                // teaching: while the "say a word" prompt is up a commanded sit stays down, so the mic can still be pressed while he does it
+                let teachingHold = trainingLock && idleState.kind == .sit && !idleState.yielding
+                if phT >= idleState.hold && !teachingHold { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
             case 3:     // get up: the body rises while the feet step back under him
                 k = 1 - smooth01(phT / 1.0)
                 if !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
@@ -777,7 +779,7 @@ extension BlobBrain {
                 if !turning && !feet.active { idleState.phase = 1; idleState.phaseT = 0 }
             case 1:     // look: a small nod / tilt
                 k = 1
-                if phT >= idleState.hold { idleState.phase = 2; idleState.phaseT = 0 }
+                if phT >= idleState.hold && !(trainingLock && idleState.kind == .look && !idleState.yielding) { idleState.phase = 2; idleState.phaseT = 0 }
             default:    // look back: lean off, turn back to the camera (or the heading he had)
                 k = max(0, k - dt / 0.5)
                 let home = (facePlayerWhenIdle && idleState.kind != .stopLook) ? faceCameraYaw() : idleState.baseYaw

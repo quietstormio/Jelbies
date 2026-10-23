@@ -21,14 +21,21 @@ struct GameScreen: View {
     @State private var goOutOpen = false                      // the Go out menu (Track / Store / Jelly Show) is unfolded
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
     @State private var bagWho: Int?
+    @State private var settingsOpen = false                   // the gear's Settings popover (Accessibility / Studio)
+    @State private var a11yOpen = UserDefaults.standard.integer(forKey: "A11yPanelOpen") != 0      // the Accessibility sheet (-A11yPanelOpen 1: captures)
+    @State private var careNatural: CGSize?                   // the open paw menu's natural size (it scrolls when the screen is too short)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     @State private var extrasOpen = false                     // Siri & Lock Screen panel (Live Activity toggles, Siri tip)
     /// Every way into the game (widget links, Siri, the App Group queue) lands here; `apply` runs the routes on the care flows.
     private let router = GameRouter.shared
     private var jellyNames: [String] { model.care.jellies.map(\.name) }
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
+    @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
+    @State private var hudPerkH: CGFloat = 0          // measured: the perk badge row under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
+    private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive }
     private func setUpSelect() {
@@ -52,11 +59,12 @@ struct GameScreen: View {
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
-                .opacity(menuOpen || goOutOpen ? 0.22 : 0)
+                .opacity(menuOpen || goOutOpen || settingsOpen ? 0.22 : 0)
                 .ignoresSafeArea()
-                .allowsHitTesting(menuOpen || goOutOpen)
-                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; goOutOpen = false } }
-                .animation(.easeInOut(duration: 0.25), value: menuOpen || goOutOpen)
+                .allowsHitTesting(menuOpen || goOutOpen || settingsOpen)
+                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; goOutOpen = false; settingsOpen = false } }
+                .animation(.easeInOut(duration: 0.25), value: menuOpen || goOutOpen || settingsOpen)
+                .accessibilityHidden(true)          // the menus carry an Escape action instead
 
             TouchHeartsView(play: model.touch, care: model.care)
 
@@ -75,6 +83,8 @@ struct GameScreen: View {
                 }
             }
 
+            CaptionsView(center: .shared)          // sound captions (Accessibility settings; off by default)
+
             RefusalLabel(care: model.care)
 
             // HUD
@@ -83,7 +93,7 @@ struct GameScreen: View {
                 VStack {
                     HStack {
                         if focus.showsRelease {
-                            ReleaseButton { withAnimation(CareMenu.spring) { model.care.release() } }
+                            ReleaseButton(name: model.care.focusGroup.ids.count == 1 ? model.care.jelly(model.care.focusGroup.ids[0])?.name : nil) { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
                             GameCircleButton(systemName: "rectangle.portrait.on.rectangle.portrait.angled", label: "Condition card") {
                                 AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
@@ -91,15 +101,16 @@ struct GameScreen: View {
                             .accessibilityIdentifier("focus-card")
                             .transition(.opacity)
                         } else if !focus.isActive, !cleaning, !racing {
-                            GameCircleButton(systemName: "gearshape", label: "Studio") {
-                                model.paused = true
-                                showStudio = true
+                            GameCircleButton(systemName: "gearshape", label: "Settings") {
+                                AudioHub.shared.uiTap()
+                                withAnimation(CareMenu.spring) { settingsOpen.toggle(); if settingsOpen { soundOpen = false; extrasOpen = false; menuOpen = false; goOutOpen = false } }
                             }
+                            .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
                             .accessibilityIdentifier("studio-button")
                             .transition(.opacity)
                             GameCircleButton(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false } }
+                                withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
                             }
                             .accessibilityIdentifier("sound-button")
                             .transition(.opacity)
@@ -107,7 +118,7 @@ struct GameScreen: View {
                                 .transition(.opacity)
                             GameCircleButton(systemName: extrasOpen ? "sparkles.rectangle.stack.fill" : "sparkles.rectangle.stack", label: "Siri and Lock Screen") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false } }
+                                withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false; settingsOpen = false } }
                             }
                             .accessibilityIdentifier("extras-button")
                             .transition(.opacity)
@@ -121,12 +132,16 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 }
+                    .accessibilityElement(children: .contain)
+                    .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     if !focus.isActive, !cleaning, !racing {
                         HStack { Spacer(); PerkBadgeRow(care: model.care) }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudPerkH = $0 }
                     }
                     Spacer()
                     if focus.showsDock {
-                        FocusHint()                       // no tabs: the gesture decides; a first-time hint that fades after 4 s
+                        FocusHint(interacted: { model.touch.contact || model.care.voice.mode.phase != .idle })                       // no tabs: the gesture decides; a first-time hint that fades after 4 s
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
@@ -144,10 +159,14 @@ struct GameScreen: View {
                                         VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
                                     }
                             }
+                            .accessibilityElement(children: .contain)
+                            .accessibilitySortPriority(3)
                             Spacer()
                             // RIGHT: the one main control (group / individual), alone
                             if !focus.isActive {
-                                careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                                careSlot.transition(a11yMotionReduced ? .opacity : .scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                                    .accessibilityElement(children: .contain)
+                                    .accessibilitySortPriority(1)
                             }
                         }
                         .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
@@ -163,6 +182,9 @@ struct GameScreen: View {
                         .transition(.opacity)
                 }
             }
+            .jHUDCap()
+            .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudPerkH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
+                - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
             }
 
             BathChrome(care: model.care)
@@ -185,6 +207,14 @@ struct GameScreen: View {
             RosterPanel(care: model.care, open: $rosterOpen) { id in model.care.rosterPick(id) }
                 .padding(.top, 8)
 
+            if settingsOpen {
+                SettingsMenu(openAccessibility: { withAnimation(CareMenu.spring) { settingsOpen = false }; a11yOpen = true },
+                             openStudio: { withAnimation(CareMenu.spring) { settingsOpen = false }; model.paused = true; showStudio = true },
+                             close: { withAnimation(CareMenu.spring) { settingsOpen = false } })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 16).padding(.top, 52)
+                    .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
+            }
             if soundOpen {
                 SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -200,6 +230,7 @@ struct GameScreen: View {
         }
         .background(Color.black)
         .onAppear {
+            A11ySettings.shared.systemReduceMotion = reduceMotionEnv
             setUpSelect(); model.care.touchPlay = model.touch
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
@@ -217,6 +248,12 @@ struct GameScreen: View {
             router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
             JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
+        }
+        .onChange(of: reduceMotionEnv) { _, on in A11ySettings.shared.systemReduceMotion = on }          // camera / effects only; the jelly physics never changes
+        .sheet(isPresented: $a11yOpen) {
+            AccessibilitySettingsView { a11yOpen = false }
+                .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
+                .presentationBackground(SK.cream)
         }
         .onOpenURL { url in _ = router.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|train|pet
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
@@ -278,10 +315,12 @@ struct GameScreen: View {
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.
     private var careSlot: some View {
-        CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
-                 openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
-                 openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
-            .padding(.trailing, 4)
+        CareScroller(natural: $careNatural) {
+            CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
+                     openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
+                     openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
+        }
+        .padding(.trailing, 4)
 
     }
 
@@ -590,9 +629,12 @@ struct GameCircleButton: View {
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+                .frame(width: 44, height: 44)          // 44 pt hit target around the 36 pt disc
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .accessibilityShowsLargeContentViewer { Label(label, systemImage: systemName) }
     }
 }
 
@@ -627,8 +669,12 @@ struct CareMenu: View {
     /// Compete is unfolded into its two chips (Track / Jelly Show).
     @State private var competeRow = false
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var dts
+    @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
+    @AccessibilityFocusState private var focusedRow: HUDItem?
+    private var calm: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
-    private var iconSize: CGFloat { tight ? 40 : 54 }
+    private var iconSize: CGFloat { tight ? 44 : 54 }
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
@@ -645,7 +691,10 @@ struct CareMenu: View {
             }
             mainButton
         }
-        .onChange(of: open) { _, isOpen in if !isOpen { picker = nil; snackPicker = false; competeRow = false } }
+        .onChange(of: open) { _, isOpen in
+            if !isOpen { picker = nil; snackPicker = false; competeRow = false }
+            else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.items(mode).first } }      // focus moves into the opened rows
+        }
         .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; snackPicker = false; competeRow = false } }
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
@@ -667,11 +716,11 @@ struct CareMenu: View {
                         Image(systemName: UIImage(systemName: c.symbol) != nil ? c.symbol : "drop.fill")
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Self.brown)
-                            .frame(width: tight ? 38 : 46, height: tight ? 38 : 46)
+                            .frame(width: tight ? 44 : 46, height: tight ? 44 : 46)
                             .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                         Text(c.name)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .jFont(12, .semibold)
                             .foregroundStyle(Self.brown)
                             .padding(.horizontal, 8).padding(.vertical, 2)
                             .background(Capsule().fill(Self.cream))
@@ -692,7 +741,7 @@ struct CareMenu: View {
         let list = care.store.snacks
         return HStack(spacing: 10) {
             if list.isEmpty {
-                Text("None yet. Visit the Shop!").font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(Self.brown)
+                Text("None yet. Visit the Shop!").jFont(13, .semibold).foregroundStyle(Self.brown)
                     .padding(.horizontal, 12).padding(.vertical, 8).background(Capsule().fill(Self.cream))
             }
             ForEach(Array(list.prefix(4).enumerated()), id: \.element.item.id) { i, s in
@@ -703,10 +752,10 @@ struct CareMenu: View {
                 } label: {
                     VStack(spacing: 3) {
                         ItemArt(item: s.item, size: 50).overlay(alignment: .topTrailing) {
-                            Text("\(s.count)").font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
+                            Text("\(s.count)").jFont(11, .black).foregroundStyle(.white)
                                 .frame(minWidth: 18, minHeight: 18).background(Circle().fill(FocusStyle.pink)).offset(x: 5, y: -5)
                         }
-                        Text(s.item.name).font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(Self.brown).lineLimit(1)
+                        Text(s.item.name).jFont(11, .semibold).foregroundStyle(Self.brown).lineLimit(1)
                             .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Self.cream))
                     }
                 }
@@ -732,10 +781,10 @@ struct CareMenu: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: o.1).font(.system(size: 15, weight: .semibold))
-                        Text(o.0).font(.system(size: 15, weight: .semibold, design: .rounded))
+                        Text(o.0).jFont(15, .semibold)
                     }
                     .foregroundStyle(Self.brown)
-                    .padding(.horizontal, 14).frame(minHeight: tight ? 36 : 44)
+                    .padding(.horizontal, 14).frame(minHeight: 44)
                     .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
                     .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                     .opacity(o.3 ? 1 : 0.45)
@@ -768,13 +817,14 @@ struct CareMenu: View {
         let fromBottom = count - 1 - index          // 0 = nearest the main button
         let on = HUDMenu.enabled(item, mode, care: care)
         let title = HUDMenu.title(item, mode, care: care)
+        let reason = HUDMenu.disabledReason(item, mode, care: care)
         return Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             tap(item)
         } label: {
             HStack(spacing: 10) {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .jFont(16, .semibold)
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
                     .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
@@ -791,7 +841,9 @@ struct CareMenu: View {
         .disabled(!on)
         .accessibilityIdentifier(item.rawValue)
         .accessibilityLabel(title)
-        .transition(.scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+        .accessibilityHint(reason ?? "")
+        .accessibilityFocused($focusedRow, equals: item)
+        .transition(calm ? .opacity : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
             .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
             .animation(Self.spring.delay(Double(fromBottom) * 0.05)))
     }
@@ -800,18 +852,18 @@ struct CareMenu: View {
     @ViewBuilder private var nameCapsule: some View {
         if case .individual(let id) = mode, let name = care.jelly(id)?.name {
             HStack(spacing: 6) {
-                Text(name).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Self.brown)
+                Text(name).jFont(15, .bold).foregroundStyle(Self.brown)
                     .accessibilityIdentifier("hud-name")
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                     withAnimation(Self.spring) { care.clearHighlight() }
                 } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(Self.brown.opacity(0.6))
-                        .frame(width: 30, height: 36).contentShape(Rectangle())
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("hud-clear").accessibilityLabel("Let go of \(name)")
             }
-            .padding(.leading, 14).padding(.trailing, 4).frame(minHeight: 36)
+            .padding(.leading, 14).padding(.trailing, 0).frame(minHeight: 44)
             .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
             .transition(.scale(scale: 0.6, anchor: .trailing).combined(with: .opacity))
@@ -852,6 +904,11 @@ struct CareMenu: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("care-menu")
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
+            .accessibilityValue(open ? "expanded" : "collapsed")
+            .accessibilityHint(who.map { "Shows care actions for \($0)" } ?? "Shows care actions for everyone")
+            .accessibilityAction(.escape) { withAnimation(Self.spring) { open = false } }
+            .accessibilityShowsLargeContentViewer { Label(who.map { "\($0)'s menu" } ?? "Care menu", systemImage: "pawprint.fill") }
+            .keyboardShortcut("p", modifiers: .command)
         }
         .animation(Self.spring, value: who)
     }
@@ -869,7 +926,9 @@ enum FocusStyle {
 
 /// "Let Bob go": the only way out of focus mode (top-left).
 struct ReleaseButton: View {
+    var name: String? = nil          // the Jelbie in the close-up (nil = more than one: "them")
     let action: () -> Void
+    var title: String { name.map { "Let \($0) go" } ?? "Let them go" }
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
@@ -878,30 +937,41 @@ struct ReleaseButton: View {
             HStack(spacing: 7) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 13, weight: .bold))
-                Text("Let Bob go")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                Text(title)
+                    .jFont(16, .semibold)
             }
             .foregroundStyle(FocusStyle.brown)
-            .padding(.horizontal, 16).padding(.vertical, 10)
+            .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
             .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("focus-release")
-        .accessibilityLabel("Let Bob go")
+        .accessibilityLabel(title)
+        .accessibilityHint("Goes back to the room")
+        .keyboardShortcut(.escape, modifiers: [])
     }
 }
 
 /// The first-time hint in focus mode: "Rub to pet · double-tap & hold to pick up · flick to throw". Shown for the first few visits only, fades after 4 s.
 struct FocusHint: View {
     static let key = "FocusHintSeen"
-    @State private var shown = UserDefaults.standard.integer(forKey: FocusHint.key) < 3
+    @State private var shown = UserDefaults.standard.integer(forKey: FocusHint.key) < 3 || UIAccessibility.isVoiceOverRunning
     @State private var visible = true
+    /// True once the player has touched the Jelbie or used the mic (polled while the hint is sticky).
+    var interacted: () -> Bool = { false }
+    /// The VoiceOver wording names the pet / pat / toss rotor actions; flip to true when they exist (Accessibility part B).
+    static var petActionsInRotor = false
+    /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
+    private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
+    private var text: String {
+        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelbie to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
+    }
 
     var body: some View {
         if shown {
-            Text("Rub to pet · double-tap & hold to pick up · flick to throw")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+            Text(text)
+                .jFont(15, .semibold)
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.horizontal, 18).padding(.vertical, 10)
                 .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
@@ -911,7 +981,12 @@ struct FocusHint: View {
                 .accessibilityIdentifier("focus-hint")
                 .task {
                     UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                    try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    if sticky {          // stays until the first touch or mic use (or 60 s, so it never lingers for good)
+                        var waited = 0.0
+                        while !Task.isCancelled, waited < 60, !interacted() { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
+                    } else {
+                        try? await Task.sleep(nanoseconds: 3_500_000_000)
+                    }
                     withAnimation(.easeOut(duration: 0.5)) { visible = false }
                 }
         }

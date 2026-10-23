@@ -99,8 +99,12 @@ struct CoursePicker: View {
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(picked ? SK.honey : Color.white.opacity(open ? 0.9 : 0.55)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? SK.honeyDeep : .clear, lineWidth: 2))
             .opacity(open ? 1 : 0.8)
+            .overlay(alignment: .topTrailing) {
+                if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink).padding(5) }          // not colour alone
+            }
         }
         .buttonStyle(.plain)
+        .accessibilityValue(picked ? "picked" : "")
         .accessibilityIdentifier("course-\(t.rawValue)")
         .accessibilityLabel("\(t.title), \(t.className) class\(open ? "" : ", locked")")
         .accessibilityAddTraits(picked ? .isSelected : [])

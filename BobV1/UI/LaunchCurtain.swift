@@ -68,18 +68,22 @@ struct LaunchCurtain: View {
     var hour: Double?
 
     @State private var bounce = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if gate.visible || hour != nil { content.transition(.opacity) }
+        else { Color.clear.frame(width: 0, height: 0).onAppear { A11yAnnounce.say("Your Jelbies are ready", priority: .low) } }          // the curtain went: say so once
     }
 
     private var content: some View {
         let h = hour ?? DayClock.shared.hour
-        return LaunchCurtainArt(hour: h, bounce: bounce)
+        return LaunchCurtainArt(hour: h, bounce: bounce && !(reduceMotion || A11ySettings.shared.reduceMotion))
             .ignoresSafeArea()
             .onAppear { bounce = true }
             .task { while !Task.isCancelled, gate.visible { gate.evaluate(); try? await Task.sleep(nanoseconds: 80_000_000) } }
-            .accessibilityHidden(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Jelbies is loading")
+            .accessibilityIdentifier("launch-curtain")
     }
 }
 
@@ -100,7 +104,7 @@ struct LaunchCurtainArt: View {
                 VStack(spacing: 14 * u) {
                     Image(systemName: glyph(phase)).font(.system(size: 34 * u, weight: .bold))
                         .foregroundStyle(night ? SK.honey : SK.honeyDeep)
-                    Text("Jelbies").font(SK.font(54 * u)).foregroundStyle(night ? SK.cream : SK.ink)
+                    Text("Jelbies").font(.system(size: 54 * u, weight: .heavy, design: .rounded)).foregroundStyle(night ? SK.cream : SK.ink)
                     HStack(spacing: 14 * u) {
                         dot(Color(hex: 0x6EB3D1), 0, u)
                         dot(SK.honey, 1, u)

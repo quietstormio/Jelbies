@@ -13,5 +13,8 @@ struct BobV1App: App {
         WindowGroup {
             ContentView()
         }
+        AssistiveAccess {          // Assistive Access: a simplified care scene (Accessibility/SimpleCareScene.swift)
+            SimpleCareScene()
+        }
     }
 }

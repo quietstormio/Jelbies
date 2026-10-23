@@ -72,8 +72,10 @@ struct EarsButton: View {
                     }
                 }
                 .animation(.spring(duration: 0.3), value: hearing)
+                .frame(width: 44, height: 44).contentShape(Circle())          // 44 pt hit target
         }
         .buttonStyle(.plain)
+        .accessibilityShowsLargeContentViewer { Label(label(st, hearing), systemImage: symbol) }
         .accessibilityLabel(label(st, hearing))
         .accessibilityIdentifier("ears-button")
     }
@@ -105,20 +107,20 @@ struct EarsSettingsRow: View {
         let on = Binding<Bool>(get: { ears.state.isOn }, set: { ears.setOn($0) })
         VStack(alignment: .leading, spacing: tight ? 2 : 4) {
             Toggle(isOn: on) {
-                Label("Ears", systemImage: "ear.fill").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                Label("Ears", systemImage: "ear.fill").jFont(15, .semibold).foregroundStyle(ink)
             }
             .tint(tint)
             .controlSize(tight ? .small : .regular)
             .disabled(ears.state == .denied)
             .accessibilityIdentifier("sound-ears-toggle")
             Text(ears.state == .denied ? Self.deniedText : Self.privacyText)
-                .font(.system(size: tight ? 11 : 12, weight: .regular, design: .rounded))
+                .jFont(tight ? 11 : 12, .regular)
                 .foregroundStyle(ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("sound-ears-privacy")
             if ears.state == .denied {
                 Button("Open Settings") { ears.openSettings() }
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .jFont(13, .semibold)
                     .foregroundStyle(tint)
                     .buttonStyle(.plain)
             }
