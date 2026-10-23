@@ -123,8 +123,11 @@ final class GameCare {
     /// The Jelly Show (Show/ShowFlow.swift, GameCare+Show.swift): the trip to the stage and back, the three rounds, the Studio's dance drill.
     let show = ShowFlow()
     @ObservationIgnored let showBook = ShowBook()
-    /// A trip is on: the race track or the show stage (the room's care, close-up and roaming wait).
-    var tripActive: Bool { race.active || show.active }
+    /// The café outing (Cafe/CafeTrip.swift, GameCare+Cafe.swift): the trip to the café and back, the menu, the treats.
+    let cafe = CafeTrip()
+    @ObservationIgnored let cafeBook = CafeBook()
+    /// A trip is on: the race track, the show stage or the café (the room's care, close-up and roaming wait).
+    var tripActive: Bool { race.active || show.active || cafe.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -238,6 +241,7 @@ final class GameCare {
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()
+        wireCafe()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }
@@ -440,6 +444,8 @@ final class GameCare {
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
         resetStandWalk()
     }
+    /// The café's serving (GameCare+Cafe.swift): a group serving that skips the trip guard; `tickGroup` takes the café's hooks (cafeBook.hooks).
+    func beginCafeServing(_ c: Consumable) { mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0 }
     func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil }
 
     /// Floor obstacle for the brain's resolver: pushes a point out of the tray.

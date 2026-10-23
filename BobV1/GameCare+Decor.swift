@@ -13,6 +13,7 @@ import simd
 /// What the room last drew for the decor.
 struct DecorDrawn {
     var storeRevision = -1
+    var cafeHidden = false
     var fieldVersion = -1
     var active: Set<Int> = []
     var activeShown = false
@@ -21,9 +22,10 @@ struct DecorDrawn {
 extension GameCare {
     /// The placed pieces reach the field (and so the walk resolver and the Jellies) the moment the store changes.
     func syncDecor() {
-        if store.revision != decorDrawn.storeRevision {
-            decorDrawn.storeRevision = store.revision
-            DecorField.shared.set(store.placedDecor)
+        let hide = cafe.hidesDecor          // in the café the room's furniture is away (it is not that room)
+        if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden {
+            decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide
+            DecorField.shared.set(hide ? [] : store.placedDecor)
         }
     }
 

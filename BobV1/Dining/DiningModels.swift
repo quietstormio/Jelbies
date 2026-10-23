@@ -306,7 +306,7 @@ nonisolated enum DiningModels {
     /// A store food's piece for the hand (centred on the origin).
     static func heldPiece(_ f: Consumable, index gi: Int, scale s: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
-        f.piece?(b, .zero, gi % 3, s, f.palette)
+        if let pp = f.placePiece { pp(b, .zero, gi / 3, gi % 3, s) } else { f.piece?(b, .zero, gi % 3, s, f.palette) }
         return b.mesh
     }
 
@@ -779,11 +779,11 @@ nonisolated enum DiningModels {
     // MARK: The whole tray group (tray-local)
 
     /// Opaque and translucent meshes of the tray with its serving: food (plate, pieces, resting forks) or a drink (glass / can + a straw per Blob).
-    static func trayGroup(layout L: TrayLayout, serving f: Consumable, state: ServingState, forksResting: Set<Int> = [], theme: RoomTheme)
+    static func trayGroup(layout L: TrayLayout, serving f: Consumable, state: ServingState, forksResting: Set<Int> = [], theme: RoomTheme, tableSkin: RoomMesh? = nil)
         -> (opaque: RoomMesh, translucent: RoomMesh) {
         let b = RoomMeshBuilder(); b.material = .plain
         let t = RoomMeshBuilder(); t.material = .plain
-        append(tray(layout: L, theme: theme), to: b, transform: matrix_identity_float4x4)
+        append(tableSkin ?? tray(layout: L, theme: theme), to: b, transform: matrix_identity_float4x4)          // the café swaps the tray for its table
         #if DEBUG || DINING_PREVIEW
         if previewGhosts, L.n > 1 { append(ghostBlobs(layout: L), to: b, transform: matrix_identity_float4x4) }
         #endif

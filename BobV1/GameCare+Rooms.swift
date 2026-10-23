@@ -75,7 +75,7 @@ extension GameCare {
     }
 
     /// Sets one Jelbie down at `p`, at rest (the same steps the Clean uses to place him in the tub).
-    private func rehome(_ a: JellyActor, at p: SIMD2<Float>) {
+    func rehome(_ a: JellyActor, at p: SIMD2<Float>) {
         guard let brain = a.brain else { a.sim.teleport(toXZ: p); return }
         brain.abortScript(a.sim, a.skinner)
         brain.pending = nil
@@ -89,7 +89,7 @@ extension GameCare {
 
     /// At launch (GameCare.init): the saved room is the one the collision, roam floor and renderer use. `-Room loft` (capture aid) moves in at once.
     func applySavedRoom() {
-        if let s = UserDefaults.standard.string(forKey: "Room"), let id = RoomID(rawValue: s) {
+        if let s = UserDefaults.standard.string(forKey: "Room"), let id = RoomID(rawValue: s), id != .cafe {
             if id != .home { store.grant("room-\(id.rawValue)") }
             store.moveIn(id)
         }

@@ -83,6 +83,8 @@ typealias ContainerBuilder = @Sendable (_ n: Int, _ palette: ConsumablePalette, 
 
 /// One piece of a plate food, built around its centre `c` (tray-local), `j` = which of a Jelly's three, `s` = the serving scale.
 typealias PieceBuilder = @Sendable (_ b: RoomMeshBuilder, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) -> Void
+/// A mixed plate (the café): a piece builder chosen by PLACE (place, j = which of his three, s = the serving scale), built around the centre `c`.
+typealias PlacePieceBuilder = @Sendable (_ b: RoomMeshBuilder, _ c: SIMD3<Float>, _ place: Int, _ j: Int, _ s: Float) -> Void
 
 nonisolated struct Consumable {
     let id: String
@@ -104,6 +106,8 @@ nonisolated struct Consumable {
     var stored = false
     var pizzaLayout = false
     var piece: PieceBuilder? = nil
+    /// The café's mixed plate: a different treat per place (set with `piece`; the held piece and the plate use it when present).
+    var placePiece: PlacePieceBuilder? = nil
     var perk: PerkKind? = nil
     var condition: [ConditionKey: Float] = [:]
     var chew: SFX = .chomp

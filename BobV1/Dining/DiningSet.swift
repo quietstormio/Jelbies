@@ -129,6 +129,10 @@ final class DiningSet {
     private(set) var n = 1
     private(set) var layout = DiningLayout.make(n: 1)
     private(set) var serving: Consumable = Consumables.berries
+    /// The café's table for n diners (nil / returns nil = the usual tray). A visual swap only: the colliders and stands are the tray's.
+    var tableSkin: ((Int) -> RoomMesh?)? = nil {
+        didSet { groupKey = ""; worldKey = ""; dirty = true }
+    }
     /// Bites left per Blob (every serving = 3 bites each).
     private(set) var bitesLeft: [Int] = [3]
     private(set) var pieceInHand: [Int?] = [nil]
@@ -403,10 +407,10 @@ final class DiningSet {
         let s = scale
         if phase != .absent && s > 0.05 {
             let skipped = Set((0..<n).compactMap { i in pieceInHand[i].map { i * 3 + $0 } })
-            let key = "\(serving.id)-\(n)-\(bitesLeft)-\(skipped.sorted())"
+            let key = "\(serving.id)-\(n)-\(bitesLeft)-\(skipped.sorted())-\(tableSkin != nil)"
             if key != groupKey {
                 groupKey = key
-                let g = D.trayGroup(layout: layout, serving: serving, state: ServingState(n: n, bitesLeft: bitesLeft, skipped: skipped), theme: theme)
+                let g = D.trayGroup(layout: layout, serving: serving, state: ServingState(n: n, bitesLeft: bitesLeft, skipped: skipped), theme: theme, tableSkin: tableSkin?(n))
                 groupOpaque = g.opaque; groupTranslucent = g.translucent
                 trayShadow(theme)
             }
@@ -468,7 +472,7 @@ final class DiningSet {
         let m: RoomMesh
         if serving.id == Consumables.pizza.id { m = DiningModels.heldSlice(scale: layout.scale) }
         else if serving.pizzaLayout && serving.piece == nil { m = DiningModels.heldSlice(scale: layout.scale, palette: serving.palette) }
-        else if serving.piece != nil { m = DiningModels.heldPiece(serving, index: gi, scale: layout.scale) }
+        else if serving.piece != nil || serving.placePiece != nil { m = DiningModels.heldPiece(serving, index: gi, scale: layout.scale) }
         else { m = DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale) }
         heldBerry[key] = m; return m
     }

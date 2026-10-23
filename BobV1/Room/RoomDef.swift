@@ -7,16 +7,16 @@
 import simd
 import Foundation
 
-nonisolated enum RoomID: String, Codable, CaseIterable, Sendable { case home, loft, cabin }
+nonisolated enum RoomID: String, Codable, CaseIterable, Sendable { case home, loft, cabin, cafe }
 
 nonisolated struct RoomWindows: Equatable, Sendable {
     var xs: [Float]; var halfW: Float; var y0: Float; var y1: Float
     /// true = RoomGeometry draws the frame / mullions / sill (home); false = the Blender art carries them.
     var proceduralFrames: Bool
 }
-nonisolated enum FloorStyle: Int, Sendable { case chevron = 0, longPlank = 1, roughPlank = 2 }
+nonisolated enum FloorStyle: Int, Sendable { case chevron = 0, longPlank = 1, roughPlank = 2, tile = 3 }
 nonisolated enum WallStyle: Int, Sendable { case plain = 0, brick = 1, logs = 2 }
-nonisolated enum RugStyle: Int, Sendable { case rings = 0, stripes = 1, braided = 2 }
+nonisolated enum RugStyle: Int, Sendable { case rings = 0, stripes = 1, braided = 2, inlay = 3 }
 
 nonisolated struct RoomDef: Equatable, Sendable {
     var id: RoomID
@@ -67,6 +67,7 @@ nonisolated enum RoomCatalog {
         windows: RoomWindows(xs: [-2.6, 2.6], halfW: 0.75, y0: 1.7, y1: 3.5, proceduralFrames: false),
         floor: .roughPlank, wall: .logs, rug: .braided, art: "cabin")
 
+    /// The livable, buyable rooms. The café (CafeRoom.swift) is a visiting room and is NOT in this list.
     static let all: [RoomDef] = [home, loft, cabin]
-    static func def(_ id: RoomID) -> RoomDef { all.first { $0.id == id } ?? home }
+    static func def(_ id: RoomID) -> RoomDef { id == .cafe ? cafe : (all.first { $0.id == id } ?? home) }
 }

@@ -28,7 +28,8 @@ nonisolated enum FoodMeshes {
         for id in resourceIDs { if let m = load(id) { out[id] = m } }
         return out
     }()
-    static let resourceIDs = ["nuggets", "nuggets_1", "nuggets_2", "fries", "sushi", "sandwich", "minipizza", "taco", "donut", "popsicle", "onigiri", "cookie"]
+    static let resourceIDs = ["nuggets", "nuggets_1", "nuggets_2", "fries", "sushi", "sandwich", "minipizza", "taco", "donut", "popsicle", "onigiri", "cookie",
+                                         "swirl", "pancakes", "sundae", "fizzmac", "cafetable_1", "cafetable_2", "cafetable_3"]
 
     static func load(_ id: String) -> Mesh? {
         let url = Bundle.main.url(forResource: "food_\(id)", withExtension: "bin") ?? Bundle(for: Token.self).url(forResource: "food_\(id)", withExtension: "bin")
@@ -80,5 +81,16 @@ nonisolated enum FoodMeshes {
             b.triangle(a, bb, cc)
         }
         return true
+    }
+
+    /// A whole bundled mesh as a RoomMesh, untransformed (the café table skins), or nil when its resource is missing.
+    static func mesh(id: String) -> RoomMesh? {
+        guard let m = loaded[id] else { return nil }
+        var out = RoomMesh()
+        for k in 0..<m.positions.count {
+            out.vertices.append(RoomVertex(pos: SIMD4(m.positions[k], RoomMaterial.plain.rawValue), normal: SIMD4(m.normals[k], m.ao[k]), color: SIMD4(m.colors[k], 1)))
+        }
+        out.indices = m.indices.map { UInt32($0) }
+        return out
     }
 }
