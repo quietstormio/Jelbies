@@ -286,7 +286,7 @@ final class GameCare {
     /// The roster: tapping a card plays the outline highlight on that Blob (works with one Blob too), then the action button shows for him.
     func rosterPick(_ id: Int, quietHop: Bool = false) {
         guard !focus.isActive else { return }
-        select.highlight(id, quietHop: quietHop)
+        select.pick(id, quietHop: quietHop, instant: selectBrain(id)?.isSleeping ?? false)          // a sleeper gets the ring at once and stays asleep
     }
     func applyBubble(_ events: [BubbleSchedule.Event], from id: Int = 0) {
         guard id == bubbleHub.owner else { return }          // only the Jelly holding the slot may change it

@@ -1,65 +1,27 @@
 //
 //  SelectionOverlay.swift
 //  The multi-Blob highlight, drawn over the stage: preview Blobs (DEBUG / SELECT_PREVIEW only), the dimming of the others, the outline that
-//  draws from the top centre down both sides and meets at the bottom (with a spark), the soft pulsing glow, and the "Play with <name>?" chip.
+//  draws from the top centre down both sides and meets at the bottom (with a spark), the soft pulsing glow, and the persistent floor ring of a settled pick.
 //
 
 import SwiftUI
 import simd
 
 struct SelectionOverlay: View {
-    /// The chip springs in 2x faster than the care menu (was CareMenu.spring, response 0.38).
-    static let spring = Animation.spring(response: 0.19, dampingFraction: 0.68)
     let select: BlobSelect
 
     var body: some View {
         ZStack {
-            // Perf: with one Blob and no highlight there is nothing to animate, so the full-screen Canvas must not redraw at display rate.
-            TimelineView(.animation(paused: !select.isSelecting && !select.blobs.contains { $0.floor != nil })) { tl in      // (stand-in previews are DEBUG only)
+            // Perf: with no highlight and no pick there is nothing to animate, so the full-screen Canvas must not redraw at display rate.
+            // A settled pick only pulses its floor ring, which needs 30 Hz, not 120.
+            TimelineView(.animation(minimumInterval: select.isSelecting ? nil : 1.0 / 30,
+                                    paused: !select.isSelecting && select.highlighted == nil && !select.blobs.contains { $0.floor != nil })) { tl in      // (stand-in previews are DEBUG only)
                 let frame = tl.date          // the Canvas must read the timeline's date, or SwiftUI reuses its last drawing and the draw never animates
                 Canvas { ctx, size in _ = frame; SelectionPainter.paint(&ctx, size: size, select: select) }
             }
             .allowsHitTesting(false)
             .ignoresSafeArea()
-            if select.chipVisible, let name = select.selectedName {
-                VStack {
-                    Spacer()
-                    SelectChip(name: name, yes: { withAnimation(SelectionOverlay.spring) { select.confirm() } }, no: { withAnimation(SelectionOverlay.spring) { select.cancel() } })
-                        .padding(.bottom, 30)
-                        .transition(.move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.8)))
-                }
-            }
         }
-        .animation(SelectionOverlay.spring, value: select.chipVisible)
-    }
-}
-
-/// "Play with Pip?" with a check and a cross.
-struct SelectChip: View {
-    let name: String
-    let yes: () -> Void
-    let no: () -> Void
-    var body: some View {
-        HStack(spacing: 12) {
-            Text("Play with \(name)?")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(FocusStyle.brown)
-                .padding(.leading, 8)
-            Button(action: { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); no() }) {
-                Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(FocusStyle.brown)
-                    .frame(width: 40, height: 40).background(Circle().fill(Color.white.opacity(0.85)))
-            }
-            .buttonStyle(.plain).accessibilityIdentifier("select-cancel").accessibilityLabel("Cancel")
-            Button(action: { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); AudioHub.shared.uiConfirm(); yes() }) {
-                Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 40, height: 40).background(Circle().fill(FocusStyle.pink))
-            }
-            .buttonStyle(.plain).accessibilityIdentifier("select-confirm").accessibilityLabel("Play with \(name)")
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.22), radius: 9, y: 4))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-        .accessibilityIdentifier("select-chip")
     }
 }
 
@@ -71,6 +33,7 @@ enum SelectionPainter {
 
     static func paint(_ ctx: inout GraphicsContext, size: CGSize, select: BlobSelect) {
         let t = select.clock
+        if select.selectedID == nil { paintRing(&ctx, select: select, time: CACurrentMediaTime()) }
         // preview Blobs (stand-ins for a 2nd / 3rd Blob until the renderer draws several)
         for b in select.blobs where b.floor != nil {
             paintPreview(&ctx, b, select: select)

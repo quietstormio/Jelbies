@@ -83,7 +83,7 @@ extension GameCare {
     var bubbleJellyName: String { jelly(bubbleHub.owner)?.name ?? "Bob" }
 
     /// The pointed-at Jelly lights up (several Jellies only: a one-Jelly game keeps its screen exactly as it was).
-    func selectForBubble(_ id: Int) { if jellyCount > 1 { select.highlight(id) } }
+    func selectForBubble(_ id: Int) { if jellyCount > 1 { select.pick(id, instant: selectBrain(id)?.isSleeping ?? false) } }
 
     /// A tap on the bubble of Jelly 1...: select him and run the action with his id.
     func tapOtherBubble() -> BubbleAction? {

@@ -56,7 +56,6 @@ extension GameCare {
     func selectBrain(_ id: Int) -> BlobBrain? { raceBook.actors.indices.contains(id) ? raceBook.actors[id].brain : nil }
 
     func wireRace() {
-        select.holdFor = { [weak self] id in guard let b = self?.selectBrain(id) else { return false }; return b.isLying && b.sleep.wakeAsked }          // (only a poked sleeper rolling up holds the outline back)
         race.wallet = bath.wallet
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }

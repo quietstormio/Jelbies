@@ -958,6 +958,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             // every Jelly's outline comes from his own skinned vertices
             model.care.select.publish(viewProj: cam.viewProj, size: pts, points: { screenPoints(of: $0, pts, cam.viewProj) })
         }
+        if game, let h = model.care.select.highlighted, h < actors.count, !model.paused, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging {
+            model.care.select.publishRing(id: h, floor: actors[h].floor, viewProj: cam.viewProj, size: pts)          // the persistent pick's floor ring
+        }
         let camIn = game && model.care.focus.blend > 0.25
         var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).map { $0.sim.centroid() }) : rig.light(centroid: c)
         if game { light.intensity *= DayLight.at(hour: DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
@@ -1161,9 +1164,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
-        if let id = model.care.select.hit(p) {          // a Jelly under the finger: select him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
-            if model.care.select.selectedID == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
-            model.care.select.doubleTap(id); return
+        if let id = model.care.select.hit(p) {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
+            if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
+            model.care.tapJelly(id); return
         }
         if let uid = decorUnderFinger(p) { model.care.pickUpDecor(uid) }          // a placed piece (and no Jelly in front of it): pick it up to move it
     }
@@ -1186,7 +1189,11 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// A tap on the floor (not on a Blob) cancels a pending selection.
     func gameSingleTap(_ p: CGPoint) {
         let sel = model.care.select
-        if game, sel.isSelecting, sel.hit(p) == nil { sel.cancel() }
+        if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1 {
+            if let id = pickJelly(p, touchSize)?.id ?? { refreshOutlines(); return sel.hit(p) }() { model.care.tapJelly(id); return }          // a Jelbie: highlight him
+            if sel.isSelecting { sel.cancel() }                                                       // the floor: let go of the highlight
+            if sel.highlighted != nil { model.care.clearHighlight() }
+        } else if game, sel.isSelecting, sel.hit(p) == nil { sel.cancel() }
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()

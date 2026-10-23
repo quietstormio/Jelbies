@@ -237,7 +237,7 @@ final class BobV1UITests: XCTestCase {
         app.launch()
         let menu = app.buttons["care-menu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 20))
-        let feed = app.buttons["care-feed"], water = app.buttons["care-water"], call = app.buttons["care-call"]
+        let feed = app.buttons["care-feed"], water = app.buttons["care-water"]
         XCTAssertFalse(feed.exists, "collapsed menu hides its actions")
 
         func waitFor(_ format: String, _ element: XCUIElement, _ timeout: TimeInterval = 20, _ message: String) {
@@ -248,7 +248,6 @@ final class BobV1UITests: XCTestCase {
             menu.tap()
             XCTAssertTrue(feed.waitForExistence(timeout: 10), "menu expands")
             XCTAssertTrue(water.exists)
-            XCTAssertTrue(call.exists)
         }
         func choose(_ b: XCUIElement) {
             b.tap()
@@ -265,7 +264,7 @@ final class BobV1UITests: XCTestCase {
         }
 
         open()
-        XCTAssertTrue(feed.isEnabled && water.isEnabled && call.isEnabled)
+        XCTAssertTrue(feed.isEnabled && water.isEnabled)
         // Feed opens a tiny picker of the catalogue's foods; choosing one starts it and collapses the menu
         feed.tap()
         let berries = app.buttons["care-food-berries"], pizza = app.buttons["care-food-pizza"]
@@ -274,21 +273,13 @@ final class BobV1UITests: XCTestCase {
         choose(pizza)
         waitFor("exists == false", feed, 10, "menu collapses after choosing a food")
 
-        // the tray is out (one tray at a time): Feed and Drink are disabled, Call is not
+        // the tray is out (one tray at a time): Feed and Drink are disabled
         open()
         waitFor("isEnabled == false", feed, 10, "Feed is disabled while the tray is out")
         XCTAssertFalse(water.isEnabled, "Drink waits for the tray too (one tray at a time)")
-        XCTAssertTrue(call.isEnabled)
-        // calling him over drops the meal: the tray poofs away and the buttons come back
-        choose(call)
-        // Come here starts focus mode (the care menu hides); "Let Bob go" is the only way out
-        let release = app.buttons["focus-release"]
-        XCTAssertTrue(release.waitForExistence(timeout: 60), "Come here ends in focus mode with the release button")
-        XCTAssertFalse(menu.exists, "the care menu hides in focus mode")
-        XCTAssertFalse(app.buttons["studio-button"].exists, "the settings gear hides in focus mode")
-        release.tap()
-        XCTAssertTrue(menu.waitForExistence(timeout: 20), "the care menu is back after the release")
-
+        // (Come here left the menu: the close-up opens from Train tricks / voice / his bubble)
+        menu.tap()
+        waitFor("exists == false", feed, 10, "the menu closes")
         open()
         waitFor("isEnabled == true", feed, 180, "Feed is available again once the tray is gone")
         waitFor("isEnabled == true", water, 180, "Drink is available again once the tray is gone")

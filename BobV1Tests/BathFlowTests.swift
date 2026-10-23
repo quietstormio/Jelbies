@@ -77,10 +77,16 @@ final class CleanRun {
         bath.touch(contact: true, hitLocal: l, world: c + l, speed: 2.5, dt: sim.stepDt)
     }
 
-    func run(_ seconds: Float, scrubbing: Bool = true, until: (() -> Bool)? = nil) {
+    /// Seconds spent in the finish card so far (autoNext presses Done after a beat).
+    var finishAge: Float = 0
+    /// `autoNext`: like a patient player, press Next when a stage is complete and Done on the finish card (the bath no longer advances by itself).
+    func run(_ seconds: Float, scrubbing: Bool = true, autoNext: Bool = true, until: (() -> Bool)? = nil) {
         for _ in 0..<Int(seconds * 60) {
             if scrubbing { scrub() }
             tick()
+            if autoNext, bath.stageComplete { care.nextCleanStep() }
+            if bath.phase == .finish { finishAge += sim.stepDt } else { finishAge = 0 }
+            if autoNext, bath.phase == .finish, bath.wipe == 0, finishAge > 0.5 { care.finishClean() }
             if let until, until() { break }
         }
     }
@@ -133,7 +139,7 @@ final class BathFlowTests: XCTestCase {
         XCTAssertEqual(l.coverage, 1, accuracy: 1e-5)
         // scrubbing the front reaches the soap threshold
         var s = BathLook()
-        for k in 0..<400 {
+        for k in 0..<1200 {
             let t = Float(k) * 0.05
             let az = sinf(t * 3.1) * 1.3, polar = 1.5 + 0.9 * sinf(t * 1.3)
             s.paint(local: SIMD3(sinf(polar) * sinf(az), cosf(polar), sinf(polar) * cosf(az)) * 0.62, radius: 0.18, amount: 0.4)
@@ -242,13 +248,111 @@ final class BathFlowTests: XCTestCase {
         XCTAssertLessThan(simd_distance(r.rig.root, p), 0.8, "back at the front spot " + r.posLog.suffix(30).joined(separator: " | "))
     }
 
+    // MARK: the player completes every stage
+
+    private func reachSoapDone(_ r: CleanRun) {
+        r.care.clean()
+        r.run(60, autoNext: false, until: { r.bath.phase == .soap && r.bath.stageComplete })
+    }
+
+    func testSoapWaitsForNext() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        reachSoapDone(r)
+        XCTAssertEqual(r.bath.phase, .soap); XCTAssertTrue(r.bath.stageComplete); XCTAssertEqual(r.bath.progress, 1)
+        r.run(40, autoNext: false)
+        XCTAssertEqual(r.bath.phase, .soap, "40 more seconds of scrubbing: still soap"); XCTAssertEqual(r.bath.progress, 1)
+        XCTAssertEqual(r.bath.prompt, "All soapy! Tap Next")
+        r.care.nextCleanStep()
+        XCTAssertEqual(r.bath.phase, .rinse); XCTAssertFalse(r.bath.stageComplete)
+        XCTAssertEqual(r.bath.prompt, "Rinse all the suds off")
+    }
+
+    func testRinseAndShineWaitForNext() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        reachSoapDone(r)
+        r.care.nextCleanStep()
+        r.run(60, autoNext: false, until: { r.bath.stageComplete })
+        XCTAssertEqual(r.bath.phase, .rinse); XCTAssertTrue(r.bath.stageComplete)
+        r.run(20, autoNext: false); XCTAssertEqual(r.bath.phase, .rinse, "rinse waits")
+        XCTAssertEqual(r.bath.prompt, "Squeaky clean! Tap Next")
+        r.care.nextCleanStep()
+        XCTAssertEqual(r.bath.phase, .shine); XCTAssertFalse(r.bath.stageComplete)
+        r.run(60, autoNext: false, until: { r.bath.stageComplete })
+        XCTAssertEqual(r.bath.phase, .shine); XCTAssertTrue(r.bath.stageComplete)
+        r.run(20, autoNext: false); XCTAssertEqual(r.bath.phase, .shine, "shine waits")
+        r.care.nextCleanStep()
+        XCTAssertEqual(r.bath.phase, .finish)
+    }
+
+    func testNextIsIgnoredBeforeTheStageIsDone() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        r.care.clean()
+        r.run(60, autoNext: false, until: { r.bath.phase == .soap && r.bath.look.coverage > 0.3 })
+        XCTAssertFalse(r.bath.stageComplete)
+        r.care.nextCleanStep()
+        XCTAssertEqual(r.bath.phase, .soap, "Next does nothing while the soap is not done")
+        r.bath.advance(); XCTAssertEqual(r.bath.phase, .soap)
+    }
+
+    func testFinishWaitsForDone() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        r.care.clean()
+        r.run(120, until: { r.bath.phase == .finish })
+        XCTAssertEqual(r.bath.phase, .finish)
+        r.run(10, scrubbing: false, autoNext: false)
+        XCTAssertEqual(r.bath.phase, .finish, "the finish card waits"); XCTAssertEqual(r.bath.wipe, 0)
+        r.care.finishClean()
+        r.run(20, scrubbing: false, autoNext: false, until: { r.bath.phase == .off })
+        XCTAssertEqual(r.bath.phase, .off)
+    }
+
+    func testNoDemoScrubsInNormalPlay() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        XCTAssertFalse(r.bath.demo)
+        r.care.clean()
+        r.run(30, scrubbing: false, autoNext: false, until: { r.bath.phase == .soap })
+        XCTAssertEqual(r.bath.phase, .soap)
+        r.run(10, scrubbing: false, autoNext: false)
+        XCTAssertEqual(r.bath.look.coverage, 0, accuracy: 1e-6); XCTAssertEqual(r.bath.progress, 0)
+        XCTAssertEqual(r.bath.phase, .soap)
+    }
+
+    func testPromptsArePersistentPerStage() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        r.care.clean()
+        r.run(30, scrubbing: false, autoNext: false, until: { r.bath.phase == .soap })
+        var seen = Set<String>()
+        func sample(_ label: String) {
+            for _ in 0..<12 {
+                r.run(0.5, scrubbing: false, autoNext: false)
+                XCTAssertNotNil(r.bath.prompt, "\(label): the prompt stays up"); seen.insert(r.bath.prompt ?? "")
+            }
+        }
+        sample("soap")
+        r.run(60, autoNext: false, until: { r.bath.stageComplete })
+        XCTAssertNotEqual(r.bath.prompt, "Scrub on the jelly soap", "the prompt changes on completion")
+        r.care.nextCleanStep()
+        sample("rinse")
+        XCTAssertTrue(seen.contains("Scrub on the jelly soap")); XCTAssertTrue(seen.contains("Rinse all the suds off"))
+    }
+
+    func testFeetAttachedWhileWaitingInTheTub() {
+        let r = CleanRun(dirt: 0.5); Self.keep.append(r)
+        reachSoapDone(r)
+        r.run(20, scrubbing: false, autoNext: false)
+        XCTAssertEqual(r.bath.phase, .soap)
+        FeetAttachTests.check("waiting in the tub", r.feet, frames: r.feetFrames)
+        XCTAssertGreaterThan(r.feetFrames, 100)
+        XCTAssertLessThanOrEqual(r.arms.capMax, ArmCap.maximum * 1.02, "arms within the wave's maximum")
+    }
+
     func testNoSparkleBeforeShine() {
         let r = CleanRun(dirt: 0.5)
         Self.keep.append(r)
         r.care.bath.grime.sparkle = 0.9
         r.care.clean()
         var worst: Float = 0
-        r.run(40, until: {
+        r.run(120, until: {
             if r.bath.phase == .soap || r.bath.phase == .rinse { worst = max(worst, r.bath.look.sparkle) }
             return r.bath.phase == .shine
         })

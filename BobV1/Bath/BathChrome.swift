@@ -13,6 +13,24 @@ struct BathChrome: View {
         (.soap, "Jelly Soap", "bubbles.and.sparkles.fill"),
         (.rinse, "Rinse", "drop.fill"), (.shine, "Shine", "sparkles")]
     private var bath: BathFlow { care.bath }
+    @Environment(\.verticalSizeClass) private var vsc
+    @State private var pulse = false
+
+    /// "Next": the stage's goal is met; the player moves on when ready (nothing advances by itself).
+    private var nextButton: some View {
+        Button { care.nextCleanStep() } label: {
+            Text("Next")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 30).frame(minHeight: 44)
+                .background(Capsule().fill(FocusStyle.pink).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(pulse ? 1.06 : 1)
+        .onAppear { withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { pulse = true } }
+        .transition(.scale.combined(with: .opacity))
+        .accessibilityIdentifier("bath-next")
+    }
 
     var body: some View {
         ZStack {
@@ -52,12 +70,20 @@ struct BathChrome: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
+                        } else if vsc == .compact {
+                            toolBar
+                            HStack(spacing: 12) {
+                                ProgressBar(value: bath.progress).frame(height: 6).accessibilityIdentifier("bath-progress")
+                                if bath.stageComplete { nextButton }
+                            }
+                            .padding(.horizontal, 24)
                         } else {
                             toolBar
                             ProgressBar(value: bath.progress)
                                 .frame(height: 6)
                                 .padding(.horizontal, 24)
                                 .accessibilityIdentifier("bath-progress")
+                            if bath.stageComplete { nextButton }
                         }
                     }
                     .padding(.bottom, 14)
@@ -65,6 +91,7 @@ struct BathChrome: View {
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .animation(.easeInOut(duration: 0.2), value: bath.phase)
                 .animation(.easeInOut(duration: 0.2), value: bath.prompt)
+                .animation(.easeInOut(duration: 0.2), value: bath.stageComplete)
                 .transition(.opacity)
             }
             Color.white.opacity(Double(bath.wipe))          // the fade to white; the world swaps only while this is fully opaque
@@ -84,6 +111,12 @@ struct BathChrome: View {
                         .background(Circle().fill(on ? Color.white : CareMenu.cream).shadow(color: .black.opacity(on ? 0.25 : 0.1), radius: on ? 7 : 3, y: 2))
                         .overlay(Circle().strokeBorder(on ? Color(red: 0.36, green: 0.62, blue: 0.95) : Color.white.opacity(0.5), lineWidth: on ? 2.5 : 1))
                         .scaleEffect(on ? 1.1 : 1)
+                        .overlay(alignment: .topTrailing) {
+                            if on && bath.stageComplete {
+                                Image(systemName: "checkmark.circle.fill").font(.system(size: 17)).foregroundStyle(.white, Color(red: 0.36, green: 0.78, blue: 0.5))
+                                    .offset(x: 4, y: -4).transition(.scale)
+                            }
+                        }
                     Text(t.1)
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .padding(.horizontal, 7).padding(.vertical, 2)

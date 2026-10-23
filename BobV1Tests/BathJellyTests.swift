@@ -86,7 +86,7 @@ final class BathJellyTests: XCTestCase {
 
         var t: Float = 0, maxZ: Float = 0, phases: [BathPhase] = [], inTubAt: SIMD2<Float>?
         var soapStyle: Float = -1
-        for _ in 0..<(60 * 90) {
+        for _ in 0..<(60 * 240) {
             scrub(care, moss, t)
             step(care, actors)
             t += 1.0 / 60
@@ -96,7 +96,8 @@ final class BathJellyTests: XCTestCase {
             XCTAssertEqual(bob.floor.x, bobBefore.x, accuracy: 0.05, "Bob stays where he was"); XCTAssertEqual(bob.floor.y, bobBefore.y, accuracy: 0.05)
             if care.bath.phase == .finish { XCTAssertEqual(care.jelly(0)!.grime.dirt, bobDirt) }
             if t > 3, !care.bath.active { break }
-            if care.bath.phase == .finish, care.bath.wipe == 0 { care.finishClean(jelly: 2) }
+            if care.bath.stageComplete { care.nextCleanStep() }
+            if care.bath.phase == .finish, phases.last == .finish, care.bath.wipe == 0 { care.finishClean(jelly: 2) }          // (Done, a step after the finish card showed)
         }
         XCTAssertTrue(phases.contains(.exit) && phases.contains(.soap) && phases.contains(.rinse) && phases.contains(.shine) && phases.contains(.finish), "\(phases)")
         XCTAssertFalse(care.bath.active, "back in the room")

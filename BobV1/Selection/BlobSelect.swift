@@ -1,13 +1,13 @@
 //
 //  BlobSelect.swift
-//  Multi-Blob selection (the code path for 2-3 Blobs; the game has one for now).
+//  Multi-Blob selection.
 //
-//  - 1 Blob: the action button (care menu) is always visible and acts on him. No select step.
-//  - 2-3 Blobs: the action button is hidden while they roam. A double tap on a Blob starts the OUTLINE HIGHLIGHT: it draws from the top centre of
-//    his silhouette down both sides at once, meeting at the bottom in 1.2 s (a spark; a light tick at the start, a crisp tap when the halves meet),
-//    then a soft pulsing glow, he hops, the others dim, and a "Play with <name>?" chip with check / cross appears.
-//  - Check confirms: the action button appears for that Blob. Cross, or a tap on the floor, cancels.
-//  - Double tap another Blob: the first highlight stops at once and the draw restarts on the new one.
+//  - A tap (or double tap) on a Jelbie HIGHLIGHTS him: the outline draws from the top centre of his silhouette down both sides at once, meeting at
+//    the bottom (a spark; a light tick at the start, a crisp tap when the halves meet), a soft glow, he hops, the others dim. Every draw
+//    confirms itself after the glow; there is no "Play with" chip. The pick then persists (`highlighted`, a floor ring) until a tap on the floor
+//    (`clearHighlight`), and the one main HUD control shows his individual menu.
+//  - A sleeping Jelbie gets the pick instantly (`pick(_, instant: true)`): no draw, no hop, and he stays asleep.
+//  - Another pick stops the first draw on the spot and restarts it on the new Jelbie.
 //
 //  The model is a pure state machine advanced by `tick(dt:)` (the stage's fixed steps), so it runs headless in tests.
 //
@@ -72,6 +72,8 @@ final class BlobSelect {
     @ObservationIgnored private(set) var hopRequest: Int?
     /// Screen silhouettes (points) of every Blob, published by the stage each frame while there are 2+ Blobs; used for hit tests and the outline.
     @ObservationIgnored var outlines: [Int: [CGPoint]] = [:]
+    /// The projected floor ring of the settled pick (SelectionRing.swift).
+    @ObservationIgnored var ring: SelectRing?
     /// The camera the outlines were made with (preview Blobs are placed with it).
     @ObservationIgnored var viewProj = matrix_identity_float4x4
     @ObservationIgnored var viewSize = CGSize.zero
@@ -91,11 +93,11 @@ final class BlobSelect {
         switch phase { case .none: return nil; case .drawing(let id), .pending(let id): return id }
     }
     var selectedName: String? { selectedID.flatMap { id in blobs.first { $0.id == id }?.name } }
-    /// The action button (care menu) is visible: always with one Blob; with several only after a check.
+    /// The action button (care menu) is visible: always with one Blob; with several only after a pick. (Unused by the new HUD; kept for source compatibility.)
     var actionVisible: Bool { count <= 1 || (confirmed != nil && phase == .none) }
-    /// The "Play with <name>?" chip is up.
-    var chipVisible: Bool { if case .pending = phase { return !rosterPick } else { return false } }
-    /// The outline is drawn and glowing (with the chip, or for a roster pick without it).
+    /// The Jelbie whose pick has settled (the persistent highlight); nil while a draw runs or when nothing is picked. While a draw runs use `selectedID`.
+    var highlighted: Int? { phase == .none ? confirmed : nil }
+    /// The outline is drawn and glowing.
     var glowing: Bool { if case .pending = phase { return true } else { return false } }
     /// 0...1 outline draw progress (eased) of the selected Blob; 1 once pending.
     var drawProgress: Float {
@@ -118,6 +120,9 @@ final class BlobSelect {
         blobs = list.isEmpty ? [SelectBlob(id: 0, name: "Bob")] : Array(list.prefix(JellyRoster.maxCount))
         phase = .none; confirmed = nil
     }
+
+    /// Drops the persistent highlight (a tap on empty floor) and stops any draw.
+    func clearHighlight() { confirmed = nil; if phase != .none { cancel() } }
 
     /// The Blob under a screen point (the nearest one when silhouettes overlap), or nil for the floor.
     func hit(_ p: CGPoint) -> Int? {
@@ -191,24 +196,18 @@ final class BlobSelect {
 
     // MARK: events
 
-    /// A double tap on a Blob (while roaming). With one Blob there is no select step.
-    func doubleTap(_ id: Int) {
-        guard count > 1, blobs.contains(where: { $0.id == id }) else { return }
-        if selectedID == id { return }                      // already highlighted: keep going
-        rosterPick = false
-        quiet = false
-        phase = .drawing(id: id)                            // a different Blob stops the first highlight on the spot and restarts the draw
-        confirmed = nil
-        clock = 0; tickFired = false; metFired = false; hopRequest = nil
-        drawStarts += 1
-        arm()
-    }
+    /// A double tap on a Blob: the same as a tap pick.
+    func doubleTap(_ id: Int) { guard count > 1 else { return }; pick(id) }          // (one Blob: no select step)
 
-    /// The roster: tapping a card plays the highlight on that Blob, even with a single Blob. No check chip: after the glow (`autoHold`) the pick
-    /// confirms itself and the action button shows for him.
+    /// Highlights a Jelbie, also with a single Blob. Every draw confirms itself after the glow (`autoHold`).
     /// `quietHop`: no hop when the glow completes (a voice name already has its own hop, and a trick may be running).
-    func highlight(_ id: Int, quietHop: Bool = false) {
+    /// `instant`: a sleeper. No draw, no hop, no `selectedID`: the pick settles at once and he stays asleep.
+    func pick(_ id: Int, quietHop: Bool = false, instant: Bool = false) {
         guard blobs.contains(where: { $0.id == id }) else { return }
+        if instant {
+            phase = .none; confirmed = id; rosterPick = false; waiting = false; hopRequest = nil
+            return
+        }
         if selectedID == id, rosterPick { return }
         quiet = quietHop
         phase = .drawing(id: id)
@@ -217,13 +216,14 @@ final class BlobSelect {
         drawStarts += 1
         arm()
     }
+    func highlight(_ id: Int, quietHop: Bool = false) { pick(id, quietHop: quietHop) }
     /// Seconds the glow holds after the halves meet before a roster pick confirms itself.
     static let autoHold: Float = 1.2
-    /// The current highlight came from the roster (no chip, self-confirming).
+    /// The current draw is self-confirming (every draw is, now).
     @ObservationIgnored private(set) var rosterPick = false
     @ObservationIgnored private var quiet = false
 
-    /// The check on the chip.
+    /// Settles the pick (called by `tick` after the glow).
     func confirm() {
         guard case .pending(let id) = phase else { return }
         rosterPick = false; waiting = false
@@ -231,7 +231,7 @@ final class BlobSelect {
         phase = .none
     }
 
-    /// The cross, or a tap on the floor.
+    /// Stops a draw in progress.
     func cancel() {
         guard phase != .none else { return }
         rosterPick = false; waiting = false

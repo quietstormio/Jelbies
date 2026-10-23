@@ -17,7 +17,11 @@ struct GameScreen: View {
     @State private var bookOpen = false                       // Voice v1 trick book
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
+    @State private var roomsOpen = false
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
+    @State private var goOutOpen = false                      // the Go out menu (Track / Store / Jelly Show) is unfolded
+    @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
+    @State private var bagWho: Int?
     @State private var extrasOpen = false                     // Siri & Lock Screen panel (Live Activity toggles, Siri tip)
     /// Every way into the game (widget links, Siri, the App Group queue) lands here; `apply` runs the routes on the care flows.
     private let router = GameRouter.shared
@@ -47,13 +51,13 @@ struct GameScreen: View {
             MelonStage(model: model)
                 .ignoresSafeArea()
 
-            // dim scrim behind the care menu; a tap anywhere outside collapses it
+            // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
-                .opacity(menuOpen ? 0.22 : 0)
+                .opacity(menuOpen || goOutOpen ? 0.22 : 0)
                 .ignoresSafeArea()
-                .allowsHitTesting(menuOpen)
-                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false } }
-                .animation(.easeInOut(duration: 0.25), value: menuOpen)
+                .allowsHitTesting(menuOpen || goOutOpen)
+                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; goOutOpen = false } }
+                .animation(.easeInOut(duration: 0.25), value: menuOpen || goOutOpen)
 
             TouchHeartsView(play: model.touch, care: model.care)
 
@@ -75,6 +79,7 @@ struct GameScreen: View {
             RefusalLabel(care: model.care)
 
             // HUD
+            GeometryReader { g in
             ZStack {
                 VStack {
                     HStack {
@@ -126,28 +131,44 @@ struct GameScreen: View {
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
-                    if !cleaning, !racing { HStack(alignment: .bottom, spacing: 10) {
-                        VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
-                            .overlay(alignment: .topLeading) {
-                                VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
+                    if !cleaning, !racing {
+                        HStack(alignment: .bottom, spacing: 10) {
+                            // LEFT RAIL: the trick book, the bag and the mic (lifted above the front row of Jelbies)
+                            VStack(spacing: HUDTuning.railGap) {
+                                VoiceBookButton { bookOpen = true }
+                                if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
+                                if !focus.isActive {
+                                    Button { AudioHub.shared.uiTap(); roomsOpen = true } label: {
+                                        Image(systemName: "house.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(SK.ink)
+                                            .frame(width: 48, height: 48)
+                                            .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+                                            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                                    }.buttonStyle(.plain).accessibilityLabel("Rooms").accessibilityIdentifier("rooms-button")
+                                }
+                                VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
+                                    .overlay(alignment: .topLeading) {
+                                        VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
+                                    }
                             }
-                        VStack(spacing: 6) {
-                            VoiceBookButton { bookOpen = true }
-                            if !focus.isActive { BagButton(store: model.care.store) { bagOpen = true } }
+                            Spacer()
+                            // RIGHT CLUSTER: Go out (a menu) and the one main control (group / individual)
+                            if !focus.isActive {
+                                HStack(alignment: .bottom, spacing: HUDTuning.railGap) {
+                                    if !menuOpen {
+                                        GoOutMenu(open: $goOutOpen) { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }
+                                            .transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                                    }
+                                    if !goOutOpen { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
+                                }
+                            }
                         }
-                        .padding(.bottom, focus.isActive ? 4 : 0)
-                        Spacer()
-                        if !focus.isActive { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
+                        .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
                     }
-                    .overlay(alignment: .bottom) {
-                        if !focus.isActive, !model.care.trayOut, !model.care.arranging, !model.care.select.isSelecting, !model.care.select.chipVisible {          // (hidden while a Jelly is picked / the "Play with ...?" chip is up: they share the bottom centre)
-                            GoOutPill { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }.padding(.bottom, 10)
-                        }
-                    } }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+            }
             }
 
             BathChrome(care: model.care)
@@ -229,9 +250,16 @@ struct GameScreen: View {
                 .presentationBackground(FocusStyle.cream)
         }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
-        .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen }
+        .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
+        .onChange(of: roomsOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen || bagOpen }
+        .sheet(isPresented: $roomsOpen) {
+            RoomPickerSheet(care: model.care) { roomsOpen = false }
+                .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
+                .presentationBackground(SK.cream)
+        }
+        .overlay { RoomSwitchVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
-            BagSheet(care: model.care, who: model.care.targetJelly) { bagOpen = false }
+            BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
@@ -243,7 +271,7 @@ struct GameScreen: View {
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
-        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen) }   // on the root: the HUD's pieces come and go with focus mode
+        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $goOutOpen) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
             ZStack(alignment: .topTrailing) {
                 MelonScreen(model: studioModel) {
@@ -259,14 +287,15 @@ struct GameScreen: View {
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.
     private var careSlot: some View {
-        CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker)
+        CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
+                 openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
+                 openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
             .padding(.trailing, 4)
-            .padding(.bottom, 12)
 
     }
 
     /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
-    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false)) async {
+    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<Bool> = .constant(false)) async {
         let d = UserDefaults.standard
         let care = model.care
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
@@ -353,11 +382,41 @@ struct GameScreen: View {
             default: break
             }
         }
+        // capture aids for the HUD: -HUDHighlight n (tap Jelbie n after 4 s), -HUDMenu open (the main control unfolds after 5 s), -HUDGoOut open,
+        // -HUDFrontPark left|right|centre (Jelly 0 walks to the front corner; use with -BlobNoWander 1), -HUDSleepDemo n (Jelbie n sleeps, 500 s hold)
+        if d.object(forKey: "HUDSleepDemo") != nil {
+            let n = d.integer(forKey: "HUDSleepDemo")
+            await sleep(2.5)
+            if care.raceBook.actors.indices.contains(n), let b = care.raceBook.actors[n].brain {
+                b.idleForced = true; _ = b.idleStart(.sleep, care.raceBook.actors[n].sim); b.sleep.hold = 500; b.sleep.holdForce = true
+            }
+        }
+        if let side = d.string(forKey: "HUDFrontPark") {
+            await sleep(3)
+            if let rf = GameCamera.roamFloor {
+                let c = rf.extremeCorners
+                let spot: SIMD2<Float> = side == "left" ? (c.first ?? SIMD2(0, rf.maxZ)) : side == "right" ? (c.count > 1 ? c[1] : SIMD2(0, rf.maxZ)) : SIMD2(0, rf.maxZ)
+                care.selectBrain(0)?.requestNow(.goTo(spot))
+            }
+        }
+        if d.object(forKey: "HUDHighlight") != nil {
+            await sleep(4)
+            care.tapJelly(d.integer(forKey: "HUDHighlight"))
+        }
+        if d.string(forKey: "HUDMenu") == "open" {
+            await sleep(5)
+            withAnimation(CareMenu.spring) { open.wrappedValue = true }
+        }
+        if d.string(forKey: "HUDGoOut") == "open" {
+            await sleep(5)
+            withAnimation(CareMenu.spring) { goOut.wrappedValue = true }
+        }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {
             await sleep(4)
             care.bath.grime.dirt = 0.5
             care.bath.demo = true
+            care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
             care.clean()
         }
         if let a = d.string(forKey: "GameAction") {
@@ -531,54 +590,55 @@ struct GameCircleButton: View {
 
 // MARK: - Care menu
 
-/// The expanding care button (bottom-right): paw -> cross, with Feed / Drink / Come here stacked above it.
+/// The one main HUD control (side of the screen): the paw expands upward into the GROUP controls (nobody highlighted) or into the highlighted
+/// Jelbie's INDIVIDUAL controls (HUDControls.swift decides the rows and what they do).
 struct CareMenu: View {
     @Binding var open: Bool
     let care: GameCare
     /// A thought bubble tap asks for a picker to be unfolded (Feed or Drink).
     @Binding var openPicker: ConsumableKind?
+    /// Dress / Play / Decor ask the screen for the Bag on a tab; Compete asks for the Track / Show screens.
+    var openBag: (BagSheet.BagTab, Int) -> Void = { _, _ in }
+    var openTown: (TownScreen, Int) -> Void = { _, _ in }
 
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
     static let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
     static let brown = Color(red: 0.42, green: 0.34, blue: 0.30)
 
-    private struct Item: Identifiable {
-        let id: String, title: String, symbol: String
-    }
     /// "waterbottle.fill" exists on the deployment target (iOS 26); keep the drop as a fallback.
     static let waterSymbol = UIImage(systemName: "waterbottle.fill") != nil ? "waterbottle.fill" : "drop.fill"
     static let cleanSymbol = UIImage(systemName: "bubbles.and.sparkles") != nil ? "bubbles.and.sparkles" : "sparkles"
     static let raceSymbol = UIImage(systemName: "flag.checkered") != nil ? "flag.checkered" : "flag.fill"
-    // top to bottom
-    private let items = [Item(id: "care-feed", title: "Feed", symbol: "fork.knife"),
-                         Item(id: "care-snacks", title: "Snacks", symbol: "bag.fill"),
-                         Item(id: "care-water", title: "Drink", symbol: CareMenu.waterSymbol),
-                         Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill"),
-                         Item(id: "care-clean", title: "Clean", symbol: CareMenu.cleanSymbol),
-                         Item(id: "care-race", title: "Race", symbol: CareMenu.raceSymbol)]
+
+    private var mode: HUDMode { HUDMenu.mode(care) }
 
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
     /// The Snacks picker (store foods in the bag, with counts) is unfolded.
     @State private var snackPicker = false
+    /// Compete is unfolded into its two chips (Track / Jelly Show).
+    @State private var competeRow = false
     @Environment(\.verticalSizeClass) private var vsc
     private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
     private var iconSize: CGFloat { tight ? 40 : 54 }
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
+        let items = HUDMenu.items(mode)
         VStack(alignment: .trailing, spacing: rowGap) {
             if open {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    row(item, index: index)
-                    if picker == .food, item.id == "care-feed" { pickerRow(Consumables.foods, kind: .food) }
-                    if picker == .drink, item.id == "care-water" { pickerRow(Consumables.drinks, kind: .drink) }
-                    if snackPicker, item.id == "care-snacks" { snackRow }
+                ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
+                    row(item, count: items.count, index: index)
+                    if picker == .food, item == .feed { pickerRow(Consumables.foods, kind: .food) }
+                    if picker == .drink, item == .drink { pickerRow(Consumables.drinks, kind: .drink) }
+                    if snackPicker, item == .snacks { snackRow }
+                    if competeRow, item == .compete { competeChips }
                 }
             }
             mainButton
         }
-        .onChange(of: open) { _, isOpen in if !isOpen { picker = nil; snackPicker = false } }
+        .onChange(of: open) { _, isOpen in if !isOpen { picker = nil; snackPicker = false; competeRow = false } }
+        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; snackPicker = false; competeRow = false } }
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
@@ -650,46 +710,67 @@ struct CareMenu: View {
         .padding(.trailing, 8)
     }
 
-    private func enabled(_ item: Item) -> Bool {
-        switch item.id {
-        case "care-feed", "care-water", "care-snacks": return !care.trayOut && !care.bath.active
-        case "care-clean": return care.canClean(jelly: care.targetJelly)
-        case "care-race": return care.canRace(jelly: care.targetJelly)
-        default: return !care.bath.active
+    /// Compete unfolds into Track (train or race) and Jelly Show, for the highlighted Jelbie.
+    private var competeChips: some View {
+        let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
+        let opts: [(String, String, TownScreen, Bool, String)] = [("Track", Self.raceSymbol, .track, care.canRace(jelly: id), "hud-compete-track"),
+                                                                    ("Jelly Show", "sparkles", .show, care.canShow(jelly: id), "hud-compete-show")]
+        return HStack(spacing: 10) {
+            ForEach(Array(opts.enumerated()), id: \.offset) { i, o in
+                Button {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                    if case .town(let t, let who) = HUDMenu.compete(o.2, id: id) { openTown(t, who) }
+                    withAnimation(Self.spring) { competeRow = false; open = false }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: o.1).font(.system(size: 15, weight: .semibold))
+                        Text(o.0).font(.system(size: 15, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundStyle(Self.brown)
+                    .padding(.horizontal, 14).frame(minHeight: tight ? 36 : 44)
+                    .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                    .opacity(o.3 ? 1 : 0.45)
+                }
+                .buttonStyle(.plain).disabled(!o.3)
+                .accessibilityIdentifier(o.4).accessibilityLabel(o.0)
+                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+            }
         }
+        .padding(.trailing, 8)
     }
 
-    private func row(_ item: Item, index: Int) -> some View {
-        let fromBottom = items.count - 1 - index          // 0 = nearest the main button
-        let on = enabled(item)
+    private func tap(_ item: HUDItem) {
+        let route = HUDMenu.perform(item, mode, care: care)
+        switch route {
+        case .picker(let k):
+            if k == .food { withAnimation(Self.spring) { picker = picker == .food ? nil : .food; snackPicker = false; competeRow = false }; return }
+            if Consumables.drinks.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; snackPicker = false; competeRow = false }; return }
+            care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
+        case .snacks: withAnimation(Self.spring) { snackPicker.toggle(); picker = nil; competeRow = false }; return
+        case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil; snackPicker = false }; return
+        case .bag(let tab, let who): openBag(tab, who)
+        case .town(let t, let who): openTown(t, who)
+        case .none: break
+        }
+        withAnimation(Self.spring) { open = false }
+    }
+
+    private func row(_ item: HUDItem, count: Int, index: Int) -> some View {
+        let fromBottom = count - 1 - index          // 0 = nearest the main button
+        let on = HUDMenu.enabled(item, mode, care: care)
+        let title = HUDMenu.title(item, mode, care: care)
         return Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-            switch item.id {
-            case "care-feed":
-                withAnimation(Self.spring) { picker = picker == .food ? nil : .food; snackPicker = false }
-                return                                       // the picker row chooses; the menu stays open
-            case "care-snacks":
-                withAnimation(Self.spring) { snackPicker.toggle(); picker = nil }
-                return
-            case "care-water":
-                if Consumables.drinks.count >= 2 {
-                    withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink }
-                    return
-                }
-                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)   // one drink: starts directly (nobody singled out = the group serving)
-            case "care-clean": care.clean(jelly: care.targetJelly)
-            case "care-race": care.startRace(jelly: care.targetJelly)
-            default: care.comeHere(jelly: care.targetJelly)
-            }
-            withAnimation(Self.spring) { open = false }
+            tap(item)
         } label: {
             HStack(spacing: 10) {
-                Text(item.title)
+                Text(title)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
                     .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
-                Image(systemName: item.symbol)
+                Image(systemName: HUDMenu.symbol(item))
                     .font(.system(size: tight ? 17 : 21, weight: .semibold))
                     .foregroundStyle(Self.brown)
                     .frame(width: iconSize, height: iconSize)
@@ -700,38 +781,71 @@ struct CareMenu: View {
         }
         .buttonStyle(.plain)
         .disabled(!on)
-        .accessibilityIdentifier(item.id)
-        .accessibilityLabel(item.title)
+        .accessibilityIdentifier(item.rawValue)
+        .accessibilityLabel(title)
         .transition(.scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
             .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
             .animation(Self.spring.delay(Double(fromBottom) * 0.05)))
     }
 
-    private var mainButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-            withAnimation(Self.spring) { open.toggle() }
-        } label: {
-            ZStack {
-                Image(systemName: "pawprint.fill")
-                    .font(.system(size: 27, weight: .semibold))
-                    .opacity(open ? 0 : 1)
-                    .rotationEffect(.degrees(open ? 90 : 0))
-                    .scaleEffect(open ? 0.4 : 1)
-                Image(systemName: "xmark")
-                    .font(.system(size: 24, weight: .bold))
-                    .opacity(open ? 1 : 0)
-                    .rotationEffect(.degrees(open ? 0 : -90))
-                    .scaleEffect(open ? 1 : 0.4)
+    /// The Jelbie's name capsule (individual mode), left of the paw. The cross lets go of the highlight.
+    @ViewBuilder private var nameCapsule: some View {
+        if case .individual(let id) = mode, let name = care.jelly(id)?.name {
+            HStack(spacing: 6) {
+                Text(name).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(Self.brown)
+                    .accessibilityIdentifier("hud-name")
+                Button {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                    withAnimation(Self.spring) { care.clearHighlight() }
+                } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(Self.brown.opacity(0.6))
+                        .frame(width: 30, height: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("hud-clear").accessibilityLabel("Let go of \(name)")
             }
-            .foregroundStyle(Self.brown)
-            .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
-            .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.28), radius: 9, y: 4))
-            .overlay(Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+            .padding(.leading, 14).padding(.trailing, 4).frame(minHeight: 36)
+            .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+            .transition(.scale(scale: 0.6, anchor: .trailing).combined(with: .opacity))
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("care-menu")
-        .accessibilityLabel(open ? "Close care menu" : "Care menu")
+    }
+
+    private var mainButton: some View {
+        var ring: Color? = nil
+        var who: String? = nil
+        if case .individual(let id) = mode, let j = care.jelly(id) {
+            let t = JellyRoster.tint(j.character)
+            ring = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z)); who = j.name
+        }
+        return HStack(spacing: 8) {
+            nameCapsule
+            Button {
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                withAnimation(Self.spring) { open.toggle() }
+            } label: {
+                ZStack {
+                    Image(systemName: "pawprint.fill")
+                        .font(.system(size: 27, weight: .semibold))
+                        .opacity(open ? 0 : 1)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                        .scaleEffect(open ? 0.4 : 1)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 24, weight: .bold))
+                        .opacity(open ? 1 : 0)
+                        .rotationEffect(.degrees(open ? 0 : -90))
+                        .scaleEffect(open ? 1 : 0.4)
+                }
+                .foregroundStyle(Self.brown)
+                .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
+                .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.28), radius: 9, y: 4))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+                .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("care-menu")
+            .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
+        }
+        .animation(Self.spring, value: who)
     }
 }
 
