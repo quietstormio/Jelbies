@@ -44,8 +44,29 @@ enum GoOutDestination: String, CaseIterable {
 /// The round "Go out" button (right side, next to the main control); it opens the GoOutMenu above it.
 struct GoOutButton: View {
     @Binding var open: Bool
+    /// In the left rail: a cream 48 pt circle like the book, bag and mic (no caption).
+    var rail = false
     @Environment(\.verticalSizeClass) private var vsc
     var body: some View {
+        if rail { railButton } else { classic }
+    }
+    private var railButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            withAnimation(CareMenu.spring) { open.toggle() }
+        } label: {
+            ZStack {
+                Image(systemName: "door.left.hand.open").font(.system(size: 19, weight: .heavy)).opacity(open ? 0 : 1).scaleEffect(open ? 0.4 : 1)
+                Image(systemName: "xmark").font(.system(size: 18, weight: .heavy)).opacity(open ? 1 : 0).scaleEffect(open ? 1 : 0.4)
+            }
+            .foregroundStyle(SK.ink).frame(width: 48, height: 48)
+            .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
+    }
+    @ViewBuilder private var classic: some View {
         let size = vsc == .compact ? HUDTuning.goOutSizeTight : HUDTuning.goOutSize
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
@@ -70,12 +91,14 @@ struct GoOutButton: View {
 /// The Go out menu: rows expand upward above the button in the care menu's row style.
 struct GoOutMenu: View {
     @Binding var open: Bool
+    /// In the left rail: the button is the cream rail style and the rows pop up over the rail above it, icon first, leading edge aligned.
+    var rail = false
     var go: (TownScreen) -> Void
     @Environment(\.verticalSizeClass) private var vsc
     var body: some View {
         let tight = vsc == .compact
         let list = GoOutDestination.visible
-        VStack(alignment: .trailing, spacing: tight ? 5 : 14) {
+        let rows = VStack(alignment: rail ? .leading : .trailing, spacing: tight ? 5 : 14) {
             if open {
                 ForEach(Array(list.enumerated()), id: \.element.rawValue) { index, d in
                     let fromBottom = list.count - 1 - index
@@ -85,24 +108,32 @@ struct GoOutMenu: View {
                         if let s = d.screen { go(s) }
                     } label: {
                         HStack(spacing: 10) {
+                            if rail { icon(d, tight: tight) }
                             Text(d.title).font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundStyle(CareMenu.brown)
                                 .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
                                 .background(Capsule().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.18), radius: 6, y: 2))
-                            Image(systemName: d.symbol).font(.system(size: tight ? 17 : 21, weight: .semibold)).foregroundStyle(CareMenu.brown)
-                                .frame(width: tight ? 40 : 54, height: tight ? 40 : 54)
-                                .background(Circle().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.22), radius: 7, y: 3))
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                            if !rail { icon(d, tight: tight) }
                         }
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(d.rawValue).accessibilityLabel(d.title)
-                    .transition(.scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+                    .transition(.scale(scale: 0.3, anchor: rail ? .bottomLeading : .bottomTrailing).combined(with: .opacity)
                         .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
                         .animation(CareMenu.spring.delay(Double(fromBottom) * 0.05)))
                 }
             }
-            GoOutButton(open: $open)
+            if !rail { GoOutButton(open: $open) }
         }
+        if rail {
+            GoOutButton(open: $open, rail: true)
+                .overlay(alignment: .bottomLeading) { rows.fixedSize().offset(y: -(48 + HUDTuning.railGap)) }
+        } else { rows }
+    }
+    private func icon(_ d: GoOutDestination, tight: Bool) -> some View {
+        Image(systemName: d.symbol).font(.system(size: tight ? 17 : 21, weight: .semibold)).foregroundStyle(CareMenu.brown)
+            .frame(width: tight ? 40 : 54, height: tight ? 40 : 54)
+            .background(Circle().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.22), radius: 7, y: 3))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
     }
 }
 
@@ -502,7 +533,7 @@ struct BagSheet: View {
         self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .snacks)          // (-StoreTab decor: capture aid)
     }
 
-    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
+    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
     private var tabs: [BagTab] { BagTab.allCases }
@@ -513,10 +544,13 @@ struct BagSheet: View {
         case .furniture: return StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }
         case .toys: return StoreCatalog.decorItems(.toys).filter { book.count($0.id) > 0 }
         case .care: return StoreCatalog.items(.supply).filter { book.count($0.id) > 0 }
+        case .rooms: return []
         }
     }
     @State private var wearSlot: WearSlot?
-    private func count(_ t: BagTab) -> Int { t == .wear ? StoreCatalog.items.filter { $0.isWearable && book.owns($0) }.count : entries(t).reduce(0) { $0 + book.count($1.id) } }
+    private var ownedRooms: [RoomDef] { RoomCatalog.all.filter { book.ownsRoom($0.id) || care.roomID == $0.id } }
+    @State private var roomRefusal: String?
+    private func count(_ t: BagTab) -> Int { t == .rooms ? ownedRooms.count : t == .wear ? StoreCatalog.items.filter { $0.isWearable && book.owns($0) }.count : entries(t).reduce(0) { $0 + book.count($1.id) } }
 
     var body: some View {
         ScrollView {
@@ -531,14 +565,14 @@ struct BagSheet: View {
                 }
                 boosts
                 WhoRow(care: care, who: $who)
-                HStack(spacing: 8) {
+                ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
-                            Text("\(t.rawValue) \(count(t))").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                            Text("\(t.rawValue) \(count(t))").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
                                 .padding(.horizontal, 12).frame(minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : Color.white.opacity(0.8)))
-                        }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())")
+                        }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())").id(t)
                     }
-                }
+                }.onAppear { proxy.scrollTo(tab, anchor: .center) } } }
                 let list = entries(tab)
                 if tab == .wear { SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && book.owns($0) } }, idPrefix: "bag-slot-") }
                 if tab.isDecor, !book.placedDecor.isEmpty {
@@ -547,14 +581,16 @@ struct BagSheet: View {
                             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48).background(Capsule().fill(SK.honey))
                     }.buttonStyle(.plain).accessibilityIdentifier("bag-arrange")
                 }
-                if list.isEmpty {
+                if list.isEmpty, tab != .rooms {
                     Text(tab == .snacks ? "No snacks yet. The Shop has plenty." : tab == .furniture ? "No furniture yet. Beanbags, sofas and more are in the Shop." : tab == .toys ? "No toys yet. Balls, ducks and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
                         .frame(maxWidth: .infinity, minHeight: 80)
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: vsc == .compact ? 2 : 1), spacing: 10) {
-                    ForEach(list) { row($0) }
+                if tab == .rooms { roomsList } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: vsc == .compact ? 2 : 1), spacing: 10) {
+                        ForEach(list) { row($0) }
+                    }
+                    roomMeter
                 }
-                roomMeter
             }
             .padding(16)
         }
@@ -562,6 +598,40 @@ struct BagSheet: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
         .onAppear { book.markSeen() }
+    }
+
+    /// The rooms the player owns (the home room and the bought ones): choosing one moves the Jelbies in (the same `care.switchRoom` the old picker used).
+    private var roomsList: some View {
+        VStack(spacing: 10) {
+            if let roomRefusal {
+                Text(roomRefusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
+                    .accessibilityIdentifier("bag-room-refusal")
+            }
+            ForEach(ownedRooms, id: \.id) { d in
+                let here = care.roomID == d.id
+                HStack(spacing: 12) {
+                    Image(systemName: "house.fill").font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.8))
+                        .frame(width: 64, height: 64).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.honey.opacity(0.3)))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(d.title).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                        Text(d.blurb).font(SK.font(12, .semibold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    if here {
+                        Text("Home now").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 40)
+                            .background(Capsule().fill(SK.mint.opacity(0.85))).accessibilityIdentifier("bag-room-here-\(d.id.rawValue)")
+                    } else {
+                        pink("Move in", enabled: true) {
+                            if let why = care.switchRoom(d.id) { roomRefusal = why.message } else { close() }
+                        }.accessibilityIdentifier("bag-room-movein-\(d.id.rawValue)")
+                    }
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
+                .accessibilityIdentifier("bag-room-\(d.id.rawValue)")
+            }
+        }
     }
 
     private var boosts: some View {
