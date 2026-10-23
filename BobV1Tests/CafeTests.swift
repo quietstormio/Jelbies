@@ -167,6 +167,7 @@ final class CafeTests: XCTestCase {
         let c = r.care
         c.store.grant("decor-cushion"); XCTAssertNotNil(c.store.place("decor-cushion")); c.syncDecor()
         XCTAssertFalse(DecorField.shared.feet.isEmpty)
+        for a in r.actors { a.brain!.autonomy = true }
         let homeRoom = c.store.currentRoom
         let before = r.actors.map(\.floor)
         enter(r)
@@ -176,6 +177,8 @@ final class CafeTests: XCTestCase {
         for a in r.actors { XCTAssertFalse(a.brain!.autonomy) }
         c.cafe.goHome()
         step(r, 6) { c.cafe.phase == .off }
+        step(r, 2)          // past the leave hold
+        for a in r.actors { XCTAssertTrue(a.brain!.autonomy, "wandering is restored at home") }
         XCTAssertEqual(c.cafe.phase, .off)
         XCTAssertEqual(RoomLayout.current.id, homeRoom)
         XCTAssertFalse(DecorField.shared.feet.isEmpty, "decor is back")
@@ -222,6 +225,17 @@ final class CafeTests: XCTestCase {
         c.cafe.goHome()
         step(r, 20) { !c.zoomiesDue.contains(0) }
         XCTAssertFalse(c.zoomiesDue.contains(0), "the sugar rush fires at home")
+    }
+
+    func testForTableOneJelbieWithTheStagesGate() {
+        let r = room(count: 1, drops: 100)
+        r.stageGate = true
+        enter(r)
+        let c = r.care
+        XCTAssertNil(c.orderCafe(CafeOrder(forTable: .fizzmac)))
+        step(r, 90) { c.cafe.phase == .cheer }
+        XCTAssertEqual(c.cafe.phase, .cheer, "the serving ran without tickOthers")
+        XCTAssertEqual(c.cafeBook.ate[0], 3)
     }
 
     // 9. mixed plate

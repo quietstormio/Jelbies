@@ -36,7 +36,7 @@ struct CafeChrome: View {
                 }
                 if cafe.menuOpen, !cardHidden {
                     if vsc == .compact {
-                        HStack { Spacer(); CafeMenuCard(care: care, compact: true).frame(width: min(320, g.size.width * 0.36)).padding(.vertical, 8).padding(.trailing, 8) }
+                        HStack { Spacer(); CafeMenuCard(care: care, compact: true).frame(width: min(320, g.size.width * 0.36)).padding(.top, 64).padding(.bottom, 8).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
                         VStack { Spacer(); CafeMenuCard(care: care, compact: false).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.bottom, 8) }

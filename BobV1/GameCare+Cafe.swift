@@ -97,14 +97,13 @@ extension GameCare {
         cafe.step(dt: dt, blocked: cafe.phase == .goOut && cafeFadeBlocked)
         guard cafe.active else { return }
         let book = cafeBook
-        if cafe.inScene || cafe.phase == .leaveHold {
+        if cafe.inScene {
             for a in actors { guard let b = a.brain else { continue }; b.autonomy = false; b.idleBlocked = true }
         }
         switch cafe.phase {
         case .arriveIn, .menu:
-            for (k, a) in actors.enumerated() {
+            for a in actors {
                 guard var t = book.hopIn[a.id] else { continue }
-                _ = k
                 t -= dt
                 if t <= 0 {
                     book.hopIn[a.id] = nil
@@ -112,7 +111,7 @@ extension GameCare {
                 } else { book.hopIn[a.id] = t }
             }
         case .eating:
-            if group.isActive || dining.phase != .absent { /* the serving is on */ }
+            if actors.count == 1 { tickGroup(actors, dt: dt) }     // the stage only runs tickOthers (and so tickGroup) with 2+ Jelbies
             let finished = groupWanted == nil && !group.isActive && groupQueue.isEmpty && dining.phase == .absent
             if finished { cafeServingFinished() }
         case .cheer:

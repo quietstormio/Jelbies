@@ -53,6 +53,8 @@ final class DiningJellyTests: XCTestCase {
             for a in actors { a.profile?.needs.set(.hunger, 0.1); a.profile?.needs.set(.thirst, 0.9); a.profile?.needs.set(.attention, 0.9) }
             care.eagerWhenFamished = false
         }
+        /// MelonStage only calls tickOthers with more than one Jelbie.
+        var stageGate = false
         func tick() {
             snapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }
             for a in actors {
@@ -62,7 +64,7 @@ final class DiningJellyTests: XCTestCase {
                 if b.activity == .eating || b.activity == .drinking { sawEating[a.id] = true }
                 if a.id == 0 { care.tick(brain: b, renderer: nil, dt: a.sim.stepDt, sim: a.sim) }
             }
-            care.tickOthers(actors, dt: actors[0].sim.stepDt)
+            if !stageGate || actors.count > 1 { care.tickOthers(actors, dt: actors[0].sim.stepDt) }
             JellyParallel.step(actors.map(\.sim))
             care.refreshHeld(actors: actors, renderer: nil)
             t += actors[0].sim.stepDt
