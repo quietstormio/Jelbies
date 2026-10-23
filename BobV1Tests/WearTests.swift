@@ -232,6 +232,76 @@ final class WearTests: XCTestCase {
         XCTAssertGreaterThan(checked, 100)
     }
 
+    // MARK: medal ribbon (W6)
+
+    private func ribbonIndices(_ p: WearPrepared) -> [Int] {
+        p.rest.indices.filter { p.partNames[Int(p.partOfVertex[$0])].hasPrefix("ribbon") }
+    }
+
+    /// The ribbon is a closed loop: every 15 degree wedge round the body axis holds ribbon, all of it surface-bound.
+    func testMedalRibbonIsAClosedLoopAroundTheBody() {
+        guard let p = WearMeshes.prepare(.medalGold, body: WearBody.shared) else { return XCTFail("medal did not load") }
+        let rib = ribbonIndices(p)
+        XCTAssertFalse(rib.isEmpty)
+        var bins = [Int](repeating: 0, count: 24)
+        for i in rib {
+            XCTAssertEqual(p.w[i], 1, accuracy: 1e-6, "ribbon vertices follow the skin")
+            let a = atan2(p.rest[i].z, p.rest[i].x)
+            bins[min(23, Int((a + .pi) / (2 * .pi) * 24))] += 1
+        }
+        XCTAssertTrue(p.anyBound)
+        for (k, n) in bins.enumerated() { XCTAssertGreaterThan(n, 0, "no ribbon in the \(k * 15 - 180)..\(k * 15 - 165) degree wedge") }
+    }
+
+    func testMedalRibbonClearsTheMouthAndTheShoulders() {
+        guard let p = WearMeshes.prepare(.medalGold, body: WearBody.shared) else { return XCTFail("medal did not load") }
+        for i in ribbonIndices(p) {
+            let r = p.rest[i]
+            if r.z > 0.15 { XCTAssertGreaterThanOrEqual(Self.ellipse(r), 1.0, "ribbon at \(r) is over the mouth") }
+            if abs(r.x) > 0.55, abs(r.z) < 0.12 { XCTAssertGreaterThanOrEqual(r.y, 0.67, "ribbon at the side \(r) dips onto the arm root") }
+            if abs(r.x) < 0.1, r.z < 0 { XCTAssertTrue((0.62...0.74).contains(r.y), "back-centre ribbon at height \(r.y)") }
+        }
+    }
+
+    /// Through a walk, a run and a wave the posed arm capsules never poke the ribbon out (no ribbon vertex deeper than 1.5 cm inside a capsule).
+    func testMedalRibbonStaysOutOfThePosedArms() {
+        WearBody.install(MotionRig.renderMesh)
+        let r = MotionRig(game: true)
+        Self.keep.append(r)
+        r.brain.seed = 11; r.brain.amplitude = 1
+        guard let p = WearMeshes.prepare(.medalGold, body: WearBody.shared) else { return XCTFail("medal did not load") }
+        let rib = ribbonIndices(p)
+        let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
+        var samples = 0, deepest: Float = 0, worst = ""
+        func sample() {
+            guard r.brain.armG > 0.3 else { return }
+            var d = [Float](repeating: 0, count: MotionRig.renderMesh.vertexCount * 6)
+            r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &d)
+            for _ in 0..<30 { w.tick(id: 0, brain: r.brain, sim: r.sim, outfit: [.neck: .medalGold], role: .none, hideAll: false, dt: 1.0 / 60) }
+            let m = frame(w, skin: d)
+            XCTAssertEqual(m.vertices.count, p.rest.count)
+            guard m.vertices.count == p.rest.count else { return }
+            for f in GameCare.armFrames(brain: r.brain, sim: r.sim) {
+                let ab = f.b - f.a, L2 = simd_length_squared(ab)
+                for i in rib where p.rest[i].z < 0.15 {   // the sides and back; a forward-reaching arm may cross the front legs (as it always did the old V) and draws over them
+                    let v = m.vertices[i].pos, q = SIMD3(v.x, v.y, v.z)
+                    let t = L2 > 0 ? max(0, min(1, simd_dot(q - f.a, ab) / L2)) : 0
+                    let r1 = Float(BobForm.armTopR)
+                    let rad = r1 + (f.r2 - r1) * t
+                    let inside = rad - simd_length(q - (f.a + ab * t))
+                    if inside > deepest { deepest = inside; worst = "rest \(p.rest[i]) t \(t) a \(f.a) b \(f.b) r2 \(f.r2) armG \(r.brain.armG) blend \(r.brain.armBlendNow)" }
+                }
+            }
+            samples += 1
+        }
+        r.brain.request(.goTo(SIMD2(1.6, 0.4)))
+        r.run(5) { sample() }
+        r.brain.request(.goTo(SIMD2(-1.2, 1.0)))
+        r.run(4) { sample() }
+        XCTAssertGreaterThan(samples, 20)
+        XCTAssertLessThanOrEqual(deepest, 0.015, "a ribbon vertex is \(deepest) inside a posed arm: \(worst)")
+    }
+
     // MARK: gloves
 
     /// Gloves follow the POSED arm capsule: through walking, a run and an idle the capsule still obeys the arm cap, and every glove vertex stays within

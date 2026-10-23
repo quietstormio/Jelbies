@@ -284,12 +284,22 @@ final class FeatureTests: XCTestCase {
 
     /// A back item with a neck item (bow tie, pearls, scarf ...) or a small head item: the wings ride up over the backpack instead of folding (the neck
     /// items and the ear / clip hats are measured at every shift, wing_limits4.json), and nothing pierces either item through the flap range.
+    /// W6: the medal ribbon is a closed loop round the back; alone it must leave Lavender's wings up, and cost Pip's spines and Moss's daisy nothing.
+    func testMedalAloneKeepsLavendersWingsUp() {
+        let fit = FeatureCompat.solve(.wings, worn: ["medal_gold"])
+        XCTAssertFalse(fit.folded)
+        XCTAssertGreaterThanOrEqual(fit.flapMax, 70)
+        XCTAssertLessThanOrEqual(fit.flapMin, -20)
+        XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["medal_gold"]).hiddenParts.isEmpty)
+        XCTAssertFalse(FeatureCompat.solve(.daisy, worn: ["medal_gold"]).hidden)
+    }
+
     func testWingsStayUpWithABackpackAndANeckItem() {
         let body = WearBody.shared
         let tol: Float = 0.02
         for (back, other) in [("backpack_sky", "bowtie_pink"), ("backpack_sky", "pearls"), ("backpack_sky", "medal_gold"), ("backpack_sky", "scarf_sky"),
                               ("backpack_sky", "bandana_mint"), ("backpack_sky", "whistle_coach"), ("backpack_sky", "cat_ears"), ("backpack_sky", "party_hat"),
-                              ("cape_hero", "bowtie_sky"), ("cape_hero", "pearls"), ("cape_hero", "frog_ears"), ("cape_hero", "tophat")] {
+                              ("cape_hero", "bowtie_sky"), ("cape_hero", "medal_gold"), ("cape_hero", "pearls"), ("cape_hero", "frog_ears"), ("cape_hero", "tophat")] {
             let fit = FeatureCompat.solve(.wings, worn: [back, other])
             XCTAssertFalse(fit.folded, "\(back) + \(other): the wings do not fold")
             XCTAssertGreaterThanOrEqual(fit.wingDY, 0.08, "\(back) + \(other): the wings ride up")

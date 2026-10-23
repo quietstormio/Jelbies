@@ -240,6 +240,46 @@ final class FeatureCaptureTests: XCTestCase {
         try write(labelled(crop, "Bob, Pip (spines), Moss (daisy), Lavender (wings) in the room" + (land ? " (landscape)" : " (portrait)")), d + (land ? "/landscape_lineup.png" : "/lineup_ingame.png"))
     }
 
+    /// W6: the medal ribbon from four angles on all four Jelbies, plus the backpack and cape combos.
+    func testCaptureMedalWrap() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let cols: [(String, Float)] = [("front", 0), ("3/4", 0.7), ("side", .pi / 2), ("back", .pi)]
+        var rows: [UIImage] = []
+        for (name, id) in [("Bob", 0), ("Pip", 1), ("Moss", 2), ("Lavender", 3)] {
+            var cells: [UIImage] = []
+            for (label, yaw) in cols { cells.append(try closeup(Char(id: id, outfit: [.neck: .medalGold]), yaw: yaw, label: "\(name) medal \(label)")) }
+            rows.append(hstack(cells))
+        }
+        var extra: [UIImage] = []
+        for (label, yaw) in [("3/4", Float(0.7)), ("back", Float.pi)] {
+            extra.append(try closeup(Char(id: 3, outfit: [.neck: .medalGold, .body: .backpackSky]), yaw: yaw, label: "Lavender medal + backpack \(label)"))
+        }
+        for (label, yaw) in [("3/4", Float(0.7)), ("back", Float.pi)] {
+            extra.append(try closeup(Char(id: 1, outfit: [.neck: .medalGold, .body: .capeHero]), yaw: yaw, label: "Pip medal + cape \(label)"))
+        }
+        rows.append(hstack(extra))
+        try write(vstack(rows), d + "/medal_wrap.png")
+    }
+
+    func testCaptureMedalLineup() throws {
+        let d = try dir()
+        let land = !(ProcessInfo.processInfo.environment["CHAR_CAP_LAND"] ?? "").isEmpty
+        if land { W = 1311 * 2; H = 603 * 2 } else { W = 603 * 2; H = 1311 * 2 }
+        DayClock.shared.forcedHour = 12
+        let chars = (0..<4).map { Char(id: $0, outfit: [.neck: .medalGold]) }
+        let positions: [SIMD2<Float>] = land ? [SIMD2(-2.6, 0.6), SIMD2(-0.9, 0.9), SIMD2(0.9, 0.9), SIMD2(2.6, 0.6)] : [SIMD2(-1.6, 0.3), SIMD2(-0.55, 1.2), SIMD2(0.55, 1.2), SIMD2(1.6, 0.3)]
+        let lab = setUpLab(positions, chars: chars, seed: 9)
+        for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim); r.brain.idleState.goalYaw = r.faceYaw; r.brain.idleState.hold = 0.01 }
+        for _ in 0..<120 { lab.tick(watching: false) }
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+        let img = composite(lab, dd, chars, ren, target, cam: cam)
+        let crop = cropJellies(img, lab, cam: cam) ?? img.uiImage()!
+        try write(labelled(crop, "Medals on Bob, Pip, Moss, Lavender" + (land ? " (landscape)" : " (portrait)")), d + (land ? "/medal_lineup_landscape.png" : "/medal_lineup_portrait.png"))
+    }
+
     func testCaptureDaisyHats() throws {
         let d = try dir()
         DayClock.shared.forcedHour = 12
