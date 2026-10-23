@@ -389,7 +389,7 @@ struct VoiceTrickBook: View {
     private func teachTyping(_ t: VoiceTrick, _ tr: VoiceTraining) -> some View {
         if typing == t {
             HStack(spacing: 8) {
-                TextField("Type a word for \(t.title)", text: $typedWord)
+                TextField(tr.isLearned(t) ? "Type a command for \(t.title)" : "Type a word for \(t.title)", text: $typedWord)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .playFont(15, .medium)
                     .padding(.horizontal, 12).frame(minHeight: 44)
@@ -401,29 +401,30 @@ struct VoiceTrickBook: View {
                         .frame(width: 44, height: 44).background(Circle().fill(FocusStyle.pink))
                 }
                 .buttonStyle(.plain).disabled(VoiceMatcher.normalise(typedWord).isEmpty)
-                .accessibilityIdentifier("voice-typed-send-\(t.rawValue)").accessibilityLabel("Teach this word")
+                .accessibilityIdentifier("voice-typed-send-\(t.rawValue)").accessibilityLabel(tr.isLearned(t) ? "Send this command" : "Teach this word")
             }
-        } else if !tr.isLearned(t) {
+        } else {
             Button {
                 AudioHub.shared.uiTap()
-                voice.show(t)                                 // he does it now; the typed word binds to this trick
+                if !tr.isLearned(t) { voice.show(t) }         // he does it now; the typed word binds to this trick
                 typedWord = ""; typing = t
             } label: {
-                Label("Teach with typing", systemImage: "keyboard").playFont(14, .bold).foregroundStyle(FocusStyle.brown)
+                Label(tr.isLearned(t) ? "Type a command" : "Teach with typing", systemImage: "keyboard").playFont(14, .bold).foregroundStyle(FocusStyle.brown)
                     .padding(.horizontal, 14).frame(minHeight: 44)
                     .background(Capsule().fill(FocusStyle.brown.opacity(0.1)))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("voice-teach-typing-\(t.rawValue)")
-            .accessibilityHint("Type a word instead of saying it. Each time counts as one lesson.")
+            .accessibilityHint(tr.isLearned(t) ? "Type the word instead of saying it. He may obey, and obeying makes him more reliable." : "Type a word instead of saying it. Each time counts as one lesson.")
         }
     }
 
     private func submitTyped(_ t: VoiceTrick) {
         let w = typedWord
         typedWord = ""
-        voice.typed(w)
-        if voice.book.isLearned(t) { typing = nil }
+        let wasLearned = voice.book.isLearned(t)
+        voice.typed(w, teaching: t)                           // bound to this row's trick, no timeout
+        if !wasLearned && voice.book.isLearned(t) { typing = nil }
     }
 }
 

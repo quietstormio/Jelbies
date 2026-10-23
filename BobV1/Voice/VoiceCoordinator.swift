@@ -269,6 +269,9 @@ final class VoiceCoordinator {
         openCount += 1
         subjectAtOpen = subjectID
         runningAtOpen = brainRef.map { subjectBrain($0) }.flatMap(Self.running)
+        // A trick-book prompt still open binds the listen to its trick even after the move has finished (tap-to-talk under VoiceOver /
+        // Switch Control cannot reach the mic inside a daytime sit; assistive play also ignores the 8 s timeout).
+        runningAtOpen = promptBound(runningAtOpen)
         poseDue = true
         input.onLevel = { [weak self] l in
             guard let self else { return }
@@ -561,10 +564,14 @@ final class VoiceCoordinator {
 
     /// Typed teaching (accessibility): the same step a heard phrase gets, with no microphone. The rep rules are identical (each submit is one listen of
     /// its own). While a trick-book move is the prompt (`show(_:)`), the word binds to THAT trick even after the move has finished.
-    func typed(_ words: String) {
+    /// `teaching` is the trick-book row the field belongs to: an unlearned one binds the word to it with no timeout (the player may take
+    /// longer than the prompt to find the field); a learned one is a plain typed command.
+    func typed(_ words: String, teaching: VoiceTrick? = nil) {
         let text = words.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, mode.phase == .idle, !stopping, care != nil else { return }
-        let prompt = teachPrompt.flatMap { clock() < $0.until ? $0.trick : nil }
+        let prompt: VoiceTrick?
+        if let t = teaching { prompt = book.isLearned(t) ? nil : t }
+        else { prompt = teachPrompt.flatMap { clock() < $0.until ? $0.trick : nil } }
         session = training.newSession()
         subjectAtOpen = subjectID
         runningAtOpen = prompt ?? brainRef.map { subjectBrain($0) }.flatMap(Self.running)
@@ -628,6 +635,11 @@ final class VoiceCoordinator {
         if !b.idleState.yielding, let t = trick(for: b.idleState.kind) { return t }
         return nil
     }
+    /// `running`, or (when he is not doing a trick-able move) the trick of the open trick-book prompt.
+    private func promptBound(_ running: VoiceTrick?) -> VoiceTrick? {
+        if running == nil, let p = teachPrompt, clock() < p.until || A11yAssist.active { return p.trick }
+        return running
+    }
     private func runningNow(_ b: BlobBrain) -> VoiceTrick? { Self.running(b) ?? (voiceGoing || clock() < comeUntil ? .come : nil) }
     /// A listen opened while he was coming (the tutorial keeps saying "hold the mic" through a long hold).
     var listeningToCome: Bool { mode.isListening && runningAtOpen == .come }
@@ -647,7 +659,7 @@ final class VoiceCoordinator {
         if poseDue, listening {
             poseDue = false
             subjectAtOpen = subjectID
-            runningAtOpen = runningNow(subjectBrain(brain))
+            runningAtOpen = promptBound(runningNow(subjectBrain(brain)))
             brain.blinkRequested = true
             let act = brain.activity
             let free = act == .idle || act == .walking || act == .lookingAround || act == .steppingInPlace || act == .turning

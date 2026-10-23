@@ -309,6 +309,47 @@ final class VoiceTypedTeachTests: XCTestCase {
         XCTAssertTrue(A11yAnnounce.log.isEmpty)
     }
 
+    /// The UI's real path: the player finds the field and types well after the 8 s prompt, with no show() before each submit.
+    func testTypedLessonsBindToTheRowTrickWithNoTimeout() {
+        let r = Run(); Self.keep.append(r)
+        r.run(0.3)
+        for i in 0..<VoiceTuning.repsToLearn {
+            r.run(9.5)                                 // far past promptTime; the sit is long over
+            XCTAssertGreaterThan(9.5, VoiceCoordinator.promptTime)
+            r.care.voice.typed("sit", teaching: .sit)
+            r.run(0.3)
+            XCTAssertEqual(r.training.lesson(.sit).reps, i + 1, "late typed lesson \(i + 1) counted")
+        }
+        XCTAssertTrue(r.training.isLearned(.sit))
+    }
+
+    /// Tap-to-talk teaching: the mic opens after the sit has ended, and the still-open trick-book prompt binds the listen.
+    func testTapToTalkTeachingBindsToTheOpenPromptAfterTheMoveEnds() {
+        let r = Run(); Self.keep.append(r)
+        A11yAssist.force = true; defer { A11yAssist.force = false }
+        r.run(0.3)
+        r.care.voice.show(.sit)
+        r.run(9.5)
+        XCTAssertNil(VoiceCoordinator.running(r.rig.brain), "the sit is over before the mic opens")
+        XCTAssertTrue(r.care.voice.begin(), "the mic opens")
+        r.run(0.3)
+        r.care.voice.hear("sit")
+        r.run(0.5)
+        XCTAssertEqual(r.training.lesson(.sit).reps, 1, "a late listen still counts for the open prompt")
+    }
+
+    /// A learned trick keeps a typed command: it goes through command(), not the router's puzzled path, and the learned word is obeyed.
+    func testLearnedTrickAcceptsATypedCommand() {
+        let r = Run(); Self.keep.append(r)
+        r.training.debugLearn(.sit, word: "sit", reliability: 1.0)
+        r.run(0.3)
+        let before = r.training.lesson(.sit).reps
+        r.care.voice.typed("sit", teaching: .sit)
+        r.run(0.6)
+        XCTAssertEqual(r.training.lesson(.sit).reps, before, "a learned trick is commanded, not re-taught")
+        XCTAssertEqual(r.rig.brain.idleState.kind, .sit, "the typed command made him sit")
+    }
+
     func testTapToTalkToggles() {
         let r = Run(); Self.keep.append(r)
         A11ySettings.shared.tapToTalk = true
