@@ -27,7 +27,7 @@ import QuartzCore
 final class AudioHub {
     static let shared = AudioHub()
 
-    var settings: AudioSettings { didSet { if settings != oldValue { settings.save(to: defaults); applyLevels() } } }
+    var settings: AudioSettings { didSet { if settings != oldValue { settings.save(to: defaults); if settings.musicOn != oldValue.musicOn { reapplySession() }; applyLevels() } } }
     /// `-Mute 1` or running under XCTest: no session, no players.
     let muted: Bool
 
@@ -43,6 +43,8 @@ final class AudioHub {
     @ObservationIgnored private var micSession = false
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
     @ObservationIgnored private var earsSession = false
+    /// Another app (Music, Spotify, a podcast) is playing: the game's music + ambience stay silent, effects mix on top. The saved setting is untouched.
+    @ObservationIgnored private(set) var otherAudioPlaying = false
     @ObservationIgnored private var danceGain: Float = 1
     @ObservationIgnored private var danceTarget: Float = 1
     /// How loud the app's own music is on the speaker right now (0...1; the ear's music exclusion reads it).
@@ -95,7 +97,10 @@ final class AudioHub {
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            Task { @MainActor in if type == .ended { self?.resumeAfterInterruption(verify: true) } }
+            Task { @MainActor in if type == .ended { self?.refreshOtherAudio(); self?.resumeAfterInterruption(verify: true) } }
+        })
+        observers.append(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.refreshOtherAudio() }
         })
         observers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.resumeAfterInterruption(verify: true) }
@@ -109,10 +114,26 @@ final class AudioHub {
 
     private func setUpSession() {
         guard !micSession, !earsSession else { return }
+        refreshOtherAudio()
+        let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
         let s = AVAudioSession.sharedInstance()
-        try? s.setCategory(.ambient, mode: .default, options: [])
+        try? s.setCategory(plan.category, mode: .default, options: plan.options)
         try? s.setActive(true)
     }
+
+    /// The music setting flipped: re-apply the (mixing) category live.
+    private func reapplySession() { if started { setUpSession() } }
+
+    /// Reads whether another app is making sound (and the system's silence hint) and re-levels the game's music.
+    private func refreshOtherAudio() {
+        guard !muted else { return }
+        let s = AVAudioSession.sharedInstance()
+        let now = s.isOtherAudioPlaying || s.secondaryAudioShouldBeSilencedHint
+        if now != otherAudioPlaying { otherAudioPlaying = now; applyLevels() }
+    }
+
+    /// Music level the game really uses: the setting, silenced while someone else's audio plays.
+    private var musicLevelNow: Float { SessionPolicy.gameMusicAllowed(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying) ? settings.musicVolume : 0 }
 
     private func resumeAfterInterruption(verify: Bool = false) {
         guard started, active else { return }
@@ -149,6 +170,8 @@ final class AudioHub {
     func _forceGap(_ s: Double) { director.forceGap(s) }
     var _inGap: Bool { director.gapLeft != nil }
     var _micSession: Bool { micSession }
+    var _musicLevelNow: Float { musicLevelNow }
+    func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on }
     var _sceneEngine: SceneMusicEngine? { scene }
     func _tick(_ dt: Double) { _ = dt; tick() }
 
@@ -158,6 +181,7 @@ final class AudioHub {
         active = on
         if on {
             lastTick = CACurrentMediaTime()
+            refreshOtherAudio()
             resumeAfterInterruption(verify: true)
         } else {
             verifyTask?.cancel()
@@ -199,7 +223,7 @@ final class AudioHub {
     var isDucked: Bool { duck.isDucked || duck.listening }
 
     /// Music is on and audible (the Jellies sway to it).
-    var musicAudible: Bool { started && !muted && settings.musicLevel > 0.05 }
+    var musicAudible: Bool { started && !muted && musicLevelNow > 0.05 }
     // MARK: ears (Audio/EarsListener.swift)
 
     /// Ears set its `.playAndRecord` + mixWithOthers session: the hub keeps off the category until `earsSessionEnded`.
@@ -273,7 +297,7 @@ final class AudioHub {
     /// A result jingle (trimmed, faded at its end). Follows the music setting.
     func playJingle(_ j: Jingle) {
         guard !muted, started, active else { return }
-        let level = settings.musicLevel * duck.gain
+        let level = musicLevelNow * duck.gain
         guard level > 0.01, let u = url(j.rawValue), let p = try? AVAudioPlayer(contentsOf: u) else { return }
         jingle?.stop()
         p.volume = min(1, level * 0.7)
@@ -522,7 +546,7 @@ final class AudioHub {
 
     private func applyLevels() {
         guard started else { return }
-        let m = settings.musicLevel * duck.gain * AudioMix.music * danceGain
+        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain
         let main = Float(director.mainGain(playing: input.playing))
         var loud: Float = 0
         for d in decks { d.player.volume = d.fader.level * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }
@@ -534,7 +558,7 @@ final class AudioHub {
         Ears.shared.speakerMusicLevel(loud)
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)
         let b = DayClock.shared.blend
-        let a = settings.musicLevel * duck.gain * AudioMix.ambience
+        let a = musicLevelNow * duck.gain * AudioMix.ambience
         ambDay?.player.volume = Float(b.morning + b.day) * a
         ambEve?.player.volume = Float(b.evening + b.night) * a
     }

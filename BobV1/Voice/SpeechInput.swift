@@ -489,7 +489,8 @@ final class DictationSpeechInput: SpeechInput {
 
     nonisolated private static func activateSessionOffMain() throws {
         let s = AVAudioSession.sharedInstance()
-        try s.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+        let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
+        try s.setCategory(plan.category, mode: .default, options: plan.options)
         try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try s.setActive(true)
         Task { @MainActor in AudioHub.shared.micSessionBegan() }       // the audio hub owns the session; it keeps its hands off while the mic is up
