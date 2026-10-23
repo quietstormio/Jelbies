@@ -6,10 +6,11 @@
 //            lifted for this phase only (`fenceLifted`), so he can run past z = 3 and fill the frame.
 //  fade      fade to white (opaque), swap the world while the overlay is fully opaque (fence back, Bob placed in the tub at `standPoint`, bath
 //            set shown, camera SNAPPED to the bath close-up), hold a couple of frames, fade in. The same in reverse on return / cancel.
-//  soap      foam on the front he presents (grey over the soot); >= 70 % -> rinse
-//  rinse     spray washes the foam (and the soot under it) off; foam < 8 % and wet -> shine
-//  shine     rub: wet dries, sparkle rises, stray soot is wiped; full polish -> happy
-//  finish    happy hop in place + hearts + success haptic, then back to the room.
+//  soap      foam on the front he presents (grey over the soot); >= 85 % covered -> "All soapy! Tap Next"
+//  rinse     spray washes the foam (and the soot under it) off; foam < 3 % and wet -> "Squeaky clean! Tap Next"
+//  shine     rub: wet dries, sparkle rises, stray soot is wiped; full polish -> "So shiny! Tap Next"
+//  finish    happy hop in place + hearts + success haptic; the player taps Done to go back to the room.
+//  The player completes every stage: reaching a goal only sets `stageComplete`; `advance()` (the Next button) moves on.
 //
 //  The renderer reads `look`. Touches arrive from the stage already resolved (`touch(...)`), so tests drive the flow without ray casts.
 //
@@ -30,9 +31,13 @@ enum BathTuning {
     // tools
     static let brushRadius: Float = 0.18, rinseRadius: Float = 0.22
     static let soapGain: Float = 1.6, rinseGain: Float = 1.4, rinsePassive: Float = 0.35, polishGain: Float = 0.13
-    static let soapDone: Float = 0.7, rinseDone: Float = 0.08, wetNeeded: Float = 0.5
+    /// A stage is done only when its goal is met AND the player taps Next (nothing auto-advances): soap covers most of him, the suds are
+    /// (nearly) all rinsed off and he is wet, the shine is full.
+    static let soapDone: Float = 0.85, rinseDone: Float = 0.03, wetNeeded: Float = 0.7, polishDone: Float = 1.0
+    static let completeHaptic: (Float, Float) = (0.6, 0.5)
     static let wetRise: Float = 1 / 1.2, wetFade: Float = 3
-    static let promptSeconds: Float = 2.2, finishSeconds: Float = 2.5
+    /// Only the hearts' timing now (the finish card waits for Done).
+    static let finishSeconds: Float = 2.5
     /// The room soot pattern is re-seeded when dirt moves this much.
     static let sootReseed: Float = 0.004
     static let bubbleLife: ClosedRange<Float> = 0.9...1.8
@@ -53,6 +58,8 @@ final class BathFlow {
     /// Progress of the current tool (0...1) and the little prompt line. Rounded to 1 % so views do not redraw every step.
     private(set) var progress: Float = 0
     private(set) var prompt: String?
+    /// The current stage's goal is met; the Next button shows (`advance()` moves on). Never set outside soap / rinse / shine.
+    private(set) var stageComplete = false
     /// The camera is on the bath close-up (0 / 1: it is snapped under the white, never blended on screen).
     @ObservationIgnored private(set) var cameraBlend: Float = 0
 
@@ -67,6 +74,9 @@ final class BathFlow {
     @ObservationIgnored var success: () -> Void = {}
     /// Capture aid: scripted fake scrubs (`-BlobGameDemo gclean`).
     @ObservationIgnored var demo = false
+    /// Capture aid (`-BathHold 1`): the demo stops at every complete stage (no auto Next / Done) so each can be filmed.
+    @ObservationIgnored var demoHold = false
+    @ObservationIgnored private var demoWait: Float = 0
 
     // fade state
     enum Dest { case bath, room }
@@ -90,7 +100,7 @@ final class BathFlow {
     @ObservationIgnored private var polish: Float = 0
     @ObservationIgnored private var wetStart: Float = 0
     @ObservationIgnored private var sootSeededFor: Float = -1
-    @ObservationIgnored private var promptT: Float = 0
+    @ObservationIgnored private var rinseStartCoverage: Float = 1
     @ObservationIgnored private var finishT: Float = 0
     @ObservationIgnored private var heartsLeft = 0
     @ObservationIgnored private var heartT: Float = 0
@@ -293,28 +303,31 @@ final class BathFlow {
         case .soap:
             look.tool = .soap
             if demo { demoTouch(dt: dt, sim: sim) }
-            progress = rounded(min(1, look.coverage / BathTuning.soapDone))
+            progress = stageComplete ? 1 : rounded(min(1, look.coverage / BathTuning.soapDone))
             tickBubbles(dt: dt)
-            if look.coverage >= BathTuning.soapDone { enter(.rinse) }
+            if !stageComplete, look.coverage >= BathTuning.soapDone { markComplete() }
         case .rinse:
             look.tool = .rinse
             if demo { demoTouch(dt: dt, sim: sim) }
             tickBubbles(dt: dt)
-            if promptT > 0 { promptT -= dt; if promptT <= 0 { prompt = nil } }
-            progress = rounded(min(1, max(0, 1 - look.coverage / BathTuning.soapDone)))
-            if look.coverage < BathTuning.rinseDone && look.wet > BathTuning.wetNeeded { enter(.shine) }
+            if stageComplete { progress = 1 } else {
+                let foam = min(1, max(0, (rinseStartCoverage - look.coverage) / max(rinseStartCoverage - BathTuning.rinseDone, 0.01)))
+                let wetP = min(1, look.wet / BathTuning.wetNeeded)
+                progress = rounded(min(foam, wetP))
+                if look.coverage < BathTuning.rinseDone && look.wet >= BathTuning.wetNeeded { markComplete() }
+            }
         case .shine:
             look.tool = .shine
             if demo { demoTouch(dt: dt, sim: sim) }
             tickBubbles(dt: dt)
-            progress = rounded(polish)
-            if polish >= 1 { enter(.finish) }
+            progress = stageComplete ? 1 : rounded(polish)
+            if !stageComplete, polish >= BathTuning.polishDone { markComplete() }
         case .finish:
             look.tool = .none; look.toolAt = nil; look.spray = nil
             finishT += dt
             if heartsLeft > 0 { heartT -= dt; if heartT <= 0 { heartT = 0.45; heartsLeft -= 1; play?.spawnHeart(now: CACurrentMediaTime()) } }
-            if finishT >= BathTuning.finishSeconds { beginFade(.room) }
         }
+        if demo, !demoHold { demoAdvance(dt: dt, brain: brain, sim: sim) }
         if !acceptsTouch { touching = false; if phase != .exit { look.toolAt = nil; look.spray = nil } }
         look.sparkle = grime.sparkle
         look.dirt = grime.dirt
@@ -350,25 +363,62 @@ final class BathFlow {
 
     private func enter(_ p: BathPhase) {
         phase = p
+        stageComplete = false; demoWait = 0
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
         switch p {
-        case .soap: progress = 0; prompt = nil; AudioHub.shared.play(.splash)
-        case .rinse: prompt = "Rinse him off!"; promptT = BathTuning.promptSeconds; progress = 0
+        case .soap: progress = 0; prompt = Self.workPrompt(.soap); AudioHub.shared.play(.splash)
+        case .rinse: prompt = Self.workPrompt(.rinse); progress = 0; rinseStartCoverage = max(look.coverage, BathTuning.rinseDone + 0.01)
         case .shine:
-            prompt = "Shine him up!"; promptT = BathTuning.promptSeconds
+            prompt = Self.workPrompt(.shine)
             polish = 0; wetStart = look.wet; progress = 0
             look.foam = Array(repeating: 0, count: look.foam.count)
         case .finish:
             polish = 1; look.wet = 0; look.sparkle = 1; grime.sparkle = 1; grime.dirt = 0; grime.save()
             look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
             finishT = 0; heartsLeft = 3; heartT = 0
-            prompt = "Sparkling clean!"
+            prompt = Self.workPrompt(.finish)
             AudioHub.shared.play(.sparkle)
             success()
         default: break
         }
         if p == .finish { finishPending = true }
     }
+    // MARK: stages the player completes
+
+    /// What the prompt says while a stage is being worked, and once its goal is met.
+    static func workPrompt(_ p: BathPhase) -> String? {
+        switch p { case .soap: return "Scrub on the jelly soap"; case .rinse: return "Rinse all the suds off"; case .shine: return "Rub to shine him up"; case .finish: return "Sparkling clean!"; default: return nil }
+    }
+    static func completePrompt(_ p: BathPhase) -> String? {
+        switch p { case .soap: return "All soapy! Tap Next"; case .rinse: return "Squeaky clean! Tap Next"; case .shine: return "So shiny! Tap Next"; default: return nil }
+    }
+    /// The prompt for the current stage (persistent: it never times out).
+    var stagePrompt: String? { stageComplete ? Self.completePrompt(phase) : Self.workPrompt(phase) }
+
+    private func markComplete() {
+        stageComplete = true; progress = 1
+        prompt = Self.completePrompt(phase)
+        haptic(BathTuning.completeHaptic.0, BathTuning.completeHaptic.1)
+        AudioHub.shared.uiConfirm()
+    }
+
+    /// The Next button: soap -> rinse -> shine -> finish. Ignored until the stage's goal is met.
+    func advance() {
+        guard acceptsTouch, stageComplete else { return }
+        switch phase {
+        case .soap: enter(.rinse)
+        case .rinse: enter(.shine)
+        case .shine: enter(.finish)
+        default: break
+        }
+    }
+
+    /// Capture aid only (`demo`): presses Next 1 s after a stage is complete, and Done 2.5 s after the finish card shows.
+    private func demoAdvance(dt: Float, brain: BlobBrain, sim: SoftBody?) {
+        if stageComplete { demoWait += dt; if demoWait >= 1 { advance() } }
+        else if phase == .finish { demoWait += dt; if demoWait >= 2.5 { done(brain: brain, sim: sim) } }
+    }
+
     /// The happy hop needs the sim: flagged in `enter`, issued at the end of `tick`.
     @ObservationIgnored private var finishPending = false
 

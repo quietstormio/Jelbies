@@ -269,13 +269,12 @@ final class NeedsTests: XCTestCase {
         sel.onDrawStart = { starts += 1 }; sel.onMeet = { meets += 1 }
         care.rosterPick(0)
         XCTAssertEqual(sel.phase, .drawing(id: 0)); XCTAssertEqual(sel.drawStarts, 1); XCTAssertEqual(starts, 1)
-        XCTAssertFalse(sel.chipVisible)
         r.run(0.5); XCTAssertEqual(sel.phase, .drawing(id: 0)); XCTAssertGreaterThan(sel.drawProgress, 0.05)
         r.run(0.8); XCTAssertEqual(sel.phase, .pending(id: 0)); XCTAssertEqual(meets, 1)
-        XCTAssertTrue(sel.glowing); XCTAssertFalse(sel.chipVisible, "a roster pick has no check chip")
+        XCTAssertTrue(sel.glowing)
         r.run(2.5)
-        XCTAssertEqual(sel.phase, .none); XCTAssertEqual(sel.confirmed, 0, "then the action button shows for him")
-        XCTAssertTrue(sel.actionVisible)
+        XCTAssertEqual(sel.phase, .none); XCTAssertEqual(sel.confirmed, 0, "then the pick settles")
+        XCTAssertEqual(sel.highlighted, 0)
         // no 2D stand-in: his outline only ever comes from the stage's real render mesh
         XCTAssertNil(sel.outlines[0])
     }

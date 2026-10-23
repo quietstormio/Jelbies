@@ -44,6 +44,9 @@ extension GameCare {
         bath.start(brain: brain, jelly: id, grime: profile.grime, look: profile.look)
     }
 
+    /// The Next button: the player moves to the next clean-up stage once the current one is complete (soap, rinse, shine).
+    func nextCleanStep() { bath.advance() }
+
     /// The ✕ button (the Jelly being washed; `jelly` is accepted for symmetry with `clean(jelly:)`).
     func cancelClean(jelly id: Int? = nil) {
         guard let (brain, sim) = washer(id) else { return }

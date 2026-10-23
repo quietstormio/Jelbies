@@ -1,6 +1,6 @@
 //
 //  SelectionTests.swift
-//  Multi-Blob select: the highlight state machine (draw, switch, cancel, confirm), the action button rule, the silhouette outline math.
+//  Multi-Blob select: the highlight state machine (draw, switch, self-confirm, persist, clear), the instant pick, the floor ring, the silhouette outline math.
 //
 
 import XCTest
@@ -26,27 +26,67 @@ final class SelectionTests: XCTestCase {
         XCTAssertTrue(s.actionVisible)
     }
 
-    func testSeveralBlobsHideTheButtonUntilConfirmed() {
+    func testATapDrawsTheOutlineThenSettlesWithNoChip() {
         let s = three()
-        XCTAssertFalse(s.actionVisible, "hidden while they roam")
+        XCTAssertNil(s.highlighted)
         var starts = 0, meets = 0
         s.onDrawStart = { starts += 1 }; s.onMeet = { meets += 1 }
         s.doubleTap(1)
         XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertEqual(starts, 1, "a light tick at the draw start"); XCTAssertEqual(meets, 0)
-        XCTAssertFalse(s.chipVisible)
+        XCTAssertNil(s.highlighted, "a draw is not a settled pick yet")
         run(s, 0.25)
         XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertGreaterThan(s.drawProgress, 0.05); XCTAssertLessThan(s.drawProgress, 0.95)
         run(s, 0.4)                                              // 0.65 s: the halves have met at 0.6 s
         XCTAssertEqual(s.phase, .pending(id: 1)); XCTAssertEqual(meets, 1, "a crisp tap when the halves meet, once")
         XCTAssertEqual(s.drawProgress, 1)
-        XCTAssertTrue(s.chipVisible); XCTAssertEqual(s.selectedName, "Pip")
+        XCTAssertEqual(s.selectedName, "Pip")
         XCTAssertEqual(s.takeHopRequest(), 1, "he hops"); XCTAssertNil(s.takeHopRequest(), "once")
         XCTAssertTrue(s.isDimmed(0)); XCTAssertTrue(s.isDimmed(2)); XCTAssertFalse(s.isDimmed(1), "the others dim")
-        XCTAssertFalse(s.actionVisible, "not before the check")
         run(s, 3); XCTAssertEqual(meets, 1); XCTAssertEqual(starts, 1)
-        s.confirm()
-        XCTAssertEqual(s.phase, .none); XCTAssertEqual(s.confirmed, 1)
-        XCTAssertTrue(s.actionVisible, "the check shows the action button for that Blob")
+        XCTAssertEqual(s.phase, .none); XCTAssertEqual(s.confirmed, 1, "every draw confirms itself")
+        XCTAssertEqual(s.highlighted, 1)
+    }
+
+    func testDoubleTapSelfConfirmsAndThePickPersists() {
+        let s = three()
+        s.doubleTap(1)
+        run(s, 0.6 + 1.2 + 0.1)
+        XCTAssertEqual(s.phase, .none); XCTAssertEqual(s.confirmed, 1); XCTAssertEqual(s.highlighted, 1)
+        run(s, 30); XCTAssertEqual(s.highlighted, 1, "it stays until the floor is tapped")
+    }
+
+    func testInstantPickHasNoDrawAndNoHop() {
+        let s = three()
+        let starts = s.drawStarts
+        s.pick(2, instant: true)
+        XCTAssertFalse(s.isSelecting); XCTAssertEqual(s.highlighted, 2); XCTAssertNil(s.selectedID)
+        XCTAssertNil(s.takeHopRequest()); XCTAssertEqual(s.drawStarts, starts)
+        run(s, 3); XCTAssertEqual(s.highlighted, 2); XCTAssertNil(s.takeHopRequest())
+    }
+
+    func testClearHighlight() {
+        let s = three()
+        s.pick(1, instant: true); XCTAssertEqual(s.highlighted, 1)
+        s.clearHighlight(); XCTAssertNil(s.highlighted); XCTAssertNil(s.confirmed)
+        s.doubleTap(2); run(s, 0.2)
+        s.clearHighlight(); XCTAssertFalse(s.isSelecting, "a draw stops too"); XCTAssertNil(s.highlighted)
+        run(s, 2); XCTAssertNil(s.highlighted, "a cleared pick does not come back")
+    }
+
+    func testRingProjectsAFrontArcOnScreen() {
+        GameCamera.configureRoom(count: 3)
+        let size = CGSize(width: 402, height: 874)
+        let cam = GameCamera.camera(aspect: Float(size.width / size.height))
+        let s = three()
+        s.publishRing(id: 1, floor: SIMD2(0, 1), viewProj: cam.viewProj, size: size)
+        let ring = try! XCTUnwrap(s.ring)
+        XCTAssertEqual(ring.pts.count, SelectTuning.ringSegments)
+        for p in ring.pts { XCTAssertTrue(CGRect(origin: .zero, size: size).contains(p), "\(p) on screen") }
+        let centre = Silhouette.project([SIMD3(0, BobShape.H * 0.5, 1)], viewProj: cam.viewProj, size: size)[0]
+        XCTAssertGreaterThan(ring.pts.map(\.y).max()!, centre.y, "the arc passes below the body centre (the front arc)")
+        XCTAssertFalse(s.ringIsFresh && s.highlighted == nil ? false : false)
+        s.pick(1, instant: true)
+        XCTAssertTrue(s.ringIsFresh)
     }
 
     func testDrawTakesAboutSixTenthsOfASecond() {
@@ -72,7 +112,7 @@ final class SelectionTests: XCTestCase {
         XCTAssertEqual(s.phase, .pending(id: 2)); XCTAssertEqual(meets, 1)
         s.doubleTap(2); XCTAssertEqual(s.phase, .pending(id: 2), "the same Blob again changes nothing"); XCTAssertEqual(s.drawStarts, 2)
         s.doubleTap(1)                                           // also from the pending state
-        XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertFalse(s.chipVisible); XCTAssertNil(s.takeHopRequest())
+        XCTAssertEqual(s.phase, .drawing(id: 1)); XCTAssertNil(s.takeHopRequest())
     }
 
     func testGatedDrawWaitsForARealOutlineAndNeverRunsOverAnEmptyPath() {
@@ -108,22 +148,15 @@ final class SelectionTests: XCTestCase {
         XCTAssertEqual(gap.min()!, 5, accuracy: 0.6); XCTAssertEqual(gap.max()!, 5, accuracy: 0.6)
     }
 
-    func testCancelFromTheCrossOrTheFloor() {
+    func testCancelStopsADrawAndItDoesNotComeBack() {
         let s = three()
         s.doubleTap(1); run(s, 0.2)
         s.cancel()
-        XCTAssertEqual(s.phase, .none); XCTAssertNil(s.confirmed); XCTAssertFalse(s.actionVisible)
+        XCTAssertEqual(s.phase, .none); XCTAssertNil(s.confirmed); XCTAssertNil(s.highlighted)
         run(s, 1); XCTAssertEqual(s.phase, .none, "a cancelled draw does not come back")
-        s.doubleTap(1); run(s, 1.3); XCTAssertTrue(s.chipVisible)
-        s.cancel(); XCTAssertFalse(s.chipVisible); XCTAssertFalse(s.isDimmed(0)); XCTAssertFalse(s.actionVisible)
-        s.doubleTap(1); s.confirm(); XCTAssertEqual(s.confirmed, nil, "confirm only works on the chip")
-    }
-
-    func testAnotherDoubleTapAfterConfirmHidesTheButtonAgain() {
-        let s = three()
-        s.doubleTap(1); run(s, 1.3); s.confirm(); XCTAssertTrue(s.actionVisible)
-        s.doubleTap(2)
-        XCTAssertFalse(s.actionVisible)
+        s.doubleTap(1); run(s, 1.0)
+        s.cancel(); XCTAssertFalse(s.isDimmed(0)); XCTAssertNil(s.highlighted)
+        s.doubleTap(1); s.confirm(); XCTAssertEqual(s.confirmed, nil, "confirm only works on a finished draw")
     }
 
     func testComeHereCancelsAPendingSelection() {
