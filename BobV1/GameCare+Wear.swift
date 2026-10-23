@@ -17,10 +17,19 @@ extension GameCare {
         return .rival(team: WearTeam.rivals[(k - 1) % WearTeam.rivals.count], number: WearTeam.rivalNumbers[(k - 1) % WearTeam.rivalNumbers.count])
     }
 
+    /// Capture aid: -WearForce medal_gold[,backpack_sky] puts those pieces (art ids) on every Jelbie over the saved outfit (screenshots only).
+    static let forcedWear: [WearSlot: WearLook] = {
+        guard let s = UserDefaults.standard.string(forKey: "WearForce") else { return [:] }
+        var o: [WearSlot: WearLook] = [:]
+        for id in s.split(separator: ",") { if let l = WearLook.pieces.first(where: { $0.art == String(id) }) { o[l.slot] = l } }
+        return o
+    }()
+
     func outfit(_ id: Int) -> [WearSlot: WearLook] {
         if wearOutfitRev != store.revision { wearOutfits = [:]; wearOutfitRev = store.revision }
         if let o = wearOutfits[id] { return o }
-        let o = store.outfit(id)
+        var o = store.outfit(id)
+        for (s, l) in Self.forcedWear { o[s] = l }
         wearOutfits[id] = o
         return o
     }
