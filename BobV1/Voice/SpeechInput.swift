@@ -64,16 +64,33 @@ final class FakeSpeechInput: SpeechInput {
 
     func prepare(contextualWords: [String]) async { availability = .ready }
 
-    private func fakeEngine() async -> Bool {
+    /// Times the (fake) session was deactivated by a failed warm-up; mirrors the real input's decision at failure time.
+    private(set) var sessionDeactivations = 0
+    private var isStarting = false
+
+    private func fakeEngine(isWarm: Bool) async -> Bool {
         warmUps += 1
-        if warmFailures > 0 { warmFailures -= 1; return false }
+        try? await Task.sleep(nanoseconds: 5_000_000)     // engine bring-up is async (the real one awaits a detached start)
+        if warmFailures > 0 {
+            warmFailures -= 1
+            if isWarm, DictationSpeechInput.shouldDeactivateAfterFailedWarm(deactivateOnFail: true, starting: isStarting) {
+                Task { [weak self] in          // same settle re-check as the real input
+                    try? await Task.sleep(nanoseconds: UInt64(VoiceAudioTuning.warmFailSettle * 1e9))
+                                        guard let self, !self.isStarting, !self.isStarted, self.gate.isSettledFailed else { return }
+                    self.gate.invalidate(); self.sessionDeactivations += 1
+                }
+            }
+            return false
+        }
         return true
     }
 
-    func warmUp() { gate.warm { [weak self] in await self?.fakeEngine() ?? false } }
+    func warmUp() { gate.warm { [weak self] in await self?.fakeEngine(isWarm: true) ?? false } }
 
     func start(contextualWords: [String]) async throws {
-        let ok = await gate.ready(stillRunning: { true }, { [weak self] in await self?.fakeEngine() ?? false }, beforeRetry: {})
+        isStarting = true
+        let ok = await gate.ready(stillRunning: { true }, { [weak self] in await self?.fakeEngine(isWarm: false) ?? false }, beforeRetry: {})
+        isStarting = false
         gate.invalidate()
         guard ok else { throw SpeechInputError.noFormat }
         lastContextualWords = contextualWords
@@ -126,6 +143,8 @@ nonisolated enum VoiceAudioTuning {
     static let warmTimeout: TimeInterval = 2.5
     /// A warm engine that failed (or died) is brought up again this many times inside `start` before the press gives up.
     static let warmRetries = 1
+    /// A failed warm-up deactivates the session only if no press has taken over after this long.
+    static let warmFailSettle: Double = 0.3
 }
 
 nonisolated enum VoiceTranscriptLog {
@@ -365,7 +384,9 @@ final class DictationSpeechInput: SpeechInput {
             return true
         } catch {
             VoiceTranscriptLog.log("warm-up failed: engine start failed: \(error)")
-            if deactivateOnFail { deactivateSession() }
+            // A failed warm task must leave the session alone while a press may be about to retry (the press's start() only runs ~16 ms
+            // after begin()): the decision is made at failure time AND re-checked after a settle delay, never at task creation.
+            if deactivateOnFail { deactivateWarmFailureWhenSettled() }
             return false
         }
     }
@@ -472,6 +493,19 @@ final class DictationSpeechInput: SpeechInput {
         try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
         try s.setActive(true)
         Task { @MainActor in AudioHub.shared.micSessionBegan() }       // the audio hub owns the session; it keeps its hands off while the mic is up
+    }
+
+    nonisolated static func shouldDeactivateAfterFailedWarm(deactivateOnFail: Bool, starting: Bool) -> Bool { deactivateOnFail && !starting }
+
+    private func deactivateWarmFailureWhenSettled() {
+        guard Self.shouldDeactivateAfterFailedWarm(deactivateOnFail: true, starting: starting) else { return }
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(VoiceAudioTuning.warmFailSettle * 1e9))
+            guard let self, Self.shouldDeactivateAfterFailedWarm(deactivateOnFail: true, starting: self.starting || self.isRunning),
+                  self.engine == nil, self.gate.isSettledFailed else { return }
+            self.gate.invalidate()
+            self.deactivateSession()
+        }
     }
 
     private func deactivateSession() {

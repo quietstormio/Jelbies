@@ -28,6 +28,28 @@ final class VoiceFirstTryTests: XCTestCase {
         XCTAssertFalse(input.isStarted)
     }
 
+    /// A warm task that fails while the press is starting must not deactivate the session (that would resume Ears mid-retry).
+    func testFailedWarmDuringPressDoesNotDeactivateBetweenAttempts() async throws {
+        let (v, input) = make(failures: 2)
+        input.nextTranscript = "sit"
+        v.warmUp()
+        XCTAssertTrue(v.begin())                          // warm task is still in flight when the press starts
+        await v._startTask?.value
+        XCTAssertEqual(input.sessionDeactivations, 0, "no deactivation between the attempts of one press")
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertEqual(input.sessionDeactivations, 0, "nor after the press took over")
+        XCTAssertTrue(DictationSpeechInput.shouldDeactivateAfterFailedWarm(deactivateOnFail: true, starting: false))
+        XCTAssertFalse(DictationSpeechInput.shouldDeactivateAfterFailedWarm(deactivateOnFail: true, starting: true))
+        XCTAssertFalse(DictationSpeechInput.shouldDeactivateAfterFailedWarm(deactivateOnFail: false, starting: false))
+    }
+
+    func testFailedWarmWithNoPressDeactivatesOnceSettled() async throws {
+        let (_, input) = make(failures: 1)
+        input.warmUp()
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertEqual(input.sessionDeactivations, 1)
+    }
+
     func testTwoCleanGesturesBothOpen() async throws {
         let (v, input) = make(failures: 0)
         for n in 1...2 {

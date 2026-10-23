@@ -19,6 +19,8 @@ final class MicWarmGate {
     nonisolated deinit {}
 
     var isWarming: Bool { task != nil }
+    /// The current warm task finished and failed, and nothing has replaced it.
+    var isSettledFailed: Bool { task != nil && failed }
 
     /// Starts a warm-up unless one is in flight or succeeded. A finished FAILED one is replaced.
     func warm(_ make: @escaping Make) {
