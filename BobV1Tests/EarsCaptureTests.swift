@@ -47,3 +47,31 @@ final class EarsCaptureTests: XCTestCase {
         try render(SoundSettingsPanel(hub: AudioHub.shared, ears: ears) {}.fixedSize(), size: CGSize(width: 300, height: 420), "panel_denied", dir: dir)
     }
 }
+
+extension EarsCaptureTests {
+    /// The sound panel with the now-playing row (portrait + landscape, playing / your music / off), gated on MUSIC_CAP_DIR.
+    func testRenderNowPlayingPanel() throws {
+        guard let dir = ProcessInfo.processInfo.environment["MUSIC_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("MUSIC_CAP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let ears = Ears(defaults: UserDefaults(suiteName: "EarsCaptureTests")!, inert: true)
+        Self.keep.append(ears)
+        let playing = NowPlaying(state: .playing, line: "Day · Soft Sunset", note: nil, canSkip: true)
+        let yours = NowPlaying(state: .yourMusic, line: "Your music is playing", note: "Game music rests until it stops", canSkip: false)
+        let off = NowPlaying(state: .musicOff, line: "Music is off", note: "Turn Music on to pick songs", canSkip: false)
+        func shot(_ np: NowPlaying, landscape: Bool, _ name: String) throws {
+            var v = AnyView(SoundSettingsPanel(hub: AudioHub.shared, ears: ears, nowPlaying: np) {}
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(.leading, 16).padding(.top, 52))
+            if landscape { v = AnyView(v.environment(\.verticalSizeClass, .compact)) }
+            try render(v, size: landscape ? CGSize(width: 874, height: 402) : CGSize(width: 402, height: 874), name, dir: dir)
+        }
+        try shot(playing, landscape: false, "panel_playing_portrait")
+        try shot(playing, landscape: true, "panel_playing_landscape")
+        try shot(yours, landscape: false, "panel_yourmusic_portrait")
+        try shot(off, landscape: true, "panel_off_landscape")
+        for np in [playing, yours, off] {
+            let probe = ImageRenderer(content: SoundSettingsPanel(hub: AudioHub.shared, ears: ears, nowPlaying: np) {}.environment(\.verticalSizeClass, .compact).fixedSize())
+            probe.scale = 1
+            XCTAssertLessThanOrEqual(try XCTUnwrap(probe.uiImage).size.height, 402 - 52 - 24, np.line)
+        }
+    }
+}
