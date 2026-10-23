@@ -32,14 +32,20 @@ enum RoomLayout {
     static let rugRadius: Float = 2.8
     static let rugHeight: Float = 0.022
 
-    struct RoundedBox { var centre: SIMD3<Float>; var halfExtents: SIMD3<Float>; var radius: Float }
-    /// Whole sofa (arms included) as one rounded box.
-    static let sofa = RoundedBox(centre: SIMD3(0, 0.5, -4.2), halfExtents: SIMD3(1.8, 0.5, 0.65), radius: 0.2)
+    struct RoundedBox: Equatable { var centre: SIMD3<Float>; var halfExtents: SIMD3<Float>; var radius: Float }
+    struct Cylinder: Equatable { var centre: SIMD2<Float>; var radius: Float; var height: Float }
 
-    struct Cylinder { var centre: SIMD2<Float>; var radius: Float; var height: Float }
-    static let table = Cylinder(centre: SIMD2(3.7, -4.0), radius: 0.5, height: 0.65)
-    static let plant = Cylinder(centre: SIMD2(-4.2, -4.2), radius: 0.4, height: 0.5)
-    static var cylinders: [Cylinder] { [table, plant] }
+    /// The room the Jelbies live in right now (Room/RoomDef.swift). Room 0 is the original living room. Set only through `apply` (main thread, between sim steps).
+    nonisolated(unsafe) static private(set) var current: RoomDef = RoomCatalog.home
+    /// Bumps on every `apply`: the renderer rebuilds the room mesh when it sees a new value.
+    nonisolated(unsafe) static private(set) var revision = 0
+    static func apply(_ d: RoomDef) { current = d; revision &+= 1 }
+
+    /// Whole sofa (arms included) as one rounded box: the main seat of the current room.
+    static var sofa: RoundedBox { current.couch }
+    /// The piece under the room lamp (the side table at home).
+    static var table: Cylinder { current.lampTable }
+    static var cylinders: [Cylinder] { current.cylinders }
 
     /// Temporary floor obstacles (the dining tray while it exists): axis-aligned rounded rectangles in xz, `height` tall.
     struct FlatBox: Equatable { var centre: SIMD2<Float>; var half: SIMD2<Float>; var height: Float; var radius: Float = 0.04 }
@@ -80,11 +86,19 @@ enum RoomLayout {
         return d
     }
 
-    /// Signed distance in the xz plane to the sofa's rounded footprint (negative inside).
-    static func sofaDistanceXZ(_ p: SIMD2<Float>) -> Float {
-        let b = sofa, inner = SIMD2(b.halfExtents.x, b.halfExtents.z) - SIMD2(repeating: b.radius)
+    /// Signed distance in the xz plane to one rounded box footprint (negative inside).
+    static func boxDistance(_ p: SIMD2<Float>, _ b: RoundedBox) -> Float {
+        let inner = SIMD2(b.halfExtents.x, b.halfExtents.z) - SIMD2(repeating: b.radius)
         let q = simd_abs(p - SIMD2(b.centre.x, b.centre.z)) - inner
         return simd_length(simd_max(q, .zero)) + min(max(q.x, q.y), 0) - b.radius
+    }
+
+    /// Signed distance in the xz plane to the room's fixed box furniture (the sofa, and any further boxes of the current room); negative inside.
+    static func sofaDistanceXZ(_ p: SIMD2<Float>) -> Float {
+        let boxes = current.allBoxes
+        var d = boxDistance(p, boxes[0])
+        for b in boxes.dropFirst() { d = min(d, boxDistance(p, b)) }
+        return d
     }
 
     /// Pushes a sphere (centre, radius) out of walls, sofa and props; returns the corrected centre (y untouched).
@@ -95,14 +109,14 @@ enum RoomLayout {
                 let dist = simd_dot(w.normal, p) - w.d
                 if dist < radius { p += w.normal * (radius - dist) }
             }
-            // sofa (skip when clearly above it)
-            if p.y - radius < sofa.centre.y + sofa.halfExtents.y {
+            // sofa and any further box furniture (skip each when clearly above it)
+            for box in current.allBoxes where p.y - radius < box.centre.y + box.halfExtents.y {
                 let xz = SIMD2(p.x, p.z)
-                let sd = sofaDistanceXZ(xz)
+                let sd = boxDistance(xz, box)
                 if sd < radius {
                     let e: Float = 1e-3
-                    var g = SIMD2(sofaDistanceXZ(xz + SIMD2(e, 0)) - sofaDistanceXZ(xz - SIMD2(e, 0)),
-                                  sofaDistanceXZ(xz + SIMD2(0, e)) - sofaDistanceXZ(xz - SIMD2(0, e)))
+                    var g = SIMD2(boxDistance(xz + SIMD2(e, 0), box) - boxDistance(xz - SIMD2(e, 0), box),
+                                  boxDistance(xz + SIMD2(0, e), box) - boxDistance(xz - SIMD2(0, e), box))
                     g = simd_length(g) > 1e-6 ? simd_normalize(g) : SIMD2(0, 1)
                     let push = g * (radius - sd)
                     p.x += push.x; p.z += push.y

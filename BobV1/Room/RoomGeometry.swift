@@ -152,15 +152,18 @@ nonisolated final class RoomMeshBuilder {
 }
 
 enum RoomGeometry {
-    static let windowXs: [Float] = [-3.0, 0.0, 3.0]
-    static let windowHalfW: Float = 0.85
-    static let windowY0: Float = 1.5, windowY1: Float = 4.3
+    /// The windows of the current room (they follow `RoomLayout.current`).
+    static var windowXs: [Float] { RoomLayout.current.windows.xs }
+    static var windowHalfW: Float { RoomLayout.current.windows.halfW }
+    static var windowY0: Float { RoomLayout.current.windows.y0 }
+    static var windowY1: Float { RoomLayout.current.windows.y1 }
     static let insetDepth: Float = 0.18
 
-    static func build(theme: RoomTheme) -> RoomMesh {
+    static func build(theme: RoomTheme, def: RoomDef = RoomLayout.current) -> RoomMesh {
         let sw = theme.swatches
         let b = RoomMeshBuilder()
         let L = RoomLayout.self
+        let windowXs = def.windows.xs, windowHalfW = def.windows.halfW, windowY0 = def.windows.y0, windowY1 = def.windows.y1
 
         // ---- floor: tessellated so we can bake contact AO around furniture / walls ----
         b.material = .floor; b.color = sw[RoomSwatch.floor]
@@ -171,7 +174,7 @@ enum RoomGeometry {
             for j in 0...nz {
                 for i in 0...nx {
                     let x = L.minX + Float(i) * step, z = L.minZ + Float(j) * step
-                    ids.append(b.vertex(SIMD3(x, 0, z), SIMD3(0, 1, 0), ao: floorAO(x, z)))
+                    ids.append(b.vertex(SIMD3(x, 0, z), SIMD3(0, 1, 0), ao: floorAO(x, z, def)))
                 }
             }
             for j in 0..<nz { for i in 0..<nx {
@@ -213,6 +216,7 @@ enum RoomGeometry {
             b.flatQuad(SIMD3(x0, y0, zb), SIMD3(x1, y0, zb), SIMD3(x1, y1, zb), SIMD3(x0, y1, zb), normal: n,
                        colors: [lo, lo, hi, hi])
             // frame + mullions
+            guard def.windows.proceduralFrames else { continue }
             b.material = .plain; b.color = sw[RoomSwatch.frame]
             let t: Float = 0.1, p: Float = 0.05
             b.roundedBox(centre: SIMD3(x0 - t / 2 + 0.02, (y0 + y1) / 2, back + p / 2 - 0.01), half: SIMD3(t / 2, (y1 - y0) / 2 + t, p / 2 + 0.01), radius: 0.015, segments: 2, aoFloor: false)
@@ -243,9 +247,12 @@ enum RoomGeometry {
             b.lathe(cx: L.rugCentre.x, cz: L.rugCentre.y, profile: prof, segments: 96)
         }
 
+        // ---- the furniture: the Blender art of the room, or the procedural living room set ----
+        if let art = def.art, RoomArt.emit(art, into: b) { return b.mesh }
+
         // ---- sofa ----
         b.material = .plain
-        let s = L.sofa.centre
+        let s = def.couch.centre
         let zc = s.z
         b.color = sw[RoomSwatch.sofa]
         b.roundedBox(centre: SIMD3(0, 0.31, zc), half: SIMD3(1.8, 0.19, 0.65), radius: 0.12)              // base
@@ -260,7 +267,7 @@ enum RoomGeometry {
 
         // ---- side table (pedestal) ----
         do {
-            let c = L.table.centre
+            let c = def.lampTable.centre
             b.color = sw[RoomSwatch.tableLeg]
             let base: [RoomMeshBuilder.ProfilePoint] = [
                 .init(r: 0, y: 0.0, nr: 0, ny: -1), .init(r: 0.28, y: 0.0, nr: 0, ny: -1),
@@ -277,7 +284,7 @@ enum RoomGeometry {
 
         // ---- table lamp (on the side table; its shade glows with the time of day) ----
         do {
-            let c = L.table.centre
+            let c = def.lampTable.centre
             let top: Float = 0.67
             b.material = .plain; b.color = sw[RoomSwatch.tableLeg]
             b.lathe(cx: c.x, cz: c.y, profile: [
@@ -293,7 +300,7 @@ enum RoomGeometry {
 
         // ---- plant ----
         do {
-            let c = L.plant.centre
+            let c = def.cylinders[def.cylinders.count - 1].centre
             b.color = sw[RoomSwatch.pot]
             let pot: [RoomMeshBuilder.ProfilePoint] = [
                 .init(r: 0, y: 0, nr: 0, ny: -1), .init(r: 0.2, y: 0, nr: 0, ny: -1),
@@ -318,17 +325,18 @@ enum RoomGeometry {
     }
 
     /// Baked contact occlusion on the floor (1 = open, lower = darker).
-    static func floorAO(_ x: Float, _ z: Float) -> Float {
+    static func floorAO(_ x: Float, _ z: Float, _ def: RoomDef = RoomLayout.current) -> Float {
         let L = RoomLayout.self
         var occ: Float = 0
         func add(_ d: Float, _ strength: Float, _ falloff: Float) { occ = 1 - (1 - occ) * (1 - strength * expf(-max(d, 0) / falloff)) }
         add(x - L.minX, 0.45, 0.30)
         add(L.maxX - x, 0.45, 0.30)
         add(z - L.minZ, 0.45, 0.30)
-        let sd = L.sofaDistanceXZ(SIMD2(x, z))
+        var sd = L.boxDistance(SIMD2(x, z), def.couch)
+        for bx in def.boxes { sd = min(sd, L.boxDistance(SIMD2(x, z), bx)) }
         add(sd, 0.65, 0.22)
         if sd < 0 { occ = max(occ, 0.7) }
-        for c in L.cylinders { add(simd_length(SIMD2(x, z) - c.centre) - c.radius, 0.55, 0.16) }
+        for c in def.cylinders { add(simd_length(SIMD2(x, z) - c.centre) - c.radius, 0.55, 0.16) }
         let rd = simd_length(SIMD2(x, z) - L.rugCentre) - L.rugRadius
         add(rd, 0.22, 0.07)
         return 1 - occ

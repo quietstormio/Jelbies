@@ -1000,6 +1000,7 @@ final class MelonRenderer {
                 let rect = rects[0]
                 let share = single ? RoomFootprint.share(rect, width: width, height: height)
                                    : Float(rects.reduce(0) { $0 + $1.area }) / Float(Swift.max(width * height, 1))
+                room.ensureBuilt()      // a swapped room (RoomLayout.apply) bumps staticVersion before the key is read
                 var key = RoomCacheKey()
                 key.viewProj = uniforms.viewProj; key.camPos = camPos3; key.width = width; key.height = height
                 key.themeTint = room.theme.tint; key.propsVersion = room.staticVersion

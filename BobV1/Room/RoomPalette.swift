@@ -47,11 +47,17 @@ enum OKLab {
 /// One base colour (sRGB 0...1) drives every surface in the room. Later a user setting.
 struct RoomTheme: Equatable {
     var tint: SIMD3<Float>
+    /// Scales the chroma of every swatch (1 = as before; below 1 pulls the room toward neutral). Applied after the base chroma clamp.
+    var chromaScale: Float = 1
+    /// Added to every swatch's lightness (clamped to 0.05...0.95).
+    var lightnessShift: Float = 0
 
     /// Warm soft cream / peach.
     static let defaultTint = SIMD3<Float>(0.96, 0.78, 0.66)
 
-    init(tint: SIMD3<Float> = RoomTheme.defaultTint) { self.tint = tint }
+    init(tint: SIMD3<Float> = RoomTheme.defaultTint, chromaScale: Float = 1, lightnessShift: Float = 0) {
+        self.tint = tint; self.chromaScale = chromaScale; self.lightnessShift = lightnessShift
+    }
 
     static let lightness: [Float] = [0.30, 0.45, 0.62, 0.78, 0.90]
     private static let chromaProfile: [Float] = [0.55, 0.85, 1.0, 0.85, 0.5]
@@ -68,7 +74,8 @@ struct RoomTheme: Equatable {
         let k = min(max(i, 0), 4)
         let (h, c) = hueChroma
         let nudge = Float(k - 2) / 2 * (8 * Float.pi / 180)
-        return OKLab.lchToLinear(L: Self.lightness[k], C: c * Self.chromaProfile[k] * 1.0, h: h + nudge)
+        let L = min(max(Self.lightness[k] + lightnessShift, 0.05), 0.95)
+        return OKLab.lchToLinear(L: L, C: c * chromaScale * Self.chromaProfile[k] * 1.0, h: h + nudge)
     }
 
     var swatches: [SIMD3<Float>] { (0..<Self.swatchCount).map(swatch) }

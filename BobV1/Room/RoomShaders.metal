@@ -26,6 +26,8 @@ struct RoomUniforms {
     float4 ambCol;      // rgb ambient tint, w = ambient multiplier
     float4 lamp;        // rgb lamp colour, w = glow amount
     float4 lampPos;     // xyz lamp position, w = pool radius
+    float4 style;       // x floor, y wall, z rug style (0 = the living room's)
+    float4 win;         // x = window bottom, y = window height (the pane gradient)
 };
 
 struct RoomVertexIn {
@@ -129,6 +131,79 @@ static float3 roomFloor(constant RoomUniforms& u, float2 xz, float3 base, float3
 }
 
 
+/// Long planks along x (the loft): rows 0.32 wide, per-row length 1.6...2.4 with an offset seam, grain streaks.
+static float3 roomFloorLong(float2 xz, float3 base, float3 light, thread float& seam) {
+    const float W = 0.32;
+    float v = xz.y / W;
+    float row = floor(v), fv = fract(v);
+    float len = 1.6 + 0.8 * roomHash(float2(row, 7.0));
+    float xo = roomHash(float2(row, 3.0)) * 2.0;
+    float cx = (xz.x + xo) / len;
+    float col = floor(cx), fx = fract(cx);
+    float dz = min(fv, 1.0 - fv) * W, dx = min(fx, 1.0 - fx) * len;
+    float aa = max(fwidth(v) * W, 0.002);
+    seam = smoothstep(0.004, 0.004 + aa * 1.5, min(dz, dx));
+    float h = roomHash(float2(col * 1.37 + row * 5.1, row * 0.73 + 5.0));
+    float grain = sin(xz.y * 70.0 + h * 40.0 + xz.x * 1.3) * 0.5 + 0.5;
+    float3 c = mix(base, light, 0.15 + 0.55 * h);
+    c *= 0.95 + 0.10 * grain;
+    return c;
+}
+
+/// Rough boards (the cabin): 0.42 wide, darker seams, two nail dots near each board end, grain +-8 %.
+static float3 roomFloorRough(float2 xz, float3 base, float3 light, thread float& seam) {
+    const float W = 0.42;
+    float v = xz.y / W;
+    float row = floor(v), fv = fract(v);
+    float len = 1.4 + 0.9 * roomHash(float2(row, 11.0));
+    float xo = roomHash(float2(row, 5.0)) * 2.0;
+    float cx = (xz.x + xo) / len;
+    float col = floor(cx), fx = fract(cx);
+    float dz = min(fv, 1.0 - fv) * W, dx = min(fx, 1.0 - fx) * len;
+    float aa = max(fwidth(v) * W, 0.002);
+    seam = smoothstep(0.006, 0.006 + aa * 1.5, min(dz, dx));
+    float h = roomHash(float2(col * 1.91 + row * 3.3, row * 0.57 + 9.0));
+    float grain = sin(xz.y * 55.0 + h * 50.0 + sin(xz.x * 3.0 + h * 9.0) * 1.5) * 0.5 + 0.5;
+    float3 c = mix(base, light, 0.1 + 0.5 * h);
+    c *= 0.92 + 0.16 * grain;
+    // nails: 2 per board end, on the board centre line +-0.09
+    float ex = min(fx, 1.0 - fx) * len;            // distance to the nearest board end along x
+    float nz = (fv - 0.5) * W;
+    float nd = min(length(float2(ex - 0.13, nz - 0.09)), length(float2(ex - 0.13, nz + 0.09)));
+    c *= 1.0 - 0.45 * (1.0 - smoothstep(0.012, 0.022, nd));
+    return c;
+}
+
+/// Brick (the loft wall): courses 0.21 high, bricks 0.46 long, half offset, mortar mixed toward pal4. `albedo` is the wall colour.
+static void roomWallBrick(float u, float y, float3 pal4, thread float3& albedo, thread float& ao) {
+    float row = floor(y / 0.21);
+    float xs = u + (fmod(row, 2.0) > 0.5 ? 0.23 : 0.0);
+    float col = floor(xs / 0.46);
+    float fx = (xs / 0.46 - col) * 0.46, fy = (y / 0.21 - row) * 0.21;
+    float dm = min(min(fx, 0.46 - fx), min(fy, 0.21 - fy));
+    float aa = max(fwidth(y) * 0.8, 0.003);
+    float mortar = 1.0 - smoothstep(0.009 - aa, 0.009 + aa, dm);
+    float h = roomHash(float2(col * 1.7 + row * 9.1, row * 0.31 + 2.0));
+    float3 brick = albedo * (0.96 + 0.08 * h) * mix(0.93, 1.0, smoothstep(0.0, 0.05, dm));
+    float3 mort = mix(albedo, pal4, 0.55);
+    albedo = mix(brick, mort, mortar);
+    ao *= mix(1.0, 0.85, mortar);
+}
+
+/// Logs (the cabin wall): period 0.42 in y, rounded profile shade, a dark groove, mixed toward the darker wood pal1.
+static void roomWallLogs(float u, float y, float3 pal1, thread float3& albedo, thread float& ao) {
+    float f = fract(y / 0.42);
+    float shade = 0.82 + 0.18 * sin(3.14159265 * f);
+    float edge = min(f, 1.0 - f) * 0.42;
+    float aa = max(fwidth(y) * 0.8, 0.003);
+    float groove = 1.0 - smoothstep(0.03 - aa, 0.03 + aa, edge);
+    float row = floor(y / 0.42);
+    float grain = sin(u * 9.0 + roomHash(float2(row, 1.0)) * 30.0 + sin(u * 2.3 + row) * 2.0) * 0.5 + 0.5;
+    float3 wood = mix(albedo, pal1, 0.35);
+    albedo = wood * shade * (0.95 + 0.07 * grain) * (1.0 - 0.45 * groove);
+    ao *= mix(1.0, 0.8, groove);
+}
+
 // ---- shoes: the paint specs evaluated per pixel (ShoeGPU.swift builds the table) ----
 
 static float3 roomSrgbToLin(float3 c) {
@@ -231,7 +306,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
 
     if (m == 4) {
         // glowing pane: emissive, only the fog-free light
-        float t = saturate((P.y - 1.5) / 2.8);
+        float t = saturate((P.y - u.win.x) / u.win.y);
         float soft = 1.0 + 0.5 * smoothstep(0.0, 1.0, t);
         float3 pane = albedo * soft * 1.25;
         if (u.sky1.w > 0.001) {
@@ -249,14 +324,31 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
         return float4(pane, 1.0);
     } else if (m == 1) {
         float seam;
-        albedo = roomFloor(u, P.xz, u.pal2.rgb, u.pal3.rgb, seam);
-        albedo *= mix(0.78, 1.0, seam);
-        gloss = 0.5 * seam;
+        int fst = int(u.style.x + 0.5);
+        if (fst == 1) {
+            albedo = roomFloorLong(P.xz, u.pal2.rgb, u.pal3.rgb, seam);
+            albedo *= mix(0.80, 1.0, seam);
+            gloss = 0.45 * seam;
+        } else if (fst == 2) {
+            albedo = roomFloorRough(P.xz, u.pal2.rgb, u.pal3.rgb, seam);
+            albedo *= mix(0.62, 1.0, seam);
+            gloss = 0.25 * seam;
+        } else {
+            albedo = roomFloor(u, P.xz, u.pal2.rgb, u.pal3.rgb, seam);
+            albedo *= mix(0.78, 1.0, seam);
+            gloss = 0.5 * seam;
+        }
     } else if (m == 2) {
         // wall: soft vertical gradient and corner / floor occlusion
         ao *= mix(0.72, 1.0, smoothstep(0.0, 1.0, P.y));
         ao *= mix(0.85, 1.0, smoothstep(0.0, 0.8, min(P.x - u.bounds.x, u.bounds.y - P.x)));
         ao *= mix(0.92, 1.0, smoothstep(1.0, 3.0, 10.0 - P.y));
+        int wst = int(u.style.y + 0.5);
+        if (wst != 0) {
+            float wu = abs(N.x) > 0.5 ? P.z : P.x;
+            if (wst == 1) { roomWallBrick(wu, P.y, u.pal4.rgb, albedo, ao); }
+            else { roomWallLogs(wu, P.y, u.pal1.rgb, albedo, ao); }
+        }
     } else if (m == 3) {
         float r = length(P.xz - u.rug.xy);
         float R = u.rug.z;
@@ -265,6 +357,21 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
         float centre = smoothstep(1.2, 0.0, r) * 0.35;                           // soft centre medallion
         albedo = mix(u.pal4.rgb, u.pal3.rgb, saturate(band + line * 0.8));
         albedo = mix(albedo, u.pal3.rgb, centre * 0.5);
+        int rst = int(u.style.z + 0.5);
+        if (rst == 1) {                                                           // stripes along x, a border band
+            float bandS = step(0.5, fract((P.x - u.rug.x) / 0.28));
+            albedo = mix(u.pal4.rgb, u.pal3.rgb, bandS);
+            float bd = smoothstep(R - 0.18 - 0.012, R - 0.18 + 0.012, r);
+            albedo = mix(albedo, u.pal2.rgb, bd * 0.9);
+        } else if (rst == 2) {                                                    // braided: rings every 0.12 cycling pal2/pal3/pal4, twisted
+            float ring = floor(r / 0.12);
+            float k = fmod(ring, 3.0);
+            float3 rc = k < 0.5 ? u.pal2.rgb : (k < 1.5 ? u.pal3.rgb : u.pal4.rgb);
+            float ang = atan2(P.z - u.rug.y, P.x - u.rug.x);
+            float tw = roomHash(float2(floor(ang * 24.0 + ring), ring));
+            float within = abs(fract(r / 0.12) - 0.5) * 2.0;
+            albedo = rc * (0.93 + 0.10 * tw) * mix(1.0, 0.86, smoothstep(0.7, 1.0, within));
+        }
         albedo *= 0.96 + 0.04 * roomHash(floor(P.xz * 90.0));                    // fibre speckle
     } else {
         ao = ao; // baked

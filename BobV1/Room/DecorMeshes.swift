@@ -63,7 +63,7 @@ nonisolated enum DecorMeshes {
             for p in 0..<np {
                 let o = 12 + p * 40
                 let nameBytes = (0..<16).map { raw.loadUnaligned(fromByteOffset: o + $0, as: UInt8.self) }.prefix { $0 != 0 }
-                var part = Part(name: String(decoding: nameBytes, as: UTF8.self), material: u32(o + 24) == 5 ? .lamp : .plain,
+                var part = Part(name: String(decoding: nameBytes, as: UTF8.self), material: { switch u32(o + 24) { case 5: return .lamp; case 4: return .glow; default: return .plain } }(),
                                 pivot: SIMD3(f32(o + 28), f32(o + 32), f32(o + 36)))
                 let first = u32(o + 16), count = u32(o + 20)
                 var remap: [Int: UInt32] = [:]
