@@ -2,8 +2,8 @@
 //  MusicDirector.swift
 //  What music plays when: a pure state machine (no players, no clock). The audio engine feeds it dt + the situation each frame and carries out
 //  the events it returns. Rules:
-//    - day / morning: the day playlist, shuffled, no repeat until all five have played;
-//    - evening (17-21): evening_1 first, then day tracks at a lower volume; night (21-6): the lo-fi playlist;
+//    - day / morning: the day playlist, shuffled, no repeat until the whole pool has played;
+//    - evening (17-21): an evening track first, then evening + day tracks at a lower volume; night (21-6): the lo-fi playlist;
 //    - every Jelly napping: lo-fi at any hour (quiet), back to the time-of-day music once one wakes;
 //    - after every 1 or 2 tracks a 30...90 s gap where only the room ambience plays; tracks crossfade over `fade` seconds;
 //    - play layer (lofi_play): fades in ~1 s when the Jellies play / zoom, fades out 8...10 s after it calms; 2 min cooldown;
@@ -16,12 +16,42 @@ import Foundation
 
 nonisolated enum MusicTrack: String, CaseIterable, Sendable {
     case day1 = "day_1", day2 = "day_2", day3 = "day_3", day4 = "day_4", day5 = "day_5"
-    case evening1 = "evening_1"
-    case night1 = "night_1", night2 = "night_2", night3 = "night_3"
+    case day6 = "day_6", day7 = "day_7", day8 = "day_8", day9 = "day_9"          // new 2026-10-23 (isNew)
+    case evening1 = "evening_1", evening2 = "evening_2", evening3 = "evening_3"
+    case night1 = "night_1", night2 = "night_2", night3 = "night_3", night4 = "night_4", night5 = "night_5"
     case lofiPlay = "lofi_play"
 
-    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5]
-    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3]
+    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5, .day6, .day7, .day8, .day9]
+    static let eveningPool: [MusicTrack] = [.evening1, .evening2, .evening3]
+    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3, .night4, .night5]
+
+    /// Display name (the sound panel's now-playing row).
+    var title: String {
+        switch self {
+        case .day1: return "Soft Sunset"
+        case .day2: return "Window Light"
+        case .day3: return "Bubble Drift"
+        case .day4: return "Pastel Haze"
+        case .day5: return "Lazy Cloud"
+        case .day6: return "Warm Static"
+        case .day7: return "Sunny Chorus"
+        case .day8: return "Bubble Pop"
+        case .day9: return "Daydream Pads"
+        case .evening1: return "Golden Hour"
+        case .evening2: return "Lamp Glow"
+        case .evening3: return "Dusk Steps"
+        case .night1: return "Moon Nap"
+        case .night2: return "Rainy Glass"
+        case .night3: return "Sleepy Lamp"
+        case .night4: return "Rain Hush"
+        case .night5: return "Night Drift"
+        case .lofiPlay: return "Zoomies"
+        }
+    }
+    /// Added 2026-10-23 (the user can veto any: remove the case, its pool entry and the m4a).
+    var isNew: Bool {
+        switch self { case .day6, .day7, .day8, .day9, .evening2, .evening3, .night4, .night5: return true; default: return false }
+    }
 }
 
 nonisolated enum MusicMode: Equatable, Sendable {
@@ -78,6 +108,7 @@ nonisolated struct MusicDirector {
     private var started = false
     private var eveningIntro = true
     private var bag: [MusicTrack] = []
+    private var eveningBag: [MusicTrack] = []
     private(set) var lastPlayed: MusicTrack?
     private(set) var played: [MusicTrack] = []
 
@@ -101,18 +132,28 @@ nonisolated struct MusicDirector {
     var layerGain: Double { layerOn ? 1 : 0 }
 
     private mutating func nextTrack() -> MusicTrack {
-        if mode == .evening, eveningIntro { eveningIntro = false; lastPlayed = .evening1; return .evening1 }
-        let pool = mode.usesLofi ? MusicTrack.lofiPool : MusicTrack.dayPool
+        if mode == .evening, eveningIntro {          // an evening track opens the evening; none repeats until all have opened one
+            eveningIntro = false
+            if eveningBag.isEmpty { eveningBag = shuffled(MusicTrack.eveningPool, avoiding: lastPlayed) }
+            let t = eveningBag.removeFirst()
+            lastPlayed = t
+            return t
+        }
+        let pool = mode.usesLofi ? MusicTrack.lofiPool : mode == .evening ? MusicTrack.eveningPool + MusicTrack.dayPool : MusicTrack.dayPool
         bag.removeAll { !pool.contains($0) }
         if bag.isEmpty {
-            var b = pool
-            for i in stride(from: b.count - 1, to: 0, by: -1) { b.swapAt(i, Int(rand() * Double(i + 1)) % (i + 1)) }
-            if b.count > 1, b[0] == lastPlayed { b.swapAt(0, b.count - 1) }
-            bag = b
+            bag = shuffled(pool, avoiding: lastPlayed)
         }
         let t = bag.removeFirst()
         lastPlayed = t
         return t
+    }
+
+    private func shuffled(_ pool: [MusicTrack], avoiding last: MusicTrack?) -> [MusicTrack] {
+        var b = pool
+        for i in stride(from: b.count - 1, to: 0, by: -1) { b.swapAt(i, Int(rand() * Double(i + 1)) % (i + 1)) }
+        if b.count > 1, b[0] == last { b.swapAt(0, b.count - 1) }
+        return b
     }
 
     private mutating func startNext(_ ev: inout [MusicEvent], fade f: Double? = nil) {
@@ -136,6 +177,23 @@ nonisolated struct MusicDirector {
         return ev
     }
 
+    static let skipFade = 1.5          // crossfade on Skip
+    static let skipMinInterval = 0.75  // taps inside this do nothing (each playTrack spawns a deck)
+    private var sinceSkip = 100.0
+
+    /// Skip to the next track of the current playlist (no repeat until the pool cycles). [] (nothing changes) while a screen's scene music is up,
+    /// before the first update, or within `skipMinInterval` of the last skip. In a gap it ends the gap. The play layer is released so the new track is heard.
+    mutating func skip(fade f: Double = MusicDirector.skipFade) -> [MusicEvent] {
+        guard started, scene == .none, sinceSkip >= Self.skipMinInterval else { return [] }
+        sinceSkip = 0
+        var ev: [MusicEvent] = []
+        if layerOn { layerOn = false; cooldownLeft = Self.layerCooldown; ev.append(.layerOff(fade: f)) }
+        tracksSincePause = 0
+        pickGapPlan()
+        startNext(&ev, fade: f)
+        return ev
+    }
+
     /// Test seam: be in an ambience-only gap of `length` seconds.
     mutating func forceGap(_ length: Double) {
         guard started, scene == .none else { return }
@@ -149,6 +207,7 @@ nonisolated struct MusicDirector {
     mutating func update(dt: Double, input: MusicInput) -> [MusicEvent] {
         var ev: [MusicEvent] = []
         dwell += dt
+        sinceSkip += dt
         cooldownLeft = max(0, cooldownLeft - dt)
 
         // screens

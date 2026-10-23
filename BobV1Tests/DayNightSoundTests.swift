@@ -187,11 +187,13 @@ final class DayNightSoundTests: XCTestCase {
     func testDayPlaylistShufflesWithoutRepeatUntilAllPlayed() {
         var d = MusicDirector(length: { _ in 20 }, rand: { Double.random(in: 0..<1) })
         d.fade = 3
-        let ev = run(&d, seconds: 4000, input: MusicInput(phase: .day))
+        let ev = run(&d, seconds: 8000, input: MusicInput(phase: .day))
         let t = tracks(ev)
         XCTAssertGreaterThan(t.count, 10)
-        for chunk in stride(from: 0, to: t.count - 5, by: 5) {
-            XCTAssertEqual(Set(t[chunk..<chunk + 5]).count, 5, "each round of 5 plays every day track once")
+        let n = MusicTrack.dayPool.count
+        XCTAssertGreaterThan(t.count, n * 2)
+        for chunk in stride(from: 0, to: t.count - n, by: n) {
+            XCTAssertEqual(Set(t[chunk..<chunk + n]).count, n, "each round plays every day track once")
         }
         for i in 1..<t.count { XCTAssertNotEqual(t[i], t[i - 1], "no immediate repeat") }
         XCTAssertTrue(t.allSatisfy { MusicTrack.dayPool.contains($0) })
@@ -222,12 +224,12 @@ final class DayNightSoundTests: XCTestCase {
         XCTAssertNotNil(d2.gapLeft)
     }
 
-    func testEveningStartsWithEvening1ThenDayTracksQuieter() {
+    func testEveningStartsWithAnEveningTrackThenMixesDayTracksQuieter() {
         var d = MusicDirector(length: { _ in 20 }, rand: { Double.random(in: 0..<1) })
         let ev = run(&d, seconds: 600, input: MusicInput(phase: .evening))
         let t = tracks(ev)
-        XCTAssertEqual(t.first, .evening1)
-        XCTAssertTrue(t.dropFirst().allSatisfy { MusicTrack.dayPool.contains($0) })
+        XCTAssertTrue(MusicTrack.eveningPool.contains(t.first!))
+        XCTAssertTrue(t.allSatisfy { (MusicTrack.eveningPool + MusicTrack.dayPool).contains($0) })
         XCTAssertEqual(d.mode, .evening)
         XCTAssertLessThan(d.mainGain(), MusicDirector(rand: { 0 }).mainGain())
     }
@@ -244,8 +246,9 @@ final class DayNightSoundTests: XCTestCase {
         XCTAssertEqual(d.mode, .night)
         // night playlist also never repeats until all three played
         var d2 = MusicDirector(length: { _ in 10 }, rand: { Double.random(in: 0..<1) })
-        let t2 = tracks(run(&d2, seconds: 3000, input: MusicInput(phase: .night)))
-        for chunk in stride(from: 0, to: t2.count - 3, by: 3) { XCTAssertEqual(Set(t2[chunk..<chunk + 3]).count, 3) }
+        let t2 = tracks(run(&d2, seconds: 5000, input: MusicInput(phase: .night)))
+        let k = MusicTrack.lofiPool.count
+        for chunk in stride(from: 0, to: t2.count - k, by: k) { XCTAssertEqual(Set(t2[chunk..<chunk + k]).count, k) }
     }
 
     /// Back from the background: the music snaps to the clock's mood at once (fade 0.4), even before minDwell.

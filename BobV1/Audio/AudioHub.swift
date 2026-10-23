@@ -27,7 +27,9 @@ import QuartzCore
 final class AudioHub {
     static let shared = AudioHub()
 
-    var settings: AudioSettings { didSet { if settings != oldValue { settings.save(to: defaults); if settings.musicOn != oldValue.musicOn { reapplySession() }; applyLevels() } } }
+    var settings: AudioSettings { didSet { if settings != oldValue { settings.save(to: defaults); if settings.musicOn != oldValue.musicOn { reapplySession() }; applyLevels(); refreshNowPlaying() } } }
+    /// The sound panel's now-playing row (observed; assigned only when it changes).
+    private(set) var nowPlaying = NowPlaying.initial
     /// `-Mute 1` or running under XCTest: no session, no players.
     let muted: Bool
 
@@ -82,6 +84,7 @@ final class AudioHub {
         settings = AudioSettings(defaults: d)
         director = MusicDirector()
         director.length = { [unowned self] t in self.trackLength(t) }
+        refreshNowPlaying()
     }
     nonisolated deinit {}
 
@@ -129,7 +132,7 @@ final class AudioHub {
         guard !muted else { return }
         let s = AVAudioSession.sharedInstance()
         let now = s.isOtherAudioPlaying || s.secondaryAudioShouldBeSilencedHint
-        if now != otherAudioPlaying { otherAudioPlaying = now; applyLevels() }
+        if now != otherAudioPlaying { otherAudioPlaying = now; applyLevels(); refreshNowPlaying() }
     }
 
     /// Music level the game really uses: the setting, silenced while someone else's audio plays.
@@ -171,7 +174,7 @@ final class AudioHub {
     var _inGap: Bool { director.gapLeft != nil }
     var _micSession: Bool { micSession }
     var _musicLevelNow: Float { musicLevelNow }
-    func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on }
+    func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on; applyLevels(); refreshNowPlaying() }
     var _sceneEngine: SceneMusicEngine? { scene }
     func _tick(_ dt: Double) { _ = dt; tick() }
 
@@ -486,7 +489,21 @@ final class AudioHub {
         return l
     }
 
+    private func refreshNowPlaying() {
+        let n = NowPlaying.make(muted: muted, musicOn: settings.musicOn, musicVolume: settings.musicVolume, otherAudioPlaying: otherAudioPlaying,
+                                mode: director.mode, scene: director.scene, current: director.current, inGap: director.gapLeft != nil, layerOn: director.layerOn)
+        if n != nowPlaying { nowPlaying = n }
+    }
+
+    /// Skip to the next song (crossfade `MusicDirector.skipFade`). Does nothing when the row says Skip is disabled.
+    func skipTrack() {
+        refreshNowPlaying()
+        guard nowPlaying.canSkip, started, active else { return }
+        perform(director.skip())
+    }
+
     private func perform(_ events: [MusicEvent]) {
+        defer { refreshNowPlaying() }
         for e in events {
             eventLog.append(e); if eventLog.count > 40 { eventLog.removeFirst() }
             switch e {
