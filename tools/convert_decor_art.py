@@ -80,4 +80,5 @@ def main():
         open(os.path.join(out, "decor_%s.bin" % i), "wb").write(data)
         print(i, nv, "verts", nt, "tris", len(data), "bytes", names)
 
-main()
+if __name__ == "__main__":
+    main()

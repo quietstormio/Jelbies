@@ -39,13 +39,18 @@ enum RoomLayout {
     nonisolated(unsafe) static private(set) var current: RoomDef = RoomCatalog.home
     /// Bumps on every `apply`: the renderer rebuilds the room mesh when it sees a new value.
     nonisolated(unsafe) static private(set) var revision = 0
-    static func apply(_ d: RoomDef) { current = d; revision &+= 1 }
+    static func apply(_ d: RoomDef) { current = d; couchBox = d.couch; extraBoxes = d.boxes; cylinderList = d.cylinders; tableCyl = d.lampTable; revision &+= 1 }
+    // The collision hot path (the sim steps) reads these cheap copies of `current` instead of copying the whole definition.
+    nonisolated(unsafe) static private var couchBox = RoomCatalog.home.couch
+    nonisolated(unsafe) static private var extraBoxes: [RoundedBox] = []
+    nonisolated(unsafe) static private var cylinderList = RoomCatalog.home.cylinders
+    nonisolated(unsafe) static private var tableCyl = RoomCatalog.home.lampTable
 
     /// Whole sofa (arms included) as one rounded box: the main seat of the current room.
-    static var sofa: RoundedBox { current.couch }
+    static var sofa: RoundedBox { couchBox }
     /// The piece under the room lamp (the side table at home).
-    static var table: Cylinder { current.lampTable }
-    static var cylinders: [Cylinder] { current.cylinders }
+    static var table: Cylinder { tableCyl }
+    static var cylinders: [Cylinder] { cylinderList }
 
     /// Temporary floor obstacles (the dining tray while it exists): axis-aligned rounded rectangles in xz, `height` tall.
     struct FlatBox: Equatable { var centre: SIMD2<Float>; var half: SIMD2<Float>; var height: Float; var radius: Float = 0.04 }
@@ -95,9 +100,8 @@ enum RoomLayout {
 
     /// Signed distance in the xz plane to the room's fixed box furniture (the sofa, and any further boxes of the current room); negative inside.
     static func sofaDistanceXZ(_ p: SIMD2<Float>) -> Float {
-        let boxes = current.allBoxes
-        var d = boxDistance(p, boxes[0])
-        for b in boxes.dropFirst() { d = min(d, boxDistance(p, b)) }
+        var d = boxDistance(p, couchBox)
+        for b in extraBoxes { d = min(d, boxDistance(p, b)) }
         return d
     }
 
@@ -110,7 +114,9 @@ enum RoomLayout {
                 if dist < radius { p += w.normal * (radius - dist) }
             }
             // sofa and any further box furniture (skip each when clearly above it)
-            for box in current.allBoxes where p.y - radius < box.centre.y + box.halfExtents.y {
+            for bi in -1..<extraBoxes.count {
+                let box = bi < 0 ? couchBox : extraBoxes[bi]
+                guard p.y - radius < box.centre.y + box.halfExtents.y else { continue }
                 let xz = SIMD2(p.x, p.z)
                 let sd = boxDistance(xz, box)
                 if sd < radius {
