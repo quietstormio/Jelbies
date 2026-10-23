@@ -131,7 +131,8 @@ final class BehaviourRoundTests: XCTestCase {
         XCTAssertGreaterThan(r.brain.awakeMin, 30, "he stays up a while")
     }
 
-    func testASelectedSleeperWakesOnceAndStaysAwake() {
+    /// A highlight (tap) on a sleeper is instant and does not wake him (the old "a pick wakes a sleeper" contract is gone).
+    func testAHighlightedSleeperStaysAsleep() {
         let room = RaceTripTests.Room()
         RaceTripTests.keep.append(room)
         let care = room.care
@@ -139,29 +140,12 @@ final class BehaviourRoundTests: XCTestCase {
         room.actors[2].brain!.commandedGoodnight = true
         room.run(40, until: { room.actors[2].brain!.isNapping })
         XCTAssertTrue(room.actors[2].brain!.isNapping)
-        care.select.doubleTap(2)
-        room.run(0.4)
-        XCTAssertTrue(room.actors[2].brain!.sleep.wakeAsked || !room.actors[2].brain!.isSleeping, "the pick woke him")
-        room.run(10, until: { !room.actors[2].brain!.isSleeping })
-        XCTAssertFalse(room.actors[2].brain!.isSleeping)
-        XCTAssertTrue(room.actors[2].brain!.selectedNow)
-        // the selection stays up; he is put back to sleep (the old code woke him again on every tick)
-        let b = room.actors[2].brain!
-        b.idleForced = true
-        XCTAssertTrue(b.idleStart(.sleep, room.actors[2].sim))
-        b.sleep.hold = 100
-        var woke = false
+        care.tapJelly(2)
         room.run(6)
-        for _ in 0..<(60 * 4) { room.step(); if b.sleep.wakeAsked { woke = true } }
-        XCTAssertFalse(woke, "one wake per selection (edge-triggered)")
-        // and nobody who is picked goes to bed by himself
-        b.idleReset(room.actors[2].skinner)
-        b.awakeMin = 0; b.sleepTryCool = 0
-        b.idleNight = 0.9
-        XCTAssertFalse(b.sleepWanted(), "no sleepWanted while selected")
-        care.select.cancel()
-        room.run(0.2)
-        XCTAssertFalse(b.selectedNow)
+        XCTAssertEqual(care.select.highlighted, 2)
+        XCTAssertFalse(room.actors[2].brain!.sleep.wakeAsked)
+        XCTAssertTrue(room.actors[2].brain!.isSleeping, "no wake from a highlight")
+        XCTAssertFalse(room.actors[2].brain!.selectedNow)
         care.release()
     }
 

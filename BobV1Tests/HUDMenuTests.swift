@@ -26,6 +26,17 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(HUDMenu.items(.group), [.feed, .snacks, .drink, .play, .decor, .bedtime])
     }
 
+    func testOneJelbieCanBeHighlightedForTheIndividualMenu() {
+        let c = GameCare(jellyCount: 1, persistent: false, defaults: UserDefaults(suiteName: "HUDMenu.1")!)
+        Self.keep.append(c)
+        XCTAssertEqual(HUDMenu.mode(c), .group)
+        c.tapJelly(0)
+        XCTAssertEqual(HUDMenu.mode(c), .individual(0))
+        XCTAssertTrue(HUDMenu.items(.individual(0)).contains(.clean))
+        c.clearHighlight()
+        XCTAssertEqual(HUDMenu.mode(c), .group)
+    }
+
     func testIndividualModeAfterATapPick() {
         let care = care3()
         care.tapJelly(1)

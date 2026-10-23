@@ -24,6 +24,8 @@ final class SelectionTests: XCTestCase {
         s.doubleTap(0)
         XCTAssertEqual(s.phase, .none, "no select step with one Blob")
         XCTAssertTrue(s.actionVisible)
+        s.pick(0)                                                // the highlight itself works with one Blob (the tap highlight)
+        XCTAssertEqual(s.selectedID, 0)
     }
 
     func testATapDrawsTheOutlineThenSettlesWithNoChip() {
