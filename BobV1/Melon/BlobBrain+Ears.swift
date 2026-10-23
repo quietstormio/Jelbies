@@ -129,8 +129,8 @@ final class EarsReactor {
         // a reserved Jelly (his meal is coming) waits where he stands: no reaction at all. (`idleBlocked` is NOT a reason: the close-up
         // sets it on everybody, and there the small reactions still land, see `Locks.focus`.)
         let free = jellies.filter { !$0.brain.reserved }
-        let awake = free.filter { !$0.brain.isNapping }
-        let asleep = free.filter { $0.brain.isNapping }
+        let awake = free.filter { !$0.brain.isSleeping }          // (on his way to bed or rolling counts as asleep for sound)
+        let asleep = free.filter { $0.brain.isSleeping }
         switch e {
         case .heard(.clap), .heard(.snap):
             for j in asleep { start(.stir, j) }
@@ -140,6 +140,11 @@ final class EarsReactor {
         case .doubleClap:
             for j in asleep { start(.stir, j) }
             guard !locks.blocksBig else { for j in awake { start(.giggle, j) }; return }
+            if !asleep.isEmpty {          // sleepers in the room: a double clap is only a clap (nobody calls everyone and wakes them)
+                for j in awake { start(.perk, j) }
+                if let near = nearestToFront(awake) { come(near); note("double clap (sleepers): \(near.id) comes") }
+                return
+            }
             for j in awake { start(.perk, j); j.brain.hurry = true; hurrying.insert(j.id) }
             comeEveryone(); note("double clap: everyone comes")
         case .musicStarted(let b):
@@ -167,7 +172,7 @@ final class EarsReactor {
         case .bang(let level):
             for j in awake { start(.startle(level: level), j) }
             for j in asleep {
-                if level >= EarsTuning.veryLoud { j.brain.sleepWake(groggy: true, fast: true); start(.startle(level: level), j); note("bang woke \(j.id)") }
+                if level >= SleepTuning.earsWakeLevel { j.brain.sleepWake(groggy: true, fast: true); start(.startle(level: level), j); note("bang woke \(j.id)") }
                 else { start(.stir, j) }
             }
         case .heard(.speech), .heard(.music), .heard(.loudBang):
@@ -185,7 +190,7 @@ final class EarsReactor {
         }
         if let t = whistleComeAt, now >= t {
             whistleComeAt = nil
-            if !locks.blocksBig, let near = nearestToFront(jellies.filter { !$0.brain.isNapping }) { come(near); note("whistle: \(near.id) comes") }
+            if !locks.blocksBig, let near = nearestToFront(jellies.filter { !$0.brain.isSleeping }) { come(near); note("whistle: \(near.id) comes") }
         }
         for j in jellies {
             if hurrying.contains(j.id) {

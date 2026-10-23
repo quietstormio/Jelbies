@@ -207,7 +207,11 @@ final class EarsReactorTests: XCTestCase {
         XCTAssertEqual(room.reactor.anim(of: 1), .stir, "a modest bang: a stir")
         room.run(1.0, brains: false)
         room.handle(.bang(level: 0.9))
-        XCTAssertEqual(room.reactor.anim(of: 1), .startle(level: 0.9), "a very loud bang wakes him")
+        XCTAssertEqual(room.reactor.anim(of: 1), .stir, "a loud bang (0.9) is still only a stir: only a VERY loud one wakes a sleeper")
+        XCTAssertFalse(room.rigs[1].brain.sleep.wakeAsked)
+        room.run(1.0, brains: false)
+        room.handle(.bang(level: 0.95))
+        XCTAssertEqual(room.reactor.anim(of: 1), .startle(level: 0.95), "a very loud bang wakes him")
         XCTAssertTrue(room.rigs[1].brain.sleep.wakeAsked)
         XCTAssertFalse(room.rigs[1].brain.isNapping)
     }

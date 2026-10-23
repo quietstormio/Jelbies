@@ -49,6 +49,8 @@ nonisolated enum MusicEvent: Equatable, Sendable {
 
 nonisolated struct MusicDirector {
     var fade = 3.0
+    /// Set by `resumed`: the next mode change after a return is immediate (the day may have moved on while he was away).
+    private var snapPending = false
     var length: (MusicTrack) -> Double
     var rand: () -> Double
     /// Mode switches wait at least this long after the last one (a time-lapse or a Jelly waking and napping again must not flap the music).
@@ -124,6 +126,7 @@ nonisolated struct MusicDirector {
     /// next track now (fading in over `fade`). Also when the room's music should be playing but no deck actually is (`deckPlaying` false).
     /// Does nothing while a screen's scene music is up (the hub re-checks the scene engine itself).
     mutating func resumed(deckPlaying: Bool, fade f: Double = 1.5) -> [MusicEvent] {
+        snapPending = true          // the next `update` snaps to the clock's mood at once (no 3 s crossfade, no minDwell wait)
         guard started, scene == .none else { return [] }
         guard gapLeft != nil || !deckPlaying else { return [] }
         var ev: [MusicEvent] = []
@@ -178,6 +181,14 @@ nonisolated struct MusicDirector {
             if want == .evening { eveningIntro = true }
             pickGapPlan()
             startNext(&ev)
+        } else if snapPending {
+            snapPending = false
+            if want != mode {
+                if want == .evening { eveningIntro = true }
+                mode = want; dwell = 0
+                tracksSincePause = 0
+                startNext(&ev, fade: 0.4)
+            }
         } else if want != mode, dwell >= minDwell {
             if want == .evening { eveningIntro = true }
             mode = want; dwell = 0

@@ -468,6 +468,7 @@ final class VoiceCoordinator {
         case .scold: legacy(.social(.scold))
         case .play: legacy(.social(.play))
         case .trick(let t): legacy(.trick(t))
+        case .wake: legacy(.social(.wakeUp))
         case .sleep: legacy(.social(.goodnight))                        // bedtime is the existing goodnight (yawn, cuddle pile, tucked in)
         case .playWith where c.object == nil: legacy(.social(.play))    // "play with Moss" and no toy named: the usual play
         default:
@@ -501,6 +502,9 @@ final class VoiceCoordinator {
         case .wrongTrick(let said, _): kind = .missed(said, pct: Int((training.reliability(said) * 100).rounded()))
         default: break
         }
+        // a name wakes ONLY that Jelbie (sleepy wake); selecting him wakes nobody. Any word counts as an interaction (the night-idle clock).
+        if case .jelly(let id) = d.target, presentIDs.contains(id), r != .social(.goodnight), r != .social(.wakeUp) { care.wakeSleeper(id) }
+        if ids.isEmpty { care.noteInteraction() } else { for id in ids { care.noteInteraction(jelly: id) } }
         // naming a Jelly selects it (the outline a tap gives); come already zooms onto him, and the close-up needs no highlight
         if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come) {
             if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }
@@ -772,10 +776,22 @@ final class VoiceCoordinator {
             switch target {
             case .everyone: meant = presentIDs
             case .jelly(let id): meant = [id]
-            case .selected: meant = (focused || care.select.selectedID != nil) ? [care.targetJelly] : presentIDs
+            case .selected: meant = focused ? [care.targetJelly] : presentIDs          // (a plain "goodnight" is everyone; a highlight is not a target)
             }
             goodnightLog.append(meant); if goodnightLog.count > 20 { goodnightLog.removeFirst() }
+            care.registerBedtime(meant)          // retried by the night-rest book until each one lies down
             if let f = onGoodnight { f(meant) } else { brain.commandedGoodnight = true }
+            return
+        }
+        if r == .social(.wakeUp) {          // one by name wakes only him; everyone (or a plain "wake up") wakes all
+            emitFeedback(r, override: kind)
+            let meant: [Int]
+            switch target {
+            case .everyone: meant = presentIDs
+            case .jelly(let id): meant = [id]
+            case .selected: meant = focused ? [care.targetJelly] : presentIDs
+            }
+            if Set(meant) == Set(presentIDs) { care.wakeAll() } else { for id in meant { care.wakeSleeper(id) } }
             return
         }
         if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
@@ -811,6 +827,7 @@ final class VoiceCoordinator {
             if !trickRunning { brain.commandedIdle = .slump }
             care.showNeedBubble()
         case .nameHeard, .nicknameLearned:
+            if brain.isSleeping { break }          // a sleeper rolling up groggy takes no name hop
             nameHop = true; nameHopSeen = false; hopWait = 0; walkAfterHop = !focused
             brain.commandedNameHop = true
         case .social(let s):
@@ -847,7 +864,7 @@ final class VoiceCoordinator {
         case .play:
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }
-        case .goodnight:
+        case .goodnight, .wakeUp:
             break                                                    // (handled before: a group command)
         }
     }

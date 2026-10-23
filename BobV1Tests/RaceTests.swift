@@ -839,8 +839,8 @@ final class RaceTripTests: XCTestCase {
         XCTAssertTrue(care.raceBusy)
     }
 
-    /// The tap on a sleeper wakes him AND the selection goes on once he is upright (it does not start the draw while he lies).
-    func testSelectingASleeperWakesHimThenSelects() {
+    /// Selecting a sleeper highlights him without waking him (round 1022); the outline is not held back.
+    func testSelectingASleeperHighlightsWithoutWaking() {
         let room = Room()
         Self.keep.append(room)
         let care = room.care
@@ -850,12 +850,9 @@ final class RaceTripTests: XCTestCase {
         XCTAssertTrue(room.actors[2].brain!.isNapping)
         care.select.doubleTap(2)
         XCTAssertEqual(care.select.selectedID, 2)
-        room.run(0.5)
-        XCTAssertTrue(room.actors[2].brain!.sleep.wakeAsked || !room.actors[2].brain!.isSleeping, "the pick woke him")
-        XCTAssertEqual(care.select.clock, 0, "the draw waits while he is lying")
-        room.run(10, until: { !room.actors[2].brain!.isSleeping && care.select.clock > 0.2 })
-        XCTAssertFalse(room.actors[2].brain!.isSleeping)
-        XCTAssertGreaterThan(care.select.clock, 0.2, "then the selection proceeds")
+        room.run(10, until: { care.select.clock > 0.2 })
+        XCTAssertTrue(room.actors[2].brain!.isNapping, "still asleep")
+        XCTAssertGreaterThan(care.select.clock, 0.2, "and the highlight draws")
         XCTAssertEqual(care.select.selectedID, 2)
     }
 

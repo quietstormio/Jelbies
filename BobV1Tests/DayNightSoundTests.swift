@@ -127,7 +127,8 @@ final class DayNightSoundTests: XCTestCase {
         XCTAssertLessThanOrEqual(long.to - long.from, 24.0001)
     }
 
-    func testReturnAfterMoreThanAnHourSweeps() {
+    /// Round 1022: the day is on the real clock before the first frame, however long he was away (the sweep is only for the curtain tap).
+    func testReturnSnapsWithNoLapse() {
         let (c, _, box) = makeClock(hour: 20)
         let left = box.date
         box.set(hour: 20.5, dayOffset: 0)
@@ -135,10 +136,13 @@ final class DayNightSoundTests: XCTestCase {
         XCTAssertFalse(c.isLapsing, "30 minutes away: no sweep")
         box.set(hour: 7, dayOffset: 1)
         c.returned(from: left)
-        XCTAssertTrue(c.isLapsing)
-        XCTAssertEqual(c.displayHour, 20, accuracy: 0.05)
-        box.uptime += 4
-        XCTAssertEqual(c.displayHour, 7, accuracy: 1e-6)
+        XCTAssertFalse(c.isLapsing, "a night away: no sweep either")
+        XCTAssertEqual(c.displayHour, c.hour, accuracy: 1e-9)
+        c.skipToNextPhase()
+        XCTAssertTrue(c.isLapsing, "the curtain tap still sweeps")
+        c.snapToNow()
+        XCTAssertFalse(c.isLapsing)
+        XCTAssertEqual(c.displayHour, c.hour, accuracy: 1e-9)
     }
 
     func testWindowTapTarget() {
@@ -242,6 +246,19 @@ final class DayNightSoundTests: XCTestCase {
         var d2 = MusicDirector(length: { _ in 10 }, rand: { Double.random(in: 0..<1) })
         let t2 = tracks(run(&d2, seconds: 3000, input: MusicInput(phase: .night)))
         for chunk in stride(from: 0, to: t2.count - 3, by: 3) { XCTAssertEqual(Set(t2[chunk..<chunk + 3]).count, 3) }
+    }
+
+    /// Back from the background: the music snaps to the clock's mood at once (fade 0.4), even before minDwell.
+    func testResumeSnapsMusicToTheClock() {
+        var d = MusicDirector(length: { _ in 80 }, rand: { Double.random(in: 0..<1) })
+        _ = run(&d, seconds: 20, input: MusicInput(phase: .day))
+        XCTAssertEqual(d.mode, .day)
+        _ = d.resumed(deckPlaying: true)
+        let ev = d.update(dt: 0.1, input: MusicInput(phase: .night))
+        XCTAssertEqual(d.mode, .night)
+        guard case .playTrack(let t, let fade)? = ev.first(where: { if case .playTrack = $0 { return true }; return false }) else { return XCTFail("a track starts at once") }
+        XCTAssertTrue(MusicTrack.lofiPool.contains(t))
+        XCTAssertEqual(fade, 0.4, accuracy: 1e-9)
     }
 
     func testAllJelliesNappingSwitchesToLofiAnyTimeAndBack() {
@@ -386,6 +403,8 @@ final class DayNightSoundTests: XCTestCase {
             XCTAssertGreaterThan(w(m, .yawn, morning: 1), w(m, .yawn), "\(m) stretches in the morning")
         }
         XCTAssertLessThan(w(.happy, .zoomies, night: 1), w(.happy, .zoomies) * 0.5)
+        // bedtime is the player's call: the night table never offers sleep by itself
+        XCTAssertNil(IdleTable.weights(.happy, night: 1, morning: 0, sleep: true).first { $0.kind == .sleep }, "no autonomous sleep at night")
         // with no time of day it is exactly the old table
         for m in [BlobMood.happy, .okay, .grumpy] {
             let a = IdleTable.weights(m), b = IdleTable.weights(m, night: 0, morning: 0)

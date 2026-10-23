@@ -113,6 +113,19 @@ final class VoiceIntentTests: XCTestCase {
         XCTAssertEqual(decide(v, "everyone").target, .everyone)
     }
 
+    func testWakeUpPhrasesBeatPraiseAndKeepTheirTargets() {
+        let v = training()
+        for said in ["wake up", "rise and shine", "good morning", "time to get up", "wakey wakey"] {
+            XCTAssertEqual(decide(v, said).reaction, .social(.wakeUp), said)
+        }
+        XCTAssertEqual(decide(v, "wake up everyone").target, .everyone)
+        XCTAssertEqual(decide(v, "wake up").target, .selected)
+        XCTAssertEqual(decide(v, "good morning Pip").reaction, .social(.wakeUp))
+        XCTAssertEqual(decide(v, "good morning Pip").target, .jelly(1))
+        XCTAssertEqual(decide(v, "good boy").reaction, .social(.praise), "good boy stays praise")
+        XCTAssertEqual(decide(v, "goodnight").reaction, .social(.goodnight))
+    }
+
     func testGoodnightPhrasesBeatPraiseAndKeepTheirTargets() {
         let v = training()
         for said in ["goodnight", "good night", "Good night!", "night night", "nighty night", "bedtime", "it's bedtime", "time for bed", "go to sleep", "sleep tight", "sweet dreams", "lights out"] {

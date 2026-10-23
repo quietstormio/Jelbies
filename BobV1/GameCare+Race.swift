@@ -56,7 +56,7 @@ extension GameCare {
     func selectBrain(_ id: Int) -> BlobBrain? { raceBook.actors.indices.contains(id) ? raceBook.actors[id].brain : nil }
 
     func wireRace() {
-        select.holdFor = { [weak self] id in self?.selectBrain(id)?.isSleeping ?? false }
+        select.holdFor = { [weak self] id in guard let b = self?.selectBrain(id) else { return false }; return b.isLying && b.sleep.wakeAsked }          // (only a poked sleeper rolling up holds the outline back)
         race.wallet = bath.wallet
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }
@@ -80,9 +80,7 @@ extension GameCare {
 
     /// Siri / the widget: "goodnight" goes through the voice goodnight flow (every Jelly to bed), with its guards.
     func goodnight() {
-        guard !raceBusy, !trayOut, !bath.active else { return }
-        let ids = jellies.map(\.id)
-        if let f = voice.onGoodnight { f(ids) } else { for id in ids { selectBrain(id)?.commandedGoodnight = true } }
+        bedtimeAll()
     }
 
     /// Why a race cannot start for this Jelly right now, in words for the Track panel (nil = it can). A stage that has not ticked yet (the panel was opened

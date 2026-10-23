@@ -185,10 +185,10 @@ struct GameScreen: View {
         .onAppear {
             setUpSelect(); model.care.touchPlay = model.touch; model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
+            DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep)
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
-            if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }        // cold launch after > 1 h: the time-lapse from when he left
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
             let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
@@ -205,9 +205,9 @@ struct GameScreen: View {
         .onChange(of: scenePhase) { _, p in
             if p == .active {
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
+                DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the director sees the foreground
                 AudioHub.shared.setForeground(true)
                 Ears.shared.setForeground(true)
-                if let left = DayClock.shared.takeLeft() { DayClock.shared.returned(from: left) }      // away > 1 h: sweep the window light from then to now
                 LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
                 router.apply(care: model.care)

@@ -115,6 +115,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         controller?.gfxWake()          // leave the 30 fps idle rest at once (the next draw may be 33 ms away)
+        controller?.noteUserTouch()          // any finger restarts the night-idle bedtime clock
         claim()
         activeTouches += touches.count
         for t in touches {
@@ -366,6 +367,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                     b.commandedNameHop = true
                 case .scold: b.commandedIdle = .slump
                 case .goodnight: if !self.model.care.raceBusy { b.commandedGoodnight = true }
+                case .wakeUp: break          // (GameCare wakes them: care.wakeAll / wakeSleeper)
                 }
             }
         }
@@ -524,7 +526,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     private func updateTuck(_ renderer: MelonRenderer, dt: Float) {
         let brains = actors.compactMap(\.brain)
         let down = !brains.isEmpty && brains.allSatisfy { $0.isNapping } && brains.contains { $0.sleep.tucked }
-        tuckAmount += max(-dt / 1.5, min(dt / 2.5, (down ? 1 : 0) - tuckAmount))
+        if LaunchGate.shared.visible { tuckAmount = down ? 1 : 0 }          // under the launch curtain the room is already tucked in (no ramp)
+        else { tuckAmount += max(-dt / 1.5, min(dt / 2.5, (down ? 1 : 0) - tuckAmount)) }
         if !down, tuckAmount < 0.01 { tuckAmount = 0 }
         renderer.tuckAmount = tuckAmount
         if down, let q = Self.quiltSpot(for: brains.map(\.position)) { renderer.quiltSpot = q }
@@ -794,6 +797,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     /// Called from touchesBegan (and any other instant wake source): back to full rate without waiting for the next draw.
+    func noteUserTouch() { if game { model.care.noteInteraction() } }
+
     func gfxWake() {
         if idleRest.wake() {
             restWakes += 1
@@ -1153,7 +1158,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
-        if let id = model.care.select.hit(p) { model.care.select.doubleTap(id); return }          // a Jelly under the finger: unchanged
+        if let id = model.care.select.hit(p) {          // a Jelly under the finger: select him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
+            if model.care.select.selectedID == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
+            model.care.select.doubleTap(id); return
+        }
         if let uid = decorUnderFinger(p) { model.care.pickUpDecor(uid) }          // a placed piece (and no Jelly in front of it): pick it up to move it
     }
 

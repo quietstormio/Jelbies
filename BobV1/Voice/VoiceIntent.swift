@@ -27,6 +27,8 @@ nonisolated enum VoiceSocial: String, CaseIterable, Equatable, Sendable {
     case stop, stopFighting, praise, scold, play
     /// "Goodnight" / "bedtime": the awake Jellies yawn, gather into a cuddle pile, roll onto their backs and are tucked in.
     case goodnight
+    /// "Wake up" / "good morning" / "rise and shine": the sleepers wake (one by name, or everyone).
+    case wakeUp
 }
 
 /// One action the player asked for.
@@ -55,6 +57,14 @@ nonisolated enum VoicePhrases {
     private static let goodnightPhrases = ["good night", "goodnight", "night night", "nighty night", "nite nite", "bedtime", "bed time", "time for bed", "time to sleep",
                                            "go to sleep", "go to bed", "sleep tight", "sweet dreams", "lights out", "night night everyone", "nighty nite"]
     private static let goodnightWords: Set<String> = ["goodnight", "bedtime", "nightnight"]
+    /// Wake commands are tested FIRST ("good morning" starts with the praise word "good").
+    private static let wakePhrases = ["wake up", "rise and shine", "good morning", "time to get up", "get up", "wakey wakey", "up you get", "morning everyone"]
+    private static let wakeWords: Set<String> = ["wake", "wakey", "awake"]
+    static func isWake(_ t: [String]) -> Bool {
+        let padded = " " + t.joined(separator: " ") + " "
+        if padded.contains(" get up "), padded.contains(" on ") { return false }          // "get up on the couch" is a go-to
+        return has(padded, wakePhrases) || !Set(t).isDisjoint(with: wakeWords)
+    }
 
     private static func has(_ padded: String, _ phrases: [String]) -> Bool { phrases.contains { padded.contains(" \($0) ") } }
 
@@ -63,6 +73,7 @@ nonisolated enum VoicePhrases {
         guard !t.isEmpty else { return nil }
         let padded = " " + t.joined(separator: " ") + " "
         let set = Set(t)
+        if isWake(t) { return .wakeUp }
         if has(padded, goodnightPhrases) || !set.isDisjoint(with: goodnightWords) { return .goodnight }
         if has(padded, stopFighting) { return .stopFighting }
         if !set.isDisjoint(with: stopWords) || has(padded, stopPhrases) { return .stop }
@@ -164,7 +175,7 @@ struct VoiceIntentOut {
         case everyone
     }
     @Generable
-    enum Act { case come, stop, stopFighting, praise, scold, play, goodnight, sit, jumpingJacks, run, flip, look, spin, hop, roll, none }
+    enum Act { case come, stop, stopFighting, praise, scold, play, goodnight, wakeUp, sit, jumpingJacks, run, flip, look, spin, hop, roll, none }
 
     @Guide(description: "selected when no pet is addressed, named(name) when a pet name or nickname is said, everyone when all pets are addressed")
     var target: Target
@@ -189,7 +200,7 @@ final class SystemIntentModel: VoiceIntentModel {
         """
         Map what a pet owner said to their jelly pets onto ONE command. Never reply with words.
         Commands: come (call over, "come see me", "over here"), stop (stop, stay, wait), stopFighting (break up a fight, be nice, quit it), \
-        praise (compliments, "I love you", "good boy"), scold (no, bad, don't), play, goodnight (goodnight, bedtime, time to sleep), sit, jumpingJacks (jump, exercise), run, flip (backflip, somersault), \
+        praise (compliments, "I love you", "good boy"), scold (no, bad, don't), play, goodnight (goodnight, bedtime, time to sleep), wakeUp (wake up, rise and shine, good morning), sit, jumpingJacks (jump, exercise), run, flip (backflip, somersault), \
         look (look around), spin (spin around), hop (hop, bounce), roll (roll over), none (anything else).
         target: everyone if all the pets are addressed, named(name) if one of [\(names.joined(separator: ", "))] or a nickname is said, otherwise selected.
         """
@@ -222,6 +233,7 @@ final class SystemIntentModel: VoiceIntentModel {
         case .scold: out.action = .social(.scold)
         case .play: out.action = .social(.play)
         case .goodnight: out.action = .social(.goodnight)
+        case .wakeUp: out.action = .social(.wakeUp)
         case .sit: out.action = .trick(.sit)
         case .jumpingJacks: out.action = .trick(.jacks)
         case .run: out.action = .trick(.run)

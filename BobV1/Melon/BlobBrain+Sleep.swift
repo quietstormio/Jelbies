@@ -53,6 +53,9 @@ struct SleepState {
     var bed = -1
     var bedHop = 0
     var lieYawHop: Float = 0
+    /// A bedtime (the player's word or the night-idle rule): this sleep never fails to lie down.
+    var force = false
+    var forceRetried = false
 }
 
 enum SleepMode { case plain, hold, cuddle }
@@ -73,6 +76,8 @@ enum SleepTuning {
     static let impactDip: Float = 0.13, impactKick: Float = 2.2, wakeKick: Float = 1.2
     /// ONE night threshold for wanting bed, choosing a night nap length and for the morning wake (they used to be 0.3 / 0.4 / 0.4 and flip-flopped).
     static let nightEdge: Float = 0.4
+    /// Only a VERY loud bang wakes a sleeper (clap / whistle / bark only stir him).
+    static let earsWakeLevel: Float = 0.92
     /// After any wake he stays up this long (outside deep night), and a failed / abandoned walk to the pile is not retried for this long.
     static let awakeMin: ClosedRange<Float> = 60...150
     static let tryCool: ClosedRange<Float> = 45...90
@@ -248,11 +253,10 @@ extension BlobBrain {
     /// at night he joins at once, by day only while the first one has just lain down).
     func sleepWanted() -> Bool {
         guard sleepEnabled, social == nil, idleState.kind == nil, !selectedNow else { return false }          // (nobody who is picked goes to bed)
-        if idleDeepNight > 0.5 { return true }
+        if bedtimeHours { return false }          // at night he never chooses bed himself: the player's word or the night-idle rule (GameCare+NightRest) decides
         if awakeMin > 0 || sleepTryCool > 0 { return false }          // up for a while after a wake; no bedtime roll right after a failed walk to the pile
         let mates = sleepMates
         if mates.isEmpty { return false }
-        if idleNight > SleepTuning.nightEdge { return rand() < 0.8 }
         let fresh = mates.contains { $0.idleState.t < 20 && $0.sleep.stage <= 3 }
         if fresh && rand() < 0.3 { return true }
         // "come snuggle": any time of day, an awake Jelly may lie down beside one who is fully asleep (the roll starts a cooldown, win or lose)
@@ -267,31 +271,38 @@ extension BlobBrain {
 
     /// "Goodnight": whatever he is doing stops, then the usual sleep (beside the others when somebody is already going to bed), asleep until morning.
     func startGoodnight(_ sim: SoftBody, _ skinner: Skinner) {
-        if idleState.kind == .sleep { sleep.tucked = true; sleep.hold = max(sleep.hold, 240); return }
+        let hold = bedtimeHours ? NightRestTuning.untilMorning : 240
+        if idleState.kind == .sleep, !sleep.wakeAsked { sleep.tucked = true; sleep.hold = max(sleep.hold, hold); return }
         var busy = idleState.kind != nil
         if case .none = script {} else { busy = true }
         if busy { abortAll(sim, skinner) }
         pending = nil
         commanded = true
-        if idleStart(.sleep, sim) {
+        currentPose(sim)
+        if sleepBegin(sim, night: bedtimeHours, force: true) {
             sleep.tucked = true
-            sleep.hold = max(sleep.hold, 240)
+            sleep.hold = max(sleep.hold, hold)
             restTimer = max(restTimer, 1)
         } else { commanded = false }
     }
 
+    /// Night (the one threshold for wanting bed): the brain never goes to bed by itself then.
+    var bedtimeHours: Bool { idleNight > SleepTuning.nightEdge || idleDeepNight > 0.5 }
+
     // MARK: starting
 
     /// `idleStart(.sleep)`.
-    func sleepBegin(_ sim: SoftBody, night: Bool) -> Bool {
+    func sleepBegin(_ sim: SoftBody, night: Bool, force: Bool = false) -> Bool {
         let wantHold = rand() < SleepTuning.holdChance
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
-        let c = bed.map { b in (spot: b.foot.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
-        guard bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
+        var c = bed.map { b in (spot: b.foot.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
+        if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
+        guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
         sleep = SleepState()
+        sleep.force = force
         sleep.spot = c.spot; sleep.lieYaw = c.yaw; sleep.joined = c.joined
         if c.joined {
             if let p = c.partner { sleep.mode = .hold; sleep.partner = p; p.sleep.mode = .hold; p.sleep.partner = self }
@@ -302,7 +313,7 @@ extension BlobBrain {
         }
         sleep.hold = night ? rand(SleepTuning.nightHold.lowerBound, SleepTuning.nightHold.upperBound) : rand(SleepTuning.napHold.lowerBound, SleepTuning.napHold.upperBound)
         if perkFlags.bedtime { sleep.hold *= 1.35 }          // the bedtime perk: a deeper, longer sleep
-        if idleDeepNight > 0.5 { sleep.hold = 3600 }
+        if bedtimeHours { sleep.hold = NightRestTuning.untilMorning }
         sleep.minHold = night ? 20 : 12
         if let b = bed {
             sleep.bed = b.foot.uid; sleep.stage = 0
@@ -343,7 +354,16 @@ extension BlobBrain {
                 return
             }
         }
-        guard sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
+        if sleep.force, !sleepFloorOK(position, relaxed: true), !sleep.forceRetried, let f = forceSpot() {
+            sleep.forceRetried = true
+            sleep.spot = f
+            if simd_distance(position, f) > 0.25 {
+                scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+                script = .walk(target: f, then: .none); activity = .walking
+                return
+            }
+        }
+        guard sleep.force || sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
         sleep.spot = position
         sleep.stage = 1; sleep.t = 0; sleep.stageStart = true
         idleState.phaseT = 0
@@ -427,7 +447,7 @@ extension BlobBrain {
         mouthOpen = mouth
     }
 
-    private func sleepToLie(_ sim: SoftBody, _ skinner: Skinner) {
+    func sleepToLie(_ sim: SoftBody, _ skinner: Skinner) {
         sleep.stage = 2; sleep.t = 0; sleep.k = 0; sleep.stageStart = true
         mouthOpen = 0; armDirW = 0; armDirOut = 0; armWalkWant = 0
         // the soles' world targets go: the rigid foot beans follow the body from here (like the flip)

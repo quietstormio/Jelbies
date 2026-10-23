@@ -16,6 +16,8 @@ struct ContentView: View {
             }
         } else {
             GameScreen().onAppear { OrientationForce.apply() }
+                .overlay { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) }
+                .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }
     }
 

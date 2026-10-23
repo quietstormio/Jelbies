@@ -1,7 +1,7 @@
 //
 //  DayClock.swift
 //  The game's time of day: the phone clock (or `-ClockHour <0-23.99>`) plus the curtain-skip offset, the continuous four-way blend the
-//  room light / music / behaviour read, and the 2-3 s time-lapse that plays when the player skips ahead or comes back after > 1 h.
+//  room light / music / behaviour read, and the 2-3 s time-lapse that plays ONLY when the player taps the curtain to skip ahead (a return snaps to the real clock).
 //  Pure and headless apart from `DayClock.shared` (UserDefaults + Date); everything else here takes plain numbers so tests can drive it.
 //
 
@@ -173,15 +173,18 @@ final class DayClock {
         skipCount += 1
     }
 
-    /// Back after `awayFrom`: sweep from the hour he left to now, when it was more than an hour.
-    func returned(from left: Date, now t: Date? = nil) {
-        let end = t ?? now()
-        guard end.timeIntervalSince(left) > 3600 else { return }
-        let c = calendar.dateComponents([.hour, .minute], from: left)
-        let leftHour = DayMath.wrap(Double(c.hour ?? 12) + Double(c.minute ?? 0) / 60 + offsetHours)
+    /// The room, the music and the Jellies are on the real clock at once: no sweep, ever (round 1022: the player must never watch the day catch up on open).
+    /// Called before the first frame on launch and on every return to the foreground. Only the curtain tap (`skipToNextPhase`) plays a time-lapse.
+    func snapToNow() {
+        lapse = nil
         refresh()
-        lapse = TimeLapse(from: leftHour, to: hour, start: uptime())
-        skipCount += 1
+        defaults.removeObject(forKey: Self.leftKey)
+    }
+
+    /// Back after `awayFrom`: kept for old callers; it no longer sweeps, it snaps.
+    func returned(from left: Date, now t: Date? = nil) {
+        _ = left; _ = t
+        snapToNow()
     }
 
     /// Stamps the moment the app left the foreground (read back by `returned`).

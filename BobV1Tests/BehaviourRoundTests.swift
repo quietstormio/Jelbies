@@ -109,7 +109,7 @@ final class BehaviourRoundTests: XCTestCase {
                     XCTAssertGreaterThan(starts[i][k + 1] - starts[i][k], 60, "night \(night) Jelly \(i): back to bed within a minute of waking \(starts[i])")
                 }
             }
-            if night > 0 { XCTAssertTrue(starts.contains { !$0.isEmpty }, "some bedtime happened at dusk") }
+            // (round 1022: no autonomous dusk bedtime in the brain-only lab; the player or the night-idle rule puts them down, see NightRestTests)
         }
     }
 
@@ -131,7 +131,8 @@ final class BehaviourRoundTests: XCTestCase {
         XCTAssertGreaterThan(r.brain.awakeMin, 30, "he stays up a while")
     }
 
-    func testASelectedSleeperWakesOnceAndStaysAwake() {
+    /// Selecting never wakes (round 1022); a deliberate poke wakes him once, and he stays up.
+    func testASelectedSleeperStaysAsleepUntilPoked() {
         let room = RaceTripTests.Room()
         RaceTripTests.keep.append(room)
         let care = room.care
@@ -140,20 +141,19 @@ final class BehaviourRoundTests: XCTestCase {
         room.run(40, until: { room.actors[2].brain!.isNapping })
         XCTAssertTrue(room.actors[2].brain!.isNapping)
         care.select.doubleTap(2)
+        room.run(6)
+        XCTAssertTrue(room.actors[2].brain!.isNapping, "the pick did not wake him")
+        XCTAssertTrue(room.actors[2].brain!.selectedNow)
+        care.pokeSleeper(2)
         room.run(0.4)
-        XCTAssertTrue(room.actors[2].brain!.sleep.wakeAsked || !room.actors[2].brain!.isSleeping, "the pick woke him")
+        XCTAssertTrue(room.actors[2].brain!.sleep.wakeAsked || !room.actors[2].brain!.isSleeping, "the poke woke him")
         room.run(10, until: { !room.actors[2].brain!.isSleeping })
         XCTAssertFalse(room.actors[2].brain!.isSleeping)
-        XCTAssertTrue(room.actors[2].brain!.selectedNow)
-        // the selection stays up; he is put back to sleep (the old code woke him again on every tick)
         let b = room.actors[2].brain!
-        b.idleForced = true
-        XCTAssertTrue(b.idleStart(.sleep, room.actors[2].sim))
-        b.sleep.hold = 100
         var woke = false
         room.run(6)
-        for _ in 0..<(60 * 4) { room.step(); if b.sleep.wakeAsked { woke = true } }
-        XCTAssertFalse(woke, "one wake per selection (edge-triggered)")
+        for _ in 0..<(60 * 4) { room.step(); if b.isSleeping { woke = true } }
+        XCTAssertFalse(woke, "he stays up (no re-sleep)")
         // and nobody who is picked goes to bed by himself
         b.idleReset(room.actors[2].skinner)
         b.awakeMin = 0; b.sleepTryCool = 0

@@ -236,6 +236,7 @@ struct VoiceBubble: View {
             case .play: sym("tennisball.fill", Color(red: 0.36, green: 0.68, blue: 0.45), 28)
             case .stop, .stopFighting: sym("hand.raised.fill", FocusStyle.brown, 28)
             case .goodnight: sym("moon.zzz.fill", Color(red: 0.45, green: 0.50, blue: 0.85), 30)
+            case .wakeUp: sym("sun.max.fill", Color(red: 0.98, green: 0.78, blue: 0.30), 30)
             }
         case .command(let a):
             HStack(spacing: 6) { sym("checkmark", Color(red: 0.36, green: 0.68, blue: 0.45), 24); sym(Self.commandSymbol(a), FocusStyle.brown, 24) }

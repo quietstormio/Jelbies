@@ -79,7 +79,7 @@ extension VoiceCoordinator {
             } else {
                 understand(Self.nobodyLine(k), kind: .answer(k, nil), ids: ids)
             }
-        case .come, .stop, .stopFighting, .praise, .scold, .play, .trick, .sleep, .none:
+        case .come, .stop, .stopFighting, .praise, .scold, .play, .trick, .sleep, .wake, .none:
             confused(ids: ids, reason: nil)          // legacy actions never get here (see `apply`)
         }
     }

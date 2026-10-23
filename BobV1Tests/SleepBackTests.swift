@@ -165,7 +165,8 @@ final class SleepBackTests: XCTestCase {
         }
     }
 
-    func testDeepNightPutsEveryoneToSleepAndMorningWakesThem() {
+    /// Round 1022: deep night alone puts nobody to bed; "goodnight" does (asleep until morning); the morning wakes them.
+    func testDeepNightAloneSleepsNobodyGoodnightDoesAndMorningWakesThem() {
         let lab = SocialTests.Lab(quiet: false, seed: 21)
         for r in lab.rigs {
             r.brain.sleepEnabled = true; r.brain.watching = true
@@ -173,8 +174,11 @@ final class SleepBackTests: XCTestCase {
             r.brain.idleState.cooldown = 0; r.brain.restTimer = 0.5; r.brain.socialBook.cooldown = 1e6
         }
         for _ in 0..<(60 * 70) { lab.tick(watching: false) }
-        MotionLog.write("SLEEPBACK deep night stages \(lab.rigs.map { $0.brain.sleep.stage }) kinds \(lab.rigs.map { String(describing: $0.brain.idleState.kind) })")
-        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.isNapping }, "all asleep at deep night: \(lab.rigs.map { $0.brain.sleep.stage })")
+        XCTAssertFalse(lab.rigs.contains { $0.brain.isSleeping }, "nobody chose bed by himself: \(lab.rigs.map { $0.brain.sleep.stage })")
+        for r in lab.rigs { r.brain.commandedGoodnight = true }
+        for _ in 0..<(60 * 70) { lab.tick(watching: false) }
+        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.isNapping }, "all asleep after goodnight: \(lab.rigs.map { $0.brain.sleep.stage })")
+        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.sleep.hold == NightRestTuning.untilMorning }, "until morning")
         // morning
         for r in lab.rigs { r.brain.idleNight = 0; r.brain.idleDeepNight = 0 }
         for _ in 0..<(60 * 40) { lab.tick(watching: false) }
