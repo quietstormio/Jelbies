@@ -157,7 +157,7 @@ struct GameScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 if model.care.voice.train != nil {          // the close-up's Train card (Voice/TrainCard.swift): bottom, right of the rail; landscape: the right side
-                    TrainCard(voice: model.care.voice, landscape: vsc == .compact)
+                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.55)
                         .padding(.leading, vsc == .compact ? 0 : 62).padding(.trailing, 12).padding(.bottom, 10)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .transition(.opacity)

@@ -23,7 +23,13 @@ extension VoiceCoordinator {
     /// The Train close-up arrived (or Train was tapped again): a fresh session on `id`, optionally already on a trick.
     func startTrain(subject id: Int, preselect: VoiceTrick? = nil) {
         if mode.isListening { cancel() }
-        train = TrainSession(subject: id)
+        endTrain()
+        let session = TrainSession(subject: id)
+        session.gateObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.announcementDidFinishNotification, object: nil, queue: .main) { [weak session] note in
+            let said = note.userInfo?[UIAccessibility.announcementStringValueUserInfoKey] as? String
+            MainActor.assumeIsolated { if let session, session.openGate > 0, said == nil || said == session.gateText { session.openGate = 0 } }
+        }
+        train = session
         let name = book(for: id).names.displayName(id)
         announce(TrainSession.headline(.pick, name: name, word: { _ in "" }, reps: { _ in 0 }))
         if let p = preselect ?? trainPreselect, book(for: id).unlocked(p), p != .come { trainPick(p) }
@@ -32,6 +38,7 @@ extension VoiceCoordinator {
 
     func endTrain() {
         if train?.step.isListening == true, mode.isListening { cancel() }
+        if let o = train?.gateObserver { NotificationCenter.default.removeObserver(o) }
         train = nil
     }
 
@@ -74,11 +81,34 @@ extension VoiceCoordinator {
     func trainPickAgain() { guard let tr = train else { return }; if mode.isListening { cancel() }; setStep(.pick); _ = tr }
     func trainDone() { endTrain(); care?.release() }
 
+    /// The card's own "Done" while listening: a hold long enough is submitted like a release; a short one (under the minimum hold, which `release()` would
+    /// silently abort) goes back to a retryable step.
+    func trainStopListening() {
+        guard let tr = train else { return }
+        if mode.isListening, mode.holdLongEnough { release(); return }
+        if mode.isListening { cancel() }
+        trainListenEnded(tr)
+    }
+
+    /// A listen step whose mic closed with no transcript on its way (cancelled, backgrounded, failed to open): the step moves on to a retry.
+    private func trainListenEnded(_ tr: TrainSession) {
+        guard let t = tr.step.trick else { return }
+        tr.wantsOpen = false; tr.autoLeft = 0
+        if micUnusable { tr.noMic = true; return }
+        switch tr.step {
+        case .listen: tr.heardText = ""; setStep(.missed(t, why: .nothing))
+        case .tryIt: tr.heardText = ""; setStep(.tried(t, ok: false, heard: ""))
+        default: break
+        }
+    }
+
     private func enterListen(_ s: TrainStep) {
         guard let tr = train else { return }
         setStep(s)
         tr.wantsOpen = true
         tr.noMic = false
+        if TrainSession.voiceOverRunning() { tr.openGate = TrainSession.voiceOverGate; tr.gateText = currentHeadline(tr) }        // let VoiceOver finish "Say sit now" first
+        else { tr.openGate = 0 }
     }
 
     func setStep(_ s: TrainStep) {
@@ -88,8 +118,13 @@ extension VoiceCoordinator {
         announce(TrainSession.headline(s, name: bk.names.displayName(tr.subject), word: { bk.word(for: $0) ?? $0.suggestion }, reps: { bk.progress($0) }))
     }
 
+    private func currentHeadline(_ tr: TrainSession) -> String {
+        let bk = book(for: tr.subject)
+        return TrainSession.headline(tr.step, name: bk.names.displayName(tr.subject), word: { bk.word(for: $0) ?? $0.suggestion }, reps: { bk.progress($0) })
+    }
+
     private func announce(_ text: String) {
-        guard UIAccessibility.isVoiceOverRunning else { return }
+        guard TrainSession.voiceOverRunning() else { return }
         UIAccessibility.post(notification: .announcement, argument: text)
     }
 
@@ -113,12 +148,14 @@ extension VoiceCoordinator {
         }
         if tr.step.isListening {
             if tr.wantsOpen {
+                if tr.openGate > 0 { tr.openGate -= dt }
                 if micUnusable { tr.noMic = true; tr.wantsOpen = false }
-                else if mode.phase == .idle, tr.age > 0.05, begin() { tr.wantsOpen = false; tr.autoLeft = TrainSession.listenWindow }
+                else if mode.phase == .idle, tr.age > 0.05, tr.openGate <= 0, begin() { tr.wantsOpen = false; tr.autoLeft = TrainSession.listenWindow }
             } else if tr.autoLeft > 0 {
                 tr.autoLeft -= dt
                 if tr.autoLeft <= 0, mode.isListening { release() }
             }
+            if !tr.wantsOpen, !tr.noMic, mode.phase == .idle, !stopping { trainListenEnded(tr) }          // the listen ended with no transcript coming
         }
     }
 

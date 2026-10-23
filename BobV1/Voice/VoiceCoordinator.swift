@@ -33,6 +33,7 @@ final class VoiceCoordinator {
     @ObservationIgnored let input: SpeechInput
     /// Mirror of the input's availability (the real input is not observable): the mic button shows a slash / a progress ring from it.
     private(set) var availability: VoiceAvailability = .unknown
+    var _availabilityForTest: VoiceAvailability { get { availability } set { availability = newValue } }        // test seam
     /// Bumped when the mic cannot be used and the trick book should open instead.
     private(set) var bookRequest = 0
     /// W2: the close-up's "Train" opens the focused Jelly's trick book (the same request the unusable mic makes).
@@ -131,7 +132,7 @@ final class VoiceCoordinator {
     @ObservationIgnored private var runningAtOpen: VoiceTrick?
     @ObservationIgnored private weak var brainRef: BlobBrain?
     @ObservationIgnored private var startTask: Task<Void, Never>?
-    @ObservationIgnored private var stopping = false
+    @ObservationIgnored var stopping = false
     /// Capture / test aid: this text is "heard" on release instead of the input's.
     @ObservationIgnored var debugTranscript: String?
 
@@ -304,7 +305,7 @@ final class VoiceCoordinator {
             catch {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
-                if self.micUnusable { self.bookRequest += 1 }
+                if self.micUnusable, self.train == nil { self.bookRequest += 1 }        // (in a Train session the card says the mic is off; the book must not pop over the close-up)
             }
         }
         return true

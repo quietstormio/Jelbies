@@ -8,6 +8,7 @@
 
 import XCTest
 import simd
+import UIKit
 @testable import BobV1
 
 @MainActor
@@ -243,5 +244,88 @@ final class TrainFlowTests: XCTestCase {
 
     func testReliabilityJustAfterLearningIsHighEnough() {
         XCTAssertGreaterThanOrEqual(VoiceTuning.baseReliability, 0.6)
+    }
+
+    // MARK: a listen that ends with no transcript never strands the card
+
+    private func openListen(_ r: FocusAnyRun, _ id: Int = 1) {
+        let v = r.care.voice
+        train(r, id); v.trainPick(.sit)
+        XCTAssertTrue(go(r, 8) { v.train?.step == .listen(.sit) && v.isListening })
+    }
+
+    func testShortHoldDoneReturnsToRetry() {
+        let r = make(); let v = r.care.voice
+        openListen(r)
+        v.trainStopListening()                          // the mic opened this instant: a short hold
+        go(r, 0.3)
+        XCTAssertEqual(v.train?.step, .missed(.sit, why: .nothing))
+        XCTAssertFalse(v.isListening)
+    }
+
+    func testRawShortReleaseDoesNotStrandTheCard() {
+        let r = make(); let v = r.care.voice
+        openListen(r)
+        v.release()                                    // aborts without hear()
+        go(r, 0.3)
+        XCTAssertEqual(v.train?.step, .missed(.sit, why: .nothing))
+    }
+
+    func testBackgroundedMidListenMovesOn() {
+        let r = make(); let v = r.care.voice
+        openListen(r)
+        v.cancel()                                     // GameScreen does this on scenePhase background
+        go(r, 0.3)
+        XCTAssertEqual(v.train?.step, .missed(.sit, why: .nothing))
+        v.trainRetry()
+        XCTAssertEqual(v.train?.step, .demo(.sit))
+    }
+
+    func testTryItCancelledMovesToNotTried() {
+        let r = make(); let v = r.care.voice
+        book(r, 1).debugLearn(.sit, word: "sit")
+        train(r, 1); v.trainPick(.sit)
+        XCTAssertTrue(go(r, 8) { v.train?.step == .tryIt(.sit) && v.isListening })
+        v.cancel()
+        go(r, 0.3)
+        XCTAssertEqual(v.train?.step, .tried(.sit, ok: false, heard: ""))
+    }
+
+    func testMicFailureMidListenSaysMicOffAndKeepsBookClosed() {
+        let r = make(); let v = r.care.voice
+        openListen(r)
+        let before = v.bookRequest
+        v._availabilityForTest = .denied
+        v.cancel()                                     // input.start threw: the mode is cancelled
+        go(r, 0.3)
+        XCTAssertEqual(v.train?.noMic, true)
+        XCTAssertEqual(v.bookRequest, before, "no trick book over the close-up")
+    }
+
+    // MARK: VoiceOver finishes speaking before the mic opens
+
+    func testMicWaitsForVoiceOverAnnouncement() {
+        let saved = TrainSession.voiceOverRunning
+        TrainSession.voiceOverRunning = { true }
+        defer { TrainSession.voiceOverRunning = saved }
+        let r = make(); let v = r.care.voice
+        train(r, 1); v.trainPick(.sit)
+        XCTAssertTrue(go(r, 8) { v.train?.step == .listen(.sit) })
+        go(r, 0.5)
+        XCTAssertFalse(v.isListening, "the mic stays shut while VoiceOver is still speaking")
+        let text = v.train!.gateText
+        NotificationCenter.default.post(name: UIAccessibility.announcementDidFinishNotification, object: nil,
+                                        userInfo: [UIAccessibility.announcementStringValueUserInfoKey: text])
+        XCTAssertTrue(go(r, 0.5) { v.isListening }, "it opens once the announcement is done")
+    }
+
+    func testVoiceOverGateFallsBackAfterTwoSeconds() {
+        let saved = TrainSession.voiceOverRunning
+        TrainSession.voiceOverRunning = { true }
+        defer { TrainSession.voiceOverRunning = saved }
+        let r = make(); let v = r.care.voice
+        train(r, 1); v.trainPick(.sit)
+        XCTAssertTrue(go(r, 8) { v.train?.step == .listen(.sit) })
+        XCTAssertTrue(go(r, 3) { v.isListening }, "no notification: the fallback opens the mic")
     }
 }

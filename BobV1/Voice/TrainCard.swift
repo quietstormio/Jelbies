@@ -10,6 +10,8 @@ import SwiftUI
 struct TrainCard: View {
     let voice: VoiceCoordinator
     let landscape: Bool
+    /// The tallest the card may grow (portrait ~55% of the screen, landscape the safe height); past it the content scrolls.
+    var maxHeight: CGFloat = 10_000
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -18,7 +20,7 @@ struct TrainCard: View {
             let name = bk.names.displayName(tr.subject)
             let step = tr.step
             let headline = TrainSession.headline(step, name: name, word: { bk.word(for: $0) ?? $0.suggestion }, reps: { bk.progress($0) })
-            VStack(alignment: .leading, spacing: 10) {
+            let inner = VStack(alignment: .leading, spacing: 10) {
                 Text(headline)
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(FocusStyle.brown)
@@ -31,7 +33,12 @@ struct TrainCard: View {
                 }
             }
             .padding(14)
-            .frame(maxWidth: landscape ? 360 : 520, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            ViewThatFits(in: .vertical) {
+                inner
+                ScrollView(.vertical) { inner }.scrollBounceBehavior(.basedOnSize)
+            }
+            .frame(maxWidth: landscape ? 360 : 520, maxHeight: maxHeight, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
                 .shadow(color: FocusStyle.shadow.opacity(0.25), radius: 10, y: 4))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
@@ -128,11 +135,11 @@ struct TrainCard: View {
         .accessibilityHint(learned ? "\(name) does it, then you try saying it." : "\(name) does it and you say a word for it, \(VoiceTuning.repsToLearn) times.")
     }
 
-    private func pipRow(_ n: Int) -> some View {
+    private func pipRow(_ n: Int, size: CGFloat = 11) -> some View {
         HStack(spacing: 5) {
             ForEach(0..<VoiceTuning.repsToLearn, id: \.self) { i in
                 // filled = done; an open ring with a number-free shape difference (not colour alone)
-                Image(systemName: i < n ? "circle.fill" : "circle").font(.system(size: 11))
+                Image(systemName: i < n ? "circle.fill" : "circle").font(.system(size: size))
                     .foregroundStyle(i < n ? FocusStyle.pink : FocusStyle.brown.opacity(0.35))
             }
         }
@@ -142,7 +149,7 @@ struct TrainCard: View {
     private func pips(_ t: VoiceTrick, _ bk: VoiceTraining) -> some View {
         let n = bk.progress(t)
         return HStack(spacing: 8) {
-            pipRow(n).scaleEffect(1.4, anchor: .leading).padding(.trailing, 14)
+            pipRow(n, size: 15)
             Text("\(n)/\(VoiceTuning.repsToLearn)").font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(FocusStyle.brown)
         }
         .accessibilityElement(children: .ignore)
@@ -158,7 +165,7 @@ struct TrainCard: View {
             Text(voice.isListening ? "Listening\u{2026}" : "Getting ready\u{2026}").font(.footnote.weight(.semibold)).foregroundStyle(FocusStyle.brown)
             Spacer(minLength: 0)
             if voice.isListening {
-                Button { voice.release() } label: {
+                Button { voice.trainStopListening() } label: {
                     Text("Done").font(.footnote.weight(.bold)).foregroundStyle(FocusStyle.brown)
                         .frame(minWidth: 44, minHeight: 44)
                 }

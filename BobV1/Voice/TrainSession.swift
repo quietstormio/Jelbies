@@ -8,6 +8,7 @@
 
 import Foundation
 import Observation
+import UIKit
 
 nonisolated enum TrainWhy: Equatable, Sendable {
     case nothing                                   // silence / nothing recognised
@@ -56,6 +57,15 @@ final class TrainSession {
     var wantsOpen = false
     /// The mic cannot be used (denied / unavailable): the card says so.
     var noMic = false
+    /// VoiceOver is speaking the step's announcement: the mic stays shut until it finishes (or this many seconds pass), so it never transcribes VoiceOver.
+    var openGate: Float = 0
+    /// The announcement text the gate waits for.
+    var gateText = ""
+    var gateObserver: NSObjectProtocol?
+    /// Whether VoiceOver is running (a seam for tests).
+    nonisolated(unsafe) static var voiceOverRunning: () -> Bool = { UIAccessibility.isVoiceOverRunning }
+    /// The longest the mic waits for VoiceOver to finish speaking.
+    static let voiceOverGate: Float = 2.0
     /// What was last heard, quoted (empty = nothing).
     var heardText = ""
     /// The last transcript (for "Use that word instead").
