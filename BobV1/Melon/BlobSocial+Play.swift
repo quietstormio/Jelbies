@@ -56,9 +56,9 @@ extension BlobBrain {
             if k == socialBook.lastKind || k == o.socialBook.lastKind { return }
             w.append((k, x * tod * nice))
         }
-        add(.chase, 3.5, fast: true); add(.dance, 1.8, fast: true); add(.keepAway, 1.4, fast: true)
-        add(.bump, 1.8); add(.nuzzle, 1.8); add(.sitTogether, 1.5); add(.sneak, 1.8)
-        add(.line, others.count >= 2 ? 1.5 : 1.1)          // follow the leader: a line of three, or two
+        add(.chase, 4.5, fast: true); add(.dance, 2.6, fast: true); add(.keepAway, 1.4, fast: true)
+        add(.bump, 2.6); add(.nuzzle, 2.2); add(.sitTogether, 1.5); add(.sneak, 2.0)
+        add(.line, others.count >= 2 ? 2.4 : 1.6)          // follow the leader: a line of three, or two
         if freeBall() != nil { add(.pass, 2.4) }
         if freeSeat() != nil { add(.bagSit, 1.8) }
         if freeLoveseat() != nil { add(.cuddle, 2.0) }

@@ -17,11 +17,19 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .rollTrip, .flapHop, .soccerKick]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .rollTrip, .flapHop, .soccerKick, .cartwheel]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float {
         switch k {
-        case .jacks, .zoomies, .slide, .tail, .roll, .flop, .peek: return 30
+        case .zoomies: return 14
+        case .slide: return 18
+        case .run: return 10
+        case .cartwheel: return 22
+        case .shake: return 16
+        case .lieDown: return 28
+        case .chirp: return 9
+        case .window: return 28
+        case .jacks, .tail, .roll, .flop, .peek: return 30
         case .sit, .look, .wander: return 8
         case .skipHop: return 12
         case .hopscotch: return 25
@@ -49,15 +57,20 @@ extension BlobBrain {
             if k == .decorSit, o.idleState.decorUID >= 0, (DecorField.shared.foot(o.idleState.decorUID)?.kind.sitPoints.count ?? 0) > 1 { continue }
             s.insert(k)
         }
+        // what a friend began a moment ago (the echo window), with its family
+        for o in socialOthers() where o !== self { for k in o.idleState.echo.keys where k != .wander && k != .look && k != .sleep { s.formUnion(Self.family(k)) } }
         return s
     }
 
     /// The dashes look alike from the sofa: a run next to a zoomies is "the same thing".
-    static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot]
+    static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot, .slide, .cartwheel]
+    /// The hops look alike too: a bounce next to a scoot is "the same thing".
+    static let hopKinds: Set<IdleKind> = [.bounce, .scoot, .joy, .skipHop, .hopscotch, .startle, .flapHop]
+    static func family(_ k: IdleKind) -> Set<IdleKind> { dashKinds.contains(k) ? dashKinds : (hopKinds.contains(k) ? hopKinds : [k]) }
     /// Another Jelly is in `k` (or, for a dash, in any dash) right now. The flourishes, the reactions and the event-driven jumps wait on this, so two Jellies never
     /// start the same move at the same moment (the scheduler's own picks go through `kindCooling`); a copycat waits for the friend to finish before doing the same.
     func othersDoing(_ k: IdleKind) -> Bool {
-        let family: Set<IdleKind> = Self.dashKinds.contains(k) ? Self.dashKinds : [k]
+        let family = Self.family(k)
         return socialOthers().contains { o in o !== self && o.idleState.kind.map { family.contains($0) } == true }
     }
 

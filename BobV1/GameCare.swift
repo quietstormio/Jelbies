@@ -232,7 +232,7 @@ final class GameCare {
         store.characterOf = { [weak self] slot in self?.jelly(slot)?.character ?? slot }       // outfits are saved by character
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
         bath.success = { [weak self] in UINotificationFeedbackGenerator().notificationOccurred(.success); self?.soapFinished() }
-        v.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter }
+        wireTrainingBooks()          // every Jelly's book (GameCare+Training.swift)
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()
@@ -639,7 +639,8 @@ final class GameCare {
             let rr = self?.footprint(r) ?? r
             if self?.focusGroup.rowOpen == true, let me = self { return me.obstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: rr) }       // the wide close-up row stands past the roaming floor's sides
             let q = base(p, rr)
-            return self?.obstacle(q, radius: rr) ?? q
+            let q2 = self?.applyKeepOut(q, id: isBob ? 0 : (brain?.steerID ?? 0), brain: brain, radius: rr) ?? q          // (the close-up's keep-out wedge: GameCare+FocusKeepOut.swift)
+            return self?.obstacle(q2, radius: rr) ?? q2
         }
     }
 
@@ -652,8 +653,8 @@ final class GameCare {
             if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale) }
             brain.idleMood = profile.needs.mood
             syncPerks(id: a.id, brain: brain)
-            brain.idleBlocked = (bath.active || focusGroup.pauses(a.id, phase: focus.phase)) && !brain.commanded
-            brain.focusPaused = !bath.active && focusGroup.pauses(a.id, phase: focus.phase) && !brain.commanded          // (he may still step out of the called Jelly's way)
+            brain.idleBlocked = bath.active && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
+            brain.focusPaused = false
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
             if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil { brain.startHopPlay(sim: a.sim, distance: 0.0001) }

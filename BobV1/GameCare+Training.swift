@@ -1,0 +1,35 @@
+//
+//  GameCare+Training.swift
+//  Voice-trick training happens in the close-up, one Jelly at a time (W2, 2026-10-22): the "Train" button (W3) calls `beginTraining(id)`, the camera comes in on that Jelly and,
+//  on arrival, his own trick book opens. Tricks are per character (JellyKeys.words), so the voice teaching, the book and the Show all read that Jelly's book.
+//
+
+import Foundation
+
+extension GameCare {
+    /// W3's "Train" button: a close-up on `id` whose arrival opens that Jelly's trick book.
+    func beginTraining(_ id: Int) {
+        guard jellies.indices.contains(id) else { return }
+        if focus.isActive, focusGroup.ids == [id] { voice.requestTrickBook(); return }
+        if focus.phase != .roaming { release(); return }          // (a different close-up: let go first; W3 disables the button until it is over)
+        beginFocus(ids: [id])
+        focusGroup.trainPending = focusGroup.ids == [id]
+    }
+    /// The Jelly the voice teaching and the trick book are about now: the one in a one-Jelly close-up, else the selected / targeted one.
+    var trainingSubject: Int { (focus.isActive && focusGroup.ids.count == 1) ? focusGroup.ids[0] : targetJelly }
+    var isTrainingCloseUp: Bool { focus.isActive && focusGroup.ids.count == 1 && focusGroup.training }
+    /// Store-page locks for EVERY Jelly's book (slot 0's was the only one wired).
+    func wireTrainingBooks() {
+        for j in jellies { j.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter } }
+        #if DEBUG
+        if UserDefaults.standard.object(forKey: "TrainJelly") != nil {          // capture aid: `-TrainJelly 1` trains Jelly 1 a few seconds after launch
+            let id = UserDefaults.standard.integer(forKey: "TrainJelly")
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                if let me = self, let p = me.jelly(id), UserDefaults.standard.object(forKey: "TrainReps") != nil { p.training.debugReps(.jacks, word: "boing", reps: UserDefaults.standard.integer(forKey: "TrainReps")) }
+                self?.beginTraining(id)
+            }
+        }
+        #endif
+    }
+}

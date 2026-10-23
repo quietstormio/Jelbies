@@ -121,8 +121,15 @@ struct GaitDriver {
     /// Flip only: seconds spent holding the crouch / since the give-up stand began.
     /// Flip only: true while he waits in the held crouch.
     var isFlipFaceplant: Bool { move == .flip && flipFail }
+    /// Cartwheel only (W2, 2026-10-22): +1 / -1 = a flip taken sideways about his forward axis, travelling toward his right / left (0 = a normal backflip).
+    private(set) var cartSide: Float = 0
     private func yawQ(_ y: Float) -> simd_quatf {
         let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
+        if cartSide != 0 {
+            let p = basePitch + slidePitchNow
+            let qp = p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
+            return qp * simd_quatf(angle: cartSide * flipPitch, axis: SIMD3<Float>(0, 0, 1))
+        }
         let p = basePitch + flipPitch + slidePitchNow
         return p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
     }
@@ -146,7 +153,7 @@ struct GaitDriver {
     }
 
     mutating func cancel(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0; slideT = 0; flipFail = false
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0; slideT = 0; flipFail = false; cartSide = 0
         sim.attractor.strength = 0
         if !sim.targets.isEmpty { sim.targets = [] }
     }
@@ -162,6 +169,23 @@ struct GaitDriver {
         from = SIMD2(pose.centroid.x, pose.centroid.z)
         to = from
         yaw0 = pose.yaw; yaw1 = yaw0
+        move = .flip; phase = .crouch; t = 0; tMove = 0; chained = false; flipPitch = 0; flipClock = 0
+        sim.attractor.rotation = yawQ(yaw0)
+    }
+
+    /// A cartwheel (W2): the flip's machinery taken sideways. `side` +1 = toward his right (body x), -1 = left; he travels `travel` u across the air phase and lands there on both feet.
+    mutating func cartwheel(_ sim: SoftBody, apex: Float, side: Float, travel: Float, reduceMotion: Bool = false) {
+        guard phase == .idle || phase == .recover || phase == .glide || phase == .land else { return }
+        reduce = reduceMotion
+        flipApex = apex
+        flipFail = false
+        flipU = 0; flipV = 0; flipLandT = 0
+        let pose = sim.bodyPose(iterations: 6)
+        from = SIMD2(pose.centroid.x, pose.centroid.z)
+        yaw0 = pose.yaw; yaw1 = yaw0
+        let right = SIMD2<Float>(cosf(yaw0), -sinf(yaw0))
+        to = from + right * side * travel
+        cartSide = side
         move = .flip; phase = .crouch; t = 0; tMove = 0; chained = false; flipPitch = 0; flipClock = 0
         sim.attractor.rotation = yawQ(yaw0)
     }
@@ -321,9 +345,10 @@ struct GaitDriver {
             let stretch = 1 + 0.05 * amp * (1 - smooth(t / 0.14))
             let launch = crouchSy + (stretch - crouchSy) * smooth(t / 0.10)
             let sy = launch - 0.06 * amp * sinf(.pi * v)
-            setUpright(sim, xz: from, yaw: yaw0, squash: sy, lift: h + sim.restCentroid.y * 0.06 * amp * sinf(.pi * v), strength: kFlip)       // the tuck lowers the centre: lift it back so the apex is the centre's (only the tuck: the crouch's squash rises out of the floor by itself, not in one step)
+            let xzAir = cartSide != 0 ? from + (to - from) * smooth(u) : from
+            setUpright(sim, xz: xzAir, yaw: yaw0, squash: sy, lift: h + sim.restCentroid.y * 0.06 * amp * sinf(.pi * v), strength: kFlip)       // the tuck lowers the centre: lift it back so the apex is the centre's (only the tuck: the crouch's squash rises out of the floor by itself, not in one step)
             tuckFeet(sim, u: u, amp: 0, ramp: Self.flipFootGrip)       // (the soles already follow the rigid crouch pose, see the crouch case: no catch-up kick at take-off)
-            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 } }
+            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 }; if cartSide != 0 { from = to } }
 
         case .land where move == .flip && flipFail:
             // faceplant: nose-first impact (the body presses into the floor: front squash), a beat lying there, a body-led push back up onto the
@@ -469,7 +494,7 @@ struct GaitDriver {
     }
 
     private mutating func endMove(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0; cartSide = 0
         sim.attractor.strength = 0
         sim.targets = []
         waitTimer = (0.25 + 0.45 * rand()) * (reduce ? 1.4 : 1)

@@ -2,8 +2,9 @@
 //  RoomMovementTests.swift
 //  2026-10-21, the phone report (roster Pip, Moss, Lavender): "I called over Moss but the other ones are stuck blocking him, they just stopped. I had just
 //  interacted with Lavender." Two mechanisms:
-//    1. the Jellies not in a close-up are PAUSED from the moment one is called (`FocusGroup.pauses` -> idleBlocked + autonomy off), and `makeRoom` never moved a
-//       held Jelly, so whoever stood in the called one's lane stayed there while he waited (6 s), walked into them, gave up and the call was cancelled;
+//    1. the Jellies not in a close-up were PAUSED from the moment one was called, and `makeRoom` never moved a held Jelly, so whoever stood in the called one's lane
+//       stayed there while he waited (6 s), walked into them, gave up and the call was cancelled. (W2, 2026-10-22: they are no longer paused or hidden at all:
+//       they keep roaming outside the camera's keep-out wedge, GameCare+FocusKeepOut.swift; this suite now guards that nobody is ever frozen and the lane stays clear.)
 //    2. a call landing in the one or two steps between a release and the hand-back of the paused Jellies' autonomy (`driveFocus`, one brain per step) wiped
 //       `FocusGroup.saved` in `begin`, leaving them with autonomy off for good.
 //  The fixes: `focusPaused` (a paused Jelly may step aside), `makeRoom.clearWay` (whoever stands in a requested walk's lane steps out of it), and `beginFocus`
@@ -39,7 +40,7 @@ final class RoomMovementTests: XCTestCase {
         r.run(0.5)
     }
     private func allFree(_ r: FocusAnyRun) -> Bool {
-        r.actors.allSatisfy { a in let b = a.brain!; return b.autonomy && !b.held && !b.focusPaused }
+        r.actors.allSatisfy { a in let b = a.brain!; return b.autonomy && !b.held && !b.focusPaused }          // (autonomy is the ones not focused; the focused one's is held on his spot)
     }
 
     // MARK: 1. the called Jelly gets through standing Jellies
@@ -77,7 +78,7 @@ final class RoomMovementTests: XCTestCase {
         let r = run3()
         r.care.comeHere(jelly: 2)
         XCTAssertTrue(r.run(20) { r.care.focus.phase == .focused }, "Lavender's close-up started")
-        for a in r.actors where a.id != 2 { XCTAssertFalse(a.brain!.autonomy, "Jelly \(a.id) is paused during the close-up") }
+        for a in r.actors where a.id != 2 { XCTAssertTrue(a.brain!.autonomy, "Jelly \(a.id) keeps roaming during the close-up"); XCTAssertFalse(a.brain!.idleBlocked) }
         r.run(1.0)
         r.care.release()
         XCTAssertTrue(r.run(6) { r.care.focus.phase == .roaming }, "the camera came home")
@@ -97,7 +98,7 @@ final class RoomMovementTests: XCTestCase {
         r.care.comeHere(jelly: 2)
         r.run(0.5)
         XCTAssertEqual(r.care.focus.phase, .approaching)
-        for a in r.actors where a.id != 2 { XCTAssertFalse(a.brain!.autonomy, "Jelly \(a.id) paused by the first call") }
+        for a in r.actors where a.id != 2 { XCTAssertTrue(a.brain!.autonomy, "Jelly \(a.id) is not paused by the first call") }
         r.care.release()                                 // approaching -> roaming at once
         XCTAssertEqual(r.care.focus.phase, .roaming)
         r.care.comeHere(jelly: 1)                        // the same step: nobody has had his autonomy handed back yet

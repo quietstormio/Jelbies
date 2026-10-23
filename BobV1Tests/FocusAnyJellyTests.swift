@@ -76,8 +76,8 @@ final class FocusAnyRun {
         for a in actors {
             guard let b = a.brain else { continue }
             if peersWired, a.id == 0 {          // (the stage's per-frame flags for Jelly 0; the care sets the others' in `tickOthers`)
-                b.idleBlocked = (care.focus.isActive || care.trayOut || care.bath.active) && !b.commanded
-                b.focusPaused = care.focusGroup.pauses(0, phase: care.focus.phase) && !care.trayOut && !care.bath.active && !b.commanded
+                b.idleBlocked = ((care.focus.isActive && care.focusGroup.includes(0)) || care.trayOut || care.bath.active) && !b.commanded
+                b.focusPaused = false
             }
             b.tick(sim: a.sim, skinner: a.skinner, dt: dt, touched: false)
             a.skinner.jelly.tick(brain: b, sim: a.sim, dt: dt)
@@ -139,32 +139,29 @@ final class FocusAnyJellyTests: XCTestCase {
 
     // MARK: Pip, come here
 
-    func testComeHerePipFocusesPipAndHidesTheOthers() {
+    func testComeHerePipFocusesPipAndTheOthersKeepRoaming() {
         let r = run3()
         let care = r.care
         care.comeHere(jelly: 1)
         XCTAssertEqual(care.focusedJellies, [1])
         XCTAssertEqual(care.focus.phase, .approaching)
-        XCTAssertTrue(care.focusHides(0)); XCTAssertTrue(care.focusHides(2)); XCTAssertFalse(care.focusHides(1))
         XCTAssertEqual(care.focusGroup.touchID, 1, "the touch goes to the focused Jelly")
         XCTAssertTrue(GameCamera.focusSpots.isEmpty, "one Jelly: the ordinary close-up on the call spot")
         XCTAssertTrue(r.run(30) { care.focus.isFocused }, "Pip runs up and the close-up starts: phase \(care.focus.phase) pip \(r.centroid(1)) act \(String(describing: r.actors[1].brain?.activity)) arrived \(care.focusGroup.arrived)")
         let c = r.centroid(1)
         XCTAssertLessThan(simd_length(SIMD2(c.x, c.z) - GameCamera.callSpot), 0.7, "Pip is on the front spot: \(c)")
         XCTAssertEqual(care.touchPlayTarget, 1)
-        // the others stand still (no wandering) and Bob never came
-        let b0 = r.centroid(0), m0 = r.centroid(2)
+        // the others are not frozen or hidden (W2): their idles and autonomy stay as they were, and Bob never came
         r.run(3)
-        XCTAssertLessThan(simd_length(r.centroid(0) - b0), 0.15, "Bob is paused")
-        XCTAssertLessThan(simd_length(r.centroid(2) - m0), 0.15, "Moss is paused")
-        XCTAssertTrue(r.actors[2].brain!.idleBlocked, "Moss's idle legs are held")
-        XCTAssertNotNil(care.focusGroup.saved[0], "Bob's wandering is paused (the stage holds his idles)")
+        XCTAssertFalse(r.actors[2].brain!.idleBlocked, "Moss's idle legs are not held")
+        XCTAssertFalse(r.actors[0].brain!.focusPaused); XCTAssertFalse(r.actors[2].brain!.focusPaused)
+        XCTAssertNil(care.focusGroup.saved[0], "Bob's wandering is not paused")
+        XCTAssertNil(care.focusGroup.saved[2])
         // leaving: everyone is normal again
         care.release()
         XCTAssertTrue(r.run(8) { care.focus.phase == .roaming })
         r.run(0.5)
         XCTAssertEqual(care.focusedJellies, [])
-        XCTAssertFalse(care.focusHides(0)); XCTAssertFalse(care.focusHides(2))
         XCTAssertFalse(r.actors[2].brain!.idleBlocked)
         XCTAssertNil(care.focusGroup.saved[0])
         XCTAssertEqual(care.focusGroup.touchID, 0)
@@ -195,7 +192,6 @@ final class FocusAnyJellyTests: XCTestCase {
         care.comeHereEveryone()
         XCTAssertEqual(care.focusedJellies, [0, 1, 2])
         XCTAssertEqual(GameCamera.focusSpots.count, 3)
-        for id in 0..<3 { XCTAssertFalse(care.focusHides(id)) }
         XCTAssertTrue(r.run(40) { care.focus.isFocused }, "all three arrive before the camera goes in")
         r.run(1.5)                                               // the spring settles
         let aspect: Float = 440.0 / 956.0

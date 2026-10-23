@@ -204,10 +204,12 @@ struct VoiceTrickBook: View {
     }
 
     var body: some View {
-        let tr = voice.training
+        let tr = voice.book          // (W2: the book of the Jelly the teaching is about: the close-up's Jelly)
+        let subject = voice.subjectID
+        let who = tr.names.displayName(subject)
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Tricks")
+                Text("\(who)'s tricks")
                     .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
                 Spacer()
                 Button { close() } label: {
@@ -221,7 +223,7 @@ struct VoiceTrickBook: View {
             ScrollView {
                 VStack(spacing: 10) {
                     smartVoiceRow
-                    ForEach(voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
+                    ForEach(voice.care?.isTrainingCloseUp == true ? [subject] : voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
                     ForEach(VoiceTrick.allCases.filter { tr.unlocked($0) }, id: \.rawValue) { t in trickRow(t, tr) }
                 }
                 .padding(.bottom, 6)
@@ -231,6 +233,7 @@ struct VoiceTrickBook: View {
         .padding(16)
         .background(FocusStyle.cream.ignoresSafeArea())
         .accessibilityIdentifier("voice-trickbook")
+        .accessibilityValue("\(subject)")
     }
 
     /// Settings: "Smart voice: On (Apple Intelligence)" when the phone understands free phrasing on device, else "Basic" (the rule parser), with why.
@@ -365,7 +368,7 @@ struct VoiceTrickBook: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("voice-trick-\(t.rawValue)")
             .accessibilityLabel("\(t.title). \(word.map { "Word: \($0)." } ?? "No word yet.") \(n) of \(VoiceTuning.repsToLearn) lessons.\(tr.isLearned(t) ? " Reliability \(rel) percent." : "")")
-            .accessibilityHint("Bob does it now. The next word you say teaches it.")
+            .accessibilityHint("\(tr.names.displayName(voice.subjectID)) does it now. The next word you say teaches it.")
             if word != nil {
                 Button { withAnimation(CareMenu.spring) { tr.forget(t) } } label: {
                     Text("Forget").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)

@@ -1,7 +1,7 @@
 //
 //  GameCare+Focus.swift
 //  "Come here" for ANY Jelly, and for everyone at once.
-//  `comeHere(jelly:)`: that Jelly runs to the front spot and the close-up frames him; the others pause (and are hidden while the camera is in).
+//  `comeHere(jelly:)`: that Jelly runs to the front spot and the close-up frames him; the others keep roaming, out of the camera's way (GameCare+FocusKeepOut.swift).
 //  `comeHereEveryone()`: all of them run to a row on the front line and the close-up widens to frame the row.
 //  Jelly 0 keeps his own path in GameCare (the `queued` come, `tickFocus`); the others are driven here, once per fixed step (`driveFocus`).
 //
@@ -41,9 +41,17 @@ final class FocusGroup {
     func spot(of id: Int) -> SIMD2<Float> { spots[id] ?? GameCamera.callSpot }
     /// The floor's visible sides do not hold the wide row: while it is on, the brains may walk past them.
     var rowOpen = false
+    /// The keep-out wedge for the current close-up (GameCare+FocusKeepOut.swift), cached per aspect / group, and the walk-out request clocks.
+    var koCache: FocusKeepOut?
+    var koAspect: Float = 0
+    var koKey: [Int] = []
+    var evictT: [Int: Float] = [:]
+    /// The close-up was asked for by the "Train" button: the trick book opens on arrival (`training` stays true for the rest of that close-up).
+    var trainPending = false
+    var training = false
 
     func begin(ids new: [Int], front: Int? = nil) {
-        ids = new; arrived = []; saved = [:]; approach = [:]; came = []; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; arrived = []; saved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]
         if new.count > 1 {
             let row = GameCamera.focusRowSpots(count: new.count)
@@ -64,20 +72,14 @@ final class FocusGroup {
     }
 
     func clear() {
-        ids = []; spots = [:]; arrived = []; saved = [:]; approach = [:]; rowOpen = false; touchAnchor = nil; touchID = 0
+        ids = []; spots = [:]; arrived = []; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; trainPending = false; training = false; rowOpen = false; touchAnchor = nil; touchID = 0
         GameCamera.focusSpots = []
     }
-
-    /// Wandering is held for a Jelly who is not part of an ongoing focus.
-    func pauses(_ id: Int, phase: FocusPhase) -> Bool { phase != .roaming && !ids.isEmpty && !ids.contains(id) }
 }
 
 extension GameCare {
     /// The Jellies the close-up is on right now (empty while roaming). In a one-Jelly game this is `[0]` during a close-up.
     var focusedJellies: [Int] { focus.isActive ? focusGroup.ids : [] }
-
-    /// The Jelly is out of the close-up (the stage hides him once the camera is in, and draws him again once it is home).
-    func focusHides(_ id: Int) -> Bool { focus.isActive && !focusGroup.ids.isEmpty && !focusGroup.ids.contains(id) }
 
     /// The Jelly the touch goes to in the close-up (the one under the finger; the first focused one until a finger picks another).
     var touchPlayTarget: Int { focusGroup.touchID }
@@ -115,10 +117,11 @@ extension GameCare {
             if g.saved.isEmpty { g.clear() }
             return
         }
-        guard g.ids.contains(id) else {            // not in it: stand still (idleBlocked is set by the caller), no new wander legs
-            if g.saved[id] == nil { g.saved[id] = brain.autonomy; brain.autonomy = false }
+        guard g.ids.contains(id) else {            // not in it: he keeps his life; if he stands in the camera's wedge he walks out of it (W2: the others are neither frozen nor hidden)
+            evictFromKeepOut(id: id, brain: brain, dt: dt)
             return
         }
+        if phase == .focused, g.trainPending, g.arrived.contains(id) { g.trainPending = false; g.training = true; voice.requestTrickBook() }          // (the "Train" button's close-up: his book opens on arrival)
         guard id != 0 else { return }              // Jelly 0's own path is tickFocus
         var s = g.approach[id] ?? FocusGroup.Approach()
         defer { g.approach[id] = s }

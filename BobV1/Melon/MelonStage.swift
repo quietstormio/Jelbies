@@ -592,8 +592,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
-                brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut || model.care.bath.active) && !brain.commanded
-                brain.focusPaused = model.care.focusGroup.pauses(0, phase: model.care.focus.phase) && !model.care.trayOut && !model.care.bath.active && !brain.commanded
+                brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
+                brain.focusPaused = false
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
             let b0 = CACurrentMediaTime()
@@ -950,7 +950,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             model.care.select.publish(viewProj: cam.viewProj, size: pts, points: { screenPoints(of: $0, pts, cam.viewProj) })
         }
         let camIn = game && model.care.focus.blend > 0.25
-        var light = game ? GameCamera.light(centroids: actors.filter { !(camIn && model.care.focusHides($0.id)) }.map { $0.sim.centroid() }) : rig.light(centroid: c)
+        var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).map { $0.sim.centroid() }) : rig.light(centroid: c)
         if game { light.intensity *= DayLight.at(hour: DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
         if game { updateTuck(renderer, dt: 1.0 / 60) }
 
@@ -970,13 +970,12 @@ final class MelonController: NSObject, MTKViewDelegate {
             let bathRoom = model.care.bath.look.visible || model.care.bath.cameraBlend > 0
             let washed = bathRoom ? min(model.care.bath.targetID, actors.count - 1) : 0
             renderer.bathBody = washed
-            let camIn = model.care.focus.blend > 0.25          // the close-up is (nearly) on: the Jellies it does not frame are out of the picture
             renderer.raceCourse = model.care.race.course.tier
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
-                renderer.setHidden((bathRoom && a.id != washed) || (camIn && model.care.focusHides(a.id)) || model.care.showHides(a.id), body: a.id)
+                renderer.setHidden((bathRoom && a.id != washed) || model.care.showHides(a.id), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
         }

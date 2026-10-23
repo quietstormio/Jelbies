@@ -151,6 +151,11 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "antic: happy bounce", game: true, seconds: 4, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.bounce, $0.sim) }),
         Move(name: "Lavender: flap-hop", game: true, seconds: 6, expectBeans: true, start: { $0.brain.feature = .wings; $0.brain.idleForced = true; _ = $0.brain.idleStart(.flapHop, $0.sim) }),
         Move(name: "antic: roll", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.roll, $0.sim) }),
+        Move(name: "antic: shake", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.shake, $0.sim) }),
+        Move(name: "antic: lie down", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.lieDown, $0.sim) }),
+        Move(name: "antic: chirp", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.chirp, $0.sim) }),
+        Move(name: "antic: cartwheel", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.cartwheel, $0.sim) }),
+        Move(name: "antic: window walk", game: true, seconds: 16, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: window", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: stretch", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stretch, $0.sim) }),
         // the Jelly Show (2026-10-21): the dances (Sway = sway, Bop = bounce, Twirl = tail, above) and the stage tricks (sit / jacks / run / look / tail / bounce / roll / flip)
@@ -225,9 +230,16 @@ final class FeetAttachTests: XCTestCase {
         }
     }()
 
+    /// `FEET_ONLY="antic: shake,antic: cartwheel"` (run with `TEST_RUNNER_FEET_ONLY`) limits the scripted-move suites to the rows whose name contains one of the parts (targeted runs; unset = all).
+    static var movesToCheck: [Move] {
+        guard let only = ProcessInfo.processInfo.environment["FEET_ONLY"], !only.isEmpty else { return moves }
+        let parts = only.components(separatedBy: ",")
+        return moves.filter { m in parts.contains { m.name.contains($0) } }
+    }
+
     func testFeetStayLowUnderAndAttachedInEveryScriptedMove() {
         defer { DecorField.shared.clear() }
-        for m in Self.moves {
+        for m in Self.movesToCheck {
             let r = MotionRig(game: m.game)
             Self.keep.append(r)
             r.renderSamples = false
@@ -263,7 +275,7 @@ final class FeetAttachTests: XCTestCase {
     /// every row is measured, the rolls and the flip included (2026-10-21: the rolls were skipped as "no beans").
     func testShoesStayAttachedInEveryScriptedMove() {
         defer { DecorField.shared.clear() }
-        for m in Self.moves {
+        for m in Self.movesToCheck {
             let r = MotionRig(game: m.game)
             Self.keep.append(r)
             r.renderSamples = false
