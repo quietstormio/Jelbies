@@ -74,18 +74,23 @@ final class VoiceIntegrationTests: XCTestCase {
         return r
     }
 
-    func testTeachSitThreeTimesThenCommandFromWander() {
+    /// Teaching happens in the Train close-up (TrainSession): the mic opens by itself, three listens teach, then a plain word works from a wander.
+    func testTeachSitInTrainThenCommandFromWander() {
         let r = make()
+        r.care.beginTraining(0)
+        XCTAssertTrue(r.run(40) { r.voice.train != nil }, "the Train card starts when he arrives")
+        r.voice.trainPick(.sit)
         for i in 0..<VoiceTuning.repsToLearn {
-            if r.brain.idleState.kind != .sit {                                        // the sit he was doing ended: he starts another
-                r.brain.idleReset(r.rig.skinner)
-                XCTAssertTrue(r.brain.idleStart(.sit, r.rig.sim))
-            }
-            r.say("sit")
+            XCTAssertTrue(r.run(8) { r.voice.train?.step == .listen(.sit) && r.voice.isListening }, "rep \(i + 1): the mic opens by itself")
+            r.run(0.4)
+            r.voice.hear("sit")
+            r.run(0.1)
             XCTAssertEqual(r.voice.training.lesson(.sit).reps, i + 1, "rep \(i + 1) counted")
         }
         XCTAssertTrue(r.voice.training.isLearned(.sit), "learned after \(VoiceTuning.repsToLearn) reps over \(VoiceTuning.repsToLearn) listens")
         XCTAssertEqual(r.voice.training.word(for: .sit), "sit")
+        r.care.release()
+        XCTAssertTrue(r.run(20) { r.care.focus.phase == .roaming && r.voice.train == nil }, "the close-up ends and the session with it")
         // from a wander
         r.brain.idleReset(r.rig.skinner)
         r.brain.requestNow(.goTo(SIMD2(1.5, 0.6)))
@@ -274,17 +279,19 @@ final class VoiceIntegrationTests: XCTestCase {
 
     func testFeedbackRepThenLearnedShowsHeardPillAndHop() {
         let r = make()
+        r.care.beginTraining(0)
+        XCTAssertTrue(r.run(40) { r.voice.train != nil })
+        r.voice.trainPick(.sit)
         for i in 0..<VoiceTuning.repsToLearn {
-            if r.brain.idleState.kind != .sit {
-                r.brain.idleReset(r.rig.skinner)
-                XCTAssertTrue(r.brain.idleStart(.sit, r.rig.sim))
-            }
-            r.say("sit down")
+            XCTAssertTrue(r.run(8) { r.voice.train?.step == .listen(.sit) && r.voice.isListening })
+            r.run(0.4)
+            r.voice.hear("sit down")
+            r.run(0.1)
             if i < VoiceTuning.repsToLearn - 1 { XCTAssertEqual(r.voice.feedbackLog.last, .rep(.sit, reps: i + 1)) }
         }
         XCTAssertEqual(r.voice.feedbackLog.last, .learned(.sit, word: "sit down"))
         XCTAssertEqual(r.voice.heard?.text, "\u{201C}sit down\u{201D}", "the heard pill quotes the player's words")
-        XCTAssertEqual(r.voice.toast?.text, "Learned \u{201C}sit down\u{201D} \u{2192} Sit")
+        XCTAssertEqual(r.voice.toast?.text, "\(r.voice.book.names.displayName(0)) learned Sit! Say \u{201C}sit down\u{201D}")
     }
 
     func testFeedbackObeyedUnknownNothingGrumpyMissed() {
@@ -598,15 +605,16 @@ extension VoiceIntegrationTests {
         XCTAssertEqual(r.voice.lastParse?.path, "det")
     }
 
-    func testTeachingAWordNeverGoesToTheModel() async {
+    /// Outside a Train session no word is ever bound to the move he happens to be doing.
+    func testAWordSaidDuringAMoveTeachesNothingOutsideTrain() async {
         let fake = FakeIntentModel()
         fake.result = ModelIntent(action: .social(.praise), confidence: 1)
         let r = make(model: fake)
         r.brain.idleReset(r.rig.skinner)
         XCTAssertTrue(r.brain.idleStart(.sit, r.rig.sim))
         await hearAndAwait(r, "mochi")
-        XCTAssertTrue(fake.calls.isEmpty)
-        XCTAssertEqual(r.voice.training.lesson(.sit).reps, 1)
+        XCTAssertEqual(r.voice.training.lesson(.sit).reps, 0)
+        XCTAssertFalse(r.voice.training.lesson(.sit).started)
     }
 }
 

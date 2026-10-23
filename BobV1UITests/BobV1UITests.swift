@@ -416,18 +416,19 @@ final class BobV1UITests: XCTestCase {
         XCTAssertTrue(app.otherElements["voice-glow"].waitForNonExistence(timeout: 0.6), "no glow after a quick double tap")
     }
 
-    /// After a taught word the heard pill quotes it and Bob's understanding bubble shows the rep.
+    /// After a learned word the heard pill quotes it and Bob's understanding bubble shows he heard (teaching itself is in the Train card: TrainFlowUITests).
     @MainActor
     func testVoiceHeardPillAndRepBubbleAppear() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-VoiceFakeMic", "1", "-VoiceFakeText", "sit", "-VoiceReset", "1", "-VoiceSay", "sit", "-VoiceTeach", "sit", "-VoiceDelay", "1", "-BlobNoWander", "1"]
+        app.launchArguments += ["-VoiceFakeMic", "1", "-VoiceFakeText", "sit", "-VoiceReset", "1", "-VoiceLearned", "1", "-VoiceSay", "sit", "-VoiceDelay", "1", "-BlobNoWander", "1"]
         app.launch()
         let heard = app.descendants(matching: .any)["voice-heard"]
         XCTAssertTrue(heard.waitForExistence(timeout: 30), "the heard pill shows")
         XCTAssertTrue((heard.value as? String ?? "").contains("sit"), "it quotes the words: \(heard.value ?? "nil")")
         let bubble = app.descendants(matching: .any)["voice-bubble"]
         XCTAssertTrue(bubble.waitForExistence(timeout: 10), "Bob's bubble shows")
-        XCTAssertTrue((bubble.value as? String ?? "").hasPrefix("rep sit"), "a rep: \(bubble.value ?? "nil")")
+        let v = bubble.value as? String ?? ""
+        XCTAssertTrue(v.hasPrefix("obeyed sit") || v.hasPrefix("missed sit"), "he understood the learned word: \(v)")
     }
 
     /// The trick book opens from its button; tapping a row has him do the trick and closes the sheet.

@@ -33,6 +33,7 @@ final class VoiceCoordinator {
     @ObservationIgnored let input: SpeechInput
     /// Mirror of the input's availability (the real input is not observable): the mic button shows a slash / a progress ring from it.
     private(set) var availability: VoiceAvailability = .unknown
+    var _availabilityForTest: VoiceAvailability { get { availability } set { availability = newValue } }        // test seam
     /// Bumped when the mic cannot be used and the trick book should open instead.
     private(set) var bookRequest = 0
     /// W2: the close-up's "Train" opens the focused Jelly's trick book (the same request the unusable mic makes).
@@ -123,11 +124,15 @@ final class VoiceCoordinator {
     private(set) var nickLesson: NickLesson?
     struct NickLesson: Equatable { var id: Int; var word = ""; var reps = 0; var sessions: [Int] = [] }
     @ObservationIgnored private var currentIDs: [Int] = []
-    @ObservationIgnored private var session = 0
+    @ObservationIgnored var session = 0
+    /// The close-up's Train session (TrainSession.swift), nil outside it; the Train card reads it.
+    var train: TrainSession?
+    /// A trick the next Train close-up starts on (the trick book's "Teach" outside the close-up).
+    @ObservationIgnored var trainPreselect: VoiceTrick?
     @ObservationIgnored private var runningAtOpen: VoiceTrick?
     @ObservationIgnored private weak var brainRef: BlobBrain?
     @ObservationIgnored private var startTask: Task<Void, Never>?
-    @ObservationIgnored private var stopping = false
+    @ObservationIgnored var stopping = false
     /// Capture / test aid: this text is "heard" on release instead of the input's.
     @ObservationIgnored var debugTranscript: String?
 
@@ -196,7 +201,10 @@ final class VoiceCoordinator {
         feedbackLog.append(kind); if feedbackLog.count > 60 { feedbackLog.removeFirst() }
         switch kind {
         case .rep, .nameRep, .nameLearned: perkLeft = 0.6
-        case .learned(let t, let w): perkLeft = 0.6; toast = VoiceToast(id: feedbackSeq, text: "Learned \u{201C}\(w)\u{201D} \u{2192} \(t.title)", born: clock())
+        case .learned(let t, let w):
+            perkLeft = 0.6
+            let who = (lastBook ?? training).names.displayName(care?.trainingSubject ?? 0)
+            toast = VoiceToast(id: feedbackSeq, text: "\(who) learned \(t.title)! Say \u{201C}\(w)\u{201D}", born: clock())
         default: break
         }
     }
@@ -256,7 +264,7 @@ final class VoiceCoordinator {
         wake?()                                    // leave the 30 fps idle rest now (the mic button does not pass through the Metal view's touches)
         if micUnusable { bookRequest += 1; return false }
         downAt = CACurrentMediaTime()
-        session = training.newSession()
+        session = nextSession()
         glowLatencyMs = nil; audioLatencyMs = nil
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
@@ -297,7 +305,7 @@ final class VoiceCoordinator {
             catch {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
-                if self.micUnusable { self.bookRequest += 1 }
+                if self.micUnusable, self.train == nil { self.bookRequest += 1 }        // (in a Train session the card says the mic is off; the book must not pop over the close-up)
             }
         }
         return true
@@ -371,10 +379,12 @@ final class VoiceCoordinator {
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         teachPrompt = nil
         if nickLesson != nil { nicknameListen(transcript); return }
+        if trainHandle(transcript) { return }           // a Train session waiting for the word (r1023-train)
+        if roomCommand(transcript) { return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()
         let who = subject(for: transcript)
         let bk = book(for: who); lastBook = bk
-        let d = bk.decideFull(transcript: transcript, runningMove: who == subjectAtOpen ? runningAtOpen : nil, mood: moodMeant(by: transcript), session: session)
+        let d = bk.decideFull(transcript: transcript, runningMove: nil, mood: moodMeant(by: transcript), session: session)
         // "everyone come eat", "come have a drink", "come get a bath": the loose come rule would win, but the sentence is a meal / nap / bath /
         // question for the natural-command path. Only the rules' confident new-kind verbs override, so taught words and the social phrases stand.
         if !d.noMatch, intentModel == nil, VoiceMatcher.looksLikeCome(VoiceMatcher.tokens(transcript)) {
@@ -404,6 +414,8 @@ final class VoiceCoordinator {
         if let id = training.names.resolve(tokens: VoiceMatcher.tokens(transcript)).first?.id { return care.needs(for: id).mood }
         return care.needs(for: care.targetJelly).mood
     }
+
+    func recordParseRoom() { lastParse = ("det", 0) }
 
     private func recordParse(_ path: String, _ t0: Double, _ transcript: String) {
         let ms = Int((CACurrentMediaTime() - t0) * 1000)
@@ -577,7 +589,6 @@ final class VoiceCoordinator {
     /// The trick book row: do the trick now (so the next said word binds to it).
     func show(_ t: VoiceTrick) {
         enqueue(.perform(t), .silent, ids: [subjectID])
-        if !book.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }
     }
 
     // MARK: mapping
@@ -623,6 +634,7 @@ final class VoiceCoordinator {
         let coming = voiceGoing || clock() < comeUntil
         if coming != comingNow { comingNow = coming }
         tutorial.update()
+        trainTick(care: care, brain: brain, dt: dt)
         if voiceGoing { goAge += dt; if goAge > 15 { voiceGoing = false } }      // a cancelled walk (he was grabbed) never reports back
         if mode.phase == .idle { runningAtOpen = nil }
 

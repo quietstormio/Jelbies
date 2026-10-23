@@ -42,17 +42,18 @@ final class CloseUpTrainingTests: XCTestCase {
 
     func testBeginTrainingFocusesThatJellyAndOpensHisBook() {
         let r = make()
-        let before = r.care.voice.bookRequest
         r.care.beginTraining(1)
         XCTAssertEqual(r.care.focusedJellies, [1])
         XCTAssertTrue(go(r, 30) { r.care.focus.isFocused }, "Pip arrives")
         _ = go(r, 0.2)
-        XCTAssertEqual(r.care.voice.bookRequest, before + 1, "the book opened once")
+        XCTAssertEqual(r.care.voice.train?.subject, 1, "the Train card started on Pip")
+        XCTAssertEqual(r.care.voice.train?.step, .pick)
         XCTAssertEqual(r.care.trainingSubject, 1)
         XCTAssertTrue(r.care.isTrainingCloseUp)
         XCTAssertTrue(r.care.voice.book === r.care.jelly(1)!.training, "the book on screen is Pip's")
+        r.care.voice.trainPick(.sit)
         r.care.beginTraining(1)
-        XCTAssertEqual(r.care.voice.bookRequest, before + 2, "Train again in the same close-up re-opens it")
+        XCTAssertEqual(r.care.voice.train?.step, .pick, "Train again in the same close-up starts over at the trick list")
     }
 
     func testAShownTrickRunsOnTheFocusedJellysBrain() {
@@ -67,13 +68,12 @@ final class CloseUpTrainingTests: XCTestCase {
     func testThreeListensTeachTheFocusedJellysOwnBook() {
         let r = make()
         r.care.beginTraining(1)
-        XCTAssertTrue(go(r, 30) { r.care.focus.isFocused })
-        let b = r.actors[1].brain!
+        XCTAssertTrue(go(r, 30) { r.care.focus.isFocused && r.care.voice.train != nil })
+        r.care.voice.trainPick(.jacks)
         for i in 0..<VoiceTuning.repsToLearn {
-            b.idleReset(r.actors[1].skinner)
-            b.idleForced = true
-            XCTAssertTrue(b.idleStart(.jacks, r.actors[1].sim))
-            listen(r, "boing")
+            XCTAssertTrue(go(r, 8) { r.care.voice.train?.step == .listen(.jacks) && r.care.voice.isListening })
+            _ = go(r, 0.4)
+            r.care.voice.hear("boing")
             XCTAssertEqual(r.care.jelly(1)!.training.lesson(.jacks).reps, i + 1, "rep \(i + 1) is in Pip's book")
         }
         XCTAssertTrue(r.care.jelly(1)!.training.isLearned(.jacks))

@@ -121,7 +121,7 @@ extension GameCare {
             evictFromKeepOut(id: id, brain: brain, dt: dt)
             return
         }
-        if phase == .focused, g.trainPending, g.arrived.contains(id) { g.trainPending = false; g.training = true; voice.requestTrickBook() }          // (the "Train" button's close-up: his book opens on arrival)
+        if phase == .focused, g.trainPending, g.arrived.contains(id) { g.trainPending = false; g.training = true; voice.startTrain(subject: id) }          // (the "Train" button's close-up: the Train card starts on arrival)
         guard id != 0 else { return }              // Jelly 0's own path is tickFocus
         var s = g.approach[id] ?? FocusGroup.Approach()
         defer { g.approach[id] = s }

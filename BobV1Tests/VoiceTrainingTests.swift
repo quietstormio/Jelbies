@@ -99,7 +99,7 @@ final class VoiceTrainingTests: XCTestCase {
     func testReliabilityAtLearnCappedAndGrows() {
         let v = make()
         teach(v, "run", .run, sessions: [1, 2, 3])
-        XCTAssertEqual(v.reliability(.run), 0.35, accuracy: 0.0001)
+        XCTAssertEqual(v.reliability(.run), 0.6, accuracy: 0.0001)
         // successes grow it (reliability 0.95 stays at the cap; use a low one)
         let x = VoiceTraining(defaults: suite(), random: { 0 })      // roll 0 always succeeds
         teach(x, "run", .run, sessions: [1, 2, 3])

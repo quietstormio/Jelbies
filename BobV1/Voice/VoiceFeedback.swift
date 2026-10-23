@@ -102,7 +102,7 @@ struct VoiceFeedbackView: View {
                     if let t = voice.toast, now - t.born < 2.8 {
                         pill(t.text, id: "voice-toast", fade: now - t.born, life: 2.8, accent: true)
                     }
-                    if let p = voice.teachPrompt, now < p.until, !voice.isListening {
+                    if voice.train == nil, let p = voice.teachPrompt, now < p.until, !voice.isListening {
                         pill("Now hold the mic and say a word for \(p.trick.title)", id: "voice-prompt", fade: 0, life: 99, accent: false)
                     }
                     if let l = voice.nickLesson, !voice.isListening {
@@ -111,7 +111,7 @@ struct VoiceFeedbackView: View {
                     if let u = voice.understood, now - u.born < Self.understoodLife {
                         understoodPill(u, fade: now - u.born)
                     }
-                    if let h = voice.heard, now - h.born < Self.heardLife {
+                    if voice.train == nil, let h = voice.heard, now - h.born < Self.heardLife {
                         pill(h.text, id: "voice-heard", fade: now - h.born, life: Self.heardLife, accent: false)
                     }
                 }
