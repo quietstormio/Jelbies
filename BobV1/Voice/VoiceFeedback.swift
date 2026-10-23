@@ -93,7 +93,7 @@ struct VoiceFeedbackView: View {
                             .position(x: min(max(p.x, 70), geo.size.width - 70), y: max(p.y, 110))
                             .accessibilityElement(children: .ignore)
                             .accessibilityIdentifier("voice-bubble")
-                            .accessibilityLabel("Bob understood")
+                            .accessibilityLabel("\(voice.subjectName) understood")
                             .accessibilityValue(f.kind.name)
                     }
                 }

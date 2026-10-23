@@ -55,6 +55,8 @@ nonisolated struct ShowTiming: Equatable, Sendable {
     var perfect: Double, good: Double, miss: Double
     static let standard = ShowTiming(perfect: TrainingTuning.perfectWindow, good: TrainingTuning.goodWindow, miss: TrainingTuning.missWindow)
     static let kind = ShowTiming(perfect: 0.080, good: 0.150, miss: 0.220)
+    /// Every window `k` times wider (the accessibility "relaxed timing").
+    func scaled(_ k: Double) -> ShowTiming { ShowTiming(perfect: perfect * k, good: good * k, miss: miss * k) }
 }
 
 // MARK: - stats and tags
@@ -239,9 +241,10 @@ nonisolated enum ShowScoring {
     static let burstPoints = 10
     static let burstCheer: Float = 0.75, burstGlow: Float = 0.5
     /// The spotlight ring closes over this long; the tap's error is judged against it.
-    static let ringSeconds: Double = 1.2
-    /// t = 1 - |error| / 0.3 s, clamped.
-    static func timing(error: Double) -> Float { Float(min(max(1 - abs(error) / 0.3, 0), 1)) }
+    /// (Accessibility: relaxed timing closes it at half speed; `ShowAssist.ringScale`.)
+    static var ringSeconds: Double { 1.2 * ShowAssist.ringScale }
+    /// t = 1 - |error| / 0.3 s, clamped (the window is wider under relaxed timing).
+    static func timing(error: Double) -> Float { Float(min(max(1 - abs(error) / (0.3 * ShowAssist.windowScale), 0), 1)) }
     /// Points of one turn (max 30): base 18 on success (12 for a trick already shown this show), 8 for a cute flop; + theme 6 / 3; + 6 x timing.
     static func turn(success: Bool, repeated: Bool, tags: [WearTag], theme: ShowTheme, timing t: Float) -> Int {
         let base = success ? (repeated ? 12 : 18) : 8
@@ -311,7 +314,7 @@ nonisolated struct ShowDanceSim: Sendable {
 
     /// `songTime`: song time at GO; the first prompt is `leadInBeats` later, on the grid. Feet alternate from a seeded start.
     init(count: Int, grid: ShowBeat, timing: ShowTiming, seed: UInt64, songTime: Double) {
-        self.grid = grid; self.timing = timing; self.songTime = songTime
+        self.grid = grid; self.timing = timing.scaled(ShowAssist.windowScale); self.songTime = songTime
         var rng = RaceRNG(seed: seed &* 0x9E3779B97F4A7C15 &+ 0xD17)
         var beat = grid.beat(atOrAfter: songTime + Double(Self.leadInBeats) * grid.period)
         var foot = Int(rng.next() * 2) % 2
@@ -356,7 +359,7 @@ nonisolated struct ShowDanceSim: Sendable {
         }
         guard let i = best else { strays += 1; events.append(.stray); return }
         let err = abs(prompts[i].time - now)
-        if prompts[i].foot != f { judge(i, .miss); return }
+        if prompts[i].foot != f, !ShowAssist.anyFoot { judge(i, .miss); return }
         if err <= timing.perfect { judge(i, .perfect) } else if err <= timing.good { judge(i, .good) } else { judge(i, .miss) }
     }
 

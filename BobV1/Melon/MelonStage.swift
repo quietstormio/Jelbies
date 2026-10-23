@@ -45,8 +45,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         isOpaque = true
         backgroundColor = UIColor(red: 0xE2 / 255, green: 0xDF / 255, blue: 0xDA / 255, alpha: 1)
         clearColor = MTLClearColor(red: 0.886, green: 0.875, blue: 0.855, alpha: 1)
-        isAccessibilityElement = true
-        accessibilityLabel = "Interactive 3D Jelbie character Bob. Drag him to squish, stretch and twist."
+        accessibilityLabel = "Interactive 3D Jelbie. Drag it to squish, stretch and twist."
         accessibilityHint = "Drag the Jelbie to stretch it, drag empty space to orbit, pinch to zoom, double tap to reset the view."
         accessibilityIdentifier = "melon-stage"
 
@@ -73,6 +72,17 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    // a11y (round-1023): in the game the stage is a CONTAINER of the room + one element per Jelbie (Accessibility/JelbieAccessibility.swift); the studio keeps one element.
+    override var isAccessibilityElement: Bool { get { controller?.game != true } set {} }
+    override var accessibilityElements: [Any]? {
+        get { controller?.game == true ? controller?.a11y.allElements() : nil }
+        set {}
+    }
+    override var accessibilityCustomRotors: [UIAccessibilityCustomRotor]? {
+        get { controller?.game == true ? controller?.a11y.rotors() : nil }
+        set {}
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
@@ -208,6 +218,10 @@ final class MelonController: NSObject, MTKViewDelegate {
     private func touchHolds(_ id: Int) -> Bool {
         id == touchID && (mode == .grab || actors[id].sim.grabbing || throwHold > 0 || model.touch.holdsBrain)
     }
+    /// The Jelbies as accessibility elements, and the scripted fingers of their custom actions (Accessibility/).
+    let a11y = JelbieA11yContainer()
+    private var scriptedRun: ScriptedTouchRun?
+    private let scriptPointers = [NSObject(), NSObject()]
     private var renderer: MelonRenderer?
     private var rig = CameraRig()
     private weak var stageView: MelonStageView?
@@ -710,6 +724,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     func attach(to view: MelonStageView) {
         stageView = view
         view.controller = self
+        a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
         guard let r = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: renderMesh,
                                     simEdges: sim.edges, particleCount: sim.n, game: game, bodyCount: actors.count) else {
@@ -875,6 +890,8 @@ final class MelonController: NSObject, MTKViewDelegate {
 
         let tt0 = CACurrentMediaTime()
         touchDemo(now: now)
+        runScripted(now: now)
+        if game, A11yAssist.active { a11y.tick(now: now) }
         touchTick(dt: dt, now: now)
         dbgTouch += CACurrentMediaTime() - tt0
 
@@ -1301,6 +1318,51 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard id != touchID, id < actors.count else { return }
         if let b = tBrain { model.touch.cancel(sim: tSim, brain: b, skinner: tSkinner) }
         touchID = id
+    }
+
+    // MARK: Accessibility (Accessibility/JelbieAccessibility.swift, JelbieActions.swift)
+
+    /// The Jelly in the tub (the washer), for the accessibility elements.
+    var a11yWasherID: Int? { washer?.id }
+
+    /// The screen box of Jelly `id`'s body in the view's space, from the last camera (nil before the first frame / for an unknown id).
+    func a11yScreenRect(of id: Int, size: CGSize) -> CGRect? {
+        guard game, haveCam, size.width > 1, id >= 0, id < actors.count else { return nil }
+        let pts = screenPoints(of: id, size, lastCam.viewProj)
+        guard let f = pts.first else { return nil }
+        var lo = f, hi = f
+        for p in pts { lo.x = min(lo.x, p.x); lo.y = min(lo.y, p.y); hi.x = max(hi.x, p.x); hi.y = max(hi.y, p.y) }
+        return CGRect(x: lo.x, y: lo.y, width: hi.x - lo.x, height: hi.y - lo.y)
+    }
+
+    /// Starts a scripted finger on Jelly `id` (the close-up touches as accessibility actions). False when a script runs, a real finger is down, or he is not in focus.
+    @discardableResult
+    func startScripted(_ kind: ScriptedTouch.Kind, jelly id: Int) -> Bool {
+        guard game, haveCam, scriptedRun == nil, (stageView?.activeTouches ?? 0) == 0, mode == .none, model.care.focus.isFocused, id < actors.count else { return false }
+        touchID = id
+        scriptedRun = ScriptedTouchRun(kind, jelly: id, start: CACurrentMediaTime())
+        return true
+    }
+    var scriptedRunning: Bool { scriptedRun != nil }
+
+    /// Feeds the running script to the SAME pointer path a finger uses. A real touch cancels it.
+    private func runScripted(now: CFTimeInterval) {
+        guard var run = scriptedRun else { return }
+        guard let stage = stageView, haveCam, game else { scriptedRun = nil; return }
+        let size = stage.bounds.size
+        let cancelled = stage.activeTouches > 0 || !model.care.focus.isFocused
+        let c = actors[run.jelly].sim.centroid()
+        let right = SIMD3<Float>(lastCam.view.columns.0.x, lastCam.view.columns.1.x, lastCam.view.columns.2.x)
+        let up = SIMD3<Float>(lastCam.view.columns.0.y, lastCam.view.columns.1.y, lastCam.view.columns.2.y)
+        func at(_ o: SIMD2<Float>) -> CGPoint { screenPoint(c + right * o.x + up * o.y, size) }
+        for e in run.step(now: now, cancelled: cancelled) {
+            switch e {
+            case .down(let k, let o): pointerDown(id: ObjectIdentifier(scriptPointers[k]), point: at(o), size: size)
+            case .move(let k, let o): pointerMove(id: ObjectIdentifier(scriptPointers[k]), point: at(o), size: size)
+            case .up(let k): pointerUp(id: ObjectIdentifier(scriptPointers[k]))
+            }
+        }
+        scriptedRun = run.finished ? nil : run
     }
 
     // Capture aid (not DEBUG-only so the Release sim build can film it): -TouchDemo pet strokes him on a 14 s loop once he is in focus mode.

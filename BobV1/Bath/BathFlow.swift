@@ -74,6 +74,8 @@ final class BathFlow {
     @ObservationIgnored var success: () -> Void = {}
     /// Capture aid: scripted fake scrubs (`-BlobGameDemo gclean`).
     @ObservationIgnored var demo = false
+    /// Accessibility "Help me scrub": the scripted scrub runs for the current stage WITHOUT the demo's auto Next / Done (the player still taps Next). Reset on every stage.
+    var assistScrub = false
     /// Capture aid (`-BathHold 1`): the demo stops at every complete stage (no auto Next / Done) so each can be filmed.
     @ObservationIgnored var demoHold = false
     @ObservationIgnored private var demoWait: Float = 0
@@ -302,13 +304,13 @@ final class BathFlow {
         case .fade: tickFade(dt: dt, brain: brain, sim: sim)
         case .soap:
             look.tool = .soap
-            if demo { demoTouch(dt: dt, sim: sim) }
+            if demo || assistScrub { demoTouch(dt: dt, sim: sim) }
             progress = stageComplete ? 1 : rounded(min(1, look.coverage / BathTuning.soapDone))
             tickBubbles(dt: dt)
             if !stageComplete, look.coverage >= BathTuning.soapDone { markComplete() }
         case .rinse:
             look.tool = .rinse
-            if demo { demoTouch(dt: dt, sim: sim) }
+            if demo || assistScrub { demoTouch(dt: dt, sim: sim) }
             tickBubbles(dt: dt)
             if stageComplete { progress = 1 } else {
                 let foam = min(1, max(0, (rinseStartCoverage - look.coverage) / max(rinseStartCoverage - BathTuning.rinseDone, 0.01)))
@@ -318,7 +320,7 @@ final class BathFlow {
             }
         case .shine:
             look.tool = .shine
-            if demo { demoTouch(dt: dt, sim: sim) }
+            if demo || assistScrub { demoTouch(dt: dt, sim: sim) }
             tickBubbles(dt: dt)
             progress = stageComplete ? 1 : rounded(polish)
             if !stageComplete, polish >= BathTuning.polishDone { markComplete() }
@@ -363,7 +365,8 @@ final class BathFlow {
 
     private func enter(_ p: BathPhase) {
         phase = p
-        stageComplete = false; demoWait = 0
+        stageComplete = false; demoWait = 0; assistScrub = false
+        if let t = Self.workPrompt(p) { A11yEvents.say(t, .normal) }
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
         switch p {
         case .soap: progress = 0; prompt = Self.workPrompt(.soap); AudioHub.shared.play(.splash)
@@ -392,12 +395,18 @@ final class BathFlow {
     static func completePrompt(_ p: BathPhase) -> String? {
         switch p { case .soap: return "All soapy! Tap Next"; case .rinse: return "Squeaky clean! Tap Next"; case .shine: return "So shiny! Tap Next"; default: return nil }
     }
+    /// "Soap done. Tap Next" for a screen reader.
+    static func stageDoneAnnouncement(_ p: BathPhase) -> String {
+        switch p { case .soap: return "Soap done. Tap Next"; case .rinse: return "Rinse done. Tap Next"; case .shine: return "Shine done. Tap Next"; default: return "Done" }
+    }
     /// The prompt for the current stage (persistent: it never times out).
     var stagePrompt: String? { stageComplete ? Self.completePrompt(phase) : Self.workPrompt(phase) }
 
     private func markComplete() {
         stageComplete = true; progress = 1
         prompt = Self.completePrompt(phase)
+        assistScrub = false
+        A11yEvents.say(Self.stageDoneAnnouncement(phase), .high)          // (the checkmark and the prompt are the visible half of the haptic)
         haptic(BathTuning.completeHaptic.0, BathTuning.completeHaptic.1)
         AudioHub.shared.uiConfirm()
     }

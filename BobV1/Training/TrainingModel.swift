@@ -144,6 +144,12 @@ nonisolated struct DrillSim: Sendable {
     private(set) var lap = 1
     private(set) var events: [DrillEvent] = []
     private(set) var finished = false
+    /// Accessibility: the judging windows are this much wider (1 = as designed), and one button judges the beat whichever foot it is.
+    var windowScale: Double = 1
+    var anyFoot = false
+    private var perfectW: Double { TrainingTuning.perfectWindow * windowScale }
+    private var goodW: Double { TrainingTuning.goodWindow * windowScale }
+    private var missW: Double { TrainingTuning.missWindow * windowScale }
     private var lapEnded: Set<Int> = []
     private var lapStarted: Set<Int> = [1]
     let seed: UInt64
@@ -194,7 +200,7 @@ nonisolated struct DrillSim: Sendable {
         guard !finished else { return }
         songTime = max(songTime, t)
         // prompts nobody tapped in time
-        for i in prompts.indices where prompts[i].grade == nil && judgedTime > prompts[i].time + TrainingTuning.goodWindow {
+        for i in prompts.indices where prompts[i].grade == nil && judgedTime > prompts[i].time + goodW {
             judge(i, .miss, late: true)
         }
         // lap bookkeeping
@@ -222,14 +228,14 @@ nonisolated struct DrillSim: Sendable {
         var best: Int?
         for i in prompts.indices where prompts[i].grade == nil {
             let d = abs(prompts[i].time - now)
-            if d <= TrainingTuning.missWindow, best == nil || d < abs(prompts[best!].time - now) { best = i }
-            if prompts[i].time - now > TrainingTuning.missWindow { break }
+            if d <= missW, best == nil || d < abs(prompts[best!].time - now) { best = i }
+            if prompts[i].time - now > missW { break }
         }
         guard let i = best else { strays += 1; events.append(.stray); return }
         let err = abs(prompts[i].time - now)
-        if prompts[i].foot != f { judge(i, .miss, late: false); return }
-        if err <= TrainingTuning.perfectWindow { judge(i, .perfect, late: false) }
-        else if err <= TrainingTuning.goodWindow { judge(i, .good, late: false) }
+        if prompts[i].foot != f, !anyFoot { judge(i, .miss, late: false); return }
+        if err <= perfectW { judge(i, .perfect, late: false) }
+        else if err <= goodW { judge(i, .good, late: false) }
         else { judge(i, .miss, late: now > prompts[i].time) }
     }
 

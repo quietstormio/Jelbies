@@ -21,6 +21,7 @@ struct SelectionOverlay: View {
             }
             .allowsHitTesting(false)
             .ignoresSafeArea()
+            MotionVeilView()          // a11y: the Reduce Motion camera crossfade (Accessibility/MotionAssist.swift)
         }
     }
 }
@@ -50,7 +51,7 @@ enum SelectionPainter {
         let (l, r) = Silhouette.halves(o)
         let p = Double(select.drawProgress)
         let pl = Silhouette.prefix(l, fraction: p), pr = Silhouette.prefix(r, fraction: p)
-        let glow = select.glowing ? 0.5 + 0.5 * sin(Double(select.glowTime) * 2 * .pi / 0.7 - .pi / 2) : 1.0     // soft pulse once drawn
+        let glow = (select.glowing && !A11ySettings.shared.reduceMotion) ? 0.5 + 0.5 * sin(Double(select.glowTime) * 2 * .pi / 0.7 - .pi / 2) : 1.0     // soft pulse once drawn
         let style = { (w: CGFloat) in StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round) }
         for (w, a) in [(26.0, 0.10), (16.0, 0.18), (9.0, 0.30)] {
             let k = select.glowing ? (0.55 + 0.45 * glow) : 1

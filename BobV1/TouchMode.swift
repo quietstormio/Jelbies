@@ -35,6 +35,9 @@ final class BlobFocus {
     @ObservationIgnored private(set) var blend: Float = 0
     @ObservationIgnored private var vel: Float = 0
     @ObservationIgnored private var goal: Float = 0
+    @ObservationIgnored private var assist = CameraBlendAssist()
+    /// The Reduce Motion veil is up or the camera is mid-snap (tests).
+    var assistPeaked: Bool { assist.peaked }
 
     /// Spring tuning: ~0.7 s to settle, barely any overshoot.
     static let omega: Float = 9.0, zeta: Float = 0.9
@@ -76,6 +79,15 @@ final class BlobFocus {
     @discardableResult
     func step(dt: Float) -> Bool {
         let h = min(dt, 1.0 / 30)
+        // a11y (round-1023): Reduce Motion turns the glide into a crossfade (Accessibility/MotionAssist.swift); the spring below is the unchanged default.
+        if A11ySettings.shared.reduceMotion || assist.stage != .idle {
+            let owned = assist.step(blend: &blend, vel: &vel, goal: goal, dt: h, reduce: A11ySettings.shared.reduceMotion)
+            MotionVeil.shared.set(assist.veil)
+            if owned {
+                if phase == .leaving, abs(blend) < 0.004, assist.stage == .fadingIn || assist.stage == .idle { blend = 0; vel = 0; phase = .roaming; return true }
+                return false
+            }
+        }
         // semi-implicit Euler on x'' = w^2 (goal - x) - 2 z w x'
         let w = Self.omega
         vel += (w * w * (goal - blend) - 2 * Self.zeta * w * vel) * h

@@ -102,6 +102,8 @@ final class RaceFlow {
     /// -RaceAuto also sends him home by himself this long after the card appears.
     @ObservationIgnored var autoReturnAfter: Float?
     @ObservationIgnored var rivalSource: RivalSource = LocalRivalSource()
+    /// The input assist this trip runs with (A11ySettings at the start; Accessibility/PlayAssist.swift).
+    var assist: RaceAssist = .off
     /// Seconds of white (fade out / hold / fade in).
     static let fadeOut: Float = 0.45, fadeHold: Float = 0.25, fadeIn: Float = 0.5
     /// Seconds he stands on the track before the numbers start.
@@ -153,6 +155,7 @@ final class RaceFlow {
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil
+        applyAssistAtStart()
         started += 1
     }
 
@@ -166,6 +169,7 @@ final class RaceFlow {
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0
         drillState.song = TrainingTuning.loopStart
+        applyAssistAtStart()
         started += 1
     }
 
@@ -208,7 +212,7 @@ final class RaceFlow {
         guard sim != nil, wipe == 0 else { return [] }
         if kind == .drill { return tickDrill(dt: dt) }
         if sim!.phase == .countdown, introT < Self.introPause { introT += dt; return [] }
-        if let r = autoRate, buttonsLive {
+        if let r = autoRate ?? autoAssistRate, buttonsLive {
             autoT += dt
             while autoT >= 1 / max(r, 0.1) { autoT -= 1 / max(r, 0.1); _ = tap(foot: autoFoot); autoFoot = 1 - autoFoot }
         }
@@ -243,6 +247,7 @@ final class RaceFlow {
     }
 
     func handle(_ e: RaceEvent) {
+        announceRace(e)
         switch e {
         case .countdown: cueSerial += 1; cue(.countdownBeep)
         case .go: cueSerial += 1; cue(.go)
@@ -256,7 +261,7 @@ final class RaceFlow {
     private func settle() {
         guard !settled, let s = sim else { return }
         settled = true
-        earned = s.playerDrops
+        earned = assistedDrops(s.playerDrops)
         if let place = s.playerPlace {
             wallet?.add(earned)
             waddleGain = stats?.afterRace(place: place) ?? 0
@@ -265,6 +270,7 @@ final class RaceFlow {
             unlockedNow = progress.unlockedTiers.first { !open.contains($0) }
             drillCue(.jingle(win: place <= 2))
         }
+        announceRaceResult()
         cueSerial += 1
         refreshUI()
     }

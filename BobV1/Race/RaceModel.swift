@@ -228,6 +228,8 @@ nonisolated struct RaceTapModel: Equatable, Sendable {
     var stumbling: Bool { stumbleLeft > 0 }
     /// The foot the next step uses.
     var nextFoot: Int { lastStepFoot.map { 1 - $0 } ?? 0 }
+    /// The foot a one-button player's next press counts as: always the OTHER one than the last tap (a stumble is impossible).
+    var alternateFoot: Int { lastTap.map { 1 - $0 } ?? 0 }
 
     mutating func tap(_ foot: Int, canStep: Bool = true) -> Outcome {
         let f = foot == 0 ? 0 : 1
@@ -379,6 +381,9 @@ nonisolated struct RaceSim: Sendable {
     }
 
     mutating func takeEvents() -> [RaceEvent] { let e = events; events.removeAll(keepingCapacity: true); return e }
+
+    /// The player's repeated-foot forgiveness window (accessibility assist; never lowers a boost's own).
+    mutating func setPlayerGrace(_ g: Float) { racers[0].tap.grace = max(racers[0].tap.grace, g) }
 
     /// A tap of the player's foot button. Only meaningful while racing.
     @discardableResult
