@@ -1,16 +1,21 @@
 //
 //  GameCare+Training.swift
 //  Voice-trick training happens in the close-up, one Jelly at a time (W2, 2026-10-22): the "Train" button (W3) calls `beginTraining(id)`, the camera comes in on that Jelly and,
-//  on arrival, his own trick book opens. Tricks are per character (JellyKeys.words), so the voice teaching, the book and the Show all read that Jelly's book.
+//  on arrival, the Train card starts (TrainSession): pick a trick, he does it, the mic listens by itself, three reps teach it, then Try it. Tricks are per character (JellyKeys.words), so the voice teaching, the book and the Show all read that Jelly's book.
 //
 
 import Foundation
 
 extension GameCare {
     /// W3's "Train" button: a close-up on `id` whose arrival opens that Jelly's trick book.
-    func beginTraining(_ id: Int) {
+    func beginTraining(_ id: Int, preselect: VoiceTrick? = nil) {
         guard jellies.indices.contains(id) else { return }
-        if focus.isActive, focusGroup.ids == [id] { voice.requestTrickBook(); return }
+        voice.trainPreselect = preselect
+        if focus.isActive, focusGroup.ids == [id] {          // already in his close-up: the Train card starts now (or on arrival)
+            if focus.phase == .focused { focusGroup.trainPending = false; focusGroup.training = true; voice.startTrain(subject: id) }
+            else { focusGroup.trainPending = true }
+            return
+        }
         if focus.phase != .roaming { release(); return }          // (a different close-up: let go first; W3 disables the button until it is over)
         beginFocus(ids: [id])
         focusGroup.trainPending = focusGroup.ids == [id]

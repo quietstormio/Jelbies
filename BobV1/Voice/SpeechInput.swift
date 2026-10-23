@@ -50,6 +50,9 @@ final class FakeSpeechInput: SpeechInput {
     var onLevel: ((Float) -> Void)?
     /// Overrides `-VoiceFakeText` when set.
     var nextTranscript: String?
+    /// `-VoiceFakeSeq "sit|sit|banana"`: one transcript per listen, in order (the last one repeats). Empty items are silence.
+    var sequence: [String] = (UserDefaults.standard.string(forKey: "VoiceFakeSeq") ?? "").split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+    private var seqIndex = 0
     private(set) var isStarted = false
     private(set) var lastContextualWords: [String] = []
     private var timer: Timer?
@@ -119,6 +122,7 @@ final class FakeSpeechInput: SpeechInput {
         isStarted = false
         guard was else { return "" }
         if let t = nextTranscript { nextTranscript = nil; return t }
+        if !sequence.isEmpty, !(sequence.count == 1 && sequence[0].isEmpty) { let t = sequence[min(seqIndex, sequence.count - 1)]; seqIndex += 1; return t }
         return UserDefaults.standard.string(forKey: "VoiceFakeText") ?? ""
     }
 }

@@ -156,6 +156,12 @@ struct GameScreen: View {
                 .animation(CareMenu.spring, value: focus.phase)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                if model.care.voice.train != nil {          // the close-up's Train card (Voice/TrainCard.swift): bottom, right of the rail; landscape: the right side
+                    TrainCard(voice: model.care.voice, landscape: vsc == .compact)
+                        .padding(.leading, vsc == .compact ? 0 : 62).padding(.trailing, 12).padding(.bottom, 10)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .transition(.opacity)
+                }
             }
             }
 

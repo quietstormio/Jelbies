@@ -343,7 +343,7 @@ struct VoiceTrickBook: View {
         return HStack(spacing: 8) {
             Button {
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                voice.show(t)
+                if tr.isLearned(t) { voice.show(t) } else { voice.teach(t) }       // a learned row: he does it now; a new one starts a lesson in the close-up
                 close()
             } label: {
                 HStack(spacing: 10) {
@@ -368,7 +368,7 @@ struct VoiceTrickBook: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("voice-trick-\(t.rawValue)")
             .accessibilityLabel("\(t.title). \(word.map { "Word: \($0)." } ?? "No word yet.") \(n) of \(VoiceTuning.repsToLearn) lessons.\(tr.isLearned(t) ? " Reliability \(rel) percent." : "")")
-            .accessibilityHint("\(tr.names.displayName(voice.subjectID)) does it now. The next word you say teaches it.")
+            .accessibilityHint(tr.isLearned(t) ? "\(tr.names.displayName(voice.subjectID)) does it now." : "Starts a lesson with \(tr.names.displayName(voice.subjectID)).")
             if word != nil {
                 Button { withAnimation(CareMenu.spring) { tr.forget(t) } } label: {
                     Text("Forget").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)

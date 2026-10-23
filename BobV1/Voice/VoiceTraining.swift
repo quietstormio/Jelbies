@@ -1,8 +1,9 @@
 //
 //  VoiceTraining.swift
 //  Voice v1: the words the player has taught Bob (his name + six tricks), Nintendogs style. Pure model, persisted to UserDefaults.
-//  Teaching: while he is DOING a move, the player says a word; it is bound to that move and counts a rep. Learned after 3 reps (`VoiceTuning.repsToLearn`), one per listen: saying the word repeatedly in one listen counts once.
-//  Commanding: a learned word makes him do the move with probability `reliability` (0.35 at learn + 0.15 per rep beyond 4, +0.03 per success, cap 0.95).
+//  Teaching: in the close-up's Train card (TrainSession) the Jelbie does a move and the player says a word; it is bound to that move and counts a rep (`teachRep`). Learned after 3 reps (`VoiceTuning.repsToLearn`), one per listen: saying the word repeatedly in one listen counts once.
+//  (`decide(... runningMove:)` still binds a word to a running move for the model API, but the app passes nil outside a Train session: no accidental lessons.)
+//  Commanding: a learned word makes him do the move with probability `reliability` (0.6 at learn + 0.15 per rep beyond 3, +0.03 per success, cap 0.95).
 //  A miss is half "wrong trick" (another learned trick) and half ignored. Grumpy refuses every trick except come (come is always obeyed).
 //  `decide` is the single entry point: transcript in, a VoiceReaction out (GameCare executes it). The RNG is injectable so tests are deterministic.
 //
@@ -75,7 +76,7 @@ nonisolated struct VoiceDecision: Equatable, Sendable {
 nonisolated enum VoiceTuning {
     /// The one rep count: a trick (or his name) is learned after this many listens that carry the word. Dots, docs and tests all read it.
     static let repsToLearn = 3
-    static let baseReliability: Float = 0.35
+    static let baseReliability: Float = 0.6
     static let perExtraRep: Float = 0.15
     static let perSuccess: Float = 0.03
     static let maxReliability: Float = 0.95
@@ -224,6 +225,11 @@ final class VoiceTraining {
     /// Words to hand the recogniser as contextual strings: his name plus every bound word.
     var contextualWords: [String] { names.contextualWords + VoiceTrick.allCases.filter { unlocked($0) }.compactMap(word(for:)) }
 
+    /// The highest listen-session id this book has handed out (the coordinator keeps ids unique ACROSS books).
+    var sessionCounter: Int { book.sessionCounter }
+    /// Raises this book's counter to `s` (a session id taken from the global maximum).
+    func adoptSession(_ s: Int) { guard s > book.sessionCounter else { return }; book.sessionCounter = s; save() }
+
     /// A fresh listen-session id (persisted, so it stays distinct across launches).
     func newSession() -> Int {
         book.sessionCounter += 1
@@ -328,6 +334,64 @@ final class VoiceTraining {
             if mood == .grumpy, s == .play { return VoiceDecision(reaction: .grumpyIgnore, target: target) }
             return VoiceDecision(reaction: .social(s), target: target)
         }
+    }
+
+    // MARK: teaching (the Train card)
+
+    /// What a word said during a Train listen for trick `t` did.
+    enum TeachResult: Equatable {
+        case rep(VoiceReaction)          // .learnedStep / .trickLearned
+        case nothing                     // silence / no words
+        case nameOnly                    // only a Jelbie's name (or "everyone")
+        case otherWord(String)           // a different word than the one this lesson is bound to
+        case reserved(String)            // already a command (a social phrase, come, another trick's word)
+    }
+
+    /// Side-effect-light teaching: binds a fresh word to `t` or counts a rep of the bound one. Never silently restarts a half-learned lesson.
+    func teachRep(_ t: VoiceTrick, transcript: String, session: Int) -> TeachResult {
+        let toks = VoiceMatcher.tokens(transcript)
+        guard !toks.isEmpty else { return .nothing }
+        let resolved = names.resolve(tokens: toks)
+        let (_, rest) = VoicePhrases.everyone(resolved.rest)
+        guard !rest.isEmpty else { return .nameOnly }
+        let said = rest.prefix(VoiceTuning.maxWordTokens).joined(separator: " ")
+        let l = lesson(t)
+        if l.started {
+            guard VoiceMatcher.best(in: rest, among: [l.word]) != nil else { return .otherWord(said) }
+            let r = rep(t, session: session); save(); return .rep(r)
+        }
+        let others = VoiceTrick.allCases.filter { $0 != t && unlocked($0) && lesson($0).started }
+        if VoiceMatcher.best(in: rest, among: others.map { lesson($0).word }) != nil
+            || VoiceMatcher.looksLikeCome(rest) || VoiceTuning.comeAliases.contains(rest.joined(separator: " "))
+            || VoicePhrases.social(rest) != nil { return .reserved(said) }
+        var fresh = VoiceLesson(); fresh.word = said
+        book.tricks[t.rawValue] = fresh
+        let r = rep(t, session: session); save(); return .rep(r)
+    }
+
+    /// "Use X instead": the half-learned word is dropped and `transcript` becomes the new word (one rep).
+    func rebind(_ t: VoiceTrick, transcript: String, session: Int) -> TeachResult {
+        book.tricks[t.rawValue] = nil
+        return teachRep(t, transcript: transcript, session: session)
+    }
+
+    /// Does `rest` (a transcript's tokens) name a trick this book has LEARNED (side-effect free)? Used by the room command.
+    func learnedTrick(in tokens: [String]) -> VoiceTrick? {
+        let resolved = names.resolve(tokens: tokens)
+        let (_, rest) = VoicePhrases.everyone(resolved.rest)
+        guard !rest.isEmpty else { return nil }
+        let learned = VoiceTrick.allCases.filter { unlocked($0) && isLearned($0) && $0 != .come }
+        guard let hit = VoiceMatcher.best(in: rest, among: learned.map { lesson($0).word }) else { return nil }
+        return learned[hit.index]
+    }
+
+    /// The try-it step: the learned trick is performed whatever the dice say, and counts as a success.
+    func creditSuccess(_ t: VoiceTrick) {
+        var l = lesson(t)
+        guard l.learned else { return }
+        l.reliability = min(l.reliability + VoiceTuning.perSuccess, VoiceTuning.maxReliability)
+        book.tricks[t.rawValue] = l
+        save()
     }
 
     private func rep(_ t: VoiceTrick, session: Int) -> VoiceReaction {
