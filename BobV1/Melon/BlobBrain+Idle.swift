@@ -219,7 +219,8 @@ extension BlobBrain {
         // the zoomies urge: a burst of energy every few minutes (not at night, never grumpy, one of the two fast Jellies at a time)
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 2 {
             let ur = rand()
-            let k: IdleKind = ur < 0.5 ? .zoomies : (ur < 0.85 ? .run : .slide)
+            var k: IdleKind = ur < 0.5 ? .zoomies : (ur < 0.85 ? .run : .slide)
+            if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
             let started = idleStart(k, sim)
             zoomUrge = started ? rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) : 20
             if started {

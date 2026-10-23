@@ -90,7 +90,7 @@ extension BlobBrain {
         let remaining = simd_distance(position, target)
         if remaining <= FlourishTuning.minRemaining { leg.rolled = true; return false }
         guard simd_distance(position, leg.from) >= leg.trigger else { return false }
-        if let k = leg.kind, othersDoing(k) { if !leg.waiting { leg.waiting = true; leg.blocked += 1 }; return false }          // (a friend is doing just that: try again at the next step, once he is done)
+        if let k = leg.kind, othersDoing(k) || kindCooling.contains(k) { if !leg.waiting { leg.waiting = true; leg.blocked += 1 }; return false }          // (a friend is doing just that: try again at the next step, once he is done)
         leg.rolled = true
         guard let kind = leg.kind, kindCool[kind] == nil, !(Self.fastKinds.contains(kind) && fastOthers() >= 2), remaining >= FlourishTuning.need(kind) - 0.2 else { leg.blocked += 1; return false }
         if flourishStart(kind, resume: target, sim, skinner) { leg.fired += 1; return true }
