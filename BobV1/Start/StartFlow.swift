@@ -79,6 +79,7 @@ final class StartFlow {
         JellyRoster.setName(c, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
         welcome = JellyRoster.names[c]
+        GameCare.newcomerPending = true
         enterGame()
     }
 

@@ -255,6 +255,7 @@ extension GameCare {
                 beginRace(jelly: w.id, seed: w.seed, drill: w.drill)
             } else { raceWait = w }
         }
+        tickNewcomer(actors, dt: dt)
         raceHome(actors, dt: dt)
         if !race.active, let l = live, l.raceLive { l.raceFinished(place: 0, drops: 0) }          // a trip that ended without results (abort): the card goes quietly
         guard race.active else { return }

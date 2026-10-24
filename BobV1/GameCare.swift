@@ -355,6 +355,7 @@ final class GameCare {
     /// Bedtime / wake / idle clocks (GameCare+NightRest.swift).
     @ObservationIgnored var nightRest = NightRestBook()
     @ObservationIgnored var greetPending: Set<Int> = []
+    @ObservationIgnored var newcomer: NewcomerWalk?          // the bring-home walk (GameCare+Newcomer.swift)
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
     static func greetSpot(_ id: Int) -> SIMD2<Float> {
