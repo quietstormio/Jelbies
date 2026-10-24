@@ -18,7 +18,7 @@ final class TrainFlowUITests: XCTestCase {
     private func launch(_ extra: [String], orient: UIDeviceOrientation) -> XCUIApplication {
         XCUIDevice.shared.orientation = orient
         let app = XCUIApplication()
-        app.launchArguments += ["-SetRoster", "pip,moss,lavender", "-VoiceFakeMic", "1", "-NeedsHappy", "1", "-VoiceTipSeen", "1"] + extra
+        app.launchArguments += ["-SetRoster", "pip,moss,lavender", "-VoiceFakeMic", "1", "-NeedsHappy", "1", "-VoiceTipSeen", "1", "-ClockHour", "17"] + extra
         app.launch()
         return app
     }

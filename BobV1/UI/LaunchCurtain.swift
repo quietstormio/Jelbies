@@ -25,6 +25,7 @@ final class LaunchGate {
     @ObservationIgnored private var settleOK = true
     @ObservationIgnored private var settleStart: TimeInterval = 0
 
+    nonisolated deinit {}          // (not an isolated deinit: see RoomSwitch)
     init(clock: (() -> TimeInterval)? = nil) {
         if let clock { self.clock = clock }
         shownAt = self.clock()

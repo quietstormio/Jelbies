@@ -18,6 +18,10 @@ final class RoomSwitch {
     private(set) var dest: RoomID?
     @ObservationIgnored var holdFrames = 0
 
+    /// Not an isolated deinit: GameCare's teardown (a test's, or the app's) released this through swift_task_deinitOnExecutor and crashed in the runtime
+    /// ("pointer being freed was not allocated", StopLookupScope). Every other Observable model here does the same.
+    nonisolated deinit {}
+
     var active: Bool { phase != .off }
 
     func begin(to id: RoomID) { dest = id; phase = .out; wipe = 0; holdFrames = 0 }
