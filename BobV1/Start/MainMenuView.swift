@@ -1,7 +1,7 @@
 //
 //  MainMenuView.swift
-//  The title screen on a cold launch: the Jelbies logo over the real 3D room (no characters).
-//  Two buttons: New Game (confirmed when it would wipe a save) and Continue (only with a save).
+//  The title screen (Cloud Jelly): white sky with slowly drifting Mist bubbles, the Jelbies logo bobbing in the top third, and two jelly buttons.
+//  Continue (only with a save) is the blue primary; New Game is the white secondary, confirmed on a white rimmed card when it would wipe a save.
 //
 
 import SwiftUI
@@ -10,13 +10,15 @@ struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
+    @State private var bob = false
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var landscape: Bool { vsc == .compact }
+    private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
 
     var body: some View {
         ZStack {
-            ShowcaseStage(roster: hasSave ? Array(JellyRoster.launchIDs().prefix(1)) : [0], empty: true)
-            scrim.ignoresSafeArea().allowsHitTesting(false)
+            CloudSky()
             if landscape {
                 HStack {
                     title.frame(maxWidth: .infinity)
@@ -25,54 +27,60 @@ struct MainMenuView: View {
                 .padding(.horizontal, 28).padding(.vertical, 12)
             } else {
                 VStack {
-                    title.padding(.top, 40)
+                    title.padding(.top, 60)
                     Spacer()
-                    buttons.frame(maxWidth: 360).padding(.bottom, 28)
+                    buttons.frame(maxWidth: 340).padding(.bottom, 36)
                 }
                 .padding(.horizontal, 24)
             }
+            if confirmNew { confirmCard.transition(.opacity) }
         }
-        .alert("Start over?", isPresented: $confirmNew) {
-            Button("Start over", role: .destructive) { flow.startOver() }
-            Button("Keep playing", role: .cancel) {}
-        } message: { Text("Your Jelbies, Drops and items will be gone.") }
+        .animation(.easeInOut(duration: 0.2), value: confirmNew)
+        .onAppear { bob = true }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
-    }
-
-    /// Day / night tint over the room: a darker, bluer wash at night, a warm one at dusk and dawn, a light cream veil by day.
-    private var scrim: some View {
-        let phase = DayPhase.of(hour: DayClock.shared.hour)
-        let top: Color, bottom: Color
-        switch phase {
-        case .night: top = Color(hex: 0x1E2440).opacity(0.62); bottom = Color(hex: 0x1E2440).opacity(0.72)
-        case .evening: top = Color(hex: 0xF7B98B).opacity(0.45); bottom = Color(hex: 0x4D331F).opacity(0.45)
-        case .morning: top = Color(hex: 0xFFE6C9).opacity(0.5); bottom = Color(hex: 0x4D331F).opacity(0.35)
-        case .day: top = Color(hex: 0xCFE8F3).opacity(0.4); bottom = Color(hex: 0x4D331F).opacity(0.38)
-        }
-        return LinearGradient(colors: [top, .clear, .clear, bottom], startPoint: .top, endPoint: .bottom)
     }
 
     private var title: some View {
         Image("JelbiesLogo").resizable().scaledToFit()
             .frame(maxWidth: landscape ? 420 : 340)
-            .shadow(color: SK.ink.opacity(0.25), radius: 6, y: 3)
+            .offset(y: bob && !still ? -6 : 0)
+            .animation(still ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: bob)
             .accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
     private var buttons: some View {
-        VStack(spacing: 12) {
-            if hasSave { big("Continue", id: "menu-continue") { flow.continueGame() } }
-            if hasSave { big("New Game", id: "menu-new") { confirmNew = true } }
-            else { big("New Game", id: "menu-start") { flow.startOver() } }
+        VStack(spacing: 16) {
+            if hasSave {
+                Button("Continue") { AudioHub.shared.uiTap(); flow.continueGame() }
+                    .buttonStyle(JellyButtonStyle(.primary)).accessibilityIdentifier("menu-continue")
+                Button("New Game") { AudioHub.shared.uiTap(); confirmNew = true }
+                    .buttonStyle(JellyButtonStyle(.secondary)).accessibilityIdentifier("menu-new")
+            } else {
+                Button("New Game") { AudioHub.shared.uiTap(); flow.startOver() }
+                    .buttonStyle(JellyButtonStyle(.primary)).accessibilityIdentifier("menu-start")
+            }
         }
     }
 
-    private func big(_ t: String, id: String, _ a: @escaping () -> Void) -> some View {
-        Button { AudioHub.shared.uiTap(); a() } label: {
-            Text(t).font(SK.font(26, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 64)
-                .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.3), radius: 6, y: 3))
-                .overlay(Capsule().strokeBorder(SK.honeyDeep, lineWidth: 2.5))
+    /// "Start over?" as the white card with the thick Jelly rim, over a pale veil.
+    private var confirmCard: some View {
+        ZStack {
+            Color.white.opacity(0.6).ignoresSafeArea().onTapGesture { confirmNew = false }
+            VStack(spacing: 12) {
+                Text("Start over?").font(CloudTheme.font(26, .bold)).foregroundStyle(CloudTheme.ink).accessibilityAddTraits(.isHeader)
+                Text("Your Jelbies, Drops and items will be gone.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                Button("Keep playing") { confirmNew = false }
+                    .buttonStyle(JellyButtonStyle(.primary, size: 20, minHeight: 48)).accessibilityIdentifier("menu-keep")
+                Button("Start over") { confirmNew = false; flow.startOver() }
+                    .buttonStyle(JellyButtonStyle(.secondary, size: 18, minHeight: 44)).accessibilityIdentifier("menu-start-over")
+            }
+            .padding(.horizontal, 22).padding(.vertical, 20)
+            .frame(maxWidth: 340)
+            .cloudCard(radius: 30)
+            .padding(24)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
         }
-        .buttonStyle(.plain).accessibilityIdentifier(id)
     }
 }

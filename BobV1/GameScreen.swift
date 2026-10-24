@@ -237,6 +237,11 @@ struct GameScreen: View {
             if settingsOpen {
                 SettingsMenu(openAccessibility: { withAnimation(CareMenu.spring) { settingsOpen = false }; a11yOpen = true },
                              openStudio: { withAnimation(CareMenu.spring) { settingsOpen = false }; model.paused = true; showStudio = true },
+                             mainMenu: {
+                                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving the app
+                                 settingsOpen = false
+                                 withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() }
+                             },
                              close: { withAnimation(CareMenu.spring) { settingsOpen = false } })
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, 16).padding(.top, 52)
