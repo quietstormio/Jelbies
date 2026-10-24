@@ -18,7 +18,6 @@ struct GameScreen: View {
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
-    @State private var goOutOpen = false                      // the Go out menu (Track / Store / Jelly Show) is unfolded
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
     @State private var bagWho: Int?
     @State private var extrasOpen = false                     // Siri & Lock Screen panel (Live Activity toggles, Siri tip)
@@ -52,11 +51,11 @@ struct GameScreen: View {
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
-                .opacity(menuOpen || goOutOpen ? 0.22 : 0)
+                .opacity(menuOpen ? 0.22 : 0)
                 .ignoresSafeArea()
-                .allowsHitTesting(menuOpen || goOutOpen)
-                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; goOutOpen = false } }
-                .animation(.easeInOut(duration: 0.25), value: menuOpen || goOutOpen)
+                .allowsHitTesting(menuOpen)
+                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false } }
+                .animation(.easeInOut(duration: 0.25), value: menuOpen)
 
             TouchHeartsView(play: model.touch, care: model.care)
 
@@ -137,7 +136,7 @@ struct GameScreen: View {
                                 VoiceBookButton { bookOpen = true }
                                 if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
                                 if !focus.isActive {
-                                    GoOutMenu(open: $goOutOpen, rail: true, go: { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }, cafe: { model.care.requestCafe() })
+                                    GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
                                 }
                                 VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                                     .overlay(alignment: .topLeading) {
@@ -170,7 +169,7 @@ struct GameScreen: View {
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -256,7 +255,7 @@ struct GameScreen: View {
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
-        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $goOutOpen) }   // on the root: the HUD's pieces come and go with focus mode
+        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $town) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
             ZStack(alignment: .topTrailing) {
                 MelonScreen(model: studioModel) {
@@ -280,7 +279,7 @@ struct GameScreen: View {
     }
 
     /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
-    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<Bool> = .constant(false)) async {
+    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<TownScreen?> = .constant(nil)) async {
         let d = UserDefaults.standard
         let care = model.care
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
@@ -394,7 +393,7 @@ struct GameScreen: View {
         }
         if d.string(forKey: "HUDGoOut") == "open" {
             await sleep(5)
-            withAnimation(CareMenu.spring) { goOut.wrappedValue = true }
+            withAnimation(.easeInOut(duration: 0.25)) { goOut.wrappedValue = .town }
         }
         // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
         if let m = d.string(forKey: "CafeAuto") {
