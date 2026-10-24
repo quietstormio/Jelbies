@@ -122,6 +122,10 @@ extension GameCare {
             let p = cur.at + (floor - cur.at) * (Float(k) / 12)
             if DecorPlacement.isValid(cur.kind, at: p, among: store.placedDecor, ignoring: uid) { best = p } else { break }
         }
+        // a finger across the middle: keep following on one axis when only the other is blocked
+        for q in [SIMD2<Float>(floor.x, best.y), SIMD2<Float>(best.x, floor.y), SIMD2<Float>(floor.x, cur.z), SIMD2<Float>(cur.x, floor.y)] where simd_distance(q, floor) < simd_distance(best, floor) - 1e-4 {
+            if DecorPlacement.isValid(cur.kind, at: q, among: store.placedDecor, ignoring: uid) { best = q }
+        }
         if best != cur.at, store.move(uid, to: best) { syncDecor(); return true }
         return false
     }

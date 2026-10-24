@@ -271,8 +271,8 @@ enum DecorTuning {
 // MARK: - where things may go
 
 enum DecorPlacement {
-    /// The middle of the rug and the front strip (tray, come-here spot, bowls, the sleeping pile, the group row): solid decor stays out.
-    static let coreMin = SIMD2<Float>(-2.0, -1.5), coreMax = SIMD2<Float>(2.0, 3.0)
+    /// A small front-centre box (the tray, the come-here spot (0, 2.4), the bowls, the group row): solid decor stays out. The rest of the floor is free.
+    static let coreMin = SIMD2<Float>(-1.6, 1.4), coreMax = SIMD2<Float>(1.6, 3.0)
     static let minZ: Float = -4.3, maxZ: Float = 3.0
     /// Gap kept between two items and between an item and the sofa / table.
     static let gap: Float = 0.06
