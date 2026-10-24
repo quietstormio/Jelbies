@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var flow = StartFlow.shared
     @State private var studioModel = ContentView.makeStudioModel()
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
@@ -15,9 +16,19 @@ struct ContentView: View {
                 MelonStage(model: studioModel)
             }
         } else {
-            GameScreen().onAppear { OrientationForce.apply() }
-                .overlay { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) }
-                .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
+            ZStack {
+                switch flow.phase {
+                case .menu: MainMenuView(flow: flow)
+                case .wiping: SK.cream.ignoresSafeArea()
+                case .adopt(let mode):
+                    AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { flow.cancelAdoption() })
+                case .game: GameHost(session: flow.session)
+                }
+                if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
+            }
+            .onAppear { OrientationForce.apply() }
+            .overlay { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) }
+            .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }
     }
 

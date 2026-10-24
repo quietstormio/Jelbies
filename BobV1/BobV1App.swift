@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct BobV1App: App {
+    init() { StartFlow.applyLaunchArguments() }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
+
     var body: some Scene {
         WindowGroup {
             ContentView()

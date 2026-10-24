@@ -42,7 +42,28 @@ nonisolated enum JellyRoster {
     static let maxCount = 3
     /// Characters available (Bob, Pip, Moss, Lavender).
     static let characterCount = 4
-    static let names = ["Bob", "Pip", "Moss", "Lavender"]
+    /// The species' own names (what the Adoption Center offers as the default).
+    static let baseNames = ["Bob", "Pip", "Moss", "Lavender"]
+    static let namesKey = "JellyNames.v1"
+    /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).
+    nonisolated(unsafe) static var names: [String] = loadNames()
+    static func loadNames(_ d: UserDefaults = .standard) -> [String] {
+        let saved = d.stringArray(forKey: namesKey) ?? []
+        return baseNames.enumerated().map { i, b in
+            guard saved.indices.contains(i) else { return b }
+            let t = saved[i].trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? b : t
+        }
+    }
+    /// Gives character `id` a name (empty = back to the base name) and saves it.
+    static func setName(_ id: Int, _ raw: String, _ d: UserDefaults = .standard) {
+        guard (0..<characterCount).contains(id) else { return }
+        var saved = d.stringArray(forKey: namesKey) ?? []
+        while saved.count < characterCount { saved.append("") }
+        saved[id] = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(14))
+        d.set(saved, forKey: namesKey)
+        names = loadNames(d)
+    }
     /// A fresh install: Bob, Pip and Moss (the roster before the characters round; Lavender stays available).
     static let defaultIDs = [0, 1, 2]
     static let rosterKey = "BlobRoster.v1"
@@ -58,7 +79,7 @@ nonisolated enum JellyRoster {
     /// Character name or id, case-insensitive ("pip", "Lavender", "2"); nil when unknown.
     static func characterID(named raw: String) -> Int? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let i = names.firstIndex(where: { $0.lowercased() == t }) { return i }
+        if let i = baseNames.firstIndex(where: { $0.lowercased() == t }) ?? names.firstIndex(where: { $0.lowercased() == t }) { return i }
         if let n = Int(t), (0..<characterCount).contains(n) { return n }
         return nil
     }
