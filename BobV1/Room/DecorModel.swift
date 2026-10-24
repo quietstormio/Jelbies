@@ -286,9 +286,16 @@ enum DecorTuning {
 // MARK: - where things may go
 
 enum DecorPlacement {
-    /// A small front-centre box (the tray, the come-here spot (0, 2.4), the bowls, the group row): solid decor stays out. The rest of the floor is free.
-    static let coreMin = SIMD2<Float>(-1.6, 1.4), coreMax = SIMD2<Float>(1.6, 3.0)
+    /// A small front-centre box (the bowls at x +-0.9 z 1.9, the tray at x +-0.5 z 1.7..2.2, the come-here spot (0, 2.4)): solid decor stays out, from there to the front of the
+    /// floor (z 14). The rest of the floor is free.
+    static let coreMin = SIMD2<Float>(-1.25, 1.55), coreMax = SIMD2<Float>(1.25, 14)
     static let minZ: Float = -4.3, maxZ: Float = 3.0
+    /// The front of the visible floor above the bottom HUD buttons (a piece's front edge may reach it): from the camera at this fraction of the screen height, never less than 3.0.
+    static var frontZ: Float {
+        let a = GameCamera.aspect, size = CGSize(width: CGFloat(1000 * a), height: 1000)
+        let z = GameCamera.floorPoint(screen: CGPoint(x: size.width / 2, y: 880), size: size)?.y ?? maxZ
+        return min(max(z, maxZ), 12)
+    }
     /// Gap kept between two items and between an item and the sofa / table.
     static let gap: Float = 0.06
 
@@ -372,12 +379,10 @@ enum DecorPlacement {
         let walked = kind.interaction != nil || kind == .petbed || kind == .minigoal          // (a Jelly walks to it: the pet bed too; the goal is shot at from in front)
         // A big deep piece (swing, slide, pet bed at 1.25x) may stand far back: it is its FRONT (where a Jelly stands for it, or the slide's climb behind it) that has to be on walkable floor
         let deep = s.box && s.half.y > 0.9
-        let lowZ = walked ? (deep ? minZ : max(minZ, GameCamera.walkMinZ)) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
+        let lowZ = walked ? (deep ? minZ : max(minZ, GameCamera.walkMinZ)) : minZ, highZ = frontZ - (s.box ? s.half.y : s.radius)          // (the piece's front edge may reach the front of the visible floor; a Jelly's stand spot is clamped onto walkable floor)
         guard p.y >= lowZ, p.y <= highZ, abs(p.x) <= xLimit(kind, z: p.y, quarter: q) else { return false }
         // inside the walls (the room is 10 wide; a landscape screen sees past them)
         guard abs(p.x) + (s.box ? s.half.x : s.radius) <= RoomLayout.maxX - 0.02 else { return false }
-        // a deep piece (slide, swing) stays wholly in the walkable depth; its front edge may not pass the front of the floor
-        if s.box, p.y + s.half.y > max(highZ, GameCamera.walkMaxZ) + 0.2 { return false }
         // the slide is climbed from behind: that spot (1.85 back) has to be floor a Jelly can stand on
         if deep, walked, kind != .slide, p.y + s.half.y + 0.9 < GameCamera.walkMinZ { return false }
         if kind == .slide {

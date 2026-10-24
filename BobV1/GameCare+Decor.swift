@@ -92,16 +92,21 @@ extension GameCare {
         if !decorBusy(uid) { startArrange(on: uid); return }
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         if let f = DecorField.shared.foot(uid) {
-            let c = DecorField.shared.position(f)
-            for a in raceBook.actors {
-                guard let b = a.brain, b.idleState.decorUID == uid || DecorField.shared.occupant[uid] == b.steerID || b.decorIgnore == uid else { continue }
-                b.idleReset(a.skinner)                                      // he stops what he is doing with the piece ...
-                let away = simd_length(b.position - c) > 1e-3 ? simd_normalize(b.position - c) : SIMD2<Float>(0, 1)
-                let out = GameCamera.constrain(SIMD3(c.x + away.x * (f.spec.radius + 1.4), 0, c.y + away.y * (f.spec.radius + 1.4)), ignoreDecor: uid)
-                b.requestNow(.goTo(SIMD2(out.x, out.z)))                    // ... and steps off it
-            }
+            releaseDecor(uid, foot: f)
         }
         arrangeWait = (uid, 4)
+    }
+    /// Every Jelly using or heading to the piece stops and steps off it (the player's hand wins over a Jelly's use).
+    func releaseDecor(_ uid: Int, foot f: DecorField.Foot? = nil) {
+        guard let f = f ?? DecorField.shared.foot(uid) else { return }
+        let c = DecorField.shared.position(f)
+        for a in raceBook.actors {
+            guard let b = a.brain, b.idleState.decorUID == uid || DecorField.shared.occupant[uid] == b.steerID || b.decorIgnore == uid else { continue }
+            b.idleReset(a.skinner)                                      // he stops what he is doing with the piece ...
+            let away = simd_length(b.position - c) > 1e-3 ? simd_normalize(b.position - c) : SIMD2<Float>(0, 1)
+            let out = GameCamera.constrain(SIMD3(c.x + away.x * (f.spec.radius + 1.4), 0, c.y + away.y * (f.spec.radius + 1.4)), ignoreDecor: uid)
+            b.requestNow(.goTo(SIMD2(out.x, out.z)))                    // ... and steps off it
+        }
     }
     private func startArrange(on uid: Int) {
         arranging = true; arrangingUID = uid
@@ -114,7 +119,8 @@ extension GameCare {
     /// Moves the piece being dragged toward `floor` (snapped to the nearest valid spot along the way; stays put when nothing near is valid).
     @discardableResult
     func dragDecor(_ uid: Int, to floor: SIMD2<Float>) -> Bool {
-        guard let cur = store.placedDecor.first(where: { $0.uid == uid }), !decorBusy(uid) else { return false }          // (never from under a Jelly)
+        guard let cur = store.placedDecor.first(where: { $0.uid == uid }) else { return false }
+        if decorBusy(uid) { releaseDecor(uid) }          // (the hand wins: the Jelly steps off and the piece moves)
         if store.move(uid, to: floor) { syncDecor(); return true }
         // blocked: slide along the line from where it is to the finger, as far as it is valid
         var best = cur.at
@@ -131,7 +137,7 @@ extension GameCare {
     }
     /// Turns the piece a quarter turn (nudged to a spot where it fits; a buzz and nothing else when there is none).
     func rotateDecor(_ uid: Int) {
-        guard !decorBusy(uid) else { UINotificationFeedbackGenerator().notificationOccurred(.warning); return }
+        if decorBusy(uid) { releaseDecor(uid) }
         if store.rotate(uid) {
             syncDecor(); DecorField.shared.kick(uid, 0.5)
             AudioHub.shared.play(.placeItem, volume: 0.7)
