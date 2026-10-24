@@ -315,6 +315,17 @@ final class BlobBrain {
     // (FeetAttach worst overlap walk -0.021 / zoomies -0.021 / call -0.020 at the -0.020 bound) and both variants left the LANDING foot's hidden crown 0.002...0.006
     // short of fused (half-way through its ball-to-boot morph, 0.11 u ahead of a body 0.07 u behind its attractor). Needs a deeper hidden crown or a tighter follow first.
     var stepRate: Float = 3.75     // 3.5 -> 3.75 (Build B, user: a little faster: walk 1.016 -> 1.144 u/s, run 1.350 -> 1.435; the ground speed steps in whole frames of step time); was 3.2 before the 20 % speed-up
+    /// 2026-10-24: free locomotion (roam / go-to walk, run, zoomies, trot, hurry) is 10 % faster in cadence (so speed); scripted interaction moves (swing, kicks, decor play,
+    /// dining, bath ...) keep `stepRate`: the global 4.0 / 4.125 loosened the feet in the swing / kick moves. The gait shape (stride, pose, arms, feet) is unchanged.
+    static let locoRate: Float = 1.10
+    var locoRateMul: Float {
+        if let k = idleState.kind {
+            switch k { case .run, .zoomies, .trot: return Self.locoRate; default: return 1 }
+        }
+        if hurry { return Self.locoRate }
+        if case .walk = script { return Self.locoRate }
+        return 1
+    }
     var stride: Float = 0.305      // was 0.27 (measured ground speed 0.853 -> 1.021 u/s)
     var stepLift: Float = 0.035          // was 0.115: a shuffle, the foot stays in the bottom band under the belly (feet-lab 2026-10-17)
     var turnLift: Float = 0.06           // was 0.20
@@ -881,7 +892,7 @@ final class BlobBrain {
         let landYaw = yaw + dyaw
         let target = inPlace ? feet.pos[s] : stepRoot0 + rootD + rotXZ(geom.off[s], landYaw) + reach
         feet.begin(side: s, to: target, toYaw: inPlace ? feet.yaw[s] : landYaw, peak: peak ?? stepLift * amplitude,
-                   rate: rate ?? stepRate * runRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
+                   rate: rate ?? stepRate * runRateMul * locoRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
         nextSwing = 1 - s
         stepLive = true
         AudioHub.shared.footstep(jelly: steerID, x: px, running: runW > 0.5)

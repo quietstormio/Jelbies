@@ -28,7 +28,7 @@ nonisolated final class JellyJiggle {
     static let hopImpulse: Float = 0.9           // per u/s of landing speed
     static let swayGain: Float = 3.4             // crown lag (u) per u/s of root speed change, before the spring
     static let twistGain: Float = 0.8            // crown lag (rad) per rad/s of turn-rate change, before the spring
-    static let walkSpeed: Float = 1.14    // the walk's root speed (u/s, measured; Build B +10 %: was 1.02, 0.853 before that)
+    static let walkSpeed: Float = 1.25    // the walk's root speed (u/s, measured; 2026-10-24 free locomotion +10 % cadence: was 1.14; Build B +10 %: was 1.02, 0.853 before that)
     /// Cap scale of the displacement springs (fractions of H / rad at boost 0): Build B 0.022 -> 0.038, twist 0.03 -> 0.05.
     static let capSq: Float = 0.038, capTw: Float = 0.05
     static let stopWobble: Float = 2.0           // squash velocity when he stops dead from a walk / run (scaled by the speed he had)
