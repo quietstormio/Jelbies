@@ -68,6 +68,8 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
+    /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
+    var insideDecorT: Float = 0
     /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
@@ -1145,6 +1147,8 @@ final class BlobBrain {
                 step(after: .none, sim, giveUp: true); restTimer = 0.25
                 return
             }
+            // a requested walk (come, the meal, a stand at a piece) that has made no progress for 3 s plans its route afresh (round whatever blocks it)
+            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; steerWait = 0; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
                 if flourishMaybe(sim, skinner, target: target) { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)

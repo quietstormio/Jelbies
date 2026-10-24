@@ -34,15 +34,48 @@ extension BlobBrain {
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
         if uid >= 0, idleState.kind == .decorSit || idleState.kind == .sleep, let f = DecorField.shared.foot(uid), f.distance(position) < footprint * f.spec.reach { decorIgnore = uid } else if decorIgnore == uid { decorIgnore = nil }
     }
-    /// Every step with no behaviour running: the piece he sat in is a wall again once he is out of it.
-    func decorExitCheck() {
-        guard let uid = decorIgnore else {
-            // a piece put down under him (or a push): he is let out of it the same way
-            for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.1 { decorIgnore = f.uid; return }
+    /// Every step with no behaviour running: the piece he sat in is a wall again once he is out of it. A Jelly whose spot ends up inside any solid piece's
+    /// footprint (a piece put down, dragged or turned onto him, or a push) is soft to that piece and, after a moment, walks out to the nearest free floor
+    /// (before, he stayed standing inside it: "stuck behind the table").
+    func decorExitCheck(dt: Float = 0) {
+        var inside: DecorFoot?
+        for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.05 { inside = f; break }
+        if let f = inside {
+            if decorIgnore == nil { decorIgnore = f.uid }
+            insideDecorT += dt
+            if insideDecorT > 1.2, !held, !sleepLocked, pending == nil, let out = decorFreeSpot(near: position) {
+                insideDecorT = -1.5
+                decorIgnore = f.uid
+                requestNow(.goTo(out))
+            }
             return
         }
+        insideDecorT = 0
+        guard let uid = decorIgnore else { return }
         if let f = DecorField.shared.foot(uid), f.distance(position) < footprint * f.spec.reach + 0.05 { return }
         decorIgnore = nil
+    }
+
+    /// The nearest floor spot to `p` that no solid piece (and no wall) pushes him off: rings outward, then the one with the least move.
+    func decorFreeSpot(near p: SIMD2<Float>) -> SIMD2<Float>? {
+        func free(_ q: SIMD2<Float>) -> Bool {
+            let r = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
+            guard simd_distance(SIMD2(r.x, r.z), q) < 0.03 else { return false }
+            for f in DecorField.shared.feet where f.spec.solid && f.distance(q) < footprint * f.spec.reach + 0.12 { return false }
+            return true
+        }
+        for k in 1...40 {
+            let r = Float(k) * 0.1
+            let n = max(12, Int(2 * Float.pi * r / 0.12))
+            var best: SIMD2<Float>?
+            for j in 0..<n {
+                let a = Float(j) / Float(n) * 2 * .pi
+                let q = p + SIMD2(sinf(a), cosf(a)) * r
+                if free(q), peerFree(q), best == nil || simd_distance(q, p) < simd_distance(best!, p) { best = q }
+            }
+            if let b = best { return b }
+        }
+        return nil
     }
 
     /// Pieces with a front only: he stands in front of them (a bookshelf is not walked round to look at its back).

@@ -272,7 +272,7 @@ extension BlobBrain {
         if boostWant < walkBoostK { walkBoostK = boostWant } else { walkBoostK = min(boostWant, walkBoostK + dt * 0.3) }
         guard let kind = idleState.kind else {
             commanded = false
-            if decorIgnore != nil || !DecorField.shared.feet.isEmpty { decorExitCheck() }
+            if decorIgnore != nil || !DecorField.shared.feet.isEmpty { decorExitCheck(dt: dt) }
             if autonomy && !held { idleState.cooldown -= dt; zoomUrge -= dt }
             return
         }
