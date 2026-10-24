@@ -46,9 +46,9 @@ final class CafeTests: XCTestCase {
     // 1. menu
 
     func testMenuPricesAndTotals() {
-        XCTAssertEqual(CafeMenu.treats.count, 4)
-        XCTAssertEqual(CafeMenu.treats.map(\.price), [14, 15, 16, 18])
-        XCTAssertEqual(CafeMenu.cheapest, 14)
+        XCTAssertEqual(CafeMenu.treats.count, 6)
+        XCTAssertEqual(CafeMenu.treats.map(\.price), [14, 15, 16, 18, 8, 12])
+        XCTAssertEqual(CafeMenu.cheapest, 8)
         XCTAssertEqual(mixed.total(jellies: [0, 1, 2]), 14 + 16 + 18)
         let t = CafeOrder(forTable: .fizzmac)
         XCTAssertEqual(t.total(jellies: [0, 1, 2]), Int((Double(15 * 3) * 0.85).rounded(.down)))
@@ -91,7 +91,7 @@ final class CafeTests: XCTestCase {
         DayClock.shared.forcedHour = 23; step(r, 0.1)
         XCTAssertEqual(r.care.cafeBlocker(), .night)
         DayClock.shared.forcedHour = 12; step(r, 0.1)
-        r.care.bath.wallet.add(10 - r.care.bath.wallet.count, silent: true)
+        r.care.bath.wallet.add(7 - r.care.bath.wallet.count, silent: true)
         XCTAssertEqual(r.care.cafeBlocker(), .noDrops)
         r.care.bath.wallet.add(90, silent: true)
         r.care.arranging = true

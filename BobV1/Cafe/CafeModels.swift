@@ -1,13 +1,13 @@
 //
 //  CafeModels.swift
-//  The café outing's data: the menu (four café-only treats, priced in Drops, each with a store perk), an order (a treat per Jelbie, or one for the table),
+//  The café outing's data: the menu (six café-only treats, priced in Drops, each with a store perk), an order (a treat per Jelbie, or one for the table),
 //  the tunables and the reasons an outing cannot start. Pure values, unit-tested (CafeTests). Nothing here is persisted: the Drops spent, the perks and the needs are
 //  kept by the stores that already own them.
 //
 
 import Foundation
 
-nonisolated enum CafeTreatID: String, CaseIterable, Codable, Sendable { case swirl, fizzmac, pancakes, sundae }
+nonisolated enum CafeTreatID: String, CaseIterable, Codable, Sendable { case swirl, fizzmac, pancakes, sundae, jellycup, latte }
 
 nonisolated struct CafeTreat: Sendable, Identifiable {
     let id: CafeTreatID
@@ -23,7 +23,9 @@ nonisolated enum CafeMenu {
         .init(id: .swirl, name: "Cinnamon swirl", price: 14, perk: .cozy, blurb: "Warm and sticky. Stays happy longer.", condition: [.sweet: 0.10, .cute: 0.06]),
         .init(id: .fizzmac, name: "Fizz macaron", price: 15, perk: .zoomies, blurb: "It pops! Zoomies at home, quicker next race.", condition: [.sporty: 0.08, .sparkle: 0.08]),
         .init(id: .pancakes, name: "Pancake stack", price: 16, perk: .fullBelly, blurb: "Fluffy and filling. Hungry much later.", condition: [.sporty: 0.08, .cute: 0.06]),
-        .init(id: .sundae, name: "Mini sundae", price: 18, perk: .bouncy, blurb: "Cold and silly. Extra bouncy for a while.", condition: [.sweet: 0.12, .cool: 0.06])]
+        .init(id: .sundae, name: "Mini sundae", price: 18, perk: .bouncy, blurb: "Cold and silly. Extra bouncy for a while.", condition: [.sweet: 0.12, .cool: 0.06]),
+        .init(id: .jellycup, name: "Jelly Cup", price: 8, perk: .cozy, blurb: "A tiny cup of whipped cream, just for Jelbies.", condition: [.sweet: 0.08, .cute: 0.08]),
+        .init(id: .latte, name: "Baby latte", price: 12, perk: .zoomies, blurb: "Warm and foamy. Zoomies right here, and again at home!", condition: [.sporty: 0.06, .cool: 0.08])]
     static var cheapest: Int { treats.map(\.price).min() ?? 0 }
     static func treat(_ id: CafeTreatID) -> CafeTreat { treats.first { $0.id == id } ?? treats[0] }
 }
@@ -57,6 +59,8 @@ nonisolated enum CafeTuning {
     /// Once per Jelbie who ate: an outing is love (the "bigger mood boost" than home food).
     static let attentionBonus: Float = 0.35
     static let tableDiscount: Double = 0.85
+    /// The baby latte's café zoomies: a burst of laps on the café floor this long (seconds, picked per Jelbie), then he sits back.
+    static let zoomSeconds: ClosedRange<Float> = 6...10
     static let arriveHopStagger: Float = 0.25
     static let cheerSeconds: Float = 2.8, cheerStagger: Float = 0.3
     static let toastSeconds: Float = 2.5

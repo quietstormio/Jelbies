@@ -84,7 +84,7 @@ struct CafeChrome: View {
     }
 }
 
-/// The menu: a chip per Jelbie, the four treats, "Same for everyone", the total, Order and Head home.
+/// The menu: a chip per Jelbie, the six treats, "Same for everyone", the total, Order and Head home.
 struct CafeMenuCard: View {
     let care: GameCare
     var compact: Bool
@@ -171,9 +171,9 @@ struct CafeMenuCard: View {
                 }
             }
             if compact {
-                VStack(spacing: 5) { ForEach(CafeMenu.treats) { t in treatRow(t) } }
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) { ForEach(CafeMenu.treats) { t in treatRow(t) } }
             } else {
-                HStack(spacing: 6) { ForEach(CafeMenu.treats) { t in treatTile(t) } }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) { ForEach(CafeMenu.treats) { t in treatTile(t) } }
             }
             if compact, ids.count > 1 { tableToggle }
             HStack(spacing: 8) {
@@ -204,18 +204,18 @@ struct CafeMenuCard: View {
     private func treatRow(_ t: CafeTreat) -> some View {
         Button { pick(t) } label: {
             HStack(spacing: 8) {
-                thumb(t.id, size: 34)
+                thumb(t.id, size: 30)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(t.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                    HStack(spacing: 3) { Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)); Text(t.perk.title).font(SK.font(10, .heavy)) }.foregroundStyle(SK.muted)
+                    Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
+                    HStack(spacing: 3) {
+                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .black)).foregroundStyle(SK.sky)
+                        Text("\(t.price)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                        Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.muted).accessibilityLabel(t.perk.title)
+                    }
                 }
-                Spacer(minLength: 2)
-                HStack(spacing: 3) {
-                    Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.sky)
-                    Text("\(t.price)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                }
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8).frame(minHeight: 42)
+            .padding(.horizontal, 6).frame(minHeight: 40)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(isChosen(t) ? SK.honey : Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(isChosen(t) ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }

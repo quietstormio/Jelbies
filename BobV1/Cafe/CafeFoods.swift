@@ -1,6 +1,6 @@
 //
 //  CafeFoods.swift
-//  The four café-only treats as hand-held foods in the dining style, and the per-visit mixed plate. Each treat is the Blender mesh when its bundled
+//  The six café-only treats as hand-held foods in the dining style, and the per-visit mixed plate. Each treat is the Blender mesh when its bundled
 //  food_<id>.bin loads (FoodMeshes), else the procedural builder below (the fallback, only seen when a bin is missing). One piece = one toss; three pieces
 //  per plate, flicked into his mouth by the existing finger-food flow.
 //
@@ -67,8 +67,52 @@ nonisolated enum CafeFoodModels {
         DiningModels.ellipsoid(b, centre: SIMD3(c.x + 0.004 * s, y0 + 0.104 * s, c.z), rx: 0.011 * s, ry: 0.011 * s, color: p.detail, rings: 4, segments: 8)
     }
 
+    /// A pup cup: a small white paper cup with a tall swirl of whipped cream, a jelly-blue drizzle ringing the swirl and a few sprinkles.
+    static func jellycup(_ b: B, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) {
+        let y0 = c.y + floorOff * s
+        let h: Float = 0.046
+        let cup: [DiningModels.PP] = [.init(r: 0, y: y0, nr: 0, ny: -1), .init(r: 0.022 * s, y: y0, nr: 0.3, ny: -1), .init(r: 0.026 * s, y: y0 + 0.004 * s, nr: 1, ny: -0.2),
+                                      .init(r: 0.037 * s, y: y0 + (h - 0.004) * s, nr: 1, ny: 0.15), .init(r: 0.039 * s, y: y0 + h * s, nr: 0.7, ny: 0.7), .init(r: 0, y: y0 + h * s, nr: 0, ny: 1)]
+        b.lathe(cx: c.x, cz: c.z, profile: cup, segments: 22, color: p.primary)
+        cylinder(b, cx: c.x, cz: c.z, r: 0.0385 * s, y0: y0 + 0.028 * s, y1: y0 + 0.036 * s, p.accent, bevel: 0.002 * s)          // a jelly-blue band round the cup
+        let top = y0 + h * s
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top + 0.008 * s, c.z), rx: 0.037 * s, ry: 0.016 * s, color: p.secondary, rings: 4, segments: 14)
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top + 0.024 * s, c.z), rx: 0.028 * s, ry: 0.014 * s, color: p.secondary * 1.01, rings: 4, segments: 14)
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top + 0.038 * s, c.z), rx: 0.018 * s, ry: 0.013 * s, color: p.secondary, rings: 4, segments: 12)
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x + 0.002 * s, top + 0.051 * s, c.z), rx: 0.007 * s, ry: 0.011 * s, color: p.secondary * 1.01, rings: 3, segments: 8)
+        for k in 0..<7 {          // the drizzle: blue beads winding down the swirl
+            let a = Float(k) * 0.9 + Float(j) * 0.8, t = Float(k) / 6
+            let rr = (0.027 - 0.014 * t) * s
+            DiningModels.ellipsoid(b, centre: SIMD3(c.x + cosf(a) * rr, top + (0.014 + 0.034 * t) * s, c.z + sinf(a) * rr), rx: 0.0062 * s, ry: 0.0036 * s, color: p.accent, rings: 2, segments: 6)
+        }
+        for k in 0..<4 {          // a few white-blue sprinkles
+            let a = Float(k) * 1.6 + Float(j) * 0.5
+            DiningModels.ellipsoid(b, centre: SIMD3(c.x + cosf(a) * 0.012 * s, top + (0.02 + 0.007 * Float(k)) * s, c.z + sinf(a) * 0.012 * s), rx: 0.0036 * s, ry: 0.0026 * s, color: p.detail, rings: 2, segments: 5)
+        }
+    }
+
+    /// A baby latte: a small cream mug with a handle, a frothy top with a brown heart of latte art and a foam dollop.
+    static func latte(_ b: B, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) {
+        let y0 = c.y + floorOff * s
+        let h: Float = 0.044
+        let mug: [DiningModels.PP] = [.init(r: 0, y: y0, nr: 0, ny: -1), .init(r: 0.024 * s, y: y0, nr: 0.3, ny: -1), .init(r: 0.032 * s, y: y0 + 0.008 * s, nr: 1, ny: -0.3),
+                                      .init(r: 0.036 * s, y: y0 + (h - 0.006) * s, nr: 1, ny: 0), .init(r: 0.036 * s, y: y0 + h * s, nr: 0.7, ny: 0.7), .init(r: 0, y: y0 + h * s, nr: 0, ny: 1)]
+        b.lathe(cx: c.x, cz: c.z, profile: mug, segments: 24, color: p.primary)
+        b.roundedBox(centre: SIMD3(c.x + 0.044 * s, y0 + 0.026 * s, c.z), half: SIMD3(0.009, 0.0045, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)          // the handle
+        b.roundedBox(centre: SIMD3(c.x + 0.049 * s, y0 + 0.019 * s, c.z), half: SIMD3(0.0045, 0.009, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)
+        b.roundedBox(centre: SIMD3(c.x + 0.044 * s, y0 + 0.012 * s, c.z), half: SIMD3(0.009, 0.0045, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)
+        let top = y0 + h * s
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top, c.z), rx: 0.0335 * s, ry: 0.007 * s, color: p.secondary, rings: 3, segments: 16)          // the coffee-and-milk top
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top + 0.003 * s, c.z), rx: 0.026 * s, ry: 0.006 * s, color: p.accent, rings: 3, segments: 14)          // the foam
+        for sgn: Float in [-1, 1] {          // the latte-art heart: two lobes and a point
+            DiningModels.ellipsoid(b, centre: SIMD3(c.x - 0.005 * s, top + 0.0085 * s, c.z + sgn * 0.0075 * s), rx: 0.0075 * s, ry: 0.0022 * s, color: p.secondary, rings: 2, segments: 8)
+        }
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x + 0.006 * s, top + 0.0085 * s, c.z), rx: 0.0075 * s, ry: 0.0022 * s, color: p.secondary, rings: 2, segments: 8)
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x - 0.01 * s, top + 0.012 * s + Float(j % 2) * 0.0005, c.z - 0.012 * s), rx: 0.006 * s, ry: 0.004 * s, color: p.detail, rings: 2, segments: 6)          // a foam dollop
+    }
+
     static func procedural(_ id: CafeTreatID) -> PieceBuilder {
-        switch id { case .swirl: return swirl; case .fizzmac: return fizzmac; case .pancakes: return pancakes; case .sundae: return sundae }
+        switch id { case .swirl: return swirl; case .fizzmac: return fizzmac; case .pancakes: return pancakes; case .sundae: return sundae; case .jellycup: return jellycup; case .latte: return latte }
     }
 }
 
@@ -88,10 +132,12 @@ extension Consumables {
     static let cafeFizzmac = cafe(.fizzmac, symbol: "sparkles", pal((0.98, 0.76, 0.60), (1.0, 0.93, 0.82), (0.9, 0.6, 0.45), (1, 0.98, 0.94)))
     static let cafePancakes = cafe(.pancakes, symbol: "fork.knife", pal((0.93, 0.74, 0.46), (0.60, 0.33, 0.14), (1.0, 0.90, 0.55), (1, 1, 1)))
     static let cafeSundae = cafe(.sundae, symbol: "birthday.cake.fill", pal((0.88, 0.68, 0.40), (1.0, 0.95, 0.82), (0.45, 0.28, 0.20), (0.82, 0.16, 0.20)))
+    static let cafeJellyCup = cafe(.jellycup, symbol: "cup.and.saucer.fill", pal((0.97, 0.96, 0.94), (1.0, 0.98, 0.95), (0.42, 0.66, 0.98), (0.80, 0.90, 1.0)))
+    static let cafeLatte = cafe(.latte, symbol: "mug.fill", pal((0.97, 0.93, 0.86), (0.55, 0.36, 0.22), (0.99, 0.93, 0.80), (1, 0.98, 0.92)))
 
     /// The café's treat as a hand-held food (menu thumbnails and the plate). Not in `Consumables.all`: it is served only at the café.
     static func cafeFood(_ id: CafeTreatID) -> Consumable {
-        switch id { case .swirl: return cafeSwirl; case .fizzmac: return cafeFizzmac; case .pancakes: return cafePancakes; case .sundae: return cafeSundae }
+        switch id { case .swirl: return cafeSwirl; case .fizzmac: return cafeFizzmac; case .pancakes: return cafePancakes; case .sundae: return cafeSundae; case .jellycup: return cafeJellyCup; case .latte: return cafeLatte }
     }
 }
 

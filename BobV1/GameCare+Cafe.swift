@@ -35,6 +35,9 @@ final class CafeBook {
     /// Seconds until each Jelbie's arrival hop / cheer (by actor id).
     var hopIn: [Int: Float] = [:]
     var cheerIn: [Int: Float] = [:]
+    /// Seconds of café zoomies left, by Jelbie (the baby latte), and how long past zero each has waited for a clean stop.
+    var zoomT: [Int: Float] = [:]
+    var zoomOver: [Int: Float] = [:]
     var serial = 0
     nonisolated deinit {}
 }
@@ -115,6 +118,7 @@ extension GameCare {
             let finished = groupWanted == nil && !group.isActive && groupQueue.isEmpty && dining.phase == .absent
             if finished { cafeServingFinished() }
         case .cheer:
+            tickCafeZoomies(actors, dt: dt)
             for a in actors {
                 guard var t = book.cheerIn[a.id] else { continue }
                 t -= dt
@@ -131,7 +135,7 @@ extension GameCare {
         let actors = book.actors
         switch dest {
         case .cafe:
-            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.charged = 0
+            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.charged = 0
             for a in actors {
                 guard let brain = a.brain else { continue }
                 book.homes[a.id] = a.floor; book.autonomy[a.id] = brain.autonomy; book.arena[a.id] = a.sim.arenaRadius
@@ -177,7 +181,7 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
-            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
+            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; cafe.holdCheer = false; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
         }
     }
 
@@ -233,6 +237,7 @@ extension GameCare {
             prof.perks.grant(t.perk, duration: t.perk.raceOnly ? nil : t.perk.duration * CafeTuning.perkDurationMul)
             if fresh { AudioHub.shared.play(.perkSparkle, volume: 0.9) }
             if t.perk == .zoomies { zoomiesDue.insert(id) }
+            if treat == .latte { cafeBook.zoomT[id] = Float.random(in: CafeTuning.zoomSeconds) }          // the café burst, run after the serving (tickCafeZoomies)
         }
     }
 
@@ -246,7 +251,33 @@ extension GameCare {
         book.hooks = nil; book.plate = nil
         cafe.servingEnded()
         book.cheerIn = [:]
-        for (k, a) in book.actors.enumerated() where a.brain != nil { book.cheerIn[a.id] = Float(k) * CafeTuning.cheerStagger }
+        for (k, a) in book.actors.enumerated() where a.brain != nil && book.zoomT[a.id] == nil { book.cheerIn[a.id] = Float(k) * CafeTuning.cheerStagger }
+        cafe.holdCheer = !book.zoomT.isEmpty
+    }
+
+    /// The baby latte's café zoomies: the Jelbie runs the usual zoomies dash again and again (each goal is a random spot on the café's walkable floor, so the
+    /// colliders - booth, counter, bistro table - and the other Jelbies are avoided) for his 6...10 s, then sits back. The home path (syncPerks) is blocked
+    /// during trips, so this is the café-safe twin; the .zoomies perk still brings the home run later.
+    private func tickCafeZoomies(_ actors: [JellyActor], dt: Float) {
+        let book = cafeBook
+        for a in actors {
+            guard var left = book.zoomT[a.id], let b = a.brain else { continue }
+            left -= dt
+            let idle = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
+            if left > 0 {
+                book.zoomT[a.id] = left
+                if idle { b.commandedIdle = .zoomies }
+            } else if idle || (book.zoomOver[a.id, default: 0] + dt) > 4 {          // (a dash in flight finishes first; never wait more than 4 s)
+                book.zoomT[a.id] = nil; book.zoomOver[a.id] = nil
+                if !idle { b.abortAll(a.sim, a.skinner) }
+                b.commandedIdle = .sit
+                b.face(.excited, hold: 2)
+                b.blushBump(hold: 2, peak: 0.6)
+                touchPlay?.spawnHeart(now: CACurrentMediaTime())
+                AudioHub.shared.chirp(jelly: a.id, .happy)
+            } else { book.zoomT[a.id] = left; book.zoomOver[a.id, default: 0] += dt }
+        }
+        cafe.holdCheer = !book.zoomT.isEmpty
     }
 
     /// A happy reaction: the jump for joy, a blush, an excited face, a heart and a chirp (existing moves only).
