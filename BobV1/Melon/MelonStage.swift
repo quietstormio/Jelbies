@@ -69,9 +69,25 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         single.delegate = self
         single.require(toFail: dbl)
         addGestureRecognizer(single)
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(photoPanned(_:)))          // Photo mode only: one finger orbits, two pan
+        pan.minimumNumberOfTouches = 1; pan.maximumNumberOfTouches = 2
+        pan.cancelsTouchesInView = false; pan.delaysTouchesBegan = false; pan.delaysTouchesEnded = false
+        pan.delegate = self
+        addGestureRecognizer(pan)
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// The room's stage (Photo mode captures this view; the SwiftUI HUD is not part of it).
+    nonisolated(unsafe) static weak var gameStage: MelonStageView?
+
+    @objc private func photoPanned(_ g: UIPanGestureRecognizer) {
+        guard PhotoCam.active, g.state == .changed else { return }
+        let d = g.translation(in: self); g.setTranslation(.zero, in: self)
+        if g.numberOfTouches >= 2 { PhotoCam.drag(dx: Float(d.x), dy: Float(d.y)) } else { PhotoCam.orbit(dx: Float(d.x), dy: Float(d.y)) }
+    }
+
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { g is UIPanGestureRecognizer ? PhotoCam.active : super.gestureRecognizerShouldBegin(g) }
 
     // a11y (round-1023): in the game the stage is a CONTAINER of the room + one element per Jelbie (Accessibility/JelbieAccessibility.swift); the studio keeps one element.
     override var isAccessibilityElement: Bool { get { controller?.game != true } set {} }
@@ -128,12 +144,14 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         controller?.noteUserTouch()          // any finger restarts the night-idle bedtime clock
         claim()
         activeTouches += touches.count
+        if PhotoCam.active { return }          // Photo mode: fingers move the camera, they never touch a Jelbie
         for t in touches {
             controller?.pointerDown(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size, time: sane(t.timestamp))
         }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if PhotoCam.active { return }
         for t in touches {
             controller?.pointerMove(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size)
         }
@@ -156,6 +174,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
         guard g.state == .changed, g.scale > 0 else { return }
+        if PhotoCam.active { PhotoCam.zoom(by: Float(g.scale)); g.scale = 1; return }
         controller?.pinch(scale: Float(g.scale))
         g.scale = 1
     }
@@ -723,6 +742,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func attach(to view: MelonStageView) {
         stageView = view
+        if game { MelonStageView.gameStage = view }
         view.controller = self
         a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
@@ -1179,6 +1199,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Double tap in the game: select the Blob under the finger (roaming only; with one Blob there is no select step).
     func gameDoubleTap(_ p: CGPoint) {
+        guard !PhotoCam.active else { return }
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
@@ -1206,6 +1227,10 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// A tap on the floor (not on a Blob) cancels a pending selection.
     func gameSingleTap(_ p: CGPoint) {
+        if PhotoCam.active {          // Photo mode: a tap on a Jelbie makes him look at the camera
+            if let size = stageView?.bounds.size, size.width > 1, let id = pickJelly(p, size)?.id { PhotoCam.onTapJelly?(id) }
+            return
+        }
         let sel = model.care.select
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1 {
             if let id = pickJelly(p, touchSize)?.id ?? { refreshOutlines(); return sel.hit(p) }() { model.care.tapJelly(id); return }          // a Jelbie: highlight him

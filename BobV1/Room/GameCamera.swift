@@ -117,6 +117,7 @@ enum GameCamera {
             e += (p.eye - e) * show
             t += (p.target - t) * show
         }
+        if PhotoCam.active { (e, t) = PhotoCam.apply(eye: e, target: t) }          // Photo mode: orbit / zoom / pan over the game pose
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: up)
         c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: race != 0 ? 260 : 60), c.view)      // the track's far hills and sky wall are ~100 u away

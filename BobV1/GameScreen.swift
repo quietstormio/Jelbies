@@ -80,14 +80,14 @@ struct GameScreen: View {
                 .animation(.easeInOut(duration: 0.25), value: menuOpen || settingsOpen)
                 .accessibilityHidden(true)          // the menus carry an Escape action instead
 
-            TouchHeartsView(play: model.touch, care: model.care)
+            TouchHeartsView(play: model.touch, care: model.care).photoHidden()
 
-            SelectionOverlay(select: model.care.select)
+            SelectionOverlay(select: model.care.select).photoHidden()
 
-            VoiceGlow(voice: model.care.voice, care: model.care)
-            VoiceFeedbackView(voice: model.care.voice, care: model.care)
+            VoiceGlow(voice: model.care.voice, care: model.care).photoHidden()
+            VoiceFeedbackView(voice: model.care.voice, care: model.care).photoHidden()
 
-            GreetHeartsView(care: model.care)          // Pip's and Moss's greeting hearts
+            GreetHeartsView(care: model.care).photoHidden()          // Pip's and Moss's greeting hearts
 
             ThoughtBubbleView(care: model.care) { action in
                 switch action {
@@ -95,11 +95,11 @@ struct GameScreen: View {
                 case .drink: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink }
                 case .comeHere, .clean: break            // GameCare.tapBubble already called him / started the clean-up
                 }
-            }
+            }.photoHidden()
 
-            CaptionsView(center: .shared)          // sound captions (Accessibility settings; off by default)
+            CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
 
-            RefusalLabel(care: model.care)
+            RefusalLabel(care: model.care).photoHidden()
 
             // HUD
             GeometryReader { g in
@@ -135,6 +135,13 @@ struct GameScreen: View {
                                 withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false; settingsOpen = false } }
                             }
                             .accessibilityIdentifier("extras-button")
+                            .transition(.opacity)
+                            GameCircleButton(systemName: "camera", label: "Photo mode") {
+                                AudioHub.shared.uiTap()
+                                menuOpen = false; settingsOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
+                                PhotoMode.shared.open(care: model.care)
+                            }
+                            .accessibilityIdentifier("photo-button")
                             .transition(.opacity)
                         }
                         Spacer()
@@ -201,7 +208,7 @@ struct GameScreen: View {
             .jHUDCap()
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudPerkH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
-            }
+            }.photoHidden()
 
             BathChrome(care: model.care)
 
@@ -212,6 +219,8 @@ struct GameScreen: View {
             CafeChrome(care: model.care)          // the café outing: the menu card, Head home, the white fade
 
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+
+            if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
                 TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
