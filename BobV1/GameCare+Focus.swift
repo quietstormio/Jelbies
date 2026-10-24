@@ -54,13 +54,15 @@ final class FocusGroup {
         ids = new; arrived = []; saved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]
         if new.count > 1 {
-            let row = GameCamera.focusRowSpots(count: new.count)
+            let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
+            let row = GameCamera.focusRowSpots(count: new.count, anchor: FreeFloor.nearest(to: GameCamera.callSpot, all: offs))
             let order = (front.flatMap { f in new.contains(f) ? f : nil } ?? new[0])
             for (k, id) in ([order] + new.filter { $0 != order }).enumerated() { spots[id] = row[k] }
             GameCamera.focusSpots = new.map { spots[$0]! }
         } else {
-            for id in new { spots[id] = GameCamera.callSpot }
-            GameCamera.focusSpots = []
+            let free = FreeFloor.nearest(to: GameCamera.callSpot)          // (decor may cover the usual spot)
+            for id in new { spots[id] = free }
+            GameCamera.focusSpots = new.isEmpty ? [] : [free]
         }
         rowOpen = new.count > 1
     }

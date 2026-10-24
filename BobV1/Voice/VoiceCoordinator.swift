@@ -215,7 +215,7 @@ final class VoiceCoordinator {
     /// Extra attention tilt at full speech level (rad): a very small lean-in.
     static let nodMax: Float = 0.035
     /// "Come" stops here (a little in front of the focus call spot, so it can never be mistaken for the Come here approach).
-    static let comeSpot = SIMD2<Float>(0, GameCamera.callSpot.y - 0.4)
+    static var comeSpot: SIMD2<Float> { FreeFloor.nearest(to: SIMD2(0, GameCamera.callSpot.y - 0.4)) }          // (the nearest open floor when decor covers it)
     /// The name makes him walk this far toward the camera.
     static let nameWalk: Float = 1.5
     /// ... and then keeps his attention on the camera this long.

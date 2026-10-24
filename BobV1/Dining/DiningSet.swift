@@ -44,7 +44,33 @@ nonisolated enum DiningCurve {
     }
 }
 
-/// Where the tray appears (centre x, z): the same front spot every time; beside / behind Bob if he stands on the tray.
+/// Open floor test for spots the game picks itself (call / row / meal): clear of solid decor, the sofa and the room's cylinders.
+nonisolated enum FreeFloor {
+    static func isFree(_ p: SIMD2<Float>, radius r: Float) -> Bool {
+        guard RoomLayout.decorDistance(p, solidOnly: true) >= r, RoomLayout.sofaDistanceXZ(p) >= r * 0.8 else { return false }
+        for c in RoomLayout.cylinders where simd_distance(p, c.centre) < c.radius + r { return false }
+        return true
+    }
+    /// `p` itself when free, else the nearest free spot (x within +-1.6, z from 1.4 back up to `p`'s z); `p` when none.
+    static func nearest(to p: SIMD2<Float>, radius r: Float = 0.8, all offsets: [SIMD2<Float>] = [.zero]) -> SIMD2<Float> {
+        func ok(_ a: SIMD2<Float>) -> Bool { offsets.allSatisfy { isFree(a + $0, radius: r) } }
+        if ok(p) { return p }
+        var best: SIMD2<Float>?, bd = Float.infinity
+        var x: Float = -1.6
+        while x <= 1.6001 {
+            var z = p.y - 1.4
+            while z <= p.y + 1e-4 {
+                let a = SIMD2<Float>(x, z), d = simd_distance(a, p)
+                if d < bd, ok(a) { bd = d; best = a }
+                z += 0.1
+            }
+            x += 0.1
+        }
+        return best ?? p
+    }
+}
+
+/// Where the tray appears (centre x, z): a random open spot in the front half of the floor each meal (the old front-centre spot when none is free).
 nonisolated enum DiningSpot {
     static let preferred = SIMD2<Float>(0, 1.3)
     /// Bob's footprint radius for the overlap test against the tray itself (he is meant to stand at a PLACE, not on the tray).
@@ -94,6 +120,19 @@ nonisolated enum DiningSpot {
 
     /// The same front spot every time; if Bob stands on it, the nearest clear spot beside (or behind) him, always fully on screen.
     static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect) -> SIMD2<Float> {
+        var open: [SIMD2<Float>] = []
+        var cx: Float = -1.6
+        while cx <= 1.6001 {
+            var cz: Float = 0.6
+            while cz <= maxZ + 1e-4 {
+                let o = SIMD2<Float>(cx, cz)
+                if isClear(origin: o, layout: L, of: bob, aspect: aspect), FreeFloor.isFree(o, radius: 0.9),
+                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) }) { open.append(o) }
+                cz += 0.2
+            }
+            cx += 0.2
+        }
+        if let pick = open.randomElement() { return pick }
         if isClear(origin: preferred, layout: L, of: bob, aspect: aspect) { return preferred }
         var best = preferred, bestCost = Float.infinity
         var fallback = preferred, fallbackD: Float = -1

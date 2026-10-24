@@ -394,7 +394,6 @@ enum DecorPlacement {
             let b = RoomLayout.FlatBox(centre: p, half: s.half, height: 1, radius: s.round)
             if RoomLayout.boxDistanceXZ(c.centre, b) < c.radius + gap { return false }
         }
-        if s.solid, inCore(kind, at: p, quarter: q) { return false }
         for o in others where o.uid != uid {
             let orad = o.kind.spec.radius, d = simd_distance(p, o.at)
             if !overlaps(kind, p, o.kind, o.at, qa: q, qb: o.quarter) { continue }

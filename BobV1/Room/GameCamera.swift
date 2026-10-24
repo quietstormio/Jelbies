@@ -89,9 +89,9 @@ enum GameCamera {
         }
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
-            var p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
+            var p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusSpots)
             if let f = trainFrame, focusSpots.count <= 1 {          // the Train card is up: frame the whole Jelbie in the free area beside / above it
-                let k = trainBlend(), tp = focusTrainPose(aspect: aspect, frame: f)
+                let k = trainBlend(), tp = focusTrainPose(aspect: aspect, frame: f, spot: focusSpots.first ?? callSpot)
                 p = (p.eye + (tp.eye - p.eye) * k, p.target + (tp.target - p.target) * k)
             }
             e += (p.eye - e) * focus
@@ -252,11 +252,11 @@ enum GameCamera {
 
     /// Where each of `ids` stands in the "everyone" row: abreast on the front line, in id order, centred on the call spot.
     /// Index 0 is the front Jelly (centre, on the call spot); the rest alternate left, right, a little behind.
-    static func focusRowSpots(count n: Int) -> [SIMD2<Float>] {
+    static func focusRowSpots(count n: Int, anchor: SIMD2<Float> = callSpot) -> [SIMD2<Float>] {
         (0..<max(n, 0)).map { k in
-            if k == 0 { return callSpot }
+            if k == 0 { return anchor }
             let side: Float = k % 2 == 1 ? -1 : 1, rank = Float((k + 1) / 2)
-            return SIMD2(callSpot.x + side * rank * focusRowSpacing, callSpot.y - focusRowBack)
+            return SIMD2(anchor.x + side * rank * focusRowSpacing, anchor.y - focusRowBack)
         }
     }
 
@@ -270,7 +270,7 @@ enum GameCamera {
         let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
-        let t = SIMD3<Float>(mid.x, ty, callSpot.y)
+        let t = SIMD3<Float>(mid.x, ty, hi.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
     }
