@@ -30,6 +30,9 @@ extension GameCare {
         return select.selectedID ?? select.confirmed
     }
 
+    /// For the general Feed / Snack menus: everybody (a group serving) unless the player is in one Jelbie's close-up. A sticky selection does NOT single one out.
+    var singledOutForFood: Int? { focus.isActive && focusGroup.ids.count == 1 ? focusGroup.ids[0] : nil }
+
     /// Drops a group serving (Come here): the drink poofs, the gulps already drunk stay paid.
     func cancelGroup() {
         groupWanted = nil

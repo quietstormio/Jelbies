@@ -734,7 +734,7 @@ struct CareMenu: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    if kind == .food { care.feed(c.id, jelly: care.singledOutJelly) } else { care.drink(c.id, jelly: care.singledOutJelly) }
+                    if kind == .food { care.feed(c.id, jelly: care.singledOutForFood) } else { care.drink(c.id, jelly: care.singledOutForFood) }
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
@@ -772,7 +772,7 @@ struct CareMenu: View {
             ForEach(Array(list.prefix(4).enumerated()), id: \.element.item.id) { i, s in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    care.feedSnack(s.item.id, jelly: care.singledOutJelly)
+                    care.feedSnack(s.item.id, jelly: care.singledOutForFood)
                     withAnimation(Self.spring) { snackPicker = false; open = false }
                 } label: {
                     VStack(spacing: 3) {
