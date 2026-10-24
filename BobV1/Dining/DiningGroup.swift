@@ -50,6 +50,8 @@ final class DiningGroup {
     /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
     private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
+    /// Blob i has been sent to eat (he arrived at his place).
+    private var started: [Bool] = []
     private var requested = false
     private var settle: Float = 0
     private var age: Float = 0
@@ -142,11 +144,24 @@ final class DiningGroup {
 
     private func beginApproach() {
         state = .approaching; requested = false; settle = 0
+        // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
+        started = [Bool](repeating: false, count: n)
+        spawnTray()
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
         for i in brains.indices { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
         requested = true
     }
 
+    /// Pops the tray in at the chosen spot (once the old one has gone) and fixes each diner's plan from his tier.
+    private func spawnTray() {
+        guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
+        for i in brains.indices {
+            paid[i] = 0
+            if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
+        }
+    }
+
+    private var trayOut: Bool { dining.phase == .popping || dining.phase == .present }
     private func isIdle(_ b: BlobBrain) -> Bool { b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace }
     /// He is at (or behind) his place's line and close to his approach point.
     private func ready(_ i: Int) -> Bool {
@@ -195,23 +210,13 @@ final class DiningGroup {
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
         case .approaching:
-            if brains.indices.allSatisfy({ ready($0) }) {
-                if brains.allSatisfy({ isIdle($0) }) { settle += dt } else { settle = 0 }
-                if settle >= GameCare.popSettle, dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
-                    state = .serving
-                    for i in brains.indices {
-                        idle[i] = 0; paid[i] = 0
-                        if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
-                        startSitting(i)
-                    }
-                }
-                return
-            }
-            settle = 0
+            if !trayOut { spawnTray() }
+            for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
+            if started.allSatisfy({ $0 }) { state = .serving; return }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
-            for i in brains.indices where !ready(i) && isIdle(brains[i]) {
+            for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
                 // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
-                guard brains.indices.allSatisfy({ $0 == i || isIdle(brains[$0]) }) else { idle[i] = 0; continue }
+                guard !started[i] else { continue }
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0

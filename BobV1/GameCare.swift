@@ -605,6 +605,8 @@ final class GameCare {
     static let approachBack: Float = 0.25
     /// After a walk to the stand he stands still this long before the tray pops in.
     static let popSettle: Float = 0.45
+    /// The tray pops in as soon as a meal is asked for, wherever he stands (he then walks over and eats).
+    static let trayFirst = true
 
     /// The tray never pops in where he would have to cross it. The visible floor beside the 1.56-wide tray is only ~0.2 u wide, so there is NO
     /// on-screen way around it for a body 1.4 wide: instead the tray waits until he is at (or behind) his stand line. If he is in front of
@@ -617,7 +619,7 @@ final class GameCare {
         stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
         wantedAge += dt
         if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
-        if here.y <= stand.y + Self.popTolerance {
+        if Self.trayFirst || here.y <= stand.y + Self.popTolerance {
             // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
             if standRequested {
                 if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }
