@@ -289,9 +289,7 @@ final class VoiceTypedTeachTests: XCTestCase {
         A11yAnnounce.sink = { t, _ in said.append(t) }
         r.run(0.3)
         for i in 0..<VoiceTuning.repsToLearn {
-            r.care.voice.show(.sit)                    // the trick-book row: he does it now and the next word binds
-            r.run(0.3)
-            r.care.voice.typed("sit")
+            r.care.voice.typed("sit", teaching: .sit)      // the trick-book row's field: the word binds to that row's trick (Train design: nothing binds by itself)
             r.run(0.3)
             XCTAssertEqual(r.training.lesson(.sit).reps, i + 1, "typed lesson \(i + 1) counted")
         }
@@ -323,8 +321,8 @@ final class VoiceTypedTeachTests: XCTestCase {
         XCTAssertTrue(r.training.isLearned(.sit))
     }
 
-    /// Tap-to-talk teaching: the mic opens after the sit has ended, and the still-open trick-book prompt binds the listen.
-    func testTapToTalkTeachingBindsToTheOpenPromptAfterTheMoveEnds() {
+    /// Tap-to-talk after a shown move: the mic opens fine, but (Train design) nothing binds the word to the shown trick by itself.
+    func testTapToTalkAfterAShownMoveOpensButTeachesNothingByItself() {
         let r = Run(); Self.keep.append(r)
         A11yAssist.force = true; defer { A11yAssist.force = false }
         r.run(0.3)
@@ -335,7 +333,7 @@ final class VoiceTypedTeachTests: XCTestCase {
         r.run(0.3)
         r.care.voice.hear("sit")
         r.run(0.5)
-        XCTAssertEqual(r.training.lesson(.sit).reps, 1, "a late listen still counts for the open prompt")
+        XCTAssertEqual(r.training.lesson(.sit).reps, 0, "no accidental lessons: only the Train card (or a typed row) teaches; the tap-to-talk mic itself opens fine")
     }
 
     /// A learned trick keeps a typed command: it goes through command(), not the router's puzzled path, and the learned word is obeyed.

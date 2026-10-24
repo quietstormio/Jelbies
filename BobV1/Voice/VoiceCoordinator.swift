@@ -373,7 +373,7 @@ final class VoiceCoordinator {
         }
     }
 
-    private func process(_ transcript: String) {
+    private func process(_ transcript: String, bindTo: VoiceTrick? = nil) {
         defer { mode.finish() }
         guard let care else { return }
         // a meal / tray owns him: commands are ignored and nothing is learned
@@ -390,7 +390,7 @@ final class VoiceCoordinator {
         let t0 = CACurrentMediaTime()
         let who = subject(for: transcript)
         let bk = book(for: who); lastBook = bk
-        let d = bk.decideFull(transcript: transcript, runningMove: nil, mood: moodMeant(by: transcript), session: session)
+        let d = bk.decideFull(transcript: transcript, runningMove: bindTo, mood: moodMeant(by: transcript), session: session)
         // "everyone come eat", "come have a drink", "come get a bath": the loose come rule would win, but the sentence is a meal / nap / bath /
         // question for the natural-command path. Only the rules' confident new-kind verbs override, so taught words and the social phrases stand.
         if !d.noMatch, intentModel == nil, VoiceMatcher.looksLikeCome(VoiceMatcher.tokens(transcript)) {
@@ -587,7 +587,7 @@ final class VoiceCoordinator {
         session = training.newSession()
         subjectAtOpen = subjectID
         runningAtOpen = prompt ?? brainRef.map { subjectBrain($0) }.flatMap(Self.running)
-        process(text)
+        process(text, bindTo: prompt)           // an explicit trick-book row binds the word (typed teaching); the Train session / room never bind by themselves
         if let t = prompt, !book.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }          // the next typed word is the next lesson
     }
 
