@@ -45,7 +45,7 @@ struct MainMenuView: View {
                 GameCircleButton(systemName: "xmark", label: "Close album") { albumOpen = false }.padding(.trailing, 16).padding(.top, 8)
             }
         }
-        .accessibilityIdentifier("main-menu")
+        .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
     /// Day / night tint over the room: a darker, bluer wash at night, a warm one at dusk and dawn, a light cream veil by day.

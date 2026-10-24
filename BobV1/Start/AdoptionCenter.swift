@@ -121,7 +121,7 @@ struct AdoptionCenter: View {
                 }
             }
             .accessibilityHidden(true)
-            primary(adoptTitle, enabled: canAdopt, id: "adopt-pick") { withAnimation(.easeOut(duration: 0.2)) { name = JellyRoster.baseNames[pick]; naming = true }; nameFocused = true }
+            primary(adoptTitle, enabled: canAdopt, id: "adopt-pick") { withAnimation(.easeOut(duration: 0.2)) { name = ""; naming = true }; nameFocused = true }
             if mode == .more, !isHome, price != nil, !canAdopt {
                 Text("Earn Drops in races to bring \(JellyRoster.baseNames[pick]) home.").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
             }
@@ -144,7 +144,7 @@ struct AdoptionCenter: View {
                 .padding(.horizontal, 14).frame(minHeight: 52)
                 .background(Capsule().fill(Color.white.opacity(0.9)))
                 .overlay(Capsule().strokeBorder(tint(pick), lineWidth: 3))
-                .onChange(of: name) { _, v in if v.count > 14 { name = String(v.prefix(14)) } }
+                .onChange(of: name) { _, v in if v.count > 12 { name = String(v.prefix(12)) } }
                 .onSubmit { bringHome() }
                 .accessibilityIdentifier("adopt-name")
             primary("Bring \(finalName) home", enabled: true, id: "adopt-bring-home") { bringHome() }
@@ -153,7 +153,7 @@ struct AdoptionCenter: View {
 
     private var finalName: String {
         let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? JellyRoster.baseNames[pick] : t
+        return t.isEmpty ? JellyRoster.baseNames[pick] : String(t.prefix(12))
     }
 
     private func primary(_ title: String, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
