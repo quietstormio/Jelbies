@@ -50,7 +50,18 @@ final class StoreBook {
 
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
-        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s) }
+        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn) }
+    }
+
+    /// Old saves: a look worn by several characters stays only on the first (sorted key order).
+    static func dedupeWorn(_ worn: [String: [String: String]]) -> [String: [String: String]] {
+        var out = worn, seen = Set<String>()
+        for k in worn.keys.sorted() {
+            for (slot, look) in worn[k] ?? [:] {
+                if seen.contains(look) { out[k]?[slot] = nil } else { seen.insert(look) }
+            }
+        }
+        return out
     }
 
     private func save() {
@@ -167,6 +178,10 @@ final class StoreBook {
     @discardableResult
     func wear(_ look: WearLook, on jelly: Int) -> Bool {
         guard ownsLook(look) else { return false }
+        // One owner per look: taking it off whoever else had it.
+        for k in Array(saved.worn.keys) where k != wornKey(jelly) {
+            for (slot, v) in saved.worn[k] ?? [:] where v == look.rawValue { saved.worn[k]?[slot] = nil }
+        }
         saved.worn[wornKey(jelly), default: [:]][look.slot.rawValue] = look.rawValue
         save()
         return true
