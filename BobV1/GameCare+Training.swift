@@ -30,7 +30,8 @@ extension GameCare {
         if UserDefaults.standard.object(forKey: "TrainJelly") != nil {          // capture aid: `-TrainJelly 1` trains Jelly 1 a few seconds after launch
             let id = UserDefaults.standard.integer(forKey: "TrainJelly")
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(4))
+                while LaunchGate.shared.visible { try? await Task.sleep(for: .milliseconds(500)) }          // not under the launch curtain (a slow simulator keeps it up for a while)
+                try? await Task.sleep(for: .seconds(UserDefaults.standard.object(forKey: "TrainDelay") != nil ? UserDefaults.standard.double(forKey: "TrainDelay") : 3))
                 if let me = self, let p = me.jelly(id), UserDefaults.standard.object(forKey: "TrainReps") != nil { p.training.debugReps(.jacks, word: "boing", reps: UserDefaults.standard.integer(forKey: "TrainReps")) }
                 self?.beginTraining(id)
             }

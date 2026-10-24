@@ -33,7 +33,22 @@ struct GameScreen: View {
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudPerkH: CGFloat = 0          // measured: the perk badge row under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
+    @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
+    @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
     private var focus: BlobFocus { model.care.focus }
+    /// Tells the close-up camera which part of the screen the Train card leaves free (GameCamera.trainFrame), as fractions of the whole screen.
+    private func frameTrainCamera(card: CGRect, g: GeometryProxy) {
+        guard card.height > 1 else { return }
+        trainCardTop = min(trainCardTop ?? .infinity, card.minY); trainCardLeft = min(trainCardLeft ?? .infinity, card.minX)
+        let W = g.size.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, H = g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom
+        let top = Float((g.safeAreaInsets.top + 8 + hudTopH + 6) / H)
+        let landscape = vsc == .compact
+        let f: GameCamera.TrainFrame = landscape
+            ? .init(minX: Float((g.safeAreaInsets.leading + 72) / W), maxX: Float(((trainCardLeft ?? card.minX) - 8) / W), minY: top, maxY: 0.95)
+            : .init(minX: 0.04, maxX: 0.96, minY: top, maxY: Float((trainCardTop ?? card.minY) / H) - 0.012)
+        GameCamera.trainInstant = a11yMotionReduced
+        if GameCamera.trainFrame != f { GameCamera.trainFrame = f }
+    }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive }
@@ -175,7 +190,9 @@ struct GameScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 if model.care.voice.train != nil {          // the close-up's Train card (Voice/TrainCard.swift): bottom, right of the rail; landscape: the right side
-                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.55)
+                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.40)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frameTrainCamera(card: $0, g: g) }          // the close-up keeps the whole Jelbie in the free area
+                        .onDisappear { trainCardTop = nil; trainCardLeft = nil; GameCamera.trainFrame = nil }
                         .padding(.leading, vsc == .compact ? 0 : 62).padding(.trailing, 12).padding(.bottom, 10)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .transition(.opacity)

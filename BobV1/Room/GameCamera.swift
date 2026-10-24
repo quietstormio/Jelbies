@@ -5,6 +5,7 @@
 //
 
 import simd
+import QuartzCore
 import Foundation
 
 enum GameCamera {
@@ -88,7 +89,11 @@ enum GameCamera {
         }
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
-            let p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
+            var p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
+            if let f = trainFrame, focusSpots.count <= 1 {          // the Train card is up: frame the whole Jelbie in the free area beside / above it
+                let k = trainBlend(), tp = focusTrainPose(aspect: aspect, frame: f)
+                p = (p.eye + (tp.eye - p.eye) * k, p.target + (tp.target - p.target) * k)
+            }
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
         }
@@ -197,6 +202,36 @@ enum GameCamera {
         let mid = 0.5 * BobShape.H
         let ty = mid - (0.5 - focusBodyScreenY) * visH           // below his middle -> he sits above the screen centre
         let t = SIMD3<Float>(spot.x, ty, spot.y)
+        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
+        return (e, t)
+    }
+
+    // MARK: Focus close-up while the Train card is up (r1023-polish)
+
+    /// The free area (fractions of the whole screen, 0...1) the trained Jelbie must sit inside, face and feet: set by GameScreen from the card's frame, nil = the normal close-up.
+    struct TrainFrame: Equatable { var minX: Float, maxX: Float, minY: Float, maxY: Float }
+    nonisolated(unsafe) static var trainFrame: TrainFrame? = nil { didSet { if (oldValue == nil) != (trainFrame == nil) { trainSince = CACurrentMediaTime() } } }
+    nonisolated(unsafe) static var trainSince: Double = 0
+    /// Reduce Motion: the camera does not glide (GameScreen sets it with the frame).
+    nonisolated(unsafe) static var trainInstant = false
+    /// 0 -> 1 over 0.45 s after the card appears (instant with Reduce Motion), 1 -> 0 is instant (the close-up is ending anyway).
+    static func trainBlend(now: Double = CACurrentMediaTime()) -> Float {
+        guard trainFrame != nil else { return 0 }
+        if trainInstant { return 1 }
+        let t = min(max(Float((now - trainSince) / 0.45), 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+    /// Never bigger than the normal close-up; the whole body (H) must fit the frame's height with a margin for a head ornament, and 2R its width.
+    static func focusTrainPose(aspect: Float, frame f: TrainFrame, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let normal = focusPose(aspect: aspect, spot: spot)
+        let normalVisH = 2 * simd_length(normal.eye - normal.target) * tanf(fovY / 2)
+        let margin: Float = 1.12
+        let freeH = max(f.maxY - f.minY, 0.12), freeW = max(f.maxX - f.minX, 0.2)
+        let visH = max(normalVisH, BobShape.H * margin / freeH, 2 * BobShape.R * 1.08 / (freeW * aspect))
+        let dist = visH / (2 * tanf(fovY / 2))
+        let cx = (f.minX + f.maxX) / 2, cy = (f.minY + f.maxY) / 2
+        let ty = 0.5 * BobShape.H - (0.5 - cy) * visH
+        let t = SIMD3<Float>(spot.x + (0.5 - cx) * visH * aspect, ty, spot.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
     }

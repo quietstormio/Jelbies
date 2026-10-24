@@ -13,6 +13,7 @@ struct TrainCard: View {
     /// The tallest the card may grow (portrait ~55% of the screen, landscape the safe height); past it the content scrolls.
     var maxHeight: CGFloat = 10_000
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var contentH: CGFloat = 200          // the content's own height: the card hugs it (no empty area), and scrolls past `maxHeight`
 
     var body: some View {
         if let tr = voice.train {
@@ -20,7 +21,7 @@ struct TrainCard: View {
             let name = bk.names.displayName(tr.subject)
             let step = tr.step
             let headline = TrainSession.headline(step, name: name, word: { bk.word(for: $0) ?? $0.suggestion }, reps: { bk.progress($0) })
-            let inner = VStack(alignment: .leading, spacing: 10) {
+            let inner = VStack(alignment: .leading, spacing: 8) {
                 Text(headline)
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(FocusStyle.brown)
@@ -32,13 +33,17 @@ struct TrainCard: View {
                     link("Choose another trick", id: "train-another") { voice.trainPickAgain() }
                 }
             }
-            .padding(14)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            ViewThatFits(in: .vertical) {
-                inner
-                ScrollView(.vertical) { inner }.scrollBounceBehavior(.basedOnSize)
+            let measured = inner.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentH = $0 }
+            Group {
+                if contentH > maxHeight {          // taller than the room the Jelbie leaves: scroll inside the cap (Dynamic Type)
+                    ScrollView(.vertical) { measured }.scrollBounceBehavior(.basedOnSize).frame(height: maxHeight)
+                } else {
+                    measured          // hugs its content: no empty area above the title
+                }
             }
-            .frame(maxWidth: landscape ? 360 : 520, maxHeight: maxHeight, alignment: .leading)
+            .frame(maxWidth: landscape ? 360 : 520, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
                 .shadow(color: FocusStyle.shadow.opacity(0.25), radius: 10, y: 4))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
@@ -52,7 +57,7 @@ struct TrainCard: View {
         switch step {
         case .pick:
             let tricks = VoiceTrick.allCases.filter { bk.unlocked($0) && $0 != .come }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], spacing: 6) {
                 ForEach(tricks, id: \.rawValue) { t in chip(t, bk: bk, name: name) }
             }
             Text("Come here: \(name) knows it already.").font(.footnote).foregroundStyle(FocusStyle.brown.opacity(0.75))
@@ -114,17 +119,17 @@ struct TrainCard: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             voice.trainPick(t)
         } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 5) {
-                    Image(systemName: VoiceTrickBook.symbol(t)).font(.system(.subheadline).weight(.semibold))
-                    Text(t.title).font(.system(.subheadline, design: .rounded).weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+            VStack(spacing: 3) {
+                HStack(spacing: 4) {
+                    Image(systemName: VoiceTrickBook.symbol(t)).font(.system(.footnote).weight(.semibold))
+                    Text(t.title).font(.system(.footnote, design: .rounded).weight(.bold)).lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
                     if learned { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(red: 0.25, green: 0.55, blue: 0.35)) }
                 }
                 pipRow(n)
             }
             .foregroundStyle(FocusStyle.brown)
             .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.vertical, 6).padding(.horizontal, 6)
+            .padding(.vertical, 4).padding(.horizontal, 4)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.85)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(FocusStyle.brown.opacity(learned ? 0.35 : 0.12), lineWidth: learned ? 2 : 1))
         }
