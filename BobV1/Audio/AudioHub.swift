@@ -159,7 +159,7 @@ final class AudioHub {
     func ensureMusic(delay: Bool) {
         guard started, active else { return }
         perform(director.resumed(deckPlaying: deckPlaying, fade: 1.5))
-        if let t = director.scene.track, !(scene?.isPlaying(t) ?? false) {
+        if let t = director.sceneTrack, !(scene?.isPlaying(t) ?? false) {
             if scene?.current != t { perform([.sceneOn(t, fade: 1.5)]) }          // lost (or never started)
             else if delay { scene?.recoverIfStalled() }                             // decoded but its node stopped
         }
@@ -280,7 +280,7 @@ final class AudioHub {
         return scene?.songTime(of: t)
     }
     /// The track of this scene is decoded and playing.
-    func scenePlaying(_ s: MusicScene) -> Bool { s.track.map { scene?.isPlaying($0) ?? false } ?? false }
+    func scenePlaying(_ s: MusicScene) -> Bool { (director.scene == s ? director.sceneTrack : s.track).map { scene?.isPlaying($0) ?? false } ?? false }
 
     /// The Jelly Show's sounds (Show/ShowFlow.swift): existing effects under the show's names.
     func showCue(_ c: ShowCue) {

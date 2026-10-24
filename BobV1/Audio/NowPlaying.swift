@@ -25,6 +25,8 @@ nonisolated struct NowPlaying: Equatable, Sendable {
         case .training: return "Training"
         case .shop: return "Shop"
         case .town: return "Town"
+        case .park: return "Park"
+        case .cafe: return "Café"
         case .studio: return "Studio"
         case .show: return "Show"
         case .results: return "Results"

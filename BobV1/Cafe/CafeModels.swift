@@ -66,8 +66,8 @@ nonisolated enum CafeTuning {
     static let toastSeconds: Float = 2.5
     /// A given-up serving where nobody ate a piece gives the Drops back.
     static let refundIfNothingEaten = true
-    /// The café plays the shop's loop (a dedicated track belongs to the music branch).
-    static let music: MusicScene = .shop
+    /// The café plays its own smooth-jazz tracks.
+    static let music: MusicScene = .cafe
 }
 
 /// Why the café cannot be entered right now (a friendly line for the toast).

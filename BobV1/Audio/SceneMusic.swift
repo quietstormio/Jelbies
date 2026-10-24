@@ -18,6 +18,7 @@ import AVFoundation
 nonisolated enum SceneTrack: String, CaseIterable, Sendable {
     case circuitRace = "circuit_race_3", circuitFinal = "circuit_final_2", training = "training_1", shop = "shop_2", town = "town_1"
     case studioPractice = "studio_practice_1", contestStage = "contest_stage_2"
+    case park1 = "park_1", park2 = "park_2", cafe1 = "cafe_1", cafe2 = "cafe_2"      // 2026-10-24; loops = the whole file (past a 2000-frame lead-in), seam crossfaded
 
     var loopStartFrame: Int {
         switch self {
@@ -28,6 +29,7 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .town: return 655_869
         case .studioPractice: return 1_235_736
         case .contestStage: return 1_511_597
+        case .park1, .park2, .cafe1, .cafe2: return 2_000
         }
     }
     var loopEndFrame: Int {
@@ -39,6 +41,8 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .town: return 3_075_098
         case .studioPractice: return 2_646_955
         case .contestStage: return 2_922_798
+        case .park1, .park2: return 3_970_058
+        case .cafe1, .cafe2: return 4_411_412
         }
     }
     /// Starts at the loop start (the intro is skipped): the training drill's beat grid is the loop's, and the drill waits for nothing.
@@ -59,6 +63,8 @@ nonisolated enum Jingle: String, Sendable {
 /// What a screen wants to hear (the director picks the files). `results` = the screen's music stops (a jingle plays) and the room music stays out.
 nonisolated enum MusicScene: Equatable, Sendable {
     case none, race, raceFinal, training, shop, town, results
+    /// The Park visit and the café outing: one of two tracks each, picked per visit by the director (`tracks`).
+    case park, cafe
     /// The Jelly Show (Show/): the Studio and its dance drill play studio_practice_1, the stage plays contest_stage_2.
     case studio, show
 
@@ -71,7 +77,17 @@ nonisolated enum MusicScene: Equatable, Sendable {
         case .town: return .town
         case .studio: return .studioPractice
         case .show: return .contestStage
+        case .park: return .park1
+        case .cafe: return .cafe1
         case .none, .results: return nil
+        }
+    }
+    /// The candidates for a visit (the director picks one at random); one entry for the other scenes.
+    var tracks: [SceneTrack] {
+        switch self {
+        case .park: return [.park1, .park2]
+        case .cafe: return [.cafe1, .cafe2]
+        default: return track.map { [$0] } ?? []
         }
     }
 }

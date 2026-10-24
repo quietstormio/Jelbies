@@ -100,6 +100,8 @@ nonisolated struct MusicDirector {
     private(set) var layerOn = false
     /// The screen scene that is playing (`.none` = the room's own music).
     private(set) var scene: MusicScene = .none
+    /// The track playing for `scene` (park / cafe pick one of two at random on entering).
+    private(set) var sceneTrack: SceneTrack?
     static let sceneFade = 1.2
     private(set) var cooldownLeft = 0.0
     private var calm = 0.0
@@ -222,7 +224,9 @@ nonisolated struct MusicDirector {
                 if layerOn { layerOn = false; cooldownLeft = Self.layerCooldown; ev.append(.layerOff(fade: Self.sceneFade)) }
                 current = nil; gapLeft = nil; tracksSincePause = 0
             }
-            if let t = scene.track { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : 0.8)) }
+            let cands = scene.tracks
+            sceneTrack = cands.isEmpty ? nil : cands[min(Int(rand() * Double(cands.count)), cands.count - 1)]
+            if let t = sceneTrack { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : 0.8)) }
             else if scene == .results { ev.append(.sceneOff(fade: 0.5)) }
             else {                                  // back in the room
                 ev.append(.sceneOff(fade: Self.sceneFade))

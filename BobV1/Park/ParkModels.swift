@@ -116,7 +116,7 @@ nonisolated enum ParkTuning {
     static let giftDrops: ClosedRange<Int> = 4...8
     // Saves
     static let saveEvery: Float = 20
-    static let music: MusicScene = .town
+    static let music: MusicScene = .park
 }
 
 /// The hand-written text: names, personalities, greetings, level-up lines. Everything works with these alone.
