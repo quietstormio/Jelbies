@@ -117,6 +117,12 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .minigoal: return DecorSpec(half: SIMD2(0.8, 0.35), height: 0.9, solid: true, units: 2, corner: 0.05, reach: 1, box: true)
         }
     }
+    /// The footprint after `q` quarter turns (an odd count swaps the half extents).
+    func spec(quarter q: Int) -> DecorSpec {
+        var s = spec
+        if q & 1 == 1 { s.half = SIMD2(s.half.y, s.half.x) }
+        return s
+    }
     /// What it does, in a sentence (shop and bag).
     var use: String {
         switch self {
@@ -240,6 +246,9 @@ nonisolated struct PlacedDecor: Codable, Equatable, Sendable {
     var kind: DecorKind
     var x: Float
     var z: Float
+    /// Quarter turns about the vertical (0...3; nil = 0 so old saves decode).
+    var turns: Int?
+    var quarter: Int { (turns ?? 0) & 3 }
     var at: SIMD2<Float> { SIMD2(x, z) }
 }
 
@@ -250,7 +259,13 @@ struct DecorFoot: Equatable, Sendable {
     var centre: SIMD2<Float>
     /// Height it is lifted (sitting on the rug).
     var lift: Float = 0
-    var spec: DecorSpec { kind.spec }
+    /// Quarter turns (see `PlacedDecor.turns`).
+    var quarter = 0
+    var yaw: Float { Float(quarter) * .pi / 2 }
+    var spec: DecorSpec { kind.spec(quarter: quarter) }
+    /// A piece-local offset (x, z) in the world, and a world offset in the piece's frame.
+    func turned(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, quarter) }
+    func local(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, (4 - quarter) & 3) }
     var radius: Float { spec.radius }
     var box: RoomLayout.FlatBox { .init(centre: centre, half: spec.half, height: spec.height + lift, radius: min(spec.corner, min(spec.half.x, spec.half.y))) }
     /// Distance from `p` to the edge of the footprint (negative inside).
@@ -281,22 +296,27 @@ enum DecorPlacement {
     static func visibleHalf(z: Float) -> Float { GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 }
     /// The most |x| a piece may have at depth `z`: on screen, and (when a Jelly plays with it) where a Jelly's centre can go: he has to be
     /// able to stand at it (at its seat, for a seat off to one side).
-    static func xLimit(_ kind: DecorKind, z: Float) -> Float {
-        let s = kind.spec
+    static func xLimit(_ kind: DecorKind, z: Float, quarter q: Int = 0) -> Float {
+        let s = kind.spec(quarter: q), off = q & 1 == 0 ? kind.standOffsetX : 0
         let seen = visibleHalf(z: z) - (s.box ? s.half.x : s.radius)
-        guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return laneWidened(kind, z: z, limit: seen) }
-        return laneWidened(kind, z: z, limit: min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - kind.standOffsetX))
+        guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return laneWidened(kind, z: z, limit: seen, quarter: q) }
+        return laneWidened(kind, z: z, limit: min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - off))
     }
     /// A wide solid piece (the slide, the goal) has to clear the core (|x| >= 2) with its whole footprint, so on a portrait screen the lane between the core and the
     /// screen edge was a sliver (~0.2 wide) and a finger could only ever land in one side's: the piece stuck on the left of the screen (2026-10-23). Such a piece may
     /// lean past the screen edge (its centre stays on screen, inside the walls) so the lane is at least `minLane` wide.
     static let minLane: Float = 0.45
-    static func laneWidened(_ kind: DecorKind, z: Float, limit: Float) -> Float {
-        let s = kind.spec
+    static func laneWidened(_ kind: DecorKind, z: Float, limit: Float, quarter q: Int = 0) -> Float {
+        let s = kind.spec(quarter: q)
         guard s.solid, s.box else { return limit }
         let need = coreMax.x + s.inner.x + s.round + minLane
         let cap = min(GameCamera.visibleHalfWidthAtBody(z: z) * 0.97, RoomLayout.maxX - 0.02 - s.half.x)
         return max(limit, min(need, cap))
+    }
+
+    /// A piece-local offset (x, z) turned `q` quarter turns (yaw about +y from +z).
+    static func turn(_ v: SIMD2<Float>, _ q: Int) -> SIMD2<Float> {
+        switch q & 3 { case 1: return SIMD2(v.y, -v.x); case 2: return -v; case 3: return SIMD2(-v.y, v.x); default: return v }
     }
 
     /// Core: the footprint's rounded box against the core rectangle (for a circle piece this is the old circle test).
@@ -304,29 +324,29 @@ enum DecorPlacement {
         let q = simd_max(simd_max(coreMin - p, p - coreMax), .zero)
         return simd_length(q) < r
     }
-    static func inCore(_ kind: DecorKind, at p: SIMD2<Float>) -> Bool {
-        let s = kind.spec
+    static func inCore(_ kind: DecorKind, at p: SIMD2<Float>, quarter q: Int = 0) -> Bool {
+        let s = kind.spec(quarter: q)
         let q = simd_max(simd_max(coreMin - (p + s.inner), (p - s.inner) - coreMax), .zero)
         return simd_length(q) < s.round
     }
 
     /// Two footprints (rounded boxes; a circle for the first eight pieces) closer than `gap`.
-    static func overlaps(_ a: DecorKind, _ pa: SIMD2<Float>, _ b: DecorKind, _ pb: SIMD2<Float>, gap g: Float = DecorPlacement.gap) -> Bool {
-        let sa = a.spec, sb = b.spec
+    static func overlaps(_ a: DecorKind, _ pa: SIMD2<Float>, _ b: DecorKind, _ pb: SIMD2<Float>, gap g: Float = DecorPlacement.gap, qa: Int = 0, qb: Int = 0) -> Bool {
+        let sa = a.spec(quarter: qa), sb = b.spec(quarter: qb)
         let q = simd_max(simd_abs(pa - pb) - (sa.inner + sb.inner), .zero)
         return simd_length(q) < sa.round + sb.round + g
     }
     /// Clearance from the sofa for a footprint at `p` (negative = overlapping), sampled along its outline.
-    static func sofaClearance(_ kind: DecorKind, at p: SIMD2<Float>) -> Float {
-        let s = kind.spec
+    static func sofaClearance(_ kind: DecorKind, at p: SIMD2<Float>, quarter q: Int = 0) -> Float {
+        let s = kind.spec(quarter: q)
         guard s.box else { return RoomLayout.sofaDistanceXZ(p) - s.radius }
         var d = RoomLayout.sofaDistanceXZ(p)
-        for q in outline(kind, at: p) { d = min(d, RoomLayout.sofaDistanceXZ(q)) }
+        for o in outline(kind, at: p, quarter: q) { d = min(d, RoomLayout.sofaDistanceXZ(o)) }
         return d
     }
     /// Points round the footprint's rounded outline (every ~0.2).
-    static func outline(_ kind: DecorKind, at p: SIMD2<Float>) -> [SIMD2<Float>] {
-        let s = kind.spec, r = s.round, i = s.inner
+    static func outline(_ kind: DecorKind, at p: SIMD2<Float>, quarter q: Int = 0) -> [SIMD2<Float>] {
+        let s = kind.spec(quarter: q), r = s.round, i = s.inner
         var out: [SIMD2<Float>] = []
         let nx = max(1, Int((2 * i.x / 0.2).rounded(.up))), nz = max(1, Int((2 * i.y / 0.2).rounded(.up)))
         for k in 0...nx { let x = -i.x + 2 * i.x * Float(k) / Float(nx); out.append(p + SIMD2(x, -i.y - r)); out.append(p + SIMD2(x, i.y + r)) }
@@ -347,29 +367,32 @@ enum DecorPlacement {
         return 0
     }
 
-    static func isValid(_ kind: DecorKind, at p: SIMD2<Float>, among others: [PlacedDecor], ignoring uid: Int? = nil) -> Bool {
-        let s = kind.spec
+    static func isValid(_ kind: DecorKind, at p: SIMD2<Float>, among others: [PlacedDecor], ignoring uid: Int? = nil, quarter q: Int = 0) -> Bool {
+        let s = kind.spec(quarter: q)
         let walked = kind.interaction != nil || kind == .petbed || kind == .minigoal          // (a Jelly walks to it: the pet bed too; the goal is shot at from in front)
         // A big deep piece (swing, slide, pet bed at 1.25x) may stand far back: it is its FRONT (where a Jelly stands for it, or the slide's climb behind it) that has to be on walkable floor
         let deep = s.box && s.half.y > 0.9
         let lowZ = walked ? (deep ? minZ : max(minZ, GameCamera.walkMinZ)) : minZ, highZ = walked ? min(maxZ, GameCamera.walkMaxZ) : maxZ
-        guard p.y >= lowZ, p.y <= highZ, abs(p.x) <= xLimit(kind, z: p.y) else { return false }
+        guard p.y >= lowZ, p.y <= highZ, abs(p.x) <= xLimit(kind, z: p.y, quarter: q) else { return false }
         // inside the walls (the room is 10 wide; a landscape screen sees past them)
         guard abs(p.x) + (s.box ? s.half.x : s.radius) <= RoomLayout.maxX - 0.02 else { return false }
         // a deep piece (slide, swing) stays wholly in the walkable depth; its front edge may not pass the front of the floor
         if s.box, p.y + s.half.y > max(highZ, GameCamera.walkMaxZ) + 0.2 { return false }
         // the slide is climbed from behind: that spot (1.85 back) has to be floor a Jelly can stand on
         if deep, walked, kind != .slide, p.y + s.half.y + 0.9 < GameCamera.walkMinZ { return false }
-        if kind == .slide, p.y - DecorKind.slideApproach < GameCamera.walkMinZ + 0.1 { return false }
-        guard sofaClearance(kind, at: p) > gap else { return false }
+        if kind == .slide {
+            let ap = p + turn(SIMD2(0, -DecorKind.slideApproach), q)          // (where a Jelly stands to climb it)
+            if ap.y < GameCamera.walkMinZ + 0.1 || abs(ap.x) > visibleHalf(z: ap.y) { return false }
+        }
+        guard sofaClearance(kind, at: p, quarter: q) > gap else { return false }
         for c in RoomLayout.cylinders {
             let b = RoomLayout.FlatBox(centre: p, half: s.half, height: 1, radius: s.round)
             if RoomLayout.boxDistanceXZ(c.centre, b) < c.radius + gap { return false }
         }
-        if s.solid, inCore(kind, at: p) { return false }
+        if s.solid, inCore(kind, at: p, quarter: q) { return false }
         for o in others where o.uid != uid {
             let orad = o.kind.spec.radius, d = simd_distance(p, o.at)
-            if !overlaps(kind, p, o.kind, o.at) { continue }
+            if !overlaps(kind, p, o.kind, o.at, qa: q, qb: o.quarter) { continue }
             // the rug hosts small things that sit fully on it
             if o.kind == .rug, kind != .rug, !s.big, d + s.radius <= orad - 0.02 { continue }
             if kind == .rug, o.kind != .rug, !o.kind.spec.big, d + orad <= s.radius - 0.02 { continue }
@@ -405,7 +428,18 @@ enum DecorPlacement {
 
     /// The feet the room and the Jellies see for a list of placed pieces (items fully on the rug are lifted).
     static func feet(_ placed: [PlacedDecor]) -> [DecorFoot] {
-        placed.map { p in DecorFoot(uid: p.uid, kind: p.kind, centre: p.at, lift: rugLift(p.kind, at: p.at, others: placed, ignoring: p.uid)) }
+        placed.map { p in DecorFoot(uid: p.uid, kind: p.kind, centre: p.at, lift: rugLift(p.kind, at: p.at, others: placed, ignoring: p.uid), quarter: p.quarter) }
+    }
+    /// The spot nearest `p` (within 1.5) where the piece fits after a turn to `q` quarters, nil when none does.
+    static func spotAfterTurn(_ kind: DecorKind, at p: SIMD2<Float>, quarter q: Int, among others: [PlacedDecor], ignoring uid: Int) -> SIMD2<Float>? {
+        if isValid(kind, at: p, among: others, ignoring: uid, quarter: q) { return p }
+        var best: (SIMD2<Float>, Float)?
+        for i in -15...15 { for j in -15...15 {
+            let c = p + SIMD2(Float(i), Float(j)) * 0.1, d = simd_length(c - p)
+            if d > 1.5 || (best.map { d >= $0.1 } ?? false) { continue }
+            if isValid(kind, at: c, among: others, ignoring: uid, quarter: q) { best = (c, d) }
+        } }
+        return best?.0
     }
 }
 
@@ -506,7 +540,8 @@ final class DecorField {
     func seatWorld(_ uid: Int, seat: Int) -> SIMD3<Float>? {
         guard let f = foot(uid), !f.kind.sitPoints.isEmpty else { return nil }
         let p = DecorModels.seatPoint(f.kind, seat: seat, anim: anim[uid] ?? DecorAnim(), lift: f.lift)
-        return SIMD3(f.centre.x + p.x, p.y, f.centre.y + p.z)
+        let w = f.turned(SIMD2(p.x, p.z))
+        return SIMD3(f.centre.x + w.x, p.y, f.centre.y + w.y)
     }
     /// The piece the player has picked up in arrange mode: no Jelly starts using it meanwhile.
     var held: Int?

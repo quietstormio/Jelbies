@@ -239,8 +239,19 @@ final class StoreBook {
     @discardableResult
     func move(_ uid: Int, to at: SIMD2<Float>) -> Bool {
         guard var list = saved.placedAt, let i = list.firstIndex(where: { $0.uid == uid }) else { return false }
-        guard DecorPlacement.isValid(list[i].kind, at: at, among: list, ignoring: uid) else { return false }
+        guard DecorPlacement.isValid(list[i].kind, at: at, among: list, ignoring: uid, quarter: list[i].quarter) else { return false }
         list[i].x = at.x; list[i].z = at.y
+        saved.placedAt = list
+        save()
+        return true
+    }
+    /// Turns a placed piece a quarter turn, nudged to the nearest spot where it fits; false = it fits nowhere near (nothing changes).
+    @discardableResult
+    func rotate(_ uid: Int) -> Bool {
+        guard var list = saved.placedAt, let i = list.firstIndex(where: { $0.uid == uid }) else { return false }
+        let q = (list[i].quarter + 1) & 3
+        guard let at = DecorPlacement.spotAfterTurn(list[i].kind, at: list[i].at, quarter: q, among: list, ignoring: uid) else { return false }
+        list[i].x = at.x; list[i].z = at.y; list[i].turns = q
         saved.placedAt = list
         save()
         return true

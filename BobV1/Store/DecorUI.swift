@@ -115,6 +115,12 @@ struct ArrangeOverlay: View {
                                     .background(Capsule().fill(SK.cream.opacity(0.96)))
                             }.buttonStyle(.plain).accessibilityIdentifier("arrange-putaway")
                         }
+                        if let s = selected {
+                            Button { care.rotateDecor(s.uid) } label: {
+                                Image(systemName: "rotate.right").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink)
+                                    .frame(width: 52, height: 52).background(Circle().fill(SK.cream.opacity(0.96)))
+                            }.buttonStyle(.plain).accessibilityLabel("Rotate").accessibilityIdentifier("arrange-rotate")
+                        }
                         Button { AudioHub.shared.uiTap(); care.endArrange() } label: {
                             Text("Done").font(SK.font(18, .black)).foregroundStyle(SK.cream).padding(.horizontal, 34).frame(minHeight: 52)
                                 .background(Capsule().fill(SK.ink))

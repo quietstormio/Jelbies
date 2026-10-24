@@ -51,8 +51,8 @@ extension BlobBrain {
     func hopStandSpots(_ f: DecorFoot, seat: Int) -> [SIMD2<Float>] {
         let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
         let c = f.centre
-        let dz = f.spec.half.y - sp.z + Self.bagHopGap
-        return [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + SIMD2(sp.x + $0, sp.z + dz) }
+        let dz = f.kind.spec.half.y - sp.z + Self.bagHopGap          // (piece-local, then turned)
+        return [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
     }
     /// The first spot in front of the seat he can stand on, nil when there is none.
     func hopStand(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
@@ -66,7 +66,7 @@ extension BlobBrain {
     private func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         var angles: [Float]
-        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6] }
+        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6].map { $0 + f.yaw } }
         else {
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
             let a0 = atan2f(base.x, base.y)
@@ -98,7 +98,7 @@ extension BlobBrain {
             return hopStand(f, seat: seat)
         case .decorSlide:
             // behind the slide, where the steps start (the JSON's approach point)
-            let p = c + SIMD2(0, -DecorKind.slideApproach)
+            let p = c + f.turned(SIMD2(0, -DecorKind.slideApproach))
             let q = fixed(p)
             return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil
         case .soccerKick: return soccerStand(f, from: here)
@@ -368,17 +368,18 @@ extension BlobBrain {
         let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) ?? SIMD3(f.centre.x, f.spec.height, f.centre.y)
         // (a rocking seat is hopped onto where it rests: the neutral spot)
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
-        return (f.centre + SIMD2(sp.x, sp.z), sw.y)
+        return (f.centre + f.turned(SIMD2(sp.x, sp.z)), sw.y)
     }
 
     /// While he sits on a rocking chair / swing the seat carries him: his root and planted feet move by the seat's change.
     func seatFollow(_ f: DecorFoot) {
         guard f.kind == .rockingchair || f.kind == .swing, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
-        let want = SIMD2<Float>(0, sw.z - (f.centre.y + sp.z))
+        let rs = f.turned(SIMD2(sp.x, sp.z))
+        let want = SIMD2<Float>(sw.x - (f.centre.x + rs.x), sw.z - (f.centre.y + rs.y))
         let d = want - idleState.seatShift
         guard simd_length(d) > 1e-6 else { return }
-        pz += d.y
+        px += d.x; pz += d.y
         feet.pos[0] += d; feet.pos[1] += d
         idleState.seatShift = want
     }
@@ -409,7 +410,7 @@ extension BlobBrain {
                 }
                 if crowded { if idleState.phaseT > 3 { idleFinish(skinner) }; return }
                 idleState.bagStage = 1; idleState.phaseT = 0; idleState.decorBooped = false
-                bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.kind.seatFacing(idleState.seat))
+                bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.quarter == 0 ? f.kind.seatFacing(idleState.seat) : f.yaw + (f.kind.seatFacing(idleState.seat) ?? 0))
             }
         case 2:
             // in the seat: sits down (two feet slide forward over the lip, the body lowers and leans back), rests, gets up, hops off
@@ -463,7 +464,7 @@ extension BlobBrain {
             if idleState.cuddle > 0.001 {
                 let sgn: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1       // toward the middle
                 roll += -sgn * 0.12 * idleState.cuddle
-                let want = SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0)
+                let want = f.turned(SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0))
                 let d = want - idleState.seatShift
                 px += d.x; feet.pos[0] += d; feet.pos[1] += d
                 idleState.seatShift = want

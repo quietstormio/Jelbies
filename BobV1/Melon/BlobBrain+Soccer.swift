@@ -158,7 +158,7 @@ extension BlobBrain {
         if L < 0.55 || s.legs > 14 || idleState.t > 40 || (s.mode == .rescue && s.legs >= 1 && field.openFloor(ball)) {
             if s.mode == .dribble, s.goal >= 0, let g = field.foot(s.goal), L < 0.9 {
                 // the ball is at the kick spot: line up the shot
-                let aim = g.centre + GoalGeometry.kickSpots[1].aim
+                let aim = g.centre + g.turned(GoalGeometry.kickSpots[1].aim)
                 let d = aim - ball, dl = simd_length(d)
                 s.mode = .shoot; s.target = aim; s.dir = dl > 1e-3 ? d / dl : SIMD2(0, -1); s.stage = 0; s.fired = false
                 idleState.soccer = s
@@ -312,9 +312,9 @@ extension BlobBrain {
         if s.mode == .shoot {
             var aim = s.target
             if soccerModeForce == nil, rand() < 0.25, let g = field.foot(s.goal) {
-                aim.x = g.centre.x + (rand() < 0.5 ? -1 : 1) * (GoalGeometry.mouthHalfWidth + 0.35)          // wide, just outside a post
+                aim = g.centre + g.turned(SIMD2((rand() < 0.5 ? -1 : 1) * (GoalGeometry.mouthHalfWidth + 0.35), GoalGeometry.mouthZ))          // wide, just outside a post
             } else {
-                aim.x += rand(-0.25, 0.25)
+                aim += (field.foot(s.goal)?.turned(SIMD2(rand(-0.25, 0.25), 0))) ?? SIMD2(rand(-0.25, 0.25), 0)
             }
             let d = aim - ball, L = simd_length(d)
             dir = L > 1e-3 ? d / L : s.dir

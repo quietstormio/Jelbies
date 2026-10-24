@@ -57,14 +57,16 @@ extension DecorField {
     func stuckBall(near p: SIMD2<Float> = .zero) -> DecorFoot? {
         soccerBalls.filter { SoccerState.shared.isStuck($0.uid) && occupant[$0.uid] == nil && $0.uid != held }.min { simd_distance(position($0), p) < simd_distance(position($1), p) }
     }
-    /// Piece-local coordinates of a world point for a goal (the goals are not rotated: a translation).
-    func goalLocal(_ g: DecorFoot, _ p: SIMD2<Float>) -> SIMD2<Float> { p - g.centre }
+    /// Piece-local coordinates of a world point for a goal (a translation, then its quarter turns undone).
+    func goalLocal(_ g: DecorFoot, _ p: SIMD2<Float>) -> SIMD2<Float> { g.local(p - g.centre) }
     /// A goal's kick spots in the world: the ball's spot, the stand, the aim (the mouth's centre).
     func kickSpots(_ g: DecorFoot) -> [(ball: SIMD2<Float>, stand: SIMD2<Float>, aim: SIMD2<Float>)] {
-        GoalGeometry.kickSpots.map { (g.centre + $0.ball, g.centre + $0.stand, g.centre + $0.aim) }
+        GoalGeometry.kickSpots.map { (g.centre + g.turned($0.ball), g.centre + g.turned($0.stand), g.centre + g.turned($0.aim)) }
     }
     /// The world point the ball comes to rest at after a goal (0.6 in front of the mouth, on the ball's line).
-    func rollOutSpot(_ g: DecorFoot, x: Float) -> SIMD2<Float> { SIMD2(g.centre.x + max(-0.5, min(0.5, x - g.centre.x)), g.centre.y + GoalGeometry.mouthZ + SoccerTuning.rollOutStop) }
+    func rollOutSpot(_ g: DecorFoot, from p: SIMD2<Float>) -> SIMD2<Float> {
+        g.centre + g.turned(SIMD2(max(-0.5, min(0.5, goalLocal(g, p).x)), GoalGeometry.mouthZ + SoccerTuning.rollOutStop))
+    }
 
     // MARK: the roll
 
@@ -90,17 +92,17 @@ extension DecorField {
             var p = a.pos + a.vel * h
             collide(&p, &a, r: r, uid: uid, feet: feet, bodies: bodies)
             // met the back of the net: the net puffs (the field reads it in `soccerRestTick`)
-            if a.inGoal >= 0, let g = feet.first(where: { $0.uid == a.inGoal }), vBefore.y < -0.2, a.vel.y >= 0, (p - g.centre).y < GoalGeometry.backZ + r + 0.03 {
+            if a.inGoal >= 0, let g = feet.first(where: { $0.uid == a.inGoal }), g.local(vBefore).y < -0.2, g.local(a.vel).y >= 0, g.local(p - g.centre).y < GoalGeometry.backZ + r + 0.03 {
                 SoccerState.shared.noteNetHit(ball: uid, goal: g.uid, speed: simd_length(vBefore))
             }
             // the goal: a crossing of a mouth plane going in scores; the net stops the ball and sends it gently back out
             for g in feet where g.kind == .minigoal {
-                let lb = before - g.centre, la = p - g.centre
+                let lb = g.local(before - g.centre), la = g.local(p - g.centre)
                 if a.inGoal == g.uid {
                     if la.y > GoalGeometry.mouthZ + r { a.inGoal = -1; SoccerState.shared.leftNet(uid) }          // rolled back out of the mouth
                     continue
                 }
-                guard lb.y >= GoalGeometry.mouthZ, la.y < GoalGeometry.mouthZ, a.vel.y < 0 else { continue }
+                guard lb.y >= GoalGeometry.mouthZ, la.y < GoalGeometry.mouthZ, g.local(a.vel).y < 0 else { continue }
                 let t = (lb.y - GoalGeometry.mouthZ) / max(lb.y - la.y, 1e-6)
                 let xAt = lb.x + (la.x - lb.x) * t
                 if abs(xAt) < GoalGeometry.mouthHalfWidth - r {
@@ -156,7 +158,7 @@ extension DecorField {
         for c in feet where c.uid != uid && c.spec.solid {
             if c.kind == .minigoal {
                 for s in GoalGeometry.solids {
-                    let box = RoomLayout.FlatBox(centre: c.centre + s.centre, half: s.half, height: 1, radius: 0.02)
+                    let box = RoomLayout.FlatBox(centre: c.centre + c.turned(s.centre), half: c.quarter & 1 == 1 ? SIMD2(s.half.y, s.half.x) : s.half, height: 1, radius: 0.02)
                     bounce(RoomLayout.boxDistanceXZ(p, box), grad { RoomLayout.boxDistanceXZ($0, box) }, e: 0.35)
                 }
                 continue
@@ -179,7 +181,7 @@ extension DecorField {
         // it has met the net and lost its pace (or a soft one stopped in the mouth): it drops and rolls gently back out, to about 0.6 in front of the mouth
         let speed = simd_length(a.vel)
         if a.inGoal >= 0, let g = foot(a.inGoal), (SoccerState.shared.inNet.contains(uid) && speed < 0.9) || speed < SoccerTuning.stopSpeed, goalLocal(g, a.pos).y < GoalGeometry.mouthZ - 0.05 {
-            let out = rollOutSpot(g, x: a.pos.x)
+            let out = rollOutSpot(g, from: a.pos)
             let d = out - a.pos, L = simd_length(d)
             if L > 0.05 {
                 // v / decay = distance (plus the little it loses under the stop speed): it stops right there

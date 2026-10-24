@@ -120,14 +120,23 @@ extension GameCare {
         var best = cur.at
         for k in 1...12 {
             let p = cur.at + (floor - cur.at) * (Float(k) / 12)
-            if DecorPlacement.isValid(cur.kind, at: p, among: store.placedDecor, ignoring: uid) { best = p } else { break }
+            if DecorPlacement.isValid(cur.kind, at: p, among: store.placedDecor, ignoring: uid, quarter: cur.quarter) { best = p } else { break }
         }
         // a finger across the middle: keep following on one axis when only the other is blocked
         for q in [SIMD2<Float>(floor.x, best.y), SIMD2<Float>(best.x, floor.y), SIMD2<Float>(floor.x, cur.z), SIMD2<Float>(cur.x, floor.y)] where simd_distance(q, floor) < simd_distance(best, floor) - 1e-4 {
-            if DecorPlacement.isValid(cur.kind, at: q, among: store.placedDecor, ignoring: uid) { best = q }
+            if DecorPlacement.isValid(cur.kind, at: q, among: store.placedDecor, ignoring: uid, quarter: cur.quarter) { best = q }
         }
         if best != cur.at, store.move(uid, to: best) { syncDecor(); return true }
         return false
+    }
+    /// Turns the piece a quarter turn (nudged to a spot where it fits; a buzz and nothing else when there is none).
+    func rotateDecor(_ uid: Int) {
+        guard !decorBusy(uid) else { UINotificationFeedbackGenerator().notificationOccurred(.warning); return }
+        if store.rotate(uid) {
+            syncDecor(); DecorField.shared.kick(uid, 0.5)
+            AudioHub.shared.play(.placeItem, volume: 0.7)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } else { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
     }
     /// The finger let go: the piece settles (a sound).
     func dropDecor(_ uid: Int) {

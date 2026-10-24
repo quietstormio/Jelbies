@@ -39,7 +39,7 @@ extension BlobBrain {
     }
 
     func slideArrived(_ sim: SoftBody, _ skinner: Skinner, _ f: DecorFoot) {
-        idleState.slideStage = 0; idleState.goalYaw = faceCameraYaw(); idleState.slideStep = 0
+        idleState.slideStage = 0; idleState.goalYaw = f.quarter == 0 ? faceCameraYaw() : f.yaw; idleState.slideStep = 0
         script = .idle; activity = .lookingAround
     }
 
@@ -81,7 +81,7 @@ extension BlobBrain {
     private func slideHop(_ sim: SoftBody, _ f: DecorFoot) {
         let st = Self.slideSteps[idleState.slideStep]
         idleState.slideStage = 1; idleState.decorBooped = false
-        bagHop(sim, to: f.centre + SIMD2(0, st.x), ground: st.y, apex: 0.14, facing: faceCameraYaw())
+        bagHop(sim, to: f.centre + f.turned(SIMD2(0, st.x)), ground: st.y, apex: 0.14, facing: f.quarter == 0 ? faceCameraYaw() : f.yaw)
     }
 
     /// Stage 0 (turn), 4 (sit down on the platform), 5 (ride), 6 (get up with a squash).
@@ -118,7 +118,7 @@ extension BlobBrain {
             let speed = 1.6 + 1.4 * smooth01(t / 1.1)
             idleState.slideS += speed * dt
             let at = Self.slideAt(idleState.slideS)
-            let want = SIMD2<Float>(c.x, c.y + at.z)
+            let want = c + f.turned(SIMD2(0, at.z))
             let d = want - SIMD2(px, pz)
             px = want.x; pz = want.y
             feet.pos[0] += d; feet.pos[1] += d

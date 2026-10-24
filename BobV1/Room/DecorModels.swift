@@ -22,8 +22,23 @@ enum DecorModels {
     /// The whole room's decor in one mesh.
     static func build(feet: [DecorFoot], field: DecorField, time: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
-        for f in feet { add(f.kind, at: f.kind.rolls ? field.position(f) : f.centre, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b) }
+        for f in feet {
+            let c = f.kind.rolls ? field.position(f) : f.centre, v0 = b.mesh.vertices.count
+            add(f.kind, at: c, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b)
+            if f.quarter != 0 { turnVertices(&b.mesh, from: v0, about: c, yaw: f.yaw) }
+        }
         return b.mesh
+    }
+
+    /// Turns the vertices added since `from` about the vertical through `c` (a placed piece's quarter turns; positions and normals).
+    static func turnVertices(_ m: inout RoomMesh, from: Int, about c: SIMD2<Float>, yaw: Float) {
+        let sn = sinf(yaw), cs = cosf(yaw)
+        for i in from..<m.vertices.count {
+            let p = m.vertices[i].pos, n = m.vertices[i].normal
+            let dx = p.x - c.x, dz = p.z - c.y
+            m.vertices[i].pos = SIMD4(c.x + dx * cs + dz * sn, p.y, c.y - dx * sn + dz * cs, p.w)
+            m.vertices[i].normal = SIMD4(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs, n.w)
+        }
     }
 
     /// One piece at the origin, resting (thumbnails).
