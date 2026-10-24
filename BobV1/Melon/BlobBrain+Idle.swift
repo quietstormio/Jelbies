@@ -122,9 +122,11 @@ enum IdleTable {
     static func set(_ m: IdleMood) -> Set<IdleKind> { Set(weights(m).map { $0.kind }.filter { $0 != .wander }) }
     /// Weighted pick, never `last`. `r` in 0..<1.
     static func pick(_ m: IdleMood, last: IdleKind?, r: Float, night: Float = 0, morning: Float = 0, sleep: Bool = false, antics: Bool = false, music: Bool = false,
-                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = []) -> IdleKind {
+                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = [], scale: ((IdleKind) -> Float)? = nil, family: VarietyFamily? = nil) -> IdleKind {
         // never the same special twice in a row (unless the mood has only one), and none that is still on its own cooldown
         var w = weights(m, night: night, morning: morning, sleep: sleep, antics: antics, music: music, anticMul: anticMul, decor: decor).filter { $0.kind != last || $0.kind == .wander || set(m).count < 2 }
+        if let family { let f = w.filter { BlobBrain.varietyFamily($0.kind) == family }; if !f.isEmpty { w = f } }          // (the shuffle-bag's family, when the table has one)
+        if let scale { for i in w.indices { w[i].weight *= scale(w[i].kind) } }
         if !cooling.isEmpty { let f = w.filter { !cooling.contains($0.kind) }; if !f.isEmpty { w = f } }
         if !recent.isEmpty { let f = w.filter { $0.kind == .wander || !recent.contains($0.kind) }; if f.contains(where: { $0.kind != .wander }) { w = f } }          // (his own last three picks stay out while there is anything else)
         let total = w.reduce(0) { $0 + $1.weight }
@@ -231,11 +233,19 @@ extension BlobBrain {
             }
         }
         guard idleState.cooldown <= 0 else { return false }
+        let decorOffers: Set<IdleKind> = anticsEnabled && !sleepLocked ? Self.decorOffers() : []
+        var vFamily: VarietyFamily?
+        if anticsEnabled, runMoveDemo == nil, let f = varietyDrawFamily(decorOffered: !decorOffers.isEmpty) {
+            if f == .social { variety.socialUntil = variety.now + VarietyTuning.socialBoostFor; idleState.cooldown = rand(2, 4) * vJit(); return false }          // (the bag's turn for company: a plain wander, and the social roll is boosted for a while)
+            vFamily = f
+        }
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
                                                  cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
-                                                 decor: anticsEnabled && !sleepLocked ? Self.decorOffers() : [], recent: anticsEnabled ? Set(idleState.recent) : [])
+                                                 decor: decorOffers, recent: anticsEnabled ? Set(idleState.recent) : [],
+                                                 scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily)
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
-        if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively; return false }          // (was 5...9)
+        if varietyPeerJustStarted(kind) { kind = .wander }          // (never two of the same special within 10 s)
+        if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively * vJit(); return false }          // (was 5...9)
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
         if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once
         let started = idleStart(kind, sim)
@@ -254,6 +264,7 @@ extension BlobBrain {
 
     /// Every tick before the gait: counts the cooldown, yields to anything else, notices the end of a run.
     func idleGate(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        varietyTick(dt)
         if !kindCool.isEmpty { for k in Array(kindCool.keys) { let v = kindCool[k]! - dt; if v <= 0 { kindCool[k] = nil } else { kindCool[k] = v } } }
         if !idleState.echo.isEmpty { for k in Array(idleState.echo.keys) { let v = idleState.echo[k]! - dt; if v <= 0 { idleState.echo[k] = nil } else { idleState.echo[k] = v } } }
         let boostWant: Float = (runW == 0 && zoomW == 0 && idleState.kind == nil && !hurry) ? Self.walkBoost : 1
@@ -356,7 +367,7 @@ extension BlobBrain {
             let flourish = Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
-            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 4 : 6) * idleLively, rand(11, 22) * idleLively - idleState.t) }
+            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 4 : 6) * idleLively, rand(11, 22) * idleLively * vJit() - idleState.t) }
         }
         if idleState.kind == .rollTrip { gait.rollTravel = 1.1 }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
@@ -408,6 +419,7 @@ extension BlobBrain {
     // MARK: starting
 
     func idleBegin(_ kind: IdleKind) {
+        varietyNote(kind)
         idleState.kind = kind; walkBoostK = 1
         idleState.t = 0; idleState.phase = 0; idleState.phaseT = 0; idleState.k = 0; idleState.yielding = false; idleState.yieldT = 0
         idleState.steps = 0; idleState.stumbleAt = 0; flopKicks = 0; idleState.resume = nil; idleState.reaction = nil

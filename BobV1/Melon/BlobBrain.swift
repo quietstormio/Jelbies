@@ -150,6 +150,8 @@ final class BlobBrain {
     var musicPlaying = false
     /// Per-behaviour cooldowns (seconds left): the same antic does not come round again at once.
     var kindCool: [IdleKind: Float] = [:]
+    /// The variety layer's memory (BlobBrain+Variety.swift).
+    var variety = VarietyBook()
     var flopKicks = 0
     var sleep = SleepState()
     /// Seconds until he may again decide to go and snuggle beside a sleeper (BlobBrain+Sleep.swift).
@@ -836,7 +838,7 @@ final class BlobBrain {
 
     func finishScript(_ sim: SoftBody, after served: Bool) {
         script = .none
-        restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
+        restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
