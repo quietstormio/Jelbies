@@ -91,7 +91,18 @@ extension BlobBrain {
     }
 
     /// The spot to stand at for a piece, or nil when there is none he can reach.
+    /// The stand spot clamped onto walkable floor (depth walkMinZ...walkMaxZ, on-screen x); nil when the piece sits so far out that the clamp moves it far (the piece is skipped in decor play).
     func decorStand(_ kind: IdleKind, _ f: DecorFoot, from here: SIMD2<Float>, seat: Int = 0) -> SIMD2<Float>? {
+        guard let p = decorStandRaw(kind, f, from: here, seat: seat) else { return nil }
+        let z = min(max(p.y, GameCamera.walkMinZ + 0.1), GameCamera.walkMaxZ - 0.1)
+        let hw = max(0, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.2)
+        let q = SIMD2(min(max(p.x, -hw), hw), z)
+        if q == p { return p }
+        guard simd_distance(p, q) < 1.2 else { return nil }
+        let r = fixed(q)
+        return simd_distance(q, r) < 0.1 && peerFree(r) ? r : nil
+    }
+    private func decorStandRaw(_ kind: IdleKind, _ f: DecorFoot, from here: SIMD2<Float>, seat: Int = 0) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         switch kind {
         case .decorSit where f.kind.hopSit && f.kind != .beanbag:
@@ -209,11 +220,11 @@ extension BlobBrain {
         case .decorSlide: slideArrived(sim, skinner, f)
         case .soccerKick: soccerArrived(sim, skinner, f)
         case .decorBoop:
-            idleState.hold = 2.6
+            idleState.hold = vDur(2.6)
             let d = c - position
             idleState.goalYaw = atan2f(d.x, d.y)
         case .decorPeek:
-            idleState.hold = 3.4
+            idleState.hold = vDur(3.4)
             let d = c - position
             idleState.goalYaw = atan2f(d.x, d.y)
         case .decorHop:
@@ -462,7 +473,10 @@ extension BlobBrain {
             if idleState.phase == 2, let o = cuddlePartner(f) { want = o.sign }
             idleState.cuddle += (abs(want) - idleState.cuddle) * 0.06
             if idleState.cuddle > 0.001 {
-                let sgn: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1       // toward the middle
+                // toward the middle: the piece's side turned by its quarter, read against the way he faces (the lean is about his own axis)
+                let localSide: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1
+                let mid = f.turned(SIMD2<Float>(localSide, 0))
+                let sgn: Float = (mid.x * cosf(yaw) - mid.y * sinf(yaw)) >= 0 ? 1 : -1
                 roll += -sgn * 0.12 * idleState.cuddle
                 let want = f.turned(SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0))
                 let d = want - idleState.seatShift

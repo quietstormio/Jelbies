@@ -297,7 +297,7 @@ extension BlobBrain {
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
-        var c = bed.map { b in (spot: b.foot.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
+        var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
         if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
         guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
@@ -393,7 +393,7 @@ extension BlobBrain {
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if !turning && !feet.active && sleep.t > 0.1, let f = DecorField.shared.foot(sleep.bed) {
                 sleep.bedHop = 2; sleep.t = 0
-                bagHop(sim, to: f.centre + SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z), ground: DecorModels.bedFloor(DecorField.shared.anim[f.uid] ?? DecorAnim(), lift: f.lift), apex: 0.42)
+                bagHop(sim, to: f.centre + f.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), ground: DecorModels.bedFloor(DecorField.shared.anim[f.uid] ?? DecorAnim(), lift: f.lift), apex: 0.42)
             }
             return
         }
@@ -569,8 +569,8 @@ extension BlobBrain {
 extension BlobBrain {
     /// Spots round the bed (front first, then the sides and the back) a hop from its mattress: 0.4 beyond the rim.
     func bedStandSpots(_ f: DecorFoot) -> [SIMD2<Float>] {
-        let r = f.spec.half.y + 0.4
-        return [Float(0), 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4, .pi].map { f.centre + SIMD2(sinf($0), cosf($0)) * r }
+        let r = f.kind.spec.half.y + 0.4          // (piece-local, then turned by its quarter: the "front" of a turned bed is its own front)
+        return [Float(0), 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4, .pi].map { f.centre + f.turned(SIMD2(sinf($0), cosf($0)) * r) }
     }
     /// A pet bed nobody uses, with a spot round it he can stand on to hop over the rim.
     func freeBed() -> (foot: DecorFoot, stand: SIMD2<Float>)? {
@@ -592,7 +592,7 @@ extension BlobBrain {
             let q = fixed(p)
             if simd_distance(p, q) < 0.06, peerFree(q) { return p }
         }
-        return f.centre + SIMD2(0, f.spec.half.y + 0.4)
+        return f.centre + f.turned(SIMD2(0, f.kind.spec.half.y + 0.4))
     }
 
     /// The two hops over the rim own the body (like the beanbag's): true = this step is handled.
