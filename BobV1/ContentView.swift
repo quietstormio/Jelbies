@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var flow = StartFlow.shared
     @State private var studioModel = ContentView.makeStudioModel()
+    @State private var introOn = IntroGate.shouldShow()
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
     var body: some View {
@@ -17,18 +18,24 @@ struct ContentView: View {
             }
         } else {
             ZStack {
-                switch flow.phase {
-                case .menu: MainMenuView(flow: flow)
-                case .wiping: SK.cream.ignoresSafeArea()
-                case .adopt(let mode):
-                    AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { flow.cancelAdoption() })
-                case .game: GameHost(session: flow.session)
-                }
+                if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
+                    IntroView { withAnimation(.easeInOut(duration: 0.6)) { introOn = false } }.transition(.opacity).zIndex(1)
+                } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
             }
             .onAppear { OrientationForce.apply() }
             .overlay { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) }
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
+        }
+    }
+
+    @ViewBuilder private var phaseView: some View {
+        switch flow.phase {
+        case .menu: MainMenuView(flow: flow)
+        case .wiping: SK.cream.ignoresSafeArea()
+        case .adopt(let mode):
+            AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { flow.cancelAdoption() })
+        case .game: GameHost(session: flow.session)
         }
     }
 

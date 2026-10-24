@@ -93,7 +93,9 @@ final class StartFlow {
 
     /// Everything the app saved (settings of this app's defaults, the old BobSave.json); the Photos album stays.
     static func wipeAll() {
+        let introSeen = UserDefaults.standard.bool(forKey: IntroGate.seenKey)
         if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
+        if introSeen { IntroGate.markSeen() }          // starting over does not replay the intro
         try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "BobSave.json"))
         JellyRoster.names = JellyRoster.loadNames()
         JellyRoster.current = [0]

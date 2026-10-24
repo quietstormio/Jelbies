@@ -1025,7 +1025,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.showVisible = model.care.show.onStage
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
-                renderer.setHidden((bathRoom && a.id != washed) || model.care.showHides(a.id), body: a.id)
+                renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
         }

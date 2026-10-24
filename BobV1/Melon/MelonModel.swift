@@ -18,6 +18,8 @@ enum MelonStatus: Equatable {
 final class MelonModel {
     /// Game screen (living room, fixed camera) instead of the studio. Fixed for the lifetime of the stage.
     var gameMode: Bool = false
+    /// The main menu's empty room: every Jelly is drawn hidden (the stage still needs one to build).
+    var hideJellies: Bool = false
     /// Care actions of the game screen (feed / water / call); ticked by the stage controller.
     let care: GameCare
     /// Touch play of focus mode (pet / pick up / bounce / cheeks reactions, hearts, haptics). See BlobBrain+Touch.swift.

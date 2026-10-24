@@ -1,7 +1,7 @@
 //
 //  MainMenuView.swift
-//  The title screen on a cold launch: "Jelbies" over a real 3D room with the player's Jelbies (three of the four for a new player).
-//  Continue (with a save), New game / Start (confirmed when it would wipe a save), Photos (once Photo mode registers its album), Settings.
+//  The title screen on a cold launch: the Jelbies logo over the real 3D room (no characters).
+//  Two buttons: New Game (confirmed when it would wipe a save) and Continue (only with a save).
 //
 
 import SwiftUI
@@ -10,14 +10,12 @@ struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
-    @State private var settingsOpen = false
-    @State private var albumOpen = false
     @Environment(\.verticalSizeClass) private var vsc
     private var landscape: Bool { vsc == .compact }
 
     var body: some View {
         ZStack {
-            ShowcaseStage(roster: hasSave ? JellyRoster.launchIDs() : [0, 1, 3])
+            ShowcaseStage(roster: hasSave ? Array(JellyRoster.launchIDs().prefix(1)) : [0], empty: true)
             scrim.ignoresSafeArea().allowsHitTesting(false)
             if landscape {
                 HStack {
@@ -38,13 +36,6 @@ struct MainMenuView: View {
             Button("Start over", role: .destructive) { flow.startOver() }
             Button("Keep playing", role: .cancel) {}
         } message: { Text("Your Jelbies, Drops and items will be gone.") }
-        .sheet(isPresented: $settingsOpen) { MenuSettingsSheet { settingsOpen = false } }
-        .fullScreenCover(isPresented: $albumOpen) {
-            ZStack(alignment: .topTrailing) {
-                StartFlow.albumView?() ?? AnyView(SK.cream)
-                GameCircleButton(systemName: "xmark", label: "Close album") { albumOpen = false }.padding(.trailing, 16).padding(.top, 8)
-            }
-        }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
@@ -62,30 +53,17 @@ struct MainMenuView: View {
     }
 
     private var title: some View {
-        VStack(spacing: 4) {
-            Text("Jelbies").font(.system(size: landscape ? 56 : 68, weight: .heavy, design: .rounded)).foregroundStyle(SK.cream)
-                .shadow(color: SK.ink.opacity(0.65), radius: 5, y: 3)
-                .accessibilityAddTraits(.isHeader)
-            Text("baby jellies, come play").font(SK.font(17, .bold)).foregroundStyle(SK.cream).shadow(color: SK.ink.opacity(0.6), radius: 3, y: 1)
-        }
+        Image("JelbiesLogo").resizable().scaledToFit()
+            .frame(maxWidth: landscape ? 420 : 340)
+            .shadow(color: SK.ink.opacity(0.25), radius: 6, y: 3)
+            .accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
     private var buttons: some View {
-        VStack(spacing: 10) {
-            if hasSave {
-                big("Continue", id: "menu-continue") { flow.continueGame() }
-                HStack(spacing: 10) {
-                    small("New game", "plus", id: "menu-new") { confirmNew = true }
-                    if StartFlow.albumView != nil { small("Photos", "photo.on.rectangle", id: "menu-photos") { albumOpen = true } }
-                    small("Settings", "gearshape", id: "menu-settings") { settingsOpen = true }
-                }
-            } else {
-                big("Start", id: "menu-start") { flow.startOver() }
-                HStack(spacing: 10) {
-                    if StartFlow.albumView != nil { small("Photos", "photo.on.rectangle", id: "menu-photos") { albumOpen = true } }
-                    small("Settings", "gearshape", id: "menu-settings") { settingsOpen = true }
-                }
-            }
+        VStack(spacing: 12) {
+            if hasSave { big("Continue", id: "menu-continue") { flow.continueGame() } }
+            if hasSave { big("New Game", id: "menu-new") { confirmNew = true } }
+            else { big("New Game", id: "menu-start") { flow.startOver() } }
         }
     }
 
@@ -96,39 +74,5 @@ struct MainMenuView: View {
                 .overlay(Capsule().strokeBorder(SK.honeyDeep, lineWidth: 2.5))
         }
         .buttonStyle(.plain).accessibilityIdentifier(id)
-    }
-
-    private func small(_ t: String, _ symbol: String, id: String, _ a: @escaping () -> Void) -> some View {
-        Button { AudioHub.shared.uiTap(); a() } label: {
-            HStack(spacing: 5) {
-                Image(systemName: symbol).font(.system(size: 14, weight: .heavy))
-                Text(t).font(SK.font(15, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48)
-            .background(Capsule().fill(Color.white.opacity(0.9)).shadow(color: SK.shadow.opacity(0.2), radius: 4, y: 2))
-        }
-        .buttonStyle(.plain).accessibilityIdentifier(id)
-    }
-}
-
-/// Menu Settings: the sound panel and the Accessibility sheet.
-private struct MenuSettingsSheet: View {
-    var close: () -> Void
-    @State private var a11yOpen = false
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                SoundSettingsPanel(hub: AudioHub.shared) { close() }
-                Button { a11yOpen = true } label: {
-                    HStack { Image(systemName: "accessibility"); Text("Accessibility").font(SK.font(17, .heavy)); Spacer(); Image(systemName: "chevron.right") }
-                        .foregroundStyle(SK.ink).padding(14).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white.opacity(0.85)))
-                }
-                .buttonStyle(.plain).accessibilityIdentifier("menu-accessibility")
-            }
-            .padding(16)
-        }
-        .background(SK.cream.ignoresSafeArea())
-        .presentationDetents([.large])
-        .sheet(isPresented: $a11yOpen) { AccessibilitySettingsView { a11yOpen = false }.presentationBackground(SK.cream) }
     }
 }

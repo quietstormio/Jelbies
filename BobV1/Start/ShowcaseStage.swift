@@ -1,7 +1,7 @@
 //
 //  ShowcaseStage.swift
 //  A real 3D room with the given characters in it (the same MelonStage the game uses), for the main menu and the Adoption Center.
-//  `focusFirst` brings the first one to the camera close-up ("come here"), so the Adoption Center shows one Jelbie large.
+//  `empty` shows the room alone (the main menu). `focusFirst` brings the first one to the camera close-up ("come here"), so the Adoption Center shows one Jelbie large.
 //
 
 import SwiftUI
@@ -9,6 +9,8 @@ import SwiftUI
 struct ShowcaseStage: View {
     let roster: [Int]
     var focusFirst = false
+    /// The room with nobody in it (the main menu): the one Jelly the stage needs is drawn hidden.
+    var empty = false
     @State private var model: MelonModel?
 
     var body: some View {
@@ -29,6 +31,7 @@ struct ShowcaseStage: View {
         DayClock.shared.snapToNow()
         let m = GameScreen.makeGameModel(jellyCount: roster.count)
         m.care.touchPlay = m.touch
+        m.hideJellies = empty
         model = m
         guard focusFirst else { return }
         Task { @MainActor in
