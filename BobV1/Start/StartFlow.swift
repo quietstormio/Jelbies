@@ -54,6 +54,9 @@ final class StartFlow {
     /// Menu: Continue. The roster is the saved one.
     func continueGame() { enterGame() }
 
+    /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
+    func returnToMenu() { if phase == .game { phase = .menu } }
+
     /// Menu: New game / Start. Clears the screen first (so the room stops writing), wipes, then the Adoption Center.
     func startOver() {
         phase = .wiping

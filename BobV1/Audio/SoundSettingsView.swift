@@ -14,12 +14,12 @@ struct SoundSettingsPanel: View {
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side (~400 pt tall): a tighter layout
     private var tight: Bool { vsc == .compact }
 
-    private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
+    private let ink = CloudTheme.ink
 
     var body: some View {
         VStack(alignment: .leading, spacing: tight ? 6 : 12) {
             HStack {
-                Text("Sound").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(ink)
+                Text("Sound").font(CloudTheme.font(20, .bold)).foregroundStyle(ink)
                 Spacer()
                 Button(action: close) {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink).padding(6)
@@ -34,13 +34,13 @@ struct SoundSettingsPanel: View {
         }
         .padding(tight ? 12 : 16)
         .frame(width: tight ? 300 : 270)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(red: 0.97, green: 0.94, blue: 0.88)).shadow(color: .black.opacity(0.2), radius: 10, y: 4))
+        .cloudCard(radius: 24)
         .accessibilityIdentifier("sound-panel")
     }
 
     private var nowPlayingRow: some View {
         let np = nowPlaying ?? hub.nowPlaying
-        let tint = Color(red: 0.43, green: 0.70, blue: 0.82)
+        let tint = CloudTheme.deepJelly
         let symbol: String = {
             switch np.state {
             case .playing: return "waveform"
@@ -86,11 +86,11 @@ struct SoundSettingsPanel: View {
             Toggle(isOn: on) {
                 Label(title, systemImage: symbol).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
             }
-            .tint(Color(red: 0.43, green: 0.70, blue: 0.82))
+            .tint(CloudTheme.deepJelly)
             .controlSize(tight ? .small : .regular)
             .accessibilityIdentifier("sound-\(id)-toggle")
             Slider(value: Binding(get: { Double(volume.wrappedValue) }, set: { volume.wrappedValue = Float($0) }), in: 0...1)
-                .tint(Color(red: 0.43, green: 0.70, blue: 0.82))
+                .tint(CloudTheme.deepJelly)
                 .disabled(!on.wrappedValue)
                 .opacity(on.wrappedValue ? 1 : 0.4)
                 .accessibilityIdentifier("sound-\(id)-volume")

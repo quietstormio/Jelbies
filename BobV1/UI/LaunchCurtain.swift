@@ -1,8 +1,8 @@
 //
 //  LaunchCurtain.swift
 //  The short loading screen on a cold launch (and when the player comes back at night to Jelbies who are already asleep).
-//  It reads the real clock, waits for the room to build and settle under it, then fades away into the room. Brand look, one title and three
-//  bouncing jelly dots; no thought lines. Works in landscape (everything is centred and scales with the short side).
+//  It reads the real clock, waits for the room to build and settle under it, then fades away into the room. Cloud Jelly look: the logo wobbling over white and
+//  three hopping dots; no thought lines. Works in landscape (everything is centred and scales with the short side).
 //
 
 import SwiftUI
@@ -88,58 +88,44 @@ struct LaunchCurtain: View {
     }
 }
 
-/// The picture itself (also rendered by the captures).
+/// The picture itself (also rendered by the captures). Cloud Jelly: white sky, drifting Mist circles, the real logo wobbling like jelly,
+/// three hopping Jelly-blue dots and a small caption. (`hour` is kept for the captures' signature; the look no longer depends on the time of day.)
 struct LaunchCurtainArt: View {
     let hour: Double
     var bounce: Bool
 
+    private struct Wobble { var x: CGFloat = 1; var y: CGFloat = 1 }
+
     var body: some View {
-        let phase = DayPhase.of(hour: hour)
-        let night = phase == .night
-        let light = DayLight.at(hour: hour)
         GeometryReader { geo in
             let u = min(geo.size.width, geo.size.height) / 440
+            let logoW = min(geo.size.width * 0.8, 360 * max(u, 0.8))
             ZStack {
-                LinearGradient(colors: [top(light, night), bottom(light, night)], startPoint: .top, endPoint: .bottom)
-                if light.sky0.w > 0.3 || night { stars(geo.size).opacity(night ? 1 : Double(light.sky0.w)) }
-                VStack(spacing: 14 * u) {
-                    Image(systemName: glyph(phase)).font(.system(size: 34 * u, weight: .bold))
-                        .foregroundStyle(night ? SK.honey : SK.honeyDeep)
-                    Text("Jelbies").font(.system(size: 54 * u, weight: .heavy, design: .rounded)).foregroundStyle(night ? SK.cream : SK.ink)
-                    HStack(spacing: 14 * u) {
-                        dot(Color(hex: 0x6EB3D1), 0, u)
-                        dot(SK.honey, 1, u)
-                        dot(SK.mint, 2, u)
-                    }.padding(.top, 8 * u)
+                CloudSky()
+                VStack(spacing: 18 * u) {
+                    logo(width: logoW)
+                    HStack(spacing: 12 * u) { ForEach(0..<3, id: \.self) { dot($0, u) } }.padding(.top, 4 * u)
+                    Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(CloudTheme.caption)
                 }
                 .position(x: geo.size.width / 2, y: geo.size.height / 2)
             }
         }
     }
 
-    private func glyph(_ p: DayPhase) -> String {
-        switch p { case .morning, .day: return "sun.max.fill"; case .evening: return "sunset.fill"; case .night: return "moon.stars.fill" }
+    @ViewBuilder private func logo(width: CGFloat) -> some View {
+        let img = Image("JelbiesLogo").resizable().scaledToFit().frame(width: width)
+        if bounce {
+            img.keyframeAnimator(initialValue: Wobble(), repeating: true) { v, w in v.scaleEffect(x: w.x, y: w.y, anchor: .bottom) } keyframes: { _ in
+                KeyframeTrack(\.x) { CubicKeyframe(1.06, duration: 0.32); CubicKeyframe(0.96, duration: 0.32); CubicKeyframe(1.02, duration: 0.32); CubicKeyframe(1, duration: 0.32); CubicKeyframe(1, duration: 0.5) }
+                KeyframeTrack(\.y) { CubicKeyframe(0.92, duration: 0.32); CubicKeyframe(1.05, duration: 0.32); CubicKeyframe(0.98, duration: 0.32); CubicKeyframe(1, duration: 0.32); CubicKeyframe(1, duration: 0.5) }
+            }
+        } else { img }
     }
-    // (DayLight's window sky is black by day, so the daytime backdrops are fixed brand tints per phase; night is the deep navy.)
-    private func top(_ l: DayLight, _ night: Bool) -> Color {
-        if night { return Color(hex: 0x1E2440) }
-        switch DayPhase.of(hour: hour) { case .morning: return Color(hex: 0xFFE6C9); case .day: return Color(hex: 0xCFE8F3); case .evening: return Color(hex: 0xF7B98B); case .night: return Color(hex: 0x1E2440) }
-    }
-    private func bottom(_ l: DayLight, _ night: Bool) -> Color {
-        if night { return Color(hex: 0x3A3F6B) }
-        switch DayPhase.of(hour: hour) { case .morning: return SK.cream; case .day: return SK.cream; case .evening: return Color(hex: 0xF3D9B8); case .night: return Color(hex: 0x3A3F6B) }
-    }
-    private func dot(_ c: Color, _ i: Int, _ u: CGFloat) -> some View {
-        Capsule().fill(c).frame(width: 26 * u, height: 26 * u)
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-            .scaleEffect(x: bounce ? 1.12 : 0.92, y: bounce ? 0.86 : 1.1, anchor: .bottom)
-            .offset(y: bounce ? 0 : -10 * u)
-            .animation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true).delay(Double(i) * 0.12), value: bounce)
-    }
-    private func stars(_ s: CGSize) -> some View {
-        Canvas { ctx, size in
-            let pts: [(CGFloat, CGFloat, CGFloat)] = [(0.12, 0.10, 2.2), (0.30, 0.22, 1.6), (0.52, 0.08, 2.0), (0.74, 0.18, 2.4), (0.90, 0.09, 1.6), (0.20, 0.36, 1.4), (0.64, 0.30, 1.8), (0.86, 0.34, 1.4), (0.40, 0.14, 1.4), (0.08, 0.28, 1.8)]
-            for p in pts { ctx.fill(Path(ellipseIn: CGRect(x: p.0 * size.width, y: p.1 * size.height, width: p.2 * 2, height: p.2 * 2)), with: .color(.white.opacity(0.85))) }
-        }
+
+    private func dot(_ i: Int, _ u: CGFloat) -> some View {
+        Circle().fill(CloudTheme.jelly).frame(width: 13 * u + 4, height: 13 * u + 4)
+            .scaleEffect(x: bounce ? 0.92 : 1.1, y: bounce ? 1.08 : 0.9, anchor: .bottom)
+            .offset(y: bounce ? -10 * u : 0)
+            .animation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(Double(i) * 0.15), value: bounce)
     }
 }
