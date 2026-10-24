@@ -1,6 +1,6 @@
 //
 //  HUDUITests.swift
-//  The one main control: group controls (nobody highlighted), individual controls (a Jelbie highlighted), Go out as a menu. Portrait and landscape.
+//  The one main control: group controls (nobody highlighted), individual controls (a Jelbie highlighted), Go out opens the Town. Portrait and landscape.
 //  HUD_TAP_P / HUD_TAP_L = "x,y" as fractions of the screen (TEST_RUNNER_HUD_TAP_P ...): where a Jelbie stands. HUD_FLOOR_P / HUD_FLOOR_L: empty floor.
 //  Without them the test only checks the group menu and Go out. Screenshots go to HUD_OUT (default /tmp/hud_ui).
 //
@@ -60,10 +60,15 @@ final class HUDUITests: XCTestCase {
                 }
             }
             app.buttons["go-out"].tap()
-            XCTAssertTrue(app.buttons["goout-track"].waitForExistence(timeout: 5) && app.buttons["goout-store"].exists, "Go out menu (\(name))")
-            XCTAssertTrue(app.buttons["goout-cafe"].exists, "the café row is in the Go out menu")
-            save("\(name)_5_goout")
-            app.buttons["go-out"].tap()
+            XCTAssertTrue(app.otherElements["town-screen"].waitForExistence(timeout: 8), "Go out opens the Town (\(name))")
+            for id in ["town-shop", "town-track", "town-studio", "town-cafe"] { XCTAssertTrue(app.buttons[id].exists, "\(id) is a Town destination (\(name))") }
+            save("\(name)_5_town")
+            app.buttons["town-track"].tap()                       // Track, then back, returns to the Town
+            sleep(2)
+            app.buttons["track-back"].tap()
+            XCTAssertTrue(app.buttons["town-cafe"].waitForExistence(timeout: 5), "back from the Track lands on the Town (\(name))")
+            app.buttons["town-home"].tap()
+            XCTAssertTrue(app.buttons["go-out"].waitForExistence(timeout: 5), "Home returns to the room (\(name))")
         }
         app.terminate()
     }
