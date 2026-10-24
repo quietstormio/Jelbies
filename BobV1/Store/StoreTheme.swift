@@ -46,7 +46,7 @@ struct DropsPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "drop.fill").font(.system(size: 15, weight: .black)).foregroundStyle(dark ? SK.honey : SK.sky)
-            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit()
+            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
         .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
