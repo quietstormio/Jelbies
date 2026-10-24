@@ -183,6 +183,7 @@ struct WardrobeStrip: View {
                 HStack(spacing: 8) {
                     ForEach(list, id: \.rawValue) { look in
                         let worn = care.store.worn(who, look.slot) == look
+                        let other = worn ? nil : care.store.wearer(look, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }
                         let m = theme.match(look.tags)
                         Button {
                             AudioHub.shared.play(.shoeOn)
@@ -193,7 +194,7 @@ struct WardrobeStrip: View {
                                 if let item = StoreCatalog.item(wearing: look) { ItemArt(item: item, size: 34) } else { Image(systemName: look.slot.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink) }
                                 Text(look.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
                                 if let t = look.tags.first(where: { $0 == theme.main }) ?? look.tags.first(where: { $0 == theme.friend }) ?? look.tags.first { TagChip(tag: t, size: 10) }
-                                Text(worn ? "Wearing" : look.slot.title).font(SK.font(10, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted)
+                                Text(worn ? "Wearing" : other.map { "On \($0)" } ?? look.slot.title).font(SK.font(10, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).jLine(1, scale: 0.7)
                             }
                             .padding(.horizontal, 4).frame(width: 78, height: 102)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(worn ? ShowUI.gold.opacity(0.35) : .white))
@@ -201,7 +202,7 @@ struct WardrobeStrip: View {
                             .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.9 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 8 : 5)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(look.title), \(look.tags.map(\.title).joined(separator: " ")), \(worn ? "worn" : "not worn")")
+                        .accessibilityLabel("\(look.title), \(look.tags.map(\.title).joined(separator: " ")), \(worn ? "worn" : "not worn")\(other.map { ", worn by \($0)" } ?? "")")
                         .accessibilityIdentifier("wardrobe-\(look.rawValue)")
                     }
                 }

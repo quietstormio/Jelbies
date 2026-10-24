@@ -559,7 +559,7 @@ struct BagSheet: View {
             ItemArt(item: item, size: 64)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+                if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : book.wearer(w, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }.map { "Worn by \($0)" } ?? "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
                 else if item.kind == .decor {
                     let placed = book.placedCount(item.id)
                     Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)

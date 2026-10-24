@@ -174,6 +174,10 @@ final class StoreBook {
         if let f = fitting, f.jelly == jelly, f.look.slot == slot { return f.look }
         return saved.worn[wornKey(jelly)]?[slot.rawValue].flatMap(WearLook.init(rawValue:))
     }
+    /// The room slot whose SAVED outfit has this look on (not the fitting try-on), if any.
+    func wearer(_ look: WearLook, among count: Int = 3) -> Int? {
+        (0..<count).first { saved.worn[wornKey($0)]?[look.slot.rawValue] == look.rawValue }
+    }
     /// Puts a look on a Jelly (must be owned). Replaces whatever he wore in that slot.
     @discardableResult
     func wear(_ look: WearLook, on jelly: Int) -> Bool {
