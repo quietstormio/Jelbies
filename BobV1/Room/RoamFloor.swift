@@ -187,6 +187,7 @@ extension GameCamera {
             zs.append(z); hw.append(h); free.append(spans.filter { $0.upperBound - $0.lowerBound > 0.1 })
             z += RoamFloor.step
         }
+        if let cap = parkRoamMaxZ { while zs.count > 2, let l = zs.last, l > cap + 1e-4 { zs.removeLast(); hw.removeLast(); free.removeLast() } }          // the park: a shorter play zone (Park/ParkRoom.swift)
         let f = RoamFloor(aspect: aspect, minZ: minZ, maxZ: zs.last ?? maxZ, zs: zs, hw: hw, free: free)
         roamFloor = f
         RoomLayout.setFront(z: f.maxZ + 0.8)

@@ -24,7 +24,7 @@ struct DecorDrawn {
 extension GameCare {
     /// The placed pieces reach the field (and so the walk resolver and the Jellies) the moment the store changes.
     func syncDecor() {
-        let hide = cafe.hidesDecor          // in the café the room's furniture is away (it is not that room)
+        let hide = cafe.hidesDecor || park.hidesDecor          // in the café (or the park) the room's furniture is away (it is not that room)
         let pv = dragPreview
         if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID {
             decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide

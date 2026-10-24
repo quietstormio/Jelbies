@@ -205,6 +205,9 @@ final class BlobBrain {
     /// Character features (Features/, BlobBrain+FlapHop.swift): what grows on him, whether his wings are folded under a back item (then the flap-hop is
     /// a plain hop), the largest flap the worn items allow (deg), and the running flap-hop. The stage / GameCare set the first three.
     var feature: JellyFeature = .none
+    /// A park visitor behaves like a starter (energetic = Pip, calm = Moss, playful = Lavender) whatever he grows; nil = by `feature`.
+    var personalityOverride: JellyFeature?
+    var personalityKey: JellyFeature { personalityOverride ?? feature }
     var wingsFolded = false
     var wingFlapLimit: Float = 75
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.

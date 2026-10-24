@@ -39,7 +39,7 @@ extension GameCare {
         for a in actors {
             guard let b = a.brain else { continue }
             var role = wearRole(for: a.id)
-            var hide = bath.active
+            var hide = bath.active || parkHides(a.id)          // (the wash, or at home while the park is on)
             if race.active, raceBook.parked.contains(a.id) { hide = true; role = .none }
             if showHidesWear(a.id) { hide = true; role = .none }          // the show: rival bodies and the parked wear nothing of ours
             let worn = outfit(a.id)

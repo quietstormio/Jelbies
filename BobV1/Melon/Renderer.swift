@@ -144,6 +144,21 @@ final class MelonRenderer {
     /// One entry per Jelly drawn (1 unless the game asked for more): own vertex stream, uniforms (palette, mouth), bath parameters.
     private(set) var slots: [BodySlot] = []
     var bodyCount: Int { slots.count }
+    /// The static stream every body starts from (the park adds bodies after launch: Park/MelonController+Park.swift).
+    private var baseStatic: [Float] = []
+    /// Grows the GPU slots to `n` bodies (never shrinks; extra ones start hidden). False when a buffer could not be made.
+    @discardableResult
+    func ensureBodies(_ n: Int) -> Bool {
+        while slots.count < n {
+            guard let slot = BodySlot(device: device, vertexCount: vertexCount, staticData: baseStatic, label: " \(slots.count)") else { return false }
+            slot.ring = slots[0].ring
+            slot.hidden = true
+            slots.append(slot)
+        }
+        return true
+    }
+    /// The park is on: its far camera wants the haze pushed out.
+    var parkVisible = false
     func dynPointer(body i: Int) -> UnsafeMutablePointer<Float> { waitIfNeeded(); return slots[i].dynPointer }
 
     private let mesh: RenderMesh
@@ -326,6 +341,7 @@ final class MelonRenderer {
             made.append(slot)
         }
         slots = made
+        baseStatic = st
 
         // ── fixed textures ──
         func depthMap(_ size: Int, _ label: String) -> MTLTexture? {
@@ -950,7 +966,7 @@ final class MelonRenderer {
             room.raceCourse = raceCourse
             room.raceVisible = raceVisible
             room.showVisible = showVisible
-            room.fog = raceVisible ? SIMD3(45, 150, 0.5) : SIMD3(14, 32, 0.3)
+            room.fog = raceVisible ? SIMD3(45, 150, 0.5) : parkVisible ? SIMD3(34, 90, 0.3) : SIMD3(14, 32, 0.3)
             let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
             room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)
             room.props = (Self.showQuilt && tuckQ > 0.05) ? quiltProps(tuckQ) : []

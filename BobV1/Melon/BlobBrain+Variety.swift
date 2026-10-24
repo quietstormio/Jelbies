@@ -109,7 +109,7 @@ extension BlobBrain {
             m *= VarietyTuning.floor + (1 - VarietyTuning.floor) * min(1, max(0, (variety.now - t) / T))
         }
         if variety.lastFamily == Self.varietyFamily(k) { m *= VarietyTuning.familyRepeat }
-        if let p = VarietyTuning.personality[feature] { for (s, x) in p.idle where s.contains(k) { m *= x } }
+        if let p = VarietyTuning.personality[personalityKey] { for (s, x) in p.idle where s.contains(k) { m *= x } }
         for o in variedPeers where k != .look {
             if o.idleState.kind == k { m *= VarietyTuning.syncMul; continue }
             if let t = o.variety.last[k] {
@@ -145,7 +145,7 @@ extension BlobBrain {
     /// The social pick's chance multiplier (personality, the bag's turn, and a recovery since the last session of any kind).
     var varietySocialMul: Float {
         guard anticsEnabled else { return 1 }
-        var m = VarietyTuning.personality[feature]?.socialChance ?? 1
+        var m = VarietyTuning.personality[personalityKey]?.socialChance ?? 1
         if variety.now < variety.socialUntil { m *= VarietyTuning.socialBoost }
         else { m *= 0.35 + 0.65 * min(1, (variety.now - variety.lastSocialAny) / VarietyTuning.socialRecover) }
         return m
@@ -153,7 +153,7 @@ extension BlobBrain {
     /// Social kinds: personality and recovery (own and the partner's).
     func varietyScaleSocial(_ w: inout [(SocialKind, Float)], partner o: BlobBrain) {
         guard anticsEnabled else { return }
-        let p = VarietyTuning.personality[feature]
+        let p = VarietyTuning.personality[personalityKey]
         for i in w.indices {
             let k = w[i].0
             var m: Float = 1

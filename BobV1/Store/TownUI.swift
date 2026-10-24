@@ -86,13 +86,15 @@ struct TownFlow: View {
     var goHome: () -> Void
     /// The Café: closes the Town and starts the café trip (the trip itself starts in the game, not on a Town screen).
     var cafe: () -> Void = {}
+    /// The Park: closes the Town and opens the picker of who comes along (Park/ParkChrome.swift).
+    var park: () -> Void = {}
     /// The Adoption Center: leaves the room for the adoption screen (StartFlow).
     var adopt: () -> Void = { StartFlow.shared.openAdoption() }
     /// The screen the flow opened on: its back button leaves the flow (the Go out button opens the Town, so Track / Store go back to it).
     @State private var root: TownScreen
 
-    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
-        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe
+    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
+        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park
         self._root = State(initialValue: screen.wrappedValue ?? .town)
     }
     /// Back from the current screen: out of the flow when it is the root, else to `target`.
@@ -100,11 +102,12 @@ struct TownFlow: View {
 
     var currentScreen: TownScreen { screen ?? .town }
     func chooseCafe() { goHome(); cafe() }
+    func choosePark() { goHome(); park() }
 
     var body: some View {
         ZStack {
             switch screen ?? .town {
-            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, adopt: adopt, home: goHome)
+            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, adopt: adopt, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
@@ -146,6 +149,7 @@ struct TownView: View {
     let care: GameCare
     var go: (TownScreen) -> Void
     var cafe: () -> Void = {}
+    var park: () -> Void = {}
     var adopt: () -> Void = {}
     var home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
@@ -193,6 +197,7 @@ struct TownView: View {
             destination("Track", "Race for Drops", "flag.checkered", SK.sky, id: "town-track") { go(.track) }
             destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
             destination("Café", "Treats out with the gang", "cup.and.saucer.fill", SK.mint, id: "town-cafe") { cafe() }
+            destination("Park", "Play and make friends with visitors", "tree.fill", SK.sky, id: "town-park") { park() }
             destination("Adoption Center", JellyRoster.savedIDs().count >= JellyRoster.maxCount ? "Your room is full: 3 Jelbies" : "Welcome another Jelbie home", "heart.fill", SK.pink, id: "town-adopt") { adopt() }
         }
     }

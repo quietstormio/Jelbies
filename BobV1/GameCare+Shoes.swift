@@ -32,6 +32,7 @@ extension GameCare {
         if race.active, a.id != race.playerID { return nil }
         if show.active, a.id != show.playerID { return nil }          // a borrowed rival body on the stage is somebody else's Jelbie: no shoes of ours
         if bath.active, bath.targetID == a.id { return nil }
+        if parkHides(a.id) { return nil }          // at home while the park is on
         return store.worn(a.id, .feet)
     }
 

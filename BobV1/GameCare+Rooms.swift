@@ -89,7 +89,7 @@ extension GameCare {
 
     /// At launch (GameCare.init): the saved room is the one the collision, roam floor and renderer use. `-Room loft` (capture aid) moves in at once.
     func applySavedRoom() {
-        if let s = UserDefaults.standard.string(forKey: "Room"), let id = RoomID(rawValue: s), id != .cafe {
+        if let s = UserDefaults.standard.string(forKey: "Room"), let id = RoomID(rawValue: s), id != .cafe, id != .park {
             if id != .home { store.grant("room-\(id.rawValue)") }
             store.moveIn(id)
         }

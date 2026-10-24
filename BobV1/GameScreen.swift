@@ -218,12 +218,14 @@ struct GameScreen: View {
 
             CafeChrome(care: model.care)          // the café outing: the menu card, Head home, the white fade
 
+            ParkChrome(care: model.care)          // the park outing: the picker, the visitors' cards, Go home, the white fade
+
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -308,6 +310,7 @@ struct GameScreen: View {
                 .presentationBackground(FocusStyle.cream)
         }
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
+        .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }

@@ -129,7 +129,10 @@ final class GameCare {
     let cafe = CafeTrip()
     @ObservationIgnored let cafeBook = CafeBook()
     /// A trip is on: the race track, the show stage or the café (the room's care, close-up and roaming wait).
-    var tripActive: Bool { race.active || show.active || cafe.active }
+    /// The park outing (Park/ParkTrip.swift, GameCare+Park.swift): the picker, the trip to the park and back, the visitors.
+    let park = ParkTrip()
+    @ObservationIgnored let parkBook = ParkBook()
+    var tripActive: Bool { race.active || show.active || cafe.active || park.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -244,6 +247,7 @@ final class GameCare {
         wireRace()
         wireShow()
         wireCafe()
+        wirePark()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }
