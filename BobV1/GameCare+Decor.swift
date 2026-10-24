@@ -97,7 +97,7 @@ extension GameCare {
         arrangeWait = (uid, 4)
     }
     /// Every Jelly using or heading to the piece stops and steps off it (the player's hand wins over a Jelly's use).
-    func releaseDecor(_ uid: Int, foot f: DecorField.Foot? = nil) {
+    func releaseDecor(_ uid: Int, foot f: DecorFoot? = nil) {
         guard let f = f ?? DecorField.shared.foot(uid) else { return }
         let c = DecorField.shared.position(f)
         for a in raceBook.actors {
