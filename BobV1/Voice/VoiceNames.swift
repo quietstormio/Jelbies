@@ -126,11 +126,22 @@ final class JellyNames {
         }
     }
 
-    func displayName(_ id: Int) -> String { JellyNameRoster.name(character(id))?.display ?? "Jelbie" }
+    /// The player's name for him (Adoption rename), else the species name.
+    func displayName(_ id: Int) -> String {
+        let c = character(id)
+        return JellyRoster.names.indices.contains(c) ? JellyRoster.names[c] : (JellyNameRoster.name(c)?.display ?? "Jelbie")
+    }
+    /// Adoption-renamed characters: (character, normalised custom name) where it differs from the species name (which still matches as before).
+    private var customNames: [(Int, String)] {
+        JellyRoster.names.enumerated().compactMap { c, raw in
+            let n = VoiceMatcher.normalise(raw)
+            return n.isEmpty || n == JellyRoster.baseNames[c].lowercased() ? nil : (c, n)
+        }
+    }
     func nicknames(for id: Int) -> [String] { nicknames[character(id)] ?? [] }
     /// The words to hand the recogniser: every base name, pet form and nickname.
     var contextualWords: [String] {
-        JellyNameRoster.all.flatMap { [$0.base] + $0.variants.sorted().prefix(6) } + nicknames.values.flatMap { $0 }
+        JellyNameRoster.all.flatMap { [$0.base] + $0.variants.sorted().prefix(6) } + nicknames.values.flatMap { $0 } + customNames.map(\.1)
     }
 
     /// Adds a nickname for `id`. False = rejected (empty, too long, already a name of any Jelly, or the cap was reached).
@@ -167,6 +178,12 @@ final class JellyNames {
 
     /// Best Jelly for one spoken token.
     func match(token t: String) -> NameHit? {
+        if let h = matchOne(token: t) { return h }
+        // plural / possessive of a name ("Bobbys" -> "Bobby")
+        if t.count >= 4, t.hasSuffix("s"), let h = matchOne(token: String(t.dropLast())), h.score >= 0.85 { return NameHit(id: h.id, score: h.score - 0.05, width: 1) }
+        return nil
+    }
+    private func matchOne(token t: String) -> NameHit? {
         guard !t.isEmpty else { return nil }
         var best: NameHit?
         func offer(_ id: Int, _ s: Float, _ w: Int = 1) { if s > (best?.score ?? 0) { best = NameHit(id: id, score: s, width: w) } }
@@ -179,7 +196,9 @@ final class JellyNames {
             if n.nearMisses.contains(t) { offer(id, 0.8); continue }
             if !stop, t.count >= 3, abs(t.count - n.base.count) <= 1, key == JellyNameRoster.phoneticKey(n.base) { offer(id, 0.65) }
         }
-        for (c, list) in nicknames {
+        var books = nicknames
+        for (c, n) in customNames { books[c, default: []].append(n) }
+        for (c, list) in books {
             let id = self.id(ofCharacter: c)
             for nick in list where !nick.contains(" ") {
                 if t == nick { offer(id, 1) }
@@ -194,7 +213,9 @@ final class JellyNames {
     /// Two-word nicknames ("mister bob") against a token pair.
     private func matchPair(_ a: String, _ b: String) -> NameHit? {
         let pair = a + " " + b
-        for (c, list) in nicknames { for nick in list where nick.contains(" ") {
+        var books = nicknames
+        for (c, n) in customNames { books[c, default: []].append(n) }
+        for (c, list) in books { for nick in list where nick.contains(" ") {
             if pair == nick || VoiceMatcher.levenshtein(pair, nick) <= (nick.count >= 8 ? 1 : 0) { return NameHit(id: id(ofCharacter: c), score: pair == nick ? 1 : 0.85, width: 2) }
         } }
         return nil
@@ -205,8 +226,9 @@ final class JellyNames {
         var rest: [String] = [], hits: [NameHit] = []
         var i = 0
         while i < tokens.count {
-            if i + 1 < tokens.count, let h = matchPair(tokens[i], tokens[i + 1]) { hits.append(h); i += 2; continue }
-            if let h = match(token: tokens[i]) { hits.append(h) } else { rest.append(tokens[i]) }
+            if i + 1 < tokens.count, let h = matchPair(tokens[i], tokens[i + 1]) { hits.append(h); i += 2; if i < tokens.count, tokens[i] == "s" { i += 1 }; continue }
+            if let h = match(token: tokens[i]) { hits.append(h); if i + 1 < tokens.count, tokens[i + 1] == "s" { i += 1 } }      // "Bobby's" -> "bobby s"
+            else { rest.append(tokens[i]) }
             i += 1
         }
         return (hits.first, hits, rest)

@@ -432,7 +432,7 @@ final class VoiceCoordinator {
     /// (b) the model fallback: free phrasing -> a structured intent, within `modelBudget` seconds. Never produces text for the player.
     private func askModel(_ model: VoiceIntentModel, transcript: String, deterministic d: VoiceDecision, t0: Double) {
         let learned = book.learnedTricks.filter { $0 != .come }
-        let names = JellyNameRoster.all.map(\.display)
+        let names = JellyRoster.names
         intentTask = Task { @MainActor [weak self] in
             var path = "model"
             var intent: ModelIntent?

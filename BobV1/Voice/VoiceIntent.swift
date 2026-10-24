@@ -209,7 +209,7 @@ final class SystemIntentModel: VoiceIntentModel {
     /// A single-turn session per request (a long-lived one would grow its transcript). `prewarm()` builds the next one ahead of time.
     func prewarm() {
         guard availability.isAvailable, session == nil else { return }
-        let s = LanguageModelSession(instructions: instructions(names: JellyNameRoster.all.map(\.display)))
+        let s = LanguageModelSession(instructions: instructions(names: JellyRoster.names))
         session = s
         s.prewarm()
     }
