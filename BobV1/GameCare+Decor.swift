@@ -17,15 +17,21 @@ struct DecorDrawn {
     var fieldVersion = -1
     var active: Set<Int> = []
     var activeShown = false
+    var preview: SIMD2<Float>?
+    var previewUID = -1
 }
 
 extension GameCare {
     /// The placed pieces reach the field (and so the walk resolver and the Jellies) the moment the store changes.
     func syncDecor() {
         let hide = cafe.hidesDecor          // in the café the room's furniture is away (it is not that room)
-        if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden {
+        let pv = dragPreview
+        if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID {
             decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide
-            DecorField.shared.set(hide ? [] : store.placedDecor)
+            decorDrawn.preview = pv?.at; decorDrawn.previewUID = pv?.uid ?? -1
+            var list = store.placedDecor
+            if let pv, let i = list.firstIndex(where: { $0.uid == pv.uid }) { list[i].x = pv.at.x; list[i].z = pv.at.y }          // (the piece in the hand is drawn at the finger; the saved spot is untouched)
+            DecorField.shared.set(hide ? [] : list)
         }
     }
 
@@ -134,6 +140,40 @@ extension GameCare {
         }
         if best != cur.at, store.move(uid, to: best) { syncDecor(); return true }
         return false
+    }
+    /// The piece follows the finger anywhere inside the room (no collision while dragging; only the preview moves, nothing is saved until `dropDecorDrag`).
+    func previewDecor(_ uid: Int, to floor: SIMD2<Float>) {
+        guard let cur = store.placedDecor.first(where: { $0.uid == uid }) else { return }
+        if decorBusy(uid) { releaseDecor(uid) }
+        let s = cur.kind.spec(quarter: cur.quarter)
+        let ex = s.box ? s.half.x : s.radius, ez = s.box ? s.half.y : s.radius
+        let z = min(max(floor.y, DecorPlacement.minZ), DecorPlacement.frontZ - ez)
+        let lim = max(0, min(DecorPlacement.visibleHalf(z: z), RoomLayout.maxX - 0.02 - ex))
+        dragPreview = (uid, SIMD2(min(max(floor.x, -lim), lim), z))
+        syncDecor()
+    }
+    /// The finger let go: a valid spot is kept; an invalid one snaps to the nearest valid spot (rings outward, up to 3), else the piece returns to where it was picked up.
+    func dropDecorDrag(_ uid: Int) {
+        defer { dragPreview = nil; syncDecor() }
+        guard let cur = store.placedDecor.first(where: { $0.uid == uid }), let pv = dragPreview, pv.uid == uid else { dropDecor(uid); return }
+        func ok(_ p: SIMD2<Float>) -> Bool { DecorPlacement.isValid(cur.kind, at: p, among: store.placedDecor, ignoring: uid, quarter: cur.quarter) }
+        var target: SIMD2<Float>?
+        if ok(pv.at) { target = pv.at } else {
+            search: for k in 1...30 {
+                let r = Float(k) * 0.1
+                let n = max(8, Int(2 * Float.pi * r / 0.1))
+                var best: SIMD2<Float>?
+                for j in 0..<n {
+                    let a = Float(j) / Float(n) * 2 * .pi
+                    let p = pv.at + SIMD2(cosf(a), sinf(a)) * r
+                    if ok(p), best == nil || simd_distance(p, pv.at) < simd_distance(best!, pv.at) { best = p }
+                }
+                if let b = best { target = b; break search }
+            }
+        }
+        if let t = target { _ = store.move(uid, to: t) }          // (none: it stays at the saved pick-up spot)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        dropDecor(uid)
     }
     /// Turns the piece a quarter turn (nudged to a spot where it fits; a buzz and nothing else when there is none).
     func rotateDecor(_ uid: Int) {

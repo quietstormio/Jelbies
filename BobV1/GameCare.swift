@@ -93,6 +93,8 @@ final class GameCare {
     var arranging = false
     var arrangingUID: Int? { didSet { DecorField.shared.held = arrangingUID } }
     /// Double tap on a piece a Jelly is using: he is asked to hop off, and arrange mode starts on it once he has (seconds left to wait).
+    /// The decor piece in the hand while dragging (drawn here; saved only on drop).
+    var dragPreview: (uid: Int, at: SIMD2<Float>)?
     @ObservationIgnored var arrangeWait: (uid: Int, left: Float)?
     /// The GROUP serving (GameCare+Group.swift): one drink with a straw per Jelly, driven over the same `dining` set.
     @ObservationIgnored let group: DiningGroup

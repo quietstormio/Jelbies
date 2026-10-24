@@ -29,15 +29,18 @@ struct ArrangeOverlay: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             } else { dragging = -1 }
         }
-        if let id = dragging, id >= 0, let off = grab { care.dragDecor(id, to: floor - off) }
+        if let id = dragging, id >= 0, let off = grab { care.previewDecor(id, to: floor - off) }
     }
 
     /// A soft ring on the floor round the picked-up piece (projected, so it is right at every aspect and orientation).
     private func ring(size: CGSize) -> some View {
-        let sel = selected          // (read here, in the body, so the ring follows the piece)
+        let sel = selected; _ = care.dragPreview          // (read here, in the body, so the ring follows the piece)
         return Canvas { ctx, _ in
             guard let p = sel else { return }
-            let c = p.at
+            let pv = care.dragPreview.flatMap { $0.uid == p.uid ? $0.at : nil }
+            let c = pv ?? p.at
+            let good = pv.map { DecorPlacement.isValid(p.kind, at: $0, among: book.placedDecor, ignoring: p.uid, quarter: p.quarter) } ?? true
+            let tint = good ? SK.honey : Color(hex: 0xE57373)
             let r = p.kind.spec.radius + 0.18
             var path = Path()
             for k in 0...48 {
@@ -46,8 +49,8 @@ struct ArrangeOverlay: View {
                 if k == 0 { path.move(to: q) } else { path.addLine(to: q) }
             }
             path.closeSubpath()
-            ctx.fill(path, with: .color(SK.honey.opacity(0.28)))
-            ctx.stroke(path, with: .color(SK.honey), style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+            ctx.fill(path, with: .color(tint.opacity(0.28)))
+            ctx.stroke(path, with: .color(tint), style: StrokeStyle(lineWidth: 3, lineJoin: .round))
         }
         .allowsHitTesting(false)
     }
@@ -80,7 +83,7 @@ struct ArrangeOverlay: View {
                     .gesture(DragGesture(minimumDistance: 0)
                         .onChanged { v in finger = v.location; touch(v.location, size: g.size) }
                         .onEnded { v in
-                            if let id = dragging, id >= 0 { care.dropDecor(id) }
+                            if let id = dragging, id >= 0 { care.dropDecorDrag(id) }
                             else if dragging == -1, hypot(v.translation.width, v.translation.height) < 12, !Self.demo { care.endArrange() }          // a tap on empty floor: let go, done
                             dragging = nil; grab = nil; finger = nil
                         })
