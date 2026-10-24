@@ -284,8 +284,19 @@ enum DecorPlacement {
     static func xLimit(_ kind: DecorKind, z: Float) -> Float {
         let s = kind.spec
         let seen = visibleHalf(z: z) - (s.box ? s.half.x : s.radius)
-        guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return seen }
-        return min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - kind.standOffsetX)
+        guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return laneWidened(kind, z: z, limit: seen) }
+        return laneWidened(kind, z: z, limit: min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - kind.standOffsetX))
+    }
+    /// A wide solid piece (the slide, the goal) has to clear the core (|x| >= 2) with its whole footprint, so on a portrait screen the lane between the core and the
+    /// screen edge was a sliver (~0.2 wide) and a finger could only ever land in one side's: the piece stuck on the left of the screen (2026-10-23). Such a piece may
+    /// lean past the screen edge (its centre stays on screen, inside the walls) so the lane is at least `minLane` wide.
+    static let minLane: Float = 0.45
+    static func laneWidened(_ kind: DecorKind, z: Float, limit: Float) -> Float {
+        let s = kind.spec
+        guard s.solid, s.box else { return limit }
+        let need = coreMax.x + s.inner.x + s.round + minLane
+        let cap = min(GameCamera.visibleHalfWidthAtBody(z: z) * 0.97, RoomLayout.maxX - 0.02 - s.half.x)
+        return max(limit, min(need, cap))
     }
 
     /// Core: the footprint's rounded box against the core rectangle (for a circle piece this is the old circle test).
