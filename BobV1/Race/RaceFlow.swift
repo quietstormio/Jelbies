@@ -31,6 +31,11 @@ final class RaceFlow {
     }
     /// What has been won on each course, the unlocks, and the chosen course (saved outside tests).
     var progress = CourseProgress(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+    /// Ribbons and trophies per Jelbie (Trophies/TrophyBook.swift), saved outside tests; `playerCharacter` is the racing Jelbie's character id (set by the glue).
+    var trophies = TrophyBook(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+    var playerCharacter = 0
+    /// What the finished race earned him (the results card says "New ribbon!" / "Trophy!").
+    private(set) var awards = TrophyAwards()
     /// The course of the race under way (the chosen one when none is).
     var course: RaceCourse { sim?.course ?? RaceCourse.course(courseTier) }
     /// 0...1 white overlay opacity (the view draws it).
@@ -154,8 +159,9 @@ final class RaceFlow {
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil
+        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
+        sim?.autoJumpPlayer = assist == .auto          // (the hands-free run clears the hurdles for him)
         started += 1
     }
 
@@ -195,6 +201,15 @@ final class RaceFlow {
         let o = sim?.playerTap(foot: foot) ?? .ignored
         refreshUI()
         return o
+    }
+
+    /// The Jump button: the take-off waits for his feet to be planted, and a bar reached in the middle of the flight is cleared (Race/Hurdles.swift).
+    @discardableResult
+    func jump() -> Bool {
+        guard kind == .race, buttonsLive else { return false }
+        let ok = sim?.playerJump() ?? false
+        if ok { refreshUI() }
+        return ok
     }
 
     /// The body's measured progress for racer `i` (units from the start line).
@@ -239,6 +254,11 @@ final class RaceFlow {
         u.tripped = s.racers[0].tap.tripped
         u.inTurn = kind == .race && u.live && s.inTurn(0)
         u.course = s.course.tier
+        u.hasHurdles = kind == .race && s.course.hasHurdles
+        if u.hasHurdles, u.live {
+            let r = s.racers[0]
+            u.hurdleAhead = r.nextHurdle < s.course.hurdles.count && s.course.hurdles[r.nextHurdle] - r.dist < HurdleTuning.hintAhead && !r.inJump
+        }
         u.placings = s.placings
         u.earned = earned
         u.waddleGain = waddleGain
@@ -267,10 +287,13 @@ final class RaceFlow {
             waddleGain = stats?.afterRace(place: place) ?? 0
             let open = progress.unlockedTiers
             progress.record(tier: s.course.tier, place: place)
+            awards = trophies.recordRace(character: playerCharacter, tier: s.course.tier, place: place)
             unlockedNow = progress.unlockedTiers.first { !open.contains($0) }
-            drillCue(.jingle(win: place <= 2))
+            drillCue(.jingle(win: place <= 2 || !awards.trophies.isEmpty))
         }
         announceRaceResult()
+        if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
+        for t in awards.trophies { A11yEvents.say("Trophy! \(t.title)", .normal) }
         cueSerial += 1
         refreshUI()
     }
@@ -332,6 +355,9 @@ struct RaceUI: Equatable {
     /// The player is in a bend (the "ease off" hint).
     var inTurn = false
     var course: CourseTier = .puddle
+    /// The course has hurdles (the Jump button shows), and the next bar is close ahead (the "Jump!" hint).
+    var hasHurdles = false
+    var hurdleAhead = false
     var placings: [RacePlacing] = []
     var earned = 0
     var waddleGain: Float = 0

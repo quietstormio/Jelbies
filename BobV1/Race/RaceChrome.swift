@@ -55,6 +55,8 @@ struct RaceChrome: View {
                 hint("Oops! Left, right, left, right")
             } else if race.ui.stalled {
                 hint("Keep tapping!")
+            } else if race.ui.hurdleAhead, race.assist != .auto {
+                hint("Jump!")
             } else if race.ui.inTurn {
                 hint("Bend! Ease off a little")
             } else if race.ui.phase == .countdown {
@@ -96,15 +98,28 @@ struct RaceChrome: View {
     private func assistOrFeet(width: CGFloat?) -> some View {
         switch race.assist {
         case .oneButton:
-            FootButton(title: "Step", id: "race-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(-1) }
+            HStack(spacing: 14) {
+                FootButton(title: "Step", id: "race-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(-1) }
+                if race.ui.hasHurdles { jumpButton.frame(width: 120) }
+            }
         case .auto:
             FootButton(title: "Cheer", id: "race-cheer", symbol: "hands.clap.fill", flip: false, live: true, key: .space) { cheer() }
         default:
             HStack(spacing: 14) {
                 FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
+                if race.ui.hasHurdles { jumpButton.frame(width: 104) }          // (hurdle courses: Jump between the two feet, reachable by either thumb)
                 FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
             }
         }
+    }
+
+    /// The Jump button of a hurdle course (the Jelbie does his hop; timed just before a bar he clears it).
+    private var jumpButton: some View {
+        FootButton(title: "Jump", id: "race-jump", symbol: "arrow.up.circle.fill", flip: false, live: race.buttonsLive, tilt: false, key: .upArrow) { jump() }
+    }
+
+    private func jump() {
+        if race.jump() { light.impactOccurred(intensity: 0.6) }
     }
 
     private func cheer() {
@@ -122,6 +137,7 @@ struct RaceChrome: View {
                     FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
                         .frame(width: 190, height: 170)
                     Spacer(minLength: 0)
+                    if race.ui.hasHurdles { jumpButton.frame(width: 130, height: 170).padding(.trailing, 10) }          // (landscape: Jump just inside the Right foot)
                     FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
                         .frame(width: 190, height: 170)
                 }
@@ -147,6 +163,7 @@ struct FootButton: View {
     let symbol: String
     let flip: Bool
     let live: Bool
+    var tilt = true
     var key: KeyEquivalent?
     let action: () -> Void
     @State private var down = false
@@ -156,7 +173,7 @@ struct FootButton: View {
             Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "figure.walk")
                 .font(.system(size: 54, weight: .bold))
                 .scaleEffect(x: flip ? -1 : 1, y: 1)
-                .rotationEffect(.degrees(flip ? 12 : -12))
+                .rotationEffect(.degrees(tilt ? (flip ? 12 : -12) : 0))
             Text(title)
                 .playFont(22, .heavy)
         }
@@ -197,6 +214,20 @@ struct RacePlacingsCard: View {
     private func ordinal(_ p: Int) -> String { p == 1 ? "1st" : p == 2 ? "2nd" : p == 3 ? "3rd" : "\(p)th" }
     private func medal(_ p: Int) -> Color {
         p == 1 ? Color(red: 0.98, green: 0.80, blue: 0.35) : p == 2 ? Color(red: 0.80, green: 0.84, blue: 0.90) : Color(red: 0.90, green: 0.68, blue: 0.52)
+    }
+
+    /// A short celebration chip on the results ("New ribbon!", "Trophy! ...").
+    private func celebration(_ text: String, symbol: String, id: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
+            Text(text).playFont(14, .heavy)
+        }
+        .foregroundStyle(CareMenu.brown)
+        .padding(.horizontal, 12).padding(.vertical, 5)
+        .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35)))
+        .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(id)
     }
 
     var body: some View {
@@ -240,6 +271,14 @@ struct RacePlacingsCard: View {
                 Text("Waddle got a little quicker")
                     .playFont(14, .medium)
                     .foregroundStyle(CareMenu.brown.opacity(0.7))
+            }
+            if !race.awards.isEmpty {
+                HStack(spacing: 8) {
+                    if race.awards.newRibbon { celebration("New ribbon!", symbol: "rosette", id: "race-new-ribbon") }
+                    if let t = race.awards.trophies.first {
+                        celebration(race.awards.trophies.count > 1 ? "Trophy! \(t.title) +\(race.awards.trophies.count - 1)" : "Trophy! \(t.title)", symbol: "trophy.fill", id: "race-trophy")
+                    }
+                }
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")

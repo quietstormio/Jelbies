@@ -587,9 +587,10 @@ struct ConditionScreen: View {
 
     private func rows(_ p: JellyProfile?) -> some View {
         let t = care.show.progress.trophies(character: p?.character ?? who)
+        let ribbons = care.race.trophies.shelf(character: p?.character ?? who).raceRibbonCount          // (race ribbons: Trophies/)
         return VStack(spacing: 8) {
             row("Food diary", note: "Last \(min(p?.stats.meals.count ?? 0, JellyStats.mealsKept)) meal\(p?.stats.meals.count == 1 ? "" : "s")", id: "condition-diary") { diaryOpen = true }
-            row("Trophies", note: "\(t.cupCount) cup\(t.cupCount == 1 ? "" : "s") \u{00B7} \(t.rosettes.count) rosette\(t.rosettes.count == 1 ? "" : "s")", id: "condition-trophies") { trophiesOpen = true }
+            row("Trophies", note: "\(t.cupCount) cup\(t.cupCount == 1 ? "" : "s") \u{00B7} \(t.rosettes.count) rosette\(t.rosettes.count == 1 ? "" : "s") \u{00B7} \(ribbons) ribbon\(ribbons == 1 ? "" : "s")", id: "condition-trophies") { trophiesOpen = true }
         }
     }
     private func row(_ title: String, note: String, id: String, _ action: @escaping () -> Void) -> some View {
@@ -738,7 +739,7 @@ struct TrophiesSheet: View {
     var close: () -> Void
     var body: some View {
         let t = care.show.progress.trophies(character: care.jelly(who)?.character ?? who)
-        VStack(alignment: .leading, spacing: 14) {
+        ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("\(care.jelly(who)?.name ?? "Bob")'s trophies").font(SK.font(26, .black)).foregroundStyle(SK.ink)
                 Spacer()
@@ -780,8 +781,8 @@ struct TrophiesSheet: View {
                 }
             }
             Text(t.shows == 0 ? "No shows yet. The first one earns a sticker." : "\(t.shows) show\(t.shows == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
-            Spacer(minLength: 0)
-        }
+            RaceTrophiesSection(care: care, who: who)          // (race ribbons and trophies: Trophies/)
+        } }
         .padding(16)
         .accessibilityIdentifier("trophies-sheet")
     }

@@ -542,6 +542,8 @@ final class MelonRenderer {
     var raceVisible = false
     /// The course the track is built for (Race/RaceCourse.swift); the stage sets it with `raceVisible`.
     var raceCourse: CourseTier = .puddle
+    /// What the room's wall trophy shelf shows (Trophies/); empty = no shelf.
+    var trophyShelf = TrophyShelfSpec()
     /// The Jelly Show's stage set is drawn instead of the room (Show/ShowStage.swift).
     var showVisible = false
     /// The jersey band colour of a body (nil = none: the locked body shader draws him).
@@ -969,7 +971,7 @@ final class MelonRenderer {
             room.fog = raceVisible ? SIMD3(45, 150, 0.5) : parkVisible ? SIMD3(34, 90, 0.3) : SIMD3(14, 32, 0.3)
             let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
             room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)
-            room.props = (Self.showQuilt && tuckQ > 0.05) ? quiltProps(tuckQ) : []
+            room.props = ((Self.showQuilt && tuckQ > 0.05) ? quiltProps(tuckQ) : []) + (trophyShelf.isEmpty ? [] : [RoomProp(kind: .shelf, pos: .zero, level: Float(RoomLayout.revision & 0xFFFF), shelf: trophyShelf)])          // (level = the room's layout revision: the shelf hangs between THIS room's windows)
             // ---- bath: bathroom on/off, props over Bob, body shader parameters ----
             room.bathVisible = bathLook.visible
             room.bathTime = uniforms.camPos.w

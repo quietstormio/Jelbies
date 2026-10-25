@@ -8,12 +8,13 @@ import simd
 import Foundation
 
 nonisolated struct RoomProp: Equatable {
-    enum Kind { case food, water, quilt }
+    enum Kind { case food, water, quilt, shelf }
     var kind: Kind
     var pos: SIMD2<Float>          // floor (x, z) of the bowl centre
     var scale: Float = 1           // 0...1 appear / disappear
     var level: Float = 1           // 1 = full, 0 = empty
     var half = SIMD2<Float>(0, 0)  // quilt: half size (x, z)
+    var shelf = TrophyShelfSpec()  // shelf: the trophy wall shelf's contents (Trophies/TrophyShelfGeometry.swift)
 }
 
 nonisolated enum RoomPropGeometry {
@@ -52,6 +53,7 @@ nonisolated enum RoomPropGeometry {
 
     private static func add(_ p: RoomProp, _ sw: [SIMD3<Float>], _ b: RoomMeshBuilder) {
         if p.kind == .quilt { addQuilt(p, b); return }
+        if p.kind == .shelf { TrophyShelfGeometry.add(p.shelf, swatches: sw, to: b); return }
         let s = p.scale
         let R = radius * s, H = height * s
         let cx = p.pos.x, cz = p.pos.y
@@ -129,7 +131,7 @@ nonisolated enum RoomPropGeometry {
             let water = SIMD3<Float>(0.50, 0.74, 0.92)
             let disc: [PP] = [PP(r: 0, y: yw, nr: 0, ny: 1, ao: 1), PP(r: rw, y: yw, nr: 0, ny: 1, ao: 1)]
             b.lathe(cx: cx, cz: cz, profile: disc, segments: 32, color: water)
-        case .quilt:
+        case .quilt, .shelf:
             break
         }
     }
