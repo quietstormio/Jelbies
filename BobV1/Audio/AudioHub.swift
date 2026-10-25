@@ -312,6 +312,30 @@ final class AudioHub {
         DispatchQueue.main.asyncAfter(deadline: .now() + j.trim) { [weak p] in p?.stop() }
     }
 
+    // MARK: intro sting
+
+    @ObservationIgnored private var sting: AVAudioPlayer?
+
+    /// The intro's one-shot sting (plays before `start()`, so it sets the session up itself). Follows -Mute and the sound-effects level.
+    func playIntroSting(_ name: String) {
+        guard !muted else { return }
+        let level = settings.sfxLevel
+        guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
+        if !started { setUpSession() }
+        sting?.stop()
+        p.volume = min(1, level * AudioMix.sfxMaster * 1.5)
+        p.prepareToPlay(); p.play()
+        sting = p
+    }
+
+    /// Fades the intro sting out (a tap to skip).
+    func stopIntroSting() {
+        guard let p = sting else { return }
+        sting = nil
+        p.setVolume(0, fadeDuration: 0.3)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { p.stop() }
+    }
+
     // MARK: effects
 
     private func url(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "m4a") }

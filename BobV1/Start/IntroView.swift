@@ -13,6 +13,8 @@ import AVFoundation
 enum IntroClip {
     static let resource = "jelbies_intro"
     static let fileExtension = "mp4"
+    /// The intro sting (an m4a in Audio/Resources); swap to "intro_sting_2" for the other.
+    static let sound = "intro_sting_1"
     /// Seconds into the clip at which the crisp logo takes over; nil = when the clip ends.
     static let handoffTime: Double? = nil
     /// The clip's logo width as a share of the (square) clip's width; the crisp logo is drawn at the same size.
@@ -127,9 +129,10 @@ struct IntroView: View {
             }
         }
         p.play()
+        AudioHub.shared.playIntroSting(IntroClip.sound)
     }
 
-    private func tapped() { if settled { finish() } else { settle() } }
+    private func tapped() { if settled { finish() } else { AudioHub.shared.stopIntroSting(); settle() } }
 
     /// The crisp logo takes over (clip end, handoff time, or a tap during the clip).
     private func settle() {
@@ -159,6 +162,7 @@ struct IntroView: View {
     }
 
     private func teardown() {
+        AudioHub.shared.stopIntroSting()
         player?.pause()
         if let b = boundary { player?.removeTimeObserver(b); boundary = nil }
         if let o = endObserver { NotificationCenter.default.removeObserver(o); endObserver = nil }
