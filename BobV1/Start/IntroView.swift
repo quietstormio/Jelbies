@@ -14,11 +14,13 @@ enum IntroClip {
     static let resource = "jelbies_intro"
     static let fileExtension = "mp4"
     /// The intro sting (an m4a in Audio/Resources); swap to "intro_sting_2" for the other.
-    static let sound = "intro_sting_1"
+    static let sound = "intro_sting_sync"
     /// Seconds into the clip at which the crisp logo takes over; nil = when the clip ends.
-    static let handoffTime: Double? = nil
+    static let handoffTime: Double? = 3.45
     /// The clip's logo width as a share of the (square) clip's width; the crisp logo is drawn at the same size.
-    static let logoWidthShare: CGFloat = 0.87
+    static let logoWidthShare: CGFloat = 0.982
+    /// The clip logo's centre sits this share of the frame side below the frame centre.
+    static let logoYOffsetShare: CGFloat = 0.0775
     /// Seconds after the logo settles before it moves on by itself.
     static let autoAdvance: Double = 2.5
 }
@@ -54,7 +56,7 @@ struct IntroView: View {
                         .opacity(settled ? 0 : 1)
                         .animation(.easeOut(duration: 0.35), value: settled)
                 }
-                logo(width: logoW)
+                logo(width: logoW).offset(y: side * IntroClip.logoYOffsetShare)
                 sparkles(side: side, logoW: logoW)
                 Text("Tap to start").font(CloudTheme.font(18, .semibold)).foregroundStyle(CloudTheme.jelly)
                     .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, max(28, geo.size.height * 0.08))
@@ -103,7 +105,7 @@ struct IntroView: View {
                 ForEach(0..<3, id: \.self) { i in
                     Sparkle(go: settled, delay: spots[i].2)
                         .frame(width: 16, height: 16)
-                        .offset(x: spots[i].0 * logoW * 1.15, y: spots[i].1 * side)
+                        .offset(x: spots[i].0 * logoW * 1.15, y: spots[i].1 * side + side * IntroClip.logoYOffsetShare)
                 }
             }
         }
