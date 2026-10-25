@@ -271,6 +271,8 @@ final class WornSet {
         let spinA = time * WearTuning.spin
         let cs = cosf(spinA), sn = sinf(spinA)
         let swing = s.swing
+        var lift: Float = 0, widen: Float = 1
+        if p.crownEnclosing, let skin { (lift, widen) = CrownFit.fit(p, carry: c, skin: skin, body: WearBody.shared) }
         for i in 0..<p.rest.count {
             var r = p.rest[i]
             var n = p.nrm[i]
@@ -279,6 +281,7 @@ final class WornSet {
                 r = WearTuning.propellerCentre + SIMD3(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs)
                 n = SIMD3(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs)
             }
+            if lift != 0 || widen != 1 { r = SIMD3(c.restCentroid.x + (r.x - c.restCentroid.x) * widen, r.y + lift * CrownFit.liftWeight(r.y - p.pivot.y), c.restCentroid.z + (r.z - c.restCentroid.z) * widen) }
             var q = c.centroid + M * (r - c.restCentroid)
             let w = p.w[i]
             if w > 0.001, let skin {

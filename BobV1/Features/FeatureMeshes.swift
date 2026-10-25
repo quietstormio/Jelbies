@@ -49,7 +49,6 @@ nonisolated enum FeatureMeshes {
     /// 2026-10-21). The hinges, binds and the measured clearance tables are untouched: smaller wings only clear the worn items by more. (A var for the
     /// before / after captures; the cache key carries it.)
     nonisolated(unsafe) static var wingScale: Float = 0.85
-
     static func art(_ id: String) -> DecorMeshes.Art? {
         lock.lock(); defer { lock.unlock() }
         if let a = arts[id] { return a }

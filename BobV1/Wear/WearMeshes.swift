@@ -20,6 +20,10 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     var partNames: [String] = [], partOfVertex: [UInt8] = []
     /// Where the piece scales about when it poofs on / off.
     var pivot = SIMD3<Float>.zero
+    /// Head wear: the crown height map (CrownFit) and whether the piece encloses the head top (then it is fitted to the skin every frame).
+    var crown: [Float] = []
+    var crownEnclosing = false
+    var crownMargin: Float = 0.02
     var triangles: Int { idx.count / 3 }
     init(_ l: WearLook) { look = l }
 }
@@ -110,6 +114,7 @@ nonisolated enum WearMeshes {
                 if let b = body.bind(p.rest[i]) { p.bind[i] = b; p.anyBound = true } else { p.w[i] = 0 }
             }
         } else { for i in p.w.indices { p.w[i] = 0 } }
+        if let body, !isArm { CrownFit.prepare(p, body: body) }
         return p
     }
 

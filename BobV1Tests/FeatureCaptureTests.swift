@@ -280,6 +280,33 @@ final class FeatureCaptureTests: XCTestCase {
         try write(labelled(crop, "Medals on Bob, Pip, Moss, Lavender" + (land ? " (landscape)" : " (portrait)")), d + (land ? "/medal_lineup_landscape.png" : "/medal_lineup_portrait.png"))
     }
 
+    /// Pip's spines through the crown of every enclosing hat: front 3/4 and back (pip_spines_hats.png).
+    func testCaptureCrownFit() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        var sp: [UIImage] = []
+        for (name, look) in [("beret", WearLook.beret), ("pirate", .pirateHat), ("bucket", .bucketHat), ("cowboy", .cowboyHat), ("beanie", .beanieHoney)] {
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: 0.7, label: "Pip + \(name) 3/4"))
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: Float.pi * 0.85, label: "Pip + \(name) back"))
+        }
+        try write(vstack([hstack(Array(sp[0..<4])), hstack(Array(sp[4..<8])), hstack(Array(sp[8..<10]))]), d + "/pip_spines_hats.png")
+    }
+
+    /// Review sheet: the batch-3 wearables (headphones, cowboy hat, beret, hair bow, bee antennae, lei) on Pip, Moss and Lavender, front 3/4, normal pose.
+    func testCaptureBatch3Wear() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        var rows: [UIImage] = []
+        for (name, id) in [("Pip", 1), ("Moss", 2), ("Lavender", 3)] {
+            var cells: [UIImage] = []
+            for (label, look) in [("headphones", WearLook.headphones), ("cowboy hat", .cowboyHat), ("beret", .beret), ("hair bow", .hairBow), ("bee antennae", .beeAntennae), ("lei", .lei)] {
+                cells.append(try closeup(Char(id: id, outfit: [look.slot: look]), yaw: 0.6, label: "\(name) + \(label)"))
+            }
+            rows.append(hstack(cells))
+        }
+        try write(vstack(rows), d + "/batch3_wear.png")
+    }
+
     func testCaptureDaisyHats() throws {
         let d = try dir()
         DayClock.shared.forcedHour = 12

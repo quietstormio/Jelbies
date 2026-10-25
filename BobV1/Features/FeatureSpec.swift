@@ -73,7 +73,9 @@ nonisolated extension Array where Element == Float {
 
 /// What a Jelly's feature does under what he wears now (FeatureCompat.solve).
 nonisolated struct FeatureFit: Equatable, Sendable {
-    /// Pip: the spines hidden under / through the worn items.
+    /// Pip: the art id of the head item the spines grow through (when it encloses the head; see FeatureSet.emit).
+    var spineHat: String?
+    /// (Spines are never hidden any more; kept empty so the tests and old callers read the same shape.)
     var hiddenParts: Set<String> = []
     /// Moss: the sprout is hidden (propeller beanie).
     var hidden = false
@@ -90,6 +92,12 @@ nonisolated struct FeatureFit: Equatable, Sendable {
 
 nonisolated enum FeatureCompat {
     static let fullFlap: ClosedRange<Float> = -40...75
+    /// Where Moss's daisy sits on the hats whose art-lab rule was "hide" (placement as the other rules: crown moved to `anchor`, tilted, sunk).
+    static let hatDaisy: [String: FeatureSpec.MossRule] = [
+        "cowboy_hat": .init(rule: "adjust", anchor: [0.0, 1.3758, 0.0], tilt: 0, sink: 0, variant: nil),
+        "beret": .init(rule: "adjust", anchor: [0.0, 1.30, 0.42], tilt: 55, sink: 0.05, variant: nil),
+        "propeller_beanie": .init(rule: "adjust", anchor: [0.0, 1.30, 0.42], tilt: 55, sink: 0.05, variant: nil),
+    ]
 
     /// The fit of `feature` under the worn art ids (what the wardrobe SHOWS now, not the whole outfit: a hat that poofed off for the night frees the spines).
     static func solve(_ feature: JellyFeature, worn: [String], spec: FeatureSpec = .shared) -> FeatureFit {
@@ -97,17 +105,22 @@ nonisolated enum FeatureCompat {
         switch feature {
         case .none: return fit
         case .spines:
-            for w in worn { if let p = spec.pairs[w] { fit.hiddenParts.formUnion(p.pipHide) } }
+            // Pip's spines NEVER vanish under what he wears. Under a hat that encloses his head they grow through the TOP of its crown (a mohawk through
+            // the hat: FeatureSet.emit seats each base on the fitted crown); with the perch items (bows, headphones, antennae ...) they stay as they are.
+            for w in worn { if spec.pairs[w]?.slot == "head" { fit.spineHat = w } }
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {
                 guard let p = spec.pairs[w], p.slot == "head" else { continue }
-                switch p.moss.rule {
+                var rule = p.moss
+                // the daisy never vanishes under a hat: where the art lab said "hide", it is tucked on the hat instead (hatDaisy)
+                if rule.rule == "hide" { rule = hatDaisy[w] ?? FeatureSpec.MossRule(rule: "adjust", anchor: [0, spec.top + 0.03, 0], tilt: 0, sink: 0, variant: nil) }
+                switch rule.rule {
                 case "hide": fit.hidden = true
                 case "adjust":
                     fit.onHat = true
-                    fit.anchor = p.moss.anchor?.v3 ?? SIMD3(0, spec.top, 0); fit.tilt = p.moss.tilt ?? 0; fit.sink = p.moss.sink ?? 0
-                    if let v = p.moss.variant { fit.hatVariant[w] = v }
+                    fit.anchor = rule.anchor?.v3 ?? SIMD3(0, spec.top, 0); fit.tilt = rule.tilt ?? 0; fit.sink = rule.sink ?? 0
+                    if let v = rule.variant { fit.hatVariant[w] = v }
                 default: break
                 }
             }

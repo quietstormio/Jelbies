@@ -270,7 +270,7 @@ final class FeatureTests: XCTestCase {
         let beanie = FeatureCompat.solve(.wings, worn: ["beanie_honey"])
         XCTAssertEqual(beanie.wingDY, -0.12); XCTAssertEqual(beanie.flapMax, 30); XCTAssertEqual(beanie.spreadMax, 12)
         // Pip: the union of the hidden spines; Moss: the on-hat sprout and the hat variant; the ring / clip group leaves the sprout alone
-        XCTAssertEqual(FeatureCompat.solve(.spines, worn: ["cat_ears", "sweatband"]).hiddenParts, ["spike_01", "spike_05", "spike_06"])
+        XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["cat_ears", "sweatband"]).hiddenParts.isEmpty, "spines are never hidden")
         let moss = FeatureCompat.solve(.daisy, worn: ["beanie_honey", "bowtie_pink"])
         XCTAssertTrue(moss.onHat); XCTAssertEqual(moss.hatVariant["beanie_honey"], "beanie_honey_nopom"); XCTAssertEqual(moss.anchor.y, 1.3698, accuracy: 1e-4)
         let chef = FeatureCompat.solve(.daisy, worn: ["chef_hat"])

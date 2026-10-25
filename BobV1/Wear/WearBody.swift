@@ -37,6 +37,8 @@ nonisolated final class WearBody: @unchecked Sendable {
     let nrm: [SIMD3<Float>]
     let tris: [SIMD3<UInt32>]
     let eggVertexLimit: Int
+    /// The egg vertices of the head cap (the highest ones): what a hat's crown must always enclose (CrownFit).
+    let capIndices: [Int]
     private let cell: Float = 0.08
     private let lo: SIMD3<Float>
     private let dim: SIMD3<Int>
@@ -56,6 +58,8 @@ nonisolated final class WearBody: @unchecked Sendable {
         while i + 2 < end { t.append(SIMD3(rm.index[i], rm.index[i + 1], rm.index[i + 2])); i += 3 }
         tris = t
         eggVertexLimit = rm.armCapsule?.firstVertex.min() ?? rm.vertexCount
+        let eggTop = (0..<min(eggVertexLimit, p.count)).map { p[$0].y }.max() ?? 0
+        capIndices = (0..<min(eggVertexLimit, p.count)).filter { p[$0].y > eggTop - 0.16 }
         var mn = SIMD3<Float>(repeating: .infinity), mx = SIMD3<Float>(repeating: -.infinity)
         for tr in t { for k in 0..<3 { let q = p[Int(tr[k])]; mn = simd_min(mn, q); mx = simd_max(mx, q) } }
         lo = mn - 0.05

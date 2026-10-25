@@ -4,7 +4,7 @@
 //  Per Jelly: the feature, its fit under what he wears (FeatureCompat), the pop on / off state (like a wearable: scale about the anchor), the
 //  per-part animation and the per-frame world mesh.
 //    spines   rigid per spine on its sunk base (surface-bound): a lagged two-axis wobble spring, driven by the body's acceleration and squash rate,
-//             a travelling wave crown -> tail by each spine's phase lag; a spine under a hat shrinks away (0.25 s) and grows back.
+//             a travelling wave crown -> tail by each spine's phase lag; under a hat that encloses his head the spines grow out of the TOP of the fitted crown (CrownFit), never hidden.
 //    daisy    stem + leaves sway about the stem root (a spring lagging the body's acceleration + a slow idle sway); the flower head lags the stem
 //             by 0.08 s about the flower centre; asleep (or deep night) the petals close toward the flower normal and the stem droops forward.
 //    wings    rigid per side on the hinge: spread (about y) x flap (about the flap axis), from the flap-hop while it runs, else a gentle idle
@@ -21,6 +21,8 @@ import Foundation
 nonisolated enum FeatureTuning {
     static let popTime: Float = 0.25
     static let partFade: Float = 0.25
+    /// A spine's base sinks this far into the crown it grows through.
+    static let crownSink: Float = 0.015
     /// Spine wobble: how hard body acceleration (u/s^2) and squash rate (1/s) push, in degrees.
     static let spineAccelGain: Float = 0.9, spineSquashGain: Float = 25
     /// Daisy sway: spring (Hz) and damping, acceleration push (deg per u/s^2), the largest sway (deg).
@@ -351,13 +353,30 @@ final class FeatureSet {
         let base = UInt32(m.vertices.count)
         m.vertices.reserveCapacity(m.vertices.count + p.rest.count)
         var keep = [Bool](repeating: true, count: p.parts.count)
+        // the crown the spines grow through (nil: no enclosing hat)
+        var crown: (piece: WearPrepared, lift: Float, widen: Float)?
+        if s.feature == .spines, let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
+           let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
+            let (lift, widen) = skin.map { CrownFit.fit(piece, carry: c, skin: $0, body: WearBody.shared) } ?? (0, 1)
+            crown = (piece, lift, widen)
+        }
         let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
         let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
         for (pi, part) in p.parts.enumerated() {
-            let ps = (s.partScale[part.name] ?? 1) * s.scale
-            if ps <= 0.001 { keep[pi] = false }
+            let tuck = s.partScale[part.name] ?? 1
+            let ps = (s.feature == .spines ? 1 : tuck) * s.scale
+            if ps * tuck <= 0.001 { keep[pi] = false }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
+            // a spine under a hat that encloses his head grows out of the TOP of the crown: its base moves up onto the fitted crown (rest frame)
+            if let cr = crown {
+                let rc = c.restCentroid
+                let px = rc.x + (part.pivot.x - rc.x) * cr.widen, pz = rc.z + (part.pivot.z - rc.z) * cr.widen
+                if let h = CrownFit.height(cr.piece.crown, rc.x + (px - rc.x) / cr.widen, rc.z + (pz - rc.z) / cr.widen) {
+                    let top = h + cr.lift * CrownFit.liftWeight(h - cr.piece.pivot.y) - FeatureTuning.crownSink
+                    if top > part.pivot.y { pivotW = c.world(SIMD3(px, top, pz)) }
+                }
+            }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
             let rot = partRotation(p, part, slot: s, spec: spec)
             var stemRot = matrix_identity_float3x3
