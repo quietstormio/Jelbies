@@ -117,6 +117,7 @@ extension BlobBrain {
                 if ago < VarietyTuning.startGap { m *= 0.02 } else if ago < VarietyTuning.syncWindow { m *= VarietyTuning.syncMul }
             }
         }
+        if anticsEnabled { m *= toyWeight(k) }          // (a fresh toy pulls; a long-standing one less; just played, hardly: BlobBrain+ToyPlay.swift)
         return max(0.01, m)
     }
     /// A friend began this very special within the start gap (the scheduler turns such a pick into a wander).
@@ -134,6 +135,7 @@ extension BlobBrain {
                 if f == .social, variedPeers.isEmpty || !socialBook.enabled { continue }
                 if f == .decor, !decorOffered { continue }
                 if f == .rest { n += Int((2 * idleNight).rounded()) }
+                if f == .decor { n += toyBagBonus() }
                 variety.bag += Array(repeating: f, count: n)
             }
             var i = variety.bag.count - 1

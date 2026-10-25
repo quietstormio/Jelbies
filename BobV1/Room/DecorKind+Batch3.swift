@@ -34,8 +34,8 @@ extension DecorKind {
         default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
         }
     }
-    /// The cushion pile is hopped onto and sat on (its soft top, 0.60 up).
-    var batch3SitPoints: [SIMD3<Float>] { self == .cushionpile ? [SIMD3(0, 0.60, 0)] : [] }
+    /// The cushion pile is hopped onto and sat on (its soft top, 0.60 up): two seats side by side, so two Jelbies sit together on it (2026-10-25).
+    var batch3SitPoints: [SIMD3<Float>] { self == .cushionpile ? [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)] : [] }
     var batch3Interaction: IdleKind? {
         switch self {
         case .cushionpile: return .decorSit

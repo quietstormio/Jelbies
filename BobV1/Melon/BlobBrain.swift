@@ -154,6 +154,8 @@ final class BlobBrain {
     var kindCool: [IdleKind: Float] = [:]
     /// The variety layer's memory (BlobBrain+Variety.swift).
     var variety = VarietyBook()
+    /// Toy play: noticing a new toy, the queue for a busy one (BlobBrain+ToyPlay.swift).
+    var toy = ToyBrain()
     var flopKicks = 0
     var sleep = SleepState()
     /// Seconds until he may again decide to go and snuggle beside a sleeper (BlobBrain+Sleep.swift).
@@ -687,6 +689,7 @@ final class BlobBrain {
     func pickAutonomous(_ sim: SoftBody) {
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
+        if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         if socialMaybeStart(sim) { return }
         if idleMaybeStart(sim) { return }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")

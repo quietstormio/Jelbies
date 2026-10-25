@@ -311,7 +311,7 @@ enum DecorPlacement {
     /// The most |x| a piece may have at depth `z`: on screen, and (when a Jelly plays with it) where a Jelly's centre can go: he has to be
     /// able to stand at it (at its seat, for a seat off to one side).
     static func xLimit(_ kind: DecorKind, z: Float, quarter q: Int = 0) -> Float {
-        let s = kind.spec(quarter: q), off = q & 1 == 0 ? kind.standOffsetX : 0
+        let s = kind.spec(quarter: q), off = q & 1 == 0 ? kind.standOffsetX : (kind.hopSit ? BlobBrain.bagHopGap + 0.1 : 0)          // (turned a quarter, the hop-up spot lies to the side of the seat)
         let seen = visibleHalf(z: z) - (s.box ? s.half.x : s.radius)
         guard kind.interaction != nil || kind == .petbed || kind == .minigoal else { return laneWidened(kind, z: z, limit: seen, quarter: q) }
         return laneWidened(kind, z: z, limit: min(seen, GameCamera.visibleHalfWidthAtBody(z: z) * GameCamera.screenFill - max(GameCamera.bodyHalfExtent, 0.63) - off))
@@ -555,13 +555,16 @@ final class DecorField {
         return SIMD3(f.centre.x + w.x, p.y, f.centre.y + w.y)
     }
     /// The piece the player has picked up in arrange mode: no Jelly starts using it meanwhile.
-    var held: Int?
+    var held: Int? { didSet { if let o = oldValue, held == nil { toyDropped(o) } } }
+    /// What the room remembers about its toys (Room/DecorField+Toys.swift).
+    var toys = ToyBook()
     /// Bumped when the pieces or their positions change; the mesh is rebuilt on it and while anything animates.
     private(set) var version = 0
     var animating: Bool { anim.values.contains { $0.active } }
 
     func set(_ list: [PlacedDecor]) {
         guard list != placed else { return }
+        toyNoteChanges(list)
         let oldKinds = Dictionary(placed.map { ($0.uid, $0.kind) }, uniquingKeysWith: { a, _ in a })
         placed = list
         if let h = held, !list.contains(where: { $0.uid == h }) { held = nil }
@@ -655,6 +658,7 @@ final class DecorField {
     /// One step: eases the sits, decays the kicks, rolls the ball (it stays on the visible floor and bounces off solid pieces and the sofa).
     func tick(dt: Float) {
         SoccerState.shared.advance(dt)
+        toyAdvance(dt)
         for uid in Array(anim.keys) {
             guard var a = anim[uid], let f = foot(uid) else { continue }
             if a.active {
