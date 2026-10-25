@@ -8,14 +8,17 @@
 
 ```
 cd .claude/worktrees/g-int
-xcodebuild -project BobV1.xcodeproj -scheme BobV1 -configuration Release \
-  -destination 'id=00008150-000261C63ED8401C' -derivedDataPath dd_sign \
-  DEVELOPMENT_TEAM=5VVYA96U3R -allowProvisioningUpdates build
+xcodebuild -scheme BobV1 -configuration Release -destination generic/platform=iOS \
+  -derivedDataPath ./dd_i -allowProvisioningUpdates DEVELOPMENT_TEAM=5VVYA96U3R build -quiet
 xcrun devicectl device install app --device 00008150-000261C63ED8401C \
-  dd_sign/Build/Products/Release-iphoneos/BobV1.app
-xcrun devicectl device process launch --device 00008150-000261C63ED8401C <bundle id>
+  dd_i/Build/Products/Release-iphoneos/BobV1.app
+xcrun devicectl device process launch --device 00008150-000261C63ED8401C \
+  --terminate-existing io.mgsllc.BobV1
 ```
-  (Adjust the derived-data path if you use another; back signed apps up under ~/BobV1_backups.)
+  - A lone "failed with exit code 0 but produced no further output" line is harmless if the binary timestamp is fresh.
+  - Useful launch args: `-Intro 1`, `-MainMenu 0`, `-BlobDrops.v1 N`.
+  - Error 4016 means the phone is locked or away.
+  - Back up signed apps under ~/BobV1_backups.
 - **Rules:** game is offline-only; the Garden is removed; one fix at a time, confirmed on the phone.
 
 ---
