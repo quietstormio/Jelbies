@@ -220,6 +220,8 @@ struct GameScreen: View {
 
             ParkChrome(care: model.care)          // the park outing: the picker, the visitors' cards, Go home, the white fade
 
+            GroomChrome(care: model.care)          // the Jelly Spa: the tier menu, the shop-front cut-scene, the reveal banner
+
             GuestChrome(care: model.care)          // a friend over at home: his card (a tap on him)
 
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
@@ -227,7 +229,7 @@ struct GameScreen: View {
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -494,6 +496,14 @@ struct GameScreen: View {
                     care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
                 }
             }
+        }
+        // capture aid: -GroomAuto picker|visit (the Jelly Spa picker after 4 s; visit also picks the Royal Pamper for everybody and goes, with 300 Drops)
+        if let m = d.string(forKey: "GroomAuto") {
+            await sleep(4)
+            care.bath.wallet.add(max(0, 300 - care.bath.wallet.count), silent: true)
+            care.bath.grime.dirt = 0.5
+            care.requestGroom()
+            if m == "visit" { await sleep(1.5); care.startGroom(.royal) }
         }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {
