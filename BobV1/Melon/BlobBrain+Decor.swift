@@ -426,7 +426,7 @@ extension BlobBrain {
 
     /// While he sits on a rocking chair / swing the seat carries him: his root and planted feet move by the seat's change.
     func seatFollow(_ f: DecorFoot) {
-        guard f.kind == .rockingchair || f.kind == .swing, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
+        guard f.kind == .rockingchair || f.kind == .swing || f.kind.parkRocker, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
         let rs = f.turned(SIMD2(sp.x, sp.z))
         let want = SIMD2<Float>(sw.x - (f.centre.x + rs.x), sw.z - (f.centre.y + rs.y))
@@ -500,6 +500,13 @@ extension BlobBrain {
     /// What the seat does to a sitter: a rocking chair / swing rocks (and carries him), a loveseat with a friend on the other cushion leans him toward them.
     private func seatMotion(_ f: DecorFoot, k: Float) {
         let uid = f.uid
+        if f.kind == .sandbox { DecorField.shared.rock(uid, idleState.phase == 2 ? 1 : 0.4) }          // (digging: the sand puffs)
+        if f.kind.parkRocker {
+            let on = idleState.phase == 2 && k > 0.5 || idleState.phase == 1 && k > 0.3
+            DecorField.shared.rock(uid, on ? 1 : 0.35)
+            seatFollow(f)
+            if f.kind == .springrider { pitch += DecorModels.springAngle(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9 }
+        }
         if f.kind == .rockingchair || f.kind == .swing {
             let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3
             let level: Float = on ? max(0.45, 1 - 0.06 * idleState.phaseT) : 0.3

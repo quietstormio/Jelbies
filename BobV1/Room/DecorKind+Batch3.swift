@@ -31,11 +31,11 @@ extension DecorKind {
         case .plushbear: return DecorSpec(half: SIMD2(0.44, 0.40), height: 1.18, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
         case .toypiano: return DecorSpec(half: SIMD2(0.56, 0.32), height: 0.98, solid: true, units: 1, corner: 0.05, reach: 1, box: true)
         case .pinwheel: return DecorSpec(half: SIMD2(0.30, 0.30), height: 1.55, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
-        default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
+        default: return parkSpec
         }
     }
     /// The cushion pile is hopped onto and sat on (its soft top, 0.60 up): two seats side by side, so two Jelbies sit together on it (2026-10-25).
-    var batch3SitPoints: [SIMD3<Float>] { self == .cushionpile ? [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)] : [] }
+    var batch3SitPoints: [SIMD3<Float>] { self == .cushionpile ? [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)] : parkSitPoints }
     var batch3Interaction: IdleKind? {
         switch self {
         case .cushionpile: return .decorSit
@@ -50,7 +50,7 @@ extension DecorKind {
         case .easel: return "Art easel"; case .mirror: return "Standing mirror"; case .clock: return "Grandfather clock"
         case .bubblemachine: return "Bubble machine"; case .rockinghorse: return "Rocking horse"; case .jackinbox: return "Jack-in-the-box"
         case .plushbear: return "Plush bear"; case .toypiano: return "Toy piano"; case .pinwheel: return "Pinwheel"
-        default: return rawValue.capitalized
+        default: return parkTitle
         }
     }
     var batch3Use: String {
@@ -68,7 +68,7 @@ extension DecorKind {
         case .plushbear: return "A big squishy bear. A boop sets it wobbling."
         case .toypiano: return "Boop the keys and they ripple up the scale."
         case .pinwheel: return "Boop it and the pinwheel spins and spins."
-        default: return ""
+        default: return parkUse
         }
     }
     /// The shop symbols (SF Symbols) and Drops prices of the batch (earned currency; furniture 45...110, toys 35...75).

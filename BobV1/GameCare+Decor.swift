@@ -31,7 +31,7 @@ extension GameCare {
             decorDrawn.preview = pv?.at; decorDrawn.previewUID = pv?.uid ?? -1
             var list = store.placedDecor
             if let pv, let i = list.firstIndex(where: { $0.uid == pv.uid }) { list[i].x = pv.at.x; list[i].z = pv.at.y }          // (the piece in the hand is drawn at the finger; the saved spot is untouched)
-            DecorField.shared.set(hide ? [] : list)
+            DecorField.shared.set(park.inScene ? ParkToys.placed : (hide ? [] : list))
         }
     }
 

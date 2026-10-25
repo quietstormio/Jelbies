@@ -1,8 +1,7 @@
 //
 //  ParkShapes.swift
 //  Small mesh pieces the Park is built from (RoomMeshBuilder, flat pastel colours, lit by the room's key light and the time of day): ellipsoids, discs,
-//  stems, camera-facing petal fans, and the flowers made of them. Everything is static or built a few times (the plants), never per frame, except the
-//  (shared builders for the Park's trees, flowers and bushes).
+//  cylinders and camera-facing petal fans (the lily blossoms). Static, built once.
 //
 
 import simd
@@ -81,73 +80,5 @@ enum ParkShapes {
             ring.append(b.vertex(c + d * r, simd_normalize(N + d * 0.5), ao: ao, color: color))
         }
         for k in 0..<n { b.triangle(hub, ring[k], ring[(k + 1) % n]) }
-    }
-
-    // MARK: flowers
-
-    enum Bloom { case daisy, tulip, rose, poppy, lavender, sunflower, hydrangea }
-
-    static let leafA = srgb(0.30, 0.56, 0.24), leafB = srgb(0.45, 0.72, 0.32)
-    static let stemC = srgb(0.34, 0.58, 0.26)
-
-    /// One flower standing at (x, z) on the ground `y0`, `h` tall, in `color`. Cheap: a stem, a couple of leaves and a head.
-    static func flower(_ b: RoomMeshBuilder, _ kind: Bloom, x: Float, z: Float, y0: Float = 0, h: Float, color: V3, scale s: Float = 1, rng r: inout ParkRandom) {
-        let top = y0 + h
-        switch kind {
-        case .daisy:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.012 * s, color: stemC, segments: 4)
-            let c = SIMD3<Float>(x, top + 0.02, z)
-            fan(b, c, n: 8, r0: 0.01, r1: 0.085 * s, width: 0.026 * s, color: color, tip: color * 0.96, phase: r.unit() * 6)
-            face(b, c + headN * 0.004, radius: 0.026 * s, color: srgb(0.96, 0.74, 0.14))
-        case .poppy:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.012 * s, color: stemC, segments: 4)
-            let c = SIMD3<Float>(x, top + 0.02, z)
-            fan(b, c, n: 5, r0: 0.0, r1: 0.075 * s, width: 0.04 * s, color: color * 1.05, tip: color * 0.9, phase: r.unit() * 6)
-            face(b, c + headN * 0.004, radius: 0.016 * s, color: srgb(0.30, 0.20, 0.16))
-        case .tulip:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.014 * s, color: stemC, segments: 4)
-            blob(b, SIMD3(x, top + 0.04 * s, z), rx: 0.042 * s, ry: 0.062 * s, rz: 0.042 * s, color: color, segments: 7, rings: 4)
-            blob(b, SIMD3(x, top + 0.07 * s, z), rx: 0.024 * s, ry: 0.04 * s, rz: 0.024 * s, color: color * 1.18, segments: 6, rings: 3)
-            b.leaf(base: SIMD3(x, y0, z), azimuth: r.unit() * 6.28, length: h * 0.7, width: 0.05 * s, lean: 0.7, colorBase: leafA, colorTip: leafB)
-        case .rose:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.014 * s, color: stemC, segments: 4)
-            let c = SIMD3<Float>(x, top + 0.03 * s, z)
-            ball(b, c, 0.05 * s, color, segments: 7, rings: 4)
-            ball(b, c + SIMD3(0, 0.026 * s, 0.012 * s), 0.034 * s, color * 1.18, segments: 6, rings: 3)
-            ball(b, c + SIMD3(0.005 * s, 0.045 * s, 0.018 * s), 0.018 * s, color * 0.8, segments: 5, rings: 3)
-        case .lavender:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.008 * s, color: srgb(0.46, 0.60, 0.40), segments: 4)
-            for k in 0..<5 {
-                let yy = top - 0.02 + Float(k) * 0.034 * s
-                blob(b, SIMD3(x, yy, z), rx: 0.022 * s * (1 - Float(k) * 0.12), ry: 0.026 * s, rz: 0.022 * s * (1 - Float(k) * 0.12), color: color * (0.9 + 0.06 * Float(k)), segments: 5, rings: 3)
-            }
-        case .sunflower:
-            stem(b, x: x, z: z, y0: y0, y1: top, r: 0.03 * s, color: srgb(0.34, 0.54, 0.22), segments: 5)
-            b.leaf(base: SIMD3(x, y0 + h * 0.3, z), azimuth: 0.4, length: 0.4 * s, width: 0.2 * s, lean: 1.0, colorBase: leafA, colorTip: leafB)
-            b.leaf(base: SIMD3(x, y0 + h * 0.5, z), azimuth: 2.7, length: 0.4 * s, width: 0.2 * s, lean: 1.0, colorBase: leafA, colorTip: leafB)
-            let c = SIMD3<Float>(x, top + 0.05, z + 0.05)
-            fan(b, c, n: 14, r0: 0.05, r1: 0.20 * s, width: 0.04 * s, color: srgb(1.0, 0.80, 0.16), tip: srgb(1.0, 0.70, 0.08), phase: r.unit() * 6)
-            face(b, c + headN * 0.01, radius: 0.085 * s, color: srgb(0.36, 0.22, 0.12))
-        case .hydrangea:
-            let c = SIMD3<Float>(x, y0 + h, z)
-            ball(b, c, 0.34 * s, color * 0.92, segments: 10, rings: 5)
-            for k in 0..<10 {
-                let a = Float(k) * 2.4 + r.unit(), e = 0.2 + r.unit() * 0.9
-                let p = c + SIMD3(cosf(a) * cosf(e), sinf(e), sinf(a) * cosf(e)) * (0.30 * s)
-                ball(b, p, 0.1 * s, color * (0.9 + 0.25 * r.unit()), segments: 6, rings: 3)
-            }
-        }
-    }
-
-    /// A leafy mound of foliage (bush) with optional blossom dots.
-    static func bush(_ b: RoomMeshBuilder, x: Float, z: Float, scale s: Float, color: V3, bloom: V3? = nil, rng r: inout ParkRandom) {
-        blob(b, SIMD3(x, 0.40 * s, z), rx: 0.80 * s, ry: 0.52 * s, rz: 0.70 * s, color: color, segments: 12, rings: 6, ao: 0.9)
-        blob(b, SIMD3(x + 0.45 * s, 0.30 * s, z + 0.1 * s), rx: 0.5 * s, ry: 0.38 * s, rz: 0.45 * s, color: color * 1.1, segments: 10, rings: 5, ao: 0.9)
-        guard let bloom else { return }
-        for _ in 0..<9 {
-            let a = r.unit() * 6.28, e = 0.1 + r.unit() * 0.9
-            let p = SIMD3<Float>(x + cosf(a) * 0.74 * s * cosf(e), 0.40 * s + sinf(e) * 0.5 * s, z + sinf(a) * 0.64 * s * cosf(e))
-            ball(b, p, 0.055 * s, bloom * (0.9 + 0.2 * r.unit()), segments: 5, rings: 3)
-        }
     }
 }
