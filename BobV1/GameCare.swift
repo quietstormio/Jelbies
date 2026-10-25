@@ -131,10 +131,13 @@ final class GameCare {
     /// A trip is on: the race track, the show stage or the café (the room's care, close-up and roaming wait).
     /// The park outing (Park/ParkTrip.swift, GameCare+Park.swift): the picker, the trip to the park and back, the visitors.
     let park = ParkTrip()
+    /// The Groomer (Groomer/): the paid clean-up trip to the Jelly Spa.
+    let groom = GroomTrip()
+    @ObservationIgnored let groomBook = GroomBook()
     @ObservationIgnored let parkBook = ParkBook()
     /// A friend over at home (Park/GuestBook.swift, GameCare+Guest.swift): the invitation / visit, saved on the device.
     let guestBook = GuestBook()
-    var tripActive: Bool { race.active || show.active || cafe.active || park.active }
+    var tripActive: Bool { race.active || show.active || cafe.active || park.active || groom.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -250,6 +253,7 @@ final class GameCare {
         wireShow()
         wireCafe()
         wirePark()
+        wireGroom()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }

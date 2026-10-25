@@ -361,6 +361,14 @@ final class BathFlow {
         }
     }
 
+    /// The Groomer (Groomer/): Bob left the shop spotless and shiny. The same end state as the Clean's finish, without the tub.
+    func groomed() {
+        guard phase == .off else { return }
+        grime.sparkle = 1; grime.dirt = 0; grime.save()
+        look.wet = 0; look.sparkle = 1; look.dirt = 0
+        look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
+    }
+
     private func enterAfterFade() { enter(.soap) }
 
     private func enter(_ p: BathPhase) {

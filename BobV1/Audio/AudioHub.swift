@@ -348,6 +348,28 @@ final class AudioHub {
 
     private func url(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "m4a") }
 
+    // MARK: one-off clips (the Groomer's bell / ambience / reveal: no variants, follow the sound-effects setting)
+
+    @ObservationIgnored private var clips: [String: AVAudioPlayer] = [:]
+
+    /// Plays the bundled clip `name` (no _N variants) once at the sound-effects level. Muted / sound effects off = silent (captions are the caller's).
+    func playClip(_ name: String, volume: Float = 1) {
+        guard !muted, started, active else { return }
+        let level = settings.sfxLevel * duck.gain
+        guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
+        clips[name]?.stop()
+        p.volume = min(1, volume * level * AudioMix.sfxMaster * 1.5)
+        p.prepareToPlay(); p.play()
+        clips[name] = p
+    }
+
+    /// Fades a clip out and stops it (a skipped visit, the reveal).
+    func stopClip(_ name: String, fade: TimeInterval = 0.3) {
+        guard let p = clips.removeValue(forKey: name) else { return }
+        p.setVolume(0, fadeDuration: fade)
+        DispatchQueue.main.asyncAfter(deadline: .now() + fade + 0.05) { p.stop() }
+    }
+
     private func variants(_ sfx: SFX) -> Int {
         if let n = variantCount[sfx.rawValue] { return n }
         var n = 0
