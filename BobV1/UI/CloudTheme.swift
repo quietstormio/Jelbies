@@ -16,7 +16,11 @@ enum CloudTheme {
     static let blush = Color(.sRGB, red: 0xF6 / 255, green: 0xAF / 255, blue: 0xC0 / 255)
     static let lipPrimary = Color(.sRGB, red: 0x7B / 255, green: 0xA8 / 255, blue: 0xD2 / 255)
     static let lipSecondary = Color(.sRGB, red: 0xCF / 255, green: 0xE1 / 255, blue: 0xF2 / 255)
-    static let caption = Color(.sRGB, red: 0x6F / 255, green: 0x8F / 255, blue: 0xAE / 255)
+    static let caption = Color(.sRGB, red: 0x4A / 255, green: 0x6A / 255, blue: 0x89 / 255)          // about 5.5:1 on white (was 3.4:1)
+
+    /// Primary-button gradient ends: white text on them is 4.5:1 or better (the lighter jelly tones were about 2.7:1).
+    static let buttonTop = Color(.sRGB, red: 0x3F / 255, green: 0x7A / 255, blue: 0xB8 / 255)
+    static let buttonBottom = Color(.sRGB, red: 0x2C / 255, green: 0x66 / 255, blue: 0xA2 / 255)
 
     static func font(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font { JFont.scaled(size, weight) }
 
@@ -51,7 +55,7 @@ struct JellyButtonStyle: ButtonStyle {
                 ZStack {
                     shape.fill(primary ? CloudTheme.lipPrimary : CloudTheme.lipSecondary).padding(-4).offset(y: lip)
                     shape.fill(CloudTheme.jelly).padding(-4)
-                    if primary { shape.fill(LinearGradient(colors: [CloudTheme.jellyLight, CloudTheme.deepJelly], startPoint: .top, endPoint: .bottom)) }
+                    if primary { shape.fill(LinearGradient(colors: [CloudTheme.buttonTop, CloudTheme.buttonBottom], startPoint: .top, endPoint: .bottom)) }
                     else { shape.fill(Color.white) }
                     if primary {
                         shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.45), .clear], startPoint: .top, endPoint: .init(x: 0.5, y: 0.25)), lineWidth: 3)
@@ -62,7 +66,7 @@ struct JellyButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .scaleEffect(x: p && !still ? 1.03 : 1, y: p && !still ? 0.96 : 1, anchor: .bottom)
             .offset(y: p ? 3 : 0)
-            .opacity(enabled ? 1 : 0.5)
+            .opacity(enabled ? 1 : 0.6)
             .animation(still ? .easeOut(duration: 0.1) : .spring(response: 0.25, dampingFraction: 0.55), value: p)
     }
 }

@@ -31,6 +31,7 @@ struct GardenOverlay: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: garden.note)
+        .onChange(of: garden.note) { _, n in if let n { A11yAnnounce.say(n) } }
         .animation(.easeOut(duration: 0.2), value: garden.pickerPlot)
     }
 

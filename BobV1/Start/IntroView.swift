@@ -47,7 +47,15 @@ struct IntroView: View {
                     IntroPlayerView(player: player).frame(width: side, height: side)
                         .opacity(ready ? 1 : 0)
                 }
-                Text("Tap to start").font(CloudTheme.font(18, .semibold)).foregroundStyle(CloudTheme.jelly)
+                if A11ySettings.shared.captions, !settled, ready {
+                    Text("Soft chime and sparkles")          // caption for the intro clip's sound
+                        .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Capsule().fill(CloudTheme.mist))
+                        .frame(maxHeight: .infinity, alignment: .top).padding(.top, max(48, geo.size.height * 0.08))
+                        .accessibilityHidden(true)
+                }
+                Text("Tap to start").font(CloudTheme.font(18, .semibold)).foregroundStyle(CloudTheme.caption)
                     .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, max(28, geo.size.height * 0.08))
                     .opacity(settled ? 1 : 0)
                     .animation(.easeOut(duration: 0.4), value: settled)
@@ -60,10 +68,10 @@ struct IntroView: View {
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { tapped() }
-        .onAppear { start() }
+        .onAppear { start(); A11yAnnounce.say("Jelbies. Double tap to start.", priority: .low) }
         .onDisappear { teardown() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jelbies")
+        .accessibilityLabel("Jelbies. Intro animation: the logo squishes and sparkles with a soft chime.")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Starts the game")
         .accessibilityIdentifier("intro")

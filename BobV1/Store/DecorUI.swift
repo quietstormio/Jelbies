@@ -50,7 +50,15 @@ struct ArrangeOverlay: View {
             }
             path.closeSubpath()
             ctx.fill(path, with: .color(tint.opacity(0.28)))
-            ctx.stroke(path, with: .color(tint), style: StrokeStyle(lineWidth: 3, lineJoin: .round))
+            // Shape cues besides colour: a solid ring + tick when it fits, a dashed ring + cross when it does not.
+            ctx.stroke(path, with: .color(tint), style: StrokeStyle(lineWidth: 3, lineJoin: .round, dash: good ? [] : [9, 6]))
+            if let m = GameCamera.screenPoint(floor: c, size: size) {
+                var g = Path()
+                if good { g.move(to: CGPoint(x: m.x - 11, y: m.y)); g.addLine(to: CGPoint(x: m.x - 3, y: m.y + 9)); g.addLine(to: CGPoint(x: m.x + 13, y: m.y - 10)) }
+                else { g.move(to: CGPoint(x: m.x - 10, y: m.y - 10)); g.addLine(to: CGPoint(x: m.x + 10, y: m.y + 10)); g.move(to: CGPoint(x: m.x + 10, y: m.y - 10)); g.addLine(to: CGPoint(x: m.x - 10, y: m.y + 10)) }
+                ctx.stroke(g, with: .color(.white), style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
+                ctx.stroke(g, with: .color(good ? SK.ink : Color(hex: 0xB3261E)), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            }
         }
         .allowsHitTesting(false)
     }

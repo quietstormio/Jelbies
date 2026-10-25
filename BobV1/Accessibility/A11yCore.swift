@@ -32,6 +32,8 @@ final class A11ySettings {
     var systemReduceMotion = false
     /// Race / drill input assist.
     var raceAssist: RaceAssist { didSet { d.set(raceAssist.rawValue, forKey: "a11y.raceAssist") } }
+    /// Hurdles are jumped for the player in any race control mode (the Jump button still works).
+    var autoJump: Bool { didSet { save("a11y.autoJump", autoJump) } }
     /// Rhythm timing (drill, Show dance, trick ring): wider windows and a slower ring.
     var relaxedTiming: Bool { didSet { save("a11y.relaxedTiming", relaxedTiming) } }
     /// The mic is tap-to-start / tap-to-stop instead of hold.
@@ -55,6 +57,7 @@ final class A11ySettings {
         }
         captions = b("a11y.captions", "A11yCaptions", false)
         reduceMotionInApp = b("a11y.reduceMotion", "A11yReduceMotion", false)
+        autoJump = b("a11y.autoJump", "A11yAutoJump", false)
         relaxedTiming = b("a11y.relaxedTiming", "A11yRelaxedTiming", false)
         tapToTalk = b("a11y.tapToTalk", "A11yTapToTalk", false)
         longerHints = b("a11y.longerHints", "A11yLongerHints", false)

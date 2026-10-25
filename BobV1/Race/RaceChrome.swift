@@ -55,7 +55,7 @@ struct RaceChrome: View {
                 hint("Oops! Left, right, left, right")
             } else if race.ui.stalled {
                 hint("Keep tapping!")
-            } else if race.ui.hurdleAhead, race.assist != .auto {
+            } else if race.ui.hurdleAhead, race.assist != .auto, !A11ySettings.shared.autoJump {
                 hint("Jump!")
             } else if race.ui.inTurn {
                 hint("Bend! Ease off a little")

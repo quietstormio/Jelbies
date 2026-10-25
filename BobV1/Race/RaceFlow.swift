@@ -161,7 +161,7 @@ final class RaceFlow {
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
-        sim?.autoJumpPlayer = assist == .auto          // (the hands-free run clears the hurdles for him)
+        sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump          // (the hands-free run clears the hurdles for him)
         started += 1
     }
 

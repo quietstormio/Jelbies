@@ -85,6 +85,7 @@ struct ParkChrome: View {
             .animation(.easeInOut(duration: 0.25), value: park.card)
             .animation(.easeInOut(duration: 0.25), value: park.phase == .playing)
             .animation(.easeInOut(duration: 0.2), value: park.toast)
+            .onChange(of: park.toast) { _, t in if let t { A11yAnnounce.say(t) } }
         }
         .allowsHitTesting(park.active || park.toast != nil)
     }

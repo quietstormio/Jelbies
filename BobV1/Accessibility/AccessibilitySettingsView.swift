@@ -30,6 +30,7 @@ struct AccessibilitySettingsView: View {
                         ForEach(RaceAssist.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .accessibilityIdentifier("a11y-race-assist")
+                    toggle("Jump for me over hurdles", $settings.autoJump, "a11y-auto-jump")
                     toggle("Relaxed rhythm timing", $settings.relaxedTiming, "a11y-relaxed-timing")
                 } header: { Text("Playing") } footer: {
                     Text(Self.raceFootnote(settings.raceAssist) + " Relaxed timing widens the windows in drills, the Show dance and the trick ring.")
@@ -58,7 +59,7 @@ struct AccessibilitySettingsView: View {
     }
 
     /// The Playing and Talking rows drive code that ships in Accessibility part B; flip when B merges so no row does nothing.
-    static let partBLanded = false
+    static let partBLanded = true
 
     static func raceFootnote(_ a: RaceAssist) -> String {
         switch a {
