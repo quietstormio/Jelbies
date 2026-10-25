@@ -93,6 +93,9 @@ struct LaunchCurtain: View {
 struct LaunchCurtainArt: View {
     let hour: Double
     var bounce: Bool
+    private var theme = ThemeStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    init(hour: Double, bounce: Bool) { self.hour = hour; self.bounce = bounce }
 
     private struct Wobble { var x: CGFloat = 1; var y: CGFloat = 1 }
 
@@ -101,11 +104,13 @@ struct LaunchCurtainArt: View {
             let u = min(geo.size.width, geo.size.height) / 440
             let logoW = min(geo.size.width * 0.8, 360 * max(u, 0.8))
             ZStack {
-                CloudSky()
+                TitleBackdrop(still: reduceMotion || A11ySettings.shared.reduceMotion, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
+                    .id(theme.palette.id).transition(.opacity)
                 VStack(spacing: 18 * u) {
                     logo(width: logoW)
                     HStack(spacing: 12 * u) { ForEach(0..<3, id: \.self) { dot($0, u) } }.padding(.top, 4 * u)
-                    Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(CloudTheme.caption)
+                    Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
+                        .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
                 .position(x: geo.size.width / 2, y: geo.size.height / 2)
             }
@@ -113,7 +118,7 @@ struct LaunchCurtainArt: View {
     }
 
     @ViewBuilder private func logo(width: CGFloat) -> some View {
-        let img = Image("JelbiesLogo").resizable().scaledToFit().frame(width: width)
+        let img = Image("JelbiesLogo").resizable().scaledToFit().frame(width: width).shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
         if bounce {
             img.keyframeAnimator(initialValue: Wobble(), repeating: true) { v, w in v.scaleEffect(x: w.x, y: w.y, anchor: .bottom) } keyframes: { _ in
                 KeyframeTrack(\.x) { CubicKeyframe(1.06, duration: 0.32); CubicKeyframe(0.96, duration: 0.32); CubicKeyframe(1.02, duration: 0.32); CubicKeyframe(1, duration: 0.32); CubicKeyframe(1, duration: 0.5) }
@@ -123,7 +128,7 @@ struct LaunchCurtainArt: View {
     }
 
     private func dot(_ i: Int, _ u: CGFloat) -> some View {
-        Circle().fill(CloudTheme.jelly).frame(width: 13 * u + 4, height: 13 * u + 4)
+        Circle().fill(Color.white).frame(width: 13 * u + 4, height: 13 * u + 4)
             .scaleEffect(x: bounce ? 0.92 : 1.1, y: bounce ? 1.08 : 0.9, anchor: .bottom)
             .offset(y: bounce ? -10 * u : 0)
             .animation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(Double(i) * 0.15), value: bounce)

@@ -11,6 +11,7 @@ struct MainMenuView: View {
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
     @State private var visible = true
+    private var theme = ThemeStore.shared
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var landscape: Bool { vsc == .compact }
@@ -21,7 +22,8 @@ struct MainMenuView: View {
             let w = geo.size.width, h = geo.size.height
             let bottom = geo.safeAreaInsets.bottom
             ZStack {
-                TitleBackdrop(still: still, size: geo.size, landscape: landscape)
+                TitleBackdrop(still: still, size: geo.size, landscape: landscape, palette: theme.palette)
+                    .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
                 if landscape {
                     let k = min(1, h / 393)
                     let btnW = min(300, w * 0.32)
@@ -46,6 +48,7 @@ struct MainMenuView: View {
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
+        .animation(.easeInOut(duration: 0.5), value: theme.selection)
         .onAppear { visible = true }
         .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
@@ -56,7 +59,7 @@ struct MainMenuView: View {
         SpinLogo(still: still, active: visible)
             .frame(width: width / 0.96)
             .aspectRatio(620.0 / 307.0, contentMode: .fit)
-            .shadow(color: Color(hex: 0x3B74B2), radius: 0, x: 0, y: 7 * width / 364)
+            .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
             .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
@@ -64,12 +67,12 @@ struct MainMenuView: View {
         VStack(spacing: 20 * k) {
             if hasSave {
                 Button("Continue") { AudioHub.shared.uiTap(); flow.continueGame() }
-                    .buttonStyle(TitleButtonStyle(primary: true, k: k)).accessibilityIdentifier("menu-continue")
+                    .buttonStyle(TitleButtonStyle(primary: true, k: k, palette: theme.palette)).accessibilityIdentifier("menu-continue")
                 Button("New Game") { AudioHub.shared.uiTap(); confirmNew = true }
-                    .buttonStyle(TitleButtonStyle(primary: false, k: k)).accessibilityIdentifier("menu-new")
+                    .buttonStyle(TitleButtonStyle(primary: false, k: k, palette: theme.palette)).accessibilityIdentifier("menu-new")
             } else {
                 Button("New Game") { AudioHub.shared.uiTap(); flow.startOver() }
-                    .buttonStyle(TitleButtonStyle(primary: true, k: k)).accessibilityIdentifier("menu-start")
+                    .buttonStyle(TitleButtonStyle(primary: true, k: k, palette: theme.palette)).accessibilityIdentifier("menu-start")
             }
         }
     }
@@ -162,23 +165,24 @@ struct SpinLogo: View {
 
 
 /// Title buttons: Continue = white pill with a solid lip; New Game = blue pill with a white rim. Press drops by the lip.
-/// New Game fill is #3672B3 (white text 4.98:1; the mockup's #3E7DC0 is 4.28:1).
+/// Colours come from the theme palette (Sky Blue New Game fill is #3672B3: white text 4.98:1; the mockup's #3E7DC0 is 4.28:1).
 private struct TitleButtonStyle: ButtonStyle {
     let primary: Bool
     let k: CGFloat
+    let palette: ThemePalette
     func makeBody(configuration: Configuration) -> some View {
         let p = configuration.isPressed
         let lip = (primary ? 8 : 6) * k
         let hgt = (primary ? 74 : 62) * k
         configuration.label
             .font(.system(size: (primary ? 27 : 22) * k, weight: primary ? .black : .heavy, design: .rounded))
-            .foregroundStyle(primary ? Color(hex: 0x2F66A4) : Color.white)
+            .foregroundStyle(primary ? palette.continueText : Color.white)
             .lineLimit(1).minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity).frame(height: hgt)
             .background {
                 ZStack {
-                    Capsule().fill(Color(hex: 0x2F5F97)).offset(y: p ? 0 : lip)
-                    Capsule().fill(primary ? Color.white : Color(hex: 0x3672B3))
+                    Capsule().fill(palette.lip).offset(y: p ? 0 : lip)
+                    Capsule().fill(primary ? Color.white : palette.newGame)
                     if !primary { Capsule().strokeBorder(Color.white.opacity(0.7), lineWidth: 3 * k) }
                 }
             }
@@ -222,10 +226,13 @@ private enum JelbieArt {
 }
 
 /// Blue title backdrop: scrolling rotated Jelbie pattern, twinkling sparkles, the peeking Jelbie.
-private struct TitleBackdrop: View {
+struct TitleBackdrop: View {
     let still: Bool
     let size: CGSize
     let landscape: Bool
+    var palette: ThemePalette = ThemeMath.palette(.sky)
+    /// false = just the colour and the pattern (the loading screen).
+    var extras = true
 
     private static func sparkle(_ cx: Double, _ cy: Double, _ r: Double, _ t: Double) -> Path {
         var p = Path()
@@ -243,7 +250,7 @@ private struct TitleBackdrop: View {
             let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
             Canvas { ctx, sz in
                 let w = sz.width, h = sz.height
-                ctx.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(Color(hex: 0x5A97D6)))
+                ctx.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(palette.bg))
                 // Pattern
                 let ps = min(w, h) / 440
                 let phase = (t.truncatingRemainder(dividingBy: 9)) / 9
@@ -255,8 +262,9 @@ private struct TitleBackdrop: View {
                 let R = Int((hypot(w, h) / ps / 72).rounded(.up)) / 2 + 2
                 let tilePath = JelbieArt.tile
                 for i in -R...R { for j in -R...R {
-                    pc.fill(tilePath.applying(CGAffineTransform(translationX: Double(i) * 72, y: Double(j) * 72)), with: .color(.white.opacity(0.13)))
+                    pc.fill(tilePath.applying(CGAffineTransform(translationX: Double(i) * 72, y: Double(j) * 72)), with: .color(.white.opacity(palette.patternOpacity)))
                 } }
+                guard extras else { return }
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
                 let sx = w / 440, sy = h / 956, sk = landscape ? min(w, h) / 440 : sx
@@ -273,7 +281,7 @@ private struct TitleBackdrop: View {
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)
-                let rim = Color(hex: 0x8DB8E0)
+                let rim = palette.rim
                 for path in [JelbieArt.body, JelbieArt.circle(-52.5, 14, 10), JelbieArt.circle(52.5, 14, 10)] {
                     jc.fill(path, with: .color(rim))
                     jc.stroke(path, with: .color(rim), style: StrokeStyle(lineWidth: 13, lineJoin: .round))
@@ -281,14 +289,14 @@ private struct TitleBackdrop: View {
                 jc.fill(JelbieArt.body, with: .color(.white))
                 var cc = jc
                 cc.clip(to: JelbieArt.body)
-                cc.fill(JelbieArt.body, with: .color(Color(hex: 0xE2EDF8)))
+                cc.fill(JelbieArt.body, with: .color(palette.shade))
                 cc.fill(JelbieArt.body.applying(CGAffineTransform(translationX: -5, y: -6)), with: .color(.white))
                 // Eyes (blink)
                 let ph = still ? 0 : t.truncatingRemainder(dividingBy: 4.6) / 4.6
                 let sy2: Double = ph < 0.93 ? 1 : ph < 0.95 ? 1 - 0.88 * (ph - 0.93) / 0.02 : ph < 1 ? 0.12 + 0.88 * (ph - 0.95) / 0.05 : 1
                 var ec = jc
                 ec.translateBy(x: 0, y: -14); ec.scaleBy(x: 1, y: sy2); ec.translateBy(x: 0, y: 14)
-                let eye = Color(hex: 0x7F9FB9)
+                let eye = palette.eye
                 for x in [-19.5, 19.5] {
                     ec.fill(JelbieArt.circle(x, -14, 4.8), with: .color(eye))
                     ec.fill(JelbieArt.circle(x, -16.2, 1.7), with: .color(.white))
