@@ -43,12 +43,10 @@ struct MainMenuView: View {
     }
 
     private var title: some View {
-        // The frame is ~16% wider than the logo inside it (logo = 86% of the frame width).
+        // The logo fills ~96% of the swing frame's width.
         SpinLogo(still: still, active: visible)
-            .frame(maxWidth: (landscape ? 420 : 340) / 0.86 * 1.04)
-            .aspectRatio(675.0 / 517.0, contentMode: .fit)
-            .offset(y: bob && !still ? -6 : 0)
-            .animation(still ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: bob)
+            .frame(maxWidth: (landscape ? 420 : 340) / 0.96 * 1.04)
+            .aspectRatio(620.0 / 307.0, contentMode: .fit)
             .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
@@ -89,43 +87,65 @@ struct MainMenuView: View {
     }
 }
 
-/// Cached frames of the 2 s, 30 fps logo spin loop (menuspin_00...59), decoded once off the main thread.
-@MainActor private enum SpinFrames {
-    static var frames: [UIImage] = []
-    static var loading = false
-    static func load() async {
-        guard frames.isEmpty, !loading else { return }
-        loading = true
-        let loaded: [UIImage] = await Task.detached(priority: .userInitiated) {
-            (0..<60).compactMap { i -> UIImage? in
-                let n = String(format: "menuspin_%02d", i)
-                guard let u = Bundle.main.url(forResource: n, withExtension: "png") ?? Bundle.main.url(forResource: n, withExtension: "png", subdirectory: "MenuSpin"),
-                      let img = UIImage(contentsOfFile: u.path) else { return nil }
-                return img.preparingForDisplay() ?? img
+/// Swing + jumps loop: 210 frames, 30 fps, 7 s seamless (menuswing_000...209). Decoded frames are ~760 KB each,
+/// so only a small sliding window is kept in memory and decoded ahead on a background queue.
+@MainActor private final class SwingFrames {
+    static let shared = SwingFrames()
+    static let count = 210
+    static let fps: Double = 30
+    private let ahead = 20, behind = 3
+    private var cache: [Int: UIImage] = [:]
+    private var pending = Set<Int>()
+
+    nonisolated private static func decode(_ i: Int) -> UIImage? {
+        let n = String(format: "menuswing_%03d", i)
+        guard let u = Bundle.main.url(forResource: n, withExtension: "png") ?? Bundle.main.url(forResource: n, withExtension: "png", subdirectory: "MenuSwing"),
+              let img = UIImage(contentsOfFile: u.path) else { return nil }
+        return img.preparingForDisplay() ?? img
+    }
+
+    /// Returns frame i if decoded (else the nearest earlier decoded one) and prefetches the window ahead.
+    func frame(_ i: Int) -> UIImage? {
+        let want = (-behind...ahead).map { (i + $0 + Self.count) % Self.count }
+        let keep = Set(want)
+        for k in cache.keys where !keep.contains(k) { cache[k] = nil }
+        for k in want where cache[k] == nil && !pending.contains(k) {
+            pending.insert(k)
+            Task.detached(priority: .userInitiated) {
+                let img = SwingFrames.decode(k)
+                await MainActor.run { [self] in
+                    pending.remove(k)
+                    if let img { cache[k] = img }
+                }
             }
-        }.value
-        frames = loaded
-        loading = false
+        }
+        if let f = cache[i] { return f }
+        for d in 1..<behind + 1 { if let f = cache[(i - d + Self.count) % Self.count] { return f } }
+        return nil
     }
 }
 
 struct SpinLogo: View {
     let still: Bool
     let active: Bool
-    @State private var ready = SpinFrames.frames.count == 60
+    @State private var start = Date()
 
     var body: some View {
         Group {
-            if ready && !SpinFrames.frames.isEmpty {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: still || !active)) { tl in
-                    let n = SpinFrames.frames.count
-                    let i = still ? 0 : Int(tl.date.timeIntervalSinceReferenceDate * 30) % n
-                    Image(uiImage: SpinFrames.frames[i]).resizable().scaledToFit()
-                }
+            if still || !active {
+                Image(uiImage: SwingFrames.shared.frame(0) ?? UIImage()).resizable().scaledToFit()
+                    .overlay { if SwingFrames.shared.frame(0) == nil { Image("JelbiesLogo").resizable().scaledToFit() } }
             } else {
-                Image("JelbiesLogo").resizable().scaledToFit().scaleEffect(0.86)
+                TimelineView(.animation(minimumInterval: 1.0 / SwingFrames.fps)) { tl in
+                    let i = Int(tl.date.timeIntervalSince(start) * SwingFrames.fps) % SwingFrames.count
+                    if let img = SwingFrames.shared.frame(i) {
+                        Image(uiImage: img).resizable().scaledToFit()
+                    } else {
+                        Image("JelbiesLogo").resizable().scaledToFit()
+                    }
+                }
             }
         }
-        .task { await SpinFrames.load(); ready = SpinFrames.frames.count == 60 }
+        .onChange(of: active) { _, _ in start = Date() }
     }
 }
