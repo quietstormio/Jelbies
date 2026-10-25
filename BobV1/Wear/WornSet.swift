@@ -213,6 +213,14 @@ final class WornSet {
         if !(l.isFinite) { s.swing = .zero; s.swingV = .zero }
     }
 
+    /// The body's pose RIGHT NOW, read after this frame's sim steps and just before the pieces are emitted. `tick` runs BEFORE the step (hopTick), so its
+    /// carry is a step stale; rigid parts rode that stale pose while surface-bound parts read this frame's skin, and the two drifted apart in fast moves.
+    func syncCarry(_ id: Int, sim: SoftBody) {
+        guard slots.indices.contains(id) else { return }
+        let pose = sim.bodyPose(iterations: 3)
+        slots[id].carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
+    }
+
     /// Stores the posed arm frames of Jelly `id` (world), from the brain (GameCare+Wear).
     func setArms(_ id: Int, _ f: [ArmFrameWorld]) { if slots.indices.contains(id) { slots[id].arms = f } }
 

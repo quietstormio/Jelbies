@@ -92,6 +92,7 @@ extension GameCare {
     func refreshWear(_ actors: [JellyActor], renderer: MelonRenderer?, time: Float) {
         guard let renderer, let room = renderer.room else { return }
         if wardrobe.body == nil { wardrobe.body = WearBody.shared }
+        for a in actors where wardrobe.slot(a.id)?.items.values.contains(where: { $0.scale > 0.001 }) == true || wardrobe.slot(a.id)?.bib != nil { wardrobe.syncCarry(a.id, sim: a.sim) }          // same-frame pose for rigid parts
         for a in actors where wardrobe.shown(a.id, .hands) != nil { wardrobe.setArms(a.id, armFrames(a)) }
         for a in actors { renderer.setJersey(wardrobe.jersey(a.id), body: a.id) }
         let active = wardrobe.isActive || features.anyShown
@@ -99,6 +100,7 @@ extension GameCare {
         var f = wardrobe.frame(theme: room.theme, hidden: room.bathVisible, time: time) { renderer.skinPointer(body: $0) }
         var boxes = wearBoxes(f.opaque, actors.count)
         if features.body == nil { features.body = WearBody.shared }
+        if features.anyShown { for a in actors { features.syncCarry(a.id, sim: a.sim) } }
         let ff = features.frame(hidden: room.bathVisible) { renderer.skinPointer(body: $0) }
         if !ff.vertices.isEmpty {
             let base = UInt32(f.opaque.vertices.count)

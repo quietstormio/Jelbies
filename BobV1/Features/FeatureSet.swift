@@ -148,6 +148,13 @@ final class FeatureSet {
         slots[id] = s
     }
 
+    /// The body's pose after this frame's sim steps (tick runs before the step; the parts' pivots read this frame's skin, so their rotation must match).
+    func syncCarry(_ id: Int, sim: SoftBody) {
+        guard slots.indices.contains(id) else { return }
+        let pose = sim.bodyPose(iterations: 3)
+        slots[id].carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
+    }
+
     /// The body's acceleration history (for the lagged drives) and squash rate.
     private func stepDrive(_ s: inout Slot, dt: Float) {
         let v = (s.carry.centroid - s.lastCentroid) / max(dt, 1e-4)
