@@ -200,4 +200,22 @@ final class RoomsCaptureTests: XCTestCase {
             try saveRaw(img, "room_thumb_\(d.id.rawValue)")
         }
     }
+
+    /// The park's empty scenery at noon, portrait + landscape, on the park camera (capture aid, scenery review).
+    func testCaptureParkScenery() throws {
+        guard let dir else { throw XCTSkip("ROOMS_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        defer { RoomLayout.apply(RoomCatalog.home) }
+        let rig = MotionRig(game: true); Self.keep.append(rig); rig.renderSamples = false
+        DayClock.shared.forcedHour = 12
+        RoomLayout.apply(RoomCatalog.park)
+        for (label, w, h) in [("portrait", 1206, 2622), ("landscape", 2622, 1206)] {
+            let a = Float(w) / Float(h)
+            GameCamera.configurePark(); _ = GameCamera.camera(aspect: a)
+            let (ren, target) = try makeRenderer(device, rig, w: w, h: h)
+            let img = emptyRoom(ren, target, rig: rig, w: w, h: h, aspect: a, hour: 12)
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try img.uiImage()?.pngData()?.write(to: URL(fileURLWithPath: "\(dir)/park_\(label).png"))
+        }
+    }
 }

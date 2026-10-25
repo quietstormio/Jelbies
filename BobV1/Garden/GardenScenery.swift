@@ -90,13 +90,9 @@ enum GardenScenery {
         }
     }
 
+    /// The park's layered tree (Park/ParkNature.swift), tinted by `crown`.
     private static func tree(_ b: RoomMeshBuilder, x: Float, z: Float, height h: Float, crown: V3, rng r: inout ParkRandom) {
-        b.lathe(cx: x, cz: z, profile: [PP(r: 0.32, y: 0, nr: 1, ny: 0, ao: 0.6), PP(r: 0.24, y: h * 0.3, nr: 1, ny: 0.05), PP(r: 0.18, y: h * 0.58, nr: 1, ny: 0.05)],
-                segments: 9, color: c(0.46, 0.32, 0.26))
-        S.blob(b, V3(x, h * 0.64, z), rx: 1.8, ry: 1.4, rz: 1.6, color: crown, segments: 12, rings: 6)
-        S.blob(b, V3(x - 1.0, h * 0.55, z + 0.3), rx: 1.2, ry: 1.0, rz: 1.1, color: crown * (0.95 + 0.1 * r.unit()), segments: 10, rings: 5)
-        S.blob(b, V3(x + 0.9, h * 0.57, z - 0.2), rx: 1.2, ry: 1.0, rz: 1.1, color: crown * (0.95 + 0.1 * r.unit()), segments: 10, rings: 5)
-        S.blob(b, V3(x + 0.1, h * 0.88, z), rx: 1.1, ry: 0.9, rz: 1.0, color: crown * 1.05, segments: 10, rings: 5)
+        ParkScenery.tree(b, x: x, z: z, height: h, scale: 1.0, hue: crown * 0.9, rng: &r)
     }
 
     // MARK: fences
@@ -351,10 +347,10 @@ enum GardenScenery {
         strip(b, x0: 3.95, x1: 4.85, z0: -0.7, z1: 8.0, perSquareMetre: 16, tall: true, &r)
         // back corners and beside the trough
         strip(b, x0: -4.85, x1: -3.6, z0: -4.75, z1: -3.75, perSquareMetre: 18, tall: true, &r)
-        strip(b, x0: 2.1, x1: 3.15, z0: -4.75, z1: -3.9, perSquareMetre: 18, tall: false, &r)
+        strip(b, x0: 2.05, x1: 2.45, z0: -4.75, z1: -3.9, perSquareMetre: 18, tall: false, &r)
         strip(b, x0: -2.05, x1: -1.0, z0: -3.55, z1: -3.2, perSquareMetre: 20, tall: false, &r)
         // hydrangea puffs at the corners of the beds and the foot of the arch
-        let hy: [(Float, Float)] = [(-4.55, -1.4), (4.5, 0.2), (-4.5, 3.0), (4.5, 3.4), (-4.55, 6.0), (4.5, 6.4), (-3.45, -4.2), (3.25, -3.95), (-2.05, -4.3)]
+        let hy: [(Float, Float)] = [(-4.55, -1.4), (4.5, 0.2), (-4.5, 3.0), (4.5, 3.4), (-4.55, 6.0), (4.5, 6.4), (-3.45, -4.2), (-2.05, -4.3)]
         for (i, h) in hy.enumerated() {
             S.flower(b, .hydrangea, x: h.0, z: h.1, h: 0.4, color: hydrangeaColours[i % hydrangeaColours.count], scale: 0.95, rng: &r)
         }
@@ -378,7 +374,7 @@ enum GardenScenery {
     private static func meadow(_ b: RoomMeshBuilder, _ r: inout ParkRandom) {
         for _ in 0..<150 {
             let side: Float = r.unit() < 0.5 ? -1 : 1
-            let x = side * (2.7 + r.unit() * 1.2), z = -2.0 + r.unit() * 9.5
+            let x = side * (3.6 + r.unit() * 1.2), z = -2.0 + r.unit() * 9.5
             let da = simd_distance(SIMD2(x, z), GardenLayout.bedA), db = simd_distance(SIMD2(x, z), GardenLayout.bedB)
             if da < GardenLayout.bedRadius + 0.3 || db < GardenLayout.bedRadius + 0.3 { continue }
             if x > GardenLayout.deck.min.x - 0.2 && z < GardenLayout.deck.max.y + 0.2 { continue }
