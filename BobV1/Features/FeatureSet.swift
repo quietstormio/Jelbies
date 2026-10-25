@@ -178,6 +178,10 @@ final class FeatureSet {
         let n = spec.spines.count
         if s.spineA.count != n { s.spineA = Array(repeating: .zero, count: n); s.spineV = Array(repeating: .zero, count: n) }
         let Rinv = simd_float3x3(s.carry.rotation).transpose
+        // under a hat that encloses his head the (small) spikes are simply covered: tucked away; perch items leave them showing
+        var covered = false
+        if let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
+           let piece = WearMeshes.prepare(look, body: WearBody.shared) { covered = piece.crownEnclosing }
         for (k, sp) in spec.spines.enumerated() {
             let a = Rinv * accel(s, lag: sp.lag, dt: dt)                    // body frame
             let axis = sp.axis.v3
@@ -192,7 +196,7 @@ final class FeatureSet {
             if l > sp.maxDeg { s.spineA[k] *= sp.maxDeg / l }
             if !l.isFinite { s.spineA[k] = .zero; s.spineV[k] = .zero }
             // a spine under a hat shrinks away
-            let want: Float = s.fit.hiddenParts.contains(sp.part) ? 0 : 1
+            let want: Float = (covered || s.fit.hiddenParts.contains(sp.part)) ? 0 : 1
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
@@ -353,13 +357,6 @@ final class FeatureSet {
         let base = UInt32(m.vertices.count)
         m.vertices.reserveCapacity(m.vertices.count + p.rest.count)
         var keep = [Bool](repeating: true, count: p.parts.count)
-        // the crown the spines grow through (nil: no enclosing hat)
-        var crown: (piece: WearPrepared, lift: Float, widen: Float)?
-        if s.feature == .spines, let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
-           let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
-            let (lift, widen) = skin.map { CrownFit.fit(piece, carry: c, skin: $0, body: WearBody.shared) } ?? (0, 1)
-            crown = (piece, lift, widen)
-        }
         let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
         let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
         for (pi, part) in p.parts.enumerated() {
@@ -368,15 +365,6 @@ final class FeatureSet {
             if ps * tuck <= 0.001 { keep[pi] = false }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
-            // a spine under a hat that encloses his head grows out of the TOP of the crown: its base moves up onto the fitted crown (rest frame)
-            if let cr = crown {
-                let rc = c.restCentroid
-                let px = rc.x + (part.pivot.x - rc.x) * cr.widen, pz = rc.z + (part.pivot.z - rc.z) * cr.widen
-                if let h = CrownFit.height(cr.piece.crown, rc.x + (px - rc.x) / cr.widen, rc.z + (pz - rc.z) / cr.widen) {
-                    let top = h + cr.lift * CrownFit.liftWeight(h - cr.piece.pivot.y) - FeatureTuning.crownSink
-                    if top > part.pivot.y { pivotW = c.world(SIMD3(px, top, pz)) }
-                }
-            }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
             let rot = partRotation(p, part, slot: s, spec: spec)
             var stemRot = matrix_identity_float3x3
