@@ -17,13 +17,13 @@ extension ParkScenery {
     private static let sunDir = simd_normalize(V3(0.45, 0.8, 0.4))
 
     /// An ellipsoid whose vertex colours are lit by hand: bright toward the sun, deep in the shade underneath.
-    static func lit(_ b: RoomMeshBuilder, _ c: V3, rx: Float, ry: Float, rz: Float, color: V3, segments: Int = 10, rings: Int = 5, lift: Float = 1) {
+    static func lit(_ b: RoomMeshBuilder, _ c: V3, rx: Float, ry: Float, rz: Float, color: V3, segments: Int = 10, rings: Int = 5, lift: Float = 1, soft: Float = 1) {
         let first = b.mesh.vertices.count
         blob(b, c, rx: rx, ry: ry, rz: rz, color: color, segments: segments, rings: rings)
         for i in first..<b.mesh.vertices.count {
             let p = V3(b.mesh.vertices[i].pos.x - c.x, b.mesh.vertices[i].pos.y - c.y, b.mesh.vertices[i].pos.z - c.z) / V3(rx, ry, rz)
             let d = simd_dot(simd_normalize(p + V3(0, 0.0001, 0)), sunDir)
-            let k = (0.66 + 0.40 * max(-0.4, d)) * lift
+            let k = (1 - (1 - 0.66) * soft + (0.40 * soft) * max(-0.4, d) * (soft < 1 ? 0.8 : 1)) * lift
             let col = b.mesh.vertices[i].color
             b.mesh.vertices[i].color = SIMD4(col.x * k * (1 + 0.04 * max(0, d)), col.y * k * (1 + 0.10 * max(0, d)), col.z * k * 0.97, col.w)
         }
@@ -71,38 +71,45 @@ extension ParkScenery {
                 lit(b, V3(tx + sgn * 0.3 * s, trunkTop + 0.1 * s, tz), rx: 0.11 * s, ry: 0.42 * s, rz: 0.11 * s, color: bark, segments: 6, rings: 3)
             }
         }
-        // canopy
+        // canopy: many round, high-subdivision clumps (smooth normals, soft shading) in layers
         let cy = trunkTop + h * 0.04
-        func shade(_ k: Float) -> V3 { hue * (0.82 + 0.34 * r.unit()) * k }
-        // layer 1: the wide skirt (low and dark)
-        let n1 = detail > 0 ? 6 : 4
+        func shade(_ k: Float) -> V3 { hue * (0.88 + 0.24 * r.unit()) * k }
+        let seg = detail > 0 ? 18 : 10, rng = detail > 0 ? 9 : 5
+        func clump(_ p: V3, _ rx: Float, _ ry: Float, _ rz: Float, _ k: Float) {
+            lit(b, p, rx: rx, ry: ry, rz: rz, color: shade(k), segments: seg, rings: rng, soft: 0.55)
+        }
+        // layer 1: the wide skirt (low and darker)
+        let n1 = detail > 0 ? 9 : 5
         for k in 0..<n1 {
-            let a = Float(k) / Float(n1) * 2 * .pi + r.unit() * 0.5
-            let rr = (1.15 + 0.35 * r.unit()) * s
-            lit(b, V3(tx + cosf(a) * rr, cy + (0.0 + 0.2 * r.unit()) * s, tz + sinf(a) * rr * 0.9), rx: 0.95 * s, ry: 0.62 * s, rz: 0.85 * s, color: shade(0.9), segments: 9, rings: 4)
+            let a = Float(k) / Float(n1) * 2 * .pi + r.unit() * 0.4
+            let rr = (1.1 + 0.35 * r.unit()) * s
+            clump(V3(tx + cosf(a) * rr, cy + (0.0 + 0.2 * r.unit()) * s, tz + sinf(a) * rr * 0.9), 0.9 * s, 0.62 * s, 0.82 * s, 0.92)
         }
         // layer 2: the full middle
-        let n2 = detail > 0 ? 5 : 3
+        let n2 = detail > 0 ? 8 : 4
         for k in 0..<n2 {
-            let a = Float(k) / Float(n2) * 2 * .pi + 0.6 + r.unit() * 0.5
+            let a = Float(k) / Float(n2) * 2 * .pi + 0.6 + r.unit() * 0.4
             let rr = (0.7 + 0.3 * r.unit()) * s
-            lit(b, V3(tx + cosf(a) * rr, cy + (0.75 + 0.25 * r.unit()) * s, tz + sinf(a) * rr * 0.9), rx: 0.95 * s, ry: 0.70 * s, rz: 0.88 * s, color: shade(1.0), segments: 9, rings: 4)
+            clump(V3(tx + cosf(a) * rr, cy + (0.7 + 0.3 * r.unit()) * s, tz + sinf(a) * rr * 0.9), 0.88 * s, 0.7 * s, 0.82 * s, 1.0)
         }
         // layer 3: the crown, lightest
-        lit(b, V3(tx + (r.unit() - 0.5) * 0.3 * s, cy + 1.55 * s, tz), rx: 1.05 * s, ry: 0.78 * s, rz: 0.95 * s, color: shade(1.12), segments: 11, rings: 5)
+        clump(V3(tx + (r.unit() - 0.5) * 0.3 * s, cy + 1.55 * s, tz), 1.05 * s, 0.8 * s, 0.95 * s, 1.1)
         if detail > 0 {
-            lit(b, V3(tx + 0.55 * s, cy + 1.25 * s, tz + 0.4 * s), rx: 0.6 * s, ry: 0.45 * s, rz: 0.55 * s, color: shade(1.2), segments: 8, rings: 4)
-            // a few bright leaf puffs on the sunny, camera side
-            for _ in 0..<4 {
+            for k in 0..<4 {
+                let a = Float(k) / 4 * 2 * .pi + r.unit()
+                clump(V3(tx + cosf(a) * 0.7 * s, cy + (1.35 + 0.2 * r.unit()) * s, tz + sinf(a) * 0.65 * s), 0.6 * s, 0.5 * s, 0.56 * s, 1.15)
+            }
+            // soft leaf puffs on the sunny, camera side
+            for _ in 0..<6 {
                 let a = (r.unit() - 0.2) * 1.8, e = 0.5 + r.unit() * 0.9
                 let p = V3(tx + sinf(a) * 1.5 * s, cy + (0.5 + e) * s, tz + cosf(a) * 1.3 * s)
-                lit(b, p, rx: 0.36 * s, ry: 0.27 * s, rz: 0.32 * s, color: shade(1.28), segments: 7, rings: 3)
+                lit(b, p, rx: 0.4 * s, ry: 0.32 * s, rz: 0.36 * s, color: shade(1.2), segments: 12, rings: 6, soft: 0.55)
             }
             if let bl = blossom {
                 for _ in 0..<10 {
                     let a = r.unit() * 6.28, e = r.unit() * 0.9
                     let p = V3(tx + cosf(a) * 1.5 * s * cosf(e), cy + (0.5 + 1.3 * sinf(e)) * s, tz + sinf(a) * 1.4 * s * cosf(e) + 0.2 * s)
-                    S.ball(b, p, 0.1 * s, bl * (0.9 + 0.2 * r.unit()), segments: 5, rings: 3)
+                    S.ball(b, p, 0.1 * s, bl * (0.9 + 0.2 * r.unit()), segments: 6, rings: 3)
                 }
             }
         }

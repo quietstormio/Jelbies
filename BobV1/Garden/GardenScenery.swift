@@ -42,6 +42,7 @@ enum GardenScenery {
         roundBeds(b, &r)
         fenceBeds(b, &r)
         sunflowers(b, &r)
+        frontGarden(b, &r)
         meadow(b, &r)
         baskets(b, &r)
         stringLights(b)
@@ -51,9 +52,26 @@ enum GardenScenery {
     // MARK: sky, lawn
 
     private static func skyAndGround(_ b: RoomMeshBuilder) {
+        // the pane is emissive and the shader brightens it with height (x1.25 up to x1.9), so each band's colour is pre-divided by that to land on the
+        // soft pastel target: warm peach at the horizon, through pale gold-pink, to a clear pastel blue overhead (night/clock tint is the shader's)
         b.material = .glow
-        let lo = V3(0.86, 0.74, 0.70), hi = V3(0.42, 0.62, 0.86)
-        b.flatQuad(V3(-80, 0, -14), V3(80, 0, -14), V3(80, 24, -14), V3(-80, 24, -14), normal: V3(0, 0, 1), colors: [lo, lo, hi, hi])
+        let stops: [(Float, V3)] = [(0, c(0.99, 0.87, 0.78)), (3, c(0.90, 0.86, 0.86)), (8, c(0.68, 0.82, 0.95)), (20, c(0.52, 0.74, 0.96)), (70, c(0.46, 0.68, 0.94))]
+        func target(_ y: Float) -> V3 {
+            for i in 1..<stops.count where y <= stops[i].0 {
+                let t = (y - stops[i - 1].0) / (stops[i].0 - stops[i - 1].0)
+                return simd_mix(stops[i - 1].1, stops[i].1, SIMD3(repeating: t))
+            }
+            return stops[stops.count - 1].1
+        }
+        func albedo(_ y: Float) -> V3 {
+            let t = min(max(y / 14, 0), 1), sm = t * t * (3 - 2 * t)
+            return target(y) / (1.25 * (1 + 0.5 * sm))
+        }
+        let ys: [Float] = [0, 2, 4, 6, 9, 12, 16, 22, 30, 45, 70]
+        for i in 0..<(ys.count - 1) {
+            let lo = albedo(ys[i]), hi = albedo(ys[i + 1])
+            b.flatQuad(V3(-120, ys[i], -14), V3(120, ys[i], -14), V3(120, ys[i + 1], -14), V3(-120, ys[i + 1], -14), normal: V3(0, 0, 1), colors: [lo, lo, hi, hi])
+        }
         b.material = .plain
         let far = c(0.38, 0.62, 0.30), near = c(0.52, 0.76, 0.38)
         b.flatQuad(V3(-80, 0, -13.5), V3(80, 0, -13.5), V3(80, 0, 50), V3(-80, 0, 50), normal: V3(0, 1, 0), colors: [far, far, near, near])
@@ -357,6 +375,29 @@ enum GardenScenery {
         // foliage mounds in the beds' backs
         for (x, z) in [(-4.6, 1.5), (4.6, 1.7), (-4.6, 4.5), (4.6, 5.0)] as [(Float, Float)] {
             S.bush(b, x: x, z: z, scale: 0.6, color: leafDeep, bloom: roseColours[Int(r.next() % 4)], rng: &r)
+        }
+    }
+
+    /// The front of the yard: a full flower border along the bottom edge, flowering hedges and flower clumps at the two front corners. Kept to the
+    /// outer margins (x beyond +-3.3 for the bushes, a low border at the very front) so the walking space and the Jelbies stay clear.
+    private static func frontGarden(_ b: RoomMeshBuilder, _ r: inout ParkRandom) {
+        strip(b, x0: -4.85, x1: 4.85, z0: 8.3, z1: 9.7, perSquareMetre: 34, tall: false, &r)
+        strip(b, x0: -4.85, x1: 4.85, z0: 7.3, z1: 7.9, perSquareMetre: 12, tall: false, &r)
+        for (x, z) in [(-4.3, 8.0), (4.3, 8.0), (-3.4, 9.1), (3.4, 9.1), (-4.4, 5.6), (4.4, 5.8)] as [(Float, Float)] {
+            ParkScenery.shrub(b, x: x, z: z, scale: 0.55, hue: leafDeep * 0.95, bloom: r.pick(roseColours), rng: &r)
+        }
+        for (i, x) in ([-2.2, -0.6, 1.0, 2.6] as [Float]).enumerated() {
+            S.flower(b, .hydrangea, x: x, z: 8.95, h: 0.4, color: hydrangeaColours[i % hydrangeaColours.count], scale: 0.9, rng: &r)
+        }
+        for (x, z) in [(-3.8, 6.4), (3.8, 6.6), (-3.6, 4.0), (3.7, 4.2), (-2.6, 8.6), (2.6, 8.7)] as [(Float, Float)] {
+            for _ in 0..<26 {
+                let fx = x + (r.unit() - 0.5) * 1.4, fz = z + (r.unit() - 0.5) * 1.0
+                let k = Int(r.next() % 4)
+                if k == 0 { S.flower(b, .tulip, x: fx, z: fz, h: 0.2 + 0.15 * r.unit(), color: r.pick(tulipColours), rng: &r) }
+                else if k == 1 { S.flower(b, .daisy, x: fx, z: fz, h: 0.16 + 0.12 * r.unit(), color: r.pick(daisyColours), rng: &r) }
+                else if k == 2 { S.flower(b, .poppy, x: fx, z: fz, h: 0.18 + 0.14 * r.unit(), color: r.pick(poppyColours), rng: &r) }
+                else { S.flower(b, .lavender, x: fx, z: fz, h: 0.22 + 0.12 * r.unit(), color: r.pick(lavenderColours), rng: &r) }
+            }
         }
     }
 
