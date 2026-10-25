@@ -56,6 +56,23 @@ struct SleepState {
     /// A bedtime (the player's word or the night-idle rule): this sleep never fails to lie down.
     var force = false
     var forceRetried = false
+    /// Small life while asleep (stage 3 only): shifts, rolls, scoots, twitches, a half-wake. Timers only; see `sleepFidgetTick`.
+    var fid = SleepFidget()
+}
+
+struct SleepFidget {
+    var nextShift: Float = 0, nextTwitch: Float = 0, nextHalf: Float = 0          // seconds to the next one (0 = not rolled yet)
+    var kind = 0                                       // 0 none, 1 wiggle, 2 nuzzle (turn a touch), 3 roll to the other side, 4 drift / scoot
+    var u: Float = 0, dur: Float = 1                   // progress 0...1 of the shift in hand
+    var yawOff: Float = 0, yawGoal: Float = 0          // slow extra heading (rad)
+    var rollOff: Float = 0, rollGoal: Float = 0        // side tilt (rad): which side he lies on
+    var wigAmp: Float = 0                              // transient wiggle amplitude (rad)
+    var from = SIMD2<Float>.zero, to = SIMD2<Float>.zero, home = SIMD2<Float>.zero
+    var twU: Float = -1, twSide = 0, twFoot = false    // twitch progress (-1 = none)
+    var halfU: Float = -1                              // half-wake progress (-1 = none)
+    var halfAmp: Float = 0
+    var rollW: Float { rollOff + (kind == 1 ? wigAmp * sinf(.pi * u) * sinf(2 * .pi * 2 * u) : 0) }
+    var active: Bool { kind != 0 || twU >= 0 || halfU >= 0 || yawOff != yawGoal || rollOff != rollGoal }
 }
 
 enum SleepMode { case plain, hold, cuddle }
@@ -101,6 +118,12 @@ enum SleepTuning {
     /// Squash while lying (a little flatter and wider: relaxed).
     static let lieSquash: Float = 0.94
     static let breathPeriod: Float = 3.6
+    /// The breathing ripple (was 0.5: too faint to read).
+    static let breathKick: Float = 0.9
+    /// Sleep fidgets: a shift every `shiftEvery` s, a twitch every `twitchEvery`, a half-wake every `halfEvery` (Reduce Motion: smaller and x2.5 rarer).
+    static let shiftEvery: ClosedRange<Float> = 20...60, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
+    static let maxRoll: Float = 0.38, maxYaw: Float = 0.5, rollRate: Float = 0.16, yawRate: Float = 0.12
+    static let driftMax: Float = 0.22, driftMaxBed: Float = 0.07
     /// A finger on him for less than this wakes him gently; longer = a real pick up (the sleep is dropped and the touch play takes over).
     static let tapTime: Float = 0.9
     /// Daytime nap hold / evening-night hold, seconds.
@@ -479,7 +502,9 @@ extension BlobBrain {
             sleep.k = 1
             sleep.breath += dt
             if sleep.joined, let o = sleep.partner, o.sleep.stage == 3, o.idleState.kind == .sleep { sleep.breath = o.sleep.breath }          // they breathe together
-            if sleep.breath >= SleepTuning.breathPeriod { sleep.breath = 0; jellyKick = max(jellyKick, 0.5) }           // the slow breathing: a soft ripple under the skin
+            if sleep.breath >= SleepTuning.breathPeriod { sleep.breath = 0; jellyKick = max(jellyKick, SleepTuning.breathKick) }           // the slow breathing: a soft ripple under the skin (in)
+            else if sleep.breath - dt < SleepTuning.breathPeriod * 0.5, sleep.breath >= SleepTuning.breathPeriod * 0.5 { jellyKick = max(jellyKick, SleepTuning.breathKick * 0.45) }          // (and out)
+            if !sleep.wakeAsked { sleepFidgetTick(dt) }
             let morning = idleDeepNight < 0.5 && idleNight < SleepTuning.nightEdge
             if sleep.wakeAsked || sleep.t >= sleep.hold || (morning && sleep.t >= sleep.minHold && sleep.hold > 600) {
                 sleep.kStart = 1; sleep.stage = 4; sleep.t = 0
@@ -495,6 +520,118 @@ extension BlobBrain {
         }
         applyLie(sim, skinner, dt)
         return true
+    }
+
+    // MARK: little movements while asleep
+
+    /// Stage 3 only. Slow and soft; never changes the sleep state. Everything is a timer or a scalar: nothing allocates.
+    func sleepFidgetTick(_ dt: Float) {
+        let small = amplitude < 0.7
+        let sc: Float = small ? 0.4 : 1, gap: Float = small ? 2.5 : 1
+        let T = SleepTuning.self
+        if sleep.fid.nextShift <= 0 {
+            sleep.fid.nextShift = rand(T.shiftEvery.lowerBound, T.shiftEvery.upperBound) * gap
+            sleep.fid.nextTwitch = rand(T.twitchEvery.lowerBound, T.twitchEvery.upperBound) * gap
+            sleep.fid.nextHalf = rand(T.halfEvery.lowerBound, T.halfEvery.upperBound) * gap
+            sleep.fid.home = position
+        }
+        // the slow offsets chase their goals at a gentle fixed rate, and snap exactly (so the body can settle and skip its step again)
+        var f = sleep.fid
+        func chase(_ v: inout Float, _ g: Float, _ rate: Float) {
+            let d = g - v
+            if abs(d) <= rate * dt { v = g } else { v += d > 0 ? rate * dt : -rate * dt }
+        }
+        chase(&f.yawOff, f.yawGoal, T.yawRate * (small ? 0.5 : 1))
+        chase(&f.rollOff, f.rollGoal, T.rollRate * (small ? 0.5 : 1))
+        // the shift in hand
+        if f.kind != 0 {
+            f.u += dt / f.dur
+            if f.kind == 4 {
+                let e = smooth01(min(f.u, 1))
+                px = f.from.x + (f.to.x - f.from.x) * e; pz = f.from.y + (f.to.y - f.from.y) * e
+            }
+            if f.u >= 1 {
+                if f.kind == 4 { px = f.to.x; pz = f.to.y; sleep.spot = f.to }
+                f.kind = 0; f.u = 0; f.wigAmp = 0
+            }
+        } else {
+            f.nextShift -= dt
+            if f.nextShift <= 0 {
+                f.nextShift = rand(T.shiftEvery.lowerBound, T.shiftEvery.upperBound) * gap
+                sleep.fid = f
+                sleepStartShift(&f, sc)
+            }
+        }
+        // a twitch (a foot is a tiny jelly flutter, an arm lifts a touch)
+        if f.twU >= 0 {
+            f.twU += dt / 0.45
+            if f.twU >= 1 { f.twU = -1 }
+        } else {
+            f.nextTwitch -= dt
+            if f.nextTwitch <= 0 {
+                f.nextTwitch = rand(T.twitchEvery.lowerBound, T.twitchEvery.upperBound) * gap
+                f.twU = 0; f.twSide = rand() < 0.5 ? 0 : 1; f.twFoot = rand() < 0.5
+                if f.twFoot { jellyKick = max(jellyKick, 0.3 * sc) }
+            }
+        }
+        // a half-wake: the eyes open a crack, slowly, and close again
+        if f.halfU >= 0 {
+            f.halfU += dt / 3.2
+            if f.halfU >= 1 { f.halfU = -1 }
+        } else {
+            f.nextHalf -= dt
+            if f.nextHalf <= 0 {
+                f.nextHalf = rand(T.halfEvery.lowerBound, T.halfEvery.upperBound) * gap
+                f.halfU = 0; f.halfAmp = 0.2 * sc + 0.05
+            }
+        }
+        sleep.fid = f
+    }
+
+    /// Picks one shift: wiggle, nuzzle, roll to the other side, or a slight drift (toward a sleeping friend when there is one).
+    private func sleepStartShift(_ f: inout SleepFidget, _ sc: Float) {
+        let T = SleepTuning.self
+        let r = rand()
+        f.u = 0
+        if r < 0.3 {          // wiggle and settle
+            f.kind = 1; f.dur = rand(2.2, 3.4); f.wigAmp = 0.07 * sc
+            jellyKick = max(jellyKick, 0.35 * sc)
+        } else if r < 0.55 {  // nuzzle in: a small turn
+            f.yawGoal = max(-T.maxYaw, min(T.maxYaw, f.yawOff + rand(-0.3, 0.3) * sc))
+            f.kind = 0         // (the offset itself is the move)
+        } else if r < 0.75 {  // roll over onto the other side
+            f.rollGoal = abs(f.rollOff) < 0.05 || f.rollGoal == 0 ? (rand() < 0.5 ? -1 : 1) * T.maxRoll * sc : -f.rollGoal
+            if f.rollGoal == 0 { f.rollGoal = T.maxRoll * sc }
+            jellyKick = max(jellyKick, 0.2 * sc)
+        } else if sleep.bed < 0 || r < 0.9 {  // a slight change of where he lies
+            sleepPlanDrift(&f, sc)
+        } else {
+            f.kind = 1; f.dur = 2.6; f.wigAmp = 0.05 * sc
+        }
+    }
+
+    private func sleepPlanDrift(_ f: inout SleepFidget, _ sc: Float) {
+        let T = SleepTuning.self
+        let mates = sleepMates
+        var to = position
+        if sleep.bed < 0, sleep.mode != .hold, let o = sleep.partner, o.isNapping {
+            let d = o.position - position, len = simd_length(d)
+            let want = T.pileSpacing + 0.04
+            if len > want + 0.05 { to = position + d / len * min(0.3 * sc, len - want) }
+        }
+        if to == position {
+            let cap = sleep.bed >= 0 ? T.driftMaxBed : T.driftMax
+            let a = rand(0, 2 * .pi), m = rand(0.05, cap) * sc
+            to = position + SIMD2(cosf(a), sinf(a)) * m
+            if simd_distance(to, f.home) > cap { return }
+        }
+        if sleep.bed < 0 {
+            guard sleepSpotOK(to, mates: mates.filter { $0 === sleep.partner }, relaxed: true) else { return }
+            guard sleepFloorOK(to, relaxed: true) else { return }
+            for o in mates where simd_distance(o.position, to) < T.minGap { return }
+        }
+        f.kind = 4; f.from = position; f.to = to
+        f.dur = max(3, simd_distance(position, to) / 0.05)
     }
 
     /// The attractor at lie blend `sleep.k`.
@@ -513,7 +650,9 @@ extension BlobBrain {
             sleep.holdSide = simd_dot(o.position - position, right) > 0 ? 1 : 0
         } else if sleep.holdForce { sleep.holdSide = 1 }
         let leanSign: Float = sleep.holdSide == 1 ? 1 : -1
-        let q = yawQuat(yaw) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
+        let fid = sleep.fid, fa = fid.active && sleep.stage == 3
+        let q0 = yawQuat(yaw + (fa ? fid.yawOff : 0)) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
+        let q = fa && (fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW, axis: SIMD3(0, 0, 1)) : q0
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
         else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
@@ -535,7 +674,7 @@ extension BlobBrain {
         sim.attractor.anchor = a
         sim.attractor.strength = kPose
         poseW = 1
-        skinner.setEyeOpenness(1 - 0.96 * smooth01(min(1, k * 1.6)))
+        skinner.setEyeOpenness(1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0))
         // feet: the rigid beans ride the body, arms stay the rest nubs
         armWalkWant = 0; armDirW = 0
         if sleep.holdW > 0.001 {
@@ -545,6 +684,14 @@ extension BlobBrain {
             armDirW = smooth01(sleep.holdW)
             armDirEl = sleep.holdSide == 1 ? [rest, SleepTuning.holdEl] : [SleepTuning.holdEl, rest]
             armDirSa = sleep.holdSide == 1 ? [restSa, 0] : [0, restSa]
+            armDirOut = 0.07
+        } else if fa, fid.twU >= 0, !fid.twFoot {
+            // a dream twitch: one arm lifts a touch and drops (the same stub, capped like every arm)
+            let rest = ArmPath.armWalkElevation(ArmPath.armWalkCentreDeg), restSa = ArmPath.armWalkCentreDeg * .pi / 180
+            armWalkWant = 1
+            armDirW = sinf(.pi * fid.twU)
+            armDirEl = fid.twSide == 1 ? [rest, SleepTuning.holdEl] : [SleepTuning.holdEl, rest]
+            armDirSa = fid.twSide == 1 ? [restSa, 0] : [0, restSa]
             armDirOut = 0.07
         }
         driveBeansRigid(sim, skinner, dt, tuck: 0)
