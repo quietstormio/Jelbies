@@ -13,9 +13,9 @@ nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
     static let seesawUID = 9001, riderUID = 9002, sandUID = 9003
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
-        PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.3, z: -1.7, turns: nil),
-        PlacedDecor(uid: riderUID, kind: .springrider, x: 2.6, z: 0.9, turns: nil),
-        PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.0, z: -2.0, turns: nil),
+        PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.7, z: -2.3, turns: nil),
+        PlacedDecor(uid: riderUID, kind: .springrider, x: 2.7, z: 1.2, turns: nil),
+        PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.9, z: -1.5, turns: nil),
     ]
     static var placed: [PlacedDecor] { layout }
 }
@@ -64,15 +64,15 @@ extension DecorModels {
     static func springSquash(_ a: DecorAnim) -> Float { 0.10 * min(a.rockAmp, 1) * (0.5 - 0.5 * cosf(2 * .pi * 2 * a.rockT / 1.2)) + 0.05 * a.sink }
 
     static func parkSeatPoint(_ kind: DecorKind, seat: Int, anim a: DecorAnim) -> SIMD3<Float> {
-        let sp = kind.sitPoints[min(seat, kind.sitPoints.count - 1)]
+        let sp = kind.sitPoints[min(seat, kind.sitPoints.count - 1)], k = kind.scale
         switch kind {
         case .seesaw:
-            let th = seesawAngle(a)
-            return SIMD3(sp.x * cosf(th), seesawPivotY + (sp.y - seesawPivotY) * cosf(th) + sp.x * sinf(th), sp.z)
+            let th = seesawAngle(a), py = seesawPivotY * k
+            return SIMD3(sp.x * cosf(th), py + (sp.y - py) * cosf(th) + sp.x * sinf(th), sp.z)
         case .springrider:
-            let q = simd_quatf(angle: springAngle(a), axis: SIMD3(1, 0, 0))
-            let p = springBase + q.act(sp - springBase)
-            return SIMD3(p.x, springBase.y + (p.y - springBase.y) * (1 - springSquash(a)), p.z)
+            let q = simd_quatf(angle: springAngle(a), axis: SIMD3(1, 0, 0)), base = springBase * k
+            let p = base + q.act(sp - base)
+            return SIMD3(p.x, base.y + (p.y - base.y) * (1 - springSquash(a)), p.z)
         default: return SIMD3(sp.x, sp.y - 0.03 * a.sink, sp.z)
         }
     }
@@ -87,7 +87,7 @@ extension DecorModels {
 
     static func addParkToy(_ kind: DecorKind, at p: SIMD2<Float>, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) {
         typealias S = ParkShapes
-        let o = SIMD3<Float>(p.x, 0, p.y)
+        let o = SIMD3<Float>(p.x, 0, p.y), first0 = b.mesh.vertices.count, k0 = kind.scale
         func rbox(_ c: SIMD3<Float>, _ h: SIMD3<Float>, _ r: Float, _ col: SIMD3<Float>) { b.roundedBox(centre: o + c, half: h, radius: r, segments: 3, aoFloor: false, color: col) }
         switch kind {
         case .seesaw:
@@ -163,7 +163,7 @@ extension DecorModels {
             let seats = (DecorField.shared.seatOccupant[uid] ?? [:]).keys
             if a.rockAmp > 0.05, !seats.isEmpty {
                 for s in seats {
-                    let sp = kind.sitPoints[min(s, 2)]
+                    let sp = kind.sitPoints[min(s, 2)] / k0
                     for i in 0..<4 {
                         let f = (time * 1.4 + Float(i) / 4 + Float(s) * 0.31).truncatingRemainder(dividingBy: 1)
                         let sd: Float = i % 2 == 0 ? -1 : 1
@@ -173,6 +173,11 @@ extension DecorModels {
                 }
             }
         default: break
+        }
+        // the pieces are modelled at 1x about their centre and drawn at `kind.scale`
+        for i in first0..<b.mesh.vertices.count {
+            let q = b.mesh.vertices[i].pos
+            b.mesh.vertices[i].pos = SIMD4(o.x + (q.x - o.x) * k0, q.y * k0, o.z + (q.z - o.z) * k0, q.w)
         }
     }
     private typealias PP = RoomMeshBuilder.ProfilePoint

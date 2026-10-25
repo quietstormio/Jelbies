@@ -66,6 +66,9 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     var scale: Float {
         switch self {
         case .loveseat, .swing, .rockingchair, .armchair, .pouf, .diningset, .petbed, .slide: return Self.bigScale
+        case .seesaw: return 1.4          // (Park toys are drawn and measured bigger so they read next to the Jelbies)
+        case .springrider: return 1.35
+        case .sandbox: return 1.15
         default: return 1
         }
     }

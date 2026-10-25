@@ -98,7 +98,7 @@ enum ParkScenery {
         floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: butter, rng: &r)
         floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: lilac, rng: &r)
         floweringBush(b, x: -5.2, z: 6.4, scale: 0.9, bloom: cream, rng: &r)
-        flowerPatch(b, x: 4.3, z: -0.6, scale: 1.0, bloom: cream, rng: &r)
+        flowerPatch(b, x: 4.8, z: 1.9, scale: 1.0, bloom: cream, rng: &r)
         flowerPatch(b, x: -3.6, z: 3.8, scale: 1.0, bloom: blush, rng: &r)
 
         // ---- the pond (right, at the back): a cream stone rim, soft water, a few lily pads ----
