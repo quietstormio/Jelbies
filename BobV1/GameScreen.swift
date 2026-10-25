@@ -20,7 +20,7 @@ struct GameScreen: View {
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
     @State private var bagWho: Int?
-    @State private var settingsOpen = false                   // the gear's Settings popover (Accessibility / Studio)
+    @State private var settingsOpen = UserDefaults.standard.integer(forKey: "SettingsOpen") != 0                   // the gear's Settings popover (Accessibility / Studio)
     @State private var a11yOpen = UserDefaults.standard.integer(forKey: "A11yPanelOpen") != 0      // the Accessibility sheet (-A11yPanelOpen 1: captures)
     @State private var careNatural: CGSize?                   // the open paw menu's natural size (it scrolls when the screen is too short)
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
@@ -73,11 +73,11 @@ struct GameScreen: View {
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
-                .opacity(menuOpen || settingsOpen ? 0.22 : 0)
+                .opacity(menuOpen ? 0.22 : 0)
                 .ignoresSafeArea()
-                .allowsHitTesting(menuOpen || settingsOpen)
-                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; settingsOpen = false } }
-                .animation(.easeInOut(duration: 0.25), value: menuOpen || settingsOpen)
+                .allowsHitTesting(menuOpen)
+                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false } }
+                .animation(.easeInOut(duration: 0.25), value: menuOpen)
                 .accessibilityHidden(true)          // the menus carry an Escape action instead
 
             TouchHeartsView(play: model.touch, care: model.care).photoHidden()
@@ -117,7 +117,7 @@ struct GameScreen: View {
                         } else if !focus.isActive, !cleaning, !racing {
                             GameCircleButton(systemName: "gearshape", label: "Settings") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { settingsOpen.toggle(); if settingsOpen { soundOpen = false; extrasOpen = false; menuOpen = false } }
+                                withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = false; menuOpen = false }; settingsOpen = true
                             }
                             .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
                             .accessibilityIdentifier("studio-button")
@@ -236,19 +236,6 @@ struct GameScreen: View {
             RosterPanel(care: model.care, open: $rosterOpen) { id in model.care.rosterPick(id) }
                 .padding(.top, 8)
 
-            if settingsOpen {
-                SettingsMenu(openAccessibility: { withAnimation(CareMenu.spring) { settingsOpen = false }; a11yOpen = true },
-                             openStudio: { withAnimation(CareMenu.spring) { settingsOpen = false }; model.paused = true; showStudio = true },
-                             mainMenu: {
-                                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving the app
-                                 settingsOpen = false
-                                 withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() }
-                             },
-                             close: { withAnimation(CareMenu.spring) { settingsOpen = false } })
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.leading, 16).padding(.top, 52)
-                    .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
-            }
             if soundOpen {
                 SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -284,6 +271,21 @@ struct GameScreen: View {
             JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
         }
         .onChange(of: reduceMotionEnv) { _, on in A11ySettings.shared.systemReduceMotion = on }          // camera / effects only; the jelly physics never changes
+        .fullScreenCover(isPresented: $settingsOpen) {
+            SettingsScreen(
+                openStudio: { settingsOpen = false; model.paused = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showStudio = true } },
+                mainMenu: {
+                    model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving the app
+                    settingsOpen = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() } }
+                },
+                resetSave: {
+                    model.care.voice.cancel()
+                    settingsOpen = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { StartFlow.shared.startOver() }
+                },
+                close: { settingsOpen = false })
+        }
         .sheet(isPresented: $a11yOpen) {
             AccessibilitySettingsView { a11yOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
