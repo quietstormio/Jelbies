@@ -94,12 +94,13 @@ final class RoomsCaptureTests: XCTestCase {
     // MARK: three Jelbies in a room
 
     /// Pip (spines), Moss (daisy) and Lavender (wings) at the spawn spots of `RoomLayout.current`, noon or `hour`.
-    func threeShot(w: Int, h: Int, hour: Double) throws -> LockImage {
+    func threeShot(w: Int, h: Int, hour: Double, park: Bool = false) throws -> LockImage {
         guard let _ = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
         let a = Float(w) / Float(h)
-        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: a); GameCamera.refreshRoam(aspect: a)
-        let ids = [1, 2, 3]
-        let lab = SocialTests.Lab(n: 3, positions: JellyRoster.spawnSpots(count: 3), quiet: true, seed: 5)
+        if park { GameCamera.configurePark() } else { GameCamera.configureRoom(count: 3, option: .A, wide: 2) }
+        _ = GameCamera.camera(aspect: a); GameCamera.refreshRoam(aspect: a)
+        let ids = park ? [1, 2, 3, 1, 2] : [1, 2, 3]
+        let lab = SocialTests.Lab(n: ids.count, positions: park ? ParkLayout.spots(count: 5) : JellyRoster.spawnSpots(count: 3), quiet: true, seed: 5)
         SocialTests.keep.append(lab)
         for (k, r) in lab.rigs.enumerated() {
             r.skinner.autoBlink = false; r.brain.feature = JellyRoster.feature(ids[k])
@@ -109,6 +110,13 @@ final class RoomsCaptureTests: XCTestCase {
         WearBody.install(MotionRig.renderMesh)
         for _ in 0..<90 { lab.tick(watching: false) }
         let (ren, target) = try makeRenderer(MTLCreateSystemDefaultDevice()!, lab.rigs[0], w: w, h: h)
+        if park {
+            let f = DecorField.shared
+            f.set(ParkToys.placed)
+            f.take(ParkToys.sandUID, seat: 0, by: 100); f.take(ParkToys.sandUID, seat: 2, by: 101)
+            for _ in 0..<50 { for u in [ParkToys.seesawUID, ParkToys.riderUID, ParkToys.sandUID] { f.rock(u, 1) }; f.tick(dt: 1.0 / 60) }
+            ren.room!.setDecorStatic(DecorModels.build(feet: f.feet, field: f, time: 0.5))
+        }
         var feats: [FeatureSet] = []
         for (k, r) in lab.rigs.enumerated() {
             let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f); feats.append(f)
@@ -216,6 +224,19 @@ final class RoomsCaptureTests: XCTestCase {
             let img = emptyRoom(ren, target, rig: rig, w: w, h: h, aspect: a, hour: 12)
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             try img.uiImage()?.pngData()?.write(to: URL(fileURLWithPath: "\(dir)/park_\(label).png"))
+        }
+    }
+
+    /// The Park (v2: simple scenery, the three Park toys) with five Jelbies, portrait + landscape at noon.
+    func testCaptureParkV2() throws {
+        guard let dir else { throw XCTSkip("ROOMS_CAP_DIR not set") }
+        defer { RoomLayout.apply(RoomCatalog.home); DecorField.shared.clear() }
+        DayClock.shared.forcedHour = 12
+        RoomLayout.apply(RoomCatalog.park)
+        for (label, w, h) in [("portrait", 603 * 2, 1311 * 2), ("landscape", 1311 * 2, 603 * 2)] {
+            let img = try threeShot(w: w, h: h, hour: 12, park: true)
+            try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try img.uiImage()?.pngData()?.write(to: URL(fileURLWithPath: "\(dir)/park_v2_\(label).png"))
         }
     }
 }
