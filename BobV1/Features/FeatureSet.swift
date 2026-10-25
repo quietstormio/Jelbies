@@ -54,6 +54,8 @@ final class FeatureSet {
         var accel: [SIMD3<Float>] = Array(repeating: .zero, count: FeatureTuning.accelHistory)      // ring, newest at `accelHead`
         var accelHead = 0
         var squashRate: Float = 0
+        /// Pip's prototype tail (PipOptions): yaw (deg, sway / wag) and pitch (deg, bounce), plus the spring state.
+        var tailYaw: Float = 0, tailPitch: Float = 0, tailSway: Float = 0, tailSwayV: Float = 0, tailPitchV: Float = 0
         /// Spines: angle (deg) about (along, across) and its rate, per spine; the visible scale of each part (hidden under a hat -> 0).
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
         var partScale: [String: Float] = [:]
@@ -142,7 +144,7 @@ final class FeatureSet {
         s.primed = true
         // the animation
         switch feature {
-        case .spines: stepSpines(&s, spec: spec, dt: dt)
+        case .spines: stepSpines(&s, spec: spec, dt: dt); if PipOptions.current != nil { stepTail(&s, brain: brain, dt: dt) }
         case .daisy: stepDaisy(&s, brain: brain, spec: spec, dt: dt)
         case .wings: stepWings(&s, brain: brain, dt: dt)
         case .none: break
@@ -213,6 +215,28 @@ final class FeatureSet {
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
+    }
+
+    /// The prototype tail: a lagged sway from the body's sideways acceleration, a gentle walk sway with his speed, a quick wag while he is happy /
+    /// excited / cheering, a slow idle sway; pitch follows the squash rate (it bounces down on a rise, up on a landing). Render only: the gait is untouched.
+    private func stepTail(_ s: inout Slot, brain: BlobBrain, dt: Float) {
+        s.clock += dt
+        let Rinv = simd_float3x3(s.carry.rotation).transpose
+        let a = Rinv * accel(s, lag: 0.04, dt: dt)
+        let w: Float = 2 * .pi * 3.2, z: Float = 0.45
+        s.tailSwayV += (-w * w * s.tailSway - 2 * z * w * s.tailSwayV + (-a.x * 0.9) * w * w * 0.25) * dt
+        s.tailSway += s.tailSwayV * dt
+        s.tailSway = max(-28, min(28, s.tailSway)); if !s.tailSway.isFinite { s.tailSway = 0; s.tailSwayV = 0 }
+        let speed = simd_length(SIMD2(s.lastVel.x, s.lastVel.z))
+        let walk = 9 * min(1, speed / 0.5) * sinf(2 * .pi * 2.4 * s.clock)
+        let happy = brain.expr.kind == .happy || brain.expr.kind == .excited || brain.expr.kind == .joyArc || brain.idleState.reaction == .cheer
+        let wag: Float = happy ? 24 * sinf(2 * .pi * 3.6 * s.clock) : 0
+        let idle = 3 * sinf(2 * .pi * 0.45 * s.clock)
+        s.tailYaw = s.tailSway + walk + wag + idle
+        let want = max(-14, min(14, -s.squashRate * 1.6))
+        s.tailPitchV += (-(2 * .pi * 4) * (2 * .pi * 4) * (s.tailPitch - want) - 2 * 0.5 * (2 * .pi * 4) * s.tailPitchV) * dt
+        s.tailPitch += s.tailPitchV * dt
+        if !s.tailPitch.isFinite { s.tailPitch = 0; s.tailPitchV = 0 }
     }
 
     private func stepDaisy(_ s: inout Slot, brain: BlobBrain, spec: FeatureSpec, dt: Float) {
@@ -330,7 +354,10 @@ final class FeatureSet {
     static func partRotation(_ p: FeaturePrepared, _ part: FeaturePrepared.Part, slot s: Slot, spec: FeatureSpec) -> simd_float3x3 {
         switch s.feature {
         case .spines:
-            if PipOptions.current != nil { return matrix_identity_float3x3 }
+            if PipOptions.current != nil {            // the prototype tail: yaw sway / wag + pitch bounce about its root (rest frame)
+                let q = simd_quatf(angle: s.tailPitch * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: s.tailYaw * .pi / 180, axis: SIMD3(0, 1, 0))
+                return simd_float3x3(q)
+            }
             guard s.spineA.indices.contains(part.side) else { return matrix_identity_float3x3 }
             let sp = spec.spines[part.side], a = s.spineA[part.side]
             let axis = sp.axis.v3

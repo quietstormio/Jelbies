@@ -484,7 +484,7 @@ final class FeatureCaptureTests: XCTestCase {
     func testCapturePipDinoTail() throws {
         let d = try dir(); DayClock.shared.forcedHour = 12
         let t = try pipTiles("A", hop: true)
-        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<5]))]), d + "/pip_dino_tail.png")
+        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<5]))]), d + "/pip_dino_tail_v2.png")
     }
     func testCapturePipOptions() throws {
         let d = try dir(); DayClock.shared.forcedHour = 12
