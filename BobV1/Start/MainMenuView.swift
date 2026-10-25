@@ -11,6 +11,7 @@ struct MainMenuView: View {
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
     @State private var bob = false
+    @State private var visible = true
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var landscape: Bool { vsc == .compact }
@@ -36,16 +37,19 @@ struct MainMenuView: View {
             if confirmNew { confirmCard.transition(.opacity) }
         }
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
-        .onAppear { bob = true }
+        .onAppear { bob = true; visible = true }
+        .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
     private var title: some View {
-        Image("JelbiesLogo").resizable().scaledToFit()
-            .frame(maxWidth: landscape ? 420 : 340)
+        // The frame is ~16% wider than the logo inside it (logo = 86% of the frame width).
+        SpinLogo(still: still, active: visible)
+            .frame(maxWidth: (landscape ? 420 : 340) / 0.86 * 1.04)
+            .aspectRatio(675.0 / 517.0, contentMode: .fit)
             .offset(y: bob && !still ? -6 : 0)
             .animation(still ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: bob)
-            .accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
+            .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
     private var buttons: some View {
@@ -82,5 +86,46 @@ struct MainMenuView: View {
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
         }
+    }
+}
+
+/// Cached frames of the 2 s, 30 fps logo spin loop (menuspin_00...59), decoded once off the main thread.
+@MainActor private enum SpinFrames {
+    static var frames: [UIImage] = []
+    static var loading = false
+    static func load() async {
+        guard frames.isEmpty, !loading else { return }
+        loading = true
+        let loaded: [UIImage] = await Task.detached(priority: .userInitiated) {
+            (0..<60).compactMap { i -> UIImage? in
+                let n = String(format: "menuspin_%02d", i)
+                guard let u = Bundle.main.url(forResource: n, withExtension: "png") ?? Bundle.main.url(forResource: n, withExtension: "png", subdirectory: "MenuSpin"),
+                      let img = UIImage(contentsOfFile: u.path) else { return nil }
+                return img.preparingForDisplay() ?? img
+            }
+        }.value
+        frames = loaded
+        loading = false
+    }
+}
+
+struct SpinLogo: View {
+    let still: Bool
+    let active: Bool
+    @State private var ready = SpinFrames.frames.count == 60
+
+    var body: some View {
+        Group {
+            if ready && !SpinFrames.frames.isEmpty {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: still || !active)) { tl in
+                    let n = SpinFrames.frames.count
+                    let i = still ? 0 : Int(tl.date.timeIntervalSinceReferenceDate * 30) % n
+                    Image(uiImage: SpinFrames.frames[i]).resizable().scaledToFit()
+                }
+            } else {
+                Image("JelbiesLogo").resizable().scaledToFit().scaleEffect(0.86)
+            }
+        }
+        .task { await SpinFrames.load(); ready = SpinFrames.frames.count == 60 }
     }
 }

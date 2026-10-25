@@ -88,31 +88,90 @@ struct CloudCard: ViewModifier {
 }
 extension View { func cloudCard(radius: CGFloat = 26) -> some View { modifier(CloudCard(radius: radius)) } }
 
-/// White sky with slow drifting Mist circles. Still when Reduce Motion is on.
+/// One Jelbie body pose in unit space (body 1 wide, faceless): squash, tilt, arm angles (0 = hanging, positive = outward/up), feet.
+private struct JelbiePose {
+    var sx = 1.0, sy = 1.0, rot = 0.0, aL = 0.25, aR = 0.25, fx = 0.2, fy = 0.0, fs = 1.0
+    static let stand = JelbiePose()
+    static let wave = JelbiePose(rot: -0.04, aL: 0.25, aR: 2.6)
+    static let hop = JelbiePose(sx: 0.92, sy: 1.1, aL: 1.9, aR: 1.9, fx: 0.15, fy: -0.14)
+    static let squish = JelbiePose(sx: 1.2, sy: 0.84, aL: 1.2, aR: 1.2, fx: 0.3, fy: 0.02)
+    static let sit = JelbiePose(sx: 1.06, sy: 0.92, aL: 0.5, aR: 0.5, fx: 0.3, fy: -0.04, fs: 1.25)
+    static let lean = JelbiePose(rot: 0.38, aL: 0.9, aR: 0.1, fx: 0.22)
+    static let sleep = JelbiePose(sx: 1.04, sy: 0.96, rot: 1.45, aL: 0.15, aR: 0.15, fx: 0.18)
+    static let cartwheel = JelbiePose(rot: -0.95, aL: 2.9, aR: 2.9, fx: 0.3, fy: -0.06)
+    func mixed(_ o: JelbiePose, _ m: Double) -> JelbiePose {
+        func l(_ a: Double, _ b: Double) -> Double { a + (b - a) * m }
+        return JelbiePose(sx: l(sx, o.sx), sy: l(sy, o.sy), rot: l(rot, o.rot), aL: l(aL, o.aL), aR: l(aR, o.aR), fx: l(fx, o.fx), fy: l(fy, o.fy), fs: l(fs, o.fs))
+    }
+}
+
+/// White sky with slow faceless Jelbie silhouettes in Mist tints: each drifts (20-40 s loops), breathes jelly-like
+/// (wider while shorter), sways, and morphs between two poses. One Canvas; still (pose A) when Reduce Motion is on.
 struct CloudSky: View {
-    @State private var drift = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visible = true
+    private struct Shape { let x, y, size, ax, ay, per, ph: Double; let a, b: JelbiePose }
+    private static let shapes: [Shape] = [
+        Shape(x: 0.06, y: 0.16, size: 0.34, ax: 0.07, ay: 0.05, per: 31, ph: 0.0, a: .stand, b: .wave),
+        Shape(x: 0.97, y: 0.34, size: 0.22, ax: 0.06, ay: 0.06, per: 23, ph: 1.7, a: .hop, b: .squish),
+        Shape(x: 0.52, y: 1.02, size: 0.42, ax: 0.09, ay: 0.04, per: 37, ph: 3.1, a: .sit, b: .lean),
+        Shape(x: 0.14, y: 0.64, size: 0.17, ax: 0.10, ay: 0.07, per: 27, ph: 4.4, a: .sleep, b: .stand),
+        Shape(x: 0.88, y: 0.76, size: 0.26, ax: 0.07, ay: 0.06, per: 33, ph: 2.3, a: .cartwheel, b: .lean),
+        Shape(x: 0.60, y: 0.02, size: 0.20, ax: 0.08, ay: 0.04, per: 29, ph: 5.2, a: .squish, b: .wave),
+    ]
+    private static let mist = (r: 0xEE / 255.0, g: 0xF5 / 255.0, b: 0xFB / 255.0)
+    private static let deep = (r: 0xD6 / 255.0, g: 0xE8 / 255.0, b: 0xF7 / 255.0)
+    private static let body: Path = {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: -0.575))
+        p.addCurve(to: CGPoint(x: 0.5, y: 0.12), control1: CGPoint(x: 0.32, y: -0.575), control2: CGPoint(x: 0.5, y: -0.26))
+        p.addCurve(to: CGPoint(x: 0, y: 0.575), control1: CGPoint(x: 0.5, y: 0.4), control2: CGPoint(x: 0.28, y: 0.575))
+        p.addCurve(to: CGPoint(x: -0.5, y: 0.12), control1: CGPoint(x: -0.28, y: 0.575), control2: CGPoint(x: -0.5, y: 0.4))
+        p.addCurve(to: CGPoint(x: 0, y: -0.575), control1: CGPoint(x: -0.5, y: -0.26), control2: CGPoint(x: -0.32, y: -0.575))
+        return p
+    }()
+    private static let arm = Path(roundedRect: CGRect(x: -0.09, y: -0.04, width: 0.18, height: 0.34), cornerRadius: 0.09)
+    private static let foot = Path(ellipseIn: CGRect(x: -0.17, y: -0.09, width: 0.34, height: 0.18))
+
     var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height, s = max(w, h)
-            let still = reduceMotion || CloudTheme.reduceMotion
-            ZStack {
-                CloudTheme.sky
-                bubble(s * 0.46, x: w * 0.05, y: h * 0.14, dx: 10, dy: -16, still)
-                bubble(s * 0.30, x: w * 0.95, y: h * 0.36, dx: -12, dy: 12, still)
-                bubble(s * 0.58, x: w * 0.55, y: h * 1.0, dx: 8, dy: -18, still)
-                bubble(s * 0.14, x: w * 0.18, y: h * 0.58, dx: 6, dy: -10, still)
+        let still = reduceMotion || CloudTheme.reduceMotion
+        TimelineView(.animation(minimumInterval: nil, paused: still || !visible)) { tl in
+            let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                let s = max(size.width, size.height)
+                let k = still ? 0.0 : (sin(t / 40 * 2 * .pi) + 1) / 2
+                let tint = Color(red: Self.mist.r + (Self.deep.r - Self.mist.r) * k * 0.8,
+                                 green: Self.mist.g + (Self.deep.g - Self.mist.g) * k * 0.8,
+                                 blue: Self.mist.b + (Self.deep.b - Self.mist.b) * k * 0.8)
+                func draw(_ l: inout GraphicsContext) {
+                    for sh in Self.shapes {
+                        let a = t / sh.per * 2 * .pi + sh.ph
+                        let m = still ? 0 : (1 - cos(t / (sh.per * 0.7) * 2 * .pi + sh.ph)) / 2
+                        var p = sh.a.mixed(sh.b, m)
+                        let br = still ? 0 : 0.045 * sin(t / 5.5 * 2 * .pi + sh.ph)
+                        p.sx *= 1 + br; p.sy *= 1 - br
+                        p.rot += still ? 0 : 0.05 * sin(t / (sh.per * 0.5) * 2 * .pi + sh.ph)
+                        let cx = (sh.x + sh.ax * sin(a)) * size.width, cy = (sh.y + sh.ay * sin(a * 0.8 + 1)) * size.height
+                        var c = l
+                        c.translateBy(x: cx, y: cy); c.rotate(by: .radians(p.rot)); c.scaleBy(x: sh.size * s * p.sx, y: sh.size * s * p.sy)
+                        c.fill(Self.body, with: .color(tint))
+                        for side in [-1.0, 1.0] {
+                            let ang = side < 0 ? p.aL : p.aR
+                            let at = CGAffineTransform(rotationAngle: -side * ang).concatenating(CGAffineTransform(translationX: side * 0.44, y: -0.04))
+                            c.fill(Self.arm.applying(at), with: .color(tint))
+                            c.fill(Self.foot.applying(CGAffineTransform(scaleX: p.fs, y: p.fs).concatenating(CGAffineTransform(translationX: side * p.fx, y: 0.56 + p.fy))), with: .color(tint))
+                        }
+                    }
+                }
+                ctx.drawLayer { l in l.addFilter(.blur(radius: s * 0.035)); l.opacity = 0.6; draw(&l) }
+                ctx.drawLayer { l in l.addFilter(.blur(radius: s * 0.004)); l.opacity = 0.9; draw(&l) }
             }
         }
+        .background(CloudTheme.sky)
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear { drift = true }
-    }
-    private func bubble(_ d: CGFloat, x: CGFloat, y: CGFloat, dx: CGFloat, dy: CGFloat, _ still: Bool) -> some View {
-        Circle().fill(CloudTheme.mist).frame(width: d, height: d)
-            .scaleEffect(drift && !still ? 1.06 : 1)
-            .position(x: x + (drift && !still ? dx : 0), y: y + (drift && !still ? dy : 0))
-            .animation(still ? nil : .easeInOut(duration: 9 + Double(d.truncatingRemainder(dividingBy: 3))).repeatForever(autoreverses: true), value: drift)
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }
