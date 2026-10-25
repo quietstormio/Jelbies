@@ -48,7 +48,7 @@ struct IntroView: View {
                         .opacity(ready ? 1 : 0)
                 }
                 if A11ySettings.shared.captions, !settled, ready {
-                    Text("Soft chime and sparkles")          // caption for the intro clip's sound
+                    Text("Piano and strings, sparkles and pops")          // caption for the intro clip's sound
                         .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(Capsule().fill(CloudTheme.mist))

@@ -149,7 +149,7 @@ struct VoiceTutorialCard: View {
                 .accessibilityIdentifier("voice-tutorial-title")
             if let d = detail(p) {
                 Text(d)
-                    .font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.75))
+                    .font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
                     .multilineTextAlignment(.center)
             }
             if p == .call || p == .again || p == .saying {

@@ -104,7 +104,7 @@ struct ShopScreen: View {
             }
             .padding(.bottom, 14)
         }
-        .background(SK.pink.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
+        .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
         .padding(.bottom, 4)
     }
 
@@ -126,7 +126,7 @@ struct ShopScreen: View {
                         Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(afford ? SK.sky : SK.muted.opacity(0.6))
                         Text("\(item.price)").font(SK.font(15, .black)).foregroundStyle(afford ? SK.ink : SK.muted)
                     }
-                    .padding(.horizontal, 10).frame(minHeight: 32)
+                    .padding(.horizontal, 10).frame(minHeight: 44)
                     .background(Capsule().fill(Color.white.opacity(0.85)))
                     Spacer(minLength: 0)
                     if owned > 0 {
@@ -202,7 +202,7 @@ struct ItemSheet: View {
             Text("What it does").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
             HStack(spacing: 10) {
                 Image(systemName: effectSymbol).font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.ink)
-                    .frame(width: 40, height: 40).background(Circle().fill(SK.honey))
+                    .frame(width: 44, height: 44).background(Circle().fill(SK.honey))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(effectTitle).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
                     Text(effectBlurb).font(SK.font(12, .semibold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)

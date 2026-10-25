@@ -101,9 +101,9 @@ struct ParkChrome: View {
                             HStack(spacing: 6) {
                                 Circle().fill(tint(v.colour)).frame(width: 22, height: 22).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5))
                                 Text(v.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
-                                if best > .stranger { Image(systemName: "heart.fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.pink) }
+                                if best > .stranger { Image(systemName: "heart.fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.pinkStrong).accessibilityLabel("Friend") }
                             }
-                            .padding(.horizontal, 10).frame(minHeight: 40)
+                            .padding(.horizontal, 10).frame(minHeight: 44)
                             .background(Capsule().fill(park.card == vid ? SK.honey : SK.cream.opacity(0.92)))
                         }
                         .buttonStyle(.plain).accessibilityLabel("\(v.name), \(best.title)").accessibilityIdentifier("park-friend-\(vid)")
@@ -178,14 +178,14 @@ struct VisitorCard: View {
         let c = visitor.colour.swatch
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Circle().fill(Color(red: Double(c.x), green: Double(c.y), blue: Double(c.z))).frame(width: 30, height: 30).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
+                Circle().fill(Color(red: Double(c.x), green: Double(c.y), blue: Double(c.z))).frame(width: 44, height: 44).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(visitor.name).font(SK.font(20, .black)).foregroundStyle(SK.ink)
                     Text("\(visitor.style.word)").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 0)
                 Button { AudioHub.shared.uiTap(); care.park.card = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).frame(width: 40, height: 40).background(Circle().fill(Color.white.opacity(0.85)))
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("park-card-close")
             }

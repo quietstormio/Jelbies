@@ -87,7 +87,7 @@ struct CoursePicker: View {
                     CourseMiniMap(course: RaceCourse.course(t), lineWidth: 6, tint: open ? Color(hex: 0xE5A88E) : Color(hex: 0xC9BDB0))
                         .frame(width: 92, height: 64)
                     if !open {
-                        Image(systemName: "lock.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink.opacity(0.8))
+                        Image(systemName: "lock.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink.opacity(0.85))
                             .padding(6).background(Circle().fill(Color.white.opacity(0.85)))
                     }
                 }

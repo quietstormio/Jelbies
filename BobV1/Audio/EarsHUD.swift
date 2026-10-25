@@ -38,7 +38,7 @@ struct EarsButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(lit ? Color.white : (st == .denied ? Color(red: 0.80, green: 0.36, blue: 0.30) : ink))
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(Circle().fill(lit ? glow : cream).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                 .background {

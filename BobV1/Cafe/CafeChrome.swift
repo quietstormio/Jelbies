@@ -105,7 +105,7 @@ struct CafeMenuCard: View {
     private var homeButton: some View {
         Button { AudioHub.shared.uiTap(); care.cafe.goHome() } label: {
             HStack(spacing: 4) { Image(systemName: "house.fill").font(.system(size: 12, weight: .bold)); Text("Head home").font(SK.font(12, .heavy)).lineLimit(1) }
-                .foregroundStyle(SK.muted).padding(.horizontal, 10).frame(minHeight: 34)
+                .foregroundStyle(SK.muted).padding(.horizontal, 10).frame(minHeight: 44)
                 .background(Capsule().fill(Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-home")
@@ -117,10 +117,13 @@ struct CafeMenuCard: View {
                 Text("Same for everyone").font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
                 Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted)
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 40)
+            .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
+        .accessibilityLabel("Same for everyone, 15 percent off")
+        .accessibilityValue(table ? "on" : "off")
+        .accessibilityAddTraits(table ? .isSelected : [])
     }
     private var orderButton: some View {
         Button {
@@ -128,14 +131,15 @@ struct CafeMenuCard: View {
             refusal = care.orderCafe(order)
         } label: {
             Text("Order").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize()
-                .padding(.horizontal, 20).frame(minHeight: 40)
-                .background(Capsule().fill(SK.pink.opacity(complete ? 1 : 0.4)))
+                .padding(.horizontal, 20).frame(minHeight: 44)
+                .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
         }
         .buttonStyle(.plain).disabled(!complete).accessibilityIdentifier("cafe-order")
+        .accessibilityHint(complete ? "Places the order" : "Choose a treat for every Jelbie first")
     }
     private var totalView: some View {
         HStack(spacing: 4) {
-            Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.sky)
+            Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep)
             Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel("\(total) Drops").accessibilityIdentifier("cafe-total")
@@ -164,10 +168,14 @@ struct CafeMenuCard: View {
                             Text(care.jelly(id)?.name ?? "Jelbie").font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
                             if let t = (table ? order.forTable : picks[id]) { thumb(t, size: 20) }
                         }
-                        .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 32)
+                        .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 44)
                         .background(Capsule().fill(sel ? SK.honey : Color.white.opacity(0.7)))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("cafe-who-\(id)")
+                    .accessibilityLabel(care.jelly(id)?.name ?? "Jelbie")
+                    .accessibilityValue((table ? order.forTable : picks[id]) != nil ? "treat chosen" : "no treat yet")
+                    .accessibilityHint("Choose a treat for this Jelbie")
+                    .accessibilityAddTraits(sel ? .isSelected : [])
                 }
             }
             if compact {
@@ -208,19 +216,20 @@ struct CafeMenuCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
                     HStack(spacing: 3) {
-                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .black)).foregroundStyle(SK.sky)
+                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .black)).foregroundStyle(SK.skyDeep)
                         Text("\(t.price)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
                         Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.muted).accessibilityLabel(t.perk.title)
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 6).frame(minHeight: 40)
+            .padding(.horizontal, 6).frame(minHeight: 44)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(isChosen(t) ? SK.honey : Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(isChosen(t) ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
         .accessibilityLabel("\(t.name), \(t.price) Drops. \(t.blurb)")
+        .accessibilityAddTraits(isChosen(t) ? .isSelected : [])
     }
 
     private func thumb(_ t: CafeTreatID, size: CGFloat) -> some View {
@@ -239,7 +248,7 @@ struct CafeMenuCard: View {
                 thumb(t.id, size: 40)
                 Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
                 HStack(spacing: 3) {
-                    Image(systemName: "drop.fill").font(.system(size: 10, weight: .black)).foregroundStyle(SK.sky)
+                    Image(systemName: "drop.fill").font(.system(size: 10, weight: .black)).foregroundStyle(SK.skyDeep)
                     Text("\(t.price)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
                 HStack(spacing: 2) {
@@ -254,5 +263,6 @@ struct CafeMenuCard: View {
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
         .accessibilityLabel("\(t.name), \(t.price) Drops. \(t.blurb)")
+        .accessibilityAddTraits(isChosen(t) ? .isSelected : [])
     }
 }

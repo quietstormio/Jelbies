@@ -7,9 +7,11 @@
 import SwiftUI
 
 extension SK {
-    /// Pink that carries white text at 4.5:1 or better (#B84A70 on white is about 4.9:1).
-    static let pinkStrong = Color(hex: 0xB84A70)
+    /// Pink that carries white text at 4.5:1 or better (#A8405F is about 5.6:1 on white, 4.9:1 on cream).
+    static let pinkStrong = Color(hex: 0xA8405F)
     /// Muted text at 4.5:1 or better on cream (the default `SK.muted` is #6B5749; this is darker).
+    /// Sky for icons / text on cream at 3:1 or better (the plain SK.sky is 2.1:1).
+    static let skyDeep = Color(hex: 0x2F7FA3)
     static let mutedStrong = Color(hex: 0x4F3F33)
 }
 

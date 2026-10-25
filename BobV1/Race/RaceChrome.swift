@@ -249,14 +249,14 @@ struct RacePlacingsCard: View {
                         Spacer()
                         Text(p.time.map { String(format: "%.1f s", $0) } ?? "-")
                             .playFont(18, .semibold).monospacedDigit()
-                            .foregroundStyle(CareMenu.brown.opacity(0.8))
+                            .foregroundStyle(CareMenu.brown.opacity(0.85))
                     }
                     .padding(.horizontal, 10).padding(.vertical, tight ? 2 : 5)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(p.isPlayer ? FocusStyle.pink.opacity(0.28) : Color.clear))
                 }
             }
             HStack(spacing: 8) {
-                Image(systemName: "drop.fill").foregroundStyle(FocusStyle.pink)
+                Image(systemName: "drop.fill").foregroundStyle(SK.pinkStrong)
                 Text("+\(race.ui.earned) Drops")
                     .playFont(20, .bold)
                     .foregroundStyle(CareMenu.brown)
@@ -264,13 +264,13 @@ struct RacePlacingsCard: View {
             if race.assist == .auto {
                 Text("Auto run pays half the Drops")
                     .playFont(14, .medium)
-                    .foregroundStyle(CareMenu.brown.opacity(0.8))
+                    .foregroundStyle(CareMenu.brown.opacity(0.85))
                     .accessibilityIdentifier("race-auto-note")
             }
             if race.ui.waddleGain > 0.0005 {
                 Text("Waddle got a little quicker")
                     .playFont(14, .medium)
-                    .foregroundStyle(CareMenu.brown.opacity(0.7))
+                    .foregroundStyle(CareMenu.brown.opacity(0.85))
             }
             if !race.awards.isEmpty {
                 HStack(spacing: 8) {
@@ -283,7 +283,7 @@ struct RacePlacingsCard: View {
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
                     .playFont(15, .heavy)
-                    .foregroundStyle(FocusStyle.pink)
+                    .foregroundStyle(SK.pinkStrong)
                     .accessibilityIdentifier("race-unlocked")
             }
             Button {
@@ -294,7 +294,7 @@ struct RacePlacingsCard: View {
                     .playFont(20, .bold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
-                    .background(Capsule().fill(FocusStyle.pink).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
+                    .background(Capsule().fill(SK.pinkStrong).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("race-home")

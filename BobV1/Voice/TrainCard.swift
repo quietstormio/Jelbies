@@ -60,7 +60,7 @@ struct TrainCard: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], spacing: 6) {
                 ForEach(tricks, id: \.rawValue) { t in chip(t, bk: bk, name: name) }
             }
-            Text("Come here: \(name) knows it already.").font(.footnote).foregroundStyle(FocusStyle.brown.opacity(0.75))
+            Text("Come here: \(name) knows it already.").font(.footnote).foregroundStyle(FocusStyle.brown.opacity(0.85))
         case .demo(let t):
             pips(t, bk)
         case .listen(let t):
@@ -75,7 +75,7 @@ struct TrainCard: View {
             pips(t, bk)
         case .missed(let t, let why):
             pips(t, bk)
-            if !tr.heardText.isEmpty { Text("Heard: \u{201C}\(tr.heardText)\u{201D}").font(.footnote).foregroundStyle(FocusStyle.brown.opacity(0.8)).accessibilityIdentifier("train-heard") }
+            if !tr.heardText.isEmpty { Text("Heard: \u{201C}\(tr.heardText)\u{201D}").font(.footnote).foregroundStyle(FocusStyle.brown.opacity(0.85)).accessibilityIdentifier("train-heard") }
             HStack(spacing: 8) {
                 button("Try again", id: "train-retry", primary: true) { voice.trainRetry() }
                 if case .otherWord(_, let heard) = why { button("Use \u{201C}\(heard)\u{201D} instead", id: "train-instead", primary: false) { voice.trainUseInstead() } }
@@ -83,9 +83,9 @@ struct TrainCard: View {
         case .learned(let t):
             pips(t, bk)
             HStack(spacing: 6) {
-                Image(systemName: "sparkles").foregroundStyle(FocusStyle.pink)
-                Image(systemName: "heart.fill").foregroundStyle(FocusStyle.pink)
-                Image(systemName: "sparkles").foregroundStyle(FocusStyle.pink)
+                Image(systemName: "sparkles").foregroundStyle(SK.pinkStrong)
+                Image(systemName: "heart.fill").foregroundStyle(SK.pinkStrong)
+                Image(systemName: "sparkles").foregroundStyle(SK.pinkStrong)
             }
             .accessibilityHidden(true)
             .scaleEffect(reduceMotion ? 1 : 1.1)

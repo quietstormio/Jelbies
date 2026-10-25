@@ -349,7 +349,7 @@ struct StudioScreen: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Show ready").font(SK.font(17, .black)).foregroundStyle(SK.ink)
                 Spacer()
-                Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).frame(minHeight: 32) }
+                Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).frame(minHeight: 44) }
                     .buttonStyle(.plain).accessibilityIdentifier("studio-card")
             }
             ShowBar(name: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme", nameWidth: 64)
@@ -550,7 +550,7 @@ struct ConditionScreen: View {
                 Spacer()
                 Button { AudioHub.shared.uiTap(); bath?() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "drop.fill").font(.system(size: 14, weight: .black)).foregroundStyle(SK.sky)
+                        Image(systemName: "drop.fill").font(.system(size: 14, weight: .black)).foregroundStyle(SK.skyDeep)
                         Text("Glow \(ShowUI.glowOf5(glow))/5").font(SK.font(14, .black)).foregroundStyle(Color(hex: 0x2F6F8C))
                         Text("Bath").font(SK.font(12, .black)).foregroundStyle(Color(hex: 0x2F6F8C)).padding(.horizontal, 10).frame(height: 28).background(Capsule().fill(.white))
                     }
@@ -599,7 +599,7 @@ struct ConditionScreen: View {
                 Text(title).font(SK.font(16, .black)).foregroundStyle(SK.ink)
                 Spacer()
                 Text(note).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 44)
             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.1), radius: 6, y: 2))
@@ -709,7 +709,7 @@ struct FoodDiarySheet: View {
                 VStack(spacing: 8) {
                     ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
                         HStack(spacing: 10) {
-                            Image(systemName: "fork.knife").font(.system(size: 16, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 40, height: 40).background(Circle().fill(Color(hex: 0xFFE7A8)))
+                            Image(systemName: "fork.knife").font(.system(size: 16, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color(hex: 0xFFE7A8)))
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(m.food).font(SK.font(16, .black)).foregroundStyle(SK.ink)
                                 HStack(spacing: 4) {
@@ -913,7 +913,7 @@ struct ShowLobby: View {
                 ForEach(1...4, id: \.self) { p in
                     VStack(spacing: 1) {
                         Text(ShowUI.ordinal(p)).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
-                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.sky); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
+                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p == 1 ? Color(hex: 0xFFE7A8) : p == 2 ? Color(hex: 0xECE8EE) : p == 3 ? Color(hex: 0xF3E1D0) : Color(hex: 0xF2ECE6)))

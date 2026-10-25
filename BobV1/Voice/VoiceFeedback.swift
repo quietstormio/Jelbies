@@ -219,7 +219,7 @@ struct VoiceBubble: View {
         case .missed(let t, let pct):
             VStack(spacing: 4) {
                 HStack(spacing: 6) { sym("questionmark", FocusStyle.pink); icon(t, size: 22) }
-                Text("\(pct)%").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                Text("\(pct)%").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
             }
         case .unknown:
             sym("questionmark", FocusStyle.pink, 30)

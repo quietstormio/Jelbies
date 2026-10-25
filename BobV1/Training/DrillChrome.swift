@@ -275,7 +275,7 @@ struct DrillResultCard: View {
             }
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); done() } label: {
                 Text("Done").font(SK.font(20, .black)).foregroundStyle(.white)
-                    .padding(.horizontal, 44).padding(.vertical, vsc == .compact ? 8 : 12).background(Capsule().fill(SK.pink))
+                    .padding(.horizontal, 44).padding(.vertical, vsc == .compact ? 8 : 12).background(Capsule().fill(SK.pinkStrong))
             }
             .buttonStyle(.plain).accessibilityIdentifier("drill-home")
         }

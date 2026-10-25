@@ -53,7 +53,7 @@ struct RoomPickerSheet: View {
             if let img = UIImage(named: "room_thumb_\(d.id.rawValue)") {
                 Image(uiImage: img).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: size * 0.12, style: .continuous))
             } else {
-                Image(systemName: "house.fill").font(.system(size: size * 0.4, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.8))
+                Image(systemName: "house.fill").font(.system(size: size * 0.4, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
             }
         }
         .frame(width: size, height: size)
@@ -88,7 +88,7 @@ struct RoomPickerSheet: View {
     private func action(_ d: RoomDef, owned: Bool, here: Bool) -> some View {
         if here {
             Text("Home now").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 14).frame(minHeight: 40).background(Capsule().fill(SK.mint.opacity(0.85)))
+                .padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(SK.mint.opacity(0.85)))
                 .accessibilityLabel("\(d.title) is your home now")
                 .accessibilityIdentifier("room-here-\(d.id.rawValue)")
         } else if owned {
@@ -103,10 +103,10 @@ struct RoomPickerSheet: View {
         } else {
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
-                    Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(SK.sky)
+                    Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(SK.skyDeep)
                     Text("\(StoreTuning.roomPrices[d.id] ?? 0)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
                 }
-                .padding(.horizontal, 10).frame(minHeight: 32).background(Capsule().fill(Color.white.opacity(0.85)))
+                .padding(.horizontal, 10).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
                 Text("In the Shop").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
             }
             .accessibilityElement(children: .ignore)

@@ -17,7 +17,7 @@ struct RaceTrophiesSection: View {
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
         VStack(alignment: .leading, spacing: 10) {
-            Text("Race ribbons").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Race ribbons").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             VStack(spacing: 6) {
                 ForEach(CourseTier.allCases, id: \.rawValue) { t in
                     let r = shelf.raceRibbons(t)
@@ -39,7 +39,7 @@ struct RaceTrophiesSection: View {
                     .accessibilityIdentifier("ribbons-\(t.rawValue)")
                 }
             }
-            Text("Race trophies").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Race trophies").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             FlowLayout(spacing: 6) {
                 ForEach(Trophy.all) { t in
                     let has = shelf.has(t)

@@ -61,7 +61,7 @@ struct PerkBadgeRow: View {
         let list = j?.perks.active ?? []
         HStack(spacing: 5) {
             if !list.isEmpty, let j {
-                Text(j.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink.opacity(0.8))
+                Text(j.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink.opacity(0.85))
                 ForEach(list, id: \.rawValue) { k in
                     Image(systemName: k.symbol).font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.ink)
                         .frame(width: 24, height: 24).background(Circle().fill(SK.honey))
@@ -249,7 +249,7 @@ struct MapStrip: View {
     private func place(_ symbol: String, _ label: String, _ color: Color, x: CGFloat, y: CGFloat) -> some View {
         VStack(spacing: 2) {
             Image(systemName: symbol).font(.system(size: 17, weight: .heavy)).foregroundStyle(SK.ink)
-                .frame(width: 40, height: 40).background(Circle().fill(color)).overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .frame(width: 44, height: 44).background(Circle().fill(color)).overlay(Circle().strokeBorder(.white, lineWidth: 2))
             Text(label).font(SK.font(11, .black)).foregroundStyle(SK.ink)
         }
         .position(x: x, y: y)
@@ -317,7 +317,7 @@ struct TrackPanel: View {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); race() } label: {
                     HStack(spacing: 8) { Image(systemName: "flag.checkered").font(.system(size: 18, weight: .heavy)); Text("Go race").font(SK.font(20, .black)) }
                         .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
-                        .background(Capsule().fill(blocker == nil ? SK.pink : SK.muted.opacity(0.5)))
+                        .background(Capsule().fill(blocker == nil ? SK.pinkStrong : SK.muted.opacity(0.5)))
                 }
                 .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-race")
             }
@@ -420,7 +420,7 @@ struct TrackPanel: View {
     private func prize(_ place: String, _ n: Int) -> some View {
         VStack(spacing: 4) {
             Text(place).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-            HStack(spacing: 4) { Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.sky); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
+            HStack(spacing: 4) { Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
         }
         .frame(maxWidth: .infinity, minHeight: 68)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(place == "1st" ? SK.honey : SK.card))
@@ -522,7 +522,7 @@ struct BagSheet: View {
             ForEach(ownedRooms, id: \.id) { d in
                 let here = care.roomID == d.id
                 HStack(spacing: 12) {
-                    Image(systemName: "house.fill").font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.8))
+                    Image(systemName: "house.fill").font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
                         .frame(width: 64, height: 64).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.honey.opacity(0.3)))
                     VStack(alignment: .leading, spacing: 3) {
                         Text(d.title).font(SK.font(16, .black)).foregroundStyle(SK.ink)
@@ -530,7 +530,7 @@ struct BagSheet: View {
                     }
                     Spacer(minLength: 0)
                     if here {
-                        Text("Home now").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 40)
+                        Text("Home now").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                             .background(Capsule().fill(SK.mint.opacity(0.85))).accessibilityIdentifier("bag-room-here-\(d.id.rawValue)")
                     } else {
                         pink("Move in", enabled: true) {
@@ -712,7 +712,7 @@ struct SlotChips: View {
                 Image(systemName: symbol).font(.system(size: 12, weight: .heavy))
                 Text(title).font(SK.font(13, .heavy))
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 40)
+            .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
             .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("\(idPrefix)\(id)").accessibilityAddTraits(on ? .isSelected : [])

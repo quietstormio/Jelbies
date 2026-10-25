@@ -61,7 +61,7 @@ private struct FrameArt: View {
             let side = m * 0.045, top = m * 0.045, bottom = m * 0.17
             ring(w, h, EdgeInsets(top: top, leading: side, bottom: bottom, trailing: side), Color(red: 0.99, green: 0.98, blue: 0.95))
                 .overlay(alignment: .bottom) {
-                    Text("Jelbies").font(.system(size: bottom * 0.36, weight: .bold, design: .rounded)).foregroundStyle(SK.ink.opacity(0.7))
+                    Text("Jelbies").font(.system(size: bottom * 0.36, weight: .bold, design: .rounded)).foregroundStyle(SK.ink.opacity(0.85))
                         .frame(height: bottom).frame(maxWidth: .infinity)
                 }
         case .cream:

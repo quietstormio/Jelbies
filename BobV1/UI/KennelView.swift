@@ -59,7 +59,7 @@ struct KennelView: View {
             if dismissible, let onClose {
                 Button { onClose() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .bold, design: .rounded))
-                        .frame(width: 40, height: 40).background(Circle().fill(UITheme.panelDeep.opacity(0.7)))
+                        .frame(width: 44, height: 44).background(Circle().fill(UITheme.panelDeep.opacity(0.7)))
                 }
                 .accessibilityLabel("Close")
             }
@@ -147,6 +147,7 @@ private struct CandidateCard: View {
             }
             Button(action: action) { Text("Choose") }
                 .buttonStyle(PillButtonStyle(tint: b.deep, compact: true))
+                .accessibilityLabel("Choose \(candidate.personality.displayName)")
                 .disabled(!enabled).opacity(enabled ? 1 : 0.4)
         }
         .foregroundStyle(UITheme.ink)
@@ -211,6 +212,7 @@ private struct NamingSheet: View {
                             name = NameSuggester.random(excluding: store.blobs.map(\.name)); dice += 1
                         } label: { Image(systemName: "dice.fill").font(.system(size: 22)) }
                             .accessibilityLabel("Suggest a name")
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .foregroundStyle(UITheme.ink)
                     .padding(14)

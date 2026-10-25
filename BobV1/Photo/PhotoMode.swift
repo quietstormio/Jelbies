@@ -144,7 +144,7 @@ struct PhotoModeView: View {
         HStack(alignment: .top) {
             if hint {
                 Text("Drag to look around, pinch to zoom, tap a Jelbie")
-                    .font(SK.font(14, .bold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 34)
+                    .font(SK.font(14, .bold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                     .background(Capsule().fill(SK.cream.opacity(0.92))).transition(.opacity)
             }
             Spacer()
@@ -153,7 +153,7 @@ struct PhotoModeView: View {
                     if let u = album.items.first, let t = PhotoThumbs.image(u, maxPixel: 160) { Image(uiImage: t).resizable().scaledToFill() }
                     else { Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink) }
                 }
-                .frame(width: 40, height: 40).background(SK.cream).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 44, height: 44).background(SK.cream).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.white, lineWidth: 2))
                 .shadow(color: SK.shadow.opacity(0.3), radius: 3, y: 1).frame(width: 44, height: 44)
             }

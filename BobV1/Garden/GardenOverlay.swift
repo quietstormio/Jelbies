@@ -28,11 +28,61 @@ struct GardenOverlay: View {
                     .allowsHitTesting(false)
                 }
                 if let plot = garden.pickerPlot { picker(plot) }
+                if assistive, garden.pickerPlot == nil { plotRow }
             }
         }
         .animation(.easeOut(duration: 0.2), value: garden.note)
         .onChange(of: garden.note) { _, n in if let n { A11yAnnounce.say(n) } }
         .animation(.easeOut(duration: 0.2), value: garden.pickerPlot)
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in assistive = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.switchControlStatusDidChangeNotification)) { _ in assistive = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning }
+    }
+
+    // MARK: plots without touching the scene (VoiceOver, Switch Control, Voice Control)
+
+    @State private var assistive = UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning
+
+    /// One button per plot: plant, water or harvest, the same call a tap on the 3D plot makes. Only shown while an assistive technology runs.
+    private var plotRow: some View {
+        TimelineView(.periodic(from: .now, by: 4)) { _ in
+            let now = Date().timeIntervalSince1970
+            VStack {
+                Spacer().frame(height: wide ? 60 : 118)
+                HStack(spacing: 8) {
+                    ForEach(0..<GardenTuning.plotCount, id: \.self) { i in plotButton(i, now: now) }
+                }
+                .padding(.horizontal, 12)
+                Spacer()
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilitySortPriority(10)
+        }
+        .accessibilityIdentifier("garden-plots")
+    }
+
+    private func plotButton(_ i: Int, now: Double) -> some View {
+        let stage = garden.stage(i)
+        let plant = garden.plots[i].plant
+        let wet = garden.isWet(i, now: now)
+        let action = stage == 0 ? "plant" : stage == 3 ? "harvest" : "water"
+        let state: String = {
+            guard let k = plant else { return "empty" }
+            let pct = Int(garden.fraction(i) * 100)
+            return stage == 3 ? "\(k.title), ripe" : "\(k.title), \(pct) percent grown, soil \(wet ? "wet" : "dry")"
+        }()
+        return Button { care.gardenTapped(plot: i) } label: {
+            VStack(spacing: 2) {
+                Image(systemName: stage == 0 ? "plus" : stage == 3 ? "basket.fill" : "drop.fill").font(.system(size: 16, weight: .black))
+                Text("Plot \(i + 1)").font(SK.font(13, .black))
+            }
+            .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SK.cream.opacity(0.96)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Plot \(i + 1)")
+        .accessibilityValue(state)
+        .accessibilityHint("Double tap to \(action)")
+        .accessibilityIdentifier("garden-plot-\(i)")
     }
 
     private func picker(_ plot: Int) -> some View {

@@ -244,7 +244,7 @@ struct VoiceTrickBook: View {
                 Text("Smart voice: \(on ? "On (Apple Intelligence)" : "Basic")")
                     .font(.system(size: 15, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
                 Text(on ? state.detail : state.detail)
-                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
@@ -271,12 +271,12 @@ struct VoiceTrickBook: View {
         let lesson = voice.nickLesson?.id == id ? voice.nickLesson : nil
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Image(systemName: "heart.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(FocusStyle.pink)
+                Image(systemName: "heart.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.pinkStrong)
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Name: \(name)").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
                     Text("He knows it")
-                        .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                        .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
                 }
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Color(red: 0.36, green: 0.68, blue: 0.45))
@@ -310,7 +310,7 @@ struct VoiceTrickBook: View {
                     .submitLabel(.done).onSubmit { addDraft(tr, id) }
                     .accessibilityIdentifier("voice-nickname-field")
                 Button { addDraft(tr, id) } label: {
-                    Image(systemName: "plus.circle.fill").font(.system(size: 24)).foregroundStyle(FocusStyle.pink)
+                    Image(systemName: "plus.circle.fill").font(.system(size: 24)).foregroundStyle(SK.pinkStrong)
                 }
                 .buttonStyle(.plain).disabled(VoiceMatcher.normalise(drafts[id] ?? "").isEmpty)
                 .accessibilityIdentifier("voice-nickname-add").accessibilityLabel("Add nickname")
@@ -322,7 +322,7 @@ struct VoiceTrickBook: View {
             }
             if let l = lesson {
                 Text("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))")
-                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.7))
+                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -359,7 +359,7 @@ struct VoiceTrickBook: View {
                     }
                     Spacer()
                     Text(tr.isLearned(t) ? "\(rel)%" : "")
-                        .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.pink)
+                        .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(SK.pinkStrong)
                 }
                 .contentShape(Rectangle())
             }

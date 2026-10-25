@@ -84,7 +84,7 @@ struct PhotoAlbumView: View {
                 if album.items.isEmpty {
                     Spacer()
                     VStack(spacing: 8) {
-                        Image(systemName: "camera").font(.system(size: 40, weight: .semibold)).foregroundStyle(SK.muted)
+                        Image(systemName: "camera").font(.system(size: 40, weight: .semibold)).foregroundStyle(SK.muted).accessibilityHidden(true)
                         Text("No photos yet").font(SK.font(20, .heavy)).foregroundStyle(SK.ink)
                         Text("Use the camera button in the room to take one.").font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
                     }

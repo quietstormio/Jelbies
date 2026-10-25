@@ -17,7 +17,7 @@ struct BlobStatusCard: View {
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold, design: .rounded))
-                        .frame(width: 34, height: 34).background(Circle().fill(UITheme.panelDeep.opacity(0.7)))
+                        .frame(width: 44, height: 44).background(Circle().fill(UITheme.panelDeep.opacity(0.7)))
                 }
                 .accessibilityLabel("Close")
             }
