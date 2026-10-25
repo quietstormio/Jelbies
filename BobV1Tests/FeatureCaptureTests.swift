@@ -458,6 +458,41 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack([hstack(Array(frames[0..<3])), hstack(Array(frames[3..<6]))]), d + "/lavender_hop.png")
     }
 
+    // MARK: Pip signature-feature prototypes (PipOptions)
+
+    private func pipTiles(_ o: Character, hop: Bool = false) throws -> [UIImage] {
+        PipOptions.current = o
+        FeatureMeshes.clearCache()
+        defer { PipOptions.current = nil; FeatureMeshes.clearCache() }
+        var t: [UIImage] = []
+        t.append(try closeup(Char(id: 1), yaw: 0.7, label: "\(o): front 3/4"))
+        t.append(try closeup(Char(id: 1), yaw: Float.pi * 0.85, label: "\(o): back 3/4"))
+        t.append(try closeup(Char(id: 1, outfit: [.head: .cowboyHat]), yaw: 0.7, label: "\(o): cowboy hat 3/4"))
+        t.append(try closeup(Char(id: 1), yaw: Float.pi / 2, label: "\(o): side"))
+        if hop {
+            let c = Char(id: 1)
+            t.append(try closeup(c, yaw: 0.9, label: "\(o): mid-hop") { lab, dr in
+                let r = lab.rigs[0]
+                r.brain.feature = .wings; r.brain.idleForced = true
+                _ = r.brain.idleStart(.flapHop, r.sim)
+                for _ in 0..<110 { lab.tick(watching: false); self.tick(dr, 0, r, c) }
+                r.brain.feature = .spines
+            })
+        }
+        return t
+    }
+    func testCapturePipDinoTail() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        let t = try pipTiles("A", hop: true)
+        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<5]))]), d + "/pip_dino_tail.png")
+    }
+    func testCapturePipOptions() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        var rows: [UIImage] = []
+        for o in ["A", "B", "C", "D"] as [Character] { rows.append(hstack(try pipTiles(o))) }
+        try write(vstack(rows), d + "/pip_options.png")
+    }
+
     // MARK: roam corners (2026-10-21 room movement v2)
 
     /// A Jelbie at each extreme corner of the roaming polygon (front-left, front-right, back-left, back-right), the real renderer, the real room camera, with

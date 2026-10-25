@@ -330,6 +330,7 @@ final class FeatureSet {
     static func partRotation(_ p: FeaturePrepared, _ part: FeaturePrepared.Part, slot s: Slot, spec: FeatureSpec) -> simd_float3x3 {
         switch s.feature {
         case .spines:
+            if PipOptions.current != nil { return matrix_identity_float3x3 }
             guard s.spineA.indices.contains(part.side) else { return matrix_identity_float3x3 }
             let sp = spec.spines[part.side], a = s.spineA[part.side]
             let axis = sp.axis.v3

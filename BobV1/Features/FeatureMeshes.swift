@@ -71,6 +71,14 @@ nonisolated enum FeatureMeshes {
     /// The prepared feature (cached per placement). `body` binds the part pivots.
     static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared) -> FeaturePrepared? {
         guard f != .none else { return nil }
+        if f == .spines, let o = PipOptions.current {          // prototype Pip signature options (-PipFeature A|B|C|D); nil = the shipped spikes
+            let k = "pipopt:\(o)"
+            lock.lock(); let c = prepared[k]; lock.unlock()
+            if let c { return c }
+            let r = PipOptions.build(o, body: body, spec: spec)
+            lock.lock(); prepared[k] = r; lock.unlock()
+            return r
+        }
         let id = (f == .daisy && p.onHat) ? spec.daisyOnHat.id : f.art
         let key = id + "|" + p.key + (f == .wings ? String(format: "|s%.3f", wingScale) : f == .spines ? String(format: "|k%.3f", spikeScale) : "")
         lock.lock(); let c = prepared[key]; lock.unlock()
