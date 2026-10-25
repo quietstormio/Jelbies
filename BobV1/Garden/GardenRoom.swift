@@ -16,11 +16,11 @@ nonisolated enum GardenLayout {
     static let soilY: Float = 0.31
     static func plotCentre(_ i: Int) -> SIMD3<Float> { SIMD3(plotXs[min(max(i, 0), plotXs.count - 1)], soilY, troughCentre.z) }
     /// The bird bath (also the room's lamp table), the two round beds, the shed, the deck.
-    static let birdBath = SIMD2<Float>(-4.0, -3.1)
-    static let bedA = SIMD2<Float>(-3.7, -0.5), bedB = SIMD2<Float>(3.9, 0.9)
+    static let birdBath = SIMD2<Float>(-3.4, -3.1)
+    static let bedA = SIMD2<Float>(-3.1, -0.5), bedB = SIMD2<Float>(3.1, 1.0)
     static let bedRadius: Float = 0.72
-    static let shed = (min: SIMD2<Float>(3.3, -4.95), max: SIMD2<Float>(4.95, -3.75), height: Float(2.1))
-    static let deck = (min: SIMD2<Float>(2.7, -3.5), max: SIMD2<Float>(4.95, -1.0))
+    static let shed = (min: SIMD2<Float>(2.55, -4.95), max: SIMD2<Float>(4.2, -3.75), height: Float(2.1))
+    static let deck = (min: SIMD2<Float>(2.1, -3.5), max: SIMD2<Float>(4.25, -1.0))
     static let gateX: Float = -2.8
     static let fenceZ: Float = -5.0
 }

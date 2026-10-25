@@ -42,6 +42,11 @@ extension GameCare {
         return b == .night ? "The park is closed at night. Come back in the morning!" : b.message
     }
 
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var startParkPending = UserDefaults.standard.integer(forKey: "StartPark") != 0
+    nonisolated(unsafe) static var startParkFrames = 0
+    #endif
+
     /// The Town's Park row: blocked = a friendly toast; else the picker (who comes along) opens.
     func requestPark() {
         if let why = parkBlocker() {
@@ -72,6 +77,12 @@ extension GameCare {
     /// Once per fixed step (the stage calls it with every Jelbie of the room, after the others).
     func tickPark(_ actors: [JellyActor], dt: Float) {
         parkBook.roster = actors
+        #if targetEnvironment(simulator)
+        if Self.startParkPending, park.phase == .off {          // capture aid: `-StartPark 1` goes straight to the park once the room is up
+            Self.startParkFrames += 1
+            if Self.startParkFrames > 90 { Self.startParkPending = false; requestPark(); startPark() }
+        }
+        #endif
         if park.active { for a in actors { a.brain?.sleepLocked = true } }
         park.step(dt: dt, blocked: park.phase == .goOut && parkFadeBlocked)
         guard park.active else { return }
