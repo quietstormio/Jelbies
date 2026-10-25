@@ -460,6 +460,18 @@ final class AudioHub {
         if !crowdWant, crowdLevel == 0 { for p in crowdPlayers where p.isPlaying { p.stop() }; crowdFade = -1 }
     }
 
+    // MARK: beach ambience (Volley/): a quiet wave and breeze loop under the music while the court is up
+
+    @ObservationIgnored private var beachPlayer: AVAudioPlayer?
+    func beachAmbience(_ on: Bool) {
+        guard !muted, started else { return }
+        if on {
+            if beachPlayer == nil, let u = url("volley_beach_amb") { beachPlayer = try? AVAudioPlayer(contentsOf: u); beachPlayer?.numberOfLoops = -1; beachPlayer?.prepareToPlay() }
+            beachPlayer?.volume = min(1, settings.sfxLevel * duck.gain * 0.25)
+            if let p = beachPlayer, !p.isPlaying, active, settings.sfxLevel > 0.01 { p.play() }
+        } else if let p = beachPlayer, p.isPlaying { p.setVolume(0, fadeDuration: 0.5); DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { p.stop() } }
+    }
+
     func uiTap() { play(.uitap) }
     func uiConfirm() { play(.uiconfirm) }
 

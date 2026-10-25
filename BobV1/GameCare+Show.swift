@@ -59,6 +59,7 @@ extension GameCare {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if show.active { return "A show is already on." }
         if race.active || raceWait != nil { return "He is at the track." }
+        if volley.active || volleyWork.wait != nil { return "He is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }

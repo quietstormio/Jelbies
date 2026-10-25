@@ -77,7 +77,7 @@ struct PerkBadgeRow: View {
 
 // MARK: - Town
 
-enum TownScreen: Equatable { case town, shop, track, studio, condition, show }
+enum TownScreen: Equatable { case town, shop, track, studio, condition, show, volley }
 
 struct TownFlow: View {
     let care: GameCare
@@ -113,6 +113,7 @@ struct TownFlow: View {
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k in goHome(); care.startVolley(jelly: who, mode: .drill(k)) })
             case .show: ShowLobby(care: care, who: $who, back: { up(.studio) }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             }
         }
@@ -198,6 +199,7 @@ struct TownView: View {
             destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
             destination("Café", "Treats out with the gang", "cup.and.saucer.fill", SK.mint, id: "town-cafe") { cafe() }
             destination("Park", "Play and make friends with visitors", "tree.fill", SK.sky, id: "town-park") { park() }
+            destination("Beach", "Volleyball: bonk, spike and dive", UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", SK.honey, id: "town-beach") { go(.volley) }
             destination("Adoption Center", JellyRoster.savedIDs().count >= JellyRoster.maxCount ? "Your room is full: 3 Jelbies" : "Welcome another Jelbie home", "heart.fill", SK.pink, id: "town-adopt") { adopt() }
         }
     }

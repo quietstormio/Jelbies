@@ -1,0 +1,357 @@
+//
+//  GameCare+Volley.swift
+//  Jelly Volleyball's glue: the Jelbies of the room (and the visitors who play against them) as the four players of VolleySim, the trip to the beach and back
+//  (under the white fade, like the park), the per-step feed of where the soft bodies are and the application of the sim's events to them, the ball as animating
+//  decor, and the player's input. The match rules are VolleySim; the moves are BlobBrain+Volley.swift; the trip is VolleyFlow.
+//
+
+import Foundation
+import QuartzCore
+import UIKit
+import simd
+
+/// What GameCare keeps while the volleyball trip is on.
+@MainActor
+final class VolleyWork {
+    var wait: (id: Int, mode: VolleyMode, age: Float)?
+    var roster: [JellyActor] = []
+    /// The bodies of players 0...3 (the human, his partner, the two opponents).
+    var players: [JellyActor] = []
+    var participants: Set<Int> = []
+    var homes: [Int: SIMD2<Float>] = [:]
+    var autonomy: [Int: Bool] = [:]
+    var arena: [Int: Float] = [:]
+    var partnerID: Int?
+    var ballShown = false
+    var lastScore = [0, 0]
+    var pendingSeed: UInt64 = 0
+    var ambT: Float = 0
+    var demoT: Float = 0
+    var rotated = false
+    var demoStage = 0
+    nonisolated deinit {}
+}
+
+extension GameCare {
+    func wireVolley() {
+        volley.onSwap = { [weak self] dest in self?.volleySwap(dest) }
+        volley.trophies = race.trophies
+        volley.wallet = bath.wallet
+    }
+
+    func volleyHides(_ id: Int) -> Bool { volley.inScene && id < jellies.count && !volleyWork.participants.contains(id) }
+
+    // MARK: asking
+
+    func volleyBlocker(jelly id: Int) -> String? {
+        guard jelly(id) != nil else { return "No such Jelbie." }
+        if volley.active || volleyWork.wait != nil { return "A match is already on." }
+        if race.active || raceWait != nil { return "He is at the track." }
+        if show.active { return "He is at the Jelly Show." }
+        if cafe.active || park.active { return "He is out already." }
+        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }
+        if bath.active { return "The clean-up is going on." }
+        if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }
+        if raceBook.returner != nil { return "Welcome him home first." }
+        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "He is listening to you." }
+        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "He is not in the room." }
+        return nil
+    }
+    func canVolley(jelly id: Int) -> Bool { volleyBlocker(jelly: id) == nil }
+
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var startVolleyPending = UserDefaults.standard.integer(forKey: "StartVolley") != 0
+    nonisolated(unsafe) static var startVolleyFrames = 0
+    #endif
+
+    func startVolley(jelly id: Int, mode: VolleyMode, seed: UInt64? = nil) {
+        guard canVolley(jelly: id) else { return }
+        select.cancel(); queued.removeAll(); callRunning = false
+        voice.cancel()
+        let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
+        let s = seed ?? UInt64(Date().timeIntervalSince1970 * 1000) & 0xFFFFFF
+        if !sleepers.isEmpty {
+            for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) }
+            volleyWork.wait = (id, mode, 0)
+            volleyWork.pendingSeed = s
+            for a in raceBook.actors { a.brain?.sleepLocked = true }
+            return
+        }
+        beginVolley(jelly: id, mode: mode, seed: s)
+    }
+
+    private func beginVolley(jelly id: Int, mode: VolleyMode, seed: UInt64) {
+        guard let prof = jelly(id) else { return }
+        let w = volleyWork
+        w.pendingSeed = seed
+        var partner: JellyProfile?
+        if case .match = mode { partner = jellies.first { $0.id != id } }
+        w.partnerID = partner?.id
+        var mine = [volley.book.stats(character: prof.character)]
+        if let p = partner { mine.append(volley.book.stats(character: p.character)) }
+        var sim = VolleySim(mode: mode, mine: mine, seed: seed, firstServe: 0)
+        let assist = A11ySettings.shared.raceAssist
+        sim.ballSpeedScale = (volley.book.slowBall || A11ySettings.shared.reduceMotion) ? 0.72 : 1
+        sim.autoMove = assist == .oneButton || assist == .auto
+        sim.autoJump = A11ySettings.shared.autoJump || assist == .auto
+        volley.assistFactor = assist == .auto ? 0.5 : 1
+        volley.trophies = race.trophies
+        volley.wallet = bath.wallet
+        volley.partnerName = partner?.name ?? ""
+        volley.begin(mode: mode, playerID: id, character: prof.character, name: prof.name, sim: sim)
+    }
+
+    // MARK: input
+
+    /// The drag / arrow buttons: -1...1 (the Jelbie walks that way along the net line).
+    func volleyMove(_ dir: Float) { guard volley.live else { return }; volley.sim?.setMove(dir) }
+    /// The Jump button (serves when it is his serve; a jump, a dig at a low ball, a spike when already in the air).
+    func volleyTap() {
+        guard volley.live else { return }
+        volley.sim?.tap()
+    }
+
+    // MARK: the world swaps (under the white)
+
+    private func volleySwap(_ dest: VolleyFlow.Dest) {
+        let w = volleyWork
+        switch dest {
+        case .beach:
+            w.roster = raceBook.actors
+            guard !w.roster.isEmpty else { return }
+            let pid = volley.playerID
+            var parts: [Int] = [pid]
+            if let p = w.partnerID { parts.append(p) }
+            w.participants = Set(parts)
+            w.homes = [:]; w.autonomy = [:]; w.arena = [:]
+            for a in w.roster {
+                guard let b = a.brain else { continue }
+                w.homes[a.id] = a.floor; w.autonomy[a.id] = b.autonomy; w.arena[a.id] = a.sim.arenaRadius
+                b.abortAll(a.sim, a.skinner)
+                b.commandedIdle = nil; b.commandedDecor = nil; b.commandedFlip = false
+                b.autonomy = false
+            }
+            RoomLayout.apply(RoomCatalog.beach)
+            GameCamera.configureBeach()
+            syncDecor()
+            // the visitors: the opponents (and a partner when the Jelbie plays alone)
+            var bodies: [JellyActor] = [w.roster[pid]]
+            var names: [String] = []
+            if case .match = volley.mode {
+                let needed = w.partnerID == nil ? 3 : 2
+                var rng = ParkRandom(w.pendingSeed &+ 77)
+                var pool = ParkPool.generate()
+                for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
+                let specs = Array(pool.prefix(needed))
+                let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []
+                if let p = w.partnerID { bodies.append(w.roster[p]) } else if let v = vis.first { bodies.append(v) }
+                let opp = w.partnerID == nil ? Array(vis.dropFirst()) : vis
+                bodies.append(contentsOf: opp.prefix(2))
+                names = specs.suffix(2).map(\.name)
+                if w.partnerID == nil, let s = specs.first { volley.partnerName = s.name }
+            }
+            volley.opponentNames = names
+            w.players = bodies
+            for (i, a) in bodies.enumerated() {
+                let team = i / 2
+                let x = volley.isDrill ? Float(-1.5) : VolleyTuning.startX[min(i, 3)]
+                a.sim.arenaRadius = .infinity
+                rehome(a, at: SIMD2(x, 0))
+                a.brain?.volleyBegin(sim: a.sim, skinner: a.skinner, x: x, z: 0, side: team == 0 ? 1 : -1)
+                a.skinner.jelly.reset()
+            }
+            w.lastScore = [0, 0]
+        case .home:
+            for a in w.players { a.brain?.volleyEnd(sim: a.sim, skinner: a.skinner) }
+            parkBook.clear?()
+            RoomLayout.apply(RoomCatalog.def(store.currentRoom))
+            GameCamera.endBeach(count: max(jellies.count, 1))
+            if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
+                for a in w.roster where (w.arena[a.id] ?? a.sim.arenaRadius).isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
+            }
+            syncDecor()
+            var taken: [SIMD2<Float>] = []
+            for a in w.roster {
+                guard let brain = a.brain else { continue }
+                var spot = w.homes[a.id] ?? Self.greetSpot(a.id)
+                if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
+                    spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
+                }
+                spot = brain.fixed(spot)
+                taken.append(spot)
+                rehome(a, at: spot)
+                brain.autonomy = w.autonomy[a.id] ?? true
+                brain.idleBlocked = false
+                brain.restTimer = 2
+                a.sim.arenaRadius = w.arena[a.id] ?? a.sim.arenaRadius
+            }
+            w.participants = []; w.players = []
+        }
+    }
+
+    // MARK: per fixed step
+
+    func tickVolley(_ actors: [JellyActor], dt: Float) {
+        let w = volleyWork
+        #if targetEnvironment(simulator)
+        if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match, `2` bonk drill, `3` spike drill, `4` sprints
+            Self.startVolleyFrames += 1
+            if Self.startVolleyFrames > 120 {
+                Self.startVolleyPending = false
+                let k = UserDefaults.standard.integer(forKey: "StartVolley")
+                startVolley(jelly: 0, mode: k == 2 ? .drill(.bonk) : k == 3 ? .drill(.spike) : k == 4 ? .drill(.sprint) : .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+            }
+        }
+        #endif
+        if var wt = w.wait {
+            wt.age += dt
+            let sleeping = actors.filter { $0.brain?.isSleeping ?? false }
+            if wt.age > 1.5, wt.age.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
+            if wt.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }
+            if sleeping.isEmpty || wt.age > 8.5 { w.wait = nil; beginVolley(jelly: wt.id, mode: wt.mode, seed: w.pendingSeed) } else { w.wait = wt }
+        }
+        volley.step(dt: dt)
+        guard volley.active else { return }
+        for a in actors { a.brain?.sleepLocked = true }
+        guard volley.inScene, var s = volley.sim, !w.players.isEmpty else { return }
+        // the ambience under the music
+        w.ambT += dt
+        if w.ambT > 1 { w.ambT = 0; AudioHub.shared.beachAmbience(volley.phase != .leaveOut) }
+        if volley.phase != .playing {
+            for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].x, speed: s.players[i].stats.speed) }
+            return
+        }
+        // where the soft bodies are
+        for (i, a) in w.players.enumerated() where i < s.players.count {
+            guard let b = a.brain else { continue }
+            let sb = a.sim, c = sb.centroid()
+            var top: Float = 0
+            s.setSamples(i) { arr in
+                arr.removeAll(keepingCapacity: true)
+                var p = 0
+                while p < sb.n { let y = sb.x[3 * p + 1]; arr.append(SIMD2(sb.x[3 * p], y)); top = max(top, y); p += 4 }
+            }
+            s.setBody(i, x: c.x, lift: max(0, c.y - sb.restCentroid.y), top: top, grounded: b.volley.phase != .air)
+            if b.volley.finished { s.bodyDone(i) }
+            else if b.volley.phase == .ground, s.players[i].act != .stand, s.players[i].actT > 0.3 { s.bodyDone(i) }
+        }
+        #if targetEnvironment(simulator)
+        volleyDemo(&s)
+        if UserDefaults.standard.bool(forKey: "VolleyLandscape"), !w.rotated {          // capture aid: the court on its side
+            w.rotated = true
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+        }
+        #endif
+        s.tick(dt: dt)
+        let events = s.takeEvents()
+        for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].wantX, speed: s.players[i].stats.speed) }
+        for e in events { applyVolley(e, &s) }
+        volley.sim = s
+        if s.phase == .over { volley.settle() }
+        volley.refreshUI()
+    }
+
+    private func applyVolley(_ e: VolleyEvent, _ s: inout VolleySim) {
+        let w = volleyWork
+        func body(_ i: Int) -> JellyActor? { w.players.indices.contains(i) ? w.players[i] : nil }
+        let now = CACurrentMediaTime()
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "VolleyLog") != nil { print("VOLLEYEV \(e)") }
+        #endif
+        switch e {
+        case .jump(let i, let dx, let apex): if let a = body(i) { a.brain?.volleyJump(sim: a.sim, dx: dx, apex: apex) }
+        case .spike(let i): body(i)?.brain?.volleySpike()
+        case .dive(let i, let dir): if let a = body(i) { a.brain?.volleyDive(sim: a.sim, dir: dir) }
+        case .serveToss: AudioHub.shared.play(.whistle, volume: 0.35, rate: 1.3)
+        case .contact(let i, let kind, let point, let normal, let speed):
+            guard let a = body(i) else { return }
+            a.brain?.volleyImpact(sim: a.sim, kind: kind, ball: point + normal * VolleyTuning.ballR * 0.65, normal: normal, speed: speed)
+            AudioHub.shared.play(kind == .spike ? .volleySpike : .volleyBonk, jelly: a.id, x: point.x, volume: min(1.1, 0.6 + speed * 0.08))
+            if i == 0 { touchPlay?.haptics.transient(now: now, intensity: kind == .spike ? 0.9 : 0.6, sharpness: kind == .spike ? 0.7 : 0.4) }
+        case .bounce(let x): AudioHub.shared.play(.volleyLand, x: x, volume: 0.6)
+        case .net: AudioHub.shared.play(.wobble, volume: 0.5)
+        case .point(let team, let out):
+            AudioHub.shared.play(.volleyPoint)
+            AudioHub.shared.play(.whistle, volume: 0.5)
+            A11yEvents.say(String(format: "%@%@. %d to %d", team == 0 ? "Point for you" : "Point for them", out ? ", out" : "", s.score[0], s.score[1]), .high)
+        case .cheer(let team):
+            for (i, a) in w.players.enumerated() where i / 2 == team { a.brain?.volleyCheer(sim: a.sim) }
+        case .serveReady(let p):
+            if p == 0 { A11yEvents.say("Your serve. Tap Jump", .normal) }
+        case .matchOver: AudioHub.shared.play(.cheerSmall)
+        case .drillHit(let good): AudioHub.shared.play(good ? .statUp : .stumble, volume: 0.6)
+        case .flag: AudioHub.shared.play(.goodStep)
+        case .drillBall, .drillOver: break
+        }
+    }
+
+    // MARK: the ball (animating decor)
+
+    func refreshVolleyBall(_ room: RoomRenderer) -> Bool {
+        let w = volleyWork
+        guard volley.inScene, let s = volley.sim else {
+            if w.ballShown { room.setDecorActive(RoomMesh()); w.ballShown = false }
+            return false
+        }
+        let b = RoomMeshBuilder()
+        b.material = .plain
+        func add(_ m: RoomMesh) {
+            let off = UInt32(b.mesh.vertices.count)
+            b.mesh.vertices.append(contentsOf: m.vertices); b.mesh.indices.append(contentsOf: m.indices.map { $0 + off })
+        }
+        if s.drillKind != .sprint {
+            VolleyBallMesh.shadow(x: s.ball.pos.x, height: s.ball.pos.y, into: b)
+            add(VolleyBallMesh.build(centre: SIMD3(s.ball.pos.x, s.ball.pos.y, s.ball.z), spin: s.ball.spin))
+        }
+        if s.drillKind == .spike {
+            for (k, x) in s.cushions.enumerated() {
+                let target = k == s.targetCushion
+                b.roundedBox(centre: SIMD3(x, 0.10, 0), half: SIMD3(0.42, 0.10, 0.42), radius: 0.09, segments: 3, aoFloor: false,
+                             color: target ? ParkShapes.srgb(0.98, 0.50, 0.58) : ParkShapes.srgb(0.99, 0.94, 0.82))
+            }
+        }
+        if s.drillKind == .sprint {
+            for (k, x) in s.flags.enumerated() where k >= s.flagIndex {
+                let cur = k == s.flagIndex
+                let col = cur ? ParkShapes.srgb(0.98, 0.50, 0.58) : ParkShapes.srgb(0.86, 0.90, 0.95)
+                b.roundedBox(centre: SIMD3(x, 0.45, 0.25), half: SIMD3(0.025, 0.45, 0.025), radius: 0.02, segments: 2, aoFloor: false, color: ParkShapes.srgb(0.96, 0.94, 0.88))
+                b.roundedBox(centre: SIMD3(x + 0.17, 0.78, 0.25), half: SIMD3(cur ? 0.19 : 0.13, cur ? 0.1 : 0.07, 0.015), radius: 0.015, segments: 2, aoFloor: false, color: col)
+            }
+        }
+        room.setDecorActive(b.mesh)
+        w.ballShown = true
+        return true
+    }
+}
+
+extension GameCare {
+    /// Capture aid (the simulator only): `-VolleySlow 0.15` slows the court's time; `-VolleyDemo bonk|spike|dig|serve|cheer` plays one move over and over for the review sheet.
+    nonisolated(unsafe) static let volleyTimeScale: Float = { let v = Float(UserDefaults.standard.double(forKey: "VolleySlow")); return v > 0 ? v : 1 }()
+
+    #if targetEnvironment(simulator)
+    func volleyDemo(_ s: inout VolleySim) {
+        guard let k = UserDefaults.standard.string(forKey: "VolleyDemo"), let p = s.players.first else { return }
+        let w = volleyWork
+        let apex = VolleyTuning.apex(hops: p.stats.hops)
+        switch k {
+        case "bonk", "spike":
+            guard s.phase == .rally else { return }
+            let b = s.ball
+            s.setMove(max(-1, min(1, (b.pos.x - p.x) / 0.9)))
+            if p.act == .stand, b.vel.y < 0, let t = s.timeToHeight(p.top + apex * 0.9 + 0.3), t <= 0.5 { s.tap() }
+            if k == "spike", p.act == .jump, !p.grounded, p.actT > 0.2 { s.tap() }
+        case "dig":
+            guard s.phase == .rally else { return }
+            if !w.ballShown || s.clock - w.demoT > 4.5 { w.demoT = s.clock; w.demoStage = 0 }
+            if w.demoStage == 0, p.act == .stand, s.clock - w.demoT > 0.2 { s.debugBall(pos: SIMD2(p.x + 0.9, 1.5), vel: SIMD2(-0.1, -0.5)); w.demoStage = 1 }
+            if w.demoStage == 1, s.ball.pos.y < 1.2, p.act == .stand { s.tap(); w.demoStage = 2 }
+        case "serve":
+            if s.waitingToServe, s.servingPlayer == 0 { s.tap() }
+        case "cheer":
+            if s.waitingToServe, s.servingPlayer == 0 { s.tap() }
+            if s.phase == .rally, s.clock - w.demoT > 3 { w.demoT = s.clock; s.forcePoint(team: 0) }
+        default: break
+        }
+    }
+    #endif
+}

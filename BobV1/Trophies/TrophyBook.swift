@@ -37,6 +37,10 @@ nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     var race: [String: [Int]] = [:]
     /// Trophy ids, in the order earned.
     var earned: [String] = []
+    /// Beach volleyball match wins per tier (Volley/VolleyFlow.swift); optional so older saves decode.
+    var volleyWins: [String: Int]? = nil
+    var volleyTotal: Int { (volleyWins ?? [:]).values.reduce(0, +) }
+    func volleyWon(_ t: VolleyTier) -> Int { volleyWins?[t.rawValue] ?? 0 }
 
     func raceRibbons(_ t: CourseTier) -> [Int] { padded(race[t.rawValue]) }
     private func padded(_ a: [Int]?) -> [Int] { var r = a ?? []; while r.count < 3 { r.append(0) }; return r }
@@ -83,6 +87,7 @@ final class TrophyBook {
     }
 
     func shelf(character c: Int) -> JelbieTrophies { shelves["\(c)"] ?? JelbieTrophies() }
+    func setShelf(_ s: JelbieTrophies, character c: Int) { shelves["\(c)"] = s; save() }
 
     /// A race on `tier` ended with Jelbie `character` in `place` (1...3 earn a ribbon; 1st also counts toward the trophies).
     @discardableResult

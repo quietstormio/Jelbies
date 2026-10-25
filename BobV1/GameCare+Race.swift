@@ -88,6 +88,7 @@ extension GameCare {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if race.active { return "A race is already on." }
         if show.active { return "He is at the Jelly Show." }
+        if volley.active || volleyWork.wait != nil { return "He is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }
@@ -125,7 +126,7 @@ extension GameCare {
     func startDrill(jelly id: Int, seed: UInt64? = nil) { startRace(jelly: id, seed: seed, drill: true) }
 
     /// True from the moment Race is asked (even while a sleeper is still rolling up) until the trip is over: no bedtime, no sleep. The show's trip too.
-    var raceBusy: Bool { race.active || raceWait != nil || show.active }
+    var raceBusy: Bool { race.active || raceWait != nil || show.active || volley.active || volleyWork.wait != nil }
 
     private func beginRace(jelly id: Int, seed: UInt64?, drill: Bool = false) {
         guard let prof = jelly(id) else { return }
