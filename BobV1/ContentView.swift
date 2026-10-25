@@ -24,7 +24,7 @@ struct ContentView: View {
                 if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
             }
             .onAppear { OrientationForce.apply() }
-            .overlay { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) }
+            .overlay { if !introOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }
     }
