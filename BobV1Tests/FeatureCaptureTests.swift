@@ -280,6 +280,48 @@ final class FeatureCaptureTests: XCTestCase {
         try write(labelled(crop, "Medals on Bob, Pip, Moss, Lavender" + (land ? " (landscape)" : " (portrait)")), d + (land ? "/medal_lineup_landscape.png" : "/medal_lineup_portrait.png"))
     }
 
+    /// The head-through-hat fix: Pip in hats mid-stretch / squash, crown fit off vs on; then the features under hats / hoodies.
+    func testCaptureCrownFit() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        func stretch(_ sq: Float, _ pitch: Float) -> (SocialTests.Lab, Dressed) -> Void {
+            return { lab, dd in
+                let r = lab.rigs[0]
+                r.sim.attractor.squash = sq
+                r.sim.attractor.rotation = simd_quatf(angle: pitch, axis: SIMD3(1, 0, 0))
+                for _ in 0..<5 { r.sim.step() }
+                r.brain.currentPose(r.sim)
+                self.tick(dd, 0, r, Char(id: 1, outfit: [.head: .bucketHat]))
+                dd.worn[0].syncCarry(0, sim: r.sim)
+            }
+        }
+        var rows: [UIImage] = []
+        if ProcessInfo.processInfo.environment["CROWN_FEATURES_ONLY"] == nil {
+        for (name, look) in [("bucket hat", WearLook.bucketHat), ("pirate hat", .pirateHat), ("cowboy hat", .cowboyHat)] {
+            var cells: [UIImage] = []
+            for fit in [false, true] {
+                CrownFit.enabled = fit
+                for (lab, sq, pitch) in [("hop stretch", Float(1.3), Float(0)), ("landing squash", 0.8, 0.2)] {
+                    let pre = stretch(sq, pitch)
+                    cells.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: 0.7, label: "Pip + \(name) \(lab) fit \(fit ? "ON" : "OFF")") { l, dd in
+                        pre(l, dd); self.tick(dd, 0, l.rigs[0], Char(id: 1, outfit: [.head: look])); dd.worn[0].syncCarry(0, sim: l.rigs[0].sim)
+                    })
+                }
+            }
+            CrownFit.enabled = true
+            rows.append(hstack(cells))
+        }
+        try write(vstack(rows), d + "/crown_fit.png")
+        }
+        var f: [UIImage] = []
+        for (label, c) in [("Moss + cowboy", Char(id: 2, outfit: [.head: .cowboyHat])), ("Moss + beret", Char(id: 2, outfit: [.head: .beret])),
+                           ("Moss + propeller", Char(id: 2, outfit: [.head: .propellerBeanie])), ("Pip + beret", Char(id: 1, outfit: [.head: .beret])),
+                           ("Pip + pirate (back)", Char(id: 1, outfit: [.head: .pirateHat])), ("Lavender + hoodie (back)", Char(id: 3, outfit: [.body: .hoodie]))] {
+            f.append(try closeup(c, yaw: label.contains("back") ? Float.pi * 0.85 : 0.6, label: label))
+        }
+        try write(vstack([hstack(Array(f[0..<3])), hstack(Array(f[3..<6]))]), d + "/features_under_wear.png")
+    }
+
     func testCaptureDaisyHats() throws {
         let d = try dir()
         DayClock.shared.forcedHour = 12

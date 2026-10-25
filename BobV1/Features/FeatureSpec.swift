@@ -90,6 +90,12 @@ nonisolated struct FeatureFit: Equatable, Sendable {
 
 nonisolated enum FeatureCompat {
     static let fullFlap: ClosedRange<Float> = -40...75
+    /// Where Moss's daisy sits on the hats whose art-lab rule was "hide" (placement as the other rules: crown moved to `anchor`, tilted, sunk).
+    static let hatDaisy: [String: FeatureSpec.MossRule] = [
+        "cowboy_hat": .init(rule: "adjust", anchor: [0.0, 1.3758, 0.0], tilt: 0, sink: 0, variant: nil),
+        "beret": .init(rule: "adjust", anchor: [0.0, 1.30, 0.42], tilt: 55, sink: 0.05, variant: nil),
+        "propeller_beanie": .init(rule: "adjust", anchor: [0.0, 1.30, 0.42], tilt: 55, sink: 0.05, variant: nil),
+    ]
 
     /// The fit of `feature` under the worn art ids (what the wardrobe SHOWS now, not the whole outfit: a hat that poofed off for the night frees the spines).
     static func solve(_ feature: JellyFeature, worn: [String], spec: FeatureSpec = .shared) -> FeatureFit {
@@ -97,17 +103,24 @@ nonisolated enum FeatureCompat {
         switch feature {
         case .none: return fit
         case .spines:
+            // Pip's spines NEVER vanish under what he wears: a spine under a hat is tucked (shrunk about its base, FeatureTuning.tuckScale), and the
+            // rear ("back" zone) spines always show in full.
+            let back = Set(spec.spines.filter { $0.zone == "back" }.map(\.part))
             for w in worn { if let p = spec.pairs[w] { fit.hiddenParts.formUnion(p.pipHide) } }
+            fit.hiddenParts.subtract(back)
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {
                 guard let p = spec.pairs[w], p.slot == "head" else { continue }
-                switch p.moss.rule {
+                var rule = p.moss
+                // the daisy never vanishes under a hat: where the art lab said "hide", it is tucked on the hat instead (hatDaisy)
+                if rule.rule == "hide" { rule = hatDaisy[w] ?? FeatureSpec.MossRule(rule: "adjust", anchor: [0, spec.top + 0.03, 0], tilt: 0, sink: 0, variant: nil) }
+                switch rule.rule {
                 case "hide": fit.hidden = true
                 case "adjust":
                     fit.onHat = true
-                    fit.anchor = p.moss.anchor?.v3 ?? SIMD3(0, spec.top, 0); fit.tilt = p.moss.tilt ?? 0; fit.sink = p.moss.sink ?? 0
-                    if let v = p.moss.variant { fit.hatVariant[w] = v }
+                    fit.anchor = rule.anchor?.v3 ?? SIMD3(0, spec.top, 0); fit.tilt = rule.tilt ?? 0; fit.sink = rule.sink ?? 0
+                    if let v = rule.variant { fit.hatVariant[w] = v }
                 default: break
                 }
             }

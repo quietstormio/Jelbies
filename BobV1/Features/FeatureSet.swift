@@ -21,6 +21,8 @@ import Foundation
 nonisolated enum FeatureTuning {
     static let popTime: Float = 0.25
     static let partFade: Float = 0.25
+    /// A spine under a hat is not hidden: it is tucked to this fraction of its height, about its base.
+    static let tuckScale: Float = 0.3
     /// Spine wobble: how hard body acceleration (u/s^2) and squash rate (1/s) push, in degrees.
     static let spineAccelGain: Float = 0.9, spineSquashGain: Float = 25
     /// Daisy sway: spring (Hz) and damping, acceleration push (deg per u/s^2), the largest sway (deg).
@@ -190,7 +192,7 @@ final class FeatureSet {
             if l > sp.maxDeg { s.spineA[k] *= sp.maxDeg / l }
             if !l.isFinite { s.spineA[k] = .zero; s.spineV[k] = .zero }
             // a spine under a hat shrinks away
-            let want: Float = s.fit.hiddenParts.contains(sp.part) ? 0 : 1
+            let want: Float = s.fit.hiddenParts.contains(sp.part) ? FeatureTuning.tuckScale : 1
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
@@ -354,8 +356,9 @@ final class FeatureSet {
         let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
         let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
         for (pi, part) in p.parts.enumerated() {
-            let ps = (s.partScale[part.name] ?? 1) * s.scale
-            if ps <= 0.001 { keep[pi] = false }
+            let tuck = s.partScale[part.name] ?? 1
+            let ps = (s.feature == .spines ? 1 : tuck) * s.scale
+            if ps * tuck <= 0.001 { keep[pi] = false }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
@@ -392,6 +395,7 @@ final class FeatureSet {
                     n = R * (rot * n)
                 }
                 if ps != 1 { q = anchorW + (q - anchorW) * ps }
+                if s.feature == .spines, tuck != 1 { q = pivotW + (q - pivotW) * tuck }               // tucked: shorter about its own base
                 m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
         }
