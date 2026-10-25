@@ -162,6 +162,7 @@ enum RoomGeometry {
     static let insetDepth: Float = 0.18
 
     static func build(theme: RoomTheme, def: RoomDef = RoomLayout.current) -> RoomMesh {
+        if def.id == .beach { return BeachScenery.build(theme: theme) }          // the volleyball beach (Volley/VolleyScene.swift)
         if def.id == .park { return ParkScenery.build(theme: theme) }          // the park: its own scenery (Park/ParkRoom.swift)
         let sw = theme.swatches
         let b = RoomMeshBuilder()

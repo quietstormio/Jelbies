@@ -137,7 +137,10 @@ final class GameCare {
     @ObservationIgnored let parkBook = ParkBook()
     /// A friend over at home (Park/GuestBook.swift, GameCare+Guest.swift): the invitation / visit, saved on the device.
     let guestBook = GuestBook()
-    var tripActive: Bool { race.active || show.active || cafe.active || park.active || groom.active }
+    /// Jelly Volleyball (Volley/VolleyFlow.swift, Volley/GameCare+Volley.swift): the trip to the beach, the match or drill, and back.
+    let volley = VolleyFlow()
+    @ObservationIgnored let volleyWork = VolleyWork()
+    var tripActive: Bool { race.active || show.active || cafe.active || park.active || groom.active || volley.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -254,6 +257,7 @@ final class GameCare {
         wireCafe()
         wirePark()
         wireGroom()
+        wireVolley()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }

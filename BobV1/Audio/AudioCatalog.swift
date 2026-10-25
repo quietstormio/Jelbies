@@ -16,6 +16,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     /// Decor cues (files place_item_N, beanbag_sit_N).
     case placeItem = "place_item", beanbagSit = "beanbag_sit"
     /// Training cues (files whistle_N, tick_N, good_step_N, perfect_streak_N, stat_up_N, tired_N, cheer_small_N).
+    /// Volleyball cues (volley_bonk_N, volley_spike_N, volley_land_N, volley_point_N).
+    case volleyBonk = "volley_bonk", volleySpike = "volley_spike", volleyLand = "volley_land", volleyPoint = "volley_point"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
@@ -41,6 +43,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .tired: return 0.5
         case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
+        case .volleyBonk, .volleySpike, .volleyLand: return 0.8
+        case .volleyPoint: return 0.6
         case .letgo: return 0.7
         case .uitap: return 0.6
         case .soapbubbles, .lintroller: return 0.7

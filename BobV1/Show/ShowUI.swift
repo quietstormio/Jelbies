@@ -782,6 +782,7 @@ struct TrophiesSheet: View {
             }
             Text(t.shows == 0 ? "No shows yet. The first one earns a sticker." : "\(t.shows) show\(t.shows == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
             RaceTrophiesSection(care: care, who: who)          // (race ribbons and trophies: Trophies/)
+            VolleyTrophiesSection(care: care, who: who)          // (beach volleyball ribbons and trophies: Volley/)
         } }
         .padding(16)
         .accessibilityIdentifier("trophies-sheet")

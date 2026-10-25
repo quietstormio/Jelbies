@@ -82,6 +82,7 @@ enum GameCamera {
     static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil, raceFollow: RaceFollowPose? = nil,
                        show: Float = 0, showFrame: ShowFrame? = nil) -> CameraState {
         self.aspect = aspect
+        if beachOn { let p = beachPose(aspect: aspect); eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = 1 }          // the volleyball beach (Volley/VolleyScene.swift)
         if roomWideScale != 1 {
             let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
             target = roomTarget + lift

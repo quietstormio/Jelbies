@@ -257,7 +257,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The aspect the roaming polygon was built for (GameCamera.refreshRoam); rebuilt when it changes, and every sim's safety arena follows it.
     private var roamAspect: Float = 0
     private func syncRoam(aspect: Float) {
-        guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005 else { return }
+        guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         for a in actors where a.sim.arenaRadius.isFinite && !(a.brain?.race.active ?? false) && !model.care.bath.fenceLifted {
@@ -560,6 +560,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in parkActors { otherTick(a, reduce: reduce) }          // the park's visitors (their looks and friendships: tickPark)
         if game { model.care.tickRace(actors, dt: sim.stepDt) }          // Jelly Circuit: the trip to the track and the race (every Jelly is ticked by now)
         if game { model.care.tickCafe(actors, dt: sim.stepDt) }          // the café outing: the fade, the swaps, the serving, the cheer
+        if game { model.care.tickVolley(actors, dt: sim.stepDt) }          // Jelly Volleyball: the trip to the beach, the match or drill (Volley/GameCare+Volley.swift)
         if game { model.care.tickPark(actors, dt: sim.stepDt) }          // the park outing: the picker, the fade, the swaps, the visitors, friendships and love
         if game { model.care.tickGroom(actors, dt: sim.stepDt) }          // the Groomer: the fade, the swap, the reveal line-up and cheer
         if game { model.care.tickShow(actors, dt: sim.stepDt) }          // Jelly Show: the trip to the stage, the rounds, the Studio's dance drill
@@ -929,7 +930,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         // fixed-step simulation
         let s0 = CACurrentMediaTime()
         if !paused {
-            acc += dt * (m.slow ? 0.25 : 1)
+            acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale : 1)          // (-VolleySlow: capture aid)
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
             let maxSteps = 2
             var steps = 0
@@ -954,7 +955,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors { a.skinner.tickBlink(dt: dt) }
         for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
-        let parkOn = game && model.care.park.inScene
+        let parkOn = game && (model.care.park.inScene || model.care.volley.inScene)
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
@@ -1045,7 +1046,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
-            renderer.parkVisible = model.care.park.inScene
+            renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
                 renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id) || model.care.parkHides(a.id), body: a.id)

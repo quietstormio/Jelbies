@@ -124,6 +124,8 @@ final class BlobBrain {
     var script: Script = .none
     /// Jelly Circuit race state (BlobBrain+Race.swift).
     var race = RaceDrive()
+    /// Jelly Volleyball (Volley/BlobBrain+Volley.swift).
+    var volley = VolleyDrive()
     /// Idle behaviours (BlobBrain+Idle.swift): run, stumble, jumping jacks, sit, look, yawn-stretch. State, mood source and the run blend.
     var idleState = IdleState()
     /// The face (BlobBrain+Expression.swift), the mid-walk flourish roll of the current leg and the pending jump for joy (BlobBrain+Flourish.swift), the reactions (BlobBrain+React.swift).
@@ -568,6 +570,7 @@ final class BlobBrain {
         if activity == .touched { activity = .recovering; gaitRecover = false; calmT = 0; recoverT = 0 }
         if activity == .recovering { recover(sim, skinner, dt); return }
 
+        if volley.active { volleyTick(sim, skinner, dt); return }          // Jelly Volleyball owns the body
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
         if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }
