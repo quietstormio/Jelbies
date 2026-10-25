@@ -135,7 +135,7 @@ struct CloudSky: View {
 
     var body: some View {
         let still = reduceMotion || CloudTheme.reduceMotion
-        TimelineView(.animation(minimumInterval: nil, paused: still || !visible)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: still || !visible)) { tl in
             let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
             Canvas { ctx, size in
                 let s = max(size.width, size.height)

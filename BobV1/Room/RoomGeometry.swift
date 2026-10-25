@@ -39,7 +39,9 @@ nonisolated final class RoomMeshBuilder {
         let g = simd_cross(pb - pa, pc - pa)
         if simd_length_squared(g) < 1e-14 { return }                // degenerate
         func nrm(_ i: UInt32) -> SIMD3<Float> { let n = mesh.vertices[Int(i)].normal; return SIMD3(n.x, n.y, n.z) }
-        if simd_dot(g, nrm(a) + nrm(b) + nrm(c)) >= 0 { mesh.indices += [a, b, c] } else { mesh.indices += [a, c, b] }
+        // appended one by one: `+= [a, b, c]` heap-allocated an array per triangle (thousands per rebuild of an animating decor piece)
+        if simd_dot(g, nrm(a) + nrm(b) + nrm(c)) >= 0 { mesh.indices.append(a); mesh.indices.append(b); mesh.indices.append(c) }
+        else { mesh.indices.append(a); mesh.indices.append(c); mesh.indices.append(b) }
     }
 
     func quad(_ a: UInt32, _ b: UInt32, _ c: UInt32, _ d: UInt32) { triangle(a, b, c); triangle(a, c, d) }

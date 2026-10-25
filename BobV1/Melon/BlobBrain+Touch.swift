@@ -234,7 +234,7 @@ extension SoftBody {
         return (lo, hi)
     }
     /// Shift every particle by `d` (a soft wall holding the whole body back, never one stretched vertex).
-    func translate(_ d: SIMD3<Float>) { for i in 0..<n { x[3 * i] += d.x; x[3 * i + 1] += d.y; x[3 * i + 2] += d.z } }
+    func translate(_ d: SIMD3<Float>) { invalidatePose(); for i in 0..<n { x[3 * i] += d.x; x[3 * i + 1] += d.y; x[3 * i + 2] += d.z } }
     /// Sideways landing squash against a wall: the body flattens along `axis` (0 x, 2 z) and bulges a little in y.
     func wallSquash(axis: Int, k: Float) {
         let c = centroid()

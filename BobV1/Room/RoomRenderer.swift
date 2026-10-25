@@ -293,6 +293,15 @@ nonisolated final class RoomRenderer {
         }
         return out
     }
+    /// The same areas as separate boxes (the garden's moving things split into local clusters), so spread-out butterflies / fireflies do not
+    /// merge into one screen-sized footprint that makes the room cache bypass.
+    var diningBoxes: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] {
+        var out: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
+        for b in [trayBounds, maskBounds, decorBounds] { if let b { out.append(b) } }
+        out += gardenBoxes
+        return out
+    }
+    private var gardenBoxes: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
     private var trayBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
     /// Sleep eye masks (opaque) and their puffs (translucent): world space, replaced every frame while any is out (SleepMask.swift).
     private var maskOpaque = DynMesh(), maskTranslucent = DynMesh()
@@ -368,6 +377,38 @@ nonisolated final class RoomRenderer {
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for v in m.vertices { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
         gardenBounds = m.vertices.isEmpty ? nil : (lo, hi)
+        gardenBoxes = Self.clusterBoxes(m, cell: 1.5)
+    }
+
+    /// Tight boxes over a mesh's triangles, grouped by the world cell (xz, `cell` units) of each triangle's centroid; every triangle is fully inside its box.
+    /// At most `maxBoxes` boxes remain (nearest merged).
+    static func clusterBoxes(_ m: RoomMesh, cell: Float, maxBoxes: Int = 3) -> [(lo: SIMD3<Float>, hi: SIMD3<Float>)] {
+        guard !m.indices.isEmpty else { return [] }
+        var boxes: [Int: (lo: SIMD3<Float>, hi: SIMD3<Float>)] = [:]
+        var t = 0
+        while t + 2 < m.indices.count {
+            let a = m.vertices[Int(m.indices[t])].pos, b = m.vertices[Int(m.indices[t + 1])].pos, c = m.vertices[Int(m.indices[t + 2])].pos
+            let pa = SIMD3(a.x, a.y, a.z), pb = SIMD3(b.x, b.y, b.z), pc = SIMD3(c.x, c.y, c.z)
+            let cx = (pa.x + pb.x + pc.x) / 3, cz = (pa.z + pb.z + pc.z) / 3
+            let key = Int(floor(cx / cell)) &* 100_003 &+ Int(floor(cz / cell))
+            let lo = simd_min(pa, simd_min(pb, pc)), hi = simd_max(pa, simd_max(pb, pc))
+            if let e = boxes[key] { boxes[key] = (simd_min(e.lo, lo), simd_max(e.hi, hi)) } else { boxes[key] = (lo, hi) }
+            t += 3
+        }
+        // each footprint re-encodes the static room inside its scissor, so keep only a few: merge the pair that grows the least until `maxBoxes` remain
+        var out = Array(boxes.values)
+        func area(_ b: (lo: SIMD3<Float>, hi: SIMD3<Float>)) -> Float { (b.hi.x - b.lo.x) * (b.hi.z - b.lo.z) }
+        while out.count > maxBoxes {
+            var best = (i: 0, j: 1, grow: Float.infinity)
+            for i in 0..<out.count { for j in (i + 1)..<out.count {
+                let u = (lo: simd_min(out[i].lo, out[j].lo), hi: simd_max(out[i].hi, out[j].hi))
+                let g = area(u) - area(out[i]) - area(out[j])
+                if g < best.grow { best = (i, j, g) }
+            } }
+            out[best.i] = (simd_min(out[best.i].lo, out[best.j].lo), simd_max(out[best.i].hi, out[best.j].hi))
+            out.remove(at: best.j)
+        }
+        return out
     }
 
     /// Replaces the animating decor (world space, per frame). An empty mesh clears it.

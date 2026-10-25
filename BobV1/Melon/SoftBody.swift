@@ -561,6 +561,7 @@ nonisolated final class SoftBody {
     // MARK: simulation
 
     func step() {
+        stepSerial &+= 1
         let sub = substeps
         let dt = stepDt / Float(sub)
         let totalM = totalMass
@@ -727,8 +728,15 @@ nonisolated final class SoftBody {
 
     /// Current whole-body rigid pose (centroid + best-fit rotation). Cheap enough to call every frame.
     func bodyPose(iterations: Int = 8) -> BodyPose {
-        x.withUnsafeBufferPointer { fitPose($0.baseAddress!, iterations: iterations) }
+        // One fit per (step, epoch, iteration count): the brain, legs, wear, arms and features all ask for the same pose several times a frame.
+        if let c = poseCache, c.epoch == epoch, c.serial == stepSerial, c.iters == iterations { return c.pose }
+        let p = x.withUnsafeBufferPointer { fitPose($0.baseAddress!, iterations: iterations) }
+        poseCache = (epoch, stepSerial, iterations, p)
+        return p
     }
+    func invalidatePose() { stepSerial &+= 1 }
+    private var stepSerial = 0
+    private var poseCache: (epoch: Int, serial: Int, iters: Int, pose: BodyPose)?
 
     /// Anchor height that puts the lowest point of the target pose (rotation q, squash s) exactly on the floor.
     func groundedAnchorY(rotation q: simd_quatf, squash sy: Float = 1) -> Float {

@@ -953,7 +953,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors { a.skinner.tickBlink(dt: dt) }
         for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
-        for a in actors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
+        let parkOn = game && model.care.park.inScene
+        for a in actors {
+            if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
+            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
+        }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0

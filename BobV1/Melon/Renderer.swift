@@ -1011,7 +1011,7 @@ final class MelonRenderer {
                 rects.append(footprint(lo, hi))
                 if !single {
                     for i in 0..<slots.count where i != bathBody && !slots[i].hidden { let b = bobBounds(i); rects.append(footprint(b.lo, b.hi)) }
-                    if let d = room.diningBounds { rects.append(footprint(d.lo, d.hi)) }
+                    for d in room.diningBoxes { rects.append(footprint(d.lo, d.hi)) }
                     for w in room.wearBounds { rects.append(footprint(w.lo, w.hi)) }
                     rects = RoomFootprint.mergeOverlapping(rects)
                 }
