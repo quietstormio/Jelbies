@@ -27,6 +27,9 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     case duck, blocks, spintop, toycar, yarnball, drum
     // soccer (2026-10-20, replaces the football): the ball is kicked with a stomp step, dribbled and passed; the goal is shot at (Room/DecorField+Soccer.swift)
     case soccerball, minigoal
+    // batch 3 (2026-10-24, Room/DecorKind+Batch3.swift): more furniture and toys
+    case roundtable, cushionpile, aquarium, plantstand, easel, mirror, clock
+    case bubblemachine, rockinghorse, jackinbox, plushbear, toypiano, pinwheel
 
     /// The first eight pieces (circle placement geometry, as they were built).
     static let original: [DecorKind] = [.beanbag, .cushion, .plant, .ball, .rug, .toybox, .nightlight, .bouncymat]
@@ -36,7 +39,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     var category: Category {
         switch self {
         case .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
-        default: return .furniture
+        default: return Self.batch3Toys.contains(self) ? .toys : .furniture
         }
     }
     /// Pieces that roll when kicked (the ball and its cousins).
@@ -115,6 +118,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .soccerball: return DecorSpec(half: SIMD2(0.18, 0.18), height: 0.36, solid: false, units: 1, corner: 0.18, reach: 1, box: true)
         // the goal is a wall for walkers; the ball alone passes its mouth (DecorField+Soccer.swift handles its posts, side nets and back net)
         case .minigoal: return DecorSpec(half: SIMD2(0.8, 0.35), height: 0.9, solid: true, units: 2, corner: 0.05, reach: 1, box: true)
+        default: return batch3Spec
         }
     }
     /// The footprint after `q` quarter turns (an odd count swaps the half extents).
@@ -155,6 +159,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelbies kick it with their stubby legs, dribble it and pass it."
         case .minigoal: return "A little goal with a net. Jelbies line up and shoot; a goal puffs the net."
+        default: return batch3Use
         }
     }
     var title: String {
@@ -167,6 +172,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block tower"; case .spintop: return "Spinning top"
         case .toycar: return "Toy car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"
         case .soccerball: return "Soccer ball"; case .minigoal: return "Mini goal"
+        default: return batch3Title
         }
     }
 }
@@ -183,7 +189,7 @@ extension DecorKind {
         case .diningset: return [SIMD3(-0.85, 0.47, 0), SIMD3(0.85, 0.47, 0)]
         case .rockingchair: return [SIMD3(0, 0.6, 0.2)]
         case .swing: return [SIMD3(-0.62, 0.6, 0), SIMD3(0.62, 0.6, 0)]
-        default: return []
+        default: return batch3SitPoints
         }
     }
     /// The pet bed's lying point (piece-local): the base of a curled sleeper on the mattress.
@@ -213,6 +219,7 @@ extension DecorKind {
         case .slide: return .decorSlide
         case .soccerball: return .soccerKick
         case .petbed, .rug, .nightlight, .divider, .floorlamp, .minigoal: return nil          // (the goal is shot at through the soccer ball's own behaviour)
+        default: return batch3Interaction
         }
     }
 }
@@ -668,6 +675,7 @@ final class DecorField {
                 if a.rockWant > 0 { a.rockAmp += (a.rockWant - a.rockAmp) * min(1, dt * 2.5) } else { a.rockAmp *= expf(-dt * 0.9); if a.rockAmp < 0.002 { a.rockAmp = 0 } }
                 a.rockWant = 0
                 if f.kind == .spintop { Self.tickTop(&a, dt: dt) }
+                if f.kind == .pinwheel { a.spinAngle += a.spin * dt; a.spin *= expf(-0.7 * dt); if a.spin < 0.4 { a.spin = 0 } }          // (batch 3: it spins down; a boop sets `spin`)
                 if f.kind == .blocks { Self.tickBlocks(&a, dt: dt, uid: uid, held: held == uid) }
                 if f.kind == .soccerball, a.moving { Self.rollSoccer(&a, dt: dt, uid: uid, feet: feet, bodies: bodies) }
                 else if f.kind.rolls, a.moving { Self.roll(&a, dt: dt, ignoring: uid, feet: feet, kind: f.kind) }

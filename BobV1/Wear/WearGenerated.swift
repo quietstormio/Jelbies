@@ -4,7 +4,7 @@
 import simd
 
 nonisolated enum WearLook: String, CaseIterable, Codable, Sendable {
-    case sneakerMint, sneakerSun, sneakerCoral, rainBoots, glitterShoes, hightopRed, balletPink, frogBoots, sneakerLightup, bandanaCoral, bandanaMint, beanieHoney, beaniePink, bibPink, bibSky, bowtiePink, bowtieSky, capTeamPink, capTeamSky, catEars, flowerCrown, frogEars, glassesRound, glovePink, gloveSky, medalGold, partyHat, sashPink, sashSky, sunglassesStar, tophat, bucketHat, bucketHatPink, crownGold, chefHat, pirateHat, bunnyEars, sweatband, propellerBeanie, flowerClip, witchHat, heartShades, gogglesAviator, monocleGold, scarfCosy, scarfSky, pearls, whistleCoach, tutuPink, capeHero, backpackSky, heroPatch, wristbandsSky, boxingMitts
+    case sneakerMint, sneakerSun, sneakerCoral, rainBoots, glitterShoes, hightopRed, balletPink, frogBoots, sneakerLightup, bandanaCoral, bandanaMint, beanieHoney, beaniePink, bibPink, bibSky, bowtiePink, bowtieSky, capTeamPink, capTeamSky, catEars, flowerCrown, frogEars, glassesRound, glovePink, gloveSky, medalGold, partyHat, sashPink, sashSky, sunglassesStar, tophat, bucketHat, bucketHatPink, crownGold, chefHat, pirateHat, bunnyEars, sweatband, propellerBeanie, flowerClip, witchHat, heartShades, gogglesAviator, monocleGold, scarfCosy, scarfSky, pearls, whistleCoach, tutuPink, capeHero, backpackSky, heroPatch, wristbandsSky, boxingMitts, headphones, cowboyHat, beret, hairBow, beeAntennae, lei, hoodie, raincoat
 }
 
 nonisolated enum WearGenerated {
@@ -67,6 +67,14 @@ nonisolated enum WearGenerated {
         Row(look: .heroPatch, art: "hero_patch", storeID: "wear-hero_patch", title: "Hero emblem patch", slot: .body, anchor: .chest, anchorRest: SIMD3(0.00000, 0.35500, 0.46830), price: 30, tags: [.cool, .sporty, .cute], batch: 2, paintStyle: "", vertices: 430, triangles: 472),
         Row(look: .wristbandsSky, art: "wristbands_sky", storeID: "wear-wristbands_sky", title: "Sky wristbands", slot: .hands, anchor: .wrist, anchorRest: SIMD3(0.55000, 0.46000, 0.06000), price: 20, tags: [.sporty, .cute], batch: 2, paintStyle: "", vertices: 280, triangles: 448),
         Row(look: .boxingMitts, art: "boxing_mitts", storeID: "wear-boxing_mitts", title: "Boxing mitts", slot: .hands, anchor: .wrist, anchorRest: SIMD3(0.55000, 0.46000, 0.06000), price: 45, tags: [.sporty, .cool], batch: 2, paintStyle: "", vertices: 616, triangles: 1132),
+        Row(look: .headphones, art: "headphones", storeID: "wear-headphones", title: "Headphones", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 55, tags: [.cool, .sporty], batch: 3, paintStyle: "", vertices: 610, triangles: 1136),
+        Row(look: .cowboyHat, art: "cowboy_hat", storeID: "wear-cowboy_hat", title: "Cowboy hat", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 55, tags: [.cool, .sporty], batch: 3, paintStyle: "", vertices: 955, triangles: 1406),
+        Row(look: .beret, art: "beret", storeID: "wear-beret", title: "Beret", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 40, tags: [.cute, .cool, .sweet], batch: 3, paintStyle: "", vertices: 385, triangles: 716),
+        Row(look: .hairBow, art: "hair_bow", storeID: "wear-hair_bow", title: "Big hair bow", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 30, tags: [.cute, .sweet], batch: 3, paintStyle: "", vertices: 702, triangles: 1360),
+        Row(look: .beeAntennae, art: "bee_antennae", storeID: "wear-bee_antennae", title: "Bee antennae", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 40, tags: [.cute, .sweet], batch: 3, paintStyle: "", vertices: 606, triangles: 1184),
+        Row(look: .lei, art: "lei", storeID: "wear-lei", title: "Flower lei", slot: .neck, anchor: .neck, anchorRest: SIMD3(0.00000, 0.47000, 0.50550), price: 45, tags: [.sweet, .cute, .sparkly], batch: 3, paintStyle: "", vertices: 1253, triangles: 2160),
+        Row(look: .hoodie, art: "hoodie", storeID: "wear-hoodie", title: "Cosy hoodie", slot: .body, anchor: .chest, anchorRest: SIMD3(0.00000, 0.35500, 0.46830), price: 65, tags: [.cool, .cute, .sweet], batch: 3, paintStyle: "", vertices: 1458, triangles: 2136),
+        Row(look: .raincoat, art: "raincoat", storeID: "wear-raincoat", title: "Yellow raincoat", slot: .body, anchor: .chest, anchorRest: SIMD3(0.00000, 0.35500, 0.46830), price: 60, tags: [.cute, .cool], batch: 3, paintStyle: "", vertices: 1241, triangles: 2038),
     ]
     /// The bib plate's number placement (bib_sky.json; identical for bib_pink).
     static let bibNumberAnchor = SIMD3<Float>(0.00000, 0.34700, 0.48610)

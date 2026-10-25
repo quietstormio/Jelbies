@@ -1109,6 +1109,154 @@
 "pipHide": [],
 "slot": "neck"
 },
+"bee_antennae": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "ok",
+"spreadMax": 40.0
+},
+"moss": {
+"anchor": [
+0.0,
+1.3975,
+0.0
+],
+"rule": "adjust",
+"sink": 0.06,
+"tilt": 0.0
+},
+"pipHide": [
+"spike_01"
+],
+"slot": "head"
+},
+"beret": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "ok",
+"spreadMax": 40.0
+},
+"moss": {
+"rule": "hide"
+},
+"pipHide": [
+"spike_00",
+"spike_01",
+"spike_02",
+"spike_03",
+"spike_04",
+"spike_05",
+"spike_06"
+],
+"slot": "head"
+},
+"cowboy_hat": {
+"lav": {
+"dy": -0.2,
+"flapMax": 20.0,
+"flapMin": -40.0,
+"rule": "adjust",
+"spreadMax": 8.0
+},
+"moss": {
+"rule": "hide"
+},
+"pipHide": [
+"spike_00",
+"spike_01",
+"spike_02",
+"spike_03",
+"spike_04",
+"spike_05",
+"spike_06"
+],
+"slot": "head"
+},
+"hair_bow": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "ok",
+"spreadMax": 40.0
+},
+"moss": {
+"rule": "ok"
+},
+"pipHide": [
+"spike_01"
+],
+"slot": "head"
+},
+"headphones": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "ok",
+"spreadMax": 40.0
+},
+"moss": {
+"anchor": [
+0.0,
+1.3975,
+0.0
+],
+"rule": "adjust",
+"sink": 0.06,
+"tilt": 0.0
+},
+"pipHide": [
+"spike_01"
+],
+"slot": "head"
+},
+"hoodie": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "hide",
+"spreadMax": 40.0
+},
+"moss": {
+"rule": "ok"
+},
+"pipHide": [],
+"slot": "body"
+},
+"raincoat": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "hide",
+"spreadMax": 40.0
+},
+"moss": {
+"rule": "ok"
+},
+"pipHide": [],
+"slot": "body"
+},
+"lei": {
+"lav": {
+"dy": 0.0,
+"flapMax": 75.0,
+"flapMin": -40.0,
+"rule": "ok",
+"spreadMax": 40.0
+},
+"moss": {
+"rule": "ok"
+},
+"pipHide": [],
+"slot": "neck"
+},
 "witch_hat": {
 "lav": {
 "dy": -0.2,

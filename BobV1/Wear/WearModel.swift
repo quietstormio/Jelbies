@@ -71,7 +71,7 @@ nonisolated enum WearRules {
         }
         switch l {
         case .sunglassesStar, .heartShades: h.insert(.eating)
-        case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky: h.insert(.flip)
+        case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky, .cowboyHat, .beeAntennae: h.insert(.flip)
         default: break
         }
         return h
@@ -96,6 +96,9 @@ nonisolated enum WearRules {
         case .monocleGold: return part == "chain" || part.hasPrefix("link") ? PartRule(w0: 1, w1: 0.4, h0: 0, h1: 1) : rigid
         case .backpackSky: return part.hasPrefix("strap") ? surface : rigid
         case .gogglesAviator: return part == "strap" ? surface : rigid
+        // batch 3 (2026-10-24): the hoodie's and raincoat's hoods rest rigid behind the shoulders; the rest hugs the belly, cords and the slicker's hem hang a little
+        case .hoodie: return part == "hood" || part == "hoodrim" ? rigid : part.hasPrefix("cord") || part.hasPrefix("aglet") ? PartRule(w0: 1, w1: 0.5, h0: 0, h1: 1) : surface
+        case .raincoat: return part.hasPrefix("hood") ? rigid : part == "coat" ? PartRule(w0: 1, w1: 1, h0: 0, h1: 0.3) : surface
         case .propellerBeanie: return part.hasPrefix("blade") || part == "hub" ? PartRule(spin: true) : rigid
         default: return isSurface(l) ? surface : rigid
         }
@@ -105,7 +108,7 @@ nonisolated enum WearRules {
     static func isSurface(_ l: WearLook) -> Bool {
         switch l {
         case .bandanaCoral, .bandanaMint, .bibPink, .bibSky, .sashPink, .sashSky, .heroPatch, .sweatband, .scarfCosy, .scarfSky, .medalGold,
-             .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator: return true
+             .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator, .lei, .hoodie, .raincoat: return true
         default: return false
         }
     }

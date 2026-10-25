@@ -79,7 +79,7 @@ extension BlobBrain {
     }
 
     /// Pieces with a front only: he stands in front of them (a bookshelf is not walked round to look at its back).
-    static let frontOnly: Set<DecorKind> = [.bookshelf, .wardrobe, .divider]
+    static let frontOnly: Set<DecorKind> = Set<DecorKind>([.bookshelf, .wardrobe, .divider]).union(DecorKind.batch3FrontOnly)
     /// The candidate spots in front of a seat: straight in front first, then to either side.
     func hopStandSpots(_ f: DecorFoot, seat: Int) -> [SIMD2<Float>] {
         let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
@@ -320,6 +320,14 @@ extension BlobBrain {
                 case .duck?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 1.9); AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.35, rate: 1.8)     // a rubber squeak
                 case .drum?: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9, rate: Float(0.5 + 0.08 * Double(Int(rand() * 4)))); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.4, rate: 0.6)
                 case .spintop?: DecorField.shared.spinTop(uid); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 1.4)
+                // batch 3: the pinwheel spins (the top's `spin`), the others play their own little sound
+                case .pinwheel?: DecorField.shared.spinTop(uid); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 1.9)
+                case .bubblemachine?: AudioHub.shared.play(.bubblepop, jelly: steerID, x: px, volume: 0.6, rate: 1.0)
+                case .jackinbox?: AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6, rate: 1.5); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.5, rate: 1.6)
+                case .toypiano?: AudioHub.shared.play(.sparkle, jelly: steerID, x: px, volume: 0.7, rate: Float(0.85 + 0.1 * Double(Int(rand() * 5))))
+                case .plushbear?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 1.1)
+                case .rockinghorse?: AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 0.7)
+                case .clock?: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9, rate: 0.45)
                 default: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.6)
                 }
             }
