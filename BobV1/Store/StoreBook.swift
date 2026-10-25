@@ -34,6 +34,8 @@ final class StoreBook {
         var room: String? = nil
         /// The placed decor of every room except the current one (`placedAt` is the current room's list).
         var stash: [String: [PlacedDecor]]? = nil
+        /// The removed Garden's room price was refunded (once). Optional: older saves decode without it.
+        var gardenRefunded: Bool? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -51,6 +53,30 @@ final class StoreBook {
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
         if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn) }
+        if migrateGarden() { save() }
+        if persists { defaults.removeObject(forKey: "Garden.v1") }          // the removed Garden's plots
+    }
+
+    /// The Garden was removed: seeds are refunded at their old prices, garden fruit dropped, the room unowned (250 Drops back once if it was bought) and the
+    /// Jelbies moved home. Idempotent; true when anything changed.
+    private func migrateGarden() -> Bool {
+        var changed = false
+        let seedPrices: [String: Int] = ["seed-daisy": 6, "seed-tulip": 8, "seed-rose": 12, "seed-strawberry": 10, "seed-blueberry": 10]
+        var refund = 0
+        for k in saved.counts.keys where k.hasPrefix("seed-") || k == "strawberry" || k == "gardenberries" {
+            let n = max(saved.counts[k] ?? 0, 0)
+            if k.hasPrefix("seed-") { refund += n * (seedPrices[k] ?? 8) }
+            saved.counts[k] = nil; changed = true
+        }
+        if saved.room == "garden" { saved.room = nil; changed = true }
+        if saved.stash?["garden"] != nil { saved.stash?["garden"] = nil; if saved.stash?.isEmpty == true { saved.stash = nil }; changed = true }
+        if let r = saved.rooms, r.contains("garden") {
+            saved.rooms = r.filter { $0 != "garden" }
+            if saved.gardenRefunded != true { saved.gardenRefunded = true; refund += 250 }
+            changed = true
+        }
+        if refund > 0 { wallet.add(refund, silent: true) }
+        return changed
     }
 
     /// Old saves: a look worn by several characters stays only on the first (sorted key order).

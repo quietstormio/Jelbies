@@ -1,14 +1,14 @@
 //
-//  GardenShapes.swift
-//  Small mesh pieces the Garden is built from (RoomMeshBuilder, flat pastel colours, lit by the room's key light and the time of day): ellipsoids, discs,
+//  ParkShapes.swift
+//  Small mesh pieces the Park is built from (RoomMeshBuilder, flat pastel colours, lit by the room's key light and the time of day): ellipsoids, discs,
 //  stems, camera-facing petal fans, and the flowers made of them. Everything is static or built a few times (the plants), never per frame, except the
-//  butterflies / fireflies in GardenLive.
+//  (shared builders for the Park's trees, flowers and bushes).
 //
 
 import simd
 import Foundation
 
-enum GardenShapes {
+enum ParkShapes {
     typealias PP = RoomMeshBuilder.ProfilePoint
     typealias V3 = SIMD3<Float>
 

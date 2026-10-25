@@ -87,7 +87,7 @@ enum ParkScenery {
             blob(b, SIMD3(x, -0.4, -8.6), rx: rx, ry: ry, rz: 2.2, color: SIMD3(0.05, 0.17, 0.07), segments: 20, rings: 8)
         }
         let greens: [SIMD3<Float>] = [SIMD3(0.07, 0.24, 0.06), SIMD3(0.10, 0.30, 0.07), SIMD3(0.13, 0.34, 0.09), SIMD3(0.14, 0.31, 0.05), SIMD3(0.06, 0.26, 0.10)]
-        let blossoms: [SIMD3<Float>] = [GardenShapes.srgb(0.98, 0.74, 0.82), GardenShapes.srgb(0.99, 0.92, 0.86)]
+        let blossoms: [SIMD3<Float>] = [ParkShapes.srgb(0.98, 0.74, 0.82), ParkShapes.srgb(0.99, 0.92, 0.86)]
         for x in stride(from: Float(-16), through: 16, by: 3.4) {
             tree(b, x: x + r.unit() * 1.4, z: -7.6 - r.unit() * 0.8, height: 5.4 + r.unit() * 2.2, scale: 1.1 + r.unit() * 0.4, hue: greens[Int(r.next() % 5)], detail: 0, rng: &r)
         }
@@ -97,7 +97,7 @@ enum ParkScenery {
             tree(b, x: t.0, z: t.1, height: t.2, scale: 1.0 + r.unit() * 0.25, hue: greens[k % 5], blossom: k == 2 || k == 7 ? blossoms[k % 2] : nil, rng: &r)
         }
         // shrubs: rounded and clumpy, some in flower
-        let pinks = [GardenShapes.srgb(0.98, 0.62, 0.74), GardenShapes.srgb(0.99, 0.86, 0.40), GardenShapes.srgb(0.96, 0.96, 0.92), GardenShapes.srgb(0.78, 0.62, 0.95)]
+        let pinks = [ParkShapes.srgb(0.98, 0.62, 0.74), ParkShapes.srgb(0.99, 0.86, 0.40), ParkShapes.srgb(0.96, 0.96, 0.92), ParkShapes.srgb(0.78, 0.62, 0.95)]
         for (k, t) in [(-5.9 as Float, 0.5 as Float, 0.8 as Float), (6.1, -0.2, 0.9), (-6.3, 5.5, 0.7), (6.4, 7.0, 0.8), (-2.6, -5.9, 0.9), (2.4, -6.0, 0.8), (-8.6, 7.0, 0.9), (9.0, 8.5, 1.0),
                        (-6.8, -3.4, 0.8), (7.0, 2.6, 0.7)].enumerated() {
             shrub(b, x: t.0, z: t.1, scale: t.2, hue: greens[(k + 1) % 5] * 1.1, bloom: k % 3 == 0 ? nil : pinks[k % 4], rng: &r)
@@ -144,11 +144,11 @@ enum ParkScenery {
         // ---- the flower bed (left, at the back) ----
         let bed = SIMD3<Float>(-3.5, 0, -4.35)
         b.roundedBox(centre: SIMD3(bed.x, 0.12, bed.z), half: SIMD3(1.1, 0.12, 0.55), radius: 0.1, segments: 3, aoFloor: false, color: SIMD3(0.20, 0.11, 0.06))
-        let bedKinds: [GardenShapes.Bloom] = [.tulip, .daisy, .poppy, .lavender, .tulip, .daisy]
+        let bedKinds: [ParkShapes.Bloom] = [.tulip, .daisy, .poppy, .lavender, .tulip, .daisy]
         for i in 0..<6 {
             for j in 0..<3 {
                 let fx = bed.x - 0.9 + Float(i) * 0.36 + (r.unit() - 0.5) * 0.12, fz = bed.z - 0.36 + Float(j) * 0.36 + (r.unit() - 0.5) * 0.1
-                GardenShapes.flower(b, bedKinds[(i + j) % bedKinds.count], x: fx, z: fz, y0: 0.22, h: 0.18 + r.unit() * 0.22,
+                ParkShapes.flower(b, bedKinds[(i + j) % bedKinds.count], x: fx, z: fz, y0: 0.22, h: 0.18 + r.unit() * 0.22,
                                     color: wildColours[(i * 2 + j) % wildColours.count], scale: 1.1, rng: &r)
             }
         }

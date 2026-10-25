@@ -38,7 +38,6 @@ extension GameCare {
     /// Once per fixed step (the stage calls it with every Jelly ticked).
     func tickDecor(dt: Float) {
         tickRoomSwitch(dt: dt)
-        tickGarden(dt: dt)
         syncDecor()
         let f = DecorField.shared
         guard !f.feet.isEmpty else { return }

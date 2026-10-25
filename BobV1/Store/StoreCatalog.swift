@@ -11,17 +11,17 @@
 import Foundation
 
 nonisolated enum StoreKind: String, CaseIterable, Codable, Sendable {
-    case food, treat, supply, trickPage, shoes, wear, decor, room, seed
+    case food, treat, supply, trickPage, shoes, wear, decor, room
     var title: String {
         switch self {
         case .food: return "Food"; case .treat: return "Treats"; case .supply: return "Care"; case .trickPage: return "Tricks"
-        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"; case .seed: return "Seeds"
+        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"
         }
     }
     var symbol: String {
         switch self {
         case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
-        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"; case .seed: return "camera.macro"
+        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"
         }
     }
 }
@@ -53,7 +53,7 @@ nonisolated enum StoreTuning {
     static let beanbagAttentionDrain = 0.85
     /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 12 and a Wave win 22, adoption costs 120 / 180 / 240 and the
     /// loveseat 120, so a room is a long-term goal: about 15 to 25 race wins.
-    static let roomPrices: [RoomID: Int] = [.loft: 300, .cabin: 400, .garden: 250]
+    static let roomPrices: [RoomID: Int] = [.loft: 300, .cabin: 400]
 }
 
 nonisolated struct StoreItem: Identifiable, Sendable {
@@ -85,13 +85,12 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + batch3 + wearItems + roomItems + gardenItems
+    static let items: [StoreItem] = base + batch2 + batch3 + wearItems + roomItems
 
     /// The rooms for sale (home is never sold).
     static let roomItems: [StoreItem] = [
         StoreItem(id: "room-loft", name: RoomCatalog.loft.title, kind: .room, price: StoreTuning.roomPrices[.loft] ?? 300, perk: nil, description: RoomCatalog.loft.blurb, symbol: "sun.max.fill", room: .loft),
         StoreItem(id: "room-cabin", name: RoomCatalog.cabin.title, kind: .room, price: StoreTuning.roomPrices[.cabin] ?? 400, perk: nil, description: RoomCatalog.cabin.blurb, symbol: "flame.fill", room: .cabin),
-        StoreItem(id: "room-garden", name: RoomCatalog.garden.title, kind: .room, price: StoreTuning.roomPrices[.garden] ?? 250, perk: nil, description: RoomCatalog.garden.blurb, symbol: "camera.macro", room: .garden),
     ]
 
     /// The second batch of furniture and toys (prices and spots from the Blender exports' JSON).

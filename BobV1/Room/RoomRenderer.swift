@@ -287,21 +287,18 @@ nonisolated final class RoomRenderer {
     /// World AABB of the dining meshes (opaque + translucent), nil when there are none. The room cache re-shades this area every frame.
     var diningBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)? {
         var out: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
-        for b in [trayBounds, maskBounds, decorBounds, gardenBounds] {
+        for b in [trayBounds, maskBounds, decorBounds] {
             guard let b else { continue }
             out = out.map { (simd_min($0.lo, b.lo), simd_max($0.hi, b.hi)) } ?? b
         }
         return out
     }
-    /// The same areas as separate boxes (the garden's moving things split into local clusters), so spread-out butterflies / fireflies do not
-    /// merge into one screen-sized footprint that makes the room cache bypass.
+    /// The same areas as separate boxes (kept as local boxes rather than one screen-sized footprint that would make the room cache bypass).
     var diningBoxes: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] {
         var out: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
         for b in [trayBounds, maskBounds, decorBounds] { if let b { out.append(b) } }
-        out += gardenBoxes
         return out
     }
-    private var gardenBoxes: [(lo: SIMD3<Float>, hi: SIMD3<Float>)] = []
     private var trayBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
     /// Sleep eye masks (opaque) and their puffs (translucent): world space, replaced every frame while any is out (SleepMask.swift).
     private var maskOpaque = DynMesh(), maskTranslucent = DynMesh()
@@ -311,11 +308,6 @@ nonisolated final class RoomRenderer {
     private var decorVB: MTLBuffer?, decorIB: MTLBuffer?, decorIndexCount = 0
     private var decorActive = DynMesh()
     private var decorBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
-    // The Garden (Garden/): the plots' plants are part of the cached static room (rebuilt when a stage changes); the butterflies, fireflies, watering can and
-    // sparkles are drawn per frame while the garden is the home, and their box joins the re-shaded footprint.
-    private var gardenVB: MTLBuffer?, gardenIB: MTLBuffer?, gardenIndexCount = 0
-    private var gardenLive = DynMesh()
-    private var gardenBounds: (lo: SIMD3<Float>, hi: SIMD3<Float>)?
     /// Worn pieces (hats, glasses, scarves, mitts, ...; opaque) and their poof puffs (translucent): world space, rebuilt every frame while any is worn
     /// (Wear/WornSet.swift). `wearBounds` = one world box per wearing Jelly (hats stand above the body's own box), which the room cache re-shades.
     private var wearOpaque = DynMesh(), wearTranslucent = DynMesh()
@@ -361,23 +353,6 @@ nonisolated final class RoomRenderer {
         decorVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
         decorIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
         decorVB?.label = "decor vertices"; decorIB?.label = "decor indices"
-    }
-    /// Replaces the garden plots' plants (world space). Invalidates the room cache. An empty mesh clears them.
-    func setGardenPlants(_ m: RoomMesh) {
-        staticVersion &+= 1
-        gardenIndexCount = m.indices.count
-        guard gardenIndexCount > 0 else { return }
-        gardenVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
-        gardenIB = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
-        gardenVB?.label = "garden plants vertices"; gardenIB?.label = "garden plants indices"
-    }
-    /// Replaces the garden's moving things (world space, per frame). An empty mesh clears them.
-    func setGardenLive(_ m: RoomMesh) {
-        upload(m, into: &gardenLive)
-        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
-        for v in m.vertices { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
-        gardenBounds = m.vertices.isEmpty ? nil : (lo, hi)
-        gardenBoxes = Self.clusterBoxes(m, cell: 1.5)
     }
 
     /// Tight boxes over a mesh's triangles, grouped by the world cell (xz, `cell` units) of each triangle's centroid; every triangle is fully inside its box.
@@ -556,12 +531,6 @@ nonisolated final class RoomRenderer {
             enc.setVertexBuffer(pv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: propIndexCount, indexType: .uint32, indexBuffer: pi, indexBufferOffset: 0)
         }
-        if gardenIndexCount > 0, let gv = gardenVB, let gi = gardenIB {
-            enc.pushDebugGroup("garden plants")
-            enc.setVertexBuffer(gv, offset: 0, index: 1)
-            enc.drawIndexedPrimitives(type: .triangle, indexCount: gardenIndexCount, indexType: .uint32, indexBuffer: gi, indexBufferOffset: 0)
-            enc.popDebugGroup()
-        }
         if decorIndexCount > 0, let dv = decorVB, let di = decorIB {
             enc.pushDebugGroup("decor")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
@@ -573,12 +542,6 @@ nonisolated final class RoomRenderer {
             enc.pushDebugGroup("decor (animating)")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: decorActive.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
-            enc.popDebugGroup()
-        }
-        if parts != .staticOnly, gardenLive.indexCount > 0, let gv = gardenLive.vb[gardenLive.slot], let gi = gardenLive.ib[gardenLive.slot] {
-            enc.pushDebugGroup("garden live")
-            enc.setVertexBuffer(gv, offset: 0, index: 1)
-            enc.drawIndexedPrimitives(type: .triangle, indexCount: gardenLive.indexCount, indexType: .uint32, indexBuffer: gi, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
         if parts != .staticOnly, diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {

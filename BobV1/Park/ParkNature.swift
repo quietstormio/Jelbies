@@ -2,7 +2,7 @@
 //  ParkNature.swift
 //  The park's plants and stones, built once into the park's static room mesh (ParkScenery.build): layered, clumpy tree canopies with a curved trunk and
 //  roots, rounded shrubs (some flowering), wildflower / meadow patches, grass tufts along the path, rocks and the pond's lily pads. The flower heads
-//  are the Garden's (GardenShapes) so the two places share one set of good builders; here they are wild and scattered, not tidy beds. Static only: no
+//  are ParkShapes builders; here they are wild and scattered, not tidy beds. Static only: no
 //  per-frame cost, no extra draw calls.
 //
 
@@ -10,7 +10,7 @@ import simd
 import Foundation
 
 extension ParkScenery {
-    typealias S = GardenShapes
+    typealias S = ParkShapes
     typealias V3 = SIMD3<Float>
 
     /// The sun side of the park's key light (up, a little right and toward the camera): clump faces turned this way brighten, the rest sink into shade.

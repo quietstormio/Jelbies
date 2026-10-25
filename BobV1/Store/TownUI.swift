@@ -443,7 +443,7 @@ struct BagSheet: View {
         self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .snacks)          // (-StoreTab decor: capture aid)
     }
 
-    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", seeds = "Seeds", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
+    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
     private var tabs: [BagTab] { BagTab.allCases }
@@ -454,7 +454,6 @@ struct BagSheet: View {
         case .furniture: return StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }
         case .toys: return StoreCatalog.decorItems(.toys).filter { book.count($0.id) > 0 }
         case .care: return StoreCatalog.items(.supply).filter { book.count($0.id) > 0 }
-        case .seeds: return StoreCatalog.items(.seed).filter { book.count($0.id) > 0 }
         case .rooms: return []
         }
     }
@@ -602,8 +601,6 @@ struct BagSheet: View {
             }
         case .supply:
             pink("Use", item, enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
-        case .seed:
-            pink("Plant", item, enabled: care.roomID == .garden && care.garden.firstEmpty() != nil) { close(); care.plantFromBag(item.id) }
         case .decor:
             VStack(spacing: 6) {
                 pink("Place", item, enabled: book.canPlace(item)) { close(); care.placeDecor(item.id) }
