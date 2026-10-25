@@ -286,7 +286,7 @@ enum DecorModels {
                 DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in (c + qq.act(v - pv), qq.act(n)) })
             }
         default:
-            all()
+            return addBatch3(kind, art, o: o, anim: a, time: time, uid: uid, into: b)          // (the third batch; any other kind: all parts as exported)
         }
         return true
     }

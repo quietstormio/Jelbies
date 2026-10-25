@@ -85,7 +85,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + wearItems + roomItems
+    static let items: [StoreItem] = base + batch2 + batch3 + wearItems + roomItems
 
     /// The rooms for sale (home is never sold).
     static let roomItems: [StoreItem] = [

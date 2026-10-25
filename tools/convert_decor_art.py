@@ -12,7 +12,9 @@ import json, struct, sys, os
 
 IDS = ("cushion ball rug plant nightlight toybox beanbag bouncymat "
        "loveseat petbed pouf rockingchair armchair swing diningset bookshelf wardrobe divider floorlamp slide monstera "
-       "duck blocks spintop toycar yarnball drum soccerball minigoal").split()
+       "duck blocks spintop toycar yarnball drum soccerball minigoal "
+       # batch 3 (2026-10-24): made by tools/make_decor_batch3/ (Blender, headless); an export dir without them just skips these
+       "roundtable cushionpile aquarium plantstand easel mirror clock bubblemachine rockinghorse jackinbox plushbear toypiano pinwheel").split()
 # the pieces whose exported frame came out inside-out (see below); every other piece is trusted as exported (open surfaces such as the slide chute or the ropes
 # have a legitimately negative signed volume)
 FLIP_FIX = {"bouncymat"}
@@ -75,6 +77,7 @@ def main():
     exp, out = sys.argv[1], sys.argv[2]
     os.makedirs(out, exist_ok=True)
     for i in IDS:
+        if not os.path.exists(os.path.join(exp, i + ".json")): print("skip", i); continue
         meta = json.load(open(os.path.join(exp, i + ".json")))
         data, nv, nt, names = convert(os.path.join(exp, i + ".obj"), meta, i in FLIP_FIX)
         open(os.path.join(out, "decor_%s.bin" % i), "wb").write(data)

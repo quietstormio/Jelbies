@@ -104,5 +104,9 @@ nonisolated enum AICatalogRegistry {
         .diningset: ["table", "dining table", "dining set"], .bookshelf: ["shelf", "bookcase", "books"], .wardrobe: ["closet"], .divider: ["divider", "screen"],
         .floorlamp: ["lamp", "floor lamp"], .slide: ["slide"], .monstera: ["monstera", "big plant"], .duck: ["duck", "ducky"], .blocks: ["blocks", "tower"],
         .spintop: ["top", "spinning top"], .toycar: ["car", "toy car"], .yarnball: ["yarn", "wool", "yarn ball"], .drum: ["drum"], .soccerball: ["football", "soccer ball", "soccer"], .minigoal: ["goal", "mini goal", "net"],
+        // batch 3
+        .roundtable: ["round table", "table"], .cushionpile: ["cushion pile", "pillows", "cushions"], .aquarium: ["aquarium", "fish tank", "fish"], .plantstand: ["fern", "plant stand"],
+        .easel: ["easel", "painting"], .mirror: ["mirror"], .clock: ["clock", "grandfather clock"], .bubblemachine: ["bubble machine", "bubbles"], .rockinghorse: ["rocking horse", "horse"],
+        .jackinbox: ["jack in the box", "jack", "clown"], .plushbear: ["bear", "teddy", "plush", "plush bear"], .toypiano: ["piano", "toy piano", "keyboard"], .pinwheel: ["pinwheel", "windmill"],
     ]
 }
