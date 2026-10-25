@@ -1,3 +1,27 @@
+# Handoff
+
+## START HERE (2026-10-25): Jelbies 1.0, feature lock
+
+- **Feature lock:** this is the first release (1.0). No new features; fixes, polish, performance, accessibility and App Store prep only. See [RELEASE-1.0.md](RELEASE-1.0.md) for what is in the game, what is still in flight, the Post-1.0 list, known issues and the App Store checklist.
+- **Integration branch:** `g-int` (worktree `.claude/worktrees/g-int`). `round-1022` is older. **Nothing is pushed.** Work branches (g-docs, g-social, etc.) merge into `g-int`.
+- **Build Release and install to the phone** (UDID 00008150-000261C63ED8401C, team 5VVYA96U3R). Release, not Debug: Debug makes the jelly sim choppy.
+
+```
+cd .claude/worktrees/g-int
+xcodebuild -project BobV1.xcodeproj -scheme BobV1 -configuration Release \
+  -destination 'id=00008150-000261C63ED8401C' -derivedDataPath dd_sign \
+  DEVELOPMENT_TEAM=5VVYA96U3R -allowProvisioningUpdates build
+xcrun devicectl device install app --device 00008150-000261C63ED8401C \
+  dd_sign/Build/Products/Release-iphoneos/BobV1.app
+xcrun devicectl device process launch --device 00008150-000261C63ED8401C <bundle id>
+```
+  (Adjust the derived-data path if you use another; back signed apps up under ~/BobV1_backups.)
+- **Rules:** game is offline-only; the Garden is removed; one fix at a time, confirmed on the phone.
+
+---
+
+# Archive
+
 ---
 name: project-handoff-2026-10-20
 description: "State of the project after the 2026-10-21 integration: every WIP branch is merged on `integrate`, final touches (roster cap 3, -SetRoster, Jelbies rename) on `final-touches`. Read this first in the next session."

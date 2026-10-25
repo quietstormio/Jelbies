@@ -1,3 +1,5 @@
+> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+
 # AI & Apple-Only Features
 
 **Goal:** capture the nostalgia of Nintendogs (a pet that knows its name, learns tricks, notices you) and add things only an iPhone can do. Keep the **age rating low (4+ / 9+)** while staying fun for adults.
@@ -153,3 +155,6 @@ Code in `BobV1/AI/`. Everything on device, no network, no keys. Rebased onto che
 3. Squish haptics. Small effort, big feel.
 4. Foundation Models reactions (#3) with fallback. (The daily diary, #4, was dropped.)
 5. Real-steps walks, Live Activities, Siri, AR mode.
+
+## 1.0 update: Park visitors (2026-10-25)
+On-device Apple Foundation Models writes Park visitor names and greetings. Each has a plain fallback (a built-in name and greeting list) when the model is unavailable. Fully offline; no network calls ever.

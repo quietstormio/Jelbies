@@ -1,3 +1,5 @@
+> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+
 # Blob Species
 
 **Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
@@ -66,3 +68,9 @@ Premium variants with special materials, sold separately from the normal kennel.
 - (More to be decided: e.g. holographic/iridescent, glow-in-the-dark, galaxy swirl.)
 
 Not in v1. When built, a special edition should be a material/finish layered on an existing species (e.g. Glitter Berry), not a new body.
+
+## 1.0 updates (2026-10-25)
+- **Pip:** spikes are smaller by default (60% height). Enclosing hats go over them and cover them; perch items show them. A new signature (dino tail) is pending the user's pick.
+- **Moss:** the daisy sits on the hat band when a hat is worn.
+- **Lavender:** wings fold rather than vanish under worn items, with periodic flap bursts and short flights.
+- Features are never hidden outright by wearables.

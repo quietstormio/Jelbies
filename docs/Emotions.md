@@ -1,3 +1,5 @@
+> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+
 # Emotions (v1 built 2026-10-16: needs and moods)
 
 Notes for when moods are added. Moods also appear in AIFeatures.md (happy, shy, curious, sleepy, excited, grumpy).

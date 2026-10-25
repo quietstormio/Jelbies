@@ -1,3 +1,5 @@
+> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+
 # Base body (LOCKED)
 
 > "Ensure the body I have on my phone now with this starting layout is LOCKED DOWN do not defer from this base ever again document that idk how you'll do that but this body is perfect this is the character it has to be consistent"

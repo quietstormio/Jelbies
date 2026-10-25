@@ -1,3 +1,5 @@
+> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+
 # Blob Animations (from the reference video)
 
 Reference: 10 s clip of the Blob (frames at 2 fps in `docs/reference/video_frames/`). Rubbery, cartoon-y limbs that stretch; soft-body jelly body squashes and sways.
@@ -100,3 +102,10 @@ Numbers are measured at 24 fps from `docs/reference/blob_reference_video.mp4` (R
 - **Look around:** a stepped turn toward something, with a curious tilt and nod, then he turns back.
 - **Yawn-stretch:** arms up, the body stretches about 15 %, eyes squeezed. The mouth opens only for the yawn, then is gone again.
 - Code: `BlobBrain+Idle.swift`. Tests: `IdleBehaviourTests`.
+
+## 1.0 updates (2026-10-25)
+- **Social moves:** chest bump, purr together, nuzzle, twirl, follow-the-leader, high-five (mostly in the Park).
+- **Sleep fidgets:** shifts, side rolls, drifting toward sleeping friends, dream twitches, half-wakes, stronger breathing.
+- **Volleyball body hits:** head bonk, belly-flop spike and belly dig (arms stay stubby).
+- **Leg attachment:** feet follow the fitted body pose, so legs never come off in flips, cartwheels or rolls.
+- **Hat crown fit:** the crown is fitted to the drawn skin each frame; the brim stays on the head in stretch and squash.
