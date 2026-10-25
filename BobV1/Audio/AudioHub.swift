@@ -328,6 +328,14 @@ final class AudioHub {
         sting = p
     }
 
+    /// For the intro video's own audio: sets the session up (as the sting does) and returns the volume to play it at (0 = muted / sound effects off).
+    func introVideoVolume() -> Float {
+        if !started { setUpSession() }
+        guard !muted else { return 0 }
+        let level = settings.sfxLevel
+        return level > 0.01 ? Float(min(1, level * AudioMix.sfxMaster * 1.5)) : 0
+    }
+
     /// Fades the intro sting out (a tap to skip).
     func stopIntroSting() {
         guard let p = sting else { return }

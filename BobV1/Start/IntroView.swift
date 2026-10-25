@@ -1,10 +1,9 @@
 //
 //  IntroView.swift
-//  The first-launch intro (Cloud Jelly): a white, square logo clip draws the logo in, then the crisp logo crossfades in with a jelly settle and
-//  three small sparkles, "Tap to start" fades in, and a tap (or 2.5 s) fades through white to the menu. A tap during the clip skips to the settled logo.
+//  The first-launch intro (Cloud Jelly): one finished white, square clip (logo, squish, sparkles and its own sound) plays once it is ready,
+//  holds its last frame, "Tap to start" fades in, and a tap (or 2 s) fades through white to the menu. A tap during the clip jumps to the last frame.
 //  Shown before the main menu until UserDefaults "IntroSeen.v1" is set; launch argument -Intro 1 forces it (for captures).
-//  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource`); change `IntroClip.handoffTime` if the crossfade should
-//  start before the clip's end (nil = at the clip's end).
+//  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource`).
 //
 
 import SwiftUI
@@ -13,16 +12,8 @@ import AVFoundation
 enum IntroClip {
     static let resource = "jelbies_intro"
     static let fileExtension = "mp4"
-    /// The intro sting (an m4a in Audio/Resources); swap to "intro_sting_2" for the other.
-    static let sound = "intro_sting_sync"
-    /// Seconds into the clip at which the crisp logo takes over; nil = when the clip ends.
-    static let handoffTime: Double? = 3.45
-    /// The clip's logo width as a share of the (square) clip's width; the crisp logo is drawn at the same size.
-    static let logoWidthShare: CGFloat = 0.982
-    /// The clip logo's centre sits this share of the frame side below the frame centre.
-    static let logoYOffsetShare: CGFloat = 0.0775
-    /// Seconds after the logo settles before it moves on by itself.
-    static let autoAdvance: Double = 2.5
+    /// Seconds after the clip ends before it moves on by itself.
+    static let autoAdvance: Double = 2.0
 }
 
 enum IntroGate {
@@ -37,10 +28,12 @@ enum IntroGate {
 struct IntroView: View {
     var done: () -> Void
     @State private var player: AVPlayer?
+    @State private var ready = false
     @State private var settled = false
     @State private var leaving = false
     @State private var finished = false
-    @State private var boundary: Any?
+    @State private var volume: Float = 0
+    @State private var statusObserver: NSKeyValueObservation?
     @State private var endObserver: NSObjectProtocol?
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     private var still: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
@@ -48,20 +41,16 @@ struct IntroView: View {
     var body: some View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
-            let logoW = side * IntroClip.logoWidthShare
             ZStack {
                 IntroGate.background
                 if let player {
                     IntroPlayerView(player: player).frame(width: side, height: side)
-                        .opacity(settled ? 0 : 1)
-                        .animation(.easeOut(duration: 0.35), value: settled)
+                        .opacity(ready ? 1 : 0)
                 }
-                logo(width: logoW).offset(y: side * IntroClip.logoYOffsetShare)
-                sparkles(side: side, logoW: logoW)
                 Text("Tap to start").font(CloudTheme.font(18, .semibold)).foregroundStyle(CloudTheme.jelly)
                     .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, max(28, geo.size.height * 0.08))
                     .opacity(settled ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(settled ? 0.8 : 0), value: settled)
+                    .animation(.easeOut(duration: 0.4), value: settled)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .opacity(leaving ? 0 : 1)
@@ -80,71 +69,66 @@ struct IntroView: View {
         .accessibilityIdentifier("intro")
     }
 
-    @ViewBuilder private func logo(width: CGFloat) -> some View {
-        let img = Image("JelbiesLogo").resizable().scaledToFit().frame(width: width)
-        if still {
-            img.opacity(settled ? 1 : 0).animation(.easeInOut(duration: 0.35), value: settled)
-        } else {
-            img.opacity(settled ? 1 : 0)
-                .keyframeAnimator(initialValue: LogoSettle(), trigger: settled) { v, s in
-                    v.scaleEffect(x: settled ? s.x : 0.82, y: settled ? s.y : 0.82, anchor: .bottom)
-                } keyframes: { _ in
-                    KeyframeTrack(\.x) { CubicKeyframe(0.82, duration: 0.01); SpringKeyframe(1.08, duration: 0.32, spring: .bouncy); CubicKeyframe(0.96, duration: 0.22); SpringKeyframe(1.0, duration: 0.35, spring: .bouncy) }
-                    KeyframeTrack(\.y) { CubicKeyframe(0.82, duration: 0.01); SpringKeyframe(0.90, duration: 0.32, spring: .bouncy); CubicKeyframe(1.05, duration: 0.22); SpringKeyframe(1.0, duration: 0.35, spring: .bouncy) }
-                }
-                .animation(.easeOut(duration: 0.2), value: settled)
-        }
-    }
-
-    private struct LogoSettle { var x: CGFloat = 1; var y: CGFloat = 1 }
-
-    private func sparkles(side: CGFloat, logoW: CGFloat) -> some View {
-        let spots: [(CGFloat, CGFloat, Double)] = [(-0.36, -0.12, 0.15), (0.38, -0.10, 0.4), (0.02, 0.17, 0.5)]
-        return ZStack {
-            if !still {
-                ForEach(0..<3, id: \.self) { i in
-                    Sparkle(go: settled, delay: spots[i].2)
-                        .frame(width: 16, height: 16)
-                        .offset(x: spots[i].0 * logoW * 1.15, y: spots[i].1 * side + side * IntroClip.logoYOffsetShare)
-                }
-            }
-        }
-        .allowsHitTesting(false).accessibilityHidden(true)
-    }
-
     // MARK: flow
 
     private func start() {
         guard player == nil else { return }
-        if still { settled = true; scheduleAdvance(); return }
         guard let url = Bundle.main.url(forResource: IntroClip.resource, withExtension: IntroClip.fileExtension) else { settle(); return }
-        let p = AVPlayer(url: url)
-        p.isMuted = true
+        let item = AVPlayerItem(url: url)
+        let p = AVPlayer(playerItem: item)
         p.actionAtItemEnd = .pause
+        volume = AudioHub.shared.introVideoVolume()
+        p.volume = volume
+        p.isMuted = volume <= 0
         player = p
-        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: p.currentItem, queue: .main) { _ in
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in
             Task { @MainActor in settle() }
         }
-        if let t = IntroClip.handoffTime {
-            boundary = p.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(seconds: t, preferredTimescale: 600))], queue: .main) {
-                Task { @MainActor in settle() }
-            }
+        statusObserver = item.observe(\.status, options: [.initial, .new]) { it, _ in
+            guard it.status == .readyToPlay else { return }
+            Task { @MainActor in begin() }
         }
-        p.play()
-        AudioHub.shared.playIntroSting(IntroClip.sound)
     }
 
-    private func tapped() { if settled { finish() } else { AudioHub.shared.stopIntroSting(); settle() } }
+    /// The first frame is decoded: show the clip and play it (Reduce Motion shows its last frame instead).
+    private func begin() {
+        guard let p = player, !ready, !finished else { return }
+        if still {
+            let end = p.currentItem?.duration ?? .zero
+            p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                Task { @MainActor in ready = true; settle() }
+            }
+        } else {
+            ready = true
+            p.play()
+        }
+    }
 
-    /// The crisp logo takes over (clip end, handoff time, or a tap during the clip).
+    private func tapped() {
+        if settled { finish(); return }
+        guard let p = player, ready else { settle(); return }
+        fadeOutAudio(p)
+        p.pause()
+        let end = p.currentItem?.duration ?? .zero
+        p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            Task { @MainActor in settle() }
+        }
+    }
+
+    /// Ramps the clip's audio to silence over 0.25 s.
+    private func fadeOutAudio(_ p: AVPlayer) {
+        let start = p.volume
+        let steps = 5
+        for i in 1...steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25 * Double(i) / Double(steps)) { p.volume = start * Float(steps - i) / Float(steps) }
+        }
+    }
+
+    /// The clip is on its last frame: "Tap to start" fades in and the auto-advance starts.
     private func settle() {
         guard !settled else { return }
         player?.pause()
         settled = true
-        scheduleAdvance()
-    }
-
-    private func scheduleAdvance() {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(IntroClip.autoAdvance * 1_000_000_000))
             finish()
@@ -164,29 +148,9 @@ struct IntroView: View {
     }
 
     private func teardown() {
-        AudioHub.shared.stopIntroSting()
         player?.pause()
-        if let b = boundary { player?.removeTimeObserver(b); boundary = nil }
+        statusObserver?.invalidate(); statusObserver = nil
         if let o = endObserver { NotificationCenter.default.removeObserver(o); endObserver = nil }
-    }
-}
-
-/// A small 4-point blue sparkle: pops in, turns, and fades.
-private struct Sparkle: View {
-    var go: Bool
-    var delay: Double
-    private struct V { var scale: CGFloat = 0.2; var rot: Double = 0; var opacity: Double = 0; var lift: CGFloat = 0 }
-    var body: some View {
-        Image(systemName: "sparkle").resizable().scaledToFit()
-            .foregroundStyle(CloudTheme.jelly)
-            .keyframeAnimator(initialValue: V(), trigger: go) { v, s in
-                v.scaleEffect(go ? s.scale : 0.2).rotationEffect(.degrees(s.rot)).opacity(go ? s.opacity : 0).offset(y: s.lift)
-            } keyframes: { _ in
-                KeyframeTrack(\.scale) { LinearKeyframe(0.2, duration: delay); CubicKeyframe(1.2, duration: 0.44); CubicKeyframe(0.6, duration: 0.66) }
-                KeyframeTrack(\.rot) { LinearKeyframe(0, duration: delay); LinearKeyframe(90, duration: 1.1) }
-                KeyframeTrack(\.opacity) { LinearKeyframe(0, duration: delay); CubicKeyframe(1, duration: 0.44); CubicKeyframe(0, duration: 0.66) }
-                KeyframeTrack(\.lift) { LinearKeyframe(0, duration: delay); LinearKeyframe(-10, duration: 1.1) }
-            }
     }
 }
 
