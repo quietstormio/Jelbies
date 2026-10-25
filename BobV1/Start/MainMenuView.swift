@@ -10,7 +10,6 @@ struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
-    @State private var bob = false
     @State private var visible = true
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -18,48 +17,59 @@ struct MainMenuView: View {
     private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
 
     var body: some View {
-        ZStack {
-            CloudSky()
-            if landscape {
-                HStack {
-                    title.frame(maxWidth: .infinity)
-                    buttons.frame(width: 320)
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let bottom = geo.safeAreaInsets.bottom
+            ZStack {
+                TitleBackdrop(still: still, size: geo.size, landscape: landscape)
+                if landscape {
+                    let k = min(1, h / 393)
+                    let btnW = min(300, w * 0.32)
+                    HStack(spacing: 0) {
+                        VStack { Spacer(minLength: 0); title(width: min(w * 0.46, 380)); Spacer(minLength: 0) }.frame(width: w * 0.5)
+                        VStack { Spacer(minLength: 0); buttons(k: max(0.7, k)).frame(width: btnW); Spacer(minLength: 0) }.frame(width: w * 0.5)
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    let s = w / 440
+                    VStack(spacing: 0) {
+                        title(width: 364 * s)
+                            .padding(.top, max(156 * s, 12))
+                        buttons(k: s).frame(width: 300 * s).padding(.top, 95 * s)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, bottom)
                 }
-                .padding(.horizontal, 28).padding(.vertical, 12)
-            } else {
-                VStack {
-                    title.padding(.top, 60)
-                    Spacer()
-                    buttons.frame(maxWidth: 340).padding(.bottom, 36)
-                }
-                .padding(.horizontal, 24)
+                if confirmNew { confirmCard.transition(.opacity) }
             }
-            if confirmNew { confirmCard.transition(.opacity) }
+            .frame(width: w, height: h)
         }
+        .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
-        .onAppear { bob = true; visible = true }
+        .onAppear { visible = true }
         .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
-    private var title: some View {
-        // The logo fills ~96% of the swing frame's width.
+    private func title(width: CGFloat) -> some View {
+        // The swing frame is 620x307 with the logo ~96% of its width.
         SpinLogo(still: still, active: visible)
-            .frame(maxWidth: (landscape ? 420 : 340) / 0.96 * 1.04)
+            .frame(width: width / 0.96)
             .aspectRatio(620.0 / 307.0, contentMode: .fit)
+            .shadow(color: Color(hex: 0x3B74B2), radius: 0, x: 0, y: 7 * width / 364)
             .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
-    private var buttons: some View {
-        VStack(spacing: 16) {
+    private func buttons(k: CGFloat) -> some View {
+        VStack(spacing: 20 * k) {
             if hasSave {
                 Button("Continue") { AudioHub.shared.uiTap(); flow.continueGame() }
-                    .buttonStyle(JellyButtonStyle(.primary)).accessibilityIdentifier("menu-continue")
+                    .buttonStyle(TitleButtonStyle(primary: true, k: k)).accessibilityIdentifier("menu-continue")
                 Button("New Game") { AudioHub.shared.uiTap(); confirmNew = true }
-                    .buttonStyle(JellyButtonStyle(.secondary)).accessibilityIdentifier("menu-new")
+                    .buttonStyle(TitleButtonStyle(primary: false, k: k)).accessibilityIdentifier("menu-new")
             } else {
                 Button("New Game") { AudioHub.shared.uiTap(); flow.startOver() }
-                    .buttonStyle(JellyButtonStyle(.primary)).accessibilityIdentifier("menu-start")
+                    .buttonStyle(TitleButtonStyle(primary: true, k: k)).accessibilityIdentifier("menu-start")
             }
         }
     }
@@ -147,5 +157,148 @@ struct SpinLogo: View {
             }
         }
         .onChange(of: active) { _, _ in start = Date() }
+    }
+}
+
+
+/// Title buttons: Continue = white pill with a solid lip; New Game = blue pill with a white rim. Press drops by the lip.
+/// New Game fill is #3672B3 (white text 4.98:1; the mockup's #3E7DC0 is 4.28:1).
+private struct TitleButtonStyle: ButtonStyle {
+    let primary: Bool
+    let k: CGFloat
+    func makeBody(configuration: Configuration) -> some View {
+        let p = configuration.isPressed
+        let lip = (primary ? 8 : 6) * k
+        let hgt = (primary ? 74 : 62) * k
+        configuration.label
+            .font(.system(size: (primary ? 27 : 22) * k, weight: primary ? .black : .heavy, design: .rounded))
+            .foregroundStyle(primary ? Color(hex: 0x2F66A4) : Color.white)
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity).frame(height: hgt)
+            .background {
+                ZStack {
+                    Capsule().fill(Color(hex: 0x2F5F97)).offset(y: p ? 0 : lip)
+                    Capsule().fill(primary ? Color.white : Color(hex: 0x3672B3))
+                    if !primary { Capsule().strokeBorder(Color.white.opacity(0.7), lineWidth: 3 * k) }
+                }
+            }
+            .offset(y: p ? lip : 0)
+            .padding(.bottom, lip)
+            .contentShape(Rectangle())
+            .animation(.easeOut(duration: 0.08), value: p)
+    }
+}
+
+private enum JelbieArt {
+    /// The mockup's body path in its own unit space (centre 0,0, ~102 wide).
+    static let body: Path = {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: -59))
+        p.addCurve(to: CGPoint(x: 51, y: -2), control1: CGPoint(x: 29, y: -59), control2: CGPoint(x: 51, y: -33))
+        p.addCurve(to: CGPoint(x: 26, y: 46), control1: CGPoint(x: 51, y: 22), control2: CGPoint(x: 44, y: 40))
+        p.addCurve(to: CGPoint(x: -26, y: 46), control1: CGPoint(x: 14, y: 49), control2: CGPoint(x: -14, y: 49))
+        p.addCurve(to: CGPoint(x: -51, y: -2), control1: CGPoint(x: -44, y: 40), control2: CGPoint(x: -51, y: 22))
+        p.addCurve(to: CGPoint(x: 0, y: -59), control1: CGPoint(x: -51, y: -33), control2: CGPoint(x: -29, y: -59))
+        p.closeSubpath()
+        return p
+    }()
+    static func circle(_ x: Double, _ y: Double, _ r: Double) -> Path { Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)) }
+    /// Faceless silhouette: body, side arms, feet.
+    static let silhouette: Path = {
+        var p = body
+        p.addPath(circle(-52.5, 14, 11)); p.addPath(circle(52.5, 14, 11))
+        p.addEllipse(in: CGRect(x: -21.7 - 11.5, y: 49 - 8.5, width: 23, height: 17))
+        p.addEllipse(in: CGRect(x: 21.7 - 11.5, y: 49 - 8.5, width: 23, height: 17))
+        return p
+    }()
+    /// One 72 pt tile: silhouettes at (18,18) and (54,54), scale 0.19.
+    static let tile: Path = {
+        var p = Path()
+        for c in [18.0, 54.0] {
+            p.addPath(silhouette.applying(CGAffineTransform(scaleX: 0.19, y: 0.19).concatenating(CGAffineTransform(translationX: c, y: c))))
+        }
+        return p
+    }()
+}
+
+/// Blue title backdrop: scrolling rotated Jelbie pattern, twinkling sparkles, the peeking Jelbie.
+private struct TitleBackdrop: View {
+    let still: Bool
+    let size: CGSize
+    let landscape: Bool
+
+    private static func sparkle(_ cx: Double, _ cy: Double, _ r: Double, _ t: Double) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: cx, y: cy - r))
+        p.addCurve(to: CGPoint(x: cx + r, y: cy), control1: CGPoint(x: cx + r * 0.1, y: cy - r * 0.6), control2: CGPoint(x: cx + r * 0.4, y: cy - r * 0.1))
+        p.addCurve(to: CGPoint(x: cx, y: cy + r), control1: CGPoint(x: cx + r * 0.4, y: cy + r * 0.1), control2: CGPoint(x: cx + r * 0.1, y: cy + r * 0.6))
+        p.addCurve(to: CGPoint(x: cx - r, y: cy), control1: CGPoint(x: cx - r * 0.1, y: cy + r * 0.6), control2: CGPoint(x: cx - r * 0.4, y: cy + r * 0.1))
+        p.addCurve(to: CGPoint(x: cx, y: cy - r), control1: CGPoint(x: cx - r * 0.4, y: cy - r * 0.1), control2: CGPoint(x: cx - r * 0.1, y: cy - r * 0.6))
+        p.closeSubpath()
+        return p
+    }
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { tl in
+            let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, sz in
+                let w = sz.width, h = sz.height
+                ctx.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(Color(hex: 0x5A97D6)))
+                // Pattern
+                let ps = min(w, h) / 440
+                let phase = (t.truncatingRemainder(dividingBy: 9)) / 9
+                var pc = ctx
+                pc.translateBy(x: w / 2, y: h / 2)
+                pc.rotate(by: .degrees(-10))
+                pc.scaleBy(x: ps, y: ps)
+                pc.translateBy(x: -phase * 72, y: -phase * 72)
+                let R = Int((hypot(w, h) / ps / 72).rounded(.up)) / 2 + 2
+                let tilePath = JelbieArt.tile
+                for i in -R...R { for j in -R...R {
+                    pc.fill(tilePath.applying(CGAffineTransform(translationX: Double(i) * 72, y: Double(j) * 72)), with: .color(.white.opacity(0.13)))
+                } }
+                // Sparkles (positions are fractions of the 440x956 design)
+                let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
+                let sx = w / 440, sy = h / 956, sk = landscape ? min(w, h) / 440 : sx
+                var sc = ctx
+                sc.opacity = tw
+                for (x, y, r) in [(52.0, 157.5, 7.5), (398.0, 337.5, 7.5), (380.0, 133.0, 5.0)] {
+                    sc.fill(Self.sparkle(x * sx, y * sy, r * sk * (landscape ? 1.2 : 1), t), with: .color(.white))
+                }
+                // Peeking Jelbie
+                let scale: Double = landscape ? (h * 0.40 / 102) : 2.4 * w / 440
+                let cx = landscape ? w * 0.5 : w / 2
+                let bob = still ? 0 : -10 * (w / 440) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
+                let cy = landscape ? h + bob + 0.03 * h : h - 36 * (w / 440) + bob
+                var jc = ctx
+                jc.translateBy(x: cx, y: cy)
+                jc.scaleBy(x: scale, y: scale)
+                let rim = Color(hex: 0x8DB8E0)
+                for path in [JelbieArt.body, JelbieArt.circle(-52.5, 14, 10), JelbieArt.circle(52.5, 14, 10)] {
+                    jc.fill(path, with: .color(rim))
+                    jc.stroke(path, with: .color(rim), style: StrokeStyle(lineWidth: 13, lineJoin: .round))
+                }
+                jc.fill(JelbieArt.body, with: .color(.white))
+                var cc = jc
+                cc.clip(to: JelbieArt.body)
+                cc.fill(JelbieArt.body, with: .color(Color(hex: 0xE2EDF8)))
+                cc.fill(JelbieArt.body.applying(CGAffineTransform(translationX: -5, y: -6)), with: .color(.white))
+                // Eyes (blink)
+                let ph = still ? 0 : t.truncatingRemainder(dividingBy: 4.6) / 4.6
+                let sy2: Double = ph < 0.93 ? 1 : ph < 0.95 ? 1 - 0.88 * (ph - 0.93) / 0.02 : ph < 1 ? 0.12 + 0.88 * (ph - 0.95) / 0.05 : 1
+                var ec = jc
+                ec.translateBy(x: 0, y: -14); ec.scaleBy(x: 1, y: sy2); ec.translateBy(x: 0, y: 14)
+                let eye = Color(hex: 0x7F9FB9)
+                for x in [-19.5, 19.5] {
+                    ec.fill(JelbieArt.circle(x, -14, 4.8), with: .color(eye))
+                    ec.fill(JelbieArt.circle(x, -16.2, 1.7), with: .color(.white))
+                }
+                var l = Path(); l.move(to: CGPoint(x: -27, y: -27)); l.addQuadCurve(to: CGPoint(x: -12, y: -28), control: CGPoint(x: -19.5, y: -31))
+                var r = Path(); r.move(to: CGPoint(x: 12, y: -28)); r.addQuadCurve(to: CGPoint(x: 27, y: -27), control: CGPoint(x: 19.5, y: -31))
+                for b in [l, r] { jc.stroke(b, with: .color(eye), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)) }
+            }
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 }
