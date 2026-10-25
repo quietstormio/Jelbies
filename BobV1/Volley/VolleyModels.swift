@@ -31,7 +31,10 @@ nonisolated enum VolleyTuning {
     // court (world units; a Jelbie is ~1.35 tall and ~1.1 wide)
     static let halfCourt: Float = 2.7            // the side lines / back lines
     static let outLine: Float = 3.15             // a ball landing past this is out
-    static let netTop: Float = 1.55
+    static let netTop: Float = 1.45
+    /// The nearest a body's centre may come to the net plane (the half width of the body plus a margin), and the two zones: back and front.
+    static let netMargin: Float = 0.9
+    static let backX: Float = 2.5, frontX: Float = 1.1
     static let netDepth: Float = 1.5             // the net runs from z = -netDepth to +netDepth
     static let ballR: Float = 0.34
     static let gravity: Float = 2.7              // floaty
@@ -45,8 +48,8 @@ nonisolated enum VolleyTuning {
     static let introSeconds: Float = 1.6
     // players
     static let restYaw: Float = 0.95             // 3/4 toward the camera, facing the net
-    static let minGap: Float = 1.05              // teammates keep this far apart
-    static let startX: [Float] = [-2.1, -1.0, 2.1, 1.0]
+    static let minGap: Float = 1.3              // teammates keep this far apart
+    static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
     // movement: speed comes from step rate and stride, like racing (RaceTuning)
     static func stride(speed: Float) -> Float { 0.27 + 0.05 * clamp01(speed) }
     static func rate(speed: Float) -> Float { 3.0 + 1.2 * clamp01(speed) }

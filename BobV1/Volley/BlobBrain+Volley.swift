@@ -83,7 +83,7 @@ extension BlobBrain {
     // MARK: commands
 
     func volleyWant(x: Float, speed: Float) {
-        volley.wantX = x
+        volley.wantX = ownSide(x)
         volley.stride = VolleyTuning.stride(speed: speed)
         volley.rate = VolleyTuning.rate(speed: speed)
     }
@@ -93,7 +93,7 @@ extension BlobBrain {
         guard volley.active, volley.phase == .ground || volley.phase == .land else { return }
         releaseFeetForAir(sim)
         volley.phase = .crouch; volley.t = 0
-        volley.from = SIMD2(px, pz); volley.to = volley.from + SIMD2(dx, 0)
+        volley.from = SIMD2(px, pz); volley.to = volley.from + SIMD2(dx, 0); volley.to.x = ownSide(volley.to.x)
         volley.apex = apex; volley.airT = VolleyTuning.airTime(apex: apex)
         volley.yaw0 = yaw; volley.spikeT = -1; volley.pitchNow = 0
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: cheer ? 0.5 : 0.8)
@@ -111,7 +111,11 @@ extension BlobBrain {
         guard volley.active, volley.phase == .ground || volley.phase == .land else { return }
         releaseFeetForAir(sim)
         volley.phase = .diveCrouch; volley.t = 0
-        volley.from = SIMD2(px, pz); volley.diveDir = dir
+        volley.from = SIMD2(px, pz)
+        // near the net he dives away from it (the body never reaches the net plane)
+        let netDir: Float = volley.side > 0 ? 1 : -1
+        let room = (volley.side > 0 ? -VolleyTuning.netMargin - px : px - VolleyTuning.netMargin)
+        volley.diveDir = (dir == netDir && room < 0.5) ? -dir : dir
         volley.yaw0 = yaw; volley.spikeT = -1
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6, rate: 1.1)
     }
@@ -214,6 +218,8 @@ extension BlobBrain {
         let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
         return p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
     }
+    /// Keeps a body's centre on its own side of the net with a margin (the body is ~1.1 wide).
+    private func ownSide(_ x: Float) -> Float { volley.side > 0 ? min(x, -VolleyTuning.netMargin) : max(x, VolleyTuning.netMargin) }
     private func ease(_ x: Float) -> Float { let k = min(1, max(0, x)); return k * k * (3 - 2 * k) }
 
     private func place(_ sim: SoftBody, xz: SIMD2<Float>, yaw y: Float, pitch p: Float, squash sy: Float, lift l: Float, strength k: Float) {
@@ -292,7 +298,8 @@ extension BlobBrain {
                 yawNow = volley.yaw0 + wrapAngle(restY - volley.yaw0) * ease(t / 0.4)
             }
             volley.pitchNow += (pitchGoal - volley.pitchNow) * min(1, dt * 24)
-            let xz = volley.from + (volley.to - volley.from) * ease(u)
+            var xz = volley.from + (volley.to - volley.from) * ease(u)
+            xz.x = ownSide(xz.x)
             place(sim, xz: xz, yaw: yawNow, pitch: volley.pitchNow, squash: sy * (1 - volley.recoil * 0.5), lift: h, strength: k)
             tuckNow = max(tuckNow, 0.05 * amp * sinf(.pi * u))
             if t >= T {
@@ -317,7 +324,7 @@ extension BlobBrain {
             let T: Float = 0.32
             let u = min(1, t / T)
             var xz = volley.from + (volley.to - volley.from) * (1 - (1 - u) * (1 - u))
-            xz.x = side > 0 ? min(xz.x, -0.6) : max(xz.x, 0.6)          // (never into the net)
+            xz.x = ownSide(xz.x)          // (never into the net)
             let pitch = 1.12 * ease(u / 0.6)
             let yawNow = volley.yaw0 + wrapAngle(volley.diveDir * Float.pi / 2 - volley.yaw0) * ease(u / 0.5)
             let h = 0.20 * 4 * u * (1 - u)
@@ -329,7 +336,7 @@ extension BlobBrain {
             let T: Float = 0.26
             let u = min(1, t / T)
             var xz = volley.from + (volley.to - volley.from) * (1 - (1 - u) * (1 - u))
-            xz.x = side > 0 ? min(xz.x, -0.6) : max(xz.x, 0.6)
+            xz.x = ownSide(xz.x)
             let wob = 1 + 0.02 * expf(-t / 0.15) * cosf(2 * .pi * 6 * t)
             volley.pitchNow = 1.12 * wob
             place(sim, xz: xz, yaw: volley.yaw0, pitch: volley.pitchNow, squash: 0.90 - 0.03 * expf(-t / 0.12) * cosf(2 * .pi * 6 * t), lift: 0, strength: k * 1.1)

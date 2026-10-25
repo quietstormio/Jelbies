@@ -27,12 +27,13 @@ extension GameCamera {
     static func beachPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let th = tanf(fovY / 2)
         let portrait = portraitAmount(aspect)
-        let needW: Float = 7.4, needH: Float = 5.6 + 2.8 * (1 - portrait)          // (a phone on its side: more air over the court, the controls sit below it)
+        let needW: Float = 7.4 - 1.0 * portrait, needH: Float = 5.6 + 2.8 * (1 - portrait)          // (a phone on its side: more air over the court, the controls sit below it)
         let distW = needW / (2 * th * max(aspect, 0.2)), distH = needH / (2 * th)
         let dist = max(distW, distH)
         let visH = 2 * dist * th
         let g: Float = 0.68 - 0.06 * portrait          // where the sand's front edge sits on the screen (0 top ... 1 bottom)
-        let ty = (g - 0.5) * visH * 0.97 - 0.1
+        let tyLand = (g - 0.5) * visH * 0.97 - 0.1
+        let ty = tyLand + (0.55 - tyLand) * portrait          // portrait: the court sits in the middle band, the sky above and the controls below stay clear
         let t = SIMD3<Float>(0, ty, 0)
         let dir = SIMD3<Float>(sinf(beachAzimuth) * cosf(beachElevation), sinf(beachElevation), cosf(beachAzimuth) * cosf(beachElevation))
         return (t + dir * dist, t)

@@ -159,7 +159,7 @@ nonisolated struct VolleySim: Sendable {
     mutating func setMove(_ dir: Float) {
         guard players.indices.contains(0), !autoMove || phase != .rally else { return }
         let p = players[0]
-        let lo: Float = -T.halfCourt - 0.2, hi: Float = isDrill ? -0.45 : -0.45
+        let lo: Float = -T.halfCourt - 0.2, hi: Float = -T.netMargin
         players[0].wantX = min(max(p.x + dir * 0.9, lo), hi)
     }
 
@@ -454,7 +454,7 @@ nonisolated struct VolleySim: Sendable {
         } else {
             switch kind {
             case .serve: targetX = opp * rng.range(1.2, 2.3); tf = T.flightTime(power: p.stats.power, over: true) + 0.1
-            case .spike: targetX = opp * rng.range(0.7, 2.3); tf = T.spikeTime(power: p.stats.power)
+            case .spike: targetX = opp * rng.range(1.2, 2.5); tf = T.spikeTime(power: p.stats.power)
             case .dig:
                 if tchs <= 1 { targetX = s * 0.95; tf = 1.95; over = false } else { targetX = opp * rng.range(0.8, 2.0); tf = 2.0 }
             case .bonk:
@@ -476,7 +476,7 @@ nonisolated struct VolleySim: Sendable {
             let tc = -c.x / vx
             if tc <= 0 || tc > tf { break }
             let yc = c.y + vy * tc - 0.5 * g * tc * tc
-            if yc >= T.netTop + T.ballR + (kind == .spike ? 0.04 : 0.16) { break }
+            if yc >= T.netTop + T.ballR + (kind == .spike ? 0.02 : 0.16) { break }
             tf *= 1.12
         }
         // off-centre hits steer a little
@@ -491,7 +491,7 @@ nonisolated struct VolleySim: Sendable {
             let p = players[i]
             let helped = p.human && (autoMove || autoJump)
             if p.human && !helped {
-                if phase == .serveWait, serverIndex == i { players[i].wantX = Self.side(p.team) * 2.05 }
+                if phase == .serveWait, serverIndex == i { players[i].wantX = Self.side(p.team) * T.backX }
                 continue
             }
             ai(i, dt: dt, moveToo: !p.human || autoMove, jumpToo: !p.human || autoJump)
@@ -507,7 +507,7 @@ nonisolated struct VolleySim: Sendable {
         }
         for i in players.indices {
             let s = Self.side(players[i].team)
-            let lo: Float = s < 0 ? -T.halfCourt - 0.2 : 0.45, hi: Float = s < 0 ? -0.45 : T.halfCourt + 0.2
+            let lo: Float = s < 0 ? -T.halfCourt - 0.2 : T.netMargin, hi: Float = s < 0 ? -T.netMargin : T.halfCourt + 0.2
             players[i].wantX = min(max(players[i].wantX, lo), hi)
         }
     }
@@ -525,9 +525,9 @@ nonisolated struct VolleySim: Sendable {
         let s = Self.side(p.team)
         let base: [Float] = i % 2 == 0 ? [1.95, 1.0] : [1.0, 1.95]
         _ = base
-        let homeX = s * (i % 2 == 0 ? 1.85 : 0.95)
+        let homeX = s * (i % 2 == 0 ? T.backX : T.frontX)
         if phase == .serveWait || phase == .intro {
-            if moveToo { p.wantX = s * ((i == serverIndex) ? 2.05 : 0.95) }
+            if moveToo { p.wantX = s * ((i == serverIndex) ? T.backX : T.frontX) }
             players[i] = p
             return
         }
@@ -578,7 +578,7 @@ nonisolated struct VolleySim: Sendable {
         } else if moveToo {
             // the other one covers: back if the receiver is in front, else in front
             let recvFront = abs(players[d].x) < 1.45
-            p.wantX = s * (recvFront ? 2.0 : 0.95)
+            p.wantX = s * (recvFront ? T.backX : T.frontX)
             p.wait = reactDelay
         }
         players[i] = p
