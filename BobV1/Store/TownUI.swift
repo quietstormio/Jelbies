@@ -159,9 +159,42 @@ struct TownView: View {
     var adopt: () -> Void = {}
     var home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("townCategory") private var categoryRaw = TownCategory.all.rawValue
+
+    enum TownCategory: String, CaseIterable {
+        case all = "All", play = "Play", shops = "Shops", friends = "Friends"
+    }
+
+    private struct Place: Identifiable {
+        let id: String, title: String, sub: String, symbol: String, color: Color
+        let cats: Set<TownCategory>
+        let action: () -> Void
+    }
+
+    private var category: TownCategory { TownCategory(rawValue: categoryRaw) ?? .all }
+
+    private var places: [Place] {
+        let visit = care.guestBook.visit.map { v in care.parkBook.visitor(v.visitor).map { v.arrived ? "\($0.name) is visiting" : "\($0.name) is coming over" } ?? "Ask a friend over" } ?? "Ask a friend over"
+        let full = JellyRoster.savedIDs().count >= JellyRoster.maxCount
+        return [
+            Place(id: "town-shop", title: "Shop", sub: "Snacks, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
+            Place(id: "town-track", title: "Track", sub: "Race for Drops", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
+            Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
+            Place(id: "town-cafe", title: "Café", sub: "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
+            Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
+            Place(id: "town-groom", title: "Groomer", sub: "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops]) { groom() },
+            Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
+            Place(id: "town-beach", title: "Beach", sub: "Volleyball fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
+            Place(id: "town-adopt", title: "Adoption Center", sub: full ? "Room full" : "Welcome a new Jelbie", symbol: "heart.fill", color: SK.pink, cats: [.friends]) { adopt() },
+        ]
+    }
+
+    private var shown: [Place] { category == .all ? places : places.filter { $0.cats.contains(category) } }
 
     var body: some View {
-        VStack(spacing: vsc == .compact ? 8 : 14) {
+        let compact = vsc == .compact
+        VStack(spacing: compact ? 6 : 10) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); home() } label: {
                     HStack(spacing: 5) {
@@ -171,63 +204,70 @@ struct TownView: View {
                     .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("town-home")
-                Spacer()
+                Text("Where to?").font(SK.font(compact ? 24 : 28, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
                 DropsPill(wallet: care.bath.wallet)
             }
-            if vsc == .compact {
-                // a phone on its side: the title and the map on the left, the places on the right (scrolling if they must)
-                HStack(alignment: .top, spacing: 18) {
-                    VStack(spacing: 10) {
-                        Text("Where to?").font(SK.font(30, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading)
-                        MapStrip().frame(maxHeight: 150)
-                        Spacer(minLength: 0)
+            chips
+            ScrollView {
+                VStack(spacing: 12) {
+                    if !compact { MapStrip().frame(height: 84) }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: compact ? 4 : 2), spacing: 12) {
+                        ForEach(shown) { p in tile(p) }
                     }
-                    ScrollView { destinations.padding(.bottom, 12) }.scrollBounceBehavior(.basedOnSize)
                 }
-            } else {
-                Text("Where to?").font(SK.font(34, .black)).foregroundStyle(SK.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                MapStrip().frame(height: 118)
-                destinations
-                Spacer(minLength: 0)
+                .padding(.bottom, 16)
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .padding(.horizontal, 16).padding(.top, 8)
         .background(SK.cream.ignoresSafeArea())
         .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
     }
 
-    private var destinations: some View {
-        VStack(spacing: 10) {
-            destination("Shop", "Snacks, shoes, tricks and more", "bag.fill", SK.pink, id: "town-shop") { go(.shop) }
-            destination("Track", "Race for Drops", "flag.checkered", SK.sky, id: "town-track") { go(.track) }
-            destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
-            destination("Café", "Treats out with the gang", "cup.and.saucer.fill", SK.mint, id: "town-cafe") { cafe() }
-            destination("Park", "Play and make friends with visitors", "tree.fill", SK.sky, id: "town-park") { park() }
-            destination("Groomer", "Jelly Spa: a fresh, shiny clean-up", "bubbles.and.sparkles.fill", SK.pink, id: "town-groom") { groom() }
-            destination("Friends", care.guestBook.visit.map { v in care.parkBook.visitor(v.visitor).map { v.arrived ? "\($0.name) is visiting" : "\($0.name) is coming over" } ?? "Ask a friend over" } ?? "Ask a friend over to play or sleep over", "person.2.fill", SK.mint, id: "town-friends") { go(.friends) }
-            destination("Beach", "Volleyball: bonk, spike and dive", UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", SK.honey, id: "town-beach") { go(.volley) }
-            destination("Adoption Center", JellyRoster.savedIDs().count >= JellyRoster.maxCount ? "Your room is full: 3 Jelbies" : "Welcome another Jelbie home", "heart.fill", SK.pink, id: "town-adopt") { adopt() }
+    private var chips: some View {
+        HStack(spacing: 6) {
+            ForEach(TownCategory.allCases, id: \.self) { c in
+                let on = category == c
+                Button {
+                    AudioHub.shared.uiTap()
+                    if reduceMotion { categoryRaw = c.rawValue } else { withAnimation(.easeInOut(duration: 0.25)) { categoryRaw = c.rawValue } }
+                } label: {
+                    Text(c.rawValue).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Capsule().fill(on ? SK.honey : Color.clear))
+                        .overlay(Capsule().strokeBorder(on ? SK.honeyDeep : .clear, lineWidth: 2))
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("town-chip-\(c.rawValue.lowercased())")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
         }
+        .padding(3).background(Capsule().fill(Color.white.opacity(0.8)))
     }
 
-    private func destination(_ title: String, _ sub: String, _ symbol: String, _ color: Color, id: String, enabled: Bool = true, _ action: @escaping () -> Void) -> some View {
-        Button { AudioHub.shared.uiTap(); action() } label: {
-            HStack(spacing: 14) {
-                Image(systemName: symbol).font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink)
-                    .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(color.opacity(enabled ? 1 : 0.5)))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(SK.font(22, .black)).foregroundStyle(SK.ink)
-                    Text(sub).font(SK.font(13, .bold)).foregroundStyle(SK.muted)
-                }
-                Spacer()
-                Image(systemName: enabled ? "chevron.right" : "lock.fill").font(.system(size: 15, weight: .black)).foregroundStyle(SK.muted)
+    private func tile(_ p: Place) -> some View {
+        Button { AudioHub.shared.uiTap(); p.action() } label: {
+            VStack(spacing: 6) {
+                Image(systemName: p.symbol).font(.system(size: 28, weight: .heavy)).foregroundStyle(SK.ink)
+                    .frame(width: 58, height: 58).background(Circle().fill(p.color.opacity(0.85)))
+                Text(p.title).font(SK.font(17, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(p.sub).font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .padding(12).frame(maxWidth: .infinity, minHeight: 80)
+            .padding(10).frame(maxWidth: .infinity).aspectRatio(1.1, contentMode: .fit)
             .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
-            .opacity(enabled ? 1 : 0.7)
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
-        .buttonStyle(.plain).disabled(!enabled).accessibilityIdentifier(id)
+        .buttonStyle(TownTilePress())
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(p.title), \(p.sub)").accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(p.id)
+    }
+}
+
+private struct TownTilePress: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.scaleEffect(configuration.isPressed ? 0.95 : 1).opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
