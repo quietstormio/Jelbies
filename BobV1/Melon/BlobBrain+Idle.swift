@@ -273,6 +273,7 @@ extension BlobBrain {
         guard let kind = idleState.kind else {
             commanded = false
             if decorIgnore != nil || !DecorField.shared.feet.isEmpty { decorExitCheck(dt: dt) }
+            toyTick(sim)
             if autonomy && !held { idleState.cooldown -= dt; zoomUrge -= dt }
             return
         }

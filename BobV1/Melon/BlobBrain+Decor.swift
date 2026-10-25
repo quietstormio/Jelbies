@@ -29,6 +29,7 @@ extension BlobBrain {
         let uid = idleState.decorUID
         if uid >= 0 {
             DecorField.shared.leave(uid, by: steerID)
+            DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
             idleState.decorUID = -1
         }
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
@@ -99,7 +100,7 @@ extension BlobBrain {
     private func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         var angles: [Float]
-        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6].map { $0 + f.yaw } }
+        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6, 0.95, -0.95, 1.4, -1.4].map { $0 + f.yaw } }          // (the sides only as a fallback: a piece at the front edge has no floor in front of it)
         else {
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
             let a0 = atan2f(base.x, base.y)
@@ -166,15 +167,15 @@ extension BlobBrain {
         }
     }
 
-    func decorStart(_ kind: IdleKind, _ sim: SoftBody, only: DecorKind? = nil) -> Bool {
+    func decorStart(_ kind: IdleKind, _ sim: SoftBody, only: DecorKind? = nil, uid onlyUID: Int? = nil) -> Bool {
         guard !sleepLocked else { return false }
         let here = SIMD2(px, pz)
         let field = DecorField.shared
         let exiting = decorIgnore          // (still standing in the bag he sat in: that stays soft for him)
-        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (only == nil || $0.kind == only) }
+        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
-        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6)) }.sorted { $0.1 < $1.1 }
+        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
         for (f, _) in ranked {
             if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
@@ -322,7 +323,7 @@ extension BlobBrain {
                 case .spintop?: DecorField.shared.spinTop(uid); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 1.4)
                 // batch 3: the pinwheel spins (the top's `spin`), the others play their own little sound
                 case .pinwheel?: DecorField.shared.spinTop(uid); AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 1.9)
-                case .bubblemachine?: AudioHub.shared.play(.bubblepop, jelly: steerID, x: px, volume: 0.6, rate: 1.0)
+                case .bubblemachine?: AudioHub.shared.play(.bubblepop, jelly: steerID, x: px, volume: 0.6, rate: 1.0); DecorField.shared.toyPostBurst(uid, by: steerID, at: DecorField.shared.foot(uid)?.centre ?? position)
                 case .jackinbox?: AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6, rate: 1.5); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.5, rate: 1.6)
                 case .toypiano?: AudioHub.shared.play(.sparkle, jelly: steerID, x: px, volume: 0.7, rate: Float(0.85 + 0.1 * Double(Int(rand() * 5))))
                 case .plushbear?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 1.1)
