@@ -1449,7 +1449,14 @@ final class BlobBrain {
         let pv = SIMD3<Float>(0, Float(FootBean.pivotLocal.y), 0)
         // The attractor is only the body's pose while the brain drives him. Thrown / launched / held far from it (a bean that lingers 0.7 s after
         // a release) it is stale: the feet would stay where he was. Then the feet follow the body's fitted pose.
-        let fitted: BodyPose? = (activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - sim.centroid()) > 0.1) ? sim.bodyPose(iterations: 3) : nil
+        // 2026-10-24 (legs never come off): the soft body LAGS the attractor in a flip / cartwheel / roll / tumble (it can trail by tens of degrees), so a bean
+        // placed on the attractor's pose floated off the real surface. Whenever the fitted pose has drifted from the attractor's (any rotation or position), the feet follow the
+        // fitted pose; and every bean gets the always-attached clamp below.
+        let fit = sim.bodyPose(iterations: 3)
+        let attQ = sim.attractor.rotation
+        let drift = simd_length(simd_float3x3(fit.rotation).columns.1 - simd_float3x3(attQ).columns.1) + simd_length(simd_float3x3(fit.rotation).columns.2 - simd_float3x3(attQ).columns.2)
+        let useFit = activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.1 || drift > 0.12
+        let fitted: BodyPose? = useFit ? fit : nil
         for s in 0..<2 {
             let c = geom.contact[s]
             func place(_ i: Int, _ m: Float) -> SIMD3<Float> {
@@ -1469,6 +1476,11 @@ final class BlobBrain {
             if scale == 1 { beanMorphLast[s] = mo }
             if mo > 0 {
                 for i in 0..<FootBean.vertexCount { var w = place(i, mo); w.y = max(w.y + tuck, sim.floorY); dst[s][i] = w }
+            }
+            // global safety clamp: the bean's top must stay buried in the real body, in every move (not for the inset start shape)
+            if scale == 1 {
+                attachBean(sim, fit, lifted: fit.tilt > 0.3 || lo - sim.floorY > 0.02, &dst[s])
+                for i in 0..<FootBean.vertexCount { dst[s][i].y = max(dst[s][i].y, sim.floorY) }
             }
         }
     }
@@ -1576,7 +1588,7 @@ final class BlobBrain {
                     let w = wanted + rotXZ(SIMD2(l.x, hz + tz), fyaw)
                     bv[i] = SIMD3(w.x, wy + ty, w.y)
                 }
-                attachBean(sim, fitted, lifted: h > 0.02, &bv)
+                attachBean(sim, fitted, lifted: h > 0.02 || fitted.tilt > 0.3, &bv)
                 for i in bv.indices { bv[i].y = max(bv[i].y, sim.floorY) }       // a foot never sinks through the floor (the attach shift can only move it in / up)
                 beanScratch[s] = bv
             }
