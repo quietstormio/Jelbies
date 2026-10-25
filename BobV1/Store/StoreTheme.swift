@@ -214,7 +214,7 @@ struct ItemArt: View {
     private var tint: Color {
         switch item.kind {
         case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .supply: return SK.sky.opacity(0.35)
-        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3)
+        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3); case .seed: return SK.mint.opacity(0.5)
         }
     }
 }

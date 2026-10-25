@@ -168,7 +168,7 @@ nonisolated enum StoreFoodModels {
 }
 
 extension Consumables {
-    private static func food(_ id: String, _ name: String, symbol: String, _ pal: ConsumablePalette, perk: PerkKind?, cond: [ConditionKey: Float], chew: SFX = .chomp,
+    static func food(_ id: String, _ name: String, symbol: String, _ pal: ConsumablePalette, perk: PerkKind?, cond: [ConditionKey: Float], chew: SFX = .chomp,
                              piece: @escaping PieceBuilder) -> Consumable {
         // The Blender mesh when its bundled resource loads, else the procedural builder (the fallback).
         let meshed: PieceBuilder = { b, c, j, s, p in
@@ -205,5 +205,5 @@ extension Consumables {
     static let cookie = food("cookie", "Bedtime cookie", symbol: "moon.zzz.fill", pal((0.88, 0.67, 0.42), (0.95, 0.80, 0.58), (0.42, 0.28, 0.22), (1, 1, 1)),
                              perk: .bedtime, cond: [.sweet: 0.10, .cute: 0.06], piece: StoreFoodModels.cookie)
 
-    static let storeFoods: [Consumable] = [nuggets, fries, sushi, sandwich, minipizza, taco, donut, popsicle, onigiri, cookie]
+    static let storeFoods: [Consumable] = [nuggets, fries, sushi, sandwich, minipizza, taco, donut, popsicle, onigiri, cookie] + gardenFoods
 }

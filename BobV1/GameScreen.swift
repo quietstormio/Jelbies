@@ -268,7 +268,7 @@ struct GameScreen: View {
             model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
-            AudioHub.shared.setTownScene(GameScreen.townMusic(town))
+            AudioHub.shared.setTownScene(GameScreen.townMusic(town, garden: model.care.roomID == .garden))
             Ears.shared.launch(care: model.care)
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
@@ -314,10 +314,12 @@ struct GameScreen: View {
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
                 .presentationBackground(FocusStyle.cream)
         }
-        .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
-        .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town, garden: model.care.roomID == .garden)) }
+        .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town, garden: model.care.roomID == .garden)) }
+        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t, garden: model.care.roomID == .garden)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
+        .onChange(of: model.care.roomID) { _, id in if !model.care.tripActive, town == nil { AudioHub.shared.setTownScene(GameScreen.townMusic(nil, garden: id == .garden)) } }
+        .overlay { GardenOverlay(care: model.care) }
         .overlay { RoomSwitchVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
@@ -561,9 +563,9 @@ struct GameScreen: View {
     }
 
     /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
-    static func townMusic(_ t: TownScreen?) -> MusicScene {
+    static func townMusic(_ t: TownScreen?, garden: Bool = false) -> MusicScene {
         switch t {
-        case nil: return .none
+        case nil: return garden ? .park : .none          // the Garden plays the Park's tracks for now
         case .shop?: return .shop
         case .studio?, .condition?, .show?: return .studio
         default: return .town
