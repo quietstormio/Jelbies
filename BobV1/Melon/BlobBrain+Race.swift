@@ -35,6 +35,9 @@ struct RaceDrive {
     var idle: Float = 0
     var steps = 0
     var looks = 0
+    /// A hurdle jump was asked while a step was still under way: it starts the moment the feet are planted. `jumping`: the hop's apex / airtime are the race's.
+    var jumpQueued = false
+    var jumping = false
 }
 
 extension BlobBrain {
@@ -78,6 +81,7 @@ extension BlobBrain {
     /// Leaves the track: the race script ends and he stands (he turns to the camera by himself).
     func endRace() {
         guard race.active else { return }
+        if race.jumping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }
         race = RaceDrive()
         if case .race = script { script = .none }
         restTimer = 1.0
@@ -97,6 +101,25 @@ extension BlobBrain {
         jellyKick = 2.4
     }
 
+    /// The hurdle jump: the EXISTING hop gait (crouch, air, land; the same squash, tuck and landing wobble as every other hop), made a little higher and
+    /// longer (HurdleTuning), forward along the way he faces. It is the roaming hop's own start (`startHop`) minus its room-floor clamp: the track lies
+    /// outside the room's walls, and the clamp would pull the hop back into the room. Nothing about the body's shape is new.
+    func raceJump(_ sim: SoftBody) {
+        guard race.active, case .race = script else { return }
+        if feet.active { race.jumpQueued = true; return }
+        race.jumpQueued = false
+        AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.8)
+        sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false          // (as startHop: the planted soles are let go before the hop owns the body)
+        gait.wander = false
+        gait.facingYaw = yaw
+        gait.home = SIMD2(px, pz)
+        gait.hopApex = HurdleTuning.apex; gait.hopDuration = HurdleTuning.airTime
+        race.jumping = true
+        poseW = 0
+        gait.hop(sim, to: SIMD2(px, pz) + SIMD2(sinf(yaw), cosf(yaw)) * HurdleTuning.hopDistance, reduceMotion: amplitude < 0.7)
+        script = .hopPlay; activity = .playing
+    }
+
     /// A focus pause: he stops and looks around (the existing look behaviour, shortened). False = not possible right now.
     @discardableResult
     func raceLook(_ sim: SoftBody) -> Bool {
@@ -114,6 +137,7 @@ extension BlobBrain {
     /// Per fixed step (the race flow): a look-around that has ended hands him back to the race script.
     func raceKeepAlive() {
         guard race.active, case .none = script, idleState.kind == nil, pending == nil else { return }
+        if race.jumping { race.jumping = false; gait.hopApex = 0.10; gait.hopDuration = 0.26 }          // (the jump is over: the roaming hop's numbers again)
         script = .race; activity = .walking
         restTimer = 1.0
     }
@@ -124,6 +148,7 @@ extension BlobBrain {
         case .step(_, let foot, let stride, let rate, let final): raceCommit(foot: foot, stride: stride, rate: rate, final: final)
         case .stumble, .trip: raceStumble(RaceTuning.stumbleTime)
         case .pauseBegan: raceLook(sim)
+        case .jump: raceJump(sim)
         default: break
         }
     }
@@ -132,6 +157,7 @@ extension BlobBrain {
 
     /// `.race`, once per fixed step (BlobBrain.runScript): pose like the walk; start the committed step when the feet are free.
     func raceRun(_ sim: SoftBody, _ dt: Float) {
+        if race.jumpQueued, !feet.active, race.pendingFoot == nil { raceJump(sim); return }
         poseOn = true; ensureFeet(sim)
         if feet.active { race.idle = 0 } else { race.idle += dt }
         if race.stumbleT > 0 { race.stumbleT = max(0, race.stumbleT - dt) }

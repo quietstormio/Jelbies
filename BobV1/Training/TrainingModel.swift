@@ -29,17 +29,18 @@ nonisolated enum DanceID: String, CaseIterable, Codable, Sendable {
 
 /// The course the Jelly races on (Race/RaceCourse.swift has the shapes). Training is always on the Puddle's straight.
 nonisolated enum CourseTier: String, CaseIterable, Codable, Sendable {
-    case puddle, ripple, splash, wave
-    var title: String { switch self { case .puddle: return "Puddle"; case .ripple: return "Ripple"; case .splash: return "Splash"; case .wave: return "Wave" } }
+    case puddle, ripple, splash, wave, tsunami
+    var title: String { switch self { case .puddle: return "Puddle"; case .ripple: return "Ripple"; case .splash: return "Splash"; case .wave: return "Wave"; case .tsunami: return "Tsunami" } }
     /// The class a racer is in on this course.
-    var className: String { switch self { case .puddle: return "Starter"; case .ripple: return "Rookie"; case .splash: return "Pro"; case .wave: return "Champion" } }
+    var className: String { switch self { case .puddle: return "Starter"; case .ripple: return "Rookie"; case .splash: return "Pro"; case .wave: return "Champion"; case .tsunami: return "Legend" } }
     /// What the course is like, for the Track panel.
     var blurb: String {
         switch self {
         case .puddle: return "The straight. Tap left, right, left, right."
         case .ripple: return "Two gentle curves. Ease off a little in the bends."
-        case .splash: return "S-bends and a couple of soft bumps. Keep your eyes on the track."
-        case .wave: return "Tight turns and two hairpins. Slow your taps for the corners."
+        case .splash: return "S-bends, soft bumps and three low hurdles. Tap Jump just before each bar."
+        case .wave: return "Tight turns, two hairpins and six hurdles. Slow down for the corners, jump the bars."
+        case .tsunami: return "Hairpins and runs of hurdles, back to back. The big one."
         }
     }
     var index: Int { CourseTier.allCases.firstIndex(of: self) ?? 0 }

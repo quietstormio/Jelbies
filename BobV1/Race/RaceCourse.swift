@@ -5,7 +5,7 @@
 //  the three lanes (the lanes are offsets to the right of the centreline; the player's lane 1 IS the centreline). Every course turns as much
 //  left as right, so all three lanes are the same length and the finish faces the way the start does.
 //
-//    CourseTier       Puddle (the straight), Ripple (gentle curves), Splash (S-bends and soft bumps), Wave (tight turns and hairpins).
+//    CourseTier       Puddle (the straight), Ripple (gentle curves), Splash (S-bends, soft bumps, 3 hurdles), Wave (hairpins, 6 hurdles), Tsunami (hairpins + hurdle runs).
 //    RaceCourse       the geometry: pose(at:), lanePoint, progress (the inverse: world -> arc length), the turn / bump at an arc length.
 //    CourseTuning     the corner rule: a safe speed per turn (by radius and skill); above it the trip chance rises; bumps add a small one.
 //    CourseProgress   what the player has won on each tier: the unlocks (1st on the tier below, or three top-two finishes).
@@ -52,9 +52,11 @@ nonisolated struct RaceCourse: Equatable, Sendable {
     private let heads: [CoursePose]
     private let cum: [Float]
     let length: Float
+    /// Arc lengths of the low jelly-bar hurdles across all lanes, ascending, each on a straight (Race/Hurdles.swift lays them out). Empty = none.
+    let hurdles: [Float]
 
-    init(tier: CourseTier, segments: [CourseSegment], start: SIMD2<Float> = SIMD2(0, RaceTuning.startZ), heading: Float = 0) {
-        self.tier = tier; self.segments = segments; self.start = start; self.startHeading = heading
+    init(tier: CourseTier, segments: [CourseSegment], start: SIMD2<Float> = SIMD2(0, RaceTuning.startZ), heading: Float = 0, hurdles: [Float] = []) {
+        self.tier = tier; self.segments = segments; self.start = start; self.startHeading = heading; self.hurdles = hurdles.sorted()
         var hs: [CoursePose] = [], cs: [Float] = []
         var p = CoursePose(pos: start, heading: heading, curvature: 0), s: Float = 0
         for seg in segments {
@@ -182,6 +184,7 @@ nonisolated struct RaceCourse: Equatable, Sendable {
 
     var isStraight: Bool { !segments.contains { $0.isTurn } }
     var hasBumps: Bool { segments.contains { $0.isBump } }
+    var hasHurdles: Bool { !hurdles.isEmpty }
     /// The total signed turn (rad, + right) over the course: 0 when it turns as much left as right.
     var netTurn: Float {
         var t: Float = 0
@@ -229,11 +232,22 @@ nonisolated struct RaceCourse: Equatable, Sendable {
     static let ripple = RaceCourse(tier: .ripple, segments: [.straight(4), .turn(radius: 10, angle: deg(40)), .straight(2), .turn(radius: 10, angle: deg(-40)), .straight(4)])
 
     /// Splash: an S-bend with a bump in its middle, then a softer S with a bump (about 29 u).
-    static let splash = RaceCourse(tier: .splash, segments: [.straight(2.5), .turn(radius: 7, angle: deg(60)), .bump(1.5), .turn(radius: 7, angle: deg(-60)), .straight(1),
-                                                          .turn(radius: 8, angle: deg(-30)), .bump(1.5), .turn(radius: 8, angle: deg(30)), .straight(2.5)])
+    /// Three low hurdles: one in the first straight, one in the short straight between the S-bends, one before the line.
+    static let splashSegments: [CourseSegment] = [.straight(2.5), .turn(radius: 7, angle: deg(60)), .bump(1.5), .turn(radius: 7, angle: deg(-60)), .straight(1),
+                                                  .turn(radius: 8, angle: deg(-30)), .bump(1.5), .turn(radius: 8, angle: deg(30)), .straight(2.5)]
+    static let splash = RaceCourse(tier: .splash, segments: splashSegments, hurdles: Hurdles.place(splashSegments, [(0, [1.8]), (4, [0.5]), (8, [1.0])]))
 
-    /// Wave: a hairpin right, a short straight, a hairpin left (about 35 u).
-    static let wave = RaceCourse(tier: .wave, segments: [.straight(2.5), .turn(radius: 4, angle: deg(180)), .straight(2), .turn(radius: 5, angle: deg(-180)), .straight(2)])
+    /// Wave: a hairpin right, a straight, a hairpin left, a straight to the line; the straights are longer than they were (about 40 u) to hold six
+    /// hurdles in three pairs.
+    static let waveSegments: [CourseSegment] = [.straight(4), .turn(radius: 4, angle: deg(180)), .straight(3.5), .turn(radius: 5, angle: deg(-180)), .straight(4)]
+    static let wave = RaceCourse(tier: .wave, segments: waveSegments, hurdles: Hurdles.place(waveSegments, [(0, [1.6, 3.0]), (2, [0.9, 2.5]), (4, [1.2, 2.6])]))
+
+    /// Tsunami: hairpin right, a run of three hurdles, hairpin left, another run of three, then a right-left S and a last run of three to the line
+    /// (about 59 u). Turns as much left as right, so it finishes facing +z like the rest.
+    static let tsunamiSegments: [CourseSegment] = [.straight(3), .turn(radius: 4, angle: deg(180)), .straight(4.5), .turn(radius: 4, angle: deg(-180)), .straight(4.5),
+                                                   .turn(radius: 5, angle: deg(90)), .straight(1.5), .turn(radius: 5, angle: deg(-90)), .straight(4.5)]
+    static let tsunami = RaceCourse(tier: .tsunami, segments: tsunamiSegments,
+                                    hurdles: Hurdles.place(tsunamiSegments, [(0, [1.8]), (2, [0.9, 2.3, 3.7]), (4, [0.9, 2.3, 3.7]), (8, [0.9, 2.2, 3.4])]))
 
     static func course(_ tier: CourseTier) -> RaceCourse {
         switch tier {
@@ -241,6 +255,7 @@ nonisolated struct RaceCourse: Equatable, Sendable {
         case .ripple: return ripple
         case .splash: return splash
         case .wave: return wave
+        case .tsunami: return tsunami
         }
     }
 }

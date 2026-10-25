@@ -138,6 +138,9 @@ enum RaceModels {
             }
         }
 
+        // ---- the low hurdles of the advanced courses (Race/Hurdles.swift) ----
+        HurdleModels.emit(c, into: b)
+
         // ---- bushes along both sides, hills far behind, a few trees ----
         var rng = RaceRNG(seed: 77)
         for side in [Float(-1), 1] {

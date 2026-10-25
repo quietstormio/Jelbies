@@ -140,6 +140,7 @@ extension GameCare {
         }
         let rivals = max(min(raceBook.actors.count, 3) - 1, 0)
         race.stats = prof.stats
+        race.playerCharacter = prof.character
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
                    playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
         if race.active, race.kind == .race {           // the race Live Activity (one sprint: lap 1 of 1)
@@ -275,6 +276,7 @@ extension GameCare {
             switch e {
             case .stumble(let i), .trip(let i):
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
+            case .hurdleCleared(let i): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.4, sharpness: 0.7); AudioHub.shared.chirp(jelly: race.playerID, .happy) }
             case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
             case .results: if race.kind == .race { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
             default: break

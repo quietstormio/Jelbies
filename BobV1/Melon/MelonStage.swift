@@ -1037,6 +1037,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let washed = bathRoom ? min(model.care.bath.targetID, actors.count - 1) : 0
             renderer.bathBody = washed
             renderer.raceCourse = model.care.race.course.tier
+            renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
             renderer.parkVisible = model.care.park.inScene
