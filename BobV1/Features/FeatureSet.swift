@@ -4,7 +4,7 @@
 //  Per Jelly: the feature, its fit under what he wears (FeatureCompat), the pop on / off state (like a wearable: scale about the anchor), the
 //  per-part animation and the per-frame world mesh.
 //    spines   rigid per spine on its sunk base (surface-bound): a lagged two-axis wobble spring, driven by the body's acceleration and squash rate,
-//             a travelling wave crown -> tail by each spine's phase lag; a spine under a hat shrinks away (0.25 s) and grows back.
+//             a travelling wave crown -> tail by each spine's phase lag; under a hat that encloses his head the spines grow out of the TOP of the fitted crown (CrownFit), never hidden.
 //    daisy    stem + leaves sway about the stem root (a spring lagging the body's acceleration + a slow idle sway); the flower head lags the stem
 //             by 0.08 s about the flower centre; asleep (or deep night) the petals close toward the flower normal and the stem droops forward.
 //    wings    rigid per side on the hinge: spread (about y) x flap (about the flap axis), from the flap-hop while it runs, else a gentle idle
@@ -21,8 +21,8 @@ import Foundation
 nonisolated enum FeatureTuning {
     static let popTime: Float = 0.25
     static let partFade: Float = 0.25
-    /// A spine under a hat is not hidden: it is tucked to this fraction of its height, about its base.
-    static let tuckScale: Float = 0.3
+    /// A spine's base sinks this far into the crown it grows through.
+    static let crownSink: Float = 0.015
     /// Spine wobble: how hard body acceleration (u/s^2) and squash rate (1/s) push, in degrees.
     static let spineAccelGain: Float = 0.9, spineSquashGain: Float = 25
     /// Daisy sway: spring (Hz) and damping, acceleration push (deg per u/s^2), the largest sway (deg).
@@ -192,7 +192,7 @@ final class FeatureSet {
             if l > sp.maxDeg { s.spineA[k] *= sp.maxDeg / l }
             if !l.isFinite { s.spineA[k] = .zero; s.spineV[k] = .zero }
             // a spine under a hat shrinks away
-            let want: Float = s.fit.hiddenParts.contains(sp.part) ? FeatureTuning.tuckScale : 1
+            let want: Float = s.fit.hiddenParts.contains(sp.part) ? 0 : 1
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
@@ -353,6 +353,13 @@ final class FeatureSet {
         let base = UInt32(m.vertices.count)
         m.vertices.reserveCapacity(m.vertices.count + p.rest.count)
         var keep = [Bool](repeating: true, count: p.parts.count)
+        // the crown the spines grow through (nil: no enclosing hat)
+        var crown: (piece: WearPrepared, lift: Float, widen: Float)?
+        if s.feature == .spines, let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
+           let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
+            let (lift, widen) = skin.map { CrownFit.fit(piece, carry: c, skin: $0, body: WearBody.shared) } ?? (0, 1)
+            crown = (piece, lift, widen)
+        }
         let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
         let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
         for (pi, part) in p.parts.enumerated() {
@@ -361,18 +368,17 @@ final class FeatureSet {
             if ps * tuck <= 0.001 { keep[pi] = false }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
-            // a spine under a hat emerges from the lower back instead of shrinking away (0 = on its own base, 1 = out of the back)
-            var em: Float = 0, emQ = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
-            if s.feature == .spines, let e = part.emerge, tuck < 1 {
-                em = min(1, (1 - tuck) / (1 - FeatureTuning.tuckScale))
-                var ew = c.world(e.pivot)
-                if let skin { ew = WearBody.world(e.bind, skin: skin) }
-                pivotW += (ew - pivotW) * em
-                emQ = simd_slerp(simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), e.quat, em)
+            // a spine under a hat that encloses his head grows out of the TOP of the crown: its base moves up onto the fitted crown (rest frame)
+            if let cr = crown {
+                let rc = c.restCentroid
+                let px = rc.x + (part.pivot.x - rc.x) * cr.widen, pz = rc.z + (part.pivot.z - rc.z) * cr.widen
+                if let h = CrownFit.height(cr.piece.crown, rc.x + (px - rc.x) / cr.widen, rc.z + (pz - rc.z) / cr.widen) {
+                    let top = h + cr.lift * CrownFit.liftWeight(h - cr.piece.pivot.y) - FeatureTuning.crownSink
+                    if top > part.pivot.y { pivotW = c.world(SIMD3(px, top, pz)) }
+                }
             }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
-            var rot = partRotation(p, part, slot: s, spec: spec)
-            if em > 0 { rot = rot * simd_float3x3(emQ) }
+            let rot = partRotation(p, part, slot: s, spec: spec)
             var stemRot = matrix_identity_float3x3
             var stemPivotW = pivotW
             if s.feature == .daisy, part.group == 1, let stem = p.parts.first(where: { $0.name == "stem" }) {
@@ -387,7 +393,6 @@ final class FeatureSet {
             }
             for i in part.first..<(part.first + part.count) {
                 var o = p.off[i]
-                if em > 0 { o *= 1 + (FeatureMeshes.emergeScale - 1) * em }
                 var n = p.nrm[i]
                 if part.isPetal, s.close > 0.001 {
                     let rel = p.rest[i] - part.hinge
@@ -406,7 +411,6 @@ final class FeatureSet {
                     n = R * (rot * n)
                 }
                 if ps != 1 { q = anchorW + (q - anchorW) * ps }
-                if s.feature == .spines, tuck != 1, part.emerge == nil { q = pivotW + (q - pivotW) * tuck }               // tucked: shorter about its own base
                 m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
         }

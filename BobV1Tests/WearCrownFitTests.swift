@@ -105,14 +105,23 @@ final class WearCrownFitTests: XCTestCase {
             XCTAssertTrue(pip.hiddenParts.isDisjoint(with: back), "\(art) hides a rear spine")
             let moss = FeatureCompat.solve(.daisy, worn: [art])
             XCTAssertFalse(moss.hidden, "\(art) hides the daisy")
-            XCTAssertLessThan(FeatureTuning.tuckScale, 1); XCTAssertGreaterThan(FeatureTuning.tuckScale, 0.05)
         }
         for art in ["cowboy_hat", "beret", "propeller_beanie"] { XCTAssertTrue(FeatureCompat.solve(.daisy, worn: [art]).onHat, art) }
     }
 
-    func testPipsHatCoveredSpinesEmergeFromTheBack() {
-        let pr = FeatureMeshes.prepare(.spines, body: WearBody.shared)
-        XCTAssertNotNil(pr?.part("spike_05")?.emerge); XCTAssertNotNil(pr?.part("spike_04")?.emerge)
-        if let e = pr?.part("spike_05")?.emerge { XCTAssertLessThan(e.pivot.y, 0.95); XCTAssertLessThan(e.pivot.z, -0.2) }
+    func testPipsSpinesGrowThroughTheCrown() {
+        XCTAssertEqual(FeatureCompat.solve(.spines, worn: ["bucket_hat"]).spineHat, "bucket_hat")
+        XCTAssertNil(FeatureCompat.solve(.spines, worn: ["bowtie_pink"]).spineHat)
+        // seated on the fitted crown: every spine base of a bucket hat is lifted onto it, none is hidden
+        let look = WearLook.bucketHat
+        let piece = WearMeshes.prepare(look, body: WearBody.shared)!
+        XCTAssertTrue(piece.crownEnclosing)
+        let spec = FeatureSpec.shared
+        var raised = 0
+        for sp in spec.spines {
+            let b = sp.base.v3
+            if let h = CrownFit.height(piece.crown, b.x, b.z), h - FeatureTuning.crownSink > b.y { raised += 1 }
+        }
+        XCTAssertGreaterThanOrEqual(raised, 3, "the head spines are raised onto the crown")
     }
 }

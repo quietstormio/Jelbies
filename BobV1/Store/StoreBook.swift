@@ -28,6 +28,8 @@ final class StoreBook {
         var nextDecorUID: Int? = nil
         /// Wearables won rather than bought (the winner medal). Optional: a save from before the wardrobe decodes without it.
         var awarded: [String]? = nil
+        /// The hoodie / raincoat refund (WearLook.unlisted) was paid.
+        var unlistedRefunded: Bool? = nil
         /// Rooms bought (RoomID raw values; home is always owned). Optional: an older save decodes without it.
         var rooms: [String]? = nil
         /// Where the Jelbies live now (nil = home).
@@ -50,7 +52,9 @@ final class StoreBook {
 
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
-        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn) }
+        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn)
+            let (kept, refund) = Self.dropUnlisted(saved)
+            if kept.unlistedRefunded != saved.unlistedRefunded { saved = kept; if refund > 0 { wallet.add(refund, silent: true) }; save() } }
     }
 
     /// Old saves: a look worn by several characters stays only on the first (sorted key order).

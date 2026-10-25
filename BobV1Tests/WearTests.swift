@@ -75,7 +75,8 @@ final class WearTests: XCTestCase {
     }
 
     func testCatalogHasEveryLookAndTheMedalIsNotSold() {
-        for l in WearLook.allCases { XCTAssertNotNil(StoreCatalog.item(wearing: l), "\(l)") }
+        for l in WearLook.allCases where !WearLook.unlisted.contains(l) { XCTAssertNotNil(StoreCatalog.item(wearing: l), "\(l)") }
+        for l in WearLook.unlisted { XCTAssertNil(StoreCatalog.item(wearing: l), "\(l) is out of the shop") }
         let medal = StoreCatalog.item(wearing: .medalGold)!
         XCTAssertTrue(medal.awarded)
         XCTAssertFalse(ShopTab.wear.items.contains { $0.awarded })
@@ -87,6 +88,24 @@ final class WearTests: XCTestCase {
         XCTAssertTrue(b.wear(.medalGold, on: 0)); XCTAssertEqual(b.worn(0, .neck), .medalGold)
         for t in WearTag.allCases { XCTAssertTrue(WearLook.allCases.contains { $0.tags.contains(t) }, "\(t)") }
         XCTAssertEqual(Set(WearSlot.allCases).count, 6)
+    }
+
+    /// The hoodie / raincoat are unlisted: an owner has them taken off and gets the price back, exactly once.
+    func testUnlistedCoatsAreRefundedOnce() throws {
+        let suite = "WearTests.unlisted.\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
+        var saved = StoreBook.Saved()
+        saved.wearables = [WearLook.hoodie.rawValue, WearLook.raincoat.rawValue, WearLook.beret.rawValue]
+        saved.worn = ["0": ["body": WearLook.hoodie.rawValue, "head": WearLook.beret.rawValue]]
+        d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
+        let w = DropsWallet(persists: false)
+        let before = w.count
+        let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
+        XCTAssertEqual(w.count - before, 65 + 60)
+        XCTAssertFalse(b.ownsLook(.hoodie)); XCTAssertFalse(b.ownsLook(.raincoat)); XCTAssertTrue(b.ownsLook(.beret))
+        XCTAssertNil(b.saved.worn["0"]?["body"]); XCTAssertEqual(b.saved.worn["0"]?["head"], WearLook.beret.rawValue)
+        let b2 = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b2)
+        XCTAssertEqual(w.count - before, 65 + 60, "a second load never pays twice")
     }
 
     // MARK: art
@@ -102,7 +121,7 @@ final class WearTests: XCTestCase {
             XCTAssertLessThanOrEqual(p.rest.count, WearMeshes.vertexBudget, "\(l)")
             XCTAssertLessThanOrEqual(p.triangles, WearMeshes.triangleBudget, "\(l)")
             XCTAssertGreaterThan(p.triangles, 50, "\(l)")
-            if l == .hoodie || l == .raincoat { XCTAssertGreaterThan(p.rest.count, l.row.vertices, "\(l) gets its back panel") } else { XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table") }
+            XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table")
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })
         }
         for n in 0..<10 { XCTAssertNotNil(WearMeshes.art("digit_\(n)")) }

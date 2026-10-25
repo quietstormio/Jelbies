@@ -73,7 +73,9 @@ nonisolated extension Array where Element == Float {
 
 /// What a Jelly's feature does under what he wears now (FeatureCompat.solve).
 nonisolated struct FeatureFit: Equatable, Sendable {
-    /// Pip: the spines hidden under / through the worn items.
+    /// Pip: the art id of the head item the spines grow through (when it encloses the head; see FeatureSet.emit).
+    var spineHat: String?
+    /// (Spines are never hidden any more; kept empty so the tests and old callers read the same shape.)
     var hiddenParts: Set<String> = []
     /// Moss: the sprout is hidden (propeller beanie).
     var hidden = false
@@ -103,11 +105,9 @@ nonisolated enum FeatureCompat {
         switch feature {
         case .none: return fit
         case .spines:
-            // Pip's spines NEVER vanish under what he wears: a spine under a hat is tucked (shrunk about its base, FeatureTuning.tuckScale), and the
-            // rear ("back" zone) spines always show in full.
-            let back = Set(spec.spines.filter { $0.zone == "back" }.map(\.part))
-            for w in worn { if let p = spec.pairs[w] { fit.hiddenParts.formUnion(p.pipHide) } }
-            fit.hiddenParts.subtract(back)
+            // Pip's spines NEVER vanish under what he wears. Under a hat that encloses his head they grow through the TOP of its crown (a mohawk through
+            // the hat: FeatureSet.emit seats each base on the fitted crown); with the perch items (bows, headphones, antennae ...) they stay as they are.
+            for w in worn { if spec.pairs[w]?.slot == "head" { fit.spineHat = w } }
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {

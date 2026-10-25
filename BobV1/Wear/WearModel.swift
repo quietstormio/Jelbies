@@ -46,6 +46,8 @@ nonisolated extension WearLook {
     /// The winner medal: awarded for a first place on the Circuit, never sold.
     static let medal: WearLook = .medalGold
     /// Looks that are drawn from art (hats, glasses, ...): everything but the shoes.
+    /// Pulled from the shop for now (2026-10-25: the hoodie and raincoat read as a bucket / diaper): not sold, taken off and refunded once. The art stays.
+    static let unlisted: Set<WearLook> = [.hoodie, .raincoat]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet }.map(\.look)
 }
 
