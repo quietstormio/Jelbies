@@ -297,7 +297,7 @@ final class FeatureCaptureTests: XCTestCase {
         }
         var rows: [UIImage] = []
         if ProcessInfo.processInfo.environment["CROWN_FEATURES_ONLY"] == nil {
-        for (name, look) in [("bucket hat", WearLook.bucketHat), ("pirate hat", .pirateHat), ("cowboy hat", .cowboyHat)] {
+        for (name, look) in [("pirate hat", WearLook.pirateHat), ("cowboy hat", .cowboyHat)] {
             var cells: [UIImage] = []
             for fit in [false, true] {
                 CrownFit.enabled = fit
@@ -320,6 +320,17 @@ final class FeatureCaptureTests: XCTestCase {
             f.append(try closeup(c, yaw: label.contains("back") ? Float.pi * 0.85 : 0.6, label: label))
         }
         try write(vstack([hstack(Array(f[0..<3])), hstack(Array(f[3..<6]))]), d + "/features_under_wear.png")
+        var sp: [UIImage] = []
+        for (name, look) in [("beret", WearLook.beret), ("pirate", .pirateHat), ("bucket", .bucketHat), ("cowboy", .cowboyHat), ("beanie", .beanieHoney)] {
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: 0.7, label: "Pip + \(name) 3/4"))
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: Float.pi * 0.85, label: "Pip + \(name) back"))
+        }
+        try write(vstack([hstack(Array(sp[0..<4])), hstack(Array(sp[4..<8])), hstack(Array(sp[8..<10]))]), d + "/pip_spines_hats.png")
+        var hd: [UIImage] = []
+        for (label, yaw) in [("front", Float(0)), ("3/4", Float(0.7)), ("back", Float.pi), ("back 3/4", Float.pi * 0.8)] {
+            hd.append(try closeup(Char(id: 3, outfit: [.body: .hoodie]), yaw: yaw, label: "Lavender + hoodie \(label)"))
+        }
+        try write(hstack(hd), d + "/lavender_hoodie.png")
     }
 
     func testCaptureDaisyHats() throws {

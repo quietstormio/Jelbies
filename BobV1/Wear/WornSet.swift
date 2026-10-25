@@ -281,7 +281,7 @@ final class WornSet {
                 r = WearTuning.propellerCentre + SIMD3(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs)
                 n = SIMD3(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs)
             }
-            if lift != 0 || widen != 1 { r = SIMD3(c.restCentroid.x + (r.x - c.restCentroid.x) * widen, r.y + lift, c.restCentroid.z + (r.z - c.restCentroid.z) * widen) }
+            if lift != 0 || widen != 1 { r = SIMD3(c.restCentroid.x + (r.x - c.restCentroid.x) * widen, r.y + lift * CrownFit.liftWeight(r.y - p.pivot.y), c.restCentroid.z + (r.z - c.restCentroid.z) * widen) }
             var q = c.centroid + M * (r - c.restCentroid)
             let w = p.w[i]
             if w > 0.001, let skin {

@@ -23,6 +23,7 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// Head wear: the crown height map (CrownFit) and whether the piece encloses the head top (then it is fitted to the skin every frame).
     var crown: [Float] = []
     var crownEnclosing = false
+    var crownMargin: Float = 0.02
     var triangles: Int { idx.count / 3 }
     init(_ l: WearLook) { look = l }
 }
@@ -113,8 +114,54 @@ nonisolated enum WearMeshes {
                 if let b = body.bind(p.rest[i]) { p.bind[i] = b; p.anyBound = true } else { p.w[i] = 0 }
             }
         } else { for i in p.w.indices { p.w[i] = 0 } }
+        if let body, l == .hoodie || l == .raincoat { backPanel(p, body: body) }
         if let body, !isArm { CrownFit.prepare(p, body: body) }
         return p
+    }
+
+    /// The hoodie / raincoat art is a belly band (the face sits high, the front stops under the mouth). It is made to read as a hoodie / slicker by a BACK
+    /// panel: the band's rear top edge continues up the back of the egg to the shoulders (never past x +-0.38: the arms; never in front: the mouth), surface-bound,
+    /// the hood resting on it behind the head.
+    static let panelTop: Float = 0.98, panelRows = 5, panelHalfWidth: Float = 0.38, panelLift: Float = 0.02
+    static func backPanel(_ p: WearPrepared, body: WearBody) {
+        let coat = p.look == .hoodie ? "body" : "coat"
+        guard let ci = p.partNames.firstIndex(of: coat) else { return }
+        var topY: Float = -.infinity
+        for i in p.rest.indices where Int(p.partOfVertex[i]) == ci { topY = max(topY, p.rest[i].y) }
+        var ring: [Int] = []
+        var seen = Set<Int>()
+        for i in p.rest.indices where Int(p.partOfVertex[i]) == ci && p.rest[i].y > topY - 0.03 && p.rest[i].z < -0.05 && abs(p.rest[i].x) <= panelHalfWidth {
+            let k = Int((p.rest[i].x * 100).rounded())
+            if seen.insert(k).inserted { ring.append(i) }
+        }
+        ring.sort { p.rest[$0].x < p.rest[$1].x }
+        guard ring.count >= 3 else { return }
+        let col = ring.reduce(SIMD3<Float>.zero) { $0 + p.col[$1] } / Float(ring.count)
+        var grid: [[UInt32]] = [ring.map { UInt32($0) }]
+        for r in 1...panelRows {
+            let y = topY + (panelTop - topY) * Float(r) / Float(panelRows)
+            var row: [UInt32] = []
+            for i in ring {
+                let taper = 1 - 0.45 * Float(r) / Float(panelRows) * Float(r) / Float(panelRows)        // narrower toward the shoulders (an arch, not a slab)
+                guard var b = body.bind(SIMD3(p.rest[i].x * taper, y, -0.8)) else { row.append(UInt32(i)); continue }
+                b.off = SIMD3(0, 0, panelLift)
+                let pos = body.restPoint(b)
+                let fr = WearBody.frame(body.pos[Int(b.tri.x)], body.pos[Int(b.tri.y)], body.nrm[Int(b.tri.x)], body.nrm[Int(b.tri.y)], body.nrm[Int(b.tri.z)], b.bary)
+                row.append(UInt32(p.rest.count))
+                p.rest.append(pos); p.nrm.append(fr.n); p.col.append(col); p.ao.append(1)
+                p.w.append(1); p.h.append(0); p.spin.append(false); p.partOfVertex.append(UInt8(ci)); p.bind.append(b)
+            }
+            grid.append(row)
+        }
+        for r in 0..<panelRows { for k in 0..<(ring.count - 1) {
+            let a = grid[r][k], b = grid[r][k + 1], c = grid[r + 1][k], d = grid[r + 1][k + 1]
+            for tri in [[a, c, b], [b, c, d]] {
+                let g = simd_cross(p.rest[Int(tri[1])] - p.rest[Int(tri[0])], p.rest[Int(tri[2])] - p.rest[Int(tri[0])])
+                let n = p.nrm[Int(tri[0])] + p.nrm[Int(tri[1])] + p.nrm[Int(tri[2])]
+                p.idx += simd_dot(g, n) >= 0 ? tri : [tri[0], tri[2], tri[1]]
+            }
+        } }
+        p.anyBound = true
     }
 
     /// The piece alone, at rest, for the shop's 3D thumbnails (no body needed).

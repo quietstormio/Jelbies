@@ -23,6 +23,8 @@ nonisolated final class FeaturePrepared: @unchecked Sendable {
         var isPetal = false
         var side = 0           // wings: 0 right (+x), 1 left (-x); spines: index; else 0
         var group = 0          // daisy: 0 stem / leaves, 1 flower
+        /// Spines that would sit under a hat emerge instead from the lower back, below the brim: the new pivot (rest, on the surface), its bind and the turn of the spine's axis toward the surface normal.
+        var emerge: (pivot: SIMD3<Float>, bind: SurfaceBind, quat: simd_quatf)?
     }
     let art: String
     let key: String
@@ -49,6 +51,9 @@ nonisolated enum FeatureMeshes {
     /// 2026-10-21). The hinges, binds and the measured clearance tables are untouched: smaller wings only clear the worn items by more. (A var for the
     /// before / after captures; the cache key carries it.)
     nonisolated(unsafe) static var wingScale: Float = 0.85
+    /// Pip's two rearmost head spines emerge from the lower back (x, y; the surface point is found behind them) when a hat sits where they grow.
+    static let spineEmerge: [String: SIMD2<Float>] = ["spike_05": SIMD2(0.3, 0.88), "spike_04": SIMD2(-0.3, 0.8)]
+    static let emergeScale: Float = 1.5
 
     static func art(_ id: String) -> DecorMeshes.Art? {
         lock.lock(); defer { lock.unlock() }
@@ -128,6 +133,13 @@ nonisolated enum FeatureMeshes {
             }
             pr.pivot = pivot
             pr.bind = body.bind(pivot) ?? SurfaceBind()
+            if f == .spines, let e = spineEmerge[part.name], let sp = spec.spines.first(where: { $0.part == part.name }), var b = body.bind(SIMD3(e.x, e.y, -0.8)) {
+                b.off = .zero
+                let pos = body.restPoint(b)
+                let fr = WearBody.frame(body.pos[Int(b.tri.x)], body.pos[Int(b.tri.y)], body.nrm[Int(b.tri.x)], body.nrm[Int(b.tri.y)], body.nrm[Int(b.tri.z)], b.bary)
+                let dir = simd_normalize(fr.n * 0.7 + SIMD3(0, 0.8, 0))                 // up and back, so it shows as a spike over the shoulder
+                pr.emerge = (pos, b, simd_quatf(from: simd_normalize(sp.axis.v3), to: dir))
+            }
             var centroid = SIMD3<Float>.zero
             let partScale: Float = f == .wings ? wingScale : 1
             for k in 0..<part.positions.count {

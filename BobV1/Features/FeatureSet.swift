@@ -361,8 +361,18 @@ final class FeatureSet {
             if ps * tuck <= 0.001 { keep[pi] = false }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
+            // a spine under a hat emerges from the lower back instead of shrinking away (0 = on its own base, 1 = out of the back)
+            var em: Float = 0, emQ = simd_quatf(angle: 0, axis: SIMD3(0, 1, 0))
+            if s.feature == .spines, let e = part.emerge, tuck < 1 {
+                em = min(1, (1 - tuck) / (1 - FeatureTuning.tuckScale))
+                var ew = c.world(e.pivot)
+                if let skin { ew = WearBody.world(e.bind, skin: skin) }
+                pivotW += (ew - pivotW) * em
+                emQ = simd_slerp(simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), e.quat, em)
+            }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
-            let rot = partRotation(p, part, slot: s, spec: spec)
+            var rot = partRotation(p, part, slot: s, spec: spec)
+            if em > 0 { rot = rot * simd_float3x3(emQ) }
             var stemRot = matrix_identity_float3x3
             var stemPivotW = pivotW
             if s.feature == .daisy, part.group == 1, let stem = p.parts.first(where: { $0.name == "stem" }) {
@@ -377,6 +387,7 @@ final class FeatureSet {
             }
             for i in part.first..<(part.first + part.count) {
                 var o = p.off[i]
+                if em > 0 { o *= 1 + (FeatureMeshes.emergeScale - 1) * em }
                 var n = p.nrm[i]
                 if part.isPetal, s.close > 0.001 {
                     let rel = p.rest[i] - part.hinge
@@ -395,7 +406,7 @@ final class FeatureSet {
                     n = R * (rot * n)
                 }
                 if ps != 1 { q = anchorW + (q - anchorW) * ps }
-                if s.feature == .spines, tuck != 1 { q = pivotW + (q - pivotW) * tuck }               // tucked: shorter about its own base
+                if s.feature == .spines, tuck != 1, part.emerge == nil { q = pivotW + (q - pivotW) * tuck }               // tucked: shorter about its own base
                 m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
         }

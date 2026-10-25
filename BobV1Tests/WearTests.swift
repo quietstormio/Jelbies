@@ -102,7 +102,7 @@ final class WearTests: XCTestCase {
             XCTAssertLessThanOrEqual(p.rest.count, WearMeshes.vertexBudget, "\(l)")
             XCTAssertLessThanOrEqual(p.triangles, WearMeshes.triangleBudget, "\(l)")
             XCTAssertGreaterThan(p.triangles, 50, "\(l)")
-            XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table")
+            if l == .hoodie || l == .raincoat { XCTAssertGreaterThan(p.rest.count, l.row.vertices, "\(l) gets its back panel") } else { XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table") }
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })
         }
         for n in 0..<10 { XCTAssertNotNil(WearMeshes.art("digit_\(n)")) }
