@@ -77,7 +77,7 @@ struct PerkBadgeRow: View {
 
 // MARK: - Town
 
-enum TownScreen: Equatable { case town, shop, track, studio, condition, show }
+enum TownScreen: Equatable { case town, shop, track, studio, condition, show, friends }
 
 struct TownFlow: View {
     let care: GameCare
@@ -114,6 +114,7 @@ struct TownFlow: View {
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
             case .show: ShowLobby(care: care, who: $who, back: { up(.studio) }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
+            case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
         }
         .transition(.opacity)
@@ -198,6 +199,7 @@ struct TownView: View {
             destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
             destination("Café", "Treats out with the gang", "cup.and.saucer.fill", SK.mint, id: "town-cafe") { cafe() }
             destination("Park", "Play and make friends with visitors", "tree.fill", SK.sky, id: "town-park") { park() }
+            destination("Friends", care.guestBook.visit.map { v in care.parkBook.visitor(v.visitor).map { v.arrived ? "\($0.name) is visiting" : "\($0.name) is coming over" } ?? "Ask a friend over" } ?? "Ask a friend over to play or sleep over", "person.2.fill", SK.mint, id: "town-friends") { go(.friends) }
             destination("Adoption Center", JellyRoster.savedIDs().count >= JellyRoster.maxCount ? "Your room is full: 3 Jelbies" : "Welcome another Jelbie home", "heart.fill", SK.pink, id: "town-adopt") { adopt() }
         }
     }

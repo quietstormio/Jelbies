@@ -173,6 +173,10 @@ struct ParkChrome: View {
 struct VisitorCard: View {
     let care: GameCare
     let visitor: ParkVisitor
+    /// At home the card is the guest's (a friend over): all the Jelbies' hearts, and Say goodbye instead of the invite.
+    var home = false
+    private var slots: [Int] { home ? Array(care.jellies.indices) : care.parkBook.comers }
+    private var isFriend: Bool { visitor.bestLevel(among: slots.compactMap { care.jelly($0)?.character }) >= .friend }
 
     var body: some View {
         let c = visitor.colour.swatch
@@ -190,7 +194,7 @@ struct VisitorCard: View {
                 .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("park-card-close")
             }
             Text(visitor.blurb).font(SK.font(13, .bold)).foregroundStyle(SK.ink).fixedSize(horizontal: false, vertical: true)
-            ForEach(care.parkBook.comers, id: \.self) { slot in
+            ForEach(slots, id: \.self) { slot in
                 if let prof = care.jelly(slot) {
                     let lvl = visitor.level(with: prof.character)
                     HStack(spacing: 8) {
@@ -209,6 +213,17 @@ struct VisitorCard: View {
             Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
                 .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
+            if home {
+                Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.guestSayGoodbye() } label: {
+                    HStack(spacing: 8) { Image(systemName: "hand.wave.fill"); Text("Say goodbye") }
+                        .font(SK.font(16, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46).background(Capsule().fill(SK.honey))
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("guest-goodbye")
+            } else if isFriend, care.guestBook.visit == nil {
+                InviteChooser(care: care, visitorID: visitor.id)
+            } else if isFriend, let cur = care.guestBook.visit, cur.visitor == visitor.id {
+                Text(cur.arrived ? "Visiting now" : "Coming over when you get home").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+            }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))

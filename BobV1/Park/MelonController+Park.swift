@@ -70,8 +70,18 @@ extension MelonController {
     }
 
     /// A touch in the park: the visitor under it (by his body's screen circle) or nothing.
-    func parkTap(_ p: CGPoint, _ size: CGSize) {
-        guard haveCam, size.width > 1, size.height > 1 else { return }
+    func parkTap(_ p: CGPoint, _ size: CGSize) { model.care.parkTapped(parkHit(p, size)) }
+
+    /// A tap at home on the guest (a friend over): his card opens. True = the tap was his.
+    func guestTap(_ p: CGPoint, _ size: CGSize) -> Bool {
+        guard !parkActors.isEmpty, let id = parkHit(p, size) else { return false }
+        model.care.guestTapped(id)
+        return true
+    }
+
+    /// The body id of the visitor under a point (by his body's screen circle), if any.
+    func parkHit(_ p: CGPoint, _ size: CGSize) -> Int? {
+        guard haveCam, size.width > 1, size.height > 1 else { return nil }
         let v = lastCam.view
         let right = SIMD3<Float>(v.columns.0.x, v.columns.1.x, v.columns.2.x)
         func screen(_ w: SIMD3<Float>) -> CGPoint? {
@@ -87,6 +97,6 @@ extension MelonController {
             let d = hypot(p.x - s.x, p.y - s.y)
             if d <= r * 1.1, best == nil || d < best!.d { best = (a.id, d) }
         }
-        model.care.parkTapped(best?.id)
+        return best?.id
     }
 }

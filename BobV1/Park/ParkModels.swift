@@ -102,11 +102,17 @@ nonisolated enum ParkTuning {
     static let maxTotal = 5, minVisitors = 2, maxVisitors = 4
     static let poolSize = 16
     static let poolSeed: UInt64 = 0x9A2B_17C3_5D41
-    // Friendship (points per second near each other; a social together is faster)
+    // Friendship (points per second near each other; a social together is faster). Doubled on 2026-10-25 (friends come in a couple of visits, not ages):
+    // a visit of ~5 minutes among the visitors is now worth ~20...40 points with each one met, the friendly socials a good deal more.
     static let nearRadius: Float = 3.2
-    static let pointsPerSecond: Float = 0.18
-    static let socialMul: Float = 2.5
+    static let pointsPerSecond: Float = 0.36
+    static let socialMul: Float = 4.0
+    /// While the two do one of the friendly socials (chest bump, high five, hum, cheek squish, twirl, hop along): the rate multiplier (instead of `socialMul`) and a lump when one starts.
+    static let friendlyMul: Float = 8.0
+    static let friendlyStartBonus: Float = 2.5
     static let palAt: Float = 20, friendAt: Float = 45, bestAt: Float = 75
+    /// A home visit (a guest over to play): friendship points per second near a housemate, and the same friendly-social boost.
+    static let homeMul: Float = 0.7
     // Love (the Love / attention need that petting fills at NeedsTuning.petRate per second): twice that while playing with a friend, a daily cap
     static let loveMul: [Float] = [0.5, 1.0, 2.0, 2.0]          // stranger, pal, friend, best friend (times petRate)
     static let loveDailyCap: Float = 0.8

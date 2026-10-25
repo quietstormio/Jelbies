@@ -220,6 +220,8 @@ struct GameScreen: View {
 
             ParkChrome(care: model.care)          // the park outing: the picker, the visitors' cards, Go home, the white fade
 
+            GuestChrome(care: model.care)          // a friend over at home: his card (a tap on him)
+
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers

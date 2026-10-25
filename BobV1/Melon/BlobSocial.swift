@@ -41,6 +41,13 @@ enum SocialKind: String, CaseIterable, Sendable {
     case bagSit         // sit together on the beanbag / cushion (a second piece each, else one on it and one beside it)
     // 2026-10-20 (batch 2): BlobSocial+Toss.swift
     case cuddle         // two Jellies on the two cushions of the loveseat: both settle, then lean toward each other
+    // 2026-10-25 (friends): BlobSocial+Friends.swift
+    case chestBump      // face to face: both hop and the bellies meet at the top (a squish, a bounce back), twice
+    case highFive       // face to face: the wave arms rise and meet, a clap
+    case hum            // heads lean in, eyes close, a soft chirp each, a heart
+    case cheekSquish    // side by side: two gentle presses
+    case twirl          // face to face: each spins once, then a bow
+    case hopAlong       // side by side: one hops, the other copies half a second later
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -96,6 +103,8 @@ struct SocialBook {
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
     var started: [SocialKind: Int] = [:]
+    /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
+    var close: [Int: Float] = [:]
     var lastKind: SocialKind?
     var roundSeen = -1
     /// Seconds since this Jelly's last social (counts only while he is awake and free to join): the floor asks for one past `droughtLimit`.
@@ -124,7 +133,7 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish }
     var round = 0, roles = 0, fastMoves = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
@@ -301,6 +310,8 @@ extension BlobBrain {
             if !idleStart(.look, sim) { social = nil; o.social = nil; return false }
         case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle:
             return socialStartPlay(kind, with: o, sim)
+        case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong:
+            return socialStartFriends(kind, with: o, sim)
         case .zoomies:
             guard d < 6 else { return false }
             guard idleState.kind == nil else { return false }
@@ -328,7 +339,7 @@ extension BlobBrain {
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
         }
         if cands.isEmpty { return false }
-        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul else { return false }
+        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         var w: [(SocialKind, Float)] = [(.boop, 3), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
@@ -602,6 +613,7 @@ extension BlobBrain {
         case .greet: driveGreet(s, o, isA, sim, dt)
         case .look: driveLook(s, o, isA, sim, dt)
         case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
+        case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
         }
         if let e = s.end, isA { _ = e }
     }

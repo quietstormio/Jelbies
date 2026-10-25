@@ -22,6 +22,8 @@ final class ParkWork {
     var owed: [Int: Float] = [:]
     var giftNear: Float = 0
     var saveT: Float = 0
+    /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
+    var friendSession: [Int: ObjectIdentifier] = [:]
     nonisolated deinit {}
 }
 
@@ -77,6 +79,7 @@ extension GameCare {
     /// Once per fixed step (the stage calls it with every Jelbie of the room, after the others).
     func tickPark(_ actors: [JellyActor], dt: Float) {
         parkBook.roster = actors
+        tickGuest(actors, dt: dt)          // a friend over at home (GameCare+Guest.swift)
         #if targetEnvironment(simulator)
         if Self.startParkPending, park.phase == .off {          // capture aid: `-StartPark 1` goes straight to the park once the room is up
             Self.startParkFrames += 1
@@ -105,20 +108,33 @@ extension GameCare {
     private func tickVisitors(dt: Float) {
         let book = parkBook
         for (a, vid) in zip(book.actors, book.cast) {
-            guard let b = a.brain, let v = book.visitor(vid) else { continue }
-            b.idleMood = .happy
-            b.sleepLocked = true
-            b.feature = v.signature
-            var outfit: [WearSlot: WearLook] = [:]
-            if let w = v.wear { outfit[w.slot] = w }
-            wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: .none, hideAll: false, dt: dt)
-            features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
-            if let s = features.slot(a.id) {
-                b.wingsFolded = v.signature == .wings && s.fit.folded
-                b.wingFlapLimit = v.signature == .wings ? s.fit.flapMax : 75
-                wardrobe.setArtOverride(a.id, s.fit.hatVariant)
-            }
+            guard let v = book.visitor(vid) else { continue }
+            visitorLook(a, v, dt: dt)
         }
+    }
+
+    /// One visitor's looks for this step (the park's visitors, and the guest at home).
+    func visitorLook(_ a: JellyActor, _ v: ParkVisitor, dt: Float, sleepLocked: Bool = true) {
+        guard let b = a.brain else { return }
+        b.idleMood = .happy
+        b.sleepLocked = sleepLocked
+        b.feature = v.signature
+        var outfit: [WearSlot: WearLook] = [:]
+        if let w = v.wear { outfit[w.slot] = w }
+        wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: .none, hideAll: false, dt: dt)
+        features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
+        if let s = features.slot(a.id) {
+            b.wingsFolded = v.signature == .wings && s.fit.folded
+            b.wingFlapLimit = v.signature == .wings ? s.fit.flapMax : 75
+            wardrobe.setArtOverride(a.id, s.fit.hatVariant)
+        }
+    }
+
+    /// A visitor's looks are put away (the wardrobe and feature slots are by body id).
+    func visitorPutAway(_ a: JellyActor) {
+        guard let b = a.brain else { return }
+        wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: [:], role: .none, hideAll: true, dt: 1.0 / 60)
+        features.tick(id: a.id, brain: b, sim: a.sim, feature: .none, worn: [], hideAll: true, dt: 1.0 / 60)
     }
 
     /// Friendship, love and the daily gift, from who stands near whom.
@@ -132,8 +148,19 @@ extension GameCare {
             for (a, vid) in zip(book.actors, book.cast) {
                 guard simd_distance(me.floor, a.floor) < ParkTuning.nearRadius else { continue }
                 var rate = ParkTuning.pointsPerSecond * dt
-                if let partner = me.brain?.socialPartnerID, partner == a.id { rate *= ParkTuning.socialMul }          // playing together
                 let before = book.visitor(vid)?.level(with: prof.character) ?? .stranger
+                // how close they are shapes how often they do the friendly socials (BlobSocial+Friends.swift), both ways
+                let closeness = FriendTuning.closeMul[before.rawValue]
+                me.brain?.socialBook.close[a.id] = closeness; a.brain?.socialBook.close[me.id] = closeness
+                if let partner = me.brain?.socialPartnerID, partner == a.id {          // playing together
+                    if let s = me.brain?.social, s.kind.isFriendly, s.end == nil {
+                        rate *= ParkTuning.friendlyMul
+                        if work.friendSession[k] != ObjectIdentifier(s) {          // a new friendly social: a bonus
+                            work.friendSession[k] = ObjectIdentifier(s)
+                            if let up = book.add(points: ParkTuning.friendlyStartBonus, visitor: vid, character: prof.character) { parkLevelUp(visitor: vid, slot: k, level: up, visitorBody: a) }
+                        }
+                    } else { rate *= ParkTuning.socialMul }
+                }
                 nearest = max(nearest ?? before, before)
                 if let up = book.add(points: rate, visitor: vid, character: prof.character) { parkLevelUp(visitor: vid, slot: k, level: up, visitorBody: a) }
                 if before == .best, giftPair == nil { giftPair = (vid, k) }
@@ -155,7 +182,7 @@ extension GameCare {
         } else { work.giftNear = 0 }
     }
 
-    private func parkLevelUp(visitor vid: Int, slot: Int, level: ParkFriendLevel, visitorBody: JellyActor) {
+    func parkLevelUp(visitor vid: Int, slot: Int, level: ParkFriendLevel, visitorBody: JellyActor) {
         let book = parkBook
         guard let v = book.visitor(vid), let prof = jelly(slot) else { return }
         let line = book.line(vid, level)
@@ -212,7 +239,7 @@ extension GameCare {
         let roster = book.roster
         switch dest {
         case .park:
-            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftNear = 0; work.saveT = 0
+            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftNear = 0; work.saveT = 0; work.friendSession = [:]
             book.comers = park.picked.filter { roster.indices.contains($0) && $0 < jellies.count }
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
@@ -251,11 +278,7 @@ extension GameCare {
             park.card = nil
         case .home:
             // the visitors go: their looks are put away first (the wardrobe and feature slots are by body id), the Jelbies let go of any play with them
-            for a in book.actors {
-                guard let b = a.brain else { continue }
-                wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: [:], role: .none, hideAll: true, dt: 1.0 / 60)
-                features.tick(id: a.id, brain: b, sim: a.sim, feature: .none, worn: [], hideAll: true, dt: 1.0 / 60)
-            }
+            for a in book.actors { visitorPutAway(a) }
             for a in roster { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }
             book.clear?()
             book.actors = []; book.cast = []

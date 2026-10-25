@@ -937,7 +937,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 let st0 = CACurrentMediaTime()
                 stepSims.removeAll(keepingCapacity: true)
                 for a in actors where a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }
-                for a in parkActors where a.updateSleep(forceAwake: true) { stepSims.append(a.sim) }
+                for a in parkActors where a.updateSleep(forceAwake: !(a.brain?.isNapping ?? false)) { stepSims.append(a.sim) }          // (a guest asleep at home skips his step like the Jelbies)
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
@@ -1619,6 +1619,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize, time: Double? = nil) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
         if game, model.care.park.inScene { parkTap(p, size); return }          // the park: a tap on a visitor opens his card (Park/MelonController+Park.swift)
+        if game, !parkActors.isEmpty, !model.paused, mode == .none, !model.care.focus.isActive, !model.care.bath.active, pickBody(p, size) == nil, guestTap(p, size) { return }          // a friend over: a tap on him opens his card
         if game, model.care.tripActive { return }          // on the track (or the show's stage) the screen is the buttons: no touch play, no selection, no voice
         if game, model.care.bath.acceptsTouch {
             // the clean-up: every touch is a scrub (no gesture classifier: no pick up, throw or cheeks), starting anywhere

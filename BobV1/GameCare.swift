@@ -132,6 +132,8 @@ final class GameCare {
     /// The park outing (Park/ParkTrip.swift, GameCare+Park.swift): the picker, the trip to the park and back, the visitors.
     let park = ParkTrip()
     @ObservationIgnored let parkBook = ParkBook()
+    /// A friend over at home (Park/GuestBook.swift, GameCare+Guest.swift): the invitation / visit, saved on the device.
+    let guestBook = GuestBook()
     var tripActive: Bool { race.active || show.active || cafe.active || park.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()

@@ -62,6 +62,7 @@ extension BlobBrain {
         if freeBall() != nil { add(.pass, 2.4) }
         if freeSeat() != nil { add(.bagSit, 1.8) }
         if freeLoveseat() != nil { add(.cuddle, 2.0) }
+        socialFriendWeights(into: &w, partner: o, grumpy: grumpy, night: night, fastOK: fastOK)          // the "we like each other" kinds (BlobSocial+Friends.swift)
         if socialBook.lastKind != nil || o.socialBook.lastKind != nil { w.removeAll { $0.0 == socialBook.lastKind || $0.0 == o.socialBook.lastKind } }
         return w
     }
@@ -143,7 +144,7 @@ extension BlobBrain {
     }
 
     /// Walking up to `goal`: the initiator's phase 0. True = still walking.
-    private func walkUpPhase(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, faceBoth: Bool = true, near: Float = 0.5) -> Bool {
+    func walkUpPhase(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, faceBoth: Bool = true, near: Float = 0.5) -> Bool {
         if !isA { return true }
         if scriptIsNone && faceBoth { faceEach(o) }
         if s.t > 18 { s.finish(.aborted); return true }
@@ -153,7 +154,7 @@ extension BlobBrain {
         return true
     }
 
-    private func leanSign(toward p: SIMD2<Float>) -> Float {
+    func leanSign(toward p: SIMD2<Float>) -> Float {
         let local = rotXZ(p - position, -yaw)
         return local.x >= 0 ? -1 : 1          // (a positive roll tips his crown toward his -x side)
     }

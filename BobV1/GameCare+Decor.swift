@@ -87,7 +87,7 @@ extension GameCare {
     /// A Jelly is using the piece (sitting in the beanbag, booping the plant, on his way to it) or is still standing inside it.
     func decorBusy(_ uid: Int) -> Bool {
         if DecorField.shared.occupant[uid] != nil { return true }
-        for a in raceBook.actors { if let b = a.brain, b.idleState.decorUID == uid || b.decorIgnore == uid { return true } }
+        for a in raceBook.actors + (guestBook.actor.map { [$0] } ?? []) { if let b = a.brain, b.idleState.decorUID == uid || b.decorIgnore == uid { return true } }          // (+ the guest, a friend over)
         return false
     }
 
@@ -106,7 +106,7 @@ extension GameCare {
     func releaseDecor(_ uid: Int, foot f: DecorFoot? = nil) {
         guard let f = f ?? DecorField.shared.foot(uid) else { return }
         let c = DecorField.shared.position(f)
-        for a in raceBook.actors {
+        for a in raceBook.actors + (guestBook.actor.map { [$0] } ?? []) {
             guard let b = a.brain, b.idleState.decorUID == uid || DecorField.shared.occupant[uid] == b.steerID || b.decorIgnore == uid else { continue }
             b.idleReset(a.skinner)                                      // he stops what he is doing with the piece ...
             let away = simd_length(b.position - c) > 1e-3 ? simd_normalize(b.position - c) : SIMD2<Float>(0, 1)
