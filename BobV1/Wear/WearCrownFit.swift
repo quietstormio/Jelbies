@@ -14,7 +14,7 @@ import Foundation
 nonisolated enum CrownFit {
     /// Master switch (tests compare before / after).
     nonisolated(unsafe) static var enabled = true
-    static let margin: Float = 0.022, minMargin: Float = 0.006, maxLift: Float = 0.35, maxDrop: Float = 0.16, maxWiden: Float = 1.14
+    static let margin: Float = 0.022, minMargin: Float = 0.006, maxLift: Float = 0.35, maxDrop: Float = 0.16, maxWiden: Float = 1.14, maxSeat: Float = 0.5
     static let cell: Float = 0.04, origin: Float = -0.9, dim = 46
     /// How much of the lift a vertex takes, by its height above the hat's pivot (rest): the brim stays seated on the head, the crown stretches up.
     @inline(__always) static func liftWeight(_ yRel: Float) -> Float { min(1, max(0, (yRel + 0.25) / 0.28)) }
@@ -67,12 +67,24 @@ nonisolated enum CrownFit {
     }
 
     /// The lift (rest frame, y) and widening (about the body axis) that keep the crown over the drawn skin. (0, 1) when nothing pokes.
-    static func fit(_ p: WearPrepared, carry c: EyeMaskModel.Carry, skin: UnsafePointer<Float>, body: WearBody) -> (dy: Float, widen: Float) {
-        guard enabled, p.crownEnclosing, !p.crown.isEmpty else { return (0, 1) }
+    static func fit(_ p: WearPrepared, carry c: EyeMaskModel.Carry, skin: UnsafePointer<Float>, body: WearBody) -> (dy: Float, widen: Float, seat: Float) {
+        guard enabled, p.crownEnclosing, !p.crown.isEmpty else { return (0, 1, 0) }
         let Rt = simd_float3x3(c.rotation).transpose
         let sxz = 1 / c.squash.squareRoot()
         let rc = c.restCentroid
         var dy: Float = -maxDrop, widen: Float = 1, any = false
+        // the seat: how far the drawn skin's head line (the lowest cap ring, rest frame) sits above / below where the rigid carry puts it. The WHOLE hat
+        // follows it (brim included), so the brim stays on the head line however the soft skin lags or overshoots the squash; the crown stretch comes on top.
+        var minY = Float.infinity
+        for i in body.capIndices { minY = min(minY, body.pos[i].y) }
+        var seatSum: Float = 0, seatN: Float = 0
+        for i in body.capIndices where body.pos[i].y < minY + 0.08 {
+            let o = 6 * i
+            let l = Rt * (SIMD3(skin[o], skin[o + 1], skin[o + 2]) - c.centroid)
+            let ry = rc.y + l.y / c.squash
+            if ry.isFinite { seatSum += ry - body.pos[i].y; seatN += 1 }
+        }
+        let seat: Float = seatN > 0 ? max(-maxSeat, min(maxSeat, seatSum / seatN)) : 0
         for i in body.capIndices {
             let o = 6 * i
             let q = SIMD3(skin[o], skin[o + 1], skin[o + 2]) - c.centroid
@@ -92,9 +104,9 @@ nonisolated enum CrownFit {
             if !(r.x.isFinite && r.y.isFinite && r.z.isFinite) { continue }
             // the crown, widened, is at (x, z) what the authored crown is at (x, z) / widen
             guard let h = height(p.crown, rc.x + (r.x - rc.x) / widen, rc.z + (r.z - rc.z) / widen) else { continue }
-            let need = r.y + p.crownMargin - h
+            let need = r.y + p.crownMargin - (h + seat)
             dy = max(dy, need / max(liftWeight(h - p.pivot.y), 0.2)); any = true
         }
-        return any ? (min(maxLift, max(-maxDrop, dy)), widen) : (0, widen)
+        return any ? (min(maxLift, max(-maxDrop, dy)), widen, seat) : (0, widen, seat)
     }
 }

@@ -174,14 +174,27 @@ final class FeatureSet {
         return s.accel[((s.accelHead - n) % FeatureTuning.accelHistory + FeatureTuning.accelHistory) % FeatureTuning.accelHistory]
     }
 
+    /// A spike is covered when its base is inside the hat's footprint and not below the brim line.
+    static func coveredByHat(_ sp: FeatureSpec.Spine, _ hat: (crown: [Float], brimY: Float)?) -> Bool {
+        guard let hat else { return false }
+        let b = sp.base.v3
+        guard let h = CrownFit.height(hat.crown, b.x, b.z) else { return false }
+        return b.y >= hat.brimY - 0.03 && h >= b.y - 0.02
+    }
+
     private func stepSpines(_ s: inout Slot, spec: FeatureSpec, dt: Float) {
         let n = spec.spines.count
         if s.spineA.count != n { s.spineA = Array(repeating: .zero, count: n); s.spineV = Array(repeating: .zero, count: n) }
         let Rinv = simd_float3x3(s.carry.rotation).transpose
-        // under a hat that encloses his head the (small) spikes are simply covered: tucked away; perch items leave them showing
-        var covered = false
+        // under a hat that encloses his head the small spikes whose base sits under the hat (inside its footprint, at or above its brim line) are
+        // covered: tucked away. The ones below the brim line (down his back) and outside the footprint stay; perch items leave all showing.
+        var hat: (crown: [Float], brimY: Float)?
         if let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
-           let piece = WearMeshes.prepare(look, body: WearBody.shared) { covered = piece.crownEnclosing }
+           let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
+            var lo = Float.infinity
+            for v in piece.rest { lo = min(lo, v.y) }
+            hat = (piece.crown, lo)
+        }
         for (k, sp) in spec.spines.enumerated() {
             let a = Rinv * accel(s, lag: sp.lag, dt: dt)                    // body frame
             let axis = sp.axis.v3
@@ -196,7 +209,7 @@ final class FeatureSet {
             if l > sp.maxDeg { s.spineA[k] *= sp.maxDeg / l }
             if !l.isFinite { s.spineA[k] = .zero; s.spineV[k] = .zero }
             // a spine under a hat shrinks away
-            let want: Float = (covered || s.fit.hiddenParts.contains(sp.part)) ? 0 : 1
+            let want: Float = (Self.coveredByHat(sp, hat) || s.fit.hiddenParts.contains(sp.part)) ? 0 : 1
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }

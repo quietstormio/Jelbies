@@ -292,6 +292,33 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack([hstack(Array(sp[0..<4])), hstack(Array(sp[4..<8])), hstack(Array(sp[8..<10]))]), d + "/pip_spines_hats.png")
     }
 
+    /// Pip's small default spikes: no hat (3/4 + side), five hats (3/4 + back), the cowboy hat squashed and stretched (pip_small_spikes.png).
+    func testCaptureSmallSpikes() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        var sp: [UIImage] = []
+        sp.append(try closeup(Char(id: 1), yaw: 0.7, label: "Pip no hat 3/4"))
+        sp.append(try closeup(Char(id: 1), yaw: Float.pi / 2, label: "Pip no hat side"))
+        for (name, look) in [("beret", WearLook.beret), ("pirate", .pirateHat), ("bucket", .bucketHat), ("cowboy", .cowboyHat), ("beanie", .beanieHoney)] {
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: 0.7, label: "Pip + \(name) 3/4"))
+            sp.append(try closeup(Char(id: 1, outfit: [.head: look]), yaw: Float.pi * 0.85, label: "Pip + \(name) back"))
+        }
+        for (hn, hl) in [("cowboy", WearLook.cowboyHat), ("pirate", .pirateHat), ("bucket", .bucketHat), ("beret", .beret), ("beanie", .beanieHoney)] {
+            for (sq, name) in [(Float(1.35), "stretch"), (Float(0.75), "squash")] {
+                let c = Char(id: 1, outfit: [.head: hl])
+                sp.append(try closeup(c, yaw: 0.7, label: "Pip + \(hn) \(name) 3/4") { lab, dr in
+                    let r = lab.rigs[0]
+                    r.sim.attractor.squash = sq
+                    for _ in 0..<90 { r.sim.step(); r.brain.currentPose(r.sim); self.tick(dr, 0, r, c) }
+                })
+            }
+        }
+        var rows: [UIImage] = []
+        var i = 0
+        while i < sp.count { rows.append(hstack(Array(sp[i..<min(i + 4, sp.count)]))); i += 4 }
+        try write(vstack(rows), d + "/pip_small_spikes.png")
+    }
+
     /// Review sheet: the batch-3 wearables (headphones, cowboy hat, beret, hair bow, bee antennae, lei) on Pip, Moss and Lavender, front 3/4, normal pose.
     func testCaptureBatch3Wear() throws {
         let d = try dir()
