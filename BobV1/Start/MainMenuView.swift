@@ -146,15 +146,15 @@ struct SpinLogo: View {
     var body: some View {
         Group {
             if still || !active {
-                Image(uiImage: SwingFrames.shared.frame(0) ?? UIImage()).resizable().scaledToFit()
-                    .overlay { if SwingFrames.shared.frame(0) == nil { Image("JelbiesLogo").resizable().scaledToFit() } }
+                Image(uiImage: SwingFrames.shared.frame(0) ?? UIImage()).resizable().scaledToFit().themedLogo()
+                    .overlay { if SwingFrames.shared.frame(0) == nil { Image("JelbiesLogo").resizable().scaledToFit().themedLogo() } }
             } else {
                 TimelineView(.animation(minimumInterval: 1.0 / SwingFrames.fps)) { tl in
                     let i = Int(tl.date.timeIntervalSince(start) * SwingFrames.fps) % SwingFrames.count
                     if let img = SwingFrames.shared.frame(i) {
-                        Image(uiImage: img).resizable().scaledToFit()
+                        Image(uiImage: img).resizable().scaledToFit().themedLogo()
                     } else {
-                        Image("JelbiesLogo").resizable().scaledToFit()
+                        Image("JelbiesLogo").resizable().scaledToFit().themedLogo()
                     }
                 }
             }

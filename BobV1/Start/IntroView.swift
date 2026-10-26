@@ -10,7 +10,8 @@ import SwiftUI
 import AVFoundation
 
 enum IntroClip {
-    static let resource = "jelbies_intro"
+    /// The clip recoloured for the current theme (one pre-rendered file per preset).
+    @MainActor static var resource: String { ThemeStore.shared.currentPreset.introResource }
     static let fileExtension = "mp4"
     /// Seconds after the clip ends before it moves on by itself.
     static let autoAdvance: Double = 2.0

@@ -118,7 +118,7 @@ struct LaunchCurtainArt: View {
     }
 
     @ViewBuilder private func logo(width: CGFloat) -> some View {
-        let img = Image("JelbiesLogo").resizable().scaledToFit().frame(width: width).shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
+        let img = Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: width).shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
         if bounce {
             img.keyframeAnimator(initialValue: Wobble(), repeating: true) { v, w in v.scaleEffect(x: w.x, y: w.y, anchor: .bottom) } keyframes: { _ in
                 KeyframeTrack(\.x) { CubicKeyframe(1.06, duration: 0.32); CubicKeyframe(0.96, duration: 0.32); CubicKeyframe(1.02, duration: 0.32); CubicKeyframe(1, duration: 0.32); CubicKeyframe(1, duration: 0.5) }
