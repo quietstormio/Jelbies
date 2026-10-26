@@ -11,8 +11,8 @@ import Foundation
 
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
-    static let count = 7
-    static let startFraction: Float = 0.80          // of his height, on the back silhouette line
+    static let count = 10
+    static let startFraction: Float = 0.88          // of his height, on the back silhouette line
     static let tailEnd: Double = 0.85               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
     static let tiltDeg: Float = 30                  // each spike leans this far from the surface normal toward the tail
@@ -43,7 +43,7 @@ nonisolated enum PipSpikes {
             for i in 1...nBody {
                 let u = Float(i) / Float(nBody)
                 let h = 0.06 * H + (hTip - 0.06 * H) * u
-                prof.append((h, tipR + (b - tipR) * (1 - (h - 0.06 * H) / (hTip - 0.06 * H))))              // straight taper
+                prof.append((h, tipR + (b - tipR) * pow(1 - (h - 0.06 * H) / (hTip - 0.06 * H), 0.85)))        // gumdrop-ish taper (slightly convex)
             }
             let base0 = UInt32(pos.count)
             var rings = 0
@@ -114,39 +114,68 @@ nonisolated enum PipSpikes {
         curve += tailPts
         var arc: [Float] = [0]
         for i in 1..<curve.count { arc.append(arc[i - 1] + simd_distance(curve[i].p, curve[i - 1].p)) }
-        let L = arc.last ?? 1, d = L / (Float(count) - 0.5)
+        let L = arc.last ?? 1
         let tn = tones(spec: spec)
+        // the ridge path, smoothed: a moving average (about +-0.12) rounds the corner where the tail meets the back with a generous fillet, so the spikes' tangents and
+        // normals no longer swing through the crease (the positions stay on the skin so each spike is still planted)
+        var sm = curve.map { $0.p }
+        for _ in 0..<4 {
+            var nx = sm
+            for i in 0..<sm.count {
+                let lo = max(0, i - 12), hi = min(sm.count - 1, i + 12)
+                var acc = SIMD3<Float>(0, 0, 0); for j in lo...hi { acc += sm[j] }
+                nx[i] = acc / Float(hi - lo + 1)
+            }
+            sm = nx
+        }
+        func smoothFrame(_ i: Int) -> (t: SIMD3<Float>, n: SIMD3<Float>) {
+            let t = simd_normalize(sm[min(i + 1, sm.count - 1)] - sm[max(i - 1, 0)])
+            return (t, simd_normalize(simd_cross(SIMD3<Float>(1, 0, 0), t)))                // outward, perpendicular to the smoothed path
+        }
+        struct Sp { var p: SIMD3<Float>; var n: SIMD3<Float>; var t: SIMD3<Float>; var isTail: Bool; var s: Float; var H: Float; var bR: Float; var ax: SIMD3<Float>; var e: Float; var tip: SIMD3<Float> }
+        func layout(_ cnt: Int) -> (sp: [Sp], d: Float) {
+            let d = L / (Float(cnt) - 0.5)
+            var out: [Sp] = []
+            var tailIndex = 0
+            for k in 0..<cnt {
+                let sK = d * 0.5 + Float(k) * d
+                var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
+                let a = max(0, min(1, (sK - arc[i - 1]) / max(arc[i] - arc[i - 1], 1e-5)))
+                let p = curve[i - 1].p * (1 - a) + curve[i].p * a
+                let f = smoothFrame(a < 0.5 ? i - 1 : i)
+                let isTail = i - 1 >= backCount
+                if isTail { tailIndex += 1 }
+                // uniform back spikes; the tail ones taper smoothly, each 85% of the one before
+                let H = 1.2 * d * (isTail ? powf(0.85, Float(tailIndex)) : 1), bR = 0.30 * H
+                let q = Float(k) / Float(max(cnt - 1, 1)), e = q * q * (3 - 2 * q)
+                let tilt = (22 + 50 * e) * Float.pi / 180
+                let ax = simd_normalize(f.n * cosf(tilt) + f.t * sinf(tilt))
+                let base = p - f.n * (0.2 * bR)
+                out.append(Sp(p: base, n: f.n, t: f.t, isTail: isTail, s: sK, H: H, bR: bR, ax: ax, e: e,
+                              tip: base + ax * H + f.t * (H * (0.10 + 0.32 * e))))
+            }
+            return (out, d)
+        }
+        // equal spacing measured at the TIPS too: no two neighbouring tips closer than 0.8 of the base spacing; if the corner still crowds them, drop a spike and re-space
+        var cnt = count
+        var lay = layout(cnt)
+        while cnt > 7 {
+            var ok = true
+            for k in 1..<lay.sp.count where simd_distance(lay.sp[k].tip, lay.sp[k - 1].tip) < 0.8 * lay.d { ok = false }
+            if ok { break }
+            cnt -= 1; lay = layout(cnt)
+        }
         var widths: [Float] = [], centres: [Float] = []
-        let first = m.pos.count
         var tailFirst = -1
-        for k in 0..<count {
-            let sK = d * 0.5 + Float(k) * d
-            var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
-            let a = max(0, min(1, (sK - arc[i - 1]) / max(arc[i] - arc[i - 1], 1e-5)))
-            let p = curve[i - 1].p * (1 - a) + curve[i].p * a
-            let nrm = simd_normalize(curve[i - 1].n * (1 - a) + curve[i].n * a)
-            var tg = curve[min(i + 1, curve.count - 1)].p - curve[max(i - 2, 0)].p
-            tg -= nrm * simd_dot(tg, nrm); tg = simd_normalize(tg)
-            // size from the spacing: small at the top, largest at the lower back (index 3), then tapering down along the tail; base width <= 55% of the spacing
-            let taper: [Float] = [0.62, 0.78, 0.92, 1.0, 0.82, 0.62, 0.45]
-            let H = taper[k] * 1.3 * d, bR = 0.30 * H
-            widths.append(2 * bR); centres.append(sK)
-            // everything eases along the row (q = 0 at the top of the back, 1 at the tail tip): the tilt grows from 22 to 72 degrees (near the tip the spikes lie
-            // almost along the tail), the claw-like bend from 0.10 to 0.42 of the height, the tip softens a little; no jump where the back meets the tail
-            let q = Float(k) / Float(count - 1), e = q * q * (3 - 2 * q)
-            let tilt = (22 + 50 * e) * Float.pi / 180
-            let ax = simd_normalize(nrm * cosf(tilt) + tg * sinf(tilt))
-            let base = p - nrm * (0.2 * bR)
-            let isTail = i - 1 >= backCount
+        for (k, sp) in lay.sp.enumerated() {
+            widths.append(2 * sp.bR); centres.append(sp.s)
             let start = m.pos.count
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.10 + 0.32 * e, tipSoft: 0.22 + 0.06 * e, lateral: SIMD3(1, 0, 0), tones: tn)
-            if isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, base)) }
+            m.cone(base: sp.p, axis: sp.ax, height: sp.H, baseR: sp.bR, bend: sp.t, curve: 0.10 + 0.32 * sp.e, tipSoft: 0.28, lateral: SIMD3(1, 0, 0), tones: tn)
+            if sp.isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, sp.p)) }
         }
         var gap = Float.infinity
-        for k in 1..<count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
-        lastLayout = (d, widths, gap)
-        assert(gap > 0.15 * d, "Pip's spikes overlap")
-        _ = first
+        for k in 1..<lay.sp.count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
+        lastLayout = (lay.d, widths, gap)
         let root = f3(sh.root)
         if tailFirst >= 0 { parts.append(("tail", tailFirst, m.pos.count - tailFirst, root)) }
         for (pi, pp) in parts.enumerated() {

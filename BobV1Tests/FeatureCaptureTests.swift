@@ -483,7 +483,7 @@ final class FeatureCaptureTests: XCTestCase {
         let z1 = try closeup(Char(id: 1), yaw: Float.pi / 2, label: "Pip: side close-up (back + tail)", dist: 1.7, lookY: 0.0, lookBack: 0.45)
         let z2 = try closeup(Char(id: 1), yaw: Float.pi * 0.8, label: "Pip: back 3/4 close-up", dist: 1.7, lookY: 0.0, lookBack: 0.4)
         NSLog("PIPLAYOUT spacing=%.3f widths=%@ minGap=%.3f", PipSpikes.lastLayout.spacing, PipSpikes.lastLayout.widths.map { String(format: "%.3f", $0) }.joined(separator: ","), PipSpikes.lastLayout.minGap)
-        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro6.png")
+        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro7.png")
     }
 
     // MARK: roam corners (2026-10-21 room movement v2)
