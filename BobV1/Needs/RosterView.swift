@@ -21,7 +21,7 @@ struct RosterButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(DT.card))
+                .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                 .frame(width: 44, height: 44).contentShape(Circle())
                 .overlay(alignment: .topTrailing) {
@@ -77,8 +77,8 @@ struct RosterPanel: View {
                 .frame(width: 300)
                 .frame(maxHeight: 500)
                 .fixedSize(horizontal: false, vertical: true)
-                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(DT.card))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.28), radius: 14, y: 6))
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
                 .padding(.top, 52).padding(.trailing, 16)
                 .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
                 .accessibilityIdentifier("roster-panel")
@@ -123,7 +123,7 @@ struct BlobCard: View {
                 status
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.white.opacity(0.0), lineWidth: 1.5))
         }
         .buttonStyle(.plain)

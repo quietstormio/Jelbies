@@ -14,7 +14,7 @@ struct PlayFont: ViewModifier {
         _size = ScaledMetric(wrappedValue: size, relativeTo: relativeTo)
         self.weight = weight; self.design = design
     }
-    func body(content: Content) -> some View { content.font(.system(size: size, weight: JFont.calm(weight), design: design)) }
+    func body(content: Content) -> some View { content.font(.system(size: size, weight: weight, design: design)) }
 }
 
 extension View {

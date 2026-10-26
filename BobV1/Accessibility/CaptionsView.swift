@@ -48,6 +48,6 @@ private struct CaptionLabelStyle: LabelStyle {
         .foregroundStyle(Color.white)
         .padding(.horizontal, 14).padding(.vertical, 7)
         .background(Capsule().fill(Color.black.opacity(0.78)))
-        .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
     }
 }

@@ -48,7 +48,7 @@ struct RaceChrome: View {
                 .playFont(17, .bold)
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
-                .background(Capsule().fill(DT.card))
+                .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             if race.ui.stumbling, race.ui.tripped {
                 hint("Whoops! He tripped. Practice helps")
             } else if race.ui.stumbling {
@@ -78,7 +78,7 @@ struct RaceChrome: View {
 
     private func numeral(_ s: String) -> some View {
         Text(s)
-            .font(.system(size: s == "GO!" ? 96 : 120, weight: .semibold, design: .rounded))
+            .font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded))
             .foregroundStyle(.white)
             .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 5)
             .shadow(color: FocusStyle.shadow.opacity(0.35), radius: 10, y: 6)
@@ -175,7 +175,7 @@ struct FootButton: View {
                 .scaleEffect(x: flip ? -1 : 1, y: 1)
                 .rotationEffect(.degrees(tilt ? (flip ? 12 : -12) : 0))
             Text(title)
-                .playFont(22, .semibold)
+                .playFont(22, .heavy)
         }
         .foregroundStyle(CareMenu.brown)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -219,12 +219,12 @@ struct RacePlacingsCard: View {
     /// A short celebration chip on the results ("New ribbon!", "Trophy! ...").
     private func celebration(_ text: String, symbol: String, id: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .semibold))
-            Text(text).playFont(14, .semibold)
+            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
+            Text(text).playFont(14, .heavy)
         }
         .foregroundStyle(CareMenu.brown)
         .padding(.horizontal, 12).padding(.vertical, 5)
-        .background(Capsule().fill(DT.accentSoft))
+        .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35)))
         .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(id)
@@ -239,7 +239,7 @@ struct RacePlacingsCard: View {
                 ForEach(race.ui.placings, id: \.racer) { p in
                     HStack(spacing: 12) {
                         Text(ordinal(p.place))
-                            .playFont(17, .semibold)
+                            .playFont(17, .heavy)
                             .foregroundStyle(CareMenu.brown)
                             .frame(minWidth: 52, minHeight: 34)
                             .background(Capsule().fill(medal(p.place)))
@@ -282,7 +282,7 @@ struct RacePlacingsCard: View {
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
-                    .playFont(15, .semibold)
+                    .playFont(15, .heavy)
                     .foregroundStyle(SK.pinkStrong)
                     .accessibilityIdentifier("race-unlocked")
             }
@@ -300,7 +300,7 @@ struct RacePlacingsCard: View {
             .accessibilityIdentifier("race-home")
         }
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(DT.card))
+        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 16, y: 8))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")

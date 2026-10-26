@@ -16,7 +16,7 @@ struct JelbiesSnippetView: View {
             HStack(spacing: 6) {
                 Image(systemName: sleeping ? "moon.zzz.fill" : "heart.fill")
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(JellyPalette.bodyDeep(sleeping ? "purple" : "blue"))
-                Text(title(sorted)).font(JellyPalette.font(17, .semibold)).foregroundStyle(JellyPalette.ink)
+                Text(title(sorted)).font(JellyPalette.font(17, .heavy)).foregroundStyle(JellyPalette.ink)
                 Spacer(minLength: 0)
             }
             if sorted.isEmpty {

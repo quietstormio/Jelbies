@@ -22,11 +22,8 @@ enum JFont {
         return min(max(v, size), size * cap)
     }
 
-    /// Calm & Clean: nothing heavier than semibold (the title-screen logo draws its own font).
-    static func calm(_ w: Font.Weight) -> Font.Weight { w == .black || w == .heavy || w == .bold ? .semibold : w }
-
-    static func scaled(_ size: CGFloat, _ weight: Font.Weight = .semibold, design: Font.Design = .rounded, style: UIFont.TextStyle = .body, cap: CGFloat = helperCap) -> Font {
-        .system(size: scaledSize(size, style: style, cap: cap), weight: calm(weight), design: design)
+    static func scaled(_ size: CGFloat, _ weight: Font.Weight = .heavy, design: Font.Design = .rounded, style: UIFont.TextStyle = .body, cap: CGFloat = helperCap) -> Font {
+        .system(size: scaledSize(size, style: style, cap: cap), weight: weight, design: design)
     }
 }
 
@@ -38,7 +35,7 @@ private struct JFontModifier: ViewModifier {
         _scaled = ScaledMetric(wrappedValue: size, relativeTo: relativeTo)
     }
     func body(content: Content) -> some View {
-        content.font(.system(size: min(max(scaled, size), size * maxScale), weight: JFont.calm(weight), design: design))
+        content.font(.system(size: min(max(scaled, size), size * maxScale), weight: weight, design: design))
     }
 }
 

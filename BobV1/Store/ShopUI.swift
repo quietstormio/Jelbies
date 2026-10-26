@@ -74,13 +74,13 @@ struct ShopScreen: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                        .dtWell()
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
+                        .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("shop-back")
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Shop").font(SK.font(28, .semibold)).foregroundStyle(DT.ink)
-                    Text("Spend your Drops on goodies").font(SK.font(12, .medium)).foregroundStyle(DT.ink2)
+                    Text("Shop").font(SK.font(28, .black)).foregroundStyle(.white)
+                    Text("Spend your Drops on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
                 }
                 Spacer()
                 DropsPill(wallet: care.bath.wallet)
@@ -92,9 +92,9 @@ struct ShopScreen: View {
                         Button {
                             if t != tab { AudioHub.shared.play(.pageTurn); withAnimation(.easeInOut(duration: 0.15)) { tab = t } }
                         } label: {
-                            Text(t.rawValue).font(SK.font(15, .semibold)).foregroundStyle(t == tab ? DT.accent : DT.ink)
+                            Text(t.rawValue).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 16).frame(minHeight: 44)
-                                .dtChip(selected: t == tab)
+                                .background(Capsule().fill(t == tab ? SK.honey : SK.cream.opacity(0.92)))
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("shop-tab-\(t.rawValue.lowercased())")
                         .accessibilityAddTraits(t == tab ? .isSelected : [])
@@ -104,8 +104,7 @@ struct ShopScreen: View {
             }
             .padding(.bottom, 14)
         }
-        .background(DT.paper.ignoresSafeArea(edges: [.top, .horizontal]))
-        .overlay(alignment: .bottom) { DT.line.frame(height: 1) }
+        .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
         .padding(.bottom, 4)
     }
 
@@ -117,21 +116,21 @@ struct ShopScreen: View {
         } label: {
             VStack(spacing: 8) {
                 ItemArt(item: item, size: wide ? 84 : 104)
-                Text(item.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
+                Text(item.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
                 if let p = item.perk { PerkChip(kind: p) }
-                else if item.kind == .room { Text("New room").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(DT.fill)) }
-                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(DT.fill)) }
+                else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : item.kind == .trickPage ? "New trick" : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
                     HStack(spacing: 4) {
-                        Image(systemName: "drop.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(afford ? SK.sky : SK.muted.opacity(0.6))
-                        Text("\(item.price)").font(SK.font(15, .semibold)).foregroundStyle(afford ? SK.ink : SK.muted)
+                        Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(afford ? SK.sky : SK.muted.opacity(0.6))
+                        Text("\(item.price)").font(SK.font(15, .black)).foregroundStyle(afford ? SK.ink : SK.muted)
                     }
                     .padding(.horizontal, 10).frame(minHeight: 44)
-                    .background(Capsule().fill(DT.card))
+                    .background(Capsule().fill(Color.white.opacity(0.85)))
                     Spacer(minLength: 0)
                     if owned > 0 {
-                        Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
+                        Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
                     }
                 }
             }
@@ -169,7 +168,7 @@ struct ItemSheet: View {
                 HStack(alignment: .top, spacing: 18) {
                     VStack(spacing: 8) {
                         ItemPicture(care: care, item: item, who: who, size: 150).padding(.top, 10)
-                        Text(item.name).font(SK.font(22, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+                        Text(item.name).font(SK.font(22, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
                         Text(item.description).font(SK.font(13, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
                         Spacer(minLength: 0)
                     }
@@ -187,7 +186,7 @@ struct ItemSheet: View {
             } else {
                 VStack(spacing: 14) {
                     ItemPicture(care: care, item: item, who: who, size: 230).padding(.top, 14)
-                    Text(item.name).font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
+                    Text(item.name).font(SK.font(26, .black)).foregroundStyle(SK.ink)
                     Text(item.description).font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
                     effectCard.padding(.horizontal, 16)
                     Spacer(minLength: 0)
@@ -200,12 +199,12 @@ struct ItemSheet: View {
 
     private var effectCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("What it does").font(SK.font(12, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("What it does").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
             HStack(spacing: 10) {
-                Image(systemName: effectSymbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
+                Image(systemName: effectSymbol).font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.ink)
                     .frame(width: 44, height: 44).background(Circle().fill(SK.honey))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(effectTitle).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
+                    Text(effectTitle).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
                     Text(effectBlurb).font(SK.font(12, .semibold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -213,7 +212,7 @@ struct ItemSheet: View {
             if !conditions.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(conditions, id: \.0.rawValue) { k, v in
-                        Text("\(k.title) +\(SK.points(v))").font(SK.font(12, .semibold)).foregroundStyle(SK.ink)
+                        Text("\(k.title) +\(SK.points(v))").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
                             .padding(.horizontal, 10).padding(.vertical, 5).background(Capsule().fill(SK.mint.opacity(0.75)))
                     }
                     Spacer(minLength: 0)
@@ -229,7 +228,7 @@ struct ItemSheet: View {
             if !item.unique {
                 HStack(spacing: 18) {
                     stepper("minus") { qty = max(1, qty - 1) }.disabled(qty <= 1)
-                    Text("\(qty)").font(SK.font(24, .semibold)).foregroundStyle(SK.ink).frame(minWidth: 40).monospacedDigit()
+                    Text("\(qty)").font(SK.font(24, .black)).foregroundStyle(SK.ink).frame(minWidth: 40).monospacedDigit()
                     stepper("plus") { if wallet.count >= item.price * (qty + 1), qty < 9 { qty += 1 } else { AudioHub.shared.play(.notEnough) } }
                 }
             }
@@ -239,7 +238,7 @@ struct ItemSheet: View {
                     AudioHub.shared.uiTap()
                     if let b = care.switchRoom(r) { refusal = b.message } else { close(); goHome() }
                 } label: {
-                    Text("Move in now").font(SK.font(18, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
+                    Text("Move in now").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
                         .background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
@@ -247,7 +246,7 @@ struct ItemSheet: View {
                 .accessibilityIdentifier("item-movein")
             }
             if let refusal {
-                Text(refusal).font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
+                Text(refusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
                     .accessibilityIdentifier("item-movein-refusal")
             }
@@ -257,8 +256,8 @@ struct ItemSheet: View {
 
     private func stepper(_ symbol: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            Image(systemName: symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
-                .frame(width: 48, height: 48).background(Circle().fill(DT.card))
+            Image(systemName: symbol).font(.system(size: 18, weight: .black)).foregroundStyle(SK.ink)
+                .frame(width: 48, height: 48).background(Circle().fill(Color.white.opacity(0.9)))
         }.buttonStyle(.plain).accessibilityLabel(symbol == "plus" ? "More \(item.name)" : "Fewer \(item.name)").accessibilityValue("\(qty)").accessibilityIdentifier("item-qty-\(symbol)")
     }
 
@@ -276,12 +275,12 @@ struct ItemSheet: View {
             } else { AudioHub.shared.play(.notEnough) }
         } label: {
             HStack(spacing: 8) {
-                if owned { Text("You have it").font(SK.font(18, .semibold)) }
-                else if left < 0 { Text("Need \(-left) more Drops").font(SK.font(18, .semibold)) }
+                if owned { Text("You have it").font(SK.font(18, .black)) }
+                else if left < 0 { Text("Need \(-left) more Drops").font(SK.font(18, .black)) }
                 else {
-                    Text("Buy for").font(SK.font(18, .semibold))
-                    Image(systemName: "drop.fill").font(.system(size: 16, weight: .semibold)).foregroundStyle(SK.honey)
-                    Text("\(total)").font(SK.font(18, .semibold))
+                    Text("Buy for").font(SK.font(18, .black))
+                    Image(systemName: "drop.fill").font(.system(size: 16, weight: .black)).foregroundStyle(SK.honey)
+                    Text("\(total)").font(SK.font(18, .black))
                 }
             }
             .foregroundStyle(SK.cream).frame(maxWidth: .infinity, minHeight: 56)
@@ -353,8 +352,8 @@ struct ItemPicture: View {
                 if fitted != nil { ItemArt(item: item, size: size * 0.3).padding(8) }
                 VStack {
                     HStack {
-                        Text("On \(care.jelly(who)?.name ?? "him")").font(SK.font(12, .semibold)).foregroundStyle(SK.ink)
-                            .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(DT.card))
+                        Text("On \(care.jelly(who)?.name ?? "him")").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
+                            .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(SK.cream.opacity(0.92)))
                         Spacer()
                     }
                     Spacer()

@@ -76,7 +76,7 @@ struct PhotoAlbumView: View {
             SK.cream.ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
-                    Text("Photos").font(SK.font(30, .semibold)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
+                    Text("Photos").font(SK.font(30, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
                     Spacer()
                     if let close { GameCircleButton(systemName: "xmark", label: "Close album") { close() } }
                 }
@@ -85,7 +85,7 @@ struct PhotoAlbumView: View {
                     Spacer()
                     VStack(spacing: 8) {
                         Image(systemName: "camera").font(.system(size: 40, weight: .semibold)).foregroundStyle(SK.muted).accessibilityHidden(true)
-                        Text("No photos yet").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
+                        Text("No photos yet").font(SK.font(20, .heavy)).foregroundStyle(SK.ink)
                         Text("Use the camera button in the room to take one.").font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
                     }
                     .padding(30)
@@ -154,11 +154,11 @@ struct PhotoActionLabel: View {
     let title: String, symbol: String, prominent: Bool
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
-            Text(title).font(SK.font(15, .semibold)).lineLimit(1).minimumScaleFactor(0.75)
+            Image(systemName: symbol).font(.system(size: 15, weight: .heavy))
+            Text(title).font(SK.font(15, .heavy)).lineLimit(1).minimumScaleFactor(0.75)
         }
         .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 48)
-        .background(Capsule().fill(prominent ? SK.honey : DT.card).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
+        .background(Capsule().fill(prominent ? SK.honey : Color.white.opacity(0.92)).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
     }
 }
 

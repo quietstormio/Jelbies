@@ -17,21 +17,21 @@ struct RaceTrophiesSection: View {
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
         VStack(alignment: .leading, spacing: 10) {
-            Text("Race ribbons").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
+            Text("Race ribbons").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             VStack(spacing: 6) {
                 ForEach(CourseTier.allCases, id: \.rawValue) { t in
                     let r = shelf.raceRibbons(t)
                     HStack(spacing: 6) {
-                        Text(t.title).font(SK.font(13, .semibold)).foregroundStyle(SK.ink).frame(width: 74, alignment: .leading)
+                        Text(t.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).frame(width: 74, alignment: .leading)
                         ForEach(0..<3, id: \.self) { k in
                             HStack(spacing: 3) {
-                                Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .semibold))
-                                Text("\(Self.ords[k]) \u{00D7}\(r[k])").font(SK.font(11, .semibold)).monospacedDigit()
+                                Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .black))
+                                Text("\(Self.ords[k]) \u{00D7}\(r[k])").font(SK.font(11, .heavy)).monospacedDigit()
                             }
                             .foregroundStyle(r[k] > 0 ? SK.ink : SK.muted)
                             .padding(.horizontal, 7).padding(.vertical, 4)
                             .frame(maxWidth: .infinity)
-                            .background(Capsule().fill(r[k] > 0 ? Self.medal[k] : DT.card))
+                            .background(Capsule().fill(r[k] > 0 ? Self.medal[k] : Color.white.opacity(0.5)))
                         }
                     }
                     .accessibilityElement(children: .ignore)
@@ -39,17 +39,17 @@ struct RaceTrophiesSection: View {
                     .accessibilityIdentifier("ribbons-\(t.rawValue)")
                 }
             }
-            Text("Race trophies").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
+            Text("Race trophies").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             FlowLayout(spacing: 6) {
                 ForEach(Trophy.all) { t in
                     let has = shelf.has(t)
                     HStack(spacing: 4) {
-                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .semibold))
-                        Text(has ? t.title : t.detail).font(SK.font(12, .semibold))
+                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .black))
+                        Text(has ? t.title : t.detail).font(SK.font(12, .black))
                     }
                     .foregroundStyle(has ? SK.ink : SK.muted)
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Self.medal[0] : DT.card))
+                    .background(Capsule().fill(has ? Self.medal[0] : Color.white.opacity(0.5)))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
                     .accessibilityIdentifier("trophy-\(t.id)")

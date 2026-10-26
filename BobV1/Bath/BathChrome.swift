@@ -58,7 +58,7 @@ struct BathChrome: View {
                                 .foregroundStyle(CareMenu.brown)
                                 .padding(.horizontal, 14).padding(.vertical, 6)
                                 .accessibilityIdentifier("bath-prompt")
-                                .background(Capsule().fill(DT.card))
+                                .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
                                 .transition(.scale.combined(with: .opacity))
                         }
                         if bath.phase == .finish {
@@ -67,7 +67,7 @@ struct BathChrome: View {
                                     .playFont(18, .bold)
                                     .foregroundStyle(CareMenu.brown)
                                     .padding(.horizontal, 28).padding(.vertical, 10).frame(minHeight: 44)
-                                    .background(Capsule().fill(DT.card))
+                                    .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
@@ -167,7 +167,7 @@ private struct ProgressBar: View {
     private var bar: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(DT.card)
+                Capsule().fill(Color.white.opacity(0.55))
                 Capsule().fill(Color(red: 0.36, green: 0.62, blue: 0.95)).frame(width: max(6, g.size.width * CGFloat(min(1, max(0, value)))))
             }
         }

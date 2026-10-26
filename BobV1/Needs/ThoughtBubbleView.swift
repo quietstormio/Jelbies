@@ -38,7 +38,7 @@ struct ThoughtBubbleView: View {
     var body: some View {
         GeometryReader { geo in
             let live = shown != nil || leaving != nil
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !live)) { tl in
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !live)) { tl in
                 ZStack {
                     Canvas { ctx, size in paint(&ctx, size: size, now: tl.date) } symbols: {
                         Image(systemName: "drop.fill").font(.system(size: 36, weight: .semibold)).foregroundStyle(NeedStyle.drop).tag(1)

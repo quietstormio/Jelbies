@@ -46,7 +46,7 @@ struct TrainCard: View {
             .frame(maxWidth: landscape ? 360 : 520, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
                 .shadow(color: FocusStyle.shadow.opacity(0.25), radius: 10, y: 4))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("train-card")
             .accessibilityValue(step.name)
@@ -130,7 +130,7 @@ struct TrainCard: View {
             .foregroundStyle(FocusStyle.brown)
             .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 4).padding(.horizontal, 4)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DT.card))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.85)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(FocusStyle.brown.opacity(learned ? 0.35 : 0.12), lineWidth: learned ? 2 : 1))
         }
         .buttonStyle(.plain)
