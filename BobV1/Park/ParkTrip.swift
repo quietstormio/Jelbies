@@ -48,6 +48,8 @@ final class ParkTrip {
         guard phase == .pick, !picked.isEmpty else { return }
         phase = .goOut; wipe = 0; holdFrames = 0; serial += 1
     }
+    /// The picker closes while the Jelbies run out of the room, then the trip begins with the same company (GameCare+Outing.swift).
+    func resume(picked p: [Int]) { guard phase == .off, !p.isEmpty else { return }; picked = p; phase = .pick; begin() }
     func goHome() {
         guard canGoHome else { return }
         card = nil; phase = .leaveOut

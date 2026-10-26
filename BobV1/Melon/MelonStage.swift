@@ -955,7 +955,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors { a.skinner.tickBlink(dt: dt) }
         for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
-        let parkOn = game && (model.care.park.inScene || model.care.volley.inScene)
+        let parkOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene)
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
@@ -1046,7 +1046,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
-            renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene
+            renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
                 renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id) || model.care.parkHides(a.id), body: a.id)

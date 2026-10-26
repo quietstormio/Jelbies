@@ -82,6 +82,7 @@ extension GameCare {
         }
         select.cancel(); queued.removeAll(); callRunning = false
         voice.cancel()
+        if outingGate(Array(jellies.indices), again: { [weak self] in self?.requestCafe() }) { return }          // everybody runs out of the room first (GameCare+Outing.swift)
         cafe.begin()
     }
 

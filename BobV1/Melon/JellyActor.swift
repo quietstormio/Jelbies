@@ -15,6 +15,8 @@ final class JellyActor {
     let sim: SoftBody
     let skinner: Skinner
     var brain: BlobBrain?
+    /// Set while he is out of the frame on an outing run (GameCare+Outing.swift): the spot he left from, so a trip saves THAT as his home.
+    var outingHome: SIMD2<Float>?
     /// Where he starts (centroid x, z).
     let spawn: SIMD2<Float>
     /// What he keeps (GameCare owns it): needs, dirt, the look the room draws it with, his book of words. Nil only for a stage without a game.
@@ -86,7 +88,7 @@ final class JellyActor {
     }
 
     /// His floor spot now: the body's centroid when it is free, else the brain's root.
-    var floor: SIMD2<Float> { brain.map { GameCare.floorPos($0, sim) } ?? { let c = sim.centroid(); return SIMD2(c.x, c.z) }() }
+    var floor: SIMD2<Float> { outingHome ?? brain.map { GameCare.floorPos($0, sim) } ?? { let c = sim.centroid(); return SIMD2(c.x, c.z) }() }
     /// He is walking somewhere (the others steer around a Jelly that stands still; between two walkers the lower id gives way).
     var isWalking: Bool { brain.map { $0.activity == .walking || $0.activity == .coming } ?? false }
 }

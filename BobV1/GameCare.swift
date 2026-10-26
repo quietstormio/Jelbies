@@ -136,6 +136,7 @@ final class GameCare {
     /// The Groomer (Groomer/): the paid clean-up trip to the Jelly Spa.
     let groom = GroomTrip()
     @ObservationIgnored let groomBook = GroomBook()
+    @ObservationIgnored let outing = OutingBook()
     @ObservationIgnored let parkBook = ParkBook()
     /// A friend over at home (Park/GuestBook.swift, GameCare+Guest.swift): the invitation / visit, saved on the device.
     let guestBook = GuestBook()
@@ -668,6 +669,7 @@ final class GameCare {
     func wireWorld(_ brain: BlobBrain, isBob: Bool) {
         let base = brain.resolve
         brain.resolve = { [weak self, weak brain] p, r in
+            if self?.outing.lifted.contains(isBob ? 0 : (brain?.steerID ?? -1)) == true { return p }          // (an outing run-out: the Jelbie leaves the room toward the camera)
             if self?.bath.fenceLifted == true, self?.bath.targetID == (isBob ? 0 : brain?.steerID) { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase, only for the Jelly being washed
             let rr = self?.footprint(r) ?? r
             if self?.focusGroup.rowOpen == true, let me = self { return me.obstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: rr) }       // the wide close-up row stands past the roaming floor's sides

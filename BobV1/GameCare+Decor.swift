@@ -24,7 +24,7 @@ struct DecorDrawn {
 extension GameCare {
     /// The placed pieces reach the field (and so the walk resolver and the Jellies) the moment the store changes.
     func syncDecor() {
-        let hide = cafe.hidesDecor || park.hidesDecor || volley.hidesDecor          // in the café (or the park) the room's furniture is away (it is not that room)
+        let hide = cafe.hidesDecor || park.hidesDecor || volley.hidesDecor || groom.inScene          // in the café (or the park) the room's furniture is away (it is not that room)
         let pv = dragPreview
         if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID {
             decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide
@@ -57,6 +57,7 @@ extension GameCare {
     func refreshDecor(renderer: MelonRenderer?, time: Float) {
         guard let room = renderer?.room else { return }
         syncDecor()
+        if refreshGroomFx(room) { return }          // the Jelly Spa street: the door, the glow, bubbles and steam (Groomer/GameCare+Groom.swift)
         if refreshVolleyBall(room) { return }          // the beach: the ball and its shadow are the animating decor (Volley/GameCare+Volley.swift)
         let f = DecorField.shared
         let active = Set(f.anim.filter { $0.value.active }.keys)

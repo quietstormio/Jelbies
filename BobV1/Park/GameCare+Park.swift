@@ -33,7 +33,7 @@ extension GameCare {
     }
 
     /// The bodies of the Jelbies that did not come along are away while the park is on.
-    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) }
+    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) || groomHides(id) }
 
     // MARK: blockers and the request
 
@@ -66,7 +66,10 @@ extension GameCare {
     func startPark() {
         guard park.picking, !park.picked.isEmpty else { return }
         select.cancel()
-        park.begin()
+        let who = park.picked
+        park.cancelPicker()
+        if outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
+        park.resume(picked: who)
     }
 
     private var parkFadeBlocked: Bool {

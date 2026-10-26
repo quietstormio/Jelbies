@@ -125,6 +125,7 @@ extension GameCare {
         select.cancel()
         queued.removeAll(); callRunning = false
         voice.cancel()
+        if outingGate([id], again: { [weak self] in self?.startShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
         let bodies = max(1, min(raceBook.actors.count, 4))
         show.begin(playerID: id, name: prof.name, character: prof.character, input: showPlayerInput(jelly: id), rank: r, dayKey: Self.showDay, bodies: bodies, seed: seed ?? Self.showSeed)
         show.setOutfit(showOutfitTags(jelly: id))
@@ -136,6 +137,7 @@ extension GameCare {
         select.cancel()
         queued.removeAll(); callRunning = false
         voice.cancel()
+        if outingGate([id], again: { [weak self] in self?.startDancePractice(jelly: id, dance: dance, seed: seed) }) { return }
         show.beginPractice(playerID: id, name: prof.name, character: prof.character, dance: dance, stats: prof.stats, seed: seed ?? Self.showSeed)
     }
     /// The lobby's rank picker.

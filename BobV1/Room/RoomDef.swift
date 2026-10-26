@@ -7,7 +7,7 @@
 import simd
 import Foundation
 
-nonisolated enum RoomID: String, Codable, CaseIterable, Sendable { case home, loft, cabin, cafe, park, beach }
+nonisolated enum RoomID: String, Codable, CaseIterable, Sendable { case home, loft, cabin, cafe, park, beach, groom }
 
 nonisolated struct RoomWindows: Equatable, Sendable {
     var xs: [Float]; var halfW: Float; var y0: Float; var y1: Float
@@ -69,5 +69,5 @@ nonisolated enum RoomCatalog {
 
     /// The livable, buyable rooms. The café (CafeRoom.swift) and the park (Park/ParkRoom.swift) are visiting rooms and are NOT in this list.
     static let all: [RoomDef] = [home, loft, cabin]
-    static func def(_ id: RoomID) -> RoomDef { id == .cafe ? cafe : id == .park ? park : id == .beach ? beach : (all.first { $0.id == id } ?? home) }
+    static func def(_ id: RoomID) -> RoomDef { id == .cafe ? cafe : id == .park ? park : id == .beach ? beach : id == .groom ? groom : (all.first { $0.id == id } ?? home) }
 }
