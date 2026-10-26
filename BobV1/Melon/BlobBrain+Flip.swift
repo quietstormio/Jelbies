@@ -124,7 +124,7 @@ extension BlobBrain {
         armWalkWant = 1
         armDirW = smooth01(flipArmA)
         armDirEl = [flipEl, flipEl]; armDirSa = [flipSa, flipSa]; armDirOut = flipOut
-        driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
+        driveBeansRigid(sim, skinner, dt, tuck: gait.tuck, force: gait.phase == .air || gait.phase == .land)
         driveArms(sim, skinner, dt)
         if !gait.isBusy {
             gait.basePitch = 0
