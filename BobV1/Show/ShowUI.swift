@@ -14,9 +14,11 @@ import SwiftUI
 // MARK: - palette and small pieces
 
 enum ShowUI {
-    static let hall = Color(hex: 0x3B2E4F), stage = Color(hex: 0x4E3D68), platform = Color(hex: 0x6B5487), curtain = Color(hex: 0xC25A78)
-    static let light = Color(hex: 0xFFF3C9), gold = Color(hex: 0xFFE07A), goldDeep = Color(hex: 0xF2B530), lilac = Color(hex: 0x9C8AB5), lilacPale = Color(hex: 0xCDBFE0), mist = Color(hex: 0xE2D6F0)
-    static let sand = Color(hex: 0xEADFC8), bar = DT.fill, brownGold = Color(hex: 0x6B4A00), goldText = Color(hex: 0x8A6A12)
+    // Calm: a charcoal hall, light neutrals, the accent for emphasis
+    static let hall = Color(hex: 0x2A2622), stage = Color(hex: 0x3A3631), platform = Color(hex: 0x57514A), curtain = Color(hex: 0x6B635B)
+    static let light = Color(hex: 0xF8F6F2), gold = Color(hex: 0xE9E4DC), lilac = Color(hex: 0x8F8880), lilacPale = Color(hex: 0xD8D2CA), mist = Color(hex: 0xEAE5DD)
+    static var goldDeep: Color { DT.accent }
+    static let sand = Color(hex: 0xF0ECE6), bar = DT.fill, brownGold = DT.ink, goldText = DT.ink2
     static func tag(_ t: WearTag) -> Color { Color(hex: t.hex) }
     static func ordinal(_ p: Int) -> String { p == 1 ? "1st" : p == 2 ? "2nd" : p == 3 ? "3rd" : "\(p)th" }
     /// A stat 0...1 as the jar's number (0...100).

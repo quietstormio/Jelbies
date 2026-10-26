@@ -489,7 +489,7 @@ struct TrickRound: View {
                     Text(t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}")).font(SK.font(15, .semibold))
                 }
                 .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44)
-                .background(Capsule().fill(now ? ShowUI.gold : SK.cream.opacity(0.95)))
+                .background(Capsule().fill(now ? ShowUI.gold : DT.card))
                 .overlay(Capsule().strokeBorder(now ? ShowUI.goldDeep : .clear, lineWidth: 3))
                 .accessibilityElement(children: .combine)
             }

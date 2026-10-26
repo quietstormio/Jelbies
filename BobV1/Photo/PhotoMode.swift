@@ -188,7 +188,7 @@ struct PhotoModeView: View {
                             Text(it.1).font(SK.font(15, .semibold)).lineLimit(1)
                         }
                         .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                        .background(Capsule().fill(it.0 == selected ? SK.honey : SK.cream.opacity(0.94)).shadow(color: SK.shadow.opacity(0.2), radius: 3, y: 1))
+                        .background(Capsule().fill(it.0 == selected ? SK.honey : DT.card).shadow(color: SK.shadow.opacity(0.2), radius: 3, y: 1))
                     }
                     .buttonStyle(.plain).accessibilityAddTraits(it.0 == selected ? .isSelected : [])
                 }
@@ -222,7 +222,7 @@ struct PhotoModeView: View {
         Button { AudioHub.shared.uiTap(); a() } label: {
             VStack(spacing: 2) {
                 Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                    .frame(width: 46, height: 46).background(Circle().fill(on ? SK.honey : SK.cream.opacity(0.94)))
+                    .frame(width: 46, height: 46).background(Circle().fill(on ? SK.honey : DT.card))
                     .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                 Text(label).font(SK.font(11, .semibold)).foregroundStyle(.white).shadow(color: .black.opacity(0.55), radius: 2, y: 1)
             }

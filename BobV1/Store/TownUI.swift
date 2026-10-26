@@ -64,13 +64,13 @@ struct PerkBadgeRow: View {
                 Text(j.name).font(SK.font(11, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
                 ForEach(list, id: \.rawValue) { k in
                     Image(systemName: k.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 24, height: 24).background(Circle().fill(SK.honey))
+                        .frame(width: 24, height: 24).background(Circle().fill(DT.fill))
                         .accessibilityLabel("\(k.title) \(SK.timeLeft(j.perks.remaining(k))) left")
                 }
             }
         }
         .padding(.horizontal, list.isEmpty ? 0 : 8).padding(.vertical, list.isEmpty ? 0 : 3)
-        .background(Capsule().fill(SK.cream.opacity(list.isEmpty ? 0 : 0.92)))
+        .background(Capsule().fill(DT.card.opacity(list.isEmpty ? 0 : 1)))
         .accessibilityIdentifier("perk-badges")
     }
 }

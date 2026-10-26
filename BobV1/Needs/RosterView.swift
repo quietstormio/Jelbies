@@ -21,7 +21,7 @@ struct RosterButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(DT.card).opacity(0.92))
+                .background(Circle().fill(DT.card))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                 .frame(width: 44, height: 44).contentShape(Circle())
                 .overlay(alignment: .topTrailing) {

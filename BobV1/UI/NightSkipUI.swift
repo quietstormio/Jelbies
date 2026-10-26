@@ -19,7 +19,7 @@ struct SleepUntilMorningButton: View {
                     }
                     .foregroundStyle(Color(red: 0.36, green: 0.32, blue: 0.55))
                     .padding(.horizontal, all ? 14 : 0).frame(minWidth: 44, minHeight: 44)
-                    .background(Capsule().fill(DT.card).opacity(0.94))
+                    .background(Capsule().fill(DT.card))
                     .overlay(Capsule().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                     .contentShape(Capsule())
                 }
