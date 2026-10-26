@@ -12,7 +12,7 @@ import Foundation
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
     static let count = 10
-    static let startFraction: Float = 0.88          // of his height, on the back silhouette line
+    static let startFraction: Float = 0.90          // of his height, on the back silhouette line
     static let tailEnd: Double = 0.85               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
     static let tiltDeg: Float = 30                  // each spike leans this far from the surface normal toward the tail
@@ -43,7 +43,7 @@ nonisolated enum PipSpikes {
             for i in 1...nBody {
                 let u = Float(i) / Float(nBody)
                 let h = 0.06 * H + (hTip - 0.06 * H) * u
-                prof.append((h, tipR + (b - tipR) * pow(1 - (h - 0.06 * H) / (hTip - 0.06 * H), 0.85)))        // gumdrop-ish taper (slightly convex)
+                prof.append((h, tipR + (b - tipR) * pow(1 - (h - 0.06 * H) / (hTip - 0.06 * H), 0.7)))        // gumdrop-ish taper (slightly convex)
             }
             let base0 = UInt32(pos.count)
             var rings = 0
@@ -156,21 +156,27 @@ nonisolated enum PipSpikes {
             }
             return (out, d)
         }
-        // equal spacing measured at the TIPS too: no two neighbouring tips closer than 0.8 of the base spacing; if the corner still crowds them, drop a spike and re-space
-        var cnt = count
+        // keep the rhythm at the TIPS too: if two neighbouring tips come closer than 0.8 of the base spacing (the corner crowds them), drop the one nearer the crease
+        // (at most twice); every other spike stays exactly where the even spacing put it
+        let cnt = count
         var lay = layout(cnt)
-        while cnt > 7 {
-            var ok = true
-            for k in 1..<lay.sp.count where simd_distance(lay.sp[k].tip, lay.sp[k - 1].tip) < 0.8 * lay.d { ok = false }
-            if ok { break }
-            cnt -= 1; lay = layout(cnt)
+        let creaseS = arc[min(backCount, arc.count - 1)]
+        for _ in 0..<2 {
+            var worst = -1, wd = 0.8 * lay.d
+            for k in 1..<lay.sp.count {
+                let dd = simd_distance(lay.sp[k].tip, lay.sp[k - 1].tip)
+                if dd < wd { wd = dd; worst = k }
+            }
+            if worst < 0 { break }
+            let drop = abs(lay.sp[worst].s - creaseS) < abs(lay.sp[worst - 1].s - creaseS) ? worst : worst - 1
+            lay.sp.remove(at: drop)
         }
         var widths: [Float] = [], centres: [Float] = []
         var tailFirst = -1
         for (k, sp) in lay.sp.enumerated() {
             widths.append(2 * sp.bR); centres.append(sp.s)
             let start = m.pos.count
-            m.cone(base: sp.p, axis: sp.ax, height: sp.H, baseR: sp.bR, bend: sp.t, curve: 0.10 + 0.32 * sp.e, tipSoft: 0.28, lateral: SIMD3(1, 0, 0), tones: tn)
+            m.cone(base: sp.p, axis: sp.ax, height: sp.H, baseR: sp.bR, bend: sp.t, curve: 0.10 + 0.32 * sp.e, tipSoft: 0.34, lateral: SIMD3(1, 0, 0), tones: tn)
             if sp.isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, sp.p)) }
         }
         var gap = Float.infinity
