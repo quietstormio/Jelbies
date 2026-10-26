@@ -54,6 +54,8 @@ final class FeatureSet {
         var accel: [SIMD3<Float>] = Array(repeating: .zero, count: FeatureTuning.accelHistory)      // ring, newest at `accelHead`
         var accelHead = 0
         var squashRate: Float = 0
+        /// Pip's tail spikes (PipSpikes): yaw (deg, sway / wag) and pitch (deg, bounce), plus the spring state.
+        var tailYaw: Float = 0, tailPitch: Float = 0, tailSway: Float = 0, tailSwayV: Float = 0, tailPitchV: Float = 0
         /// Spines: angle (deg) about (along, across) and its rate, per spine; the visible scale of each part (hidden under a hat -> 0).
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
         var partScale: [String: Float] = [:]
@@ -142,7 +144,7 @@ final class FeatureSet {
         s.primed = true
         // the animation
         switch feature {
-        case .spines: stepSpines(&s, spec: spec, dt: dt)
+        case .spines: stepSpines(&s, spec: spec, dt: dt); stepTail(&s, brain: brain, dt: dt)
         case .daisy: stepDaisy(&s, brain: brain, spec: spec, dt: dt)
         case .wings: stepWings(&s, brain: brain, dt: dt)
         case .none: break
@@ -213,6 +215,12 @@ final class FeatureSet {
             let cur = s.partScale[sp.part] ?? want
             s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
+    }
+
+    /// The tail spikes follow the tail: the sway / wag / bob angles come from the Skinner that moves the tail in the body mesh (Skinner.applyTail).
+    private func stepTail(_ s: inout Slot, brain: BlobBrain, dt: Float) {
+        s.tailYaw = brain.skinnerRef?.tailYaw ?? 0
+        s.tailPitch = brain.skinnerRef?.tailPitch ?? 0
     }
 
     private func stepDaisy(_ s: inout Slot, brain: BlobBrain, spec: FeatureSpec, dt: Float) {
@@ -331,6 +339,11 @@ final class FeatureSet {
     static func partRotation(_ p: FeaturePrepared, _ part: FeaturePrepared.Part, slot s: Slot, spec: FeatureSpec) -> simd_float3x3 {
         switch s.feature {
         case .spines:
+            if part.name == "tail" {                // the tail spikes ride the tail: yaw sway / wag + pitch bounce about its root (rest frame)
+                let q = simd_quatf(angle: s.tailPitch * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: s.tailYaw * .pi / 180, axis: SIMD3(0, 1, 0))
+                return simd_float3x3(q)
+            }
+            if PipSpikes.backFractions.count > 0 { return matrix_identity_float3x3 }       // the back spikes are rigid on the skin
             guard s.spineA.indices.contains(part.side) else { return matrix_identity_float3x3 }
             let sp = spec.spines[part.side], a = s.spineA[part.side]
             let axis = sp.axis.v3

@@ -35,6 +35,7 @@ final class JellyPortraitRenderer {
         skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount,
                           eyes: buildEyeRig(render: rm, sim: sm), antennae: buildAntennaRig(render: rm, sim: sm))
         skinner.autoBlink = false
+        skinner.configureTail(rm)
         sim = SoftBody(mesh: sm, firmness: 0.95)
         sim.reset(drop: 0.35)
         for _ in 0..<300 { sim.step() }

@@ -40,6 +40,7 @@ final class JellyActor {
         skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount,
                           eyes: buildEyeRig(render: rm, sim: sm, appearance: ap),
                           antennae: buildAntennaRig(render: rm, sim: sm))
+        skinner.configureTail(rm)
     }
 
     // MARK: sleep (a settled Jelly skips his sim step)

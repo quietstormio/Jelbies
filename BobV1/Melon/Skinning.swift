@@ -77,6 +77,19 @@ nonisolated final class Skinner {
     var beanPos: [[SIMD3<Float>]] = [[], []]
     var beanStart: [[SIMD3<Float>]] = [[], []]         // the inset bean in the body-rigid foot pose: where each bean starts from at blend 0
     var beanBlend: Float = 0
+    // Pip's tail (TailBean): a block of body vertices after the foot beans. Off (every Jelly but Pip), it is collapsed onto its base pole (zero-area, invisible).
+    // On, it sways (walking), wags (happy) and bobs (vertical motion); `tailYaw` / `tailPitch` (deg) are read by the spike layer so the tail spikes ride it.
+    var tailFirst = -1, tailOn = false, tailHappy = false
+    private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []
+    /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
+    func configureTail(_ rm: RenderMesh) {
+        guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
+        tailFirst = cap.tailFirst
+        tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
+        tailLMRest = tailLM.map { SIMD3(rm.rest[3 * $0], rm.rest[3 * $0 + 1], rm.rest[3 * $0 + 2]) }
+    }
+    private(set) var tailYaw: Float = 0, tailPitch: Float = 0
+    private var tailScale: Float = 0, tailInit = false, tailClock: Float = 0, tailLastB = SIMD3<Float>.zero, tailPrimed = false
     var retractVertices: [Int32] = []
     var retractRest: [SIMD3<Float>] = []              // rest-space delta of each retracting vertex onto the footless egg (sunk a little)
     var retractWeight: [Float] = []
@@ -379,6 +392,7 @@ nonisolated final class Skinner {
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
             }
         }
+        applyTail(dyn)
         eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
         if !antennae.isEmpty { applyAntennae(x, dyn) }
@@ -397,6 +411,51 @@ nonisolated final class Skinner {
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
+    }
+
+    private func applyTail(_ dyn: UnsafeMutablePointer<Float>) {
+        guard tailFirst >= 0, tailFirst + TailBean.vertexCount <= vertexCount else { return }
+        let f = tailFirst, n = TailBean.vertexCount
+        func P(_ i: Int) -> SIMD3<Float> { SIMD3(dyn[6 * (f + i)], dyn[6 * (f + i) + 1], dyn[6 * (f + i) + 2]) }
+        let dt = frameDt
+        guard tailLM.count == 3 else { return }
+        // carry the tail rigidly on the frame of its three landmark egg vertices (rest -> skinned)
+        func lm(_ k: Int) -> SIMD3<Float> { let o = 6 * tailLM[k]; return SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
+        func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
+            let x = simd_normalize(b - a), z = simd_normalize(simd_cross(x, c - a)), y = simd_cross(z, x)
+            return simd_float3x3(columns: (x, y, z))
+        }
+        let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
+        let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
+        let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
+        for i in 0..<n { let p = Cs + Rot * (TailBean.localF[i] - Cr); let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z }
+        let B = P(0), T = P(n - 1)
+        if !tailInit { tailScale = tailOn ? 1 : 0; tailInit = true }
+        tailScale += max(-dt / 0.15, min(dt / 0.15, (tailOn ? 1 : 0) - tailScale))
+        if !tailOn && tailScale <= 0.002 {                       // off: every vertex onto the base pole (inside the body)
+            for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
+            tailPrimed = false; tailYaw = 0; tailPitch = 0
+            return
+        }
+        let vel = tailPrimed ? (B - tailLastB) / dt : SIMD3<Float>.zero
+        tailLastB = B; tailPrimed = true
+        tailClock += dt
+        let speed = (vel.x * vel.x + vel.z * vel.z).squareRoot()
+        let yawT = 9 * min(1, speed / 0.5) * sinf(2 * .pi * 2.4 * tailClock) + (tailHappy ? 24 * sinf(2 * .pi * 3.6 * tailClock) : 0) + 3 * sinf(2 * .pi * 0.45 * tailClock)
+        let pitchT = max(-14, min(14, -vel.y * 4))
+        tailYaw += (yawT - tailYaw) * min(1, dt * 14); tailPitch += (pitchT - tailPitch) * min(1, dt * 10)
+        if !tailYaw.isFinite { tailYaw = 0 }; if !tailPitch.isFinite { tailPitch = 0 }
+        let D = simd_normalize(T - B)
+        let pivot = B + (T - B) * 0.30                               // about where the tail leaves the back
+        let axis = simd_normalize(simd_cross(D, SIMD3<Float>(0, 1, 0)))
+        let q = simd_quatf(angle: tailYaw * .pi / 180, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: tailPitch * .pi / 180, axis: simd_length(axis) > 1e-4 ? axis : SIMD3(1, 0, 0))
+        let sc = tailScale
+        for i in 1..<n {
+            var p = pivot + q.act(P(i) - pivot)
+            if sc < 1 { p = pivot + (p - pivot) * sc }
+            let o = 6 * (f + i)
+            dyn[o] = p.x; dyn[o + 1] = max(p.y, 0.004); dyn[o + 2] = p.z
+        }
     }
 
     // MARK: vertex normals

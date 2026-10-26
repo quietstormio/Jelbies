@@ -1003,6 +1003,10 @@ private func buildRenderMeshBob() -> RenderMesh {
         for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], FootBean.mat[i]) }
         idx += FootBean.triangles(firstVertex: beanFirst)
     }
+    // Pip's tail (TailBean): after the foot beans, still in the body index range; skinned like the body, collapsed for every Jelly but Pip (Skinner)
+    let tailFirst = pos.count / 3
+    for i in 0..<TailBean.vertexCount { add(TailBean.local.pos[i], TailBean.local.nrm[i], 0) }
+    idx += TailBean.triangles(firstVertex: tailFirst)
     let bodyIndexCount = idx.count
 
     // decals: footprints in the x-y plane, projected onto the front surface
@@ -1099,7 +1103,7 @@ private func buildRenderMeshBob() -> RenderMesh {
     return RenderMesh(
         rest: pos.map { Float($0) }, restNormal: nrm.map { Float($0) }, mat: mat, index: idx,
         body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
-        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst))
+        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst))
 }
 
 private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {
