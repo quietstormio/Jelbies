@@ -268,6 +268,8 @@ final class BlobBrain {
     var yaw: Float = 0
     var roll: Float = 0, pitch: Float = 0, squash: Float = 1, lift: Float = 0
     var runAir: Float = 0            // the run's airborne rise (world units) this tick: the planted bean tucks up with it, so both feet leave the floor
+    var runDt: Float = 1.0 / 60, runSpring: Float = 0, runSpringV: Float = 0, runYawPrev: Float = 0, runYawRate: Float = 0
+    var runArmS: [Float] = [0, 0], runArmV: [Float] = [0, 0]
     var runFalling = false           // the run blend is ramping out (the skid-stop)
     var pitchBase: Float = 0
     var twist: Float = 0                 // extra heading (the dining reach turns his body toward the arm; the feet stay where they are)
@@ -545,6 +547,7 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        runDt = dt
         defer { expressionTick(sim, skinner, dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
@@ -1757,7 +1760,13 @@ final class BlobBrain {
             let sg: Float = si == 0 ? -1 : 1
             if armWalkWant > 0 {
                 let S = ArmPath.armWalkSweepDeg(phase: ph, side: si == 0 ? -1 : 1, gaitW: armGaitW)
-                armLastS[si] = ArmPath.armWalkCentreDeg + (S - ArmPath.armWalkCentreDeg) * sweep
+                var tgt = ArmPath.armWalkCentreDeg + (S - ArmPath.armWalkCentreDeg) * sweep
+                if runW > 0.01 {        // the arms trail the stride and overshoot a little (underdamped spring), blended in with the run
+                    runArmV[si] += ((tgt - runArmS[si]) * 700 - runArmV[si] * 22) * dt
+                    runArmS[si] += runArmV[si] * dt
+                    tgt += (runArmS[si] - tgt) * min(1, runW)
+                } else { runArmS[si] = tgt; runArmV[si] = 0 }
+                armLastS[si] = tgt
             }
             nubPhi[si] = (armLastS[si] - ArmPath.armWalkCentreDeg) / 33
             let g = armDirW > 0 ? armGeometry(S: armLastS[si], lift: armLift, dirEl: armDirEl[si], dirSa: armDirSa[si], w: armDirW, out: armDirOut) : armGeometry(S: armLastS[si], lift: armLift)
