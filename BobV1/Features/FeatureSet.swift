@@ -289,6 +289,7 @@ final class FeatureSet {
             flap = brain.flapHop.flapDeg; spread = brain.flapHop.spreadDeg
         } else {
             flap = FeatureTuning.flutterA * sinf(2 * .pi * FeatureTuning.flutterHzA * s.clock) + FeatureTuning.flutterB * sinf(2 * .pi * FeatureTuning.flutterHzB * s.clock + 1.3)
+            flap += brain.runW * brain.runChar.flutter * 9 * sinf(2 * .pi * 7 * s.clock)       // a tiny flutter while running
             spread = 0.4 * max(flap, 0)
         }
         if s.folded { flap = 0; spread = 0 }

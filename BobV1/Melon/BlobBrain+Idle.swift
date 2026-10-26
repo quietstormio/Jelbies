@@ -193,16 +193,49 @@ extension BlobBrain {
     static let runArmGain: Float = 1.1
     static let runTuck: Float = 1.6                    // swing-foot lift x(1 + this) at full run: the feet tuck up under him
     static let runBound: Float = 0.085                 // airborne rise per stride (world units)
-    /// The run's body: forward lean, a bound each stride (rise in the flight, squash at touch-down, stretch at push-off), the skid-stop dip.
+    /// Per-character run feel from the personality data (Pip energetic: quicker, bouncier; Moss calm: smoother; Lavender floaty: long hang).
+    var runChar: (rate: Float, bounce: Float, hang: Float, flutter: Float) {
+        switch personalityKey {
+        case .spines: return (1.06, 1.25, 0.0, 0)
+        case .daisy: return (0.96, 0.8, 0.0, 0)
+        case .wings: return (0.98, 1.1, 0.12, 1)
+        default: return (1, 1, 0, 0)
+        }
+    }
+    /// The run's body: forward lean that builds with speed (eased) and banks into turns, an eased bound each stride (anticipation dip, ease-out rise,
+    /// a hang at the top, an ease-in snappy landing), touch-down squash, a lagged follow-through spring (body + head-top wobble), the crouch-launch and the skid-stop.
     func runPose(_ a: Float) {
-        let u = feet.stepU, w = runW
-        pitch += Self.runLean * w
-        let hump = powf(sinf(.pi * u), 1.3)
-        runAir = Self.runBound * a * w * hump
+        let u = feet.stepU, w = runW, dt = max(runDt, 1e-3), ch = runChar
+        let ws = w * w * (3 - 2 * w)                                             // lean builds smoothly
+        pitch += Self.runLean * ws
+        let top = 0.46 + ch.hang
+        let h: Float
+        if u < top { let s = u / top; h = 1 - (1 - s) * (1 - s) } else { let s = (u - top) / (1 - top); h = 1 - s * s * (1 + 0.35 * s) }
+        runAir = max(0, Self.runBound * ch.bounce * a * w * h)
         lift += runAir
-        let land = max(0, 1 - u / 0.22), land2 = max(0, (u - 0.8) / 0.2)       // touch-down squash at both ends of a stride
-        squash += w * (0.07 * sinf(.pi * u) - 0.11 * max(land, land2))
-        if runFalling { squash -= 0.06 * w; pitch -= 0.05 * w }
+        let land = powf(max(0, 1 - u / 0.2), 1.6), land2 = max(0, (u - 0.82) / 0.18)      // snappy touch-down squash; the anticipation before push-off
+        let target = w * (0.07 * sinf(.pi * u) - 0.12 * ch.bounce * max(land, land2))
+        squash += target
+        lift -= 0.012 * w * land2 * a                                             // anticipation: a tiny sink before the push
+        // follow-through: a damped spring chasing the bounce's squash, so the body lags a few frames and overshoots on landings
+        runSpringV += ((target - runSpring) * 260 - runSpringV * 11) * dt
+        runSpring += runSpringV * dt
+        let lag = runSpring - target
+        squash += lag * 0.8
+        pitch += lag * 1.4                                                         // the head-top wobble on landings
+        // banking: lean into the turn (smoothed yaw rate)
+        let dy = wrapAngle(yaw - runYawPrev); runYawPrev = yaw
+        runYawRate += (dy / dt - runYawRate) * min(1, dt * 8)
+        roll += max(-0.06, min(0.06, runYawRate * 0.035)) * w
+        // crouch-launch: the first of the blend sinks and pitches in; skid-stop: lean back, squash, then the spring settles
+        if runFalling {
+            let sk = sinf(.pi * min(1, w)) * 0.5 + 0.5 * w
+            pitch -= (0.05 + 0.2 * sk) * w
+            squash -= 0.07 * sk
+        } else if w < 0.7 {
+            let cr = sinf(.pi * w / 0.7)
+            lift -= 0.02 * cr; squash -= 0.05 * cr; pitch += 0.04 * cr
+        }
     }
     /// 2026-10-18: the roaming walk is ~14 % faster (stride x1.143, cadence unchanged, so speed = stride x rate stays slip-free; a faster cadence made the turn-in-place steps of the zoomies loop come off the belly); the boost is off whenever a run / zoomies / slide (or its
     /// blend-out) is on, so the run / zoomies / slide keep their tuned, feet-attached gait exactly (`runW` = 1 gives the old numbers).
@@ -211,7 +244,7 @@ extension BlobBrain {
     /// Waits between behaviours: half while the player is watching (the stage turns `watching` on in the room; the headless suites leave it off).
     var idleLively: Float { (watching ? 0.35 : 1) * (perkFlags.bouncy ? 0.7 : 1) }
     var runStrideMul: Float { (1 + 0.24 * runW + 0.0 * zoomW) * walkBoostNow }
-    var runRateMul: Float { 1 + 0.17 * runW + 0.20 * zoomW }
+    var runRateMul: Float { 1 + 0.17 * runW * runChar.rate + 0.20 * zoomW }
 
     var idleActivity: Activity {
         switch idleState.kind {

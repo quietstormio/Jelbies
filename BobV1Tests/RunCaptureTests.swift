@@ -45,7 +45,7 @@ final class RunCaptureTests: XCTestCase {
         try img.pngData()!.write(to: URL(fileURLWithPath: path))
     }
 
-    private func strip(dx: Float, dz: Float, device: MTLDevice, target: MTLTexture, Wc: Int, Hc: Int, C: Int) throws -> [(String, LockImage)] {
+    private func strip(dx: Float, dz: Float, device: MTLDevice, target: MTLTexture, Wc: Int, Hc: Int, C: Int, dist: Float = 4.2, warm: Float = 0.6, every: Int? = nil) throws -> [(String, LockImage)] {
         let r = MotionRig(game: true); Self.keep.append(r)
         r.skinner.autoBlink = false
         r.brain.seed = 11; r.brain.autonomy = false
@@ -59,12 +59,12 @@ final class RunCaptureTests: XCTestCase {
         for _ in 0..<120 { r.sim.step() }
         r.brain.currentPose(r.sim)
         r.brain.hurry = true
-        r.brain.script = .walk(target: start + SIMD2(dx, dz) * 4.2, then: .none); r.brain.activity = .walking
+        r.brain.script = .walk(target: start + SIMD2(dx, dz) * dist, then: .none); r.brain.activity = .walking
         r.brain.scriptT = 0
-        r.run(0.6)
+        if warm > 0 { r.run(warm) }
         var out: [(String, LockImage)] = []
         var i = 0
-        let every = Int(ProcessInfo.processInfo.environment["RUN_CAP_EVERY"] ?? "3") ?? 3
+        let every = every ?? Int(ProcessInfo.processInfo.environment["RUN_CAP_EVERY"] ?? "3") ?? 3
         while out.count < 10 {
             r.tick()
             r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
@@ -109,6 +109,18 @@ final class RunCaptureTests: XCTestCase {
         for (label, dx, dz) in [("run, side view (across the room)", Float(1), Float(0)), ("run, 3/4 view (toward the camera)", Float(0), Float(1))] {
             rows.append((label, try strip(dx: dx, dz: dz, device: device, target: target, Wc: Wc, Hc: Hc, C: C)))
         }
-        try sheet(rows, cw: 200, to: d + "/run_cycle.png", cols: 10)
+        try sheet(rows, cw: 200, to: d + "/run_cycle_v2.png", cols: 10)
+    }
+
+    func testStartStopStrip() throws {
+        let d = try dir()
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        let Wc = 1080, Hc = 1920, C = 420
+        let td = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: Wc, height: Hc, mipmapped: false)
+        td.usage = [.renderTarget, .shaderRead]; td.storageMode = .shared
+        let target = device.makeTexture(descriptor: td)!
+        GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: Float(Wc) / Float(Hc))
+        let rows = [("start + stop, side view (from rest, short dash)", try strip(dx: 1, dz: 0, device: device, target: target, Wc: Wc, Hc: Hc, C: C, dist: 0.9, warm: 0, every: 6))]
+        try sheet(rows, cw: 200, to: d + "/run_startstop_v2.png", cols: 10)
     }
 }
