@@ -133,6 +133,7 @@ extension GameCare {
         select.cancel()
         queued.removeAll(); callRunning = false
         voice.cancel()
+        if outingGate([id], again: { [weak self] in self?.beginRace(jelly: id, seed: seed, drill: drill) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
         if drill {
             race.stats = prof.stats
             if let l = live, l.pepLive, prof.stats.pepLeft > 0 { l.pepRefilled() }          // a new day: the Pep is back before he practises

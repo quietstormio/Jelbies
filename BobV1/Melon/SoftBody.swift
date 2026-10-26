@@ -146,6 +146,8 @@ nonisolated final class SoftBody {
     /// Invisible round wall: particles are kept within `arenaRadius` of `arenaCenter` (xz). Infinite = off.
     var arenaCenter = SIMD2<Float>(0, 0)
     var arenaRadius: Float = .infinity
+    /// The wall is off for now without losing its radius (an outing run-out leaves the room: GameCare+Outing.swift).
+    var arenaSuspended = false
 
     // grab state
     private let grabIdx: UnsafeMutablePointer<Int32>
@@ -633,7 +635,7 @@ nonisolated final class SoftBody {
         if !targets.isEmpty { solveTargets(dt, x) }
         if pressing { solvePress(x) }
         solveFloor(x)
-        if arenaRadius.isFinite { solveArena(x) }
+        if arenaRadius.isFinite, !arenaSuspended { solveArena(x) }
         let inv = 1 / dt, vmax = maxSpeed
         var i = 0
         while i < 3 * n {
@@ -1254,7 +1256,7 @@ nonisolated final class SoftBody {
                     if !targets.isEmpty { t0 = DispatchTime.now().uptimeNanoseconds; solveTargets(dt, x); lap("targets", t0) }
                     if pressing { t0 = DispatchTime.now().uptimeNanoseconds; solvePress(x); lap("press", t0) }
                     t0 = DispatchTime.now().uptimeNanoseconds; solveFloor(x); lap("floor", t0)
-                    if arenaRadius.isFinite { t0 = DispatchTime.now().uptimeNanoseconds; solveArena(x); lap("arena", t0) }
+                    if arenaRadius.isFinite, !arenaSuspended { t0 = DispatchTime.now().uptimeNanoseconds; solveArena(x); lap("arena", t0) }
                     t0 = DispatchTime.now().uptimeNanoseconds
                     let inv = 1 / dt, vmax = maxSpeed
                     var i = 0

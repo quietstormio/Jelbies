@@ -163,6 +163,7 @@ enum RoomGeometry {
 
     static func build(theme: RoomTheme, def: RoomDef = RoomLayout.current) -> RoomMesh {
         if def.id == .beach { return BeachScenery.build(theme: theme) }          // the volleyball beach (Volley/VolleyScene.swift)
+        if def.id == .groom { return GroomScenery.build(theme: theme) }          // the Jelly Spa street (Groomer/GroomRoom.swift)
         if def.id == .park { return ParkScenery.build(theme: theme) }          // the park: its own scenery (Park/ParkRoom.swift)
         let sw = theme.swatches
         let b = RoomMeshBuilder()

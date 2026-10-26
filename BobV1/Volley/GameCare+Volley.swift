@@ -84,6 +84,9 @@ extension GameCare {
 
     private func beginVolley(jelly id: Int, mode: VolleyMode, seed: UInt64) {
         guard let prof = jelly(id) else { return }
+        var going = [id]
+        if case .match = mode, let p = jellies.first(where: { $0.id != id }) { going.append(p.id) }
+        if outingGate(going, again: { [weak self] in self?.beginVolley(jelly: id, mode: mode, seed: seed) }) { return }          // they run out of the room first
         let w = volleyWork
         w.pendingSeed = seed
         var partner: JellyProfile?
