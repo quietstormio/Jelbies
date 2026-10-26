@@ -19,8 +19,8 @@ struct CafeChrome: View {
                     VStack {
                         HStack(alignment: .top) {
                             HStack(spacing: 7) {
-                                Image(systemName: "cup.and.saucer.fill").font(.system(size: 15, weight: .heavy))
-                                Text("Café").font(SK.font(17, .black))
+                                Image(systemName: "cup.and.saucer.fill").font(.system(size: 15, weight: .semibold))
+                                Text("Café").font(SK.font(17, .semibold))
                             }
                             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
@@ -46,11 +46,11 @@ struct CafeChrome: View {
                 if cafe.phase == .done {
                     VStack(spacing: 8) {
                         Spacer()
-                        Text("That was yummy!").font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
+                        Text("That was yummy!").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                             .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
                         Button { AudioHub.shared.uiTap(); cafe.goHome() } label: {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Head home") }
-                                .font(SK.font(19, .black)).foregroundStyle(SK.ink)
+                                .font(SK.font(19, .semibold)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
                                 .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
                         }
@@ -63,7 +63,7 @@ struct CafeChrome: View {
                     VStack {
                         Spacer()
                         HStack {
-                            Text(r).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
+                            Text(r).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
                                 .padding(.horizontal, 16).padding(.vertical, 10)
                                 .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
                                 .accessibilityIdentifier("cafe-toast")
@@ -104,7 +104,7 @@ struct CafeMenuCard: View {
 
     private var homeButton: some View {
         Button { AudioHub.shared.uiTap(); care.cafe.goHome() } label: {
-            HStack(spacing: 4) { Image(systemName: "house.fill").font(.system(size: 12, weight: .bold)); Text("Head home").font(SK.font(12, .heavy)).lineLimit(1) }
+            HStack(spacing: 4) { Image(systemName: "house.fill").font(.system(size: 12, weight: .bold)); Text("Head home").font(SK.font(12, .semibold)).lineLimit(1) }
                 .foregroundStyle(SK.muted).padding(.horizontal, 10).frame(minHeight: 44)
                 .background(Capsule().fill(Color.white.opacity(0.7)))
         }
@@ -114,8 +114,8 @@ struct CafeMenuCard: View {
         Button { AudioHub.shared.uiTap(); table.toggle(); refusal = nil } label: {
             HStack(spacing: 6) {
                 Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold))
-                Text("Same for everyone").font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
-                Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted)
+                Text("Same for everyone").font(SK.font(13, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                Text("-15%").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
@@ -130,7 +130,7 @@ struct CafeMenuCard: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             refusal = care.orderCafe(order)
         } label: {
-            Text("Order").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize()
+            Text("Order").font(SK.font(17, .semibold)).foregroundStyle(.white).lineLimit(1).fixedSize()
                 .padding(.horizontal, 20).frame(minHeight: 44)
                 .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
         }
@@ -139,8 +139,8 @@ struct CafeMenuCard: View {
     }
     private var totalView: some View {
         HStack(spacing: 4) {
-            Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep)
-            Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
+            Image(systemName: "drop.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.skyDeep)
+            Text("\(total)").font(SK.font(18, .semibold)).foregroundStyle(SK.ink).monospacedDigit()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel("\(total) Drops").accessibilityIdentifier("cafe-total")
     }
@@ -151,7 +151,7 @@ struct CafeMenuCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Café menu").font(SK.font(compact ? 18 : 20, .black)).foregroundStyle(SK.ink)
                     if let r = refusal ?? care.cafe.cardRefusal {
-                        Text(r).font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
+                        Text(r).font(SK.font(12, .semibold)).foregroundStyle(Color(hex: 0xB0413E)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
                     } else {
                         Text(table ? "One treat for the table" : "A treat for each Jelbie").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
                     }
@@ -165,7 +165,7 @@ struct CafeMenuCard: View {
                     Button { AudioHub.shared.uiTap(); who = id; table = false } label: {
                         HStack(spacing: 5) {
                             Circle().fill(tint(id)).frame(width: 12, height: 12).overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1))
-                            Text(care.jelly(id)?.name ?? "Jelbie").font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(care.jelly(id)?.name ?? "Jelbie").font(SK.font(13, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                             if let t = (table ? order.forTable : picks[id]) { thumb(t, size: 20) }
                         }
                         .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 44)
@@ -214,11 +214,11 @@ struct CafeMenuCard: View {
             HStack(spacing: 8) {
                 thumb(t.id, size: 30)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
+                    Text(t.name).font(SK.font(12, .semibold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
                     HStack(spacing: 3) {
-                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .black)).foregroundStyle(SK.skyDeep)
-                        Text("\(t.price)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                        Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.muted).accessibilityLabel(t.perk.title)
+                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(SK.skyDeep)
+                        Text("\(t.price)").font(SK.font(13, .semibold)).foregroundStyle(SK.ink).monospacedDigit()
+                        Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .semibold)).foregroundStyle(SK.muted).accessibilityLabel(t.perk.title)
                     }
                 }
                 Spacer(minLength: 0)
@@ -246,14 +246,14 @@ struct CafeMenuCard: View {
         return Button { pick(t) } label: {
             VStack(spacing: 2) {
                 thumb(t.id, size: 40)
-                Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
+                Text(t.name).font(SK.font(12, .semibold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
                 HStack(spacing: 3) {
-                    Image(systemName: "drop.fill").font(.system(size: 10, weight: .black)).foregroundStyle(SK.skyDeep)
-                    Text("\(t.price)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                    Image(systemName: "drop.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(SK.skyDeep)
+                    Text("\(t.price)").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).monospacedDigit()
                 }
                 HStack(spacing: 2) {
-                    Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy))
-                    Text(t.perk.title).font(SK.font(10, .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                    Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .semibold))
+                    Text(t.perk.title).font(SK.font(10, .semibold)).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .foregroundStyle(SK.muted)
             }

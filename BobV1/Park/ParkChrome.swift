@@ -27,8 +27,8 @@ struct ParkChrome: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
                             HStack(spacing: 7) {
-                                Image(systemName: "tree.fill").font(.system(size: 15, weight: .heavy))
-                                Text("Park").font(SK.font(17, .black))
+                                Image(systemName: "tree.fill").font(.system(size: 15, weight: .semibold))
+                                Text("Park").font(SK.font(17, .semibold))
                             }
                             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
@@ -56,7 +56,7 @@ struct ParkChrome: View {
                         Spacer()
                         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); park.goHome() } label: {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Go home") }
-                                .font(SK.font(19, .black)).foregroundStyle(SK.ink)
+                                .font(SK.font(19, .semibold)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
                                 .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
                         }
@@ -69,7 +69,7 @@ struct ParkChrome: View {
                     VStack {
                         Spacer()
                         HStack {
-                            Text(t).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
+                            Text(t).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
                                 .padding(.horizontal, 16).padding(.vertical, 10)
                                 .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
                                 .accessibilityIdentifier("park-toast")
@@ -100,8 +100,8 @@ struct ParkChrome: View {
                         Button { care.parkOpenCard(vid) } label: {
                             HStack(spacing: 6) {
                                 Circle().fill(tint(v.colour)).frame(width: 22, height: 22).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5))
-                                Text(v.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
-                                if best > .stranger { Image(systemName: "heart.fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.pinkStrong).accessibilityLabel("Friend") }
+                                Text(v.name).font(SK.font(13, .semibold)).foregroundStyle(SK.ink).lineLimit(1)
+                                if best > .stranger { Image(systemName: "heart.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.pinkStrong).accessibilityLabel("Friend") }
                             }
                             .padding(.horizontal, 10).frame(minHeight: 44)
                             .background(Capsule().fill(park.card == vid ? SK.honey : SK.cream.opacity(0.92)))
@@ -121,8 +121,8 @@ struct ParkChrome: View {
             Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.28).ignoresSafeArea().onTapGesture { park.cancelPicker() }.accessibilityHidden(true)
             VStack(spacing: 12) {
                 HStack {
-                    Image(systemName: "tree.fill").font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
-                    Text("Who comes to the park?").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                    Image(systemName: "tree.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink)
+                    Text("Who comes to the park?").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
                     Spacer(minLength: 0)
                 }
                 Text("Pick one to three. Visitors are there to meet.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading)
@@ -136,7 +136,7 @@ struct ParkChrome: View {
                         } label: {
                             HStack(spacing: 7) {
                                 Circle().fill(jellyTint(j.id)).frame(width: 22, height: 22).overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-                                Text(j.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
+                                Text(j.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineLimit(1)
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold)).foregroundStyle(SK.ink)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
@@ -148,13 +148,13 @@ struct ParkChrome: View {
                 }
                 HStack(spacing: 10) {
                     Button { AudioHub.shared.uiTap(); park.cancelPicker() } label: {
-                        Text("Not now").font(SK.font(16, .heavy)).foregroundStyle(SK.muted).padding(.horizontal, 18).frame(minHeight: 48)
+                        Text("Not now").font(SK.font(16, .semibold)).foregroundStyle(SK.muted).padding(.horizontal, 18).frame(minHeight: 48)
                             .background(Capsule().fill(Color.white.opacity(0.8)))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("park-cancel")
                     Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.startPark() } label: {
                         HStack(spacing: 8) { Image(systemName: "figure.walk"); Text("Go to the park") }
-                            .font(SK.font(18, .black)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 48)
+                            .font(SK.font(18, .semibold)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 48)
                             .background(Capsule().fill(SK.pinkStrong))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("park-go")
@@ -184,12 +184,12 @@ struct VisitorCard: View {
             HStack(spacing: 10) {
                 Circle().fill(Color(red: Double(c.x), green: Double(c.y), blue: Double(c.z))).frame(width: 44, height: 44).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(visitor.name).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                    Text("\(visitor.style.word)").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text(visitor.name).font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
+                    Text("\(visitor.style.word)").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 0)
                 Button { AudioHub.shared.uiTap(); care.park.card = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("park-card-close")
             }
@@ -198,31 +198,31 @@ struct VisitorCard: View {
                 if let prof = care.jelly(slot) {
                     let lvl = visitor.level(with: prof.character)
                     HStack(spacing: 8) {
-                        Text(prof.name).font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
+                        Text(prof.name).font(SK.font(14, .semibold)).foregroundStyle(SK.ink).lineLimit(1)
                         Spacer(minLength: 4)
                         HStack(spacing: 2) {
                             ForEach(0..<3, id: \.self) { i in
-                                Image(systemName: i < lvl.hearts ? "heart.fill" : "heart").font(.system(size: 14, weight: .heavy)).foregroundStyle(i < lvl.hearts ? SK.pink : SK.muted.opacity(0.5))
+                                Image(systemName: i < lvl.hearts ? "heart.fill" : "heart").font(.system(size: 14, weight: .semibold)).foregroundStyle(i < lvl.hearts ? SK.pink : SK.muted.opacity(0.5))
                             }
                         }
-                        Text(lvl.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted).frame(minWidth: 70, alignment: .trailing)
+                        Text(lvl.title).font(SK.font(12, .semibold)).foregroundStyle(SK.muted).frame(minWidth: 70, alignment: .trailing)
                     }
                     .accessibilityElement(children: .combine).accessibilityLabel("\(prof.name): \(lvl.title)")
                 }
             }
-            Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+            Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
                 .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
             if home {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.guestSayGoodbye() } label: {
                     HStack(spacing: 8) { Image(systemName: "hand.wave.fill"); Text("Say goodbye") }
-                        .font(SK.font(16, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46).background(Capsule().fill(SK.honey))
+                        .font(SK.font(16, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46).background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("guest-goodbye")
             } else if isFriend, care.guestBook.visit == nil {
                 InviteChooser(care: care, visitorID: visitor.id)
             } else if isFriend, let cur = care.guestBook.visit, cur.visitor == visitor.id {
-                Text(cur.arrived ? "Visiting now" : "Coming over when you get home").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+                Text(cur.arrived ? "Visiting now" : "Coming over when you get home").font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
             }
         }
         .padding(14)

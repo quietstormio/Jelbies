@@ -137,11 +137,11 @@ struct WelcomeBanner: View {
     var body: some View {
         ZStack {
             ForEach(0..<7, id: \.self) { i in
-                Image(systemName: "heart.fill").font(.system(size: CGFloat(16 + (i % 3) * 6), weight: .black)).foregroundStyle(SK.pink)
+                Image(systemName: "heart.fill").font(.system(size: CGFloat(16 + (i % 3) * 6), weight: .semibold)).foregroundStyle(SK.pink)
                     .offset(x: CGFloat(i - 3) * 38, y: up ? -170 - CGFloat(i % 3) * 30 : 20).opacity(up ? 0 : 0.95)
                     .animation(.easeOut(duration: 2.2).delay(Double(i) * 0.1), value: up)
             }
-            Text("Welcome home, \(name)!").font(SK.font(22, .black)).foregroundStyle(SK.ink)
+            Text("Welcome home, \(name)!").font(SK.font(22, .semibold)).foregroundStyle(SK.ink)
                 .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
                 .offset(y: -140)
         }

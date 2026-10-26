@@ -16,7 +16,7 @@ struct GoOutButton: View {
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action()
         } label: {
-            Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .heavy))
+            Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(SK.ink).frame(width: 48, height: 48)
                 .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
@@ -34,13 +34,13 @@ struct BagButton: View {
     var action: () -> Void
     var body: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action() } label: {
-            Image(systemName: "bag.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(SK.ink)
+            Image(systemName: "bag.fill").font(.system(size: 19, weight: .semibold)).foregroundStyle(SK.ink)
                 .frame(width: 48, height: 48)
                 .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                 .overlay(alignment: .topTrailing) {
                     if store.newCount > 0 {
-                        Text("\(store.newCount)").font(SK.font(11, .black)).foregroundStyle(.white)
+                        Text("\(store.newCount)").font(SK.font(11, .semibold)).foregroundStyle(.white)
                             .frame(minWidth: 20, minHeight: 20).background(Circle().fill(SK.pink))
                             .overlay(Circle().strokeBorder(SK.cream, lineWidth: 2)).offset(x: 4, y: -4)
                     }
@@ -61,9 +61,9 @@ struct PerkBadgeRow: View {
         let list = j?.perks.active ?? []
         HStack(spacing: 5) {
             if !list.isEmpty, let j {
-                Text(j.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink.opacity(0.85))
+                Text(j.name).font(SK.font(11, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
                 ForEach(list, id: \.rawValue) { k in
-                    Image(systemName: k.symbol).font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.ink)
+                    Image(systemName: k.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.ink)
                         .frame(width: 24, height: 24).background(Circle().fill(SK.honey))
                         .accessibilityLabel("\(k.title) \(SK.timeLeft(j.perks.remaining(k))) left")
                 }
@@ -136,7 +136,7 @@ struct WhoRow: View {
                     HStack(spacing: 7) {
                         Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 22, height: 22)
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-                        Text(j.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
+                        Text(j.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                     }
                     .padding(.horizontal, 12).frame(minHeight: 44)
                     .background(Capsule().fill(who == j.id ? SK.honey : Color.white.opacity(0.8)))
@@ -199,8 +199,8 @@ struct TownView: View {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); home() } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "house.fill").font(.system(size: 15, weight: .heavy))
-                        Text("Home").font(SK.font(15, .heavy))
+                        Image(systemName: "house.fill").font(.system(size: 15, weight: .semibold))
+                        Text("Home").font(SK.font(15, .semibold))
                     }
                     .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
                 }
@@ -235,7 +235,7 @@ struct TownView: View {
                     AudioHub.shared.uiTap()
                     if reduceMotion { categoryRaw = c.rawValue } else { withAnimation(.easeInOut(duration: 0.25)) { categoryRaw = c.rawValue } }
                 } label: {
-                    Text(c.rawValue).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(c.rawValue).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(Capsule().fill(on ? SK.honey : Color.clear))
                         .overlay(Capsule().strokeBorder(on ? SK.honeyDeep : .clear, lineWidth: 2))
@@ -261,7 +261,7 @@ struct TownView: View {
                             LinearGradient(stops: [.init(color: SK.cream.opacity(0.15), location: 0), .init(color: SK.cream.opacity(0.35), location: 0.5), .init(color: SK.cream.opacity(0.92), location: 0.78), .init(color: SK.cream.opacity(0.95), location: 1)], startPoint: .top, endPoint: .bottom)
                         }
                         VStack(alignment: .leading, spacing: 0) {
-                            Image(systemName: p.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink)
+                            Image(systemName: p.symbol).font(.system(size: 22, weight: .semibold)).foregroundStyle(SK.ink)
                                 .frame(width: 46, height: 46).background(Circle().fill(p.color.opacity(0.9)))
                             Spacer(minLength: 4)
                             Text(p.title).font(SK.font(compact ? 16 : 20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
@@ -314,9 +314,9 @@ struct MapStrip: View {
     }
     private func place(_ symbol: String, _ label: String, _ color: Color, x: CGFloat, y: CGFloat) -> some View {
         VStack(spacing: 2) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .heavy)).foregroundStyle(SK.ink)
+            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
                 .frame(width: 44, height: 44).background(Circle().fill(color)).overlay(Circle().strokeBorder(.white, lineWidth: 2))
-            Text(label).font(SK.font(11, .black)).foregroundStyle(SK.ink)
+            Text(label).font(SK.font(11, .semibold)).foregroundStyle(SK.ink)
         }
         .position(x: x, y: y)
     }
@@ -343,10 +343,10 @@ struct TrackPanel: View {
         VStack(spacing: compact ? 8 : 14) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
                         .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                 }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("track-back")
-                Text("Track").font(SK.font(30, .black)).foregroundStyle(SK.ink)
+                Text("Track").font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
                 DropsPill(wallet: care.bath.wallet)
             }
@@ -373,7 +373,7 @@ struct TrackPanel: View {
             HStack(spacing: 12) {
                 if Self.trainingExists {
                     Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); train() } label: {
-                        HStack(spacing: 8) { Image(systemName: "figure.walk").font(.system(size: 18, weight: .heavy)); Text("Train").font(SK.font(19, .black)).lineLimit(1) }
+                        HStack(spacing: 8) { Image(systemName: "figure.walk").font(.system(size: 18, weight: .semibold)); Text("Train").font(SK.font(19, .semibold)).lineLimit(1) }
                             .foregroundStyle(blocker == nil ? SK.ink : SK.muted).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
                             .background(Capsule().fill(Color.white.opacity(0.9)))
                             .overlay(Capsule().strokeBorder(blocker == nil ? SK.ink : SK.muted.opacity(0.4), lineWidth: 3))
@@ -381,7 +381,7 @@ struct TrackPanel: View {
                     .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-train")
                 }
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); race() } label: {
-                    HStack(spacing: 8) { Image(systemName: "flag.checkered").font(.system(size: 18, weight: .heavy)); Text("Go race").font(SK.font(20, .black)) }
+                    HStack(spacing: 8) { Image(systemName: "flag.checkered").font(.system(size: 18, weight: .semibold)); Text("Go race").font(SK.font(20, .semibold)) }
                         .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
                         .background(Capsule().fill(blocker == nil ? SK.pinkStrong : SK.muted.opacity(0.5)))
                 }
@@ -398,11 +398,11 @@ struct TrackPanel: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("\(prof?.name ?? "Bob") races").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                        Text("\(prof?.name ?? "Bob") races").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
                         Text("Class: \(courseTier.className) (\(courseTier.title))").font(SK.font(13, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("track-class")
                     }
                     Spacer()
-                    if care.jellies.count > 1 { Text("Switch").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase) }
+                    if care.jellies.count > 1 { Text("Switch").font(SK.font(11, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase) }
                 }
                 if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
                 bar("Waddle", prof?.stats.waddle ?? 0, "Longer steps, quicker feet", SK.pink)
@@ -426,13 +426,13 @@ struct TrackPanel: View {
         let left = st.pepLeft
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
-                Text("Pep").font(SK.font(15, .heavy)).foregroundStyle(SK.ink).frame(width: 52, alignment: .leading)
+                Text("Pep").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(width: 52, alignment: .leading)
                 HStack(spacing: 6) {
                     ForEach(0..<TrainingTuning.fullSessions, id: \.self) { i in
                         Capsule().fill(i < left ? SK.mint : Color(hex: 0xE6D8C6)).frame(height: 14)
                     }
                 }
-                Text("\(left)/\(TrainingTuning.fullSessions)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 34, alignment: .trailing)
+                Text("\(left)/\(TrainingTuning.fullSessions)").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 34, alignment: .trailing)
             }
             Text("Pep refills overnight. Practice after that still helps, just less.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
         }
@@ -442,10 +442,10 @@ struct TrackPanel: View {
     /// The race itself: its name, the field and how it is played.
     private var raceCard: some View {
         HStack(spacing: 14) {
-            Image(systemName: "flag.checkered").font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.ink)
+            Image(systemName: "flag.checkered").font(.system(size: 26, weight: .semibold)).foregroundStyle(SK.ink)
                 .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.sky))
             VStack(alignment: .leading, spacing: 3) {
-                Text("Waddle Sprint").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                Text("Waddle Sprint").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
                 Text("You and two rivals on the \(courseTier.title). Tap the two foot buttons to waddle faster.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -472,7 +472,7 @@ struct TrackPanel: View {
 
     private func bar(_ name: String, _ v: Float, _ sub: String, _ c: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((v * 100).rounded()))").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit() }
+            HStack { Text(name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((v * 100).rounded()))").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).monospacedDigit() }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(SK.ink.opacity(0.1))
@@ -485,8 +485,8 @@ struct TrackPanel: View {
     }
     private func prize(_ place: String, _ n: Int) -> some View {
         VStack(spacing: 4) {
-            Text(place).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-            HStack(spacing: 4) { Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
+            Text(place).font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
+            HStack(spacing: 4) { Image(systemName: "drop.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.skyDeep); Text("\(n)").font(SK.font(20, .semibold)).foregroundStyle(SK.ink) }
         }
         .frame(maxWidth: .infinity, minHeight: 68)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(place == "1st" ? SK.honey : SK.card))
@@ -532,11 +532,11 @@ struct BagSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("Bag").font(SK.font(30, .black)).foregroundStyle(SK.ink)
+                    Text("Bag").font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                     Spacer()
                     DropsPill(wallet: care.bath.wallet)
                     Button { close() } label: {
-                        Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                        Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
                 boosts
@@ -544,7 +544,7 @@ struct BagSheet: View {
                 ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
-                            Text("\(t.rawValue) \(count(t))").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                            Text("\(t.rawValue) \(count(t))").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
                                 .padding(.horizontal, 12).frame(minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : Color.white.opacity(0.8)))
                         }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())").id(t)
                     }
@@ -553,7 +553,7 @@ struct BagSheet: View {
                 if tab == .wear { SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && book.owns($0) } }, idPrefix: "bag-slot-") }
                 if tab.isDecor, !book.placedDecor.isEmpty {
                     Button { AudioHub.shared.uiTap(); close(); care.beginArrange() } label: {
-                        HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .heavy)); Text("Arrange the room").font(SK.font(15, .black)) }
+                        HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .semibold)); Text("Arrange the room").font(SK.font(15, .semibold)) }
                             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48).background(Capsule().fill(SK.honey))
                     }.buttonStyle(.plain).accessibilityIdentifier("bag-arrange")
                 }
@@ -580,22 +580,22 @@ struct BagSheet: View {
     private var roomsList: some View {
         VStack(spacing: 10) {
             if let roomRefusal {
-                Text(roomRefusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                Text(roomRefusal).font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
                     .accessibilityIdentifier("bag-room-refusal")
             }
             ForEach(ownedRooms, id: \.id) { d in
                 let here = care.roomID == d.id
                 HStack(spacing: 12) {
-                    Image(systemName: "house.fill").font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
+                    Image(systemName: "house.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(SK.ink.opacity(0.85))
                         .frame(width: 64, height: 64).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.honey.opacity(0.3)))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(d.title).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                        Text(d.title).font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                         Text(d.blurb).font(SK.font(12, .semibold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                     if here {
-                        Text("Home now").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                        Text("Home now").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                             .background(Capsule().fill(SK.mint.opacity(0.85))).accessibilityIdentifier("bag-room-here-\(d.id.rawValue)")
                     } else {
                         pink("Move in", enabled: true) {
@@ -612,14 +612,14 @@ struct BagSheet: View {
 
     private var boosts: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Boosts on now").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Boosts on now").font(SK.font(12, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
             let rows = care.perkRows.filter { !$0.perks.isEmpty }
             if rows.isEmpty {
                 Text("None. A snack can give one.").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
             }
             ForEach(rows, id: \.id) { r in
                 HStack(alignment: .top, spacing: 8) {
-                    Text(r.name).font(SK.font(14, .black)).foregroundStyle(SK.ink).frame(width: 42, alignment: .leading)
+                    Text(r.name).font(SK.font(14, .semibold)).foregroundStyle(SK.ink).frame(width: 42, alignment: .leading)
                     FlowChips(items: r.perks.map { ($0.kind, $0.left) })
                 }
             }
@@ -633,14 +633,14 @@ struct BagSheet: View {
         HStack(spacing: 12) {
             ItemArt(item: item, size: 64)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text(item.name).font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : book.wearer(w, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }.map { "Worn by \($0)" } ?? "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
                 else if item.kind == .decor {
                     let placed = book.placedCount(item.id)
-                    Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                     if let why = book.placeBlocker(item), book.unplaced(item.id) > 0 { Text(why).font(SK.font(11, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
                 }
-                else { Text("x\(book.count(item.id))").font(SK.font(13, .heavy)).foregroundStyle(SK.muted) }
+                else { Text("x\(book.count(item.id))").font(SK.font(13, .semibold)).foregroundStyle(SK.muted) }
                 if let p = item.perk { PerkChip(kind: p) }
             }
             Spacer(minLength: 0)
@@ -675,7 +675,7 @@ struct BagSheet: View {
                         AudioHub.shared.uiTap()
                         if let p = book.placedDecor.last(where: { $0.kind.storeID == item.id }) { care.putAwayDecor(p.uid) }
                     } label: {
-                        Text("Put away").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44)
+                        Text("Put away").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44)
                             .background(Capsule().fill(Color.white.opacity(0.9)))
                     }.buttonStyle(.plain).accessibilityLabel("Put away \(item.name)").accessibilityIdentifier("bag-action-put-away-\(item.id)")
                 }
@@ -698,7 +698,7 @@ struct BagSheet: View {
             }
         }()
         return Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); action() } label: {
-            Text(title).font(SK.font(16, .black)).foregroundStyle(.white).padding(.horizontal, 18).frame(minWidth: 84, minHeight: 46)
+            Text(title).font(SK.font(16, .semibold)).foregroundStyle(.white).padding(.horizontal, 18).frame(minWidth: 84, minHeight: 46)
                 .background(Capsule().fill(enabled ? SK.pinkStrong : SK.muted.opacity(0.45)))
         }
         .buttonStyle(.plain).disabled(!enabled).accessibilityLabel(spoken).accessibilityIdentifier("bag-action-\(title.lowercased())")
@@ -707,9 +707,9 @@ struct BagSheet: View {
     private var roomMeter: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Room space").font(SK.font(14, .black)).foregroundStyle(SK.ink)
+                Text("Room space").font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text("\(book.roomUnitsUsed) of \(StoreTuning.roomCapacity) spots").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+                Text("\(book.roomUnitsUsed) of \(StoreTuning.roomCapacity) spots").font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
             }
             HStack(spacing: 4) {
                 ForEach(0..<StoreTuning.roomCapacity, id: \.self) { i in
@@ -772,8 +772,8 @@ struct SlotChips: View {
     private func chip(_ title: String, symbol: String, on: Bool, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.12)) { action() } } label: {
             HStack(spacing: 5) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .heavy))
-                Text(title).font(SK.font(13, .heavy))
+                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                Text(title).font(SK.font(13, .semibold))
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
             .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))

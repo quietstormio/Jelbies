@@ -14,18 +14,19 @@ extension Color {
 }
 
 enum SK {
-    static let cream = Color(hex: 0xF7F0E0)
-    static let ink = Color(hex: 0x4D331F)
-    static let muted = Color(hex: 0x6B5749)
-    static let sky = Color(hex: 0x6EB3D1)
-    static let pink = Color(hex: 0xE98AA4)
-    static let honey = Color(hex: 0xFFE07A)
-    static let honeyDeep = Color(hex: 0xF9CC59)
-    static let mint = Color(hex: 0x9FD9B0)
-    static let card = Color.white.opacity(0.78)
-    /// Follows Dynamic Type (capped at 2x, see A11yFont.swift); a mid-session size change applies on the next re-render.
-    static func font(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font { JFont.scaled(size, weight) }
-    static let shadow = Color(red: 0.3, green: 0.2, blue: 0.12)
+    // The calm palette (DesignTokens.swift): neutrals + one accent. The old rainbow names map onto it so no screen shows per-item tints.
+    static let cream = DT.paper
+    static let ink = DT.ink
+    static let muted = DT.ink2
+    static var sky: Color { DT.accent }
+    static var pink: Color { DT.accent }
+    static var honey: Color { DT.accentSoft }
+    static var honeyDeep: Color { DT.accent }
+    static var mint: Color { DT.success }
+    static let card = Color.white
+    /// Follows Dynamic Type (capped at 2x, see A11yFont.swift); calm weights (JFont clamps heavy/black to semibold).
+    static func font(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font { JFont.scaled(size, weight) }
+    static let shadow = Color.black
 
     /// "3h 20m", "25m", "40s".
     static func timeLeft(_ s: TimeInterval) -> String {
@@ -45,8 +46,8 @@ struct DropsPill: View {
     var dark = false
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "drop.fill").font(.system(size: 15, weight: .black)).foregroundStyle(dark ? SK.honey : SK.sky)
-            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Image(systemName: "drop.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(dark ? SK.honey : SK.sky)
+            Text("\(wallet.count)").font(SK.font(17, .semibold)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
         .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
@@ -63,8 +64,8 @@ struct PerkChip: View {
     var left: TimeInterval?
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: kind.symbol).font(.system(size: 11, weight: .heavy))
-            Text(left.map { "\(kind.title) \(SK.timeLeft($0))" } ?? kind.title).font(SK.font(11, .heavy)).lineLimit(1)
+            Image(systemName: kind.symbol).font(.system(size: 11, weight: .semibold))
+            Text(left.map { "\(kind.title) \(SK.timeLeft($0))" } ?? kind.title).font(SK.font(11, .semibold)).lineLimit(1)
         }
         .foregroundStyle(SK.ink)
         .padding(.horizontal, 8).padding(.vertical, 4)
@@ -205,7 +206,7 @@ struct ItemArt: View {
                 Image(uiImage: img).resizable().scaledToFit().padding(size * 0.06)
             } else {
                 Image(systemName: UIImage(systemName: item.symbol) != nil ? item.symbol : "star.fill")
-                    .font(.system(size: size * 0.42, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
+                    .font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(SK.ink.opacity(0.85))
             }
         }
         .frame(width: size, height: size)

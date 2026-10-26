@@ -67,13 +67,13 @@ struct ArrangeOverlay: View {
     private var moveControls: some View {
         HStack(spacing: 8) {
             Button { AudioHub.shared.uiTap(); ArrangeAssist.next(care: care) } label: {
-                Text(selected == nil ? "Pick a piece" : "Next piece").playFont(15, .black).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 48)
+                Text(selected == nil ? "Pick a piece" : "Next piece").playFont(15, .semibold).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 48)
                     .background(Capsule().fill(SK.cream.opacity(0.96)))
             }.buttonStyle(.plain).accessibilityIdentifier("arrange-next")
             if let s = selected {
                 ForEach(ArrangeDirection.allCases, id: \.rawValue) { d in
                     Button { ArrangeAssist.move(s.uid, d, care: care) } label: {
-                        Image(systemName: d.symbol).font(.system(size: 18, weight: .black)).foregroundStyle(SK.ink)
+                        Image(systemName: d.symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
                             .frame(width: 48, height: 48).background(Circle().fill(SK.cream.opacity(0.96)))
                     }
                     .buttonStyle(.plain).accessibilityLabel("\(d.title), \(s.kind.title)").accessibilityIdentifier("arrange-\(d.rawValue)")
@@ -101,7 +101,7 @@ struct ArrangeOverlay: View {
                 VStack {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Arrange the room").font(SK.font(18, .black)).foregroundStyle(SK.ink)
+                            Text("Arrange the room").font(SK.font(18, .semibold)).foregroundStyle(SK.ink)
                             Text(selected.map { "\($0.kind.title): drag to move" } ?? "Touch a piece and drag it").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
                                 .accessibilityIdentifier("arrange-selected")
                                 .accessibilityAction(named: "Move left") { if let s = selected { ArrangeAssist.move(s.uid, .left, care: care) } }
@@ -111,7 +111,7 @@ struct ArrangeOverlay: View {
                                 .accessibilityAction(named: "Put away") { if let s = selected { care.putAwayDecor(s.uid) } }
                         }
                         Spacer(minLength: 0)
-                        Text("\(book.roomUnitsUsed)/\(StoreTuning.roomCapacity) spots").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+                        Text("\(book.roomUnitsUsed)/\(StoreTuning.roomCapacity) spots").font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(0.94)).shadow(color: SK.shadow.opacity(0.2), radius: 6, y: 2))
@@ -122,18 +122,18 @@ struct ArrangeOverlay: View {
                     HStack(spacing: 10) {
                         if let s = selected {
                             Button { UINotificationFeedbackGenerator().notificationOccurred(.success); care.putAwayDecor(s.uid) } label: {
-                                Text("Put away").font(SK.font(16, .black)).foregroundStyle(SK.ink).padding(.horizontal, 20).frame(minHeight: 52)
+                                Text("Put away").font(SK.font(16, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 20).frame(minHeight: 52)
                                     .background(Capsule().fill(SK.cream.opacity(0.96)))
                             }.buttonStyle(.plain).accessibilityIdentifier("arrange-putaway")
                         }
                         if let s = selected {
                             Button { care.rotateDecor(s.uid) } label: {
-                                Image(systemName: "rotate.right").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink)
+                                Image(systemName: "rotate.right").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink)
                                     .frame(width: 52, height: 52).background(Circle().fill(SK.cream.opacity(0.96)))
                             }.buttonStyle(.plain).accessibilityLabel("Rotate").accessibilityIdentifier("arrange-rotate")
                         }
                         Button { AudioHub.shared.uiTap(); care.endArrange() } label: {
-                            Text("Done").font(SK.font(18, .black)).foregroundStyle(SK.cream).padding(.horizontal, 34).frame(minHeight: 52)
+                            Text("Done").font(SK.font(18, .semibold)).foregroundStyle(SK.cream).padding(.horizontal, 34).frame(minHeight: 52)
                                 .background(Capsule().fill(SK.ink))
                         }.buttonStyle(.plain).accessibilityIdentifier("arrange-done")
                     }

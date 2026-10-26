@@ -666,7 +666,7 @@ struct GameScreen: View {
     }
 }
 
-/// Small matte cream circle with an SF Symbol.
+/// Small 44 pt Card circle with a hairline and an SF Symbol.
 struct GameCircleButton: View {
     let systemName: String
     let label: String
@@ -676,10 +676,9 @@ struct GameCircleButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(DT.ink)
+                .dtWell()
                 .frame(width: 44, height: 44)          // 44 pt hit target around the 36 pt disc
                 .contentShape(Circle())
         }
@@ -702,9 +701,9 @@ struct CareMenu: View {
     var openBag: (BagSheet.BagTab, Int) -> Void = { _, _ in }
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
 
-    static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
-    static let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
-    static let brown = Color(red: 0.42, green: 0.34, blue: 0.30)
+    static let spring = DT.spring
+    static let cream = DT.card
+    static let brown = DT.ink
 
     /// "waterbottle.fill" exists on the deployment target (iOS 26); keep the drop as a fallback.
     static let waterSymbol = UIImage(systemName: "waterbottle.fill") != nil ? "waterbottle.fill" : "drop.fill"
@@ -768,8 +767,8 @@ struct CareMenu: View {
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Self.brown)
                             .frame(width: tight ? 44 : 46, height: tight ? 44 : 46)
-                            .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                            .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                            .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                         Text(c.name)
                             .jFont(12, .semibold)
                             .foregroundStyle(Self.brown)
@@ -803,7 +802,7 @@ struct CareMenu: View {
                 } label: {
                     VStack(spacing: 3) {
                         ItemArt(item: s.item, size: 50).overlay(alignment: .topTrailing) {
-                            Text("\(s.count)").jFont(11, .black).foregroundStyle(.white)
+                            Text("\(s.count)").jFont(11, .semibold).foregroundStyle(.white)
                                 .frame(minWidth: 18, minHeight: 18).background(Circle().fill(FocusStyle.pink)).offset(x: 5, y: -5)
                         }
                         Text(s.item.name).jFont(11, .semibold).foregroundStyle(Self.brown).lineLimit(1)
@@ -837,8 +836,8 @@ struct CareMenu: View {
                     }
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 14).frame(minHeight: 44)
-                    .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                    .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                    .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                     .opacity(o.3 ? 1 : 0.45)
                 }
                 .buttonStyle(.plain).disabled(!o.3)
@@ -879,13 +878,13 @@ struct CareMenu: View {
                     .jFont(16, .semibold)
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
-                    .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
+                    .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
                 Image(systemName: HUDMenu.symbol(item))
                     .font(.system(size: tight ? 17 : 21, weight: .semibold))
                     .foregroundStyle(Self.brown)
                     .frame(width: iconSize, height: iconSize)
-                    .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                    .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                    .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
             }
             .opacity(on ? 1 : 0.45)
         }
@@ -916,8 +915,8 @@ struct CareMenu: View {
                 .buttonStyle(.plain).accessibilityIdentifier("hud-clear").accessibilityLabel("Let go of \(name)")
             }
             .padding(.leading, 14).padding(.trailing, 0).frame(minHeight: 44)
-            .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+            .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+            .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
             .transition(.scale(scale: 0.6, anchor: .trailing).combined(with: .opacity))
         }
     }
@@ -949,8 +948,8 @@ struct CareMenu: View {
                 }
                 .foregroundStyle(Self.brown)
                 .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
-                .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.28), radius: 9, y: 4))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+                .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }
             .buttonStyle(.plain)
@@ -968,12 +967,12 @@ struct CareMenu: View {
 
 // MARK: - Focus mode UI
 
-/// The pastel palette of the focus-mode UI (cream #FFF8F1, pink #E98AA4, brown #5a3324).
+/// The focus-mode UI palette, now the calm tokens (Card, accent, Ink).
 enum FocusStyle {
-    static let cream = Color(red: 1.0, green: 0.973, blue: 0.945)
-    static let pink = Color(red: 0.914, green: 0.541, blue: 0.643)
-    static let brown = Color(red: 0.353, green: 0.2, blue: 0.141)
-    static let shadow = Color(red: 0.3, green: 0.2, blue: 0.12)
+    static let cream = DT.card
+    static var pink: Color { DT.accent }
+    static let brown = DT.ink
+    static let shadow = Color.black
 }
 
 /// "Let Bob go": the only way out of focus mode (top-left).
@@ -995,7 +994,7 @@ struct ReleaseButton: View {
             .foregroundStyle(FocusStyle.brown)
             .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
             .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("focus-release")
@@ -1027,7 +1026,7 @@ struct FocusHint: View {
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.horizontal, 18).padding(.vertical, 10)
                 .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+                .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                 .opacity(visible ? 1 : 0)
                 .allowsHitTesting(false)
                 .accessibilityIdentifier("focus-hint")

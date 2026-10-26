@@ -53,12 +53,12 @@ struct SimpleCareScene: View {
     private var list: some View {
         ScrollView {
             VStack(spacing: 12) {
-                Text("Who do you want to look after?").font(SK.font(22, .black)).foregroundStyle(SK.ink)
+                Text("Who do you want to look after?").font(SK.font(22, .semibold)).foregroundStyle(SK.ink)
                     .multilineTextAlignment(.center).accessibilityAddTraits(.isHeader).padding(.top, 14)
                 ForEach(care.jellies, id: \.id) { j in
                     Button { selected = j.id } label: {
                         HStack {
-                            Text(j.name).font(SK.font(30, .black))
+                            Text(j.name).font(SK.font(30, .semibold))
                             Spacer()
                             Text(care.needs(for: j.id).mood.word).font(SK.font(22, .bold))
                         }
@@ -78,11 +78,11 @@ struct SimpleCareScene: View {
         VStack(spacing: 12) {
             HStack {
                 Button { if petting { care.release(); petting = false }; selected = nil } label: {
-                    Label("Back", systemImage: "chevron.left").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                    Label("Back", systemImage: "chevron.left").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
                         .frame(minWidth: 88, minHeight: 56)
                 }.accessibilityIdentifier("simple-back")
                 Spacer()
-                Text(j.name).font(SK.font(26, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
+                Text(j.name).font(SK.font(26, .semibold)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
                 Spacer()
                 Color.clear.frame(width: 88, height: 1)
             }
@@ -103,7 +103,7 @@ struct SimpleCareScene: View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             VStack(spacing: 6) {
                 Image(systemName: symbol).font(.system(size: 34, weight: .bold))
-                Text(title).font(SK.font(22, .black))
+                Text(title).font(SK.font(22, .semibold))
             }
             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 96)
             .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.honey))

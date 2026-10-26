@@ -72,14 +72,14 @@ struct AdoptionCenter: View {
             if mode == .more || naming {
                 Button { AudioHub.shared.uiTap(); if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() } } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: naming ? "chevron.left" : "house.fill").font(.system(size: 15, weight: .heavy))
-                        Text(naming ? "Back" : "Home").font(SK.font(15, .heavy))
+                        Image(systemName: naming ? "chevron.left" : "house.fill").font(.system(size: 15, weight: .semibold))
+                        Text(naming ? "Back" : "Home").font(SK.font(15, .semibold))
                     }
                     .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.88)))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("adopt-back")
             }
-            Text("Adoption Center").font(SK.font(20, .black)).foregroundStyle(SK.cream).shadow(color: SK.ink.opacity(0.6), radius: 3, y: 1)
+            Text("Adoption Center").font(SK.font(20, .semibold)).foregroundStyle(SK.cream).shadow(color: SK.ink.opacity(0.6), radius: 3, y: 1)
                 .padding(.leading, 6).accessibilityAddTraits(.isHeader)
             Spacer()
             if mode == .more { DropsPill(wallet: wallet) }
@@ -102,10 +102,10 @@ struct AdoptionCenter: View {
             HStack(spacing: 10) {
                 arrow("chevron.left", "Previous Jelbie") { step(-1) }
                 VStack(spacing: 4) {
-                    Text(JellyRoster.baseNames[pick]).font(SK.font(30, .black)).foregroundStyle(SK.ink)
+                    Text(JellyRoster.baseNames[pick]).font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                     HStack(spacing: 8) {
                         Circle().fill(tint(pick)).frame(width: 16, height: 16).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5))
-                        Image(systemName: t.symbol).font(.system(size: 12, weight: .heavy)).foregroundStyle(SK.muted)
+                        Image(systemName: t.symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(SK.muted)
                         Text(t.signature).font(SK.font(14, .bold)).foregroundStyle(SK.muted)
                     }
                 }
@@ -136,11 +136,11 @@ struct AdoptionCenter: View {
 
     private var nameCard: some View {
         VStack(spacing: 10) {
-            Text("What will you call \(JellyRoster.baseNames[pick])?").font(SK.font(20, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+            Text("What will you call \(JellyRoster.baseNames[pick])?").font(SK.font(20, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
             TextField(JellyRoster.baseNames[pick], text: $name)
                 .focused($nameFocused)
                 .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.done)
-                .font(SK.font(24, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+                .font(SK.font(24, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).frame(minHeight: 52)
                 .background(Capsule().fill(Color.white.opacity(0.9)))
                 .overlay(Capsule().strokeBorder(tint(pick), lineWidth: 3))
@@ -158,7 +158,7 @@ struct AdoptionCenter: View {
 
     private func primary(_ title: String, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            Text(title).font(SK.font(18, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+            Text(title).font(SK.font(18, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: 54).padding(.horizontal, 10)
                 .background(Capsule().fill(enabled ? SK.honey : Color.black.opacity(0.08)))
                 .overlay(Capsule().strokeBorder(enabled ? SK.honeyDeep : .clear, lineWidth: 2))
@@ -169,7 +169,7 @@ struct AdoptionCenter: View {
 
     private func arrow(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            Image(systemName: symbol).font(.system(size: 18, weight: .black)).foregroundStyle(SK.ink)
+            Image(systemName: symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
                 .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85))).contentShape(Circle())
         }
         .buttonStyle(.plain).accessibilityLabel(label)
@@ -214,13 +214,13 @@ private struct Celebration: View {
             ForEach(0..<16, id: \.self) { i in
                 let a = Double(i) / 16 * 2 * .pi
                 Image(systemName: i % 3 == 0 ? "sparkle" : "heart.fill")
-                    .font(.system(size: CGFloat(18 + (i % 4) * 5), weight: .black))
+                    .font(.system(size: CGFloat(18 + (i % 4) * 5), weight: .semibold))
                     .foregroundStyle(i % 3 == 0 ? SK.honeyDeep : SK.pink)
                     .offset(x: go ? CGFloat(cos(a)) * 150 : 0, y: go ? CGFloat(sin(a)) * 150 - 80 : 20)
                     .opacity(go ? 0 : 1).scaleEffect(go ? 1.2 : 0.4)
                     .animation(.easeOut(duration: 1.5).delay(Double(i % 4) * 0.06), value: go)
             }
-            Text("\(name) is coming home!").font(SK.font(28, .black)).foregroundStyle(SK.cream)
+            Text("\(name) is coming home!").font(SK.font(28, .semibold)).foregroundStyle(SK.cream)
                 .shadow(color: SK.ink.opacity(0.7), radius: 4, y: 2).multilineTextAlignment(.center).padding(.horizontal, 24)
                 .scaleEffect(go ? 1 : 0.6).animation(.spring(response: 0.5, dampingFraction: 0.6), value: go)
         }

@@ -62,12 +62,12 @@ struct SettingsScreen: View {
 
     private func header(_ pal: ThemePalette) -> some View {
         HStack {
-            Text("Settings").font(CloudTheme.font(28, .heavy)).foregroundStyle(.white)
+            Text("Settings").font(CloudTheme.font(28, .semibold)).foregroundStyle(.white)
                 .shadow(color: pal.shadow, radius: 0, y: 2)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { AudioHub.shared.uiTap(); close() } label: {
-                Text("Done").font(CloudTheme.font(18, .heavy)).foregroundStyle(pal.continueText)
+                Text("Done").font(CloudTheme.font(18, .semibold)).foregroundStyle(pal.continueText)
                     .padding(.horizontal, 20).frame(minHeight: 44)
                     .background(Capsule().fill(Color.white).shadow(color: pal.lip, radius: 0, y: 4))
             }
@@ -111,7 +111,7 @@ struct SettingsScreen: View {
             Circle().fill(Color(hex: p.hex)).frame(width: 44, height: 44)
                 .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
                 .overlay(Circle().strokeBorder(ink, lineWidth: on ? 3 : 0).padding(-3))
-                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 16, weight: .black)).foregroundStyle(.white).shadow(radius: 1) } }
+                .overlay { if on { Image(systemName: "checkmark").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).shadow(radius: 1) } }
                 .frame(minWidth: 52, minHeight: 52)
         }
         .buttonStyle(.plain)
@@ -196,7 +196,7 @@ struct SettingsScreen: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return card("About", "info.circle") {
-            Text("Jelbies").font(CloudTheme.font(18, .heavy)).foregroundStyle(ink)
+            Text("Jelbies").font(CloudTheme.font(18, .semibold)).foregroundStyle(ink)
             Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
             if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75)) }
             Text("Made with love.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
@@ -232,7 +232,7 @@ private struct HoldToConfirm: View {
     @State private var holding = false
 
     var body: some View {
-        Text(title).font(CloudTheme.font(18, .heavy)).foregroundStyle(.white)
+        Text(title).font(CloudTheme.font(18, .semibold)).foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(
                 GeometryReader { g in

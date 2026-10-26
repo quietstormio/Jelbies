@@ -78,7 +78,7 @@ struct RaceChrome: View {
 
     private func numeral(_ s: String) -> some View {
         Text(s)
-            .font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded))
+            .font(.system(size: s == "GO!" ? 96 : 120, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
             .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 5)
             .shadow(color: FocusStyle.shadow.opacity(0.35), radius: 10, y: 6)
@@ -175,7 +175,7 @@ struct FootButton: View {
                 .scaleEffect(x: flip ? -1 : 1, y: 1)
                 .rotationEffect(.degrees(tilt ? (flip ? 12 : -12) : 0))
             Text(title)
-                .playFont(22, .heavy)
+                .playFont(22, .semibold)
         }
         .foregroundStyle(CareMenu.brown)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -219,8 +219,8 @@ struct RacePlacingsCard: View {
     /// A short celebration chip on the results ("New ribbon!", "Trophy! ...").
     private func celebration(_ text: String, symbol: String, id: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy)
+            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .semibold))
+            Text(text).playFont(14, .semibold)
         }
         .foregroundStyle(CareMenu.brown)
         .padding(.horizontal, 12).padding(.vertical, 5)
@@ -239,7 +239,7 @@ struct RacePlacingsCard: View {
                 ForEach(race.ui.placings, id: \.racer) { p in
                     HStack(spacing: 12) {
                         Text(ordinal(p.place))
-                            .playFont(17, .heavy)
+                            .playFont(17, .semibold)
                             .foregroundStyle(CareMenu.brown)
                             .frame(minWidth: 52, minHeight: 34)
                             .background(Capsule().fill(medal(p.place)))
@@ -282,7 +282,7 @@ struct RacePlacingsCard: View {
             }
             if let t = race.unlockedNow {
                 Text("\(t.title) course unlocked!")
-                    .playFont(15, .heavy)
+                    .playFont(15, .semibold)
                     .foregroundStyle(SK.pinkStrong)
                     .accessibilityIdentifier("race-unlocked")
             }

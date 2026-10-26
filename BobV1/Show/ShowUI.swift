@@ -43,12 +43,12 @@ struct ShowHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); back() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
+                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
                     .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
             }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier(backID)
             VStack(alignment: .leading, spacing: 0) {
-                if let k = kicker { Text(k).font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5) }
-                Text(title).font(SK.font(24, .black)).foregroundStyle(light ? SK.cream : SK.ink).jLine(1, scale: 0.7)
+                if let k = kicker { Text(k).font(SK.font(12, .semibold)).foregroundStyle(ShowUI.gold).tracking(0.5) }
+                Text(title).font(SK.font(24, .semibold)).foregroundStyle(light ? SK.cream : SK.ink).jLine(1, scale: 0.7)
             }
             Spacer(minLength: 4)
             trailing()
@@ -110,7 +110,7 @@ struct TagChip: View {
     var prefix = ""
     var size: CGFloat = 13
     var body: some View {
-        Text(prefix + tag.title).font(SK.font(size, .black)).foregroundStyle(SK.ink)
+        Text(prefix + tag.title).font(SK.font(size, .semibold)).foregroundStyle(SK.ink)
             .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(ShowUI.tag(tag)))
     }
 }
@@ -125,15 +125,15 @@ struct ShowBar: View {
     var nameWidth: CGFloat = 56
     var body: some View {
         HStack(spacing: 10) {
-            Text(name).font(SK.font(15, .black)).foregroundStyle(SK.ink).frame(width: nameWidth, alignment: .leading)
+            Text(name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(width: nameWidth, alignment: .leading)
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(ShowUI.bar)
                     Capsule().fill(color).frame(width: max(6, g.size.width * CGFloat(min(max(value, 0), 1))))
                 }
             }.frame(height: 12)
-            if let score { Text("\(score)").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 30, alignment: .trailing) }
-            if !note.isEmpty { Text(note).font(SK.font(11, .heavy)).foregroundStyle(SK.muted).frame(width: 104, alignment: .leading).jLine(2, scale: 0.8) }
+            if let score { Text("\(score)").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 30, alignment: .trailing) }
+            if !note.isEmpty { Text(note).font(SK.font(11, .semibold)).foregroundStyle(SK.muted).frame(width: 104, alignment: .leading).jLine(2, scale: 0.8) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(name) \(score.map { "\($0)" } ?? "\(Int((value * 100).rounded()))"). \(note)")
@@ -151,8 +151,8 @@ struct ShowCTA: View {
     var body: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); action() } label: {
             HStack(spacing: 8) {
-                if let s = symbol { Image(systemName: s).font(.system(size: 20, weight: .black)) }
-                Text(title).font(SK.font(20, .black)).jLine(1, scale: 0.7)
+                if let s = symbol { Image(systemName: s).font(.system(size: 20, weight: .semibold)) }
+                Text(title).font(SK.font(20, .semibold)).jLine(1, scale: 0.7)
             }
             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: height)
             .background(Capsule().fill(enabled ? ShowUI.gold : SK.muted.opacity(0.4)))
@@ -191,10 +191,10 @@ struct WardrobeStrip: View {
                             onChange()
                         } label: {
                             VStack(spacing: 3) {
-                                if let item = StoreCatalog.item(wearing: look) { ItemArt(item: item, size: 34) } else { Image(systemName: look.slot.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink) }
-                                Text(look.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
+                                if let item = StoreCatalog.item(wearing: look) { ItemArt(item: item, size: 34) } else { Image(systemName: look.slot.symbol).font(.system(size: 22, weight: .semibold)).foregroundStyle(SK.ink) }
+                                Text(look.title).font(SK.font(11, .semibold)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
                                 if let t = look.tags.first(where: { $0 == theme.main }) ?? look.tags.first(where: { $0 == theme.friend }) ?? look.tags.first { TagChip(tag: t, size: 10) }
-                                Text(worn ? "Wearing" : other.map { "On \($0)" } ?? look.slot.title).font(SK.font(10, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).jLine(1, scale: 0.7)
+                                Text(worn ? "Wearing" : other.map { "On \($0)" } ?? look.slot.title).font(SK.font(10, .semibold)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).jLine(1, scale: 0.7)
                             }
                             .padding(.horizontal, 4).frame(width: 78, height: 102)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(worn ? ShowUI.gold.opacity(0.35) : .white))
@@ -225,16 +225,16 @@ struct SlotChip: View {
             Button { AudioHub.shared.uiTap(); action?() } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous).fill(look == nil ? Color.clear : SK.cream)
-                    if look == nil { Text("+").font(SK.font(22, .black)).foregroundStyle(ShowUI.lilacPale) }
+                    if look == nil { Text("+").font(SK.font(22, .semibold)).foregroundStyle(ShowUI.lilacPale) }
                     else if let l = look, let item = StoreCatalog.item(wearing: l) { ItemArt(item: item, size: 32) }
-                    else { Image(systemName: slot.symbol).font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.ink) }
+                    else { Image(systemName: slot.symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink) }
                 }
                 .frame(width: 44, height: 44)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(look == nil ? ShowUI.lilac : m >= 1 ? ShowUI.gold : m >= 0.5 ? Color(hex: 0xF4D98C) : ShowUI.lilac, style: StrokeStyle(lineWidth: 2, dash: look == nil ? [5, 4] : [])))
                 .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.85 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 9 : 5)
             }
             .buttonStyle(.plain).disabled(action == nil)
-            if caption { Text(slot.title.replacingOccurrences(of: "Faces", with: "Face").replacingOccurrences(of: "Hats", with: "Head").replacingOccurrences(of: "Shoes", with: "Feet").replacingOccurrences(of: "Necks", with: "Neck").replacingOccurrences(of: "Bodies", with: "Body")).font(SK.font(11, .heavy)).foregroundStyle(m >= 1 ? ShowUI.gold : ShowUI.mist) }
+            if caption { Text(slot.title.replacingOccurrences(of: "Faces", with: "Face").replacingOccurrences(of: "Hats", with: "Head").replacingOccurrences(of: "Shoes", with: "Feet").replacingOccurrences(of: "Necks", with: "Neck").replacingOccurrences(of: "Bodies", with: "Body")).font(SK.font(11, .semibold)).foregroundStyle(m >= 1 ? ShowUI.gold : ShowUI.mist) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(slot.title) slot: \(look?.title ?? "empty")\(m >= 1 ? ", matches \(theme.main.title)" : m >= 0.5 ? ", matches friend stat \(theme.friend.title)" : "")")
@@ -303,12 +303,12 @@ struct StudioScreen: View {
             }
             .padding(.horizontal, 16)
             VStack {
-                Text("\(ShowUI.dayName(day))'s theme: \(theme.main.title)").font(SK.font(14, .black)).foregroundStyle(ShowUI.brownGold).jLine(1, scale: 0.7)
+                Text("\(ShowUI.dayName(day))'s theme: \(theme.main.title)").font(SK.font(14, .semibold)).foregroundStyle(ShowUI.brownGold).jLine(1, scale: 0.7)
                     .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(ShowUI.light))
                     .accessibilityIdentifier("studio-theme")
                 Spacer()
                 HStack(alignment: .bottom) {
-                    Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .heavy)).foregroundStyle(ShowUI.gold).jLine(1, scale: 0.7)
+                    Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .semibold)).foregroundStyle(ShowUI.gold).jLine(1, scale: 0.7)
                     if care.jellies.count > 1 { Spacer(minLength: 6); whoChips }
                 }
                 .padding(.horizontal, 10)
@@ -347,9 +347,9 @@ struct StudioScreen: View {
         let skill = p?.stats.bestDance.map { p!.stats.proficiency($0) } ?? 0
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Show ready").font(SK.font(17, .black)).foregroundStyle(SK.ink)
+                Text("Show ready").font(SK.font(17, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).frame(minHeight: 44) }
+                Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .semibold)).foregroundStyle(SK.muted).frame(minHeight: 44) }
                     .buttonStyle(.plain).accessibilityIdentifier("studio-card")
             }
             ShowBar(name: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme", nameWidth: 64)
@@ -373,7 +373,7 @@ struct StudioScreen: View {
     }
     private func pill(_ title: String, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            Text(title).font(SK.font(17, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
+            Text(title).font(SK.font(17, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
         }.buttonStyle(.plain).accessibilityIdentifier(id)
     }
 }
@@ -410,13 +410,13 @@ struct WardrobeSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Dress up").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                    Text("Dress up").font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
                     Spacer()
-                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                         .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("wardrobe-close")
                 }
                 HStack(spacing: 6) {
-                    Text("\(theme.title):").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+                    Text("\(theme.title):").font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
                     TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
                     Spacer()
                 }
@@ -448,9 +448,9 @@ struct DancePicker: View {
         let st = care.jelly(who)?.stats
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Practise dance").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                Text("Practise dance").font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("dance-close")
             }
             Text("Tap the feet on the beat of the studio music. Dance skill is 30% of the Dance round.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
@@ -458,16 +458,16 @@ struct DancePicker: View {
                 let open = st?.danceOpen(d) ?? (d == .sway), skill = st?.proficiency(d) ?? 0
                 Button { if open { start(d) } else { AudioHub.shared.play(.notEnough) } } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: open ? "music.note" : "lock.fill").font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
+                        Image(systemName: open ? "music.note" : "lock.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink)
                             .frame(width: 48, height: 48).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(open ? Color(hex: 0xB58BDB) : SK.muted.opacity(0.3)))
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(d.title).font(SK.font(18, .black)).foregroundStyle(SK.ink)
+                            Text(d.title).font(SK.font(18, .semibold)).foregroundStyle(SK.ink)
                             Text(open ? d.blurb : "Opens when \(d.opensAfter?.dance.title ?? "") is half learned").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
                             GeometryReader { g in
                                 ZStack(alignment: .leading) { Capsule().fill(ShowUI.bar); Capsule().fill(Color(hex: 0xB58BDB)).frame(width: max(4, g.size.width * CGFloat(skill))) }
                             }.frame(height: 8)
                         }
-                        Text(skill > 0 ? "\(ShowUI.pts(skill))%" : "new").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                        Text(skill > 0 ? "\(ShowUI.pts(skill))%" : "new").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).monospacedDigit()
                     }
                     .padding(12).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(open ? 0.85 : 0.5)))
                 }
@@ -542,17 +542,17 @@ struct ConditionScreen: View {
         let target = ShowUI.target(after: care.show.progress.unlockedRanks)
         return VStack(spacing: 8) {
             HStack {
-                Text("\(name)'s jelly jars").font(SK.font(18, .black)).foregroundStyle(SK.ink)
+                Text("\(name)'s jelly jars").font(SK.font(18, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
             }
             HStack {
-                if let meal { Text("Just fed: \(meal.food)").font(SK.font(13, .black)).foregroundStyle(ShowUI.brownGold).padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0xFFE7A8))).accessibilityIdentifier("condition-fed") }
+                if let meal { Text("Just fed: \(meal.food)").font(SK.font(13, .semibold)).foregroundStyle(ShowUI.brownGold).padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0xFFE7A8))).accessibilityIdentifier("condition-fed") }
                 Spacer()
                 Button { AudioHub.shared.uiTap(); bath?() } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "drop.fill").font(.system(size: 14, weight: .black)).foregroundStyle(SK.skyDeep)
-                        Text("Glow \(ShowUI.glowOf5(glow))/5").font(SK.font(14, .black)).foregroundStyle(Color(hex: 0x2F6F8C))
-                        Text("Bath").font(SK.font(12, .black)).foregroundStyle(Color(hex: 0x2F6F8C)).padding(.horizontal, 10).frame(height: 28).background(Capsule().fill(.white))
+                        Image(systemName: "drop.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(SK.skyDeep)
+                        Text("Glow \(ShowUI.glowOf5(glow))/5").font(SK.font(14, .semibold)).foregroundStyle(Color(hex: 0x2F6F8C))
+                        Text("Bath").font(SK.font(12, .semibold)).foregroundStyle(Color(hex: 0x2F6F8C)).padding(.horizontal, 10).frame(height: 28).background(Capsule().fill(.white))
                     }
                     .padding(.leading, 12).padding(.trailing, 6).frame(height: 44).background(Capsule().fill(Color(hex: 0xDDEFF6)))
                 }
@@ -570,11 +570,11 @@ struct ConditionScreen: View {
             .frame(maxHeight: compact ? 190 : 270)
             HStack(spacing: 8) {
                 ForEach(WearTag.jarOrder, id: \.rawValue) { t in
-                    Text(t.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 28).background(Capsule().fill(ShowUI.tag(t)))
+                    Text(t.title).font(SK.font(13, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 28).background(Capsule().fill(ShowUI.tag(t)))
                 }
             }
             VStack(spacing: 2) {
-                Text("Strongest: \(strongest.title) \u{00B7} Weakest: \(weakest.title)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
+                Text("Strongest: \(strongest.title) \u{00B7} Weakest: \(weakest.title)").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                 if let target { Text("Gold dashed line: \(target.rank.title) target").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
                 else { Text("Every rank is open. Keep him fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
             }
@@ -596,10 +596,10 @@ struct ConditionScreen: View {
     private func row(_ title: String, note: String, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             HStack(spacing: 8) {
-                Text(title).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text(title).font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text(note).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).accessibilityHidden(true)
+                Text(note).font(SK.font(13, .semibold)).foregroundStyle(SK.muted)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.ink).accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 44)
             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.1), radius: 6, y: 2))
@@ -649,8 +649,8 @@ struct JellyJar: View {
                 // "+1" droplet
                 if grew {
                     VStack(spacing: 2) {
-                        Image(systemName: "drop.fill").font(.system(size: w * 0.3, weight: .black)).foregroundStyle(c).overlay(Image(systemName: "drop").font(.system(size: w * 0.3, weight: .black)).foregroundStyle(SK.ink))
-                        Text("+\(max(1, Int(((level - previous) * 100).rounded())))").font(SK.font(11, .black)).foregroundStyle(ShowUI.gold)
+                        Image(systemName: "drop.fill").font(.system(size: w * 0.3, weight: .semibold)).foregroundStyle(c).overlay(Image(systemName: "drop").font(.system(size: w * 0.3, weight: .semibold)).foregroundStyle(SK.ink))
+                        Text("+\(max(1, Int(((level - previous) * 100).rounded())))").font(SK.font(11, .semibold)).foregroundStyle(ShowUI.gold)
                             .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(SK.ink))
                     }
                     .offset(y: max(top + h * 0.1, y - w * 0.95))
@@ -658,7 +658,7 @@ struct JellyJar: View {
                     .accessibilityHidden(true)
                 }
                 // number plate
-                Text("\(number)").font(SK.font(w * 0.34, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                Text("\(number)").font(SK.font(w * 0.34, .semibold)).foregroundStyle(SK.ink).monospacedDigit()
                     .frame(width: w * 0.72, height: h * 0.12)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(hex: 0xFBF6EA)).overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(SK.ink.opacity(0.3), lineWidth: 1.5)))
                     .offset(y: bottom - h * 0.17)
@@ -699,9 +699,9 @@ struct FoodDiarySheet: View {
         let meals = care.jelly(who)?.stats.meals ?? []
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Food diary").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                Text("Food diary").font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("diary-close")
             }
             if meals.isEmpty { Text("Nothing eaten from the bag yet. Store foods fill his jars: sushi is Sparkly, donuts are Sweet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
@@ -709,17 +709,17 @@ struct FoodDiarySheet: View {
                 VStack(spacing: 8) {
                     ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
                         HStack(spacing: 10) {
-                            Image(systemName: "fork.knife").font(.system(size: 16, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color(hex: 0xFFE7A8)))
+                            Image(systemName: "fork.knife").font(.system(size: 16, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color(hex: 0xFFE7A8)))
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(m.food).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                                Text(m.food).font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                                 HStack(spacing: 4) {
                                     ForEach(m.gains.sorted { $0.value > $1.value }, id: \.key) { k, v in
-                                        if let key = ConditionKey(rawValue: k) { Text("+\(max(1, Int((v * 100).rounded()))) \(key.title)").font(SK.font(11, .black)).foregroundStyle(SK.ink).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(ShowUI.tag(key.tag))) }
+                                        if let key = ConditionKey(rawValue: k) { Text("+\(max(1, Int((v * 100).rounded()))) \(key.title)").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(ShowUI.tag(key.tag))) }
                                     }
                                 }
                             }
                             Spacer()
-                            Text(m.date, style: .relative).font(SK.font(12, .heavy)).foregroundStyle(SK.muted) + Text(" ago").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                            Text(m.date, style: .relative).font(SK.font(12, .semibold)).foregroundStyle(SK.muted) + Text(" ago").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                         }
                         .padding(10).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.8)))
                     }
@@ -741,42 +741,42 @@ struct TrophiesSheet: View {
         let t = care.show.progress.trophies(character: care.jelly(who)?.character ?? who)
         ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("\(care.jelly(who)?.name ?? "Bob")'s trophies").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                Text("\(care.jelly(who)?.name ?? "Bob")'s trophies").font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("trophies-close")
             }
-            Text("Cups").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Cups").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
             HStack(spacing: 10) {
                 ForEach(ShowRank.allCases, id: \.rawValue) { r in
                     let place = t.cup(r)
                     VStack(spacing: 4) {
-                        Image(systemName: "trophy.fill").font(.system(size: 30, weight: .black))
+                        Image(systemName: "trophy.fill").font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(place == 1 ? ShowUI.goldDeep : place == 2 ? Color(hex: 0xC9CFD8) : place == 3 ? Color(hex: 0xC98B55) : SK.muted.opacity(0.25))
-                        Text(r.title).font(SK.font(12, .black)).foregroundStyle(SK.ink)
-                        Text(place.map { ShowUI.ordinal($0) } ?? "\u{2014}").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                        Text(r.title).font(SK.font(12, .semibold)).foregroundStyle(SK.ink)
+                        Text(place.map { ShowUI.ordinal($0) } ?? "\u{2014}").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
                     }
                     .frame(maxWidth: .infinity, minHeight: 84).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.8)))
                     .accessibilityElement(children: .combine).accessibilityIdentifier("cup-\(r.rawValue)")
                 }
             }
-            Text("Rosettes").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Rosettes").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
             HStack(spacing: 8) {
                 ForEach(WearTag.jarOrder, id: \.rawValue) { tag in
                     let has = t.hasRosette(tag)
                     VStack(spacing: 3) {
-                        Image(systemName: "seal.fill").font(.system(size: 26, weight: .black)).foregroundStyle(has ? ShowUI.tag(tag) : SK.muted.opacity(0.2))
-                        Text(tag.title).font(SK.font(11, .black)).foregroundStyle(has ? SK.ink : SK.muted)
+                        Image(systemName: "seal.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(has ? ShowUI.tag(tag) : SK.muted.opacity(0.2))
+                        Text(tag.title).font(SK.font(11, .semibold)).foregroundStyle(has ? SK.ink : SK.muted)
                     }
                     .frame(maxWidth: .infinity, minHeight: 60).background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(has ? 0.85 : 0.45)))
                     .accessibilityElement(children: .combine).accessibilityIdentifier("rosette-\(tag.rawValue)")
                 }
             }
-            Text("Stickers").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Stickers").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
             FlowLayout(spacing: 6) {
                 ForEach(ShowProgress.Sticker.allCases, id: \.rawValue) { s in
                     let has = t.stickers.contains(s.rawValue)
-                    Text(s.title).font(SK.font(12, .black)).foregroundStyle(has ? ShowUI.brownGold : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
+                    Text(s.title).font(SK.font(12, .semibold)).foregroundStyle(has ? ShowUI.brownGold : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
                         .background(Capsule().fill(has ? ShowUI.light : .white.opacity(0.45)))
                 }
             }
@@ -809,7 +809,7 @@ struct ShowLobby: View {
         VStack(spacing: compact ? 8 : 12) {
             ShowHeader(title: "Jelly Show", backID: "show-back", back: back) {
                 Button { AudioHub.shared.uiTap(); card() } label: {
-                    Text("\(care.jelly(who)?.name ?? "Bob")'s card").font(SK.font(15, .black)).foregroundStyle(SK.ink).padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(SK.cream))
+                    Text("\(care.jelly(who)?.name ?? "Bob")'s card").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(SK.cream))
                 }.buttonStyle(.plain).accessibilityIdentifier("show-card")
             }
             if compact {
@@ -836,8 +836,8 @@ struct ShowLobby: View {
             ZStack {
                 StageBackdrop().opacity(0.9)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("TODAY'S THEME").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
-                    Text(theme.title).font(SK.font(24, .black)).foregroundStyle(ShowUI.light).jLine(2, scale: 0.7)
+                    Text("TODAY'S THEME").font(SK.font(12, .semibold)).foregroundStyle(ShowUI.gold).tracking(0.5)
+                    Text(theme.title).font(SK.font(24, .semibold)).foregroundStyle(ShowUI.light).jLine(2, scale: 0.7)
                     HStack(spacing: 6) { TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ") }
                     Text("\(theme.main.title) counts most").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
                 }
@@ -846,9 +846,9 @@ struct ShowLobby: View {
             .frame(minHeight: 150).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .accessibilityElement(children: .combine).accessibilityIdentifier("show-theme")
             VStack(alignment: .leading, spacing: 4) {
-                Text("TOMORROW").font(SK.font(11, .black)).foregroundStyle(ShowUI.lilacPale).tracking(0.5)
-                Text(tomorrow.title).font(SK.font(17, .black)).foregroundStyle(SK.cream).jLine(2, scale: 0.7)
-                Text("\(tomorrow.main.title) + \(tomorrow.friend.title)").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB58BDB))
+                Text("TOMORROW").font(SK.font(11, .semibold)).foregroundStyle(ShowUI.lilacPale).tracking(0.5)
+                Text(tomorrow.title).font(SK.font(17, .semibold)).foregroundStyle(SK.cream).jLine(2, scale: 0.7)
+                Text("\(tomorrow.main.title) + \(tomorrow.friend.title)").font(SK.font(12, .semibold)).foregroundStyle(Color(hex: 0xB58BDB))
                 Text("Get ready: feed and dress").font(SK.font(11, .bold)).foregroundStyle(ShowUI.lilacPale)
             }
             .padding(12).frame(width: 118).frame(minHeight: 150, alignment: .leading)
@@ -862,19 +862,19 @@ struct ShowLobby: View {
         let prog = care.show.progress
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Pick a rank").font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text("Pick a rank").font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text(prog.requirement(rank.above ?? .ocean) ?? "Every rank is open").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).jLine(1, scale: 0.7)
+                Text(prog.requirement(rank.above ?? .ocean) ?? "Every rank is open").font(SK.font(11, .semibold)).foregroundStyle(SK.muted).jLine(1, scale: 0.7)
             }
             HStack(spacing: 6) {
                 ForEach(ShowRank.allCases, id: \.rawValue) { r in
                     let open = prog.unlocked(r), picked = r == rank, cup = prog.trophies(character: care.jelly(who)?.character ?? who).cup(r)
                     Button { if open { AudioHub.shared.uiTap(); care.chooseShowRank(r) } else { AudioHub.shared.play(.notEnough) } } label: {
                         VStack(spacing: 1) {
-                            Image(systemName: open ? (cup != nil ? "trophy.fill" : "drop.fill") : "lock.fill").font(.system(size: 18, weight: .black))
+                            Image(systemName: open ? (cup != nil ? "trophy.fill" : "drop.fill") : "lock.fill").font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(open ? (cup == 1 ? ShowUI.goldDeep : cup == 2 ? Color(hex: 0x9AA3B2) : cup == 3 ? Color(hex: 0xC98B55) : SK.sky) : Color(hex: 0x7C6A93))
-                            Text(r.title).font(SK.font(14, .black))
-                            Text(picked ? "Selected" : open ? (cup.map { "\($0 == 1 ? "Gold" : $0 == 2 ? "Silver" : "Bronze") cup" } ?? "Open") : "Locked").font(SK.font(11, .heavy)).opacity(0.8)
+                            Text(r.title).font(SK.font(14, .semibold))
+                            Text(picked ? "Selected" : open ? (cup.map { "\($0 == 1 ? "Gold" : $0 == 2 ? "Silver" : "Bronze") cup" } ?? "Open") : "Locked").font(SK.font(11, .semibold)).opacity(0.8)
                         }
                         .foregroundStyle(open ? (picked ? SK.ink : Color(hex: 0x2E6B26)) : Color(hex: 0x7C6A93))
                         .frame(maxWidth: .infinity, minHeight: 76)
@@ -894,16 +894,16 @@ struct ShowLobby: View {
     private var today: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Today at \(rank.title)").font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text("Today at \(rank.title)").font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text("3 rivals \u{00B7} 4 Jelbies").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                Text("3 rivals \u{00B7} 4 Jelbies").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
             }
             HStack(spacing: 8) {
                 ForEach(Array(rivals.enumerated()), id: \.offset) { _, r in
                     VStack(spacing: 1) {
                         RivalBlob(tint: r.tint, size: 44)
                         Text(r.name).font(SK.font(r.headliner ? 11 : 14, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.6)
-                        Text(r.persona.title).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                        Text(r.persona.title).font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 6).padding(.horizontal, 4)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(red: Double(r.tint.x), green: Double(r.tint.y), blue: Double(r.tint.z)).opacity(0.28)))
@@ -913,8 +913,8 @@ struct ShowLobby: View {
             HStack(spacing: 6) {
                 ForEach(1...4, id: \.self) { p in
                     VStack(spacing: 1) {
-                        Text(ShowUI.ordinal(p)).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
-                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
+                        Text(ShowUI.ordinal(p)).font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
+                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.skyDeep); Text("\(rank.drops(place: p))").font(SK.font(15, .semibold)).foregroundStyle(SK.ink) }
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p == 1 ? Color(hex: 0xFFE7A8) : p == 2 ? Color(hex: 0xECE8EE) : p == 3 ? Color(hex: 0xF3E1D0) : Color(hex: 0xF2ECE6)))
@@ -938,17 +938,17 @@ struct ShowLobby: View {
         let best = known.max { (p.tricks[$0] ?? 0) < (p.tricks[$1] ?? 0) }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Ready check").font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text("Ready check").font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text("\(p.name) \u{00B7} out of 100 each").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                Text("\(p.name) \u{00B7} out of 100 each").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
             }
             ShowBar(name: "Look", value: est.look / 100, color: SK.pink, note: "\(rank.slots) slots, \(String(format: "%g", (sum * 2).rounded() / 2)) theme match", score: est.lookPts, nameWidth: 50)
             ShowBar(name: "Dance", value: est.dance / 100, color: Color(hex: 0xB58BDB), note: p.dance.map { "\($0.title) skill \(ShowUI.pts(p.danceSkill))%" } ?? "No dance learned", score: est.dancePts, nameWidth: 50)
             ShowBar(name: "Trick", value: est.trick / 100, color: SK.honeyDeep, note: known.isEmpty ? "No tricks learned" : "\(known.count) known, \(best?.title.lowercased() ?? "") is \(ShowUI.pts(best.map { p.tricks[$0] ?? 0 } ?? 0))%", score: est.trickPts, nameWidth: 50)
             HStack {
-                (Text("Estimate ").font(SK.font(14, .heavy)) + Text("about \(Int((est.total / 10).rounded()) * 10)").font(SK.font(17, .black)) + Text(" / 300").font(SK.font(14, .heavy))).foregroundStyle(SK.ink)
+                (Text("Estimate ").font(SK.font(14, .semibold)) + Text("about \(Int((est.total / 10).rounded()) * 10)").font(SK.font(17, .semibold)) + Text(" / 300").font(SK.font(14, .semibold))).foregroundStyle(SK.ink)
                 Spacer()
-                Text("\(rank.title) rivals about \(rank.rivalEstimate)").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                Text("\(rank.title) rivals about \(rank.rivalEstimate)").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
             }
             .padding(.top, 6).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xD9C9AE)).frame(height: 2) }
             .accessibilityIdentifier("show-estimate")
