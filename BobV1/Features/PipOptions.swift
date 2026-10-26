@@ -55,7 +55,7 @@ nonisolated enum PipOptions {
             }
         }
         /// A smooth plush tube: rings along `path` (radius `r[i]`), smooth analytic normals, closed with a hemispherical round tip. Path lies in the y-z plane.
-        mutating func sweep(_ path: [SIMD3<Float>], _ r: [Float], _ color: SIMD3<Float>, seg: Int = 22, capRings: Int = 7) {
+        mutating func sweep(_ path: [SIMD3<Float>], _ r: [Float], _ color: SIMD3<Float>, seg: Int = 24, capRings: Int = 8, xs: Float = 1) {
             let n = path.count, base = UInt32(pos.count)
             let side = SIMD3<Float>(1, 0, 0)
             var rings = 0
@@ -63,10 +63,11 @@ nonisolated enum PipOptions {
                 let v = simd_normalize(simd_cross(t, side))
                 for j in 0..<seg {
                     let ph = 2 * Float.pi * Float(j) / Float(seg)
-                    let radial = side * cosf(ph) + v * sinf(ph)
+                    let radial = side * cosf(ph) * xs + v * sinf(ph)                       // elliptical section (xs narrows the sides)
+                    let radialN = side * cosf(ph) / xs + v * sinf(ph)
                     let nn: SIMD3<Float>, pp: SIMD3<Float>
-                    if cap { nn = radial * capC + t * capS; pp = c + radial * rad * capC + t * rad * capS }
-                    else { let ca = cosf(alpha), sa = sinf(alpha); nn = radial * ca + t * sa; pp = c + radial * rad }
+                    if cap { nn = simd_normalize(radialN) * capC + t * capS; pp = c + radial * rad * capC + t * rad * capS }
+                    else { let ca = cosf(alpha), sa = sinf(alpha); nn = simd_normalize(radialN) * ca + t * sa; pp = c + radial * rad }
                     pos.append(pp); nrm.append(simd_normalize(nn)); col.append(color); ao.append(1)
                 }
                 rings += 1
@@ -159,43 +160,44 @@ nonisolated enum PipOptions {
         var pivotPoint = SIMD3<Float>.zero
         switch opt {
         case "A":
-            // a short chubby plush stub, 33% of the body width long, from the lower back (32% of his height), curving gently up 15 -> 32 degrees to a round tip
+            // a plump kawaii comma: a very wide base (about half his height tall, centred at 30%) melting into the lower back, tapering quickly into a short
+            // round tip that curls UP; 28% of the body width out from the surface. Three original head spikes (full size) stand along the top ridge.
             var xmin = Float.infinity, xmax = -Float.infinity
             for i in 0..<body.eggVertexLimit { xmin = min(xmin, body.pos[i].x); xmax = max(xmax, body.pos[i].x) }
             let width = xmax - xmin
-            let root = centre(body, y: ymin + 0.34 * h, back: true)
+            let root = centre(body, y: ymin + 0.30 * h, back: true)
             let o = root.p
-            let sink: Float = 0.10, vis: Float = 0.33 * width - 0.10        // visible path length before the round tip cap (tip radius 0.085)
-            let N = 12
+            let sink: Float = 0.16, tipR: Float = 0.095
+            let vis: Float = 0.28 * width - tipR                                  // surface -> tip-cap start
+            let N = 16
             var path: [SIMD3<Float>] = [], rad: [Float] = []
-            var cur = o + SIMD3(0, -0.012, sink)                              // starts inside the body
+            var cur = o + SIMD3(0, 0, sink)
             let ds = (sink + vis) / Float(N - 1)
             for i in 0..<N {
-                let u = max(0, (Float(i) * ds - sink) / vis)                   // 0 at the surface, 1 at the tip
+                let u = max(0, (Float(i) * ds - sink) / vis)                       // 0 at the surface, 1 at the tip
                 path.append(cur)
-                let ang = (20 + 18 * u) * Float.pi / 180
+                let ang = (6 + 38 * powf(u, 1.2)) * Float.pi / 180                // flat at the base, curling up to ~54 deg
                 cur += SIMD3(0, sinf(ang), -cosf(ang)) * ds
-                rad.append(0.18 - 0.08 * powf(u, 0.9))
+                let uu = (Float(i) * ds) / (sink + vis)
+                rad.append(tipR + (0.315 - tipR) * powf(1 - uu, 1.15))
             }
-            m.sweep(path, rad, flesh * 0.95)
+            m.sweep(path, rad, flesh * 0.92, xs: 0.82)
             let tailCount = m.pos.count
-            // spikes: three ORIGINAL head spikes (largest in front), 65% size, in a row along the top
-            for (k, u) in [Float(0.22), 0.46, 0.70].enumerated() {
+            // the ORIGINAL head spikes, full size, largest at the base, along the top ridge
+            for (k, u) in [Float(0.0), 0.5, 0.92].enumerated() {
                 let f = (sink + u * vis) / ds, i0 = min(Int(f), N - 2), fr = f - Float(i0)
                 let c = path[i0] * (1 - fr) + path[i0 + 1] * fr
                 let rr = rad[i0] * (1 - fr) + rad[i0 + 1] * fr
                 let tan = simd_normalize(path[i0 + 1] - path[i0])
                 var up = SIMD3<Float>(0, 1, 0); up -= tan * simd_dot(up, tan); up = simd_normalize(up)
-                m.spike(["spike_01", "spike_02", "spike_03"][k], base: c + up * rr * 0.8, normal: up, scale: 0.7, spec: spec)
+                m.spike(["spike_00", "spike_02", "spike_03"][k], base: c + up * rr * 0.86, normal: simd_normalize(up + tan * 0.12), scale: 1.0, spec: spec)
             }
-            // body-fed shading: near the join the tail takes the body's own normal (a soft fillet, no crease); elsewhere the lighting is softened toward the
-            // body's flat soft look (the room pass lights it, the body skin shader can't be used by a feature)
+            // shading: the tail is lit with (mostly) the body's own surface normal at the join, so it reads as the same skin with no lighter band
             for i in 0..<tailCount {
                 let d = simd_length(m.pos[i] - o)
-                let w = 1 - min(max((d - 0.04) / 0.18, 0), 1)
-                var nn = m.nrm[i]
-                nn = simd_normalize(nn * 0.4 + SIMD3<Float>(0, 0.85, 0.2) * 0.6)
-                m.nrm[i] = simd_normalize(nn * (1 - w) + root.n * w)
+                let w = 1 - min(max((d - 0.05) / 0.2, 0), 1)
+                let soft = simd_normalize(m.nrm[i] * 0.4 + SIMD3<Float>(0, 0.85, 0.2) * 0.6)
+                m.nrm[i] = simd_normalize(soft * (1 - 0.5 * w) + SIMD3<Float>(0, 0.85, 0.2) * 0.5 * w)
             }
             pivotPoint = o
         case "B":
