@@ -382,9 +382,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             return self.peerSnapshot.enumerated().filter { $0.offset != id }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) }
         }
         let floorRules = b.resolve
-        b.resolve = { [weak self] p, r in
-            guard let self, !self.peerSnapshot.isEmpty else { return floorRules(p, r) }
-            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap), r)
+        b.resolve = { [weak self, weak b] p, r in
+            guard let self, !self.peerSnapshot.isEmpty, b?.socialBook.passThrough != true else { return floorRules(p, r) }          // (a leapfrog hop goes over its partner)
+            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap ?? (b?.inCloseSocial == true ? Self.jellyGap * SocialTuning.closeGapFactor : nil)), r)
         }
     }
 
@@ -414,8 +414,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
     }
 
-    /// The hard rule under the steering: a root position is pushed out of the circle (the gap) around every other Jelly, so two bodies never
-    /// sit inside each other even when the planner finds no way around (the soft bodies themselves do not collide).
+    /// How much of the overlap a pressed Jelly gives back (a spring, not a wall), and how deep two bodies may squash into each other at the most (a fraction of the gap).
+    static let softPush: Float = 0.6, softFloor: Float = 0.78
+
+    /// The rule under the steering: a root position is pushed out of the circle (the gap) around every other Jelly, softly. The push returns `softPush` of the
+    /// overlap (a continuous map: no pop at the edge of the circle, no flip-flopping when two stand close), down to a floor (`softFloor` of the gap) where two
+    /// bodies are squashed together and no deeper, so they never sit inside each other even when the planner finds no way around (the soft bodies themselves
+    /// do not collide: the contact squish is BlobBrain+Contact).
     static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil) -> SIMD3<Float> {
         var q = p
         let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
@@ -423,7 +428,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
             if L < g {
                 let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
-                q.x = o.pos.x + u.x * g; q.z = o.pos.y + u.y * g
+                let to = max(L + (g - L) * softPush, g * softFloor)
+                q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to
             }
         }
         return q
@@ -446,7 +452,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         func free(_ i: Int) -> Bool { cooldown[i] <= 0 && freeBrain(i) }
         clearWay(snapshot: snapshot, brains: brains, cooldown: &cooldown, free: freeBrain)
         for i in 0..<snapshot.count {
-            for j in (i + 1)..<snapshot.count where simd_distance(snapshot[i].pos, snapshot[j].pos) < jellyGap && !snapshot[i].walking && !snapshot[j].walking {
+            for j in (i + 1)..<snapshot.count where simd_distance(snapshot[i].pos, snapshot[j].pos) < jellyGap * 0.93 && !snapshot[i].walking && !snapshot[j].walking {
                 let mover = free(j) ? j : (free(i) ? i : -1)
                 guard mover >= 0, let b = brains[mover] else { continue }
                 let other = mover == i ? j : i

@@ -90,7 +90,7 @@ final class SocialTests: XCTestCase {
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
             for (i, r) in rigs.enumerated() {
                 let floorRules = r.brain.resolve
-                r.brain.resolve = { [unowned self] p, rad in floorRules(MelonController.keepApart(floorRules(p, rad), id: i, peers: self.snapshot), rad) }
+                r.brain.resolve = { [unowned self, unowned b = r.brain] p, rad in b.socialBook.passThrough ? floorRules(p, rad) : floorRules(MelonController.keepApart(floorRules(p, rad), id: i, peers: self.snapshot, gap: b.inCloseSocial ? MelonController.jellyGap * SocialTuning.closeGapFactor : nil), rad) }
                 r.brain.peers = { [unowned self] in self.snapshot.enumerated().filter { $0.offset != i }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }
             }
             for r in rigs { r.brain.autonomy = true; if quiet { r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6; r.brain.restTimer = 1e6 } }
