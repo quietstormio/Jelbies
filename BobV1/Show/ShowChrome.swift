@@ -490,7 +490,7 @@ struct TrickRound: View {
                 }
                 .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44)
                 .background(Capsule().fill(now ? ShowUI.gold : DT.card))
-                .overlay(Capsule().strokeBorder(now ? ShowUI.goldDeep : .clear, lineWidth: 3))
+                .overlay(Capsule().strokeBorder(now ? ShowUI.goldDeep : .clear, lineWidth: 1.5))
                 .accessibilityElement(children: .combine)
             }
         }
@@ -534,7 +534,7 @@ struct TrickRound: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .background(Capsule().fill(s.burstUsed ? ShowUI.gold.opacity(0.4) : ShowUI.gold))
-                .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
+                .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 1.5))
                 .shadow(color: ShowUI.gold.opacity(s.burstUsed ? 0 : 0.7), radius: 14)
             }
             .buttonStyle(.plain).disabled(!ready)
@@ -577,7 +577,7 @@ struct TrickRound: View {
             }
             .padding(.horizontal, 8).padding(.vertical, compact ? 6 : 10).frame(width: 112)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(live ? 0.97 : 0.7)))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(tag == show.theme.main ? ShowUI.gold : .clear, lineWidth: 3))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(tag == show.theme.main ? ShowUI.gold : .clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain).disabled(!live)
         .accessibilityLabel("\(t.title): \(tag.map { "\($0.title) match plus \(bonus)" } ?? "no theme match"), \(Int((r * 100).rounded())) percent chance\(used ? ", used already" : "")")
@@ -688,7 +688,7 @@ struct ResultsScreen: View {
                             Circle().fill(Color(red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z)))
                             Image(systemName: "face.smiling.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(.white.opacity(0.85))
                         }
-                        .frame(width: 52, height: 52).overlay(Circle().strokeBorder(ShowUI.gold, lineWidth: 3)).shadow(color: ShowUI.gold.opacity(0.7), radius: 10)
+                        .frame(width: 52, height: 52).overlay(Circle().strokeBorder(ShowUI.gold, lineWidth: 1.5)).shadow(color: ShowUI.gold.opacity(0.7), radius: 10)
                     } else { RivalBlob(tint: e.tint, size: 50) }
                     Text(e.name).font(SK.font(e.name.count > 9 ? 10 : 13, .black)).foregroundStyle(e.isPlayer ? ShowUI.gold : ShowUI.mist).lineLimit(1).minimumScaleFactor(0.6)
                     VStack(spacing: 2) {

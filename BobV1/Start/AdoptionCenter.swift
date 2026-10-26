@@ -143,7 +143,7 @@ struct AdoptionCenter: View {
                 .font(SK.font(24, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).frame(minHeight: 52)
                 .background(Capsule().fill(DT.card))
-                .overlay(Capsule().strokeBorder(tint(pick), lineWidth: 3))
+                .overlay(Capsule().strokeBorder(tint(pick), lineWidth: 1.5))
                 .onChange(of: name) { _, v in if v.count > 12 { name = String(v.prefix(12)) } }
                 .onSubmit { bringHome() }
                 .accessibilityIdentifier("adopt-name")

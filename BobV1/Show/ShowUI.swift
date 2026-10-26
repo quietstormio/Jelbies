@@ -629,7 +629,7 @@ struct JellyJar: View {
             ZStack(alignment: .top) {
                 // glass
                 RoundedRectangle(cornerRadius: w * 0.26, style: .continuous).fill(.white.opacity(0.55))
-                    .overlay(RoundedRectangle(cornerRadius: w * 0.26, style: .continuous).strokeBorder(Color(hex: 0xB9D3DC), lineWidth: 3))
+                    .overlay(RoundedRectangle(cornerRadius: w * 0.26, style: .continuous).strokeBorder(Color(hex: 0xB9D3DC), lineWidth: 1.5))
                     .frame(width: w * 0.9, height: bottom - top).offset(y: top)
                 // jelly
                 JellyFill(top: y, bottom: bottom, width: w * 0.86, radius: w * 0.24).fill(c).offset(x: w * 0.07)
@@ -881,7 +881,7 @@ struct ShowLobby: View {
                         .foregroundStyle(open ? (picked ? SK.ink : Color(hex: 0x2E6B26)) : Color(hex: 0x7C6A93))
                         .frame(maxWidth: .infinity, minHeight: 76)
                         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(picked ? ShowUI.gold : open ? Color(hex: 0xE3F4DD) : Color(hex: 0xE9E1F0)))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? ShowUI.goldDeep : open ? SK.mint : Color(hex: 0xC9BBD9), lineWidth: 3))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? ShowUI.goldDeep : open ? SK.mint : Color(hex: 0xC9BBD9), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(r.title) rank, \(picked ? "selected" : open ? "open" : "locked")").accessibilityIdentifier("rank-\(r.rawValue)").accessibilityAddTraits(picked ? .isSelected : [])

@@ -141,7 +141,7 @@ struct ArrangeOverlay: View {
                 }
                 .padding(.leading, inset.leading + 16).padding(.trailing, inset.trailing + 16)
                 if Self.demo, let f = finger {
-                    Circle().strokeBorder(Color.red, lineWidth: 3).background(Circle().fill(Color.red.opacity(0.25))).frame(width: 44, height: 44).position(f).allowsHitTesting(false)
+                    Circle().strokeBorder(Color.red, lineWidth: 1.5).background(Circle().fill(Color.red.opacity(0.25))).frame(width: 44, height: 44).position(f).allowsHitTesting(false)
                 }
             }
             .task(id: g.size) {

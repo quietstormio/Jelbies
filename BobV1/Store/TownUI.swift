@@ -378,7 +378,7 @@ struct TrackPanel: View {
                         HStack(spacing: 8) { Image(systemName: "figure.walk").font(.system(size: 18, weight: .semibold)); Text("Train").font(SK.font(19, .semibold)).lineLimit(1) }
                             .foregroundStyle(blocker == nil ? SK.ink : SK.muted).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
                             .background(Capsule().fill(DT.card))
-                            .overlay(Capsule().strokeBorder(blocker == nil ? SK.ink : SK.muted.opacity(0.4), lineWidth: 3))
+                            .overlay(Capsule().strokeBorder(blocker == nil ? DT.line : SK.muted.opacity(0.3), lineWidth: 1))
                     }
                     .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-train")
                 }
