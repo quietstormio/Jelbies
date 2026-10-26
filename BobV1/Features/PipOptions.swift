@@ -12,7 +12,7 @@ import Foundation
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
     static let count = 7
-    static let startFraction: Float = 0.82          // of his height, on the back silhouette line
+    static let startFraction: Float = 0.80          // of his height, on the back silhouette line
     static let tailEnd: Double = 0.85               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
     static let tiltDeg: Float = 30                  // each spike leans this far from the surface normal toward the tail
@@ -21,36 +21,29 @@ nonisolated enum PipSpikes {
     /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
 
-    /// The orange of the shipped spikes: the base tone and the lighter tip tone (sampled from the art: lowest / highest vertices along the spike).
-    static func tones(spec: FeatureSpec) -> (base: SIMD3<Float>, tip: SIMD3<Float>) {
-        guard let art = FeatureMeshes.art("pip_c_final"), let p = art.parts.first(where: { $0.name == "spike_00" }), let sp = spec.spines.first(where: { $0.part == "spike_00" }) else {
-            return (SIMD3(0.72, 0.30, 0.06), SIMD3(0.95, 0.55, 0.15))
-        }
-        let n0 = simd_normalize(sp.normal.v3), piv = sp.pivot.v3
-        let order = p.positions.indices.sorted { simd_dot(p.positions[$0] - piv, n0) < simd_dot(p.positions[$1] - piv, n0) }
-        func mean(_ idx: ArraySlice<Int>) -> SIMD3<Float> { idx.reduce(SIMD3<Float>(0, 0, 0)) { $0 + p.colors[$1] } / Float(max(idx.count, 1)) }
-        let k = max(order.count / 6, 1)
-        return (mean(order[0..<k]), mean(order[(order.count - k)...]))
-    }
+    /// The shipped spikes' orange (the mean vertex colour of the art, measured from feature_pip_c_final.bin: about (0.92, 0.52, 0.15) linear).
+    static func tones(spec: FeatureSpec) -> (base: SIMD3<Float>, tip: SIMD3<Float>) { (SIMD3(0.92, 0.48, 0.13), SIMD3(0.95, 0.56, 0.17)) }
 
     struct Mesh {
         var pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = [], idx: [UInt32] = []
-        /// A clean slightly pointed cone: sunk base with a soft flare that blends into the skin, straight taper to a softly rounded tip (like the tail's), smooth normals.
-        mutating func cone(base: SIMD3<Float>, axis a: SIMD3<Float>, height H: Float, baseR b: Float, lateral: SIMD3<Float>, tones t: (base: SIMD3<Float>, tip: SIMD3<Float>)) {
-            let seg = 18, tipR = 0.11 * b
-            var u0 = lateral - a * simd_dot(lateral, a); u0 = simd_normalize(u0)
-            let v0 = simd_cross(a, u0)
+        /// A clean slightly pointed cone that bends gently toward `bend` (a small claw / thorn): sunk base with a soft flare that blends into the skin, a straight
+        /// taper to a softly rounded tip, smooth normals. `curve` = how far the tip is carried along `bend`, as a fraction of the height; `tipSoft` = tip radius / base radius.
+        mutating func cone(base: SIMD3<Float>, axis a: SIMD3<Float>, height H: Float, baseR b: Float, bend: SIMD3<Float>, curve: Float, tipSoft: Float,
+                           lateral: SIMD3<Float>, tones t: (base: SIMD3<Float>, tip: SIMD3<Float>)) {
+            let seg = 18, tipR = tipSoft * b
+            var bd = bend - a * simd_dot(bend, a); bd = simd_length(bd) > 1e-5 ? simd_normalize(bd) : a
+            func centre(_ h: Float) -> SIMD3<Float> { let q = max(h, 0) / H; return base + a * h + bd * (curve * H * q * q) }
+            func tangent(_ h: Float) -> SIMD3<Float> { simd_normalize(a + bd * (2 * curve * max(h, 0) / H)) }
             var prof: [(h: Float, r: Float)] = []
             prof.append((-0.35 * b, 1.30 * b))                              // buried flare
             prof.append((0, 1.12 * b))
             prof.append((0.06 * H, 1.0 * b))
-            let nBody = 7
+            let nBody = 8
             let hTip = H - tipR
             for i in 1...nBody {
                 let u = Float(i) / Float(nBody)
                 let h = 0.06 * H + (hTip - 0.06 * H) * u
-                let r = tipR + (b - tipR) * (1 - (h - 0.06 * H) / (hTip - 0.06 * H))                   // straight cone
-                prof.append((h, r))
+                prof.append((h, tipR + (b - tipR) * (1 - (h - 0.06 * H) / (hTip - 0.06 * H))))              // straight taper
             }
             let base0 = UInt32(pos.count)
             var rings = 0
@@ -59,26 +52,32 @@ nonisolated enum PipSpikes {
                 return atanf(-(a1.r - a0.r) / max(a1.h - a0.h, 1e-5))
             }
             func color(_ h: Float) -> SIMD3<Float> { let u = max(0, min(1, h / H)); let w = u * u * (3 - 2 * u); return t.base + (t.tip - t.base) * w }
+            func frame(_ h: Float) -> (u: SIMD3<Float>, v: SIMD3<Float>, t: SIMD3<Float>) {
+                let tg = tangent(h)
+                let u = simd_normalize(lateral - tg * simd_dot(lateral, tg))
+                return (u, simd_cross(tg, u), tg)
+            }
             for (i, p) in prof.enumerated() {
-                let al = slopeAngle(i)
+                let al = slopeAngle(i), f = frame(p.h), c = centre(p.h)
                 for j in 0..<seg {
                     let ph = 2 * Float.pi * Float(j) / Float(seg)
-                    let rad = u0 * (cosf(ph) * PipSpikes.slim) + v0 * sinf(ph)
-                    let radN = simd_normalize(u0 * (cosf(ph) / PipSpikes.slim) + v0 * sinf(ph))
-                    pos.append(base + a * p.h + rad * p.r)
-                    nrm.append(simd_normalize(radN * cosf(al) + a * sinf(al))); col.append(color(p.h)); ao.append(1)
+                    let rad = f.u * (cosf(ph) * PipSpikes.slim) + f.v * sinf(ph)
+                    let radN = simd_normalize(f.u * (cosf(ph) / PipSpikes.slim) + f.v * sinf(ph))
+                    pos.append(c + rad * p.r)
+                    nrm.append(simd_normalize(radN * cosf(al) + f.t * sinf(al))); col.append(color(p.h)); ao.append(1)
                 }
                 rings += 1
             }
-            let capRings = 4
+            let capRings = 5
+            let fc = frame(hTip), cc = centre(hTip)
             for k in 1...capRings {                                           // the softly rounded tip: a small hemisphere
                 let th = Float.pi / 2 * Float(k) / Float(capRings)
                 for j in 0..<seg {
                     let ph = 2 * Float.pi * Float(j) / Float(seg)
-                    let rad = u0 * (cosf(ph) * PipSpikes.slim) + v0 * sinf(ph)
-                    let radN = simd_normalize(u0 * (cosf(ph) / PipSpikes.slim) + v0 * sinf(ph))
-                    pos.append(base + a * (hTip + tipR * sinf(th)) + rad * (tipR * cosf(th)))
-                    nrm.append(simd_normalize(radN * cosf(th) + a * sinf(th))); col.append(color(H)); ao.append(1)
+                    let rad = fc.u * (cosf(ph) * PipSpikes.slim) + fc.v * sinf(ph)
+                    let radN = simd_normalize(fc.u * (cosf(ph) / PipSpikes.slim) + fc.v * sinf(ph))
+                    pos.append(cc + fc.t * (tipR * sinf(th)) + rad * (tipR * cosf(th)))
+                    nrm.append(simd_normalize(radN * cosf(th) + fc.t * sinf(th))); col.append(color(H)); ao.append(1)
                 }
                 rings += 1
             }
@@ -116,8 +115,7 @@ nonisolated enum PipSpikes {
         var arc: [Float] = [0]
         for i in 1..<curve.count { arc.append(arc[i - 1] + simd_distance(curve[i].p, curve[i - 1].p)) }
         let L = arc.last ?? 1, d = L / (Float(count) - 0.5)
-        let tn0 = tones(spec: spec)
-        let tn = (base: tn0.base * 0.85, tip: tn0.base * 1.08)          // the shipped orange, a little deeper (the art's pale tip washes out on a thin cone)
+        let tn = tones(spec: spec)
         var widths: [Float] = [], centres: [Float] = []
         let first = m.pos.count
         var tailFirst = -1
@@ -133,11 +131,15 @@ nonisolated enum PipSpikes {
             let taper: [Float] = [0.62, 0.78, 0.92, 1.0, 0.82, 0.62, 0.45]
             let H = taper[k] * 1.3 * d, bR = 0.30 * H
             widths.append(2 * bR); centres.append(sK)
-            let ax = simd_normalize(nrm * cosf(tiltDeg * .pi / 180) + tg * sinf(tiltDeg * .pi / 180))
+            // everything eases along the row (q = 0 at the top of the back, 1 at the tail tip): the tilt grows from 22 to 72 degrees (near the tip the spikes lie
+            // almost along the tail), the claw-like bend from 0.10 to 0.42 of the height, the tip softens a little; no jump where the back meets the tail
+            let q = Float(k) / Float(count - 1), e = q * q * (3 - 2 * q)
+            let tilt = (22 + 50 * e) * Float.pi / 180
+            let ax = simd_normalize(nrm * cosf(tilt) + tg * sinf(tilt))
             let base = p - nrm * (0.2 * bR)
             let isTail = i - 1 >= backCount
             let start = m.pos.count
-            m.cone(base: base, axis: ax, height: H, baseR: bR, lateral: SIMD3(1, 0, 0), tones: tn)
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.10 + 0.32 * e, tipSoft: 0.22 + 0.06 * e, lateral: SIMD3(1, 0, 0), tones: tn)
             if isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, base)) }
         }
         var gap = Float.infinity
