@@ -257,8 +257,8 @@ struct TownView: View {
                         if !reduceTransparency {
                             // a sneak peek of the place: low-opacity picture under a cream wash (decorative)
                             Image("town_preview_" + p.id.replacingOccurrences(of: "town-", with: ""))
-                                .resizable().scaledToFill().opacity(0.3).accessibilityHidden(true)
-                            LinearGradient(colors: [SK.cream.opacity(0.55), SK.cream.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+                                .resizable().scaledToFill().opacity(0.4).accessibilityHidden(true)
+                            LinearGradient(stops: [.init(color: SK.cream.opacity(0.15), location: 0), .init(color: SK.cream.opacity(0.35), location: 0.5), .init(color: SK.cream.opacity(0.92), location: 0.78), .init(color: SK.cream.opacity(0.95), location: 1)], startPoint: .top, endPoint: .bottom)
                         }
                         VStack(alignment: .leading, spacing: 0) {
                             Image(systemName: p.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink)
