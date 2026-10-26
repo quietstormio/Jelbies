@@ -10,11 +10,11 @@ import simd
 import Foundation
 
 nonisolated enum PipSpikes {
-    static let backFractions: [Float] = [0.80, 0.665, 0.53, 0.395]       // of his height, from just below the hat line down to the lower back
+    static let backFractions: [Float] = [0.86, 0.735, 0.61, 0.485]       // of his height, from just below the hat line down to the lower back
     static let backTemplates = ["spike_00", "spike_00", "spike_00", "spike_00"]
-    static let backScale: [Float] = [0.95, 0.88, 0.81, 0.74]
-    static let tailU: [Double] = [0.42, 0.66, 0.86]                    // along the tail (fraction of its centre line)
-    static let tailScale: [Float] = [0.8, 0.68, 0.56]
+    static let backScale: [Float] = [0.9, 0.84, 0.78, 0.72]
+    static let tailU: [Double] = [0.30, 0.55, 0.78]                    // along the tail (fraction of its centre line)
+    static let tailScale: [Float] = [0.75, 0.62, 0.5]
     static let tailTemplates = ["spike_00", "spike_00", "spike_00"]
 
     struct Mesh {
@@ -28,7 +28,8 @@ nonisolated enum PipSpikes {
             let q = simd_quatf(from: n0, to: simd_normalize(normal))
             let off = UInt32(pos.count)
             for k in 0..<p.positions.count {
-                pos.append(base + q.act((crown + p.positions[k]) - piv) * s)
+                var lv = (crown + p.positions[k]) - piv; lv.x *= 0.8                  // slimmer sideways
+                pos.append(base + q.act(lv) * s)
                 nrm.append(q.act(p.normals[k])); col.append(p.colors[k]); ao.append(p.ao[k])
             }
             idx += p.indices.map { $0 + off }
@@ -67,7 +68,7 @@ nonisolated enum PipSpikes {
             let up = SIMD3<Float>(Float(rg.up.x), Float(rg.up.y), Float(rg.up.z))
             let c = SIMD3<Float>(Float(rg.p.x), Float(rg.p.y), Float(rg.p.z))
             let tg = SIMD3<Float>(Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).x), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).y), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).z))
-            m.spike(tailTemplates[k], base: c + up * Float(rg.r) * 0.9, normal: simd_normalize(up * 1.0 + tg * 0.1), scale: tailScale[k], spec: spec)
+            m.spike(tailTemplates[k], base: c + up * Float(rg.r) * 0.95, normal: simd_normalize(up * 1.0 + tg * 0.3), scale: tailScale[k], spec: spec)
         }
         parts.append(("tail", first, m.pos.count - first, root))
         for (pi, pp) in parts.enumerated() {

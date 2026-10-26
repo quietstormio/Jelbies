@@ -58,15 +58,15 @@ nonisolated enum TailBean {
     }
 
     static let shape: Shape = {
-        let y0 = 0.36 * 1.3458                                           // the lower back, 30% of his height
+        let y0 = 0.39 * 1.3458                                           // the lower back, 30% of his height
         var lo = -1.2, hi = 0.0
         for _ in 0..<50 { let m = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y0, m)) > 0 { lo = m } else { hi = m } }
         let root = SIMD3(0, y0, hi)
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.10, sink = 0.17
-        let vis = 0.30 * width - tipR                                    // surface -> start of the round tip cap
+        let tipR = 0.075, sink = 0.17
+        let vis = 0.34 * width - tipR                                    // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var table: [SIMD3<Double>] = []
@@ -79,7 +79,7 @@ nonisolated enum TailBean {
             cur += SIMD3(0, sin(ang), -cos(ang)) * step
             t += step
         }
-        return Shape(root: root, table: table, step: step, length: length, sink: sink, tipR: tipR, baseR: 0.25, xs: 0.85)
+        return Shape(root: root, table: table, step: step, length: length, sink: sink, tipR: tipR, baseR: 0.175, xs: 0.85)
     }()
 
     /// Rest-space vertices and outward normals.
