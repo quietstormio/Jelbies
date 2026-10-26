@@ -87,6 +87,9 @@ nonisolated struct VolleyPlayer: Sendable {
     var tapQ: VolleyQuality = .good
     var tapT: Float = -9
     var calledSerial = -1
+    /// The computer's misjudgement of this ball's landing (sideways, metres), rolled once per touch.
+    var readSerial = -1
+    var readErr: Float = 0
     var lastX: Float = 0, lastZ: Float = 0
 }
 
@@ -453,6 +456,7 @@ nonisolated struct VolleySim: Sendable {
         for i in players.indices {
             players[i].cooldown = max(0, players[i].cooldown - dt)
             players[i].actT += dt
+            if players[i].act != .stand, players[i].actT > 2.5 { players[i].act = .stand; players[i].spikePlanned = false }      // stuck-state guard: no move lasts this long
         }
         switch phase {
         case .intro:
@@ -1015,7 +1019,13 @@ nonisolated struct VolleySim: Sendable {
             if !isDrill { aiBlock(&p, i: i, pr: pr) }
             if moveToo, p.act == .stand {
                 let blocking = blockWanted[team] && touches[1 - team] >= 2 && abs(p.x) < 2.2 && (players.indices.contains(team * 2 + 1) ? abs(p.x) <= abs(players[team * 2 + (i % 2 == 0 ? 1 : 0)].x) : true)
-                if !blocking { p.wantX = homeX; p.wantZ = homeZ + max(-0.5, min(0.5, ball.z * 0.3)) }
+                if !blocking {
+                    // the partner (the human too) is front or back: take the other job, and stagger across the court
+                    let mate = players.indices.contains(team * 2 + (i % 2 == 0 ? 1 : 0)) ? players[team * 2 + (i % 2 == 0 ? 1 : 0)] : nil
+                    var hx = homeX, hz = homeZ + max(-0.5, min(0.5, ball.z * 0.3))
+                    if let mate { hx = abs(mate.x) < 1.7 ? backX : frontX; hz = max(-0.9, min(0.9, -mate.z * 0.6 + ball.z * 0.2)) }
+                    p.wantX = hx; p.wantZ = hz
+                }
             }
             players[i] = p
             return
@@ -1026,8 +1036,15 @@ nonisolated struct VolleySim: Sendable {
             let apex = T.apex(hops: p.stats.hops)
             let lead = T.crouch + 0.5 * T.airTime(apex: apex)
             let hitH = T.bodyTop + apex * 0.9 + 0.3
-            var tx = landX
-            if t0 >= 2 { tx = landX + s * 0.45 }
+            // a lower-tier player misjudges the landing now and then (a miss that is the ball's fault, never an impossible save)
+            if p.readSerial != touchSerial {
+                p.readSerial = touchSerial
+                let slip = (1 - pr.read) * 1.0
+                p.readErr = (rng.next() - 0.5) * 2 * slip
+                if !isDrill, rng.next() < 0.5 { p.readErr *= 0.3 }
+            }
+            var tx = landX + p.readErr
+            if t0 >= 2 { tx = landX + s * 0.45 + p.readErr }
             if moveToo {
                 p.wait = max(0, p.wait - dt)
                 if p.wait <= 0 { p.wantX = tx; p.wantZ = landZ }

@@ -30,6 +30,10 @@ final class VolleyWork {
     var rotated = false
     var demoStage = 0
     var slowLeft: Float = 0
+    /// Recent ball centres (the trail) and sand puffs (x, z, age seconds, size).
+    var trail: [SIMD3<Float>] = []
+    var puffs: [(x: Float, z: Float, age: Float, size: Float)] = []
+    var nudge: Float = 0
     var captureDone = false
     nonisolated deinit {}
 }
@@ -272,6 +276,15 @@ extension GameCare {
         volley.bodyPos = w.players.enumerated().compactMap { i, a in i < s.players.count ? SIMD3(s.players[i].x, s.players[i].top, s.players[i].z) : nil }
         volley.sim = s
         volley.lastStepMedia = CACurrentMediaTime()
+        // juice state: the trail of a fast ball, ageing sand puffs, the camera's drift toward the action
+        let reduce = A11ySettings.shared.reduceMotion
+        if hypot(s.ball.vel.x, s.ball.vel.y) > 5.5, s.phase == .rally, !reduce { w.trail.append(SIMD3(s.ball.pos.x, s.ball.pos.y, s.ball.z)); if w.trail.count > 6 { w.trail.removeFirst() } }
+        else if !w.trail.isEmpty { w.trail.removeFirst() }
+        for k in w.puffs.indices { w.puffs[k].age += dt }
+        w.puffs.removeAll { $0.age > 0.6 }
+        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.pos.x * 0.05))
+        w.nudge += (want - w.nudge) * min(1, dt * 1.5)
+        GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
         volley.refreshUI()
     }
@@ -286,7 +299,9 @@ extension GameCare {
         switch e {
         case .jump(let i, let dx, let dz, let apex, let block): if let a = body(i) { a.brain?.volleyJump(sim: a.sim, dx: dx, dz: dz, apex: apex, block: block) }
         case .spike(let i): body(i)?.brain?.volleySpike()
-        case .dive(let i, let dir): if let a = body(i) { a.brain?.volleyDive(sim: a.sim, dir: dir) }
+        case .dive(let i, let dir):
+            if let a = body(i) { a.brain?.volleyDive(sim: a.sim, dir: dir) }
+            if s.players.indices.contains(i) { w.puffs.append((s.players[i].x + dir * 0.5, s.players[i].z, 0, 1.0)) }
         case .serveToss: AudioHub.shared.play(.whistle, volume: 0.35, rate: 1.3)
         case .contact(let i, let kind, let quality, let point, let normal, let speed):
             guard let a = body(i) else { return }
@@ -319,7 +334,9 @@ extension GameCare {
         case .touchCount(let team, let count):
             if team == 0 { A11yEvents.say("Touch \(count) of 3", .low) }
         case .fault: AudioHub.shared.play(.whistle, volume: 0.5)
-        case .bounce(let x): AudioHub.shared.play(.volleyLand, x: x, volume: 0.6)
+        case .bounce(let x):
+            AudioHub.shared.play(.volleyLand, x: x, volume: 0.6)
+            w.puffs.append((x, s.ball.z, 0, 0.7))
         case .net: AudioHub.shared.play(.wobble, volume: 0.5)
         case .point(let team, let out):
             AudioHub.shared.play(.volleyPoint)
@@ -354,6 +371,7 @@ extension GameCare {
             VolleyBallMesh.shadow(x: s.ball.pos.x, z: s.ball.z, height: s.ball.pos.y, into: b)
             if let r = s.ring, s.phase == .rally { VolleyBallMesh.timingRing(r, time: s.clock, into: b) }
             add(VolleyBallMesh.build(centre: SIMD3(s.ball.pos.x, s.ball.pos.y, s.ball.z), spin: s.ball.spin))
+            if !w.trail.isEmpty { VolleyBallMesh.trail(w.trail, into: b) }
         }
         if s.drillKind == .spike {
             for (k, x) in s.cushions.enumerated() {
@@ -370,6 +388,7 @@ extension GameCare {
                 b.roundedBox(centre: SIMD3(pt.x + 0.17, 0.78, pt.y), half: SIMD3(cur ? 0.19 : 0.13, cur ? 0.1 : 0.07, 0.015), radius: 0.015, segments: 2, aoFloor: false, color: col)
             }
         }
+        for pf in w.puffs { VolleyBallMesh.puff(x: pf.x, z: pf.z, age: pf.age / 0.6, size: pf.size, into: b) }
         // the control ring under the Jelbie you steer, and an arrow over him
         if !s.isDrill, s.phase != .over, s.players.indices.contains(s.controlled) {
             let p = s.players[s.controlled]

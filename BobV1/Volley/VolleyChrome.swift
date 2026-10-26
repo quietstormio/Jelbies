@@ -249,6 +249,10 @@ struct VolleyChrome: View {
                     Text(volley.ui.hitLabel).playFont(compact ? 18 : 22, .heavy)
                 }.foregroundStyle(CareMenu.brown)
                 if let a = aimShown {
+                    // the ghost aim line: from the button's centre out toward where the hit will go
+                    Path { p in p.move(to: CGPoint(x: size / 2, y: size / 2)); p.addLine(to: CGPoint(x: size / 2 + CGFloat(a.x) * size * 0.34, y: size / 2 + CGFloat(a.y) * size * 0.34)) }
+                        .stroke(FocusStyle.pink.opacity(0.7), style: StrokeStyle(lineWidth: 5, lineCap: .round, dash: [1, 9]))
+                        .frame(width: size, height: size)
                     Circle().fill(FocusStyle.pink).frame(width: 14, height: 14).offset(x: CGFloat(a.x) * size * 0.34, y: CGFloat(a.y) * size * 0.34)
                 }
             }

@@ -21,6 +21,8 @@ extension RoomCatalog {
 
 extension GameCamera {
     nonisolated(unsafe) static var beachOn = false
+    /// A gentle sideways drift of the view toward the action (world x, a few centimetres; zero with Reduce Motion).
+    nonisolated(unsafe) static var beachNudge: Float = 0
     static let beachAzimuth: Float = 13 * .pi / 180, beachElevation: Float = 16 * .pi / 180
 
     /// Eye / target for the court: the whole court (and the sky the ball climbs into) fits the width of a portrait phone, the height of a landscape one.
@@ -36,7 +38,8 @@ extension GameCamera {
         let ty = tyLand + (0.55 - tyLand) * portrait          // portrait: the court sits in the middle band, the sky above and the controls below stay clear
         let t = SIMD3<Float>(0, ty, 0)
         let dir = SIMD3<Float>(sinf(beachAzimuth) * cosf(beachElevation), sinf(beachElevation), cosf(beachAzimuth) * cosf(beachElevation))
-        return (t + dir * dist, t)
+        let shift = SIMD3<Float>(beachNudge, 0, 0)
+        return (t + dir * dist + shift, t + shift)
     }
 
     static func configureBeach() {
@@ -240,6 +243,28 @@ enum VolleyBallMesh {
         let col: V3 = inPerfect ? ParkShapes.srgb(1.0, 0.80, 0.18) : late ? ParkShapes.srgb(0.95, 0.48, 0.44) : inGood ? ParkShapes.srgb(0.99, 0.96, 0.78) : ParkShapes.srgb(1.0, 1.0, 1.0)
         let w: Float = inPerfect ? 0.085 : 0.05
         annulus(b, cx: r.x, cz: r.z, r0: rad, r1: rad + w, y: 0.038, color: col, segs: 36)
+    }
+
+    /// A fading string of small balls behind a fast ball.
+    static func trail(_ pts: [SIMD3<Float>], into b: RoomMeshBuilder) {
+        b.material = .plain
+        for (k, p) in pts.enumerated() {
+            let f = Float(k + 1) / Float(pts.count + 1)
+            b.roundedBox(centre: p, half: SIMD3(repeating: VolleyTuning.ballR * (0.25 + 0.5 * f)), radius: VolleyTuning.ballR * 0.2, segments: 2, aoFloor: false,
+                         color: simd_mix(ParkShapes.srgb(0.62, 0.80, 0.96), ParkShapes.srgb(1, 1, 1), SIMD3(repeating: f)))
+        }
+    }
+
+    /// A puff of sand: a few soft discs that widen and sink as it ages (0...1).
+    static func puff(x: Float, z: Float, age: Float, size: Float, into b: RoomMeshBuilder) {
+        b.material = .plain
+        let a = min(1, max(0, age))
+        let col = simd_mix(ParkShapes.srgb(0.98, 0.90, 0.70), ParkShapes.srgb(0.90, 0.78, 0.55), SIMD3(repeating: a))
+        for k in 0..<4 {
+            let ang = Float(k) * 1.57 + size * 3
+            let r = size * (0.15 + 0.5 * a)
+            ParkScenery.disc(b, cx: x + cosf(ang) * r, cz: z + sinf(ang) * r * 0.7, radius: size * 0.22 * (1 - 0.6 * a), y: 0.04 + 0.28 * size * (1 - a) * (1 - a) * 0.0 + 0.10 * size * (1 - a), color: col)
+        }
     }
 
     /// The ring at the feet of the Jelbie you steer, and a bobbing arrow over his head.
