@@ -59,6 +59,7 @@ final class DayNightSoundTests: XCTestCase {
     private func makeClock(hour: Double, suite: String = UUID().uuidString, uptime: UnsafeMutablePointer<Double>? = nil) -> (DayClock, UserDefaults, ClockBox) {
         let d = UserDefaults(suiteName: suite)!
         d.removePersistentDomain(forName: suite)
+        d.set(true, forKey: DayClock.followKey)          // these suites test the real-clock mode; the game clock has its own tests below
         let box = ClockBox(hour: hour)
         let c = DayClock(defaults: d, now: { box.date }, uptime: { box.uptime }, calendar: box.cal)
         return (c, d, box)
@@ -71,6 +72,24 @@ final class DayNightSoundTests: XCTestCase {
         static let base: Double = Double((1_800_000_000 / 86400) * 86400)
         init(hour: Double) { date = Date(timeIntervalSince1970: ClockBox.base + hour * 3600) }
         func set(hour: Double, dayOffset: Int = 0) { date = Date(timeIntervalSince1970: ClockBox.base + Double(dayOffset) * 86400 + hour * 3600) }
+    }
+
+    func testGameClockRunsSavesResumesAndFreshMorning() {
+        let suite = UUID().uuidString
+        let d = UserDefaults(suiteName: suite)!; d.removePersistentDomain(forName: suite)
+        let box = ClockBox(hour: 15)
+        let c = DayClock(defaults: d, now: { box.date }, uptime: { box.uptime }, calendar: box.cal)
+        XCTAssertEqual(c.hour, 8, accuracy: 1e-6); XCTAssertEqual(c.day, 1)          // a new game: 8:00, Day 1
+        box.uptime += 0.9; _ = c.hour
+        for _ in 0..<60 { box.uptime += 0.9; _ = c.hour }                              // 54 s + 0.9 s = ~55 s
+        XCTAssertEqual(c.hour, 8 + 54.9 / 60, accuracy: 1e-6)
+        c.leaving(); box.uptime += 500; box.date = box.date.addingTimeInterval(500)    // away 500 s: nothing runs
+        c.snapToNow(); XCTAssertEqual(c.hour, 8 + 54.9 / 60, accuracy: 1e-6)
+        let c2 = DayClock(defaults: d, now: { box.date }, uptime: { box.uptime }, calendar: box.cal)
+        XCTAssertEqual(c2.hour, 8 + 54.9 / 60, accuracy: 1e-3)                          // a relaunch resumes
+        c2.leaving(); box.date = box.date.addingTimeInterval(7 * 3600)
+        c2.snapToNow(); XCTAssertEqual(c2.hour, 7, accuracy: 1e-6); XCTAssertEqual(c2.day, 2)          // 6 h or more away: a fresh morning
+        c2.skipToMorning(); XCTAssertEqual(c2.hour, 7, accuracy: 1e-6); XCTAssertEqual(c2.day, 3)
     }
 
     func testClockReadsHourAndForcedHour() {

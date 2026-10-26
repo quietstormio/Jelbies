@@ -54,12 +54,13 @@ nonisolated enum GuestRules {
         if h < GuestTuning.lateNightHour { return today }
         return c.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
     }
-    static func endsAt(_ kind: GuestVisit.Kind, arrival: Date, calendar: Calendar = .current, roll: Double = Double.random(in: 0..<1)) -> Date {
+    /// `sleepoverSeconds`: on the game clock a sleepover lasts until 7:30 GAME time (`DayClock.secondsToSleepoverEnd`); nil = the phone clock's 07:30.
+    static func endsAt(_ kind: GuestVisit.Kind, arrival: Date, calendar: Calendar = .current, roll: Double = Double.random(in: 0..<1), sleepoverSeconds: Double? = nil) -> Date {
         switch kind {
         case .playDate:
             let r = GuestTuning.playDate
             return arrival.addingTimeInterval(r.lowerBound + roll * (r.upperBound - r.lowerBound))
-        case .sleepover: return morningEnd(after: arrival, calendar: calendar)
+        case .sleepover: return sleepoverSeconds.map { arrival.addingTimeInterval($0) } ?? morningEnd(after: arrival, calendar: calendar)
         }
     }
 
@@ -139,10 +140,10 @@ final class GuestBook {
         visit = nil; save()
     }
     /// He is at the door: the clock of the visit starts.
-    func markArrived(now: Double, calendar: Calendar = .current) {
+    func markArrived(now: Double, calendar: Calendar = .current, sleepoverSeconds: Double? = nil) {
         guard var v = visit, !v.arrived else { return }
         v.arrivedAt = now
-        v.endsAt = GuestRules.endsAt(v.kind, arrival: Date(timeIntervalSince1970: now), calendar: calendar).timeIntervalSince1970
+        v.endsAt = GuestRules.endsAt(v.kind, arrival: Date(timeIntervalSince1970: now), calendar: calendar, sleepoverSeconds: sleepoverSeconds).timeIntervalSince1970
         visit = v; save()
     }
     /// The player says goodbye early: the visit is over now.

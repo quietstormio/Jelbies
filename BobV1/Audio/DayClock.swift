@@ -95,6 +95,21 @@ nonisolated struct TimeLapse: Equatable, Sendable {
     }
 }
 
+/// The game clock's tunables.
+nonisolated enum GameClockTuning {
+    /// Real seconds that make one game hour while the app is open and in the foreground (60 -> a full day is 24 real minutes).
+    static let realSecondsPerGameHour: Double = 60
+    /// A brand-new game starts here, on Day 1.
+    static let newGameHour: Double = 8
+    /// Away at least this long (real seconds): the next launch / return starts at `freshMorningHour` on a new day.
+    static let freshMorningAfterAway: TimeInterval = 6 * 3600
+    static let freshMorningHour: Double = 7
+    /// "Sleep until morning" lands here, on the next day.
+    static let wakeHour: Double = 7
+    /// How much of a night the needs / dirt catch up on a skipped night (real seconds on the gentle time-away curve; it never starves).
+    static let skippedNightAway: TimeInterval = 6 * 3600
+}
+
 @MainActor
 final class DayClock {
     /// Under XCTest the clock is frozen at noon (unless `-ClockHour` is given) so suites never depend on the hour they run at.
@@ -105,13 +120,21 @@ final class DayClock {
     }()
 
     static let offsetKey = "DayClock.offset.v1", offsetPhaseKey = "DayClock.offsetPhase.v1", leftKey = "DayClock.left.v1"
+    static let gameKey = "DayClock.gameTime.v1", savedAtKey = "DayClock.savedAt.v1", followKey = "DayClock.followReal.v1"
 
     private let defaults: UserDefaults
     private let now: () -> Date
     private let uptime: () -> Double
     private let calendar: Calendar
-    /// `-ClockHour` (debug): freezes the real clock at this hour.
+    /// `-ClockHour` (debug): freezes the clock at this hour.
     var forcedHour: Double?
+    /// "Follow real clock" (Settings -> Game, off by default): the old behaviour, the phone clock plus the curtain offset.
+    private(set) var followReal: Bool
+    /// Game hours since Day 1 at 00:00 (Day 1 starts at 8:00 = 8.0). Only advances in the foreground (game mode).
+    private(set) var gameTime: Double
+    private var lastUptime: Double
+    private var lastSaveUptime: Double
+    private var paused = false
     private(set) var offsetHours: Double
     private var offsetPhase: DayPhase?
     private(set) var lapse: TimeLapse?
@@ -122,13 +145,31 @@ final class DayClock {
          uptime: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, calendar: Calendar = .current) {
         self.defaults = defaults; self.now = now; self.uptime = uptime; self.calendar = calendar
         if defaults.object(forKey: "ClockHour") != nil { forcedHour = defaults.double(forKey: "ClockHour") }
+        followReal = defaults.bool(forKey: Self.followKey)
         offsetHours = defaults.double(forKey: Self.offsetKey)
         offsetPhase = defaults.string(forKey: Self.offsetPhaseKey).flatMap(DayPhase.init(rawValue:))
+        lastUptime = uptime(); lastSaveUptime = lastUptime
+        if defaults.object(forKey: Self.gameKey) != nil {
+            gameTime = defaults.double(forKey: Self.gameKey)
+            let saved = defaults.double(forKey: Self.savedAtKey)
+            if saved > 0, now().timeIntervalSince1970 - saved >= GameClockTuning.freshMorningAfterAway { gameTime = Self.freshMorning(after: gameTime) }
+        } else { gameTime = GameClockTuning.newGameHour }
+        defaults.removeObject(forKey: Self.leftKey)          // the away rule was just applied from the saved stamp
+        save()
         refresh()
     }
     nonisolated deinit {}
 
-    /// The phone's calendar day as one number (yyyymmdd). It changes at local midnight, whatever time has gone by (Pep resets on it). The curtain offset does not move it.
+    /// 7:00 on the day after the one `t` is in.
+    static func freshMorning(after t: Double) -> Double { (t / 24).rounded(.down) * 24 + 24 + GameClockTuning.freshMorningHour }
+
+    /// A new game (Reset save / Start over): Day 1, 8:00.
+    func resetForNewGame() {
+        gameTime = GameClockTuning.newGameHour; lapse = nil; clearOffset(); lastUptime = uptime(); save()
+    }
+
+    /// The phone's calendar day as one number (yyyymmdd). It changes at local midnight, whatever time has gone by. EVERY daily limit keys off this REAL day
+    /// (Pep / training fatigue, Volley fatigue, the Show's day) and never off the game day, so sleeping through nights cannot refill anything.
     var dayKey: Int {
         let c = calendar.dateComponents([.year, .month, .day], from: now())
         return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
@@ -140,18 +181,53 @@ final class DayClock {
         let c = calendar.dateComponents([.hour, .minute, .second], from: now())
         return Double(c.hour ?? 12) + Double(c.minute ?? 0) / 60 + Double(c.second ?? 0) / 3600
     }
-    /// Real clock + curtain offset (no time-lapse).
-    var hour: Double { DayMath.wrap(realHour + offsetHours) }
+    /// The game hour (0..<24), or the phone's hour (+ curtain offset) when following the real clock / forced by `-ClockHour`.
+    var hour: Double {
+        if followReal || forcedHour != nil { return DayMath.wrap(realHour + offsetHours) }
+        advance()
+        return DayMath.wrap(gameTime)
+    }
+    /// "Day N" (1 on a new game). Meaningless while following the real clock.
+    var day: Int { Int((gameTime / 24).rounded(.down)) + 1 }
+    var showsDay: Bool { !followReal }
     /// What the room and the music draw: the time-lapse hour while one runs.
     var displayHour: Double { lapse.map { $0.hour(at: uptime()) } ?? hour }
     var phase: DayPhase { DayPhase.of(hour: displayHour) }
     var blend: DayBlend { DayBlend(hour: displayHour) }
     var isLapsing: Bool { lapse != nil }
+    /// "Sleep until morning" is offered: evening on, and all night until 7:00.
+    var skipOffered: Bool { let h = hour; return h >= 17 || h < GameClockTuning.wakeHour }
+    /// Real seconds until a sleepover guest leaves (7:30 game time), nil while following the real clock (GuestRules uses the phone clock then).
+    var secondsToSleepoverEnd: Double? {
+        guard !followReal, forcedHour == nil else { return nil }
+        var d = 7.5 - hour
+        if d <= 0 { d += 24 }
+        return d * GameClockTuning.realSecondsPerGameHour
+    }
 
-    /// Drops a finished lapse, and clears the curtain offset once the real clock has moved on to another phase. Call every frame / second.
+    func setFollowReal(_ on: Bool) {
+        guard on != followReal else { return }
+        followReal = on; defaults.set(on, forKey: Self.followKey)
+        lapse = nil; lastUptime = uptime()
+    }
+
+    private func advance() {
+        let u = uptime()
+        defer { lastUptime = u }
+        guard !followReal, !paused, forcedHour == nil else { return }
+        gameTime += min(max(u - lastUptime, 0), 1) / GameClockTuning.realSecondsPerGameHour
+        if u - lastSaveUptime >= 5 { save() }
+    }
+    private func save() {
+        lastSaveUptime = uptime()
+        defaults.set(followReal, forKey: Self.followKey); defaults.set(gameTime, forKey: Self.gameKey); defaults.set(now().timeIntervalSince1970, forKey: Self.savedAtKey)
+    }
+
+    /// Drops a finished lapse, advances the game clock, and (real clock mode) clears the curtain offset once the real clock has moved on. Call every frame / second.
     func refresh() {
+        if !followReal { advance() }
         if let l = lapse, l.isDone(at: uptime()) { lapse = nil }
-        if offsetHours != 0, let p = offsetPhase, DayPhase.of(hour: realHour) != p { clearOffset() }
+        if followReal, offsetHours != 0, let p = offsetPhase, DayPhase.of(hour: realHour) != p { clearOffset() }
     }
 
     private func clearOffset() {
@@ -159,24 +235,43 @@ final class DayClock {
         defaults.removeObject(forKey: Self.offsetKey); defaults.removeObject(forKey: Self.offsetPhaseKey)
     }
 
-    /// The curtains: jump to the start of the next part of the day (an offset on the real clock) with a short time-lapse.
-    func skipToNextPhase() {
-        let here = hour
-        let target = DayPhase.of(hour: here).next.startHour
-        var delta = target - here
-        if delta <= 0.001 { delta += 24 }
+    /// Moves the clock `delta` hours ahead (game time, or the curtain offset on the real clock) and starts the sweep.
+    private func jump(by delta: Double, duration: Double, sweep: Bool) {
         let from = displayHour
-        offsetHours = (offsetHours + delta).truncatingRemainder(dividingBy: 24)
-        offsetPhase = DayPhase.of(hour: realHour)
-        defaults.set(offsetHours, forKey: Self.offsetKey); defaults.set(offsetPhase?.rawValue, forKey: Self.offsetPhaseKey)
-        lapse = TimeLapse(from: from, to: from + delta, start: uptime())
+        if followReal || forcedHour != nil {
+            offsetHours = (offsetHours + delta).truncatingRemainder(dividingBy: 24)
+            offsetPhase = DayPhase.of(hour: realHour)
+            defaults.set(offsetHours, forKey: Self.offsetKey); defaults.set(offsetPhase?.rawValue, forKey: Self.offsetPhaseKey)
+        } else {
+            advance(); gameTime += delta; save()
+        }
+        lapse = sweep ? TimeLapse(from: from, to: from + delta, start: uptime(), duration: duration) : nil
         skipCount += 1
     }
 
-    /// The room, the music and the Jellies are on the real clock at once: no sweep, ever (round 1022: the player must never watch the day catch up on open).
-    /// Called before the first frame on launch and on every return to the foreground. Only the curtain tap (`skipToNextPhase`) plays a time-lapse.
+    /// The curtains: jump to the start of the next part of the day with a short time-lapse.
+    func skipToNextPhase() {
+        let here = hour
+        var delta = DayPhase.of(hour: here).next.startHour - here
+        if delta <= 0.001 { delta += 24 }
+        jump(by: delta, duration: 2.6, sweep: true)
+    }
+
+    /// "Sleep until morning": 7:00 on the next Day (or the same morning before 7:00). `sweep` runs the time-lapse (sunrise); Reduce Motion passes false.
+    func skipToMorning(duration: Double = 2.0, sweep: Bool = true) {
+        let here = hour
+        var delta = GameClockTuning.wakeHour - here
+        if delta <= 0.001 { delta += 24 }
+        jump(by: delta, duration: duration, sweep: sweep)
+    }
+
+    /// The room, the music and the Jellies are on the clock at once: no sweep, ever (the player must never watch the day catch up on open).
+    /// Called before the first frame on launch and on every return to the foreground. In game mode, away >= 6 real hours starts a fresh morning (7:00, next Day);
+    /// less than that resumes where it left off (the game clock does not run while the app is away).
     func snapToNow() {
         lapse = nil
+        if !followReal, let left = takeLeft(), now().timeIntervalSince(left) >= GameClockTuning.freshMorningAfterAway { gameTime = Self.freshMorning(after: gameTime); save() }
+        paused = false; lastUptime = uptime()
         refresh()
         defaults.removeObject(forKey: Self.leftKey)
     }
@@ -187,8 +282,12 @@ final class DayClock {
         snapToNow()
     }
 
-    /// Stamps the moment the app left the foreground (read back by `returned`).
-    func leaving() { defaults.set(now().timeIntervalSince1970, forKey: Self.leftKey) }
+    /// Stamps the moment the app left the foreground (read back by `snapToNow`); the game clock stops until the return.
+    func leaving() {
+        if !followReal { advance() }
+        paused = true; save()
+        defaults.set(now().timeIntervalSince1970, forKey: Self.leftKey)
+    }
     func takeLeft() -> Date? {
         guard defaults.object(forKey: Self.leftKey) != nil else { return nil }
         let d = Date(timeIntervalSince1970: defaults.double(forKey: Self.leftKey))

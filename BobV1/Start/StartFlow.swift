@@ -104,6 +104,7 @@ final class StartFlow {
         JellyRoster.names = JellyRoster.loadNames()
         JellyRoster.current = [0]
         DecorField.shared.set([])
+        DayClock.shared.resetForNewGame()          // Day 1, 8:00
     }
 
     /// A newcomer starts fresh: whatever a preview (the Adoption Center's stage) saved under his keys goes.

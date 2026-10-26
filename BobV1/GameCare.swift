@@ -114,6 +114,8 @@ final class GameCare {
     let store: StoreBook
     /// The fade between rooms (Room/RoomSwitch.swift, GameCare+Rooms.swift).
     let roomSwitch = RoomSwitch()
+    /// "Sleep until morning": the cut-scene's state (GameCare+SkipNight.swift).
+    var nightSkip = NightSkipState()
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
     @ObservationIgnored var servingCharged = false
     @ObservationIgnored var zoomiesDue: Set<Int> = []
@@ -717,6 +719,7 @@ final class GameCare {
         for a in raceBook.actors { a.brain?.selectedNow = (a.id == select.selectedID) }
         selectWokeFor = select.selectedID
         tickNightRest(dt: dt)
+        tickNightSkip(dt: dt)
         LaunchGate.shared.stageTicked()
         select.tick(dt: dt)
         if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive, !brain.isSleeping { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)

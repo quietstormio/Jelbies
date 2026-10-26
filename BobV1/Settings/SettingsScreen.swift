@@ -18,6 +18,7 @@ struct SettingsScreen: View {
     @State private var showA11y = false
     @State private var confirmReset = false
     @State private var replayIntro = UserDefaults.standard.integer(forKey: "Intro") != 0
+    @State private var followReal = DayClock.shared.followReal
     @Environment(\.verticalSizeClass) private var vsc
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
@@ -169,6 +170,11 @@ struct SettingsScreen: View {
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-replay-intro")
             actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio)
+            Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))
+                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
+                .accessibilityIdentifier("settings-follow-real-clock")
+            Text(followReal ? "Day and night follow your phone's clock." : "One game hour is one real minute. Day \(DayClock.shared.day) so far. You can also skip the night with the moon button.")
+                .font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
             Button { AudioHub.shared.uiTap(); confirmReset = true } label: {
                 Label("Reset save", systemImage: "trash").font(CloudTheme.font(16, .bold)).foregroundStyle(Color(hex: 0xB3261E))
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -192,6 +198,7 @@ struct SettingsScreen: View {
         return card("About", "info.circle") {
             Text("Jelbies").font(CloudTheme.font(18, .heavy)).foregroundStyle(ink)
             Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
+            if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75)) }
             Text("Made with love.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
             Text("Everything stays on this phone. No accounts, no internet.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)

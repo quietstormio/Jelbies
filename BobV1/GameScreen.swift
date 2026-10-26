@@ -157,7 +157,7 @@ struct GameScreen: View {
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     if !focus.isActive, !cleaning, !racing {
-                        HStack { Spacer(); PerkBadgeRow(care: model.care) }
+                        HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer(); DayChip(); PerkBadgeRow(care: model.care) }
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudPerkH = $0 }
                     }
                     Spacer()
@@ -328,6 +328,7 @@ struct GameScreen: View {
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
+        .overlay { NightSkipVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])

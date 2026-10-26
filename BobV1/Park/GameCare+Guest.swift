@@ -158,7 +158,7 @@ extension GameCare {
         b.sleepLocked = false
         b.idleMood = .happy
         if !visit.arrived {
-            g.markArrived(now: now)
+            g.markArrived(now: now, sleepoverSeconds: DayClock.shared.secondsToSleepoverEnd)
             park.say(visit.kind == .sleepover ? "\(v.name) came over for a sleepover!" : "\(v.name) came over to play!")
         }
         if overdue {          // the app is back just after the end: he is still here, ready to go home
