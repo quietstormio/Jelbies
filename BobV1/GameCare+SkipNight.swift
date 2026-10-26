@@ -31,6 +31,7 @@ struct NightSkipState {
 }
 
 extension GameCare {
+    static let nightClip = "night_to_morning_1"
     private var rosterActors: [JellyActor] { raceBook.actors.filter { $0.brain != nil && $0.id < max(jellies.count, 1) } }
     /// Every Jelbie in the roster is lying asleep (the goodnight is done): the moon button then offers the skip more loudly.
     var rosterAllAsleep: Bool { let a = rosterActors; return !a.isEmpty && a.allSatisfy { $0.brain?.isSleeping == true } }
@@ -42,12 +43,14 @@ extension GameCare {
         nightSkip = NightSkipState(active: true, t: 0, reduce: A11ySettings.shared.reduceMotion)
         select.cancel()
         if !nightSkip.reduce { bedtimeAll() }
-        AudioHub.shared.uiTap()
+        AudioHub.shared.playClip(Self.nightClip)          // the lullaby that swells into the morning chime and birds (follows the sound settings)
+        CaptionCenter.shared.post("Lullaby, then morning birds")
     }
 
     /// A tap during the cut-scene: finish everything now.
     func skipNightCutscene() {
         guard nightSkip.active else { return }
+        AudioHub.shared.stopClip(Self.nightClip, fade: 0.4)
         nightSkip.t = nightSkip.reduce ? NightSkipTuning.rmTotal : NightSkipTuning.total
         tickNightSkip(dt: 0)
     }
@@ -107,7 +110,6 @@ extension GameCare {
     private func wakeForMorning() {
         guard !nightSkip.woke else { return }
         nightSkip.woke = true
-        AudioHub.shared.play(.perkSparkle, volume: 0.6, rate: 0.9)
         nightRest.wanted.removeAll(); nightRest.dayOnce.removeAll(); nightRest.nightWoken.removeAll()
         for a in rosterActors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: true) } }
         noteInteraction()
