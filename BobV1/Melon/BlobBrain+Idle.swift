@@ -189,16 +189,29 @@ struct IdleState {
 }
 
 extension BlobBrain {
-    static let runLean: Float = 5.5 * .pi / 180
-    static let runArmGain: Float = 0.3
+    static let runLean: Float = 12 * .pi / 180        // a real run leans 10-15 deg (was 5.5)
+    static let runArmGain: Float = 1.1
+    static let runTuck: Float = 1.6                    // swing-foot lift x(1 + this) at full run: the feet tuck up under him
+    static let runBound: Float = 0.085                 // airborne rise per stride (world units)
+    /// The run's body: forward lean, a bound each stride (rise in the flight, squash at touch-down, stretch at push-off), the skid-stop dip.
+    func runPose(_ a: Float) {
+        let u = feet.stepU, w = runW
+        pitch += Self.runLean * w
+        let hump = powf(sinf(.pi * u), 1.3)
+        runAir = Self.runBound * a * w * hump
+        lift += runAir
+        let land = max(0, 1 - u / 0.22), land2 = max(0, (u - 0.8) / 0.2)       // touch-down squash at both ends of a stride
+        squash += w * (0.07 * sinf(.pi * u) - 0.11 * max(land, land2))
+        if runFalling { squash -= 0.06 * w; pitch -= 0.05 * w }
+    }
     /// 2026-10-18: the roaming walk is ~14 % faster (stride x1.143, cadence unchanged, so speed = stride x rate stays slip-free; a faster cadence made the turn-in-place steps of the zoomies loop come off the belly); the boost is off whenever a run / zoomies / slide (or its
     /// blend-out) is on, so the run / zoomies / slide keep their tuned, feet-attached gait exactly (`runW` = 1 gives the old numbers).
     static let walkBoost: Float = 1.1427
     var walkBoostNow: Float { walkBoostK }
     /// Waits between behaviours: half while the player is watching (the stage turns `watching` on in the room; the headless suites leave it off).
     var idleLively: Float { (watching ? 0.35 : 1) * (perkFlags.bouncy ? 0.7 : 1) }
-    var runStrideMul: Float { (1 + 0.2 * runW + 0.0 * zoomW) * walkBoostNow }
-    var runRateMul: Float { 1 + 0.125 * runW + 0.20 * zoomW }
+    var runStrideMul: Float { (1 + 0.24 * runW + 0.0 * zoomW) * walkBoostNow }
+    var runRateMul: Float { 1 + 0.17 * runW + 0.20 * zoomW }
 
     var idleActivity: Activity {
         switch idleState.kind {
@@ -355,8 +368,8 @@ extension BlobBrain {
         if idleState.kind == .zoomies { runW += max(-dt / 0.2, min(dt / 0.45, want - runW)); if want == 0 && runW < 1e-3 { runW = 0 }; return }
         if hurry, case .walk(let target, _) = script, simd_length(target - SIMD2(px, pz)) > 0.35 { want = 1 }       // touch play: running back after a throw
         if runW == want { return }
-        let rampT: Float = hurry ? 0.3 : 0.6                    // a throw's run back starts quickly
-        runW += max(-dt / rampT, min(dt / rampT, want - runW))
+        runFalling = want < runW
+        runW += max(-dt / 0.3, min(dt / 0.2, want - runW))              // blend in over 0.2 s, out over 0.3 s (the skid)
         if want == 0 && runW < 1e-3 { runW = 0 }
     }
 

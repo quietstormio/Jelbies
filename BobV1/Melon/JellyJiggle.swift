@@ -170,7 +170,7 @@ extension JellyJiggle {
         var landing: Float = 0
         let speed = simd_length(vel)
         if wasSwinging && !swinging {
-            landing = Self.footImpulse * impulseK * (0.75 + 0.25 * min(3, speed / Self.walkSpeed))
+            landing = Self.footImpulse * impulseK * (0.75 + 0.25 * min(3, speed / Self.walkSpeed)) * (1 + 0.6 * brain.runW)
         }
         wasSwinging = swinging
         let cy = sim.centroid().y

@@ -267,6 +267,8 @@ final class BlobBrain {
     var px: Float = 0, pz: Float = 0
     var yaw: Float = 0
     var roll: Float = 0, pitch: Float = 0, squash: Float = 1, lift: Float = 0
+    var runAir: Float = 0            // the run's airborne rise (world units) this tick: the planted bean tucks up with it, so both feet leave the floor
+    var runFalling = false           // the run blend is ramping out (the skid-stop)
     var pitchBase: Float = 0
     var twist: Float = 0                 // extra heading (the dining reach turns his body toward the arm; the feet stay where they are)
     var poseW: Float = 0            // 0 = free physics, 1 = fully driven
@@ -904,7 +906,7 @@ final class BlobBrain {
         stepYaw0 = yaw; stepYawD = dyaw
         let landYaw = yaw + dyaw
         let target = inPlace ? feet.pos[s] : stepRoot0 + rootD + rotXZ(geom.off[s], landYaw) + reach
-        feet.begin(side: s, to: target, toYaw: inPlace ? feet.yaw[s] : landYaw, peak: peak ?? stepLift * amplitude,
+        feet.begin(side: s, to: target, toYaw: inPlace ? feet.yaw[s] : landYaw, peak: peak ?? stepLift * amplitude * (1 + Self.runTuck * runW),
                    rate: rate ?? stepRate * runRateMul * locoRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
         nextSwing = 1 - s
         stepLive = true
@@ -944,7 +946,8 @@ final class BlobBrain {
         squash = 1 + bob * bobScale * a * w
         lift = bobLift * a * w * (bob / 0.12)
         pitch += rockPitch * a * rock * cosf(2 * .pi * feet.stepU)     // forward at contact, back at mid swing
-        pitch += Self.runLean * runW                                  // the run's forward lean (0 = the locked walk)
+        runAir = 0
+        if runW > 0 { runPose(a) }
         pivotSide = 1 - feet.side; pivotNominal = true
         nubTarget = a
     }
@@ -1567,6 +1570,7 @@ final class BlobBrain {
                     let o = r - c0
                     return att.anchor + RA * SIMD3(o.x * sxza, o.y * sya, o.z * sxza)
                 }
+                if runAir > 0.003 { h += runAir }       // the run's flight: both feet leave the floor (the bean tucks up under him)
                 let wanted = xz + outV
                 let bc = bodyPos(c)
                 let offFull = wanted - SIMD2(bc.x, bc.z)
