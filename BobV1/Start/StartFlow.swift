@@ -142,7 +142,7 @@ struct WelcomeBanner: View {
                     .animation(.easeOut(duration: 2.2).delay(Double(i) * 0.1), value: up)
             }
             Text("Welcome home, \(name)!").font(SK.font(22, .semibold)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
+                .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(DT.card))
                 .offset(y: -140)
         }
         .allowsHitTesting(false)

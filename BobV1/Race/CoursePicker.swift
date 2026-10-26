@@ -88,7 +88,7 @@ struct CoursePicker: View {
                         .frame(width: 92, height: 64)
                     if !open {
                         Image(systemName: "lock.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink.opacity(0.85))
-                            .padding(6).background(Circle().fill(Color.white.opacity(0.85)))
+                            .padding(6).background(Circle().fill(DT.card))
                     }
                 }
                 Text(t.title).font(SK.font(14, .semibold)).foregroundStyle(open ? SK.ink : SK.muted)

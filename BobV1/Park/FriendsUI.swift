@@ -92,7 +92,7 @@ struct FriendsScreen: View {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("friends-back")
                 Text("Friends").font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
@@ -131,7 +131,7 @@ struct FriendsScreen: View {
                 if !cur.arrived {
                     Button { AudioHub.shared.uiTap(); care.cancelInvite() } label: {
                         Text("Cancel").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                            .background(Capsule().fill(Color.white.opacity(0.85)))
+                            .background(Capsule().fill(DT.card))
                     }.buttonStyle(.plain).accessibilityIdentifier("friends-cancel")
                 }
             }

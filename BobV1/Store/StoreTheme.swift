@@ -26,7 +26,7 @@ enum SK {
     static let card = Color.white
     /// Follows Dynamic Type (capped at 2x, see A11yFont.swift); calm weights (JFont clamps heavy/black to semibold).
     static func font(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font { JFont.scaled(size, weight) }
-    static let shadow = Color.black
+    static let shadow = Color.black.opacity(0.35)
 
     /// "3h 20m", "25m", "40s".
     static func timeLeft(_ s: TimeInterval) -> String {
@@ -46,12 +46,12 @@ struct DropsPill: View {
     var dark = false
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "drop.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(dark ? SK.honey : SK.sky)
-            Text("\(wallet.count)").font(SK.font(17, .semibold)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Image(systemName: "drop.fill").font(.system(size: 15, weight: .medium)).foregroundStyle(DT.accent)
+            Text("\(wallet.count)").font(SK.font(17, .semibold)).foregroundStyle(DT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
-        .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+        .background(Capsule().fill(DT.card).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+        .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(wallet.count) Drops")
         .accessibilityIdentifier("drops-pill")
@@ -69,7 +69,7 @@ struct PerkChip: View {
         }
         .foregroundStyle(SK.ink)
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Capsule().fill(SK.honey))
+        .background(Capsule().fill(DT.fill))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(left.map { "\(kind.title), \(SK.timeLeft($0)) left" } ?? kind.title)
     }
@@ -206,16 +206,11 @@ struct ItemArt: View {
                 Image(uiImage: img).resizable().scaledToFit().padding(size * 0.06)
             } else {
                 Image(systemName: UIImage(systemName: item.symbol) != nil ? item.symbol : "star.fill")
-                    .font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(SK.ink.opacity(0.85))
+                    .font(.system(size: size * 0.42, weight: .medium)).foregroundStyle(DT.ink)
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
     }
-    private var tint: Color {
-        switch item.kind {
-        case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .supply: return SK.sky.opacity(0.35)
-        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3)
-        }
-    }
+    private var tint: Color { DT.fill }
 }

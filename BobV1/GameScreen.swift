@@ -767,7 +767,7 @@ struct CareMenu: View {
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Self.brown)
                             .frame(width: tight ? 44 : 46, height: tight ? 44 : 46)
-                            .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                            .background(Circle().fill(DT.card))
                             .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                         Text(c.name)
                             .jFont(12, .semibold)
@@ -836,7 +836,7 @@ struct CareMenu: View {
                     }
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 14).frame(minHeight: 44)
-                    .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                    .background(Capsule().fill(DT.card))
                     .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                     .opacity(o.3 ? 1 : 0.45)
                 }
@@ -878,12 +878,12 @@ struct CareMenu: View {
                     .jFont(16, .semibold)
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
-                    .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                    .background(Capsule().fill(DT.card))
                 Image(systemName: HUDMenu.symbol(item))
                     .font(.system(size: tight ? 17 : 21, weight: .semibold))
                     .foregroundStyle(Self.brown)
                     .frame(width: iconSize, height: iconSize)
-                    .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                    .background(Circle().fill(DT.card))
                     .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
             }
             .opacity(on ? 1 : 0.45)
@@ -915,7 +915,7 @@ struct CareMenu: View {
                 .buttonStyle(.plain).accessibilityIdentifier("hud-clear").accessibilityLabel("Let go of \(name)")
             }
             .padding(.leading, 14).padding(.trailing, 0).frame(minHeight: 44)
-            .background(Capsule().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+            .background(Capsule().fill(DT.card))
             .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
             .transition(.scale(scale: 0.6, anchor: .trailing).combined(with: .opacity))
         }
@@ -948,7 +948,7 @@ struct CareMenu: View {
                 }
                 .foregroundStyle(Self.brown)
                 .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
-                .background(Circle().fill(Self.cream).shadow(color: .black.opacity(0.06), radius: 6, y: 2))
+                .background(Circle().fill(DT.card))
                 .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }
@@ -993,7 +993,7 @@ struct ReleaseButton: View {
             }
             .foregroundStyle(FocusStyle.brown)
             .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
-            .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
+            .background(Capsule().fill(DT.card))
             .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -1025,7 +1025,7 @@ struct FocusHint: View {
                 .jFont(15, .semibold)
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.horizontal, 18).padding(.vertical, 10)
-                .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
+                .background(Capsule().fill(DT.card))
                 .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                 .opacity(visible ? 1 : 0)
                 .allowsHitTesting(false)

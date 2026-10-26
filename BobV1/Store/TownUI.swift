@@ -18,8 +18,8 @@ struct GoOutButton: View {
         } label: {
             Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(SK.ink).frame(width: 48, height: 48)
-                .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                .background(Circle().fill(DT.card))
+                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
@@ -36,8 +36,8 @@ struct BagButton: View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action() } label: {
             Image(systemName: "bag.fill").font(.system(size: 19, weight: .semibold)).foregroundStyle(SK.ink)
                 .frame(width: 48, height: 48)
-                .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                .background(Circle().fill(DT.card))
+                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                 .overlay(alignment: .topTrailing) {
                     if store.newCount > 0 {
                         Text("\(store.newCount)").font(SK.font(11, .semibold)).foregroundStyle(.white)
@@ -139,8 +139,7 @@ struct WhoRow: View {
                         Text(j.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                     }
                     .padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(Capsule().fill(who == j.id ? SK.honey : Color.white.opacity(0.8)))
-                    .overlay(Capsule().strokeBorder(who == j.id ? SK.honeyDeep : .clear, lineWidth: 2))
+                    .dtChip(selected: who == j.id)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("who-\(j.id)").accessibilityLabel(j.name).accessibilityAddTraits(who == j.id ? .isSelected : [])
@@ -202,7 +201,7 @@ struct TownView: View {
                         Image(systemName: "house.fill").font(.system(size: 15, weight: .semibold))
                         Text("Home").font(SK.font(15, .semibold))
                     }
-                    .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
+                    .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(DT.card)).overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("town-home")
                 Text("Where to?").font(SK.font(compact ? 24 : 28, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
@@ -235,20 +234,20 @@ struct TownView: View {
                     AudioHub.shared.uiTap()
                     if reduceMotion { categoryRaw = c.rawValue } else { withAnimation(.easeInOut(duration: 0.25)) { categoryRaw = c.rawValue } }
                 } label: {
-                    Text(c.rawValue).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(c.rawValue).font(SK.font(15, .semibold)).foregroundStyle(on ? DT.accent : DT.ink2).lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Capsule().fill(on ? SK.honey : Color.clear))
-                        .overlay(Capsule().strokeBorder(on ? SK.honeyDeep : .clear, lineWidth: 2))
+                        .background(Capsule().fill(on ? DT.card : Color.clear))
+                        .overlay(Capsule().strokeBorder(on ? DT.accentLine : .clear, lineWidth: 1))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("town-chip-\(c.rawValue.lowercased())")
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .padding(3).background(Capsule().fill(Color.white.opacity(0.8)))
+        .padding(3).background(Capsule().fill(DT.fill))
     }
 
     private func tile(_ p: Place, compact: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: DT.cardRadius, style: .continuous)
         return Button { AudioHub.shared.uiTap(); p.action() } label: {
             Color.clear.aspectRatio(1, contentMode: .fit)
                 .overlay {
@@ -261,18 +260,20 @@ struct TownView: View {
                             LinearGradient(stops: [.init(color: SK.cream.opacity(0.15), location: 0), .init(color: SK.cream.opacity(0.35), location: 0.5), .init(color: SK.cream.opacity(0.92), location: 0.78), .init(color: SK.cream.opacity(0.95), location: 1)], startPoint: .top, endPoint: .bottom)
                         }
                         VStack(alignment: .leading, spacing: 0) {
-                            Image(systemName: p.symbol).font(.system(size: 22, weight: .semibold)).foregroundStyle(SK.ink)
-                                .frame(width: 46, height: 46).background(Circle().fill(p.color.opacity(0.9)))
+                            Image(systemName: p.symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(SK.ink)
+                                .frame(width: 44, height: 44).background(Circle().fill(DT.card.opacity(0.92)))
+                                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                             Spacer(minLength: 4)
                             Text(p.title).font(SK.font(compact ? 16 : 20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                            Text(p.sub).font(SK.font(compact ? 11 : 13, .bold)).foregroundStyle(SK.ink.opacity(0.85)).lineLimit(2).minimumScaleFactor(0.8)
+                            Text(p.sub).font(SK.font(compact ? 11 : 13, .medium)).foregroundStyle(DT.ink2).lineLimit(2).minimumScaleFactor(0.8)
                                 .multilineTextAlignment(.leading)
                         }
                         .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
                 }
                 .clipShape(shape)
-                .background(shape.fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
+                .background(shape.fill(SK.card).shadow(color: .black.opacity(0.06), radius: 10, y: 2))
+                .overlay(shape.strokeBorder(DT.line, lineWidth: 1))
                 .contentShape(shape)
         }
         .buttonStyle(TownTilePress())
@@ -294,28 +295,29 @@ struct MapStrip: View {
         GeometryReader { g in
             let w = g.size.width, h = g.size.height
             ZStack {
-                LinearGradient(colors: [SK.sky.opacity(0.75), Color(hex: 0xCFE8F2)], startPoint: .top, endPoint: .bottom)
-                Ellipse().fill(SK.mint).frame(width: w * 0.9, height: h * 0.9).offset(x: -w * 0.25, y: h * 0.45)
-                Ellipse().fill(Color(hex: 0x86C99B)).frame(width: w * 0.8, height: h * 0.8).offset(x: w * 0.3, y: h * 0.5)
+                LinearGradient(colors: [DT.fill, DT.paper], startPoint: .top, endPoint: .bottom)
+                Ellipse().fill(DT.line.opacity(0.7)).frame(width: w * 0.9, height: h * 0.9).offset(x: -w * 0.25, y: h * 0.45)
+                Ellipse().fill(DT.line).frame(width: w * 0.8, height: h * 0.8).offset(x: w * 0.3, y: h * 0.5)
                 Path { p in
                     p.move(to: CGPoint(x: w * 0.14, y: h * 0.82))
                     p.addCurve(to: CGPoint(x: w * 0.5, y: h * 0.74), control1: CGPoint(x: w * 0.25, y: h * 0.62), control2: CGPoint(x: w * 0.38, y: h * 0.9))
                     p.addCurve(to: CGPoint(x: w * 0.86, y: h * 0.78), control1: CGPoint(x: w * 0.62, y: h * 0.6), control2: CGPoint(x: w * 0.74, y: h * 0.95))
                 }
-                .stroke(Color(hex: 0xF3DDB0), style: StrokeStyle(lineWidth: 9, lineCap: .round, dash: [1, 12]))
-                place("house.fill", "Home", SK.honeyDeep, x: w * 0.14, y: h * 0.52)
-                place("bag.fill", "Shop", SK.pink, x: w * 0.5, y: h * 0.46)
-                place("flag.checkered", "Track", SK.cream, x: w * 0.86, y: h * 0.52)
-                place("sparkles", "Studio", SK.honey, x: w * 0.68, y: h * 0.30)
+                .stroke(DT.card, style: StrokeStyle(lineWidth: 9, lineCap: .round, dash: [1, 12]))
+                place("house.fill", "Home", DT.card, x: w * 0.14, y: h * 0.52)
+                place("bag.fill", "Shop", DT.card, x: w * 0.5, y: h * 0.46)
+                place("flag.checkered", "Track", DT.card, x: w * 0.86, y: h * 0.52)
+                place("sparkles", "Studio", DT.card, x: w * 0.68, y: h * 0.30)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DT.cardRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DT.cardRadius, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
         }
         .accessibilityHidden(true)
     }
     private func place(_ symbol: String, _ label: String, _ color: Color, x: CGFloat, y: CGFloat) -> some View {
         VStack(spacing: 2) {
             Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                .frame(width: 44, height: 44).background(Circle().fill(color)).overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .frame(width: 44, height: 44).background(Circle().fill(color)).overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
             Text(label).font(SK.font(11, .semibold)).foregroundStyle(SK.ink)
         }
         .position(x: x, y: y)
@@ -344,7 +346,7 @@ struct TrackPanel: View {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("track-back")
                 Text("Track").font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
@@ -375,7 +377,7 @@ struct TrackPanel: View {
                     Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); train() } label: {
                         HStack(spacing: 8) { Image(systemName: "figure.walk").font(.system(size: 18, weight: .semibold)); Text("Train").font(SK.font(19, .semibold)).lineLimit(1) }
                             .foregroundStyle(blocker == nil ? SK.ink : SK.muted).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
-                            .background(Capsule().fill(Color.white.opacity(0.9)))
+                            .background(Capsule().fill(DT.card))
                             .overlay(Capsule().strokeBorder(blocker == nil ? SK.ink : SK.muted.opacity(0.4), lineWidth: 3))
                     }
                     .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-train")
@@ -429,7 +431,7 @@ struct TrackPanel: View {
                 Text("Pep").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(width: 52, alignment: .leading)
                 HStack(spacing: 6) {
                     ForEach(0..<TrainingTuning.fullSessions, id: \.self) { i in
-                        Capsule().fill(i < left ? SK.mint : Color(hex: 0xE6D8C6)).frame(height: 14)
+                        Capsule().fill(i < left ? SK.mint : DT.fill).frame(height: 14)
                     }
                 }
                 Text("\(left)/\(TrainingTuning.fullSessions)").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 34, alignment: .trailing)
@@ -536,7 +538,7 @@ struct BagSheet: View {
                     Spacer()
                     DropsPill(wallet: care.bath.wallet)
                     Button { close() } label: {
-                        Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                        Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(DT.card))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
                 boosts
@@ -545,7 +547,7 @@ struct BagSheet: View {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
                             Text("\(t.rawValue) \(count(t))").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
-                                .padding(.horizontal, 12).frame(minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : Color.white.opacity(0.8)))
+                                .padding(.horizontal, 12).frame(minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : DT.card))
                         }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())").id(t)
                     }
                 }.onAppear { proxy.scrollTo(tab, anchor: .center) } } }
@@ -676,7 +678,7 @@ struct BagSheet: View {
                         if let p = book.placedDecor.last(where: { $0.kind.storeID == item.id }) { care.putAwayDecor(p.uid) }
                     } label: {
                         Text("Put away").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44)
-                            .background(Capsule().fill(Color.white.opacity(0.9)))
+                            .background(Capsule().fill(DT.card))
                     }.buttonStyle(.plain).accessibilityLabel("Put away \(item.name)").accessibilityIdentifier("bag-action-put-away-\(item.id)")
                 }
             }
@@ -776,7 +778,7 @@ struct SlotChips: View {
                 Text(title).font(SK.font(13, .semibold))
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
-            .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))
+            .background(Capsule().fill(on ? SK.honey : DT.card))
         }
         .buttonStyle(.plain).accessibilityIdentifier("\(idPrefix)\(id)").accessibilityAddTraits(on ? .isSelected : [])
     }

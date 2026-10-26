@@ -20,7 +20,7 @@ struct RoomPickerSheet: View {
                 Spacer()
                 Button { AudioHub.shared.uiTap(); close() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.9)))
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("room-picker-close")
             }
             .padding(.horizontal, 20).padding(.top, 16)
@@ -106,7 +106,7 @@ struct RoomPickerSheet: View {
                     Image(systemName: "drop.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(SK.skyDeep)
                     Text("\(StoreTuning.roomPrices[d.id] ?? 0)").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                 }
-                .padding(.horizontal, 10).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
+                .padding(.horizontal, 10).frame(minHeight: 44).background(Capsule().fill(DT.card))
                 Text("In the Shop").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
             }
             .accessibilityElement(children: .ignore)

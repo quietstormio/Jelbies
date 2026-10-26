@@ -127,7 +127,7 @@ struct ShopScreen: View {
                         Text("\(item.price)").font(SK.font(15, .semibold)).foregroundStyle(afford ? SK.ink : SK.muted)
                     }
                     .padding(.horizontal, 10).frame(minHeight: 44)
-                    .background(Capsule().fill(Color.white.opacity(0.85)))
+                    .background(Capsule().fill(DT.card))
                     Spacer(minLength: 0)
                     if owned > 0 {
                         Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
@@ -257,7 +257,7 @@ struct ItemSheet: View {
     private func stepper(_ symbol: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             Image(systemName: symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
-                .frame(width: 48, height: 48).background(Circle().fill(Color.white.opacity(0.9)))
+                .frame(width: 48, height: 48).background(Circle().fill(DT.card))
         }.buttonStyle(.plain).accessibilityLabel(symbol == "plus" ? "More \(item.name)" : "Fewer \(item.name)").accessibilityValue("\(qty)").accessibilityIdentifier("item-qty-\(symbol)")
     }
 
@@ -353,7 +353,7 @@ struct ItemPicture: View {
                 VStack {
                     HStack {
                         Text("On \(care.jelly(who)?.name ?? "him")").font(SK.font(12, .semibold)).foregroundStyle(SK.ink)
-                            .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(SK.cream.opacity(0.92)))
+                            .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(DT.card))
                         Spacer()
                     }
                     Spacer()

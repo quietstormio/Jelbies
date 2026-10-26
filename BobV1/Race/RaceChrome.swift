@@ -48,7 +48,7 @@ struct RaceChrome: View {
                 .playFont(17, .bold)
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
-                .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+                .background(Capsule().fill(DT.card))
             if race.ui.stumbling, race.ui.tripped {
                 hint("Whoops! He tripped. Practice helps")
             } else if race.ui.stumbling {
@@ -300,7 +300,7 @@ struct RacePlacingsCard: View {
             .accessibilityIdentifier("race-home")
         }
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(DT.card))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")

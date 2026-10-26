@@ -158,7 +158,7 @@ struct PhotoActionLabel: View {
             Text(title).font(SK.font(15, .semibold)).lineLimit(1).minimumScaleFactor(0.75)
         }
         .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 48)
-        .background(Capsule().fill(prominent ? SK.honey : Color.white.opacity(0.92)).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
+        .background(Capsule().fill(prominent ? SK.honey : DT.card).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
     }
 }
 

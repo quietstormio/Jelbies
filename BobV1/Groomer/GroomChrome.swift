@@ -29,7 +29,7 @@ struct GroomChrome: View {
                 if groom.phase == .arriveIn || groom.phase == .shop {
                     VStack {
                         Text(groom.tier.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
-                            .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.9)))
+                            .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(DT.card))
                             .accessibilityIdentifier("groom-tier-name")
                         Spacer()
                         Text("Tap to skip").font(SK.font(12, .semibold)).foregroundStyle(SK.ink.opacity(0.55)).padding(.bottom, 26)
@@ -45,7 +45,7 @@ struct GroomChrome: View {
                 VStack {
                     Text(groom.tier.banner).font(SK.font(26, .semibold)).foregroundStyle(SK.ink)
                         .padding(.horizontal, 22).padding(.vertical, 10)
-                        .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
+                        .background(Capsule().fill(DT.card))
                         .scaleEffect(reduce || groom.cheerT > 0.35 ? 1 : 0.8)
                         .accessibilityIdentifier("groom-banner")
                     Spacer()
@@ -61,7 +61,7 @@ struct GroomChrome: View {
                     HStack {
                         Text(t).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
                             .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+                            .background(Capsule().fill(DT.card))
                             .accessibilityIdentifier("groom-toast")
                         Spacer(minLength: 20)
                     }
@@ -86,7 +86,7 @@ struct GroomChrome: View {
                 ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
             }
             .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
-            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 10, y: 4))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(DT.card))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
         }
@@ -113,7 +113,7 @@ struct GroomChrome: View {
                                     Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold)).foregroundStyle(SK.ink)
                                 }
                                 .padding(.horizontal, 9).frame(minHeight: 44)
-                                .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))
+                                .background(Capsule().fill(on ? SK.honey : DT.card))
                             }
                             .buttonStyle(.plain).accessibilityLabel(j.name).accessibilityAddTraits(on ? .isSelected : []).accessibilityIdentifier("groom-pick-\(j.id)")
                         }
@@ -136,7 +136,7 @@ struct GroomChrome: View {
                                 }
                             }
                             .padding(10).frame(maxWidth: .infinity, minHeight: 66)
-                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white.opacity(0.85)))
+                            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(DT.card))
                             .opacity(total <= care.bath.wallet.count ? 1 : 0.65)
                         }
                         .buttonStyle(.plain).accessibilityLabel("\(tier.name), \(total) Drops. \(tier.blurb)").accessibilityIdentifier("groom-tier-\(tier.rawValue)")
@@ -146,7 +146,7 @@ struct GroomChrome: View {
                     }
                     Button { AudioHub.shared.uiTap(); groom.cancelPicker() } label: {
                         Text("Not now").font(SK.font(16, .semibold)).foregroundStyle(SK.muted).padding(.horizontal, 22).frame(minHeight: 44)
-                            .background(Capsule().fill(Color.white.opacity(0.8)))
+                            .background(Capsule().fill(DT.card))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("groom-cancel")
                 }

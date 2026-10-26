@@ -145,7 +145,7 @@ struct PhotoModeView: View {
             if hint {
                 Text("Drag to look around, pinch to zoom, tap a Jelbie")
                     .font(SK.font(14, .bold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                    .background(Capsule().fill(SK.cream.opacity(0.92))).transition(.opacity)
+                    .background(Capsule().fill(DT.card)).transition(.opacity)
             }
             Spacer()
             Button { AudioHub.shared.uiTap(); album.reload(); mode.albumOpen = true } label: {   // (v2: the selfie bubble goes beside this)

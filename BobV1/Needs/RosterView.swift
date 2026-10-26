@@ -77,8 +77,8 @@ struct RosterPanel: View {
                 .frame(width: 300)
                 .frame(maxHeight: 500)
                 .fixedSize(horizontal: false, vertical: true)
-                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.28), radius: 14, y: 6))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(DT.card))
+                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
                 .padding(.top, 52).padding(.trailing, 16)
                 .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
                 .accessibilityIdentifier("roster-panel")
@@ -123,7 +123,7 @@ struct BlobCard: View {
                 status
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.white.opacity(0.0), lineWidth: 1.5))
         }
         .buttonStyle(.plain)

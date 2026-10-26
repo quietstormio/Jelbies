@@ -31,7 +31,7 @@ struct RaceTrophiesSection: View {
                             .foregroundStyle(r[k] > 0 ? SK.ink : SK.muted)
                             .padding(.horizontal, 7).padding(.vertical, 4)
                             .frame(maxWidth: .infinity)
-                            .background(Capsule().fill(r[k] > 0 ? Self.medal[k] : Color.white.opacity(0.5)))
+                            .background(Capsule().fill(r[k] > 0 ? Self.medal[k] : DT.card))
                         }
                     }
                     .accessibilityElement(children: .ignore)
@@ -49,7 +49,7 @@ struct RaceTrophiesSection: View {
                     }
                     .foregroundStyle(has ? SK.ink : SK.muted)
                     .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Self.medal[0] : Color.white.opacity(0.5)))
+                    .background(Capsule().fill(has ? Self.medal[0] : DT.card))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
                     .accessibilityIdentifier("trophy-\(t.id)")

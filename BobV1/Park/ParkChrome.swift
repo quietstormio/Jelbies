@@ -31,8 +31,8 @@ struct ParkChrome: View {
                                 Text("Park").font(SK.font(17, .semibold))
                             }
                             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                            .background(Capsule().fill(DT.card))
+                            .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                             .accessibilityElement(children: .ignore).accessibilityLabel("Park").accessibilityIdentifier("park-chip")
                             Spacer()
                             DropsPill(wallet: care.bath.wallet)
@@ -71,7 +71,7 @@ struct ParkChrome: View {
                         HStack {
                             Text(t).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
                                 .padding(.horizontal, 16).padding(.vertical, 10)
-                                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+                                .background(Capsule().fill(DT.card))
                                 .accessibilityIdentifier("park-toast")
                             Spacer(minLength: 20)
                         }
@@ -140,7 +140,7 @@ struct ParkChrome: View {
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold)).foregroundStyle(SK.ink)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))
+                            .background(Capsule().fill(on ? SK.honey : DT.card))
                         }
                         .buttonStyle(.plain).accessibilityLabel(j.name).accessibilityAddTraits(on ? .isSelected : []).accessibilityIdentifier("park-pick-\(j.id)")
                     }
@@ -149,7 +149,7 @@ struct ParkChrome: View {
                 HStack(spacing: 10) {
                     Button { AudioHub.shared.uiTap(); park.cancelPicker() } label: {
                         Text("Not now").font(SK.font(16, .semibold)).foregroundStyle(SK.muted).padding(.horizontal, 18).frame(minHeight: 48)
-                            .background(Capsule().fill(Color.white.opacity(0.8)))
+                            .background(Capsule().fill(DT.card))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("park-cancel")
                     Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.startPark() } label: {
@@ -161,7 +161,7 @@ struct ParkChrome: View {
                 }
             }
             .padding(16).frame(maxWidth: 440)
-            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 10, y: 4))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(DT.card))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("park-picker")
         }
@@ -189,7 +189,7 @@ struct VisitorCard: View {
                 }
                 Spacer(minLength: 0)
                 Button { AudioHub.shared.uiTap(); care.park.card = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("park-card-close")
             }
@@ -212,7 +212,7 @@ struct VisitorCard: View {
             }
             Text("\u{201C}\(visitor.greeting)\u{201D}").font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
                 .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.7)))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(DT.card))
             if home {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); care.guestSayGoodbye() } label: {
                     HStack(spacing: 8) { Image(systemName: "hand.wave.fill"); Text("Say goodbye") }
@@ -226,7 +226,7 @@ struct VisitorCard: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("park-card")
     }
 }

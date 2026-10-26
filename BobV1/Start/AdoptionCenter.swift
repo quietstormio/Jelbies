@@ -75,7 +75,7 @@ struct AdoptionCenter: View {
                         Image(systemName: naming ? "chevron.left" : "house.fill").font(.system(size: 15, weight: .semibold))
                         Text(naming ? "Back" : "Home").font(SK.font(15, .semibold))
                     }
-                    .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.88)))
+                    .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44).background(Capsule().fill(DT.card))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("adopt-back")
             }
@@ -91,8 +91,8 @@ struct AdoptionCenter: View {
             if naming { nameCard } else { browseCard }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 12, y: 4))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(DT.card))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
         .padding(.bottom, 6)
     }
 
@@ -142,7 +142,7 @@ struct AdoptionCenter: View {
                 .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.done)
                 .font(SK.font(24, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).frame(minHeight: 52)
-                .background(Capsule().fill(Color.white.opacity(0.9)))
+                .background(Capsule().fill(DT.card))
                 .overlay(Capsule().strokeBorder(tint(pick), lineWidth: 3))
                 .onChange(of: name) { _, v in if v.count > 12 { name = String(v.prefix(12)) } }
                 .onSubmit { bringHome() }
@@ -170,7 +170,7 @@ struct AdoptionCenter: View {
     private func arrow(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             Image(systemName: symbol).font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
-                .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85))).contentShape(Circle())
+                .frame(width: 44, height: 44).background(Circle().fill(DT.card)).contentShape(Circle())
         }
         .buttonStyle(.plain).accessibilityLabel(label)
     }

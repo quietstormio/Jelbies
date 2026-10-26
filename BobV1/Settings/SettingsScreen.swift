@@ -271,7 +271,7 @@ struct ThemeMiniPreview: View {
                 .position(x: 48, y: 250 * k)
             VStack(spacing: 6 * k) {
                 Capsule().fill(Color.white).frame(width: 300 * k, height: 74 * k).shadow(color: palette.lip, radius: 0, y: 8 * k)
-                Capsule().fill(palette.newGame).overlay(Capsule().strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                Capsule().fill(palette.newGame).overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                     .frame(width: 300 * k, height: 62 * k).shadow(color: palette.lip, radius: 0, y: 6 * k)
             }
             .position(x: 48, y: 500 * k)

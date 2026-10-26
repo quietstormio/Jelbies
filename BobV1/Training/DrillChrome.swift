@@ -110,7 +110,7 @@ struct DrillChrome: View {
         Group {
             if !s.isEmpty {
                 Text(s).font(SK.font(15, .bold)).foregroundStyle(SK.ink)
-                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
+                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(DT.card))
             }
         }
     }
@@ -127,7 +127,7 @@ struct DrillChrome: View {
                 Text("Waddle").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(width: 62, alignment: .leading)
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0xE6D8C6))
+                        Capsule().fill(DT.fill)
                         Capsule().fill(Color(hex: 0xFFD1BF)).frame(width: max(14, g.size.width * CGFloat(min(1, w + gain))))
                         Capsule().fill(SK.pink).frame(width: max(14, g.size.width * CGFloat(w)))
                     }
@@ -143,7 +143,7 @@ struct DrillChrome: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.cream.opacity(0.94)))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("drill-stats")
     }
 
@@ -176,7 +176,7 @@ struct DrillChrome: View {
     }
 
     private var promptRow: some View {
-        TimelineView(.animation) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.trainingSongTime() ?? race.drillState.song
             let items = race.drill?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
@@ -280,7 +280,7 @@ struct DrillResultCard: View {
             .buttonStyle(.plain).accessibilityIdentifier("drill-home")
         }
         .padding(.horizontal, 20).padding(.vertical, vsc == .compact ? 10 : 18)
-        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("drill-card")
         .onAppear { withAnimation(.easeOut(duration: 1.3).delay(0.35)) { shown = true } }
     }
@@ -301,9 +301,9 @@ struct DrillResultCard: View {
             GeometryReader { g in
                 let v = shown ? after : before
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(hex: 0xE6D8C6))
+                    Capsule().fill(DT.fill)
                     Capsule().fill(color).frame(width: max(14, g.size.width * CGFloat(min(max(v, 0), 1))))
-                    Capsule().fill(Color.white.opacity(0.55)).frame(width: 3, height: 14).offset(x: max(14, g.size.width * CGFloat(before)) - 3)
+                    Capsule().fill(DT.card).frame(width: 3, height: 14).offset(x: max(14, g.size.width * CGFloat(before)) - 3)
                 }
             }.frame(height: 16)
         }

@@ -107,8 +107,8 @@ struct VoiceTip: View {
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(FocusStyle.brown)
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 3))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+                .background(Capsule().fill(DT.card))
+                .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                 .opacity(visible ? 1 : 0)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -211,7 +211,7 @@ struct VoiceTrickBook: View {
                 Spacer()
                 Button { close() } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(FocusStyle.brown)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.75)))
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("voice-book-close").accessibilityLabel("Close tricks")
@@ -250,7 +250,7 @@ struct VoiceTrickBook: View {
             Spacer()
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("smart-voice")
         .accessibilityLabel("Smart voice: \(on ? "On, Apple Intelligence" : "Basic")")
@@ -326,7 +326,7 @@ struct VoiceTrickBook: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
     }
 
     private func addDraft(_ tr: VoiceTraining, _ id: Int) {
@@ -381,7 +381,7 @@ struct VoiceTrickBook: View {
         teachTyping(t, tr)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
     }
 
     /// "Teach with typing" (no microphone, no speaking): he does the trick, you type the word, and each submit is one lesson (the same rules as three listens).

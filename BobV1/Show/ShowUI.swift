@@ -16,7 +16,7 @@ import SwiftUI
 enum ShowUI {
     static let hall = Color(hex: 0x3B2E4F), stage = Color(hex: 0x4E3D68), platform = Color(hex: 0x6B5487), curtain = Color(hex: 0xC25A78)
     static let light = Color(hex: 0xFFF3C9), gold = Color(hex: 0xFFE07A), goldDeep = Color(hex: 0xF2B530), lilac = Color(hex: 0x9C8AB5), lilacPale = Color(hex: 0xCDBFE0), mist = Color(hex: 0xE2D6F0)
-    static let sand = Color(hex: 0xEADFC8), bar = Color(hex: 0xE6D8C6), brownGold = Color(hex: 0x6B4A00), goldText = Color(hex: 0x8A6A12)
+    static let sand = Color(hex: 0xEADFC8), bar = DT.fill, brownGold = Color(hex: 0x6B4A00), goldText = Color(hex: 0x8A6A12)
     static func tag(_ t: WearTag) -> Color { Color(hex: t.hex) }
     static func ordinal(_ p: Int) -> String { p == 1 ? "1st" : p == 2 ? "2nd" : p == 3 ? "3rd" : "\(p)th" }
     /// A stat 0...1 as the jar's number (0...100).
@@ -581,7 +581,7 @@ struct ConditionScreen: View {
             .accessibilityIdentifier("condition-summary")
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.12), radius: 6, y: 2))
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("condition-jars")
     }
 
@@ -602,7 +602,7 @@ struct ConditionScreen: View {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(SK.ink).accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 44)
-            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.1), radius: 6, y: 2))
+            .background(Capsule().fill(DT.card))
         }
         .buttonStyle(.plain).accessibilityIdentifier(id)
     }

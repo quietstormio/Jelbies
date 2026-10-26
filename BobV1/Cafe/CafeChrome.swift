@@ -23,8 +23,8 @@ struct CafeChrome: View {
                                 Text("Café").font(SK.font(17, .semibold))
                             }
                             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                            .background(Capsule().fill(DT.card))
+                            .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
                             .accessibilityElement(children: .ignore).accessibilityLabel("Café").accessibilityIdentifier("cafe-chip")
                             Spacer()
                             DropsPill(wallet: care.bath.wallet)
@@ -47,7 +47,7 @@ struct CafeChrome: View {
                     VStack(spacing: 8) {
                         Spacer()
                         Text("That was yummy!").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
-                            .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
+                            .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(DT.card))
                         Button { AudioHub.shared.uiTap(); cafe.goHome() } label: {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Head home") }
                                 .font(SK.font(19, .semibold)).foregroundStyle(SK.ink)
@@ -65,7 +65,7 @@ struct CafeChrome: View {
                         HStack {
                             Text(r).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
                                 .padding(.horizontal, 16).padding(.vertical, 10)
-                                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+                                .background(Capsule().fill(DT.card))
                                 .accessibilityIdentifier("cafe-toast")
                             Spacer(minLength: 70)
                         }
@@ -106,7 +106,7 @@ struct CafeMenuCard: View {
         Button { AudioHub.shared.uiTap(); care.cafe.goHome() } label: {
             HStack(spacing: 4) { Image(systemName: "house.fill").font(.system(size: 12, weight: .bold)); Text("Head home").font(SK.font(12, .semibold)).lineLimit(1) }
                 .foregroundStyle(SK.muted).padding(.horizontal, 10).frame(minHeight: 44)
-                .background(Capsule().fill(Color.white.opacity(0.7)))
+                .background(Capsule().fill(DT.card))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-home")
     }
@@ -118,7 +118,7 @@ struct CafeMenuCard: View {
                 Text("-15%").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
-            .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
+            .background(Capsule().fill(table ? SK.honey : DT.card))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
         .accessibilityLabel("Same for everyone, 15 percent off")
@@ -169,7 +169,7 @@ struct CafeMenuCard: View {
                             if let t = (table ? order.forTable : picks[id]) { thumb(t, size: 20) }
                         }
                         .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 44)
-                        .background(Capsule().fill(sel ? SK.honey : Color.white.opacity(0.7)))
+                        .background(Capsule().fill(sel ? SK.honey : DT.card))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("cafe-who-\(id)")
                     .accessibilityLabel(care.jelly(id)?.name ?? "Jelbie")
@@ -192,8 +192,8 @@ struct CafeMenuCard: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 14, y: 4))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(DT.card))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
         .onAppear { who = ids.first ?? 0 }
         .accessibilityIdentifier("cafe-menu")
     }
@@ -224,7 +224,7 @@ struct CafeMenuCard: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 6).frame(minHeight: 44)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(isChosen(t) ? SK.honey : Color.white.opacity(0.75)))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(isChosen(t) ? SK.honey : DT.card))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(isChosen(t) ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
@@ -258,7 +258,7 @@ struct CafeMenuCard: View {
                 .foregroundStyle(SK.muted)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : DT.card))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
