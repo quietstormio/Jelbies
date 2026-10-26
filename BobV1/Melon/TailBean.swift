@@ -46,7 +46,7 @@ nonisolated enum TailBean {
         }
         func radius(_ t: Double) -> Double {
             let u = min(max(t / length, 0), 1)
-            return tipR + (baseR - tipR) * pow(1 - u, 1.25)
+            return tipR + (baseR - tipR) * pow(1 - u, 1.0)
         }
         /// The point on the top ridge and the way up (perpendicular to the centre line) at `t`.
         func ridge(_ t: Double) -> (p: SIMD3<Double>, up: SIMD3<Double>, r: Double) {
@@ -65,8 +65,8 @@ nonisolated enum TailBean {
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.075, sink = 0.17
-        let vis = 0.34 * width - tipR                                    // surface -> start of the round tip cap
+        let tipR = 0.018, sink = 0.17
+        let vis = 0.255 * width - tipR                                    // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var table: [SIMD3<Double>] = []
