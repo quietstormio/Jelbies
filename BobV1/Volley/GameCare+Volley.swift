@@ -115,9 +115,15 @@ extension GameCare {
     /// The floating joystick: x toward the screen's right (+x on the court), y toward the camera (+z), magnitude 0...1.
     func volleyStick(_ v: SIMD2<Float>) { guard volley.live else { return }; volley.sim?.setStick(v) }
     /// The Hit button went down (serves / tosses on his serve; otherwise bump, set, spike, dig or block by the situation).
-    func volleyTap() {
+    /// `touched`: when the finger landed (the event's own time), so the grade is taken at the touch and not at the next sim step.
+    func volleyTap(touched: Date? = nil) {
         guard volley.live else { return }
-        volley.sim?.tap()
+        var lag: Float = 0
+        if let touched, volley.lastStepMedia > 0 {
+            let touchMedia = CACurrentMediaTime() - Date().timeIntervalSince(touched)
+            lag = Float(touchMedia - volley.lastStepMedia)      // + : the touch came after the last step, so the ball has moved on since
+        }
+        volley.sim?.tap(lag: lag)
     }
     /// A swipe on the Hit button: where the hit is aimed (nil: auto-aim to the open spot).
     func volleyAim(_ a: SIMD2<Float>?) { guard volley.live else { return }; volley.sim?.setAim(a) }
@@ -265,6 +271,7 @@ extension GameCare {
         if w.slowLeft > 0 { w.slowLeft -= dt / max(GameCare.volleySlowScale, 0.1); if w.slowLeft <= 0 { GameCare.volleySlowScale = 1 } }
         volley.bodyPos = w.players.enumerated().compactMap { i, a in i < s.players.count ? SIMD3(s.players[i].x, s.players[i].top, s.players[i].z) : nil }
         volley.sim = s
+        volley.lastStepMedia = CACurrentMediaTime()
         if s.phase == .over { volley.settle() }
         volley.refreshUI()
     }
@@ -287,6 +294,11 @@ extension GameCare {
             let big = kind == .spike || kind == .block
             AudioHub.shared.play(big ? .volleySpike : .volleyBonk, jelly: a.id, x: point.x, volume: min(1.1, 0.6 + speed * 0.08))
             if i == s.controlled { touchPlay?.haptics.transient(now: now, intensity: big ? 0.9 : quality == .perfect ? 0.8 : 0.6, sharpness: big ? 0.7 : 0.4) }
+        case .perfectTap(let i):
+            if i == s.controlled {
+                AudioHub.shared.play(.select, volume: 0.55, rate: 2.0)
+                touchPlay?.haptics.transient(now: now, intensity: 0.9, sharpness: 0.9)
+            }
         case .switched(let to, let auto):
             AudioHub.shared.play(.select, volume: 0.5, rate: 1.4)
             touchPlay?.haptics.transient(now: now, intensity: 0.45, sharpness: 0.6)

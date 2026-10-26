@@ -56,7 +56,7 @@ nonisolated enum VolleyTuning {
     /// Depth: the players roam this far either side of the centre line; a ball landing past `outZ` is out; a body must be within `zReach` of the ball's depth to touch it.
     static let zLimit: Float = 1.15, outZ: Float = 1.75, zReach: Float = 0.78
     /// Timing: the Perfect and Good half windows (seconds, around the ideal tap) from the Timing stat; the wide ones are for assists.
-    static func perfectWindow(timing: Float, wide: Bool) -> Float { (0.055 + 0.10 * clamp01(timing)) * (wide ? 1.8 : 1) }
+    static func perfectWindow(timing: Float, wide: Bool) -> Float { (0.075 + 0.10 * clamp01(timing)) * (wide ? 1.8 : 1) }
     static func goodWindow(timing: Float, wide: Bool) -> Float { perfectWindow(timing: timing, wide: wide) + 0.14 * (wide ? 1.5 : 1) }
     /// The body block jumps a little higher than a plain hop.
     static func blockApex(hops: Float) -> Float { apex(hops: hops) * 1.05 + 0.04 }

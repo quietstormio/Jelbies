@@ -233,10 +233,10 @@ enum VolleyBallMesh {
         let e = r.tau - r.lead
         let inPerfect = abs(e) <= r.perfect, inGood = abs(e) <= r.good
         let late = e < -r.good
-        ParkScenery.disc(b, cx: r.x, cz: r.z, radius: 0.30, y: 0.03, color: ParkShapes.srgb(0.74, 0.60, 0.40))
+        ParkScenery.disc(b, cx: r.x, cz: r.z, radius: 0.30, y: 0.03, color: ParkShapes.srgb(0.50, 0.66, 0.78))   // your side's marker is cool blue
         annulus(b, cx: r.x, cz: r.z, r0: 0.27, r1: 0.31, y: 0.034, color: ParkShapes.srgb(1.0, 0.99, 0.95))
         let k = min(1, max(0, e / 1.1))
-        let rad = 0.34 + 0.95 * k
+        let rad = 0.31 + 0.95 * k          // the ring's inner edge meets the marker's rim exactly at the ideal moment
         let col: V3 = inPerfect ? ParkShapes.srgb(1.0, 0.80, 0.18) : late ? ParkShapes.srgb(0.95, 0.48, 0.44) : inGood ? ParkShapes.srgb(0.99, 0.96, 0.78) : ParkShapes.srgb(1.0, 1.0, 1.0)
         let w: Float = inPerfect ? 0.085 : 0.05
         annulus(b, cx: r.x, cz: r.z, r0: rad, r1: rad + w, y: 0.038, color: col, segs: 36)

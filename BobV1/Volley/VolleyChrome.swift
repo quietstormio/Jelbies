@@ -120,7 +120,7 @@ struct VolleyChrome: View {
         HStack(spacing: 6) {
             if serving { Circle().fill(FocusStyle.pink).frame(width: 9, height: 9) }
             Text(name).playFont(14, .semibold).lineLimit(1)
-            Text("\(pts)").playFont(24, .heavy).monospacedDigit()
+            Text("\(pts)").playFont(34, .black).monospacedDigit()
         }.foregroundStyle(CareMenu.brown)
     }
 
@@ -259,7 +259,7 @@ struct VolleyChrome: View {
             .contentShape(Circle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
-                    if !hitDown { hitDown = true; aimShown = nil; care.volleyTap() }
+                    if !hitDown { hitDown = true; aimShown = nil; care.volleyTap(touched: v.time) }
                     let dx = v.translation.width, dy = v.translation.height
                     if hypot(dx, dy) > 20 {
                         let a = SIMD2<Float>(Float(max(-1, min(1, dx / 52))), Float(max(-1, min(1, dy / 52))))

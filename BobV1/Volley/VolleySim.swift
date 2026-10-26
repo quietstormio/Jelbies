@@ -48,6 +48,8 @@ nonisolated enum VolleyEvent: Equatable, Sendable {
     case slowMo
     case touchCount(team: Int, count: Int)
     case fault(team: Int)
+    /// The human's tap was graded Perfect: a tick and a haptic.
+    case perfectTap(player: Int)
 }
 
 nonisolated enum VolleyAct: Equatable, Sendable { case stand, jump, spike, dive, block }
@@ -277,8 +279,10 @@ nonisolated struct VolleySim: Sendable {
     }
 
     /// The Hit button went down. Serves when it is his serve (a second tap at the top of the toss is the power serve); otherwise it hits, in a way the situation decides.
-    mutating func tap() {
+    /// `lag`: seconds the sim state is behind the touch (positive: the touch came after the last step); the grade is taken at the touch, not at the next step.
+    mutating func tap(lag: Float = 0) {
         guard players.indices.contains(controlled) else { return }
+        tapLag = max(-0.1, min(0.1, lag)); defer { tapLag = 0 }
         if phase == .serveWait {
             if !isDrill, serverIndex == controlled { toss(controlled) }
             return
@@ -349,6 +353,7 @@ nonisolated struct VolleySim: Sendable {
         }
         let q: VolleyQuality = ai ? rollQuality(i) : judge(tm, i)
         players[i].tapQ = q; players[i].tapT = clock
+        if !ai, q == .perfect { events.append(.perfectTap(player: i)) }
         // a low ball is a dig: a dive at it
         let low = ball.pos.y < 1.05 + 0.35 && ball.vel.y < 1.0
         let reach = ball.pos.x - p.x
@@ -383,11 +388,16 @@ nonisolated struct VolleySim: Sendable {
         return VolleyTiming(tau: timeToHeight(0.6) ?? tl, lead: 0.28, dig: true, x: lx, z: lz)
     }
 
+    /// Set while a tap is graded (see `tap(lag:)`).
+    private var tapLag: Float = 0
+    /// What the player saw was about a frame old by the time the glass showed it: the grade allows for it.
+    static let displayLatency: Float = 1.0 / 60
+
     private func judge(_ tm: VolleyTiming?, _ i: Int) -> VolleyQuality {
         guard let tm, players.indices.contains(i) else { return .good }
         let st = players[i].stats.timing
         let pw = T.perfectWindow(timing: st, wide: wideWindow), gw = T.goodWindow(timing: st, wide: wideWindow)
-        let e = tm.tau - tm.lead
+        let e = tm.tau - tapLag + Self.displayLatency - tm.lead
         if abs(e) <= pw { return .perfect }
         if abs(e) <= gw { return .good }
         return e > 0 ? .early : .late
@@ -418,6 +428,7 @@ nonisolated struct VolleySim: Sendable {
         let p = players[i]
         players[i].act = .jump; players[i].actT = 0; players[i].spikePlanned = false
         players[i].tapQ = q; players[i].tapT = clock
+        if isHuman(i), q == .perfect { events.append(.perfectTap(player: i)) }
         events.append(.jump(player: i, dx: Self.side(p.team) * 0.25, dz: 0, apex: T.apex(hops: p.stats.hops), block: false))
     }
 
@@ -465,6 +476,8 @@ nonisolated struct VolleySim: Sendable {
         case .rally:
             if let k = drillKind { tickDrill(k, dt: dt); return }
             stepBall(dt: dt)
+            // soft-lock guard: a rally that somehow never ends is called for whoever did not touch last
+            if phase == .rally, !isDrill, phaseT > 60 { awardPoint(lastHit >= 0 ? 1 - players[lastHit].team : 1 - server, out: false); return }
             if phase == .rally {
                 updateRing()
                 runAI(dt: dt)
@@ -520,7 +533,7 @@ nonisolated struct VolleySim: Sendable {
         guard let t = timeToHeight(hitH) else { serveMeter = nil; return }
         let pw = T.perfectWindow(timing: p.stats.timing, wide: wideWindow)
         if isHuman(i) {
-            serveMeter = min(1, max(0, (1 - max(-0.25, min(1, (t - lead) / 1.3)) + 0.25) / 1.25))
+            serveMeter = min(1, max(0, (1 - max(-0.25, min(1, t - lead))) / 1.25))   // 0.8 is exactly the ideal moment (t == lead)
             _ = pw
             if t <= lead - 0.24, p.act == .stand { serveJump(i, quality: .late) }
         } else {
@@ -532,7 +545,7 @@ nonisolated struct VolleySim: Sendable {
     var serveSweet: (center: Float, half: Float) {
         guard players.indices.contains(serverIndex) else { return (0.8, 0.05) }
         let pw = T.perfectWindow(timing: players[serverIndex].stats.timing, wide: wideWindow)
-        return (0.8, max(0.025, pw / 1.3 / 1.25))
+        return (0.8, max(0.025, pw / 1.25))      // meter units are seconds / 1.25, the same scale the grade uses
     }
 
     // MARK: ball

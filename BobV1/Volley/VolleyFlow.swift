@@ -42,6 +42,8 @@ final class VolleyFlow {
     private(set) var wipe: Float = 0
     var book = VolleyBook(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
     @ObservationIgnored var sim: VolleySim?
+    /// CACurrentMediaTime when the sim last stepped (to date a touch against the sim state).
+    @ObservationIgnored var lastStepMedia: Double = 0
     private(set) var ui = VolleyUI()
     private(set) var mode: VolleyMode = .match(.sandcastle)
     var playerID = 0
@@ -139,7 +141,7 @@ final class VolleyFlow {
         if !s.isDrill, s.possession == 0 { u.touchDots = (0..<VolleyTuning.maxTouches).map { $0 < s.touchLog.count ? (s.touchLog[$0] == .perfect ? 2 : 1) : 0 } }
         else if !s.isDrill { u.touchDots = [] }
         u.fxSerial = s.fxSerial; u.fxText = s.fxText; u.fxTone = s.fxTone
-        if let m = s.serveMeter { u.serveMeter = (m * 25).rounded() / 25; u.serveSweet = s.serveSweet.center; u.serveHalf = s.serveSweet.half } else { u.serveMeter = -1 }
+        if let m = s.serveMeter { u.serveMeter = (m * 200).rounded() / 200; u.serveSweet = s.serveSweet.center; u.serveHalf = s.serveSweet.half } else { u.serveMeter = -1 }
         u.combo = s.comboFlash > 0
         let nowT = CACurrentMediaTime()
         u.calls = callUntil.filter { $0.value > nowT }.keys.sorted()
