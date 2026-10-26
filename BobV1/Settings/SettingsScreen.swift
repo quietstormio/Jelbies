@@ -30,7 +30,7 @@ struct SettingsScreen: View {
     var body: some View {
         let pal = theme.palette
         ZStack {
-            pal.bg.ignoresSafeArea()
+            DT.paper.ignoresSafeArea()
             VStack(spacing: 0) {
                 header(pal)
                 ScrollView {
@@ -62,14 +62,13 @@ struct SettingsScreen: View {
 
     private func header(_ pal: ThemePalette) -> some View {
         HStack {
-            Text("Settings").font(CloudTheme.font(28, .semibold)).foregroundStyle(.white)
-                .shadow(color: pal.shadow, radius: 0, y: 2)
+            Text("Settings").font(CloudTheme.font(28, .semibold)).foregroundStyle(DT.ink)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { AudioHub.shared.uiTap(); close() } label: {
-                Text("Done").font(CloudTheme.font(18, .semibold)).foregroundStyle(pal.continueText)
+                Text("Done").font(CloudTheme.font(17, .semibold)).foregroundStyle(DT.accent)
                     .padding(.horizontal, 20).frame(minHeight: 44)
-                    .background(Capsule().fill(Color.white).shadow(color: pal.lip, radius: 0, y: 4))
+                    .background(Capsule().fill(DT.card)).overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
             }
             .accessibilityIdentifier("settings-done")
         }
@@ -78,13 +77,13 @@ struct SettingsScreen: View {
 
     private func card<C: View>(_ title: String, _ symbol: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label { Text(title).font(CloudTheme.font(20, .bold)) } icon: { Image(systemName: symbol) }
+            Label { Text(title).font(DT.heading()) } icon: { Image(systemName: symbol) }
                 .foregroundStyle(ink).accessibilityAddTraits(.isHeader)
             content()
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cloudCard(radius: 26)
+        .dtCard()
     }
 
     private func appearance(_ pal: ThemePalette) -> some View {
@@ -92,7 +91,7 @@ struct SettingsScreen: View {
             HStack(alignment: .top, spacing: 16) {
                 ThemeMiniPreview(palette: pal).frame(width: 96, height: 210).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Theme colour").font(CloudTheme.font(15, .semibold)).foregroundStyle(ink.opacity(0.8))
+                    Text("Theme colour").font(CloudTheme.font(15, .semibold)).foregroundStyle(DT.ink2)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 10)], spacing: 10) {
                         ForEach(ThemePreset.allCases) { p in swatch(p) }
                     }
@@ -109,8 +108,8 @@ struct SettingsScreen: View {
         let on = theme.preset == p
         return Button { AudioHub.shared.uiTap(); theme.choose(p) } label: {
             Circle().fill(Color(hex: p.hex)).frame(width: 44, height: 44)
-                .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
-                .overlay(Circle().strokeBorder(ink, lineWidth: on ? 3 : 0).padding(-3))
+                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
+                .overlay(Circle().strokeBorder(ink, lineWidth: on ? 2 : 0).padding(-4))
                 .overlay { if on { Image(systemName: "checkmark").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).shadow(radius: 1) } }
                 .frame(minWidth: 52, minHeight: 52)
         }
@@ -124,7 +123,7 @@ struct SettingsScreen: View {
         card("Sound", "speaker.wave.2.fill") {
             slider("Music", on: $hub.settings.musicOn, volume: $hub.settings.musicVolume, id: "music")
             HStack {
-                Label(hub.nowPlaying.line, systemImage: "music.note").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.8)).lineLimit(2)
+                Label(hub.nowPlaying.line, systemImage: "music.note").font(CloudTheme.font(14, .medium)).foregroundStyle(DT.ink2).lineLimit(2)
                 Spacer(minLength: 8)
                 Button { hub.skipTrack() } label: {
                     Label("Skip", systemImage: "forward.fill").font(CloudTheme.font(14, .bold)).foregroundStyle(.white)
@@ -174,7 +173,7 @@ struct SettingsScreen: View {
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-follow-real-clock")
             Text(followReal ? "Day and night follow your phone's clock." : "One game hour is one real minute. Day \(DayClock.shared.day) so far. You can also skip the night with the moon button.")
-                .font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                .font(CloudTheme.font(13, .medium)).foregroundStyle(DT.ink2).fixedSize(horizontal: false, vertical: true)
             Button { AudioHub.shared.uiTap(); confirmReset = true } label: {
                 Label("Reset save", systemImage: "trash").font(CloudTheme.font(16, .bold)).foregroundStyle(Color(hex: 0xB3261E))
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -197,10 +196,10 @@ struct SettingsScreen: View {
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return card("About", "info.circle") {
             Text("Jelbies").font(CloudTheme.font(18, .semibold)).foregroundStyle(ink)
-            Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
-            if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75)) }
-            Text("Made with love.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
-            Text("Everything stays on this phone. No accounts, no internet.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
+            Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(DT.ink2)
+            if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(DT.ink2) }
+            Text("Made with love.").font(CloudTheme.font(14, .medium)).foregroundStyle(DT.ink2)
+            Text("Everything stays on this phone. No accounts, no internet.").font(CloudTheme.font(14, .medium)).foregroundStyle(DT.ink2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -209,15 +208,15 @@ struct SettingsScreen: View {
         ZStack {
             Color.black.opacity(0.35).ignoresSafeArea().onTapGesture { confirmReset = false }
             VStack(spacing: 12) {
-                Text("Reset your save?").font(CloudTheme.font(24, .bold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
+                Text("Reset your save?").font(DT.title(22)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
                 Text("Your Jelbies, Drops and items will be gone for good. Press and hold the red button to confirm.")
-                    .font(CloudTheme.font(15, .medium)).foregroundStyle(ink.opacity(0.85)).multilineTextAlignment(.center)
+                    .font(CloudTheme.font(15, .medium)).foregroundStyle(DT.ink2).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 HoldToConfirm(title: "Hold to reset") { confirmReset = false; resetSave() }
                 Button("Keep my save") { confirmReset = false }
-                    .buttonStyle(JellyButtonStyle(.primary, size: 18, minHeight: 48)).accessibilityIdentifier("settings-reset-cancel")
+                    .buttonStyle(.dtPrimary).accessibilityIdentifier("settings-reset-cancel")
             }
-            .padding(20).frame(maxWidth: 340).cloudCard(radius: 30).padding(24)
+            .padding(20).frame(maxWidth: 340).dtCard().padding(24)
             .accessibilityElement(children: .contain).accessibilityAddTraits(.isModal)
         }
         .transition(.opacity)
@@ -237,7 +236,7 @@ private struct HoldToConfirm: View {
             .background(
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0xB3261E))
+                        Capsule().fill(DT.danger)
                         Capsule().fill(Color.black.opacity(0.28)).frame(width: g.size.width * progress)
                     }
                 }
@@ -278,6 +277,6 @@ struct ThemeMiniPreview: View {
         }
         .frame(width: 96, height: 956 * k)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(CloudTheme.jelly, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(DT.accentLine, lineWidth: 1))
     }
 }

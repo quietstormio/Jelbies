@@ -10,13 +10,13 @@ enum CloudTheme {
     static let sky = Color.white
     static let mist = Color(.sRGB, red: 0xEE / 255, green: 0xF5 / 255, blue: 0xFB / 255)
     static let jelly = Color(.sRGB, red: 0x8D / 255, green: 0xB8 / 255, blue: 0xE0 / 255)
-    static let deepJelly = Color(.sRGB, red: 0x4F / 255, green: 0x8B / 255, blue: 0xC6 / 255)
+    static var deepJelly: Color { DT.accent }
     static let jellyLight = Color(.sRGB, red: 0x69 / 255, green: 0xA1 / 255, blue: 0xD6 / 255)
-    static let ink = Color(.sRGB, red: 0x22 / 255, green: 0x40 / 255, blue: 0x5E / 255)
+    static let ink = DT.ink
     static let blush = Color(.sRGB, red: 0xF6 / 255, green: 0xAF / 255, blue: 0xC0 / 255)
     static let lipPrimary = Color(.sRGB, red: 0x7B / 255, green: 0xA8 / 255, blue: 0xD2 / 255)
     static let lipSecondary = Color(.sRGB, red: 0xCF / 255, green: 0xE1 / 255, blue: 0xF2 / 255)
-    static let caption = Color(.sRGB, red: 0x4A / 255, green: 0x6A / 255, blue: 0x89 / 255)          // about 5.5:1 on white (was 3.4:1)
+    static let caption = DT.ink2
 
     /// Primary-button gradient ends: white text on them is 4.5:1 or better (the lighter jelly tones were about 2.7:1).
     static let buttonTop = Color(.sRGB, red: 0x3F / 255, green: 0x7A / 255, blue: 0xB8 / 255)
