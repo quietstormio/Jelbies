@@ -77,7 +77,7 @@ extension GameCare {
 
     /// The room is free for the body to be there: no outing, no veil, no curtain.
     private var guestOuting: Bool {
-        if race.active || raceWait != nil || show.active || cafe.active { return true }
+        if race.active || raceWait != nil || show.active || cafe.active || volley.active || volleyWork.wait != nil { return true }          // (the beach: the guest's body is put away, 4 bodies at most; he walks in again after)
         if park.active, !park.picking, !(park.phase == .goOut && park.wipe < 0.8) { return true }
         return false
     }

@@ -42,7 +42,9 @@ nonisolated enum VolleyTuning {
     static let ballZ: Float = 0.06
     static let bodyTop: Float = 1.35             // a resting Jelbie's crown
     // match
-    static let pointsToWin = 7
+    static let pointsToWin = 11              // rally scoring to 11, win by 2, capped at 15
+    static let winBy = 2, scoreCap = 15
+    static let maxTouches = 3                // bump, set, spike
     static let pointPause: Float = 2.1
     static let serveWaitAI: Float = 1.1
     static let introSeconds: Float = 1.6
@@ -50,6 +52,14 @@ nonisolated enum VolleyTuning {
     static let restYaw: Float = 0.95             // 3/4 toward the camera, facing the net
     static let minGap: Float = 1.3              // teammates keep this far apart
     static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
+    static let startZ: [Float] = [0.35, -0.35, -0.35, 0.35]
+    /// Depth: the players roam this far either side of the centre line; a ball landing past `outZ` is out; a body must be within `zReach` of the ball's depth to touch it.
+    static let zLimit: Float = 1.15, outZ: Float = 1.75, zReach: Float = 0.78
+    /// Timing: the Perfect and Good half windows (seconds, around the ideal tap) from the Timing stat; the wide ones are for assists.
+    static func perfectWindow(timing: Float, wide: Bool) -> Float { (0.055 + 0.10 * clamp01(timing)) * (wide ? 1.8 : 1) }
+    static func goodWindow(timing: Float, wide: Bool) -> Float { perfectWindow(timing: timing, wide: wide) + 0.14 * (wide ? 1.5 : 1) }
+    /// The body block jumps a little higher than a plain hop.
+    static func blockApex(hops: Float) -> Float { apex(hops: hops) * 1.05 + 0.04 }
     // movement: speed comes from step rate and stride, like racing (RaceTuning)
     static func stride(speed: Float) -> Float { 0.27 + 0.05 * clamp01(speed) }
     static func rate(speed: Float) -> Float { 3.0 + 1.2 * clamp01(speed) }
@@ -71,7 +81,7 @@ nonisolated enum VolleyTuning {
 
     // payout: a win pays like a race 1st, a loss like 3rd (RaceTuning.drops); tiers pay more
     static func drops(win: Bool, tier: VolleyTier) -> Int {
-        let w = [12, 15, 19, 24], l = [3, 4, 5, 6]
+        let w = [16, 20, 25, 31], l = [4, 5, 6, 8]          // (v2: about 30% more for the longer match)
         return win ? w[tier.index] : l[tier.index]
     }
 }
@@ -105,16 +115,17 @@ nonisolated enum VolleyTraining {
 }
 
 nonisolated enum VolleyDrillKind: String, CaseIterable, Sendable {
-    case bonk, spike, sprint
-    var title: String { switch self { case .bonk: return "Bonk practice"; case .spike: return "Spike targets"; case .sprint: return "Sand sprints" } }
+    case bonk, spike, block, sprint
+    var title: String { switch self { case .bonk: return "Bump & Set"; case .spike: return "Spike targets"; case .block: return "Block wall"; case .sprint: return "Sand sprints" } }
     var blurb: String {
         switch self {
-        case .bonk: return "Keep the ball up. Raises Hops and Timing."
-        case .spike: return "Spike the ball onto the cushions. Raises Power."
-        case .sprint: return "Dash to the flags. Raises Speed."
+        case .bonk: return "Bump, set, bump... keep it up with Perfect timing. Raises Timing and Hops."
+        case .spike: return "Swipe the Hit button to aim the spike at the pink cushion. Raises Power."
+        case .block: return "Jump at the net to block their spikes. Raises Hops."
+        case .sprint: return "Dash to the flags with the stick. Raises Speed."
         }
     }
-    var symbol: String { switch self { case .bonk: return "circle.dotted"; case .spike: return "arrow.down.right.circle.fill"; case .sprint: return "figure.run" } }
+    var symbol: String { switch self { case .bonk: return "circle.dotted"; case .spike: return "arrow.down.right.circle.fill"; case .block: return "rectangle.portrait.arrowtriangle.2.outward"; case .sprint: return "figure.run" } }
 }
 
 /// Wins, close losses and unlocks per tier (a win, or three close losses, opens the next tier; saved).
@@ -127,6 +138,8 @@ final class VolleyBook {
     private(set) var records: [String: VolleyRecord] = [:]
     var chosen: VolleyTier = .sandcastle
     var slowBall = false { didSet { if persists { defaults.set(slowBall, forKey: "volley.slowBall") } } }
+    /// When the ball crosses to your side, control jumps to the teammate nearer the landing spot (a double-tap always wins for 2 s). On by default.
+    var autoSwitch = true { didSet { if persists { defaults.set(autoSwitch, forKey: "volley.autoSwitch") } } }
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let dayKey: () -> Int
@@ -139,6 +152,7 @@ final class VolleyBook {
         self.persists = persists; self.defaults = defaults; self.dayKey = dayKey
         guard persists else { return }
         slowBall = defaults.bool(forKey: "volley.slowBall")
+        autoSwitch = defaults.object(forKey: "volley.autoSwitch") == nil ? true : defaults.bool(forKey: "volley.autoSwitch")
         if let d = defaults.data(forKey: Self.key), let s = try? JSONDecoder().decode(Saved.self, from: d) { stats = s.stats; records = s.records; chosen = s.chosen }
     }
 
@@ -167,6 +181,7 @@ final class VolleyBook {
             d.hops = VolleyTraining.gain(stat: s.hops, accuracy: accuracy, sessionsToday: n, share: 0.7) * factor
             d.timing = VolleyTraining.gain(stat: s.timing, accuracy: accuracy, sessionsToday: n, share: 1.0) * factor
         case .spike: d.power = VolleyTraining.gain(stat: s.power, accuracy: accuracy, sessionsToday: n) * factor
+        case .block: d.hops = VolleyTraining.gain(stat: s.hops, accuracy: accuracy, sessionsToday: n) * factor
         case .sprint: d.speed = VolleyTraining.gain(stat: s.speed, accuracy: accuracy, sessionsToday: n) * factor
         }
         s.speed = min(1, s.speed + d.speed); s.power = min(1, s.power + d.power); s.hops = min(1, s.hops + d.hops); s.timing = min(1, s.timing + d.timing)

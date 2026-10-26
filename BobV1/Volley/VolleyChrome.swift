@@ -12,11 +12,19 @@ struct VolleyChrome: View {
     private var volley: VolleyFlow { care.volley }
     @Environment(\.verticalSizeClass) private var vsc
     private var compact: Bool { vsc == .compact }
-    @State private var dragDir: Float = 0
+    @State private var stickOrigin: CGPoint?
+    @State private var stickKnob: CGSize = .zero
+    @State private var hitDown = false
+    @State private var aimShown: SIMD2<Float>?
+    @State private var fxText = ""
+    @State private var fxTone = 0
+    @State private var fxY: CGFloat = 0
+    @State private var fxOpacity: Double = 0
 
     var body: some View {
         ZStack {
             if volley.inScene {
+                if volley.phase == .playing, volley.live { courtLayer }
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
@@ -27,6 +35,16 @@ struct VolleyChrome: View {
                 .padding(.horizontal, 14).padding(.bottom, compact ? 8 : 14)
                 .animation(CareMenu.spring, value: volley.showsCard)
                 if volley.live, volley.ui.phase == .intro { banner(volley.isDrill ? "Ready?" : "Beach volley!") }
+                Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .heavy, design: .rounded))
+                    .foregroundStyle(fxTone == 1 || fxTone == 3 ? Color(red: 1.0, green: 0.85, blue: 0.25) : fxTone == 2 ? Color.white.opacity(0.85) : .white)
+                    .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 4)
+                    .opacity(fxOpacity).offset(y: -120 + fxY).allowsHitTesting(false).accessibilityHidden(true)
+                    .onChange(of: volley.ui.fxSerial) { _, _ in
+                        fxText = volley.ui.fxText; fxTone = volley.ui.fxTone
+                        var t = Transaction(); t.disablesAnimations = true
+                        withTransaction(t) { fxY = 10; fxOpacity = 1 }
+                        withAnimation(.easeOut(duration: 1.0)) { fxY = -40; fxOpacity = 0 }
+                    }
             }
             Color.white.opacity(Double(volley.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
@@ -48,10 +66,24 @@ struct VolleyChrome: View {
                 Spacer()
                 Color.clear.frame(width: 44, height: 44)
             }
+            if volley.live, !volley.isDrill, !volley.ui.touchDots.isEmpty { touchDots }
             if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
             if let t = volley.toast { Text(t).playFont(14, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream)) }
         }
         .padding(.top, 8)
+    }
+
+    /// 1 · 2 · 3: your side's touches this rally (gold = Perfect).
+    private var touchDots: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<VolleyTuning.maxTouches, id: \.self) { k in
+                let v = volley.ui.touchDots.indices.contains(k) ? volley.ui.touchDots[k] : 0
+                Circle().fill(v == 2 ? Color(red: 1.0, green: 0.8, blue: 0.2) : v == 1 ? FocusStyle.pink : Color.white.opacity(0.5))
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5)).frame(width: 15, height: 15)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5).background(Capsule().fill(CareMenu.cream.opacity(0.85)))
+        .accessibilityElement(children: .ignore).accessibilityLabel("Touch \(volley.ui.touchDots.filter { $0 > 0 }.count) of 3")
     }
 
     @ViewBuilder
@@ -61,7 +93,8 @@ struct VolleyChrome: View {
             HStack(spacing: 10) {
                 Text(k.title).playFont(15, .heavy)
                 switch k {
-                case .bonk: Text("\(u.drillCount) bonks").playFont(17, .bold).monospacedDigit()
+                case .bonk: Text("\(u.drillCount) hits").playFont(17, .bold).monospacedDigit()
+                case .block: Text("Ball \(min(u.drillFeeds, VolleySim.blockFeeds))/\(VolleySim.blockFeeds) · \(u.drillGood) blocked").playFont(15, .bold).monospacedDigit()
                 case .spike: Text("Ball \(min(u.drillFeeds, VolleySim.spikeFeeds))/\(VolleySim.spikeFeeds) · \(u.drillGood) hit").playFont(15, .bold).monospacedDigit()
                 case .sprint: Text("Flags \(u.drillFlags)/\(VolleySim.sprintFlags)").playFont(17, .bold).monospacedDigit()
                 }
@@ -78,7 +111,7 @@ struct VolleyChrome: View {
             .padding(.horizontal, 16).padding(.vertical, 8)
             .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin).")
+            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin), win by 2. Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelbie").")
             .accessibilityIdentifier("volley-score")
         }
     }
@@ -96,9 +129,14 @@ struct VolleyChrome: View {
         guard volley.live else { return nil }
         if volley.isDrill {
             if u.phase == .intro { return nil }
-            switch volley.mode { case .drill(.bonk): return "Keep it up! Walk under it"; case .drill(.spike): return "Jump, then Jump again to spike the pink cushion"; case .drill(.sprint): return "Run to the pink flag"; default: return nil }
+            switch volley.mode {
+            case .drill(.bonk): return "Bump, set, bump! Hit when the ring meets the marker"
+            case .drill(.spike): return "Tap to spike. Swipe the button to aim at the pink cushion"
+            case .drill(.block): return "Tap at the net to block the spike"
+            case .drill(.sprint): return "Run to the pink flag"
+            default: return nil }
         }
-        if u.humanServes { return "Your serve. Tap Jump!" }
+        if u.humanServes { return "Your serve. Tap to toss, tap again at the top" }
         if u.waitingToServe { return "Their serve" }
         return nil
     }
@@ -111,42 +149,158 @@ struct VolleyChrome: View {
 
     // MARK: controls
 
-    private var controls: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            if volley.sim?.autoMove == true {
-                Text("The Jelbie walks for you").playFont(13, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(Capsule().fill(CareMenu.cream.opacity(0.9))).frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
-            } else {
-                HStack(spacing: 10) {
-                    HoldButton(symbol: "chevron.left", title: "Move left", id: "volley-left", key: .leftArrow, size: compact ? 78 : 84) { down in care.volleyMove(down ? -1 : 0) }
-                    HoldButton(symbol: "chevron.right", title: "Move right", id: "volley-right", key: .rightArrow, size: compact ? 78 : 84) { down in care.volleyMove(down ? 1 : 0) }
-                }
-                Spacer(minLength: 0)
-            }
-            if volley.sim?.autoMove == true { Spacer(minLength: 0) }
-            jump
-        }
-        .frame(maxWidth: .infinity)
-        // dragging anywhere in the lower area also walks him
-        .background(
-            Color.clear.contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 4)
-                    .onChanged { v in
-                        let d = Float(max(-1, min(1, v.translation.width / 60)))
-                        if abs(d - dragDir) > 0.15 { dragDir = d; care.volleyMove(d) }
+    private var assisted: Bool { volley.sim?.autoMove == true }
+
+    /// The whole-screen layer under the HUD: the floating stick on the left half, the double-tap that switches control, the call bubbles.
+    private var courtLayer: some View {
+        GeometryReader { g in
+            ZStack {
+                Color.clear.contentShape(Rectangle())
+                    .gesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
+                // the left half: the floating stick (it appears where the thumb lands)
+                HStack(spacing: 0) {
+                    ZStack {
+                        Color.clear.contentShape(Rectangle())
+                            .gesture(DragGesture(minimumDistance: 0)
+                                .onChanged { v in
+                                    guard !assisted else { return }
+                                    if stickOrigin == nil { stickOrigin = v.startLocation }
+                                    let o = stickOrigin ?? v.startLocation
+                                    var d = CGSize(width: v.location.x - o.x, height: v.location.y - o.y)
+                                    let m = hypot(d.width, d.height), R: CGFloat = 54
+                                    if m > R { d = CGSize(width: d.width / m * R, height: d.height / m * R) }
+                                    stickKnob = d
+                                    care.volleyStick(SIMD2(Float(d.width / R), Float(d.height / R)))
+                                }
+                                .onEnded { _ in stickOrigin = nil; stickKnob = .zero; care.volleyStick(.zero) })
+                            .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
+                            .padding(.top, 110)
+                        if let o = stickOrigin {
+                            ZStack {
+                                Circle().fill(Color.white.opacity(0.22)).frame(width: 118, height: 118)
+                                Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 2.5).frame(width: 118, height: 118)
+                                Circle().fill(CareMenu.cream).frame(width: 52, height: 52).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 4, y: 2).offset(stickKnob)
+                            }.position(o).allowsHitTesting(false)
+                        }
                     }
-                    .onEnded { _ in dragDir = 0; care.volleyMove(0) })
-                .padding(.top, -160)
-        )
+                    .frame(width: g.size.width * 0.5)
+                    Spacer(minLength: 0).allowsHitTesting(false)
+                }
+                if !volley.ui.calls.isEmpty {
+                    TimelineView(.animation) { _ in
+                        ZStack {
+                            ForEach(volley.ui.calls, id: \.self) { i in
+                                if volley.bodyPos.indices.contains(i), let pt = GameCamera.screenPoint(floor: SIMD2(volley.bodyPos[i].x, volley.bodyPos[i].z), y: volley.bodyPos[i].y + 0.75, size: g.size) {
+                                    Text("!").font(.system(size: 26, weight: .black, design: .rounded)).foregroundStyle(.white)
+                                        .frame(width: 36, height: 36).background(Circle().fill(FocusStyle.pink).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 4, y: 2))
+                                        .position(pt)
+                                }
+                            }
+                        }
+                    }.allowsHitTesting(false)
+                }
+            }
+        }
+        .ignoresSafeArea()
     }
 
-    private var jump: some View {
-        let serve = volley.ui.humanServes
-        return FootButton(title: serve ? "Serve" : "Jump", id: "volley-jump", symbol: serve ? "figure.volleyball" : "arrow.up.circle.fill", flip: false, live: volley.live, tilt: false, key: .space) {
-            care.volleyTap()
+    /// A double-tap: the nearest of your two Jelbies to the finger takes control.
+    private func pick(_ at: CGPoint, _ size: CGSize) {
+        guard volley.live, !volley.isDrill else { return }
+        var best: (Int, CGFloat)?
+        for i in 0..<min(2, volley.bodyPos.count) {
+            let p = volley.bodyPos[i]
+            guard let pt = GameCamera.screenPoint(floor: SIMD2(p.x, p.z), y: p.y * 0.5, size: size) else { continue }
+            let d = hypot(pt.x - at.x, pt.y - at.y)
+            if d < 110, d < (best?.1 ?? .infinity) { best = (i, d) }
         }
-        .frame(width: compact ? 150 : 170, height: compact ? 104 : 150)
-        .accessibilityHint("Jump. Tap again in the air to spike. Near a low ball he dives to dig it.")
+        if let (i, _) = best {
+            if i != volley.ui.controlled { care.volleySwitch(to: i) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
+    private var controls: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            if assisted {
+                Text("The Jelbie walks for you").playFont(13, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Capsule().fill(CareMenu.cream.opacity(0.9))).padding(.bottom, 8)
+            } else if stickOrigin == nil {
+                Text("Hold the left side to move").playFont(12, .semibold).foregroundStyle(CareMenu.brown.opacity(0.85)).padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(CareMenu.cream.opacity(0.75))).padding(.bottom, 10).allowsHitTesting(false)
+            }
+            Spacer(minLength: 0)
+            hit
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var hit: some View {
+        let serving = volley.ui.humanServes || volley.ui.serveMeter >= 0
+        let size: CGFloat = compact ? 108 : 138
+        return VStack(spacing: 6) {
+            if volley.ui.serveMeter >= 0 { serveArc.frame(width: size + 10, height: 46) }
+            ZStack {
+                Circle().fill(hitDown ? FocusStyle.pink.opacity(0.6) : CareMenu.cream)
+                    .shadow(color: FocusStyle.shadow.opacity(hitDown ? 0.12 : 0.28), radius: hitDown ? 4 : 9, y: hitDown ? 1 : 4)
+                Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 2)
+                VStack(spacing: 2) {
+                    Image(systemName: serving ? "figure.volleyball" : "hand.tap.fill").font(.system(size: compact ? 26 : 34, weight: .bold))
+                    Text(volley.ui.hitLabel).playFont(compact ? 18 : 22, .heavy)
+                }.foregroundStyle(CareMenu.brown)
+                if let a = aimShown {
+                    Circle().fill(FocusStyle.pink).frame(width: 14, height: 14).offset(x: CGFloat(a.x) * size * 0.34, y: CGFloat(a.y) * size * 0.34)
+                }
+            }
+            .frame(width: size, height: size)
+            .scaleEffect(hitDown ? 0.96 : 1)
+            .opacity(volley.live ? 1 : 0.55)
+            .animation(.easeOut(duration: 0.08), value: hitDown)
+            .contentShape(Circle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    if !hitDown { hitDown = true; aimShown = nil; care.volleyTap() }
+                    let dx = v.translation.width, dy = v.translation.height
+                    if hypot(dx, dy) > 20 {
+                        let a = SIMD2<Float>(Float(max(-1, min(1, dx / 52))), Float(max(-1, min(1, dy / 52))))
+                        aimShown = a; care.volleyAim(a)
+                    }
+                }
+                .onEnded { _ in hitDown = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if !hitDown { aimShown = nil } } })
+            .background { Button("") { care.volleyTap() }.keyboardShortcut(.space, modifiers: []).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
+            .accessibilityElement().accessibilityLabel(volley.ui.hitLabel).accessibilityIdentifier("volley-jump").accessibilityAddTraits(.isButton)
+            .accessibilityHint("Tap to hit. The move depends on the touch: bump, set, spike, dig or block. Swipe the button to aim: left short, right deep, up far, down near.")
+            .accessibilityAction { care.volleyTap() }
+        }
+    }
+
+    /// The serve meter: a small arc with the sweet spot marked; tap again when the dot is in it.
+    private var serveArc: some View {
+        let u = volley.ui
+        let lo: Double = 200 + 140 * Double(u.serveSweet - u.serveHalf)
+        let hi: Double = 200 + 140 * Double(u.serveSweet + u.serveHalf)
+        let t: Double = Double(min(max(u.serveMeter, 0), 1))
+        return GeometryReader { g in
+            let r: CGFloat = g.size.width / 2
+            let c = CGPoint(x: g.size.width / 2, y: g.size.height + r * 0.2)
+            let ang: Double = Angle.degrees(200 + 140 * t).radians
+            let dot = CGPoint(x: c.x + CGFloat(cos(ang)) * r, y: c.y + CGFloat(sin(ang)) * r)
+            ZStack {
+                ServeArcShape(from: 200, to: 340).stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                ServeArcShape(from: lo, to: hi).stroke(Color(red: 1.0, green: 0.8, blue: 0.2), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                Circle().fill(FocusStyle.pink).frame(width: 16, height: 16).position(dot)
+            }
+        }.allowsHitTesting(false)
+    }
+}
+
+struct ServeArcShape: SwiftUI.Shape {
+    var from: Double, to: Double
+    func path(in rect: CGRect) -> Path {
+        let r = rect.width / 2
+        var p = Path()
+        p.addArc(center: CGPoint(x: rect.midX, y: rect.height + r * 0.2), radius: r, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false)
+        return p
     }
 }
 
@@ -230,7 +384,8 @@ struct VolleyResultsCard: View {
     private func summary(_ s: VolleySim?) -> String {
         guard let s else { return "" }
         switch s.drillKind {
-        case .bonk?: return "\(s.drillCount) bonks in a row"
+        case .bonk?: return "\(s.drillCount) hits, \(s.drillPerfect) Perfect"
+        case .block?: return "\(s.drillGood) of \(VolleySim.blockFeeds) blocked"
         case .spike?: return "\(s.drillGood) of \(VolleySim.spikeFeeds) on the cushion"
         case .sprint?: return "\(s.flagIndex) of \(VolleySim.sprintFlags) flags"
         case nil: return ""
@@ -294,7 +449,7 @@ struct VolleyLobby: View {
                     .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.honey))
                 VStack(alignment: .leading, spacing: 3) {
                     Text("2 vs 2 on the sand").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                    Text("Bonk the ball with your head, jump twice to spike, dive for low ones. First to \(VolleyTuning.pointsToWin).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                    Text("Bump, set, spike: three touches a side. Time your tap to the ring for a Perfect. Double-tap a Jelbie to steer him. First to \(VolleyTuning.pointsToWin), win by 2.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
@@ -305,6 +460,11 @@ struct VolleyLobby: View {
                     .background(Capsule().fill(blocker == nil ? SK.pink : SK.muted.opacity(0.45)))
             }.buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("volley-play")
             if let b = blocker { Text(b).font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+            if care.jellies.count > 1, let p2 = care.jellies.first(where: { $0.id != who }) { Text("Team: \(prof?.name ?? "Bob") + \(p2.name)").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+            else { Text("Team: your Jelbie + a Park friend").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+            Toggle(isOn: Binding(get: { book.autoSwitch }, set: { book.autoSwitch = $0 })) {
+                Text("Auto-switch Jelbies").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+            }.tint(SK.pink).accessibilityIdentifier("volley-autoswitch")
             Toggle(isOn: Binding(get: { book.slowBall }, set: { book.slowBall = $0 })) {
                 Text("Slower ball").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
             }.tint(SK.pink).accessibilityIdentifier("volley-slow")

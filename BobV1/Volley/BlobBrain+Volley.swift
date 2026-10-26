@@ -25,6 +25,8 @@ struct VolleyDrive {
     var side: Float = 1
     var restYaw: Float = 0.95
     var wantX: Float = 0
+    var wantZ: Float = 0
+    var block = false
     var stride: Float = 0.3, rate: Float = 3.6
     var phase: Phase = .ground
     var t: Float = 0
@@ -62,7 +64,7 @@ extension BlobBrain {
         runW = 0; zoomW = 0; hurry = false
         sim.endPress()
         volley = VolleyDrive()
-        volley.active = true; volley.side = side; volley.restYaw = side * VolleyTuning.restYaw; volley.wantX = x
+        volley.active = true; volley.side = side; volley.restYaw = side * VolleyTuning.restYaw; volley.wantX = x; volley.wantZ = z
         currentPose(sim)
         yaw = volley.restYaw
         nextSwing = 0
@@ -82,18 +84,18 @@ extension BlobBrain {
 
     // MARK: commands
 
-    func volleyWant(x: Float, speed: Float) {
-        volley.wantX = ownSide(x)
+    func volleyWant(x: Float, z: Float = 0, speed: Float) {
+        volley.wantX = ownSide(x); volley.wantZ = ownZ(z)
         volley.stride = VolleyTuning.stride(speed: speed)
         volley.rate = VolleyTuning.rate(speed: speed)
     }
 
     /// The jump of a bonk, a serve or a spike: crouch, spring, fall. `dx` is how far he travels along the sand while he is up.
-    func volleyJump(sim: SoftBody, dx: Float, apex: Float, cheer: Bool = false) {
+    func volleyJump(sim: SoftBody, dx: Float, dz: Float = 0, apex: Float, cheer: Bool = false, block: Bool = false) {
         guard volley.active, volley.phase == .ground || volley.phase == .land else { return }
         releaseFeetForAir(sim)
         volley.phase = .crouch; volley.t = 0
-        volley.from = SIMD2(px, pz); volley.to = volley.from + SIMD2(dx, 0); volley.to.x = ownSide(volley.to.x)
+        volley.from = SIMD2(px, pz); volley.to = volley.from + SIMD2(dx, dz); volley.to.x = ownSide(volley.to.x); volley.to.y = ownZ(volley.to.y); volley.block = block
         volley.apex = apex; volley.airT = VolleyTuning.airTime(apex: apex)
         volley.yaw0 = yaw; volley.spikeT = -1; volley.pitchNow = 0
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: cheer ? 0.5 : 0.8)
@@ -134,15 +136,18 @@ extension BlobBrain {
     }
 
     /// The ball met the body: the impulse into the soft sim. `point` = the ball's centre (x, y), `normal` points from the body to the ball.
-    func volleyImpact(sim: SoftBody, kind: VolleyHit, ball: SIMD2<Float>, normal: SIMD2<Float>, speed: Float) {
+    func volleyImpact(sim: SoftBody, kind: VolleyHit, quality: VolleyQuality = .good, ball: SIMD2<Float>, normal: SIMD2<Float>, speed: Float) {
         guard volley.active else { return }
         let z = sim.centroid().z
         volley.press = (SIMD3(ball.x, ball.y, z), VolleyTuning.ballR * 0.97, Self.volleyPressTime)
-        let hard: Float = kind == .spike ? 1.0 : kind == .serve ? 0.8 : kind == .dig ? 0.7 : 0.6
-        volley.recoilV += hard * (kind == .spike ? 3.2 : 2.4)
-        jellyKick = max(jellyKick, kind == .spike ? 2.6 : kind == .dig ? 2.0 : 1.6)
-        AudioHub.shared.play(kind == .spike ? .squish : .boop, jelly: steerID, x: px, volume: kind == .spike ? 0.9 : 0.75, rate: kind == .dig ? 0.85 : 1)
-        face(kind == .spike ? .joyArc : .excited, hold: 0.55)
+        let hard: Float = kind == .spike ? 1.0 : kind == .block ? 0.95 : kind == .serve ? 0.8 : kind == .dig ? 0.7 : 0.6
+        let perfect: Float = quality == .perfect ? 1.25 : quality == .good ? 1 : 0.8          // a Perfect hit squishes bigger, a weak one less
+        volley.recoilV += hard * perfect * (kind == .spike ? 3.2 : 2.4)
+        jellyKick = max(jellyKick, (kind == .spike || kind == .block ? 2.6 : kind == .dig ? 2.0 : 1.6) * (quality == .perfect ? 1.2 : 1))
+        let big = kind == .spike || kind == .block
+        AudioHub.shared.play(big ? .squish : .boop, jelly: steerID, x: px, volume: big ? 0.9 : 0.75, rate: kind == .dig ? 0.85 : 1)
+        if quality == .perfect { AudioHub.shared.play(.sparkle, jelly: steerID, x: px, volume: 0.5) }
+        face(big || quality == .perfect ? .joyArc : .excited, hold: 0.55)
     }
 
     // MARK: the tick (called from BlobBrain.tick before anything else owns the body)
@@ -180,11 +185,11 @@ extension BlobBrain {
         pitchBase += max(-1.2 * dt, min(1.2 * dt, dp))
         poseOn = true; ensureFeet(sim)
         if !feet.active {
-            let dx = volley.wantX - px
-            if abs(dx) > 0.06 {
-                let dir: Float = dx > 0 ? 1 : -1
-                let L = min(volley.stride, max(0.14, abs(dx) * 1.1))
-                volleyStep(dir: dir, L: L, rate: volley.rate)
+            let dv = SIMD2(volley.wantX - px, volley.wantZ - pz)
+            let dl = simd_length(dv)
+            if dl > 0.06 {
+                let L = min(volley.stride, max(0.14, dl * 1.1))
+                volleyStep(dir: dv / dl, L: L, rate: volley.rate)
             } else if abs(wrapAngle(volley.restYaw - yaw)) > 0.05 {
                 _ = turnSteps(goal: volley.restYaw, tol: 0.05)
             }
@@ -199,9 +204,9 @@ extension BlobBrain {
     }
 
     /// One step of the locked gait along the net line (the strafing step: the root goes `dir` along x, the heading stays 3/4 toward the camera).
-    private func volleyStep(dir: Float, L: Float, rate: Float) {
+    private func volleyStep(dir: SIMD2<Float>, L: Float, rate: Float) {
         let root = SIMD2(px, pz)
-        let u = SIMD2<Float>(dir, 0)
+        let u = dir
         let foot = nextSwing, stance = 1 - foot
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)
         let r = 0.5 * L
@@ -220,6 +225,7 @@ extension BlobBrain {
     }
     /// Keeps a body's centre on its own side of the net with a margin (the body is ~1.1 wide).
     private func ownSide(_ x: Float) -> Float { volley.side > 0 ? min(x, -VolleyTuning.netMargin) : max(x, VolleyTuning.netMargin) }
+    private func ownZ(_ z: Float) -> Float { min(max(z, -VolleyTuning.zLimit), VolleyTuning.zLimit) }
     private func ease(_ x: Float) -> Float { let k = min(1, max(0, x)); return k * k * (3 - 2 * k) }
 
     private func place(_ sim: SoftBody, xz: SIMD2<Float>, yaw y: Float, pitch p: Float, squash sy: Float, lift l: Float, strength k: Float) {
@@ -253,6 +259,7 @@ extension BlobBrain {
         case .crouch, .diveCrouch: return (-0.30, -1.15, 0.04, 0.05, 1)                    // wound back
         case .air:
             if v.spikeT >= 0 { return (0.55, 0.25, 0.08, 0.05, 1) }                           // tucked in along the lean
+            if v.block { return (1.1, 0.85, 0.06, 0.04, 1) }                                   // thrown up and held: the wall
             return v.t < 0.12 ? (1.1, 0.85, 0.06, 0.035, 1) : (0.7, 0.5, 0.05, 0.06, 1)      // thrown up at take-off, then a balancing flap
         case .dive, .slide: return (0.9, 0.35, 0.10, 0.05, 1)
         case .land, .peel: return (0.3, 0.1, 0.06, 0.08, v.t < 0.2 ? 1 : 0)
@@ -294,12 +301,16 @@ extension BlobBrain {
                 yawNow = volley.yaw0 + wrapAngle(facingNet - volley.yaw0) * ease(s / 0.16)
                 sy -= 0.07 * lean * out                         // the tuck
                 tuckNow = 0.02
+            } else if volley.block {
+                // the wall: square to the net, stretched tall and held
+                yawNow = volley.yaw0 + wrapAngle(facingNet - volley.yaw0) * ease(t / 0.16)
+                sy = (1 - 0.21 * amp) + (1.24 - (1 - 0.21 * amp)) * ease(t / 0.12)
             } else {
                 yawNow = volley.yaw0 + wrapAngle(restY - volley.yaw0) * ease(t / 0.4)
             }
             volley.pitchNow += (pitchGoal - volley.pitchNow) * min(1, dt * 24)
             var xz = volley.from + (volley.to - volley.from) * ease(u)
-            xz.x = ownSide(xz.x)
+            xz.x = ownSide(xz.x); xz.y = ownZ(xz.y)
             place(sim, xz: xz, yaw: yawNow, pitch: volley.pitchNow, squash: sy * (1 - volley.recoil * 0.5), lift: h, strength: k)
             tuckNow = max(tuckNow, 0.05 * amp * sinf(.pi * u))
             if t >= T {
@@ -376,7 +387,7 @@ extension BlobBrain {
     private func volleyFinishMove(_ sim: SoftBody) {
         sim.targets = []
         sim.attractor.strength = 0
-        volley.pitchNow = 0; volley.tuck = 0; volley.spikeT = -1
+        volley.pitchNow = 0; volley.tuck = 0; volley.spikeT = -1; volley.block = false
         armDirW = 0; armDirOut = 0; volley.armA = 0
         currentPose(sim)
         yaw = volley.restYaw

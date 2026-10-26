@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import QuartzCore
 import Observation
 
 /// What the screen needs of the match, republished only when it changes.
@@ -20,6 +21,15 @@ struct VolleyUI: Equatable {
     var targetCushion = 0
     var rally = 0
     var airborne = false
+    /// The touch counter: 0 empty, 1 filled, 2 filled by a Perfect touch (your side's possession only).
+    var touchDots: [Int] = []
+    var controlled = 0
+    var hitLabel = "Hit"
+    var fxSerial = 0, fxText = "", fxTone = 0
+    var serveMeter: Float = -1
+    var serveSweet: Float = 0.8, serveHalf: Float = 0.05
+    var combo = false
+    var calls: [Int] = []
 }
 
 @MainActor
@@ -54,6 +64,12 @@ final class VolleyFlow {
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var assistFactor: Float = 1
     @ObservationIgnored var started = 0
+    /// World positions (x, crown y, z) of the court's players, refreshed every step (not observed: the screen reads them per frame for the double-tap and the call bubbles).
+    @ObservationIgnored var bodyPos: [SIMD3<Float>] = []
+    @ObservationIgnored var callUntil: [Int: Double] = [:]
+    @ObservationIgnored var onSwitchTap: (Int) -> Void = { _ in }
+    /// Names of the human's team (the controlled one is announced when control moves).
+    var teamNames: [String] = []
     static let fadeOut: Float = 0.45, fadeIn: Float = 0.5, holdSteps = 3
     nonisolated deinit {}
 
@@ -117,7 +133,16 @@ final class VolleyFlow {
         u.drillCount = s.drillCount; u.drillGood = s.drillGood; u.drillFeeds = s.drillFeeds; u.drillFlags = s.flagIndex
         u.drillTime = (s.drillTime * 2).rounded() / 2
         u.targetCushion = s.targetCushion; u.rally = s.rallyHits
-        u.airborne = s.players.first.map { !$0.grounded } ?? false
+        u.airborne = s.players.indices.contains(s.controlled) ? !s.players[s.controlled].grounded : false
+        u.controlled = s.controlled
+        u.hitLabel = s.hitLabel
+        if !s.isDrill, s.possession == 0 { u.touchDots = (0..<VolleyTuning.maxTouches).map { $0 < s.touchLog.count ? (s.touchLog[$0] == .perfect ? 2 : 1) : 0 } }
+        else if !s.isDrill { u.touchDots = [] }
+        u.fxSerial = s.fxSerial; u.fxText = s.fxText; u.fxTone = s.fxTone
+        if let m = s.serveMeter { u.serveMeter = (m * 25).rounded() / 25; u.serveSweet = s.serveSweet.center; u.serveHalf = s.serveSweet.half } else { u.serveMeter = -1 }
+        u.combo = s.comboFlash > 0
+        let nowT = CACurrentMediaTime()
+        u.calls = callUntil.filter { $0.value > nowT }.keys.sorted()
         if u != ui { ui = u }
     }
 

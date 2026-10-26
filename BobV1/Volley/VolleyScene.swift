@@ -177,6 +177,7 @@ enum BeachScenery {
 /// The beach ball and its shadow, rebuilt every frame.
 enum VolleyBallMesh {
     typealias V3 = SIMD3<Float>
+    typealias PP = RoomMeshBuilder.ProfilePoint
     static let panels: [V3] = [ParkShapes.srgb(0.96, 0.40, 0.42), ParkShapes.srgb(0.99, 0.98, 0.95), ParkShapes.srgb(0.28, 0.62, 0.95), ParkShapes.srgb(0.99, 0.98, 0.95),
                                ParkShapes.srgb(1.00, 0.82, 0.28), ParkShapes.srgb(0.99, 0.98, 0.95)]
 
@@ -207,18 +208,55 @@ enum VolleyBallMesh {
     }
 
     /// A soft dark disc on the sand under the ball: smaller and darker the closer the ball is.
-    static func shadow(x: Float, height: Float, into b: RoomMeshBuilder) {
+    static func shadow(x: Float, z: Float = VolleyTuning.ballZ, height: Float, into b: RoomMeshBuilder) {
         b.material = .plain
         let k = min(1, max(0, height / 4))
         let r = VolleyTuning.ballR * (1.25 - 0.45 * k)
         let col = ParkShapes.srgb(0.62 + 0.20 * k, 0.52 + 0.20 * k, 0.34 + 0.16 * k)
-        ParkScenery.disc(b, cx: x, cz: VolleyTuning.ballZ, radius: r * 1.5, y: 0.02, color: simd_mix(col, ParkShapes.srgb(0.84, 0.72, 0.50), SIMD3(repeating: 0.5)))
-        ParkScenery.disc(b, cx: x, cz: VolleyTuning.ballZ, radius: r, y: 0.024, color: col)
+        ParkScenery.disc(b, cx: x, cz: z, radius: r * 1.5, y: 0.02, color: simd_mix(col, ParkShapes.srgb(0.84, 0.72, 0.50), SIMD3(repeating: 0.5)))
+        ParkScenery.disc(b, cx: x, cz: z, radius: r, y: 0.024, color: col)
+    }
+
+    /// A flat ring on the sand (an annulus of quads).
+    static func annulus(_ b: RoomMeshBuilder, cx: Float, cz: Float, r0: Float, r1: Float, y: Float, color: V3, segs: Int = 28) {
+        b.material = .plain
+        for k in 0..<segs {
+            let a0 = Float(k) / Float(segs) * 2 * .pi, a1 = Float(k + 1) / Float(segs) * 2 * .pi
+            let p0 = V3(cx + r0 * cosf(a0), y, cz + r0 * sinf(a0)), p1 = V3(cx + r1 * cosf(a0), y, cz + r1 * sinf(a0))
+            let p2 = V3(cx + r1 * cosf(a1), y, cz + r1 * sinf(a1)), p3 = V3(cx + r0 * cosf(a1), y, cz + r0 * sinf(a1))
+            b.flatQuad(p0, p1, p2, p3, normal: V3(0, 1, 0), colors: [color, color, color, color])
+        }
+    }
+
+    /// Where the ball will land, and the ring that shrinks onto it as the ball falls: tap when the ring meets the marker. Gold in the Perfect window.
+    static func timingRing(_ r: VolleyRing, time: Float, into b: RoomMeshBuilder) {
+        let e = r.tau - r.lead
+        let inPerfect = abs(e) <= r.perfect, inGood = abs(e) <= r.good
+        let late = e < -r.good
+        ParkScenery.disc(b, cx: r.x, cz: r.z, radius: 0.30, y: 0.03, color: ParkShapes.srgb(0.74, 0.60, 0.40))
+        annulus(b, cx: r.x, cz: r.z, r0: 0.27, r1: 0.31, y: 0.034, color: ParkShapes.srgb(1.0, 0.99, 0.95))
+        let k = min(1, max(0, e / 1.1))
+        let rad = 0.34 + 0.95 * k
+        let col: V3 = inPerfect ? ParkShapes.srgb(1.0, 0.80, 0.18) : late ? ParkShapes.srgb(0.95, 0.48, 0.44) : inGood ? ParkShapes.srgb(0.99, 0.96, 0.78) : ParkShapes.srgb(1.0, 1.0, 1.0)
+        let w: Float = inPerfect ? 0.085 : 0.05
+        annulus(b, cx: r.x, cz: r.z, r0: rad, r1: rad + w, y: 0.038, color: col, segs: 36)
+    }
+
+    /// The ring at the feet of the Jelbie you steer, and a bobbing arrow over his head.
+    static func controlMark(x: Float, z: Float, top: Float, time: Float, into b: RoomMeshBuilder) {
+        let col = ParkShapes.srgb(0.28, 0.78, 0.96)
+        let pulse = 0.04 * sinf(time * 5)
+        annulus(b, cx: x, cz: z, r0: 0.66 + pulse, r1: 0.74 + pulse, y: 0.045, color: col)
+        b.material = .plain
+        let first = b.mesh.vertices.count
+        b.lathe(cx: 0, cz: 0, profile: [PP(r: 0.0, y: 0.0, nr: 0, ny: -1), PP(r: 0.13, y: 0.24, nr: 1, ny: 0.3), PP(r: 0.0, y: 0.24, nr: 0, ny: 1)], segments: 10, color: col)
+        let dy = top + 0.42 + 0.06 * sinf(time * 5)
+        for i in first..<b.mesh.vertices.count { b.mesh.vertices[i].pos.x += x; b.mesh.vertices[i].pos.y += dy; b.mesh.vertices[i].pos.z += z }
     }
 
     static func frame(ball: VolleyBall) -> RoomMesh {
         let sb = RoomMeshBuilder()
-        shadow(x: ball.pos.x, height: ball.pos.y, into: sb)
+        shadow(x: ball.pos.x, z: ball.z, height: ball.pos.y, into: sb)
         var m = build(centre: V3(ball.pos.x, ball.pos.y, ball.z), spin: ball.spin)
         let off = UInt32(sb.mesh.vertices.count)
         sb.mesh.vertices.append(contentsOf: m.vertices)

@@ -930,7 +930,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         // fixed-step simulation
         let s0 = CACurrentMediaTime()
         if !paused {
-            acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale : 1)          // (-VolleySlow: capture aid)
+            acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale * GameCare.volleySlowScale : 1)          // (-VolleySlow: capture aid)
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
             let maxSteps = 2
             var steps = 0
@@ -938,7 +938,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 hopTick(reduce: reduce)
                 let st0 = CACurrentMediaTime()
                 stepSims.removeAll(keepingCapacity: true)
-                for a in actors where a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }
+                for a in actors where !(game && model.care.volley.inScene && model.care.volleyHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (volleyball: the Jelbies at home are not stepped, drawn or worn; at most 4 bodies play)
                 for a in parkActors where a.updateSleep(forceAwake: !(a.brain?.isNapping ?? false)) { stepSims.append(a.sim) }          // (a guest asleep at home skips his step like the Jelbies)
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
