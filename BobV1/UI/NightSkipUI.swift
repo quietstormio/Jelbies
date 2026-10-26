@@ -19,7 +19,7 @@ struct SleepUntilMorningButton: View {
                     }
                     .foregroundStyle(Color(red: 0.36, green: 0.32, blue: 0.55))
                     .padding(.horizontal, all ? 14 : 0).frame(minWidth: 44, minHeight: 44)
-                    .background(Capsule().fill(Color(red: 0.93, green: 0.91, blue: 0.98)).opacity(0.94))
+                    .background(Capsule().fill(DT.card))
                     .overlay(Capsule().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                     .contentShape(Capsule())
                 }
@@ -39,9 +39,9 @@ struct DayChip: View {
         TimelineView(.periodic(from: .now, by: 2)) { _ in
             if DayClock.shared.showsDay {
                 Text("Day \(DayClock.shared.day)")
-                    .font(SK.font(12, .heavy)).foregroundStyle(SK.ink.opacity(0.7)).monospacedDigit()
+                    .font(SK.font(12, .semibold)).foregroundStyle(SK.ink.opacity(0.7)).monospacedDigit()
                     .padding(.horizontal, 10).frame(minHeight: 26)
-                    .background(Capsule().fill(SK.cream.opacity(0.8)))
+                    .background(Capsule().fill(DT.card))
                     .accessibilityLabel("Day \(DayClock.shared.day)")
                     .accessibilityIdentifier("day-chip")
             }
@@ -73,7 +73,7 @@ struct NightSkipVeil: View {
 
 private struct StarsAndZzz: View {
     var body: some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height, u = min(w, h) / 400
@@ -92,7 +92,7 @@ private struct StarsAndZzz: View {
                         .position(x: w * 0.74, y: h * 0.2)
                     ForEach(0..<3, id: \.self) { i in
                         let p = (t * 0.35 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                        Text(i == 1 ? "Zz" : "Z").font(.system(size: (26 + Double(i) * 9) * u, weight: .heavy, design: .rounded))
+                        Text(i == 1 ? "Zz" : "Z").font(.system(size: (26 + Double(i) * 9) * u, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.85 * sin(p * .pi)))
                             .position(x: w * (0.36 + 0.1 * Double(i)) + 12 * u * sin(p * 5), y: h * (0.62 - 0.22 * p))
                     }

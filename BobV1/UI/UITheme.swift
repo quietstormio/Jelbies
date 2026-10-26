@@ -12,19 +12,19 @@ extension Color {
     }
 }
 
-/// Cosy peach/cream palette matching RoomTheme's default tint (0.96, 0.78, 0.66).
+/// Legacy names, now the calm tokens (DesignTokens.swift).
 enum UITheme {
-    static let peach = Color(.sRGB, red: 0.96, green: 0.78, blue: 0.66)
-    static let cream = Color(.sRGB, red: 1.0, green: 0.95, blue: 0.89)
-    static let panel = Color(.sRGB, red: 1.0, green: 0.93, blue: 0.85)
-    static let panelDeep = Color(.sRGB, red: 0.96, green: 0.84, blue: 0.72)
-    static let ink = Color(.sRGB, red: 0.40, green: 0.24, blue: 0.20)
-    static let inkSoft = Color(.sRGB, red: 0.40, green: 0.24, blue: 0.20).opacity(0.65)
-    static let spring = Animation.spring(response: 0.38, dampingFraction: 0.68)
+    static let peach = DT.paper
+    static let cream = DT.card
+    static let panel = DT.card
+    static let panelDeep = DT.fill
+    static let ink = DT.ink
+    static let inkSoft = DT.ink2
+    static let spring = DT.spring
 
-    static func title(_ size: CGFloat = 28) -> Font { JFont.scaled(size, .bold, style: .title2) }
-    static func body(_ size: CGFloat = 16) -> Font { JFont.scaled(size, .semibold) }
-    static func caption(_ size: CGFloat = 13) -> Font { JFont.scaled(size, .medium, style: .footnote) }
+    static func title(_ size: CGFloat = 28) -> Font { DT.title(size) }
+    static func body(_ size: CGFloat = 16) -> Font { JFont.scaled(size, .medium) }
+    static func caption(_ size: CGFloat = 13) -> Font { DT.caption(size) }
 }
 
 extension BreedID {
@@ -57,25 +57,16 @@ extension Marking {
 // MARK: - Panels
 
 struct SoftPanel: ViewModifier {
-    var radius: CGFloat = 26
-    func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(LinearGradient(colors: [UITheme.cream, UITheme.panel], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.7), lineWidth: 1.5))
-                    .shadow(color: UITheme.ink.opacity(0.18), radius: 14, y: 6)
-            )
-    }
+    var radius: CGFloat = DT.cardRadius
+    func body(content: Content) -> some View { content.dtCard(radius: radius) }
 }
 
 extension View {
-    func softPanel(radius: CGFloat = 26) -> some View { modifier(SoftPanel(radius: radius)) }
+    func softPanel(radius: CGFloat = DT.cardRadius) -> some View { modifier(SoftPanel(radius: radius)) }
 }
 
 struct PillButtonStyle: ButtonStyle {
-    var tint: Color = UITheme.ink
+    var tint: Color = DT.accent
     var filled = true
     var compact = false
     func makeBody(configuration: Configuration) -> some View {
@@ -84,10 +75,9 @@ struct PillButtonStyle: ButtonStyle {
             .lineLimit(1).minimumScaleFactor(0.7)
             .foregroundStyle(filled ? Color.white : tint)
             .padding(.horizontal, compact ? 12 : 22).padding(.vertical, compact ? 9 : 13)
-            .background(Capsule().fill(filled ? tint : tint.opacity(0.14)))
-            .shadow(color: tint.opacity(filled ? 0.35 : 0), radius: 8, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(UITheme.spring, value: configuration.isPressed)
+            .background(RoundedRectangle(cornerRadius: DT.buttonRadius, style: .continuous).fill(filled ? tint : tint.opacity(0.12)))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(DT.spring, value: configuration.isPressed)
     }
 }
 

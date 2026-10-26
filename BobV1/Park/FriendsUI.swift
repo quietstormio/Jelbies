@@ -17,7 +17,7 @@ struct InviteChooser: View {
         if !choosing {
             Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.2)) { choosing = true } } label: {
                 HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Invite over") }
-                    .font(SK.font(16, .black)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 46)
+                    .font(SK.font(16, .semibold)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 46)
                     .background(Capsule().fill(SK.pinkStrong))
             }
             .buttonStyle(.plain).accessibilityIdentifier("invite-over")
@@ -28,7 +28,7 @@ struct InviteChooser: View {
                     choice(.sleepover)
                 }
                 Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.2)) { choosing = false } } label: {
-                    Text("Not now").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 36)
+                    Text("Not now").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 36)
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("invite-cancel")
             }
@@ -41,7 +41,7 @@ struct InviteChooser: View {
             if care.inviteFriend(visitorID, kind: kind) { after() }
         } label: {
             VStack(spacing: 2) {
-                HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }.font(SK.font(15, .black))
+                HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }.font(SK.font(15, .semibold))
                 Text(kind == .playDate ? "10 to 15 minutes" : "Until morning").font(SK.font(11, .bold)).opacity(0.75)
             }
             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
@@ -91,10 +91,10 @@ struct FriendsScreen: View {
         VStack(spacing: vsc == .compact ? 8 : 14) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("friends-back")
-                Text("Friends").font(SK.font(30, .black)).foregroundStyle(SK.ink)
+                Text("Friends").font(SK.font(30, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
             }
             ScrollView {
@@ -124,14 +124,14 @@ struct FriendsScreen: View {
             HStack(spacing: 12) {
                 Circle().fill(tint(v.colour)).frame(width: 40, height: 40).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(cur.arrived ? "\(v.name) is visiting" : "\(v.name) is on the way").font(SK.font(17, .black)).foregroundStyle(SK.ink)
-                    Text(cur.kind.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text(cur.arrived ? "\(v.name) is visiting" : "\(v.name) is on the way").font(SK.font(17, .semibold)).foregroundStyle(SK.ink)
+                    Text(cur.kind.title).font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 4)
                 if !cur.arrived {
                     Button { AudioHub.shared.uiTap(); care.cancelInvite() } label: {
-                        Text("Cancel").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                            .background(Capsule().fill(Color.white.opacity(0.85)))
+                        Text("Cancel").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                            .background(Capsule().fill(DT.card))
                     }.buttonStyle(.plain).accessibilityIdentifier("friends-cancel")
                 }
             }
@@ -148,16 +148,16 @@ struct FriendsScreen: View {
             HStack(spacing: 12) {
                 Circle().fill(tint(v.colour)).frame(width: 44, height: 44).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(v.name).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                    Text(v.style.word).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text(v.name).font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
+                    Text(v.style.word).font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 4)
                 HStack(spacing: 2) {
                     ForEach(0..<3, id: \.self) { i in
-                        Image(systemName: i < lvl.hearts ? "heart.fill" : "heart").font(.system(size: 14, weight: .heavy)).foregroundStyle(i < lvl.hearts ? SK.pink : SK.muted.opacity(0.5))
+                        Image(systemName: i < lvl.hearts ? "heart.fill" : "heart").font(.system(size: 14, weight: .semibold)).foregroundStyle(i < lvl.hearts ? SK.pink : SK.muted.opacity(0.5))
                     }
                 }
-                Text(lvl.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                Text(lvl.title).font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
             }
             HStack(spacing: 8) {
                 ForEach([GuestVisit.Kind.playDate, .sleepover], id: \.self) { kind in
@@ -166,7 +166,7 @@ struct FriendsScreen: View {
                         if care.inviteFriend(v.id, kind: kind) { goHome() }
                     } label: {
                         HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }
-                            .font(SK.font(15, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46)
+                            .font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46)
                             .background(Capsule().fill(SK.honey.opacity(free ? 1 : 0.4)))
                     }
                     .buttonStyle(.plain).disabled(!free).accessibilityLabel("\(kind.title) with \(v.name)").accessibilityIdentifier("friends-\(kind.rawValue)-\(v.id)")

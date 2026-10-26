@@ -43,7 +43,7 @@ struct CourseMiniMap: View {
                 Self.path(pts).stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round, dash: [3, 3]))
                 if let s = pts.first { Circle().fill(SK.mint).frame(width: lineWidth + 3, height: lineWidth + 3).position(s) }
                 if let f = pts.last {
-                    Image(systemName: "flag.checkered").font(.system(size: 11, weight: .black)).foregroundStyle(SK.ink).position(x: f.x, y: f.y + 8)
+                    Image(systemName: "flag.checkered").font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.ink).position(x: f.x, y: f.y + 8)
                 }
             }
         }
@@ -60,7 +60,7 @@ struct CoursePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Course").font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
+                Text("Course").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
                 Text("\(chosen.title) · \(chosen.className) class").font(SK.font(12, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("course-chosen")
             }
@@ -87,11 +87,11 @@ struct CoursePicker: View {
                     CourseMiniMap(course: RaceCourse.course(t), lineWidth: 6, tint: open ? Color(hex: 0xE5A88E) : Color(hex: 0xC9BDB0))
                         .frame(width: 92, height: 64)
                     if !open {
-                        Image(systemName: "lock.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink.opacity(0.85))
-                            .padding(6).background(Circle().fill(Color.white.opacity(0.85)))
+                        Image(systemName: "lock.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink.opacity(0.85))
+                            .padding(6).background(Circle().fill(DT.card))
                     }
                 }
-                Text(t.title).font(SK.font(14, .black)).foregroundStyle(open ? SK.ink : SK.muted)
+                Text(t.title).font(SK.font(14, .semibold)).foregroundStyle(open ? SK.ink : SK.muted)
                 Text(open ? (rec.wins > 0 ? "\(rec.wins) win\(rec.wins == 1 ? "" : "s")" : t.className) : "Locked").font(SK.font(10, .bold)).foregroundStyle(SK.muted)
             }
             .padding(.horizontal, 8).padding(.vertical, 8)
@@ -100,7 +100,7 @@ struct CoursePicker: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? SK.honeyDeep : .clear, lineWidth: 2))
             .opacity(open ? 1 : 0.8)
             .overlay(alignment: .topTrailing) {
-                if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink).padding(5) }          // not colour alone
+                if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink).padding(5) }          // not colour alone
             }
         }
         .buttonStyle(.plain)

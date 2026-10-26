@@ -12,7 +12,7 @@ import SwiftUI
 struct EarsButton: View {
     let ears: Ears
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
-    private let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
+    private let cream = DT.card
     private let glow = Color(red: 0.43, green: 0.70, blue: 0.82)
 
     var body: some View {
@@ -39,8 +39,8 @@ struct EarsButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(lit ? Color.white : (st == .denied ? Color(red: 0.80, green: 0.36, blue: 0.30) : ink))
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(lit ? glow : cream).opacity(0.92))
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+                .background(Circle().fill(lit ? glow : cream))
+                .overlay(Circle().strokeBorder(DT.line, lineWidth: 1))
                 .background {
                     if on, st == .listening {
                         // live halo: with the level, brighter while a kind is heard

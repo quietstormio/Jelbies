@@ -175,7 +175,7 @@ private struct TitleButtonStyle: ButtonStyle {
         let lip = (primary ? 8 : 6) * k
         let hgt = (primary ? 74 : 62) * k
         configuration.label
-            .font(.system(size: (primary ? 27 : 22) * k, weight: primary ? .black : .heavy, design: .rounded))
+            .font(.system(size: (primary ? 27 : 22) * k, weight: primary ? .bold : .semibold, design: .rounded))
             .foregroundStyle(primary ? palette.continueText : Color.white)
             .lineLimit(1).minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity).frame(height: hgt)

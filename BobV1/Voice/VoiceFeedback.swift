@@ -142,8 +142,8 @@ struct VoiceFeedbackView: View {
                 .lineLimit(2).multilineTextAlignment(.leading)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        .background(Capsule().fill(DT.card))
+        .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
         .opacity(out)
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("voice-understood")
@@ -159,7 +159,7 @@ struct VoiceFeedbackView: View {
             .lineLimit(2).multilineTextAlignment(.leading)
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(Capsule().fill(accent ? FocusStyle.pink : FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(DT.line, lineWidth: 1))
             .opacity(out)
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier(id)
@@ -199,7 +199,7 @@ struct VoiceBubble: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
                 .shadow(color: FocusStyle.shadow.opacity(0.22), radius: 6, y: 3))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(DT.line, lineWidth: 1))
             .overlay { if case .learned = kind { sparkles } }
             .scaleEffect(enter * 0.78)
             .opacity(leave)

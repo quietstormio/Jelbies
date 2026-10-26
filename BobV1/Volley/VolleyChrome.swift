@@ -35,7 +35,7 @@ struct VolleyChrome: View {
                 .padding(.horizontal, 14).padding(.bottom, compact ? 8 : 14)
                 .animation(CareMenu.spring, value: volley.showsCard)
                 if volley.live, volley.ui.phase == .intro { banner(volley.isDrill ? "Ready?" : "Beach volley!") }
-                Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .heavy, design: .rounded))
+                Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .semibold, design: .rounded))
                     .foregroundStyle(fxTone == 1 || fxTone == 3 ? Color(red: 1.0, green: 0.85, blue: 0.25) : fxTone == 2 ? Color.white.opacity(0.85) : .white)
                     .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 4)
                     .opacity(fxOpacity).offset(y: -120 + fxY).allowsHitTesting(false).accessibilityHidden(true)
@@ -58,8 +58,8 @@ struct VolleyChrome: View {
         VStack(spacing: 6) {
             HStack(alignment: .top) {
                 Button { AudioHub.shared.uiTap(); volley.goHome() } label: {
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .black)).foregroundStyle(CareMenu.brown)
-                        .frame(width: 44, height: 44).background(Circle().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundStyle(CareMenu.brown)
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Leave the beach").accessibilityIdentifier("volley-leave")
                 Spacer()
                 scoreBoard
@@ -78,7 +78,7 @@ struct VolleyChrome: View {
         HStack(spacing: 6) {
             ForEach(0..<VolleyTuning.maxTouches, id: \.self) { k in
                 let v = volley.ui.touchDots.indices.contains(k) ? volley.ui.touchDots[k] : 0
-                Circle().fill(v == 2 ? Color(red: 1.0, green: 0.8, blue: 0.2) : v == 1 ? FocusStyle.pink : Color.white.opacity(0.5))
+                Circle().fill(v == 2 ? Color(red: 1.0, green: 0.8, blue: 0.2) : v == 1 ? FocusStyle.pink : DT.card)
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5)).frame(width: 15, height: 15)
             }
         }
@@ -91,7 +91,7 @@ struct VolleyChrome: View {
         let u = volley.ui
         if case .drill(let k) = volley.mode {
             HStack(spacing: 10) {
-                Text(k.title).playFont(15, .heavy)
+                Text(k.title).playFont(15, .semibold)
                 switch k {
                 case .bonk: Text("\(u.drillCount) hits").playFont(17, .bold).monospacedDigit()
                 case .block: Text("Ball \(min(u.drillFeeds, VolleySim.blockFeeds))/\(VolleySim.blockFeeds) · \(u.drillGood) blocked").playFont(15, .bold).monospacedDigit()
@@ -100,16 +100,16 @@ struct VolleyChrome: View {
                 }
             }
             .foregroundStyle(CareMenu.brown).padding(.horizontal, 16).padding(.vertical, 8)
-            .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+            .background(Capsule().fill(DT.card))
             .accessibilityElement(children: .combine).accessibilityIdentifier("volley-score")
         } else {
             HStack(spacing: 12) {
                 team(volley.playerName.isEmpty ? "You" : volley.playerName, u.score[0], serving: u.serveTeam == 0 && u.phase != .over)
-                Text(":").playFont(20, .black).foregroundStyle(CareMenu.brown.opacity(0.6))
+                Text(":").playFont(20, .semibold).foregroundStyle(CareMenu.brown.opacity(0.6))
                 team("Them", u.score[1], serving: u.serveTeam == 1 && u.phase != .over)
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
-            .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+            .background(Capsule().fill(DT.card))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin), win by 2. Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelbie").")
             .accessibilityIdentifier("volley-score")
@@ -120,7 +120,7 @@ struct VolleyChrome: View {
         HStack(spacing: 6) {
             if serving { Circle().fill(FocusStyle.pink).frame(width: 9, height: 9) }
             Text(name).playFont(14, .semibold).lineLimit(1)
-            Text("\(pts)").playFont(34, .black).monospacedDigit()
+            Text("\(pts)").playFont(34, .semibold).monospacedDigit()
         }.foregroundStyle(CareMenu.brown)
     }
 
@@ -142,7 +142,7 @@ struct VolleyChrome: View {
     }
 
     private func banner(_ s: String) -> some View {
-        Text(s).font(.system(size: 64, weight: .heavy, design: .rounded)).foregroundStyle(.white)
+        Text(s).font(.system(size: 64, weight: .semibold, design: .rounded)).foregroundStyle(.white)
             .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 4).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 8, y: 5)
             .allowsHitTesting(false).offset(y: -40).transition(.opacity)
     }
@@ -187,11 +187,11 @@ struct VolleyChrome: View {
                     Spacer(minLength: 0).allowsHitTesting(false)
                 }
                 if !volley.ui.calls.isEmpty {
-                    TimelineView(.animation) { _ in
+                    TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
                         ZStack {
                             ForEach(volley.ui.calls, id: \.self) { i in
                                 if volley.bodyPos.indices.contains(i), let pt = GameCamera.screenPoint(floor: SIMD2(volley.bodyPos[i].x, volley.bodyPos[i].z), y: volley.bodyPos[i].y + 0.75, size: g.size) {
-                                    Text("!").font(.system(size: 26, weight: .black, design: .rounded)).foregroundStyle(.white)
+                                    Text("!").font(.system(size: 26, weight: .semibold, design: .rounded)).foregroundStyle(.white)
                                         .frame(width: 36, height: 36).background(Circle().fill(FocusStyle.pink).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 4, y: 2))
                                         .position(pt)
                                 }
@@ -318,7 +318,7 @@ struct HoldButton: View {
     let change: (Bool) -> Void
     @State private var down = false
     var body: some View {
-        Image(systemName: symbol).font(.system(size: 34, weight: .black)).foregroundStyle(CareMenu.brown)
+        Image(systemName: symbol).font(.system(size: 34, weight: .semibold)).foregroundStyle(CareMenu.brown)
             .frame(width: size, height: size * 0.95)
             .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(down ? FocusStyle.pink.opacity(0.55) : CareMenu.cream)
                 .shadow(color: FocusStyle.shadow.opacity(down ? 0.12 : 0.28), radius: down ? 4 : 9, y: down ? 1 : 4))
@@ -342,10 +342,10 @@ struct VolleyResultsCard: View {
 
     private func chip(_ text: String, _ symbol: String, _ id: String) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .black))
-            Text(text).playFont(14, .heavy)
+            Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .semibold))
+            Text(text).playFont(14, .semibold)
         }.foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 5)
-            .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35))).accessibilityElement(children: .combine).accessibilityIdentifier(id)
+            .background(Capsule().fill(DT.accentSoft)).accessibilityElement(children: .combine).accessibilityIdentifier(id)
     }
 
     var body: some View {
@@ -360,7 +360,7 @@ struct VolleyResultsCard: View {
                 }
             } else {
                 Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).foregroundStyle(CareMenu.brown)
-                Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
+                Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .semibold).monospacedDigit().foregroundStyle(CareMenu.brown)
                 HStack(spacing: 8) {
                     Image(systemName: "drop.fill").foregroundStyle(SK.pink)
                     Text("+\(volley.earned) Drops").playFont(20, .bold).foregroundStyle(CareMenu.brown)
@@ -372,7 +372,7 @@ struct VolleyResultsCard: View {
                         if let t = volley.awards.trophies.first { chip("Trophy! \(t.title)", "trophy.fill", "volley-trophy") }
                     }
                 }
-                if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }
+                if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .semibold).foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }
             }
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); home() } label: {
                 Text("Back home").playFont(20, .bold).foregroundStyle(.white).padding(.horizontal, 30).padding(.vertical, tight ? 8 : 12)
@@ -380,7 +380,7 @@ struct VolleyResultsCard: View {
             }.buttonStyle(.plain).accessibilityIdentifier("volley-home")
         }
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(DT.card))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-card")
     }
@@ -398,7 +398,7 @@ struct VolleyResultsCard: View {
     @ViewBuilder
     private func gainRow(_ name: String, _ v: Float) -> some View {
         if v > 0.0005 {
-            HStack { Text(name).playFont(16, .semibold); Spacer(); Text("+\(Int((v * 100).rounded(.up)))").playFont(16, .heavy).monospacedDigit() }
+            HStack { Text(name).playFont(16, .semibold); Spacer(); Text("+\(Int((v * 100).rounded(.up)))").playFont(16, .semibold).monospacedDigit() }
                 .foregroundStyle(CareMenu.brown).frame(width: 180)
         }
     }
@@ -421,10 +421,10 @@ struct VolleyLobby: View {
         VStack(spacing: compact ? 8 : 14) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
+                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("volley-back")
-                Text("Beach Volleyball").font(SK.font(28, .black)).foregroundStyle(SK.ink)
+                Text("Beach Volleyball").font(SK.font(28, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
                 DropsPill(wallet: care.bath.wallet)
             }
@@ -449,10 +449,10 @@ struct VolleyLobby: View {
     private func matchCard(_ prof: JellyProfile?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
-                Image(systemName: "figure.volleyball").font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.ink)
+                Image(systemName: "figure.volleyball").font(.system(size: 26, weight: .semibold)).foregroundStyle(SK.ink)
                     .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.honey))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("2 vs 2 on the sand").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                    Text("2 vs 2 on the sand").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
                     Text("Bump, set, spike: three touches a side. Time your tap to the ring for a Perfect. Double-tap a Jelbie to steer him. First to \(VolleyTuning.pointsToWin), win by 2.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -460,17 +460,17 @@ struct VolleyLobby: View {
             Button {
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play(book.chosen)
             } label: {
-                Text("Play \(book.chosen.title)").font(SK.font(18, .black)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 50)
+                Text("Play \(book.chosen.title)").font(SK.font(18, .semibold)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 50)
                     .background(Capsule().fill(blocker == nil ? SK.pink : SK.muted.opacity(0.45)))
             }.buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("volley-play")
             if let b = blocker { Text(b).font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
             if care.jellies.count > 1, let p2 = care.jellies.first(where: { $0.id != who }) { Text("Team: \(prof?.name ?? "Bob") + \(p2.name)").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
             else { Text("Team: your Jelbie + a Park friend").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
             Toggle(isOn: Binding(get: { book.autoSwitch }, set: { book.autoSwitch = $0 })) {
-                Text("Auto-switch Jelbies").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                Text("Auto-switch Jelbies").font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
             }.tint(SK.pink).accessibilityIdentifier("volley-autoswitch")
             Toggle(isOn: Binding(get: { book.slowBall }, set: { book.slowBall = $0 })) {
-                Text("Slower ball").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                Text("Slower ball").font(SK.font(14, .semibold)).foregroundStyle(SK.ink)
             }.tint(SK.pink).accessibilityIdentifier("volley-slow")
             if A11ySettings.shared.raceAssist != .off { Text("Play assist is on (Settings > Accessibility): the Jelbie walks to the ball for you.").font(SK.font(11, .bold)).foregroundStyle(SK.muted) }
         }
@@ -480,21 +480,21 @@ struct VolleyLobby: View {
 
     private var tiers: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Courts").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+            Text("Courts").font(SK.font(12, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
             ForEach(VolleyTier.allCases, id: \.rawValue) { t in
                 let open = book.unlocked(t), on = book.chosen == t
                 Button { AudioHub.shared.uiTap(); if open { book.chosen = t; book.save() } } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: open ? (on ? "checkmark.circle.fill" : "circle") : "lock.fill").font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.ink)
+                        Image(systemName: open ? (on ? "checkmark.circle.fill" : "circle") : "lock.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.ink)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(t.title) · \(t.className)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
+                            Text("\(t.title) · \(t.className)").font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                             Text(open ? t.blurb : "Win a match (or three close ones) at \(t.below?.title ?? "") to open").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
                         }
                         Spacer()
-                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.sky); Text("\(VolleyTuning.drops(win: true, tier: t))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
+                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.sky); Text("\(VolleyTuning.drops(win: true, tier: t))").font(SK.font(15, .semibold)).foregroundStyle(SK.ink) }
                     }
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? SK.honey : Color.white.opacity(0.6)))
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? SK.honey : DT.card))
                     .opacity(open ? 1 : 0.6)
                 }.buttonStyle(.plain).accessibilityIdentifier("volley-tier-\(t.rawValue)").accessibilityAddTraits(on ? .isSelected : [])
             }
@@ -506,7 +506,7 @@ struct VolleyLobby: View {
     private func statCard(_ prof: JellyProfile?) -> some View {
         let st = book.stats(character: prof?.character ?? who)
         return VStack(alignment: .leading, spacing: 10) {
-            Text("\(prof?.name ?? "Bob") on the sand").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+            Text("\(prof?.name ?? "Bob") on the sand").font(SK.font(20, .semibold)).foregroundStyle(SK.ink)
             VolleyStatBar(name: "Speed", value: st.speed, sub: "Quicker feet, longer steps", color: SK.sky)
             VolleyStatBar(name: "Power", value: st.power, sub: "Harder hits and spikes", color: SK.pink)
             VolleyStatBar(name: "Hops", value: st.hops, sub: "Higher jumps", color: SK.mint)
@@ -522,27 +522,27 @@ struct VolleyLobby: View {
         let left = book.sessionsLeft(prof?.character ?? who)
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Training").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+                Text("Training").font(SK.font(12, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase)
                 Spacer()
                 HStack(spacing: 5) {
-                    Text("Pep").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
-                    ForEach(0..<VolleyTraining.fullSessions, id: \.self) { i in Capsule().fill(i < left ? SK.mint : Color(hex: 0xE6D8C6)).frame(width: 22, height: 10) }
+                    Text("Pep").font(SK.font(12, .semibold)).foregroundStyle(SK.ink)
+                    ForEach(0..<VolleyTraining.fullSessions, id: \.self) { i in Capsule().fill(i < left ? SK.mint : DT.fill).frame(width: 22, height: 10) }
                 }.accessibilityElement(children: .ignore).accessibilityLabel("Pep: \(left) of \(VolleyTraining.fullSessions) full practices left today")
             }
             ForEach(VolleyDrillKind.allCases, id: \.rawValue) { k in
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); drill(k) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: UIImage(systemName: k.symbol) != nil ? k.symbol : "figure.walk").font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
+                        Image(systemName: UIImage(systemName: k.symbol) != nil ? k.symbol : "figure.walk").font(.system(size: 20, weight: .semibold)).foregroundStyle(SK.ink)
                             .frame(width: 44, height: 44).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(SK.sky.opacity(0.7)))
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(k.title).font(SK.font(15, .black)).foregroundStyle(SK.ink)
+                            Text(k.title).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                             Text(k.blurb).font(SK.font(11, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
-                        Text("Train").font(SK.font(13, .black)).foregroundStyle(.white).padding(.horizontal, 12).frame(minHeight: 36)
+                        Text("Train").font(SK.font(13, .semibold)).foregroundStyle(.white).padding(.horizontal, 12).frame(minHeight: 36)
                             .background(Capsule().fill(blocker == nil ? SK.pink : SK.muted.opacity(0.45)))
                     }
-                    .padding(8).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.6)))
+                    .padding(8).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
                 }.buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("volley-drill-\(k.rawValue)")
             }
             Text("Practice raises the stats a little each time. Pep refills overnight; after that it still helps, just less.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
@@ -556,7 +556,7 @@ struct VolleyStatBar: View {
     let name: String, value: Float, sub: String, color: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((value * 100).rounded()))").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit() }
+            HStack { Text(name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((value * 100).rounded()))").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).monospacedDigit() }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(SK.ink.opacity(0.1))
@@ -575,26 +575,26 @@ struct VolleyTrophiesSection: View {
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
         VStack(alignment: .leading, spacing: 8) {
-            Text("Beach volleyball").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
+            Text("Beach volleyball").font(SK.font(13, .semibold)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             FlowLayout(spacing: 6) {
                 ForEach(VolleyTier.allCases, id: \.rawValue) { t in
                     let n = shelf.volleyWon(t)
                     HStack(spacing: 4) {
-                        Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .black))
-                        Text("\(t.title) \u{00D7}\(n)").font(SK.font(12, .black))
+                        Image(systemName: UIImage(systemName: "rosette") != nil ? "rosette" : "seal.fill").font(.system(size: 12, weight: .semibold))
+                        Text("\(t.title) \u{00D7}\(n)").font(SK.font(12, .semibold))
                     }
                     .foregroundStyle(n > 0 ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(n > 0 ? Color(red: 0.98, green: 0.80, blue: 0.35) : Color.white.opacity(0.5)))
+                    .background(Capsule().fill(n > 0 ? DT.accentSoft : DT.card))
                     .accessibilityElement(children: .ignore).accessibilityLabel("\(t.title) volleyball ribbon: \(n) win\(n == 1 ? "" : "s")")
                 }
                 ForEach(Trophy.allVolley.filter { $0.id.hasPrefix("vwins") }) { t in
                     let has = shelf.has(t)
                     HStack(spacing: 4) {
-                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .black))
-                        Text(has ? t.title : t.detail).font(SK.font(12, .black))
+                        Image(systemName: has ? "trophy.fill" : "lock.fill").font(.system(size: 11, weight: .semibold))
+                        Text(has ? t.title : t.detail).font(SK.font(12, .semibold))
                     }
                     .foregroundStyle(has ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Color(red: 0.98, green: 0.80, blue: 0.35) : Color.white.opacity(0.5)))
+                    .background(Capsule().fill(has ? DT.accentSoft : DT.card))
                     .accessibilityElement(children: .ignore).accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
                 }
             }

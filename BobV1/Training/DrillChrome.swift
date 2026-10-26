@@ -91,17 +91,17 @@ struct DrillChrome: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); race.quitDrill() } label: {
-                Image(systemName: "xmark").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
-                    .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
+                    .frame(width: 44, height: 44).background(Circle().fill(DT.card))
             }
             .buttonStyle(.plain).accessibilityLabel("Stop practice").accessibilityIdentifier("drill-quit")
             VStack(spacing: 2) {
-                Text("Rhythm Steps").font(SK.font(17, .black)).foregroundStyle(SK.ink)
-                Text("Builds Waddle · lap \(min(race.drillUI.lap, race.drillUI.laps)) of \(race.drillUI.laps)").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                Text("Rhythm Steps").font(SK.font(17, .semibold)).foregroundStyle(SK.ink)
+                Text("Builds Waddle · lap \(min(race.drillUI.lap, race.drillUI.laps)) of \(race.drillUI.laps)").font(SK.font(12, .semibold)).foregroundStyle(SK.muted)
                     .accessibilityIdentifier("drill-lap")
             }
             .padding(.horizontal, 12).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
             Color.clear.frame(width: 44, height: 44)
         }
     }
@@ -110,7 +110,7 @@ struct DrillChrome: View {
         Group {
             if !s.isEmpty {
                 Text(s).font(SK.font(15, .bold)).foregroundStyle(SK.ink)
-                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
+                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(DT.card))
             }
         }
     }
@@ -124,15 +124,15 @@ struct DrillChrome: View {
         let gain = st?.practiceGain(accuracy: d?.accuracy ?? 0, steadiness: d?.steadiness ?? 0).waddle ?? 0
         return VStack(spacing: 8) {
             HStack(spacing: 10) {
-                Text("Waddle").font(SK.font(15, .black)).foregroundStyle(SK.ink).frame(width: 62, alignment: .leading)
+                Text("Waddle").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).frame(width: 62, alignment: .leading)
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0xE6D8C6))
+                        Capsule().fill(DT.fill)
                         Capsule().fill(Color(hex: 0xFFD1BF)).frame(width: max(14, g.size.width * CGFloat(min(1, w + gain))))
                         Capsule().fill(SK.pink).frame(width: max(14, g.size.width * CGFloat(w)))
                     }
                 }.frame(height: 14)
-                Text("+\(DrillResultCard.points(gain))").font(SK.font(14, .black)).foregroundStyle(Color(hex: 0xC0603D)).monospacedDigit()
+                Text("+\(DrillResultCard.points(gain))").font(SK.font(14, .semibold)).foregroundStyle(Color(hex: 0xC0603D)).monospacedDigit()
                     .frame(minWidth: 34, alignment: .trailing).accessibilityIdentifier("drill-gain")
             }
             HStack(spacing: 8) {
@@ -143,12 +143,12 @@ struct DrillChrome: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.cream.opacity(0.94)))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("drill-stats")
     }
 
     private func chip(_ s: String, bg: Color, fg: Color) -> some View {
-        Text(s).font(SK.font(13, .black)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 4)
+        Text(s).font(SK.font(13, .semibold)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 4)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(bg))
     }
 
@@ -164,7 +164,7 @@ struct DrillChrome: View {
                 case nil: Text(" ")
                 }
             }
-            .font(SK.font(24, .black)).foregroundStyle(.white)
+            .font(SK.font(24, .semibold)).foregroundStyle(.white)
             .shadow(color: SK.ink.opacity(0.5), radius: 4, y: 2)
             .id(race.drillUI.flashSerial)
             .transition(.scale(scale: 1.4).combined(with: .opacity))
@@ -176,7 +176,7 @@ struct DrillChrome: View {
     }
 
     private var promptRow: some View {
-        TimelineView(.animation) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.trainingSongTime() ?? race.drillState.song
             let items = race.drill?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
@@ -231,7 +231,7 @@ struct DrillChrome: View {
 
     private func numeral(_ s: String) -> some View {
         Text(s)
-            .font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded))
+            .font(.system(size: s == "GO!" ? 96 : 120, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
             .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 5)
             .shadow(color: SK.shadow.opacity(0.35), radius: 10, y: 6)
@@ -274,36 +274,36 @@ struct DrillResultCard: View {
                 Text(r.pepLeft > 0 ? "Pep left today" : "Pep used up. Practice still helps, just less.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
             }
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); done() } label: {
-                Text("Done").font(SK.font(20, .black)).foregroundStyle(.white)
+                Text("Done").font(SK.font(20, .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 44).padding(.vertical, vsc == .compact ? 8 : 12).background(Capsule().fill(SK.pinkStrong))
             }
             .buttonStyle(.plain).accessibilityIdentifier("drill-home")
         }
         .padding(.horizontal, 20).padding(.vertical, vsc == .compact ? 10 : 18)
-        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("drill-card")
         .onAppear { withAnimation(.easeOut(duration: 1.3).delay(0.35)) { shown = true } }
     }
 
     private func chip(_ s: String, bg: Color, fg: Color) -> some View {
-        Text(s).font(SK.font(13, .black)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 4)
+        Text(s).font(SK.font(13, .semibold)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 4)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(bg))
     }
 
     private func bar(_ name: String, before: Float, after: Float, color: Color, gain: Float) -> some View {
         VStack(spacing: 4) {
             HStack {
-                Text(name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                Text(name).font(SK.font(16, .semibold)).foregroundStyle(SK.ink)
                 Spacer()
-                Text("+\(Self.points(gain)) \(name)").font(SK.font(16, .black)).foregroundStyle(Color(hex: 0xC0603D)).monospacedDigit()
+                Text("+\(Self.points(gain)) \(name)").font(SK.font(16, .semibold)).foregroundStyle(Color(hex: 0xC0603D)).monospacedDigit()
                     .accessibilityIdentifier("drill-result-\(name.lowercased())")
             }
             GeometryReader { g in
                 let v = shown ? after : before
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(hex: 0xE6D8C6))
+                    Capsule().fill(DT.fill)
                     Capsule().fill(color).frame(width: max(14, g.size.width * CGFloat(min(max(v, 0), 1))))
-                    Capsule().fill(Color.white.opacity(0.55)).frame(width: 3, height: 14).offset(x: max(14, g.size.width * CGFloat(before)) - 3)
+                    Capsule().fill(DT.card).frame(width: 3, height: 14).offset(x: max(14, g.size.width * CGFloat(before)) - 3)
                 }
             }.frame(height: 16)
         }
