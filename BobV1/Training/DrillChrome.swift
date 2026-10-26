@@ -92,7 +92,7 @@ struct DrillChrome: View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); race.quitDrill() } label: {
                 Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                    .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                    .frame(width: 44, height: 44).background(Circle().fill(DT.card))
             }
             .buttonStyle(.plain).accessibilityLabel("Stop practice").accessibilityIdentifier("drill-quit")
             VStack(spacing: 2) {
@@ -101,7 +101,7 @@ struct DrillChrome: View {
                     .accessibilityIdentifier("drill-lap")
             }
             .padding(.horizontal, 12).padding(.vertical, 6).frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream))
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(DT.card))
             Color.clear.frame(width: 44, height: 44)
         }
     }

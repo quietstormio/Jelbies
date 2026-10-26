@@ -113,7 +113,7 @@ struct GroomChrome: View {
                                     Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold)).foregroundStyle(SK.ink)
                                 }
                                 .padding(.horizontal, 9).frame(minHeight: 44)
-                                .background(Capsule().fill(on ? SK.honey : DT.card))
+                                .dtChip(selected: on)
                             }
                             .buttonStyle(.plain).accessibilityLabel(j.name).accessibilityAddTraits(on ? .isSelected : []).accessibilityIdentifier("groom-pick-\(j.id)")
                         }

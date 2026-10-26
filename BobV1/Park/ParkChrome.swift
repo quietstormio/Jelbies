@@ -104,7 +104,7 @@ struct ParkChrome: View {
                                 if best > .stranger { Image(systemName: "heart.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(SK.pinkStrong).accessibilityLabel("Friend") }
                             }
                             .padding(.horizontal, 10).frame(minHeight: 44)
-                            .background(Capsule().fill(park.card == vid ? SK.honey : SK.cream.opacity(0.92)))
+                            .dtChip(selected: park.card == vid)
                         }
                         .buttonStyle(.plain).accessibilityLabel("\(v.name), \(best.title)").accessibilityIdentifier("park-friend-\(vid)")
                     }
@@ -140,7 +140,7 @@ struct ParkChrome: View {
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold)).foregroundStyle(SK.ink)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background(Capsule().fill(on ? SK.honey : DT.card))
+                            .dtChip(selected: on)
                         }
                         .buttonStyle(.plain).accessibilityLabel(j.name).accessibilityAddTraits(on ? .isSelected : []).accessibilityIdentifier("park-pick-\(j.id)")
                     }

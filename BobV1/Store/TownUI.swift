@@ -256,8 +256,8 @@ struct TownView: View {
                         if !reduceTransparency {
                             // a sneak peek of the place: low-opacity picture under a cream wash (decorative)
                             Image("town_preview_" + p.id.replacingOccurrences(of: "town-", with: ""))
-                                .resizable().scaledToFill().opacity(0.4).accessibilityHidden(true)
-                            LinearGradient(stops: [.init(color: SK.cream.opacity(0.15), location: 0), .init(color: SK.cream.opacity(0.35), location: 0.5), .init(color: SK.cream.opacity(0.92), location: 0.78), .init(color: SK.cream.opacity(0.95), location: 1)], startPoint: .top, endPoint: .bottom)
+                                .resizable().scaledToFill().opacity(0.75).accessibilityHidden(true)
+                            LinearGradient(stops: [.init(color: DT.card.opacity(0.0), location: 0), .init(color: DT.card.opacity(0.1), location: 0.45), .init(color: DT.card.opacity(0.94), location: 0.75), .init(color: DT.card, location: 1)], startPoint: .top, endPoint: .bottom)
                         }
                         VStack(alignment: .leading, spacing: 0) {
                             Image(systemName: p.symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(SK.ink)
@@ -547,7 +547,7 @@ struct BagSheet: View {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
                             Text("\(t.rawValue) \(count(t))").font(SK.font(14, .semibold)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
-                                .padding(.horizontal, 12).frame(minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : DT.card))
+                                .padding(.horizontal, 12).frame(minHeight: 44).dtChip(selected: t == tab)
                         }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())").id(t)
                     }
                 }.onAppear { proxy.scrollTo(tab, anchor: .center) } } }
@@ -778,7 +778,7 @@ struct SlotChips: View {
                 Text(title).font(SK.font(13, .semibold))
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
-            .background(Capsule().fill(on ? SK.honey : DT.card))
+            .dtChip(selected: on)
         }
         .buttonStyle(.plain).accessibilityIdentifier("\(idPrefix)\(id)").accessibilityAddTraits(on ? .isSelected : [])
     }

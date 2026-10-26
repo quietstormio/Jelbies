@@ -37,7 +37,7 @@ struct VoiceMicButton: View {
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(listening ? Color.white : Color(red: 0.42, green: 0.34, blue: 0.30))
             .frame(width: 44, height: 44)
-            .background(Circle().fill(listening ? FocusStyle.pink : Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.94))
+            .background(Circle().fill(listening ? FocusStyle.pink : DT.card).opacity(0.94))
             .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
             .overlay {
                 if let p = progress {
@@ -169,7 +169,7 @@ struct VoiceBookButton: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
+                .background(Circle().fill(DT.card).opacity(0.92))
                 .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
         }
         .buttonStyle(.plain)

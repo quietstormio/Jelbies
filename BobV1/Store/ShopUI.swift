@@ -75,12 +75,12 @@ struct ShopScreen: View {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                        .dtWell()
                 }
                 .buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("shop-back")
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Shop").font(SK.font(28, .semibold)).foregroundStyle(.white)
-                    Text("Spend your Drops on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
+                    Text("Shop").font(SK.font(28, .semibold)).foregroundStyle(DT.ink)
+                    Text("Spend your Drops on goodies").font(SK.font(12, .medium)).foregroundStyle(DT.ink2)
                 }
                 Spacer()
                 DropsPill(wallet: care.bath.wallet)
@@ -92,9 +92,9 @@ struct ShopScreen: View {
                         Button {
                             if t != tab { AudioHub.shared.play(.pageTurn); withAnimation(.easeInOut(duration: 0.15)) { tab = t } }
                         } label: {
-                            Text(t.rawValue).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
+                            Text(t.rawValue).font(SK.font(15, .semibold)).foregroundStyle(t == tab ? DT.accent : DT.ink)
                                 .padding(.horizontal, 16).frame(minHeight: 44)
-                                .background(Capsule().fill(t == tab ? SK.honey : SK.cream.opacity(0.92)))
+                                .dtChip(selected: t == tab)
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("shop-tab-\(t.rawValue.lowercased())")
                         .accessibilityAddTraits(t == tab ? .isSelected : [])
@@ -104,7 +104,8 @@ struct ShopScreen: View {
             }
             .padding(.bottom, 14)
         }
-        .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
+        .background(DT.paper.ignoresSafeArea(edges: [.top, .horizontal]))
+        .overlay(alignment: .bottom) { DT.line.frame(height: 1) }
         .padding(.bottom, 4)
     }
 
@@ -118,8 +119,8 @@ struct ShopScreen: View {
                 ItemArt(item: item, size: wide ? 84 : 104)
                 Text(item.name).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
                 if let p = item.perk { PerkChip(kind: p) }
-                else if item.kind == .room { Text("New room").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
-                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.kind == .room { Text("New room").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(DT.fill)) }
+                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(DT.fill)) }
                 else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : item.kind == .trickPage ? "New trick" : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
                     HStack(spacing: 4) {

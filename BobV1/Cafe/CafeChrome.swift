@@ -118,7 +118,7 @@ struct CafeMenuCard: View {
                 Text("-15%").font(SK.font(11, .semibold)).foregroundStyle(SK.muted)
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
-            .background(Capsule().fill(table ? SK.honey : DT.card))
+            .dtChip(selected: table)
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
         .accessibilityLabel("Same for everyone, 15 percent off")
@@ -169,7 +169,7 @@ struct CafeMenuCard: View {
                             if let t = (table ? order.forTable : picks[id]) { thumb(t, size: 20) }
                         }
                         .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 44)
-                        .background(Capsule().fill(sel ? SK.honey : DT.card))
+                        .dtChip(selected: sel)
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("cafe-who-\(id)")
                     .accessibilityLabel(care.jelly(id)?.name ?? "Jelbie")

@@ -67,7 +67,7 @@ struct RoundHeader: View {
             if quits {
                 Button { AudioHub.shared.uiTap(); show.goHome() } label: {
                     Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                        .frame(width: 44, height: 44).background(Circle().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityLabel("Leave the show").accessibilityIdentifier("show-quit")
             }
             VStack(alignment: .leading, spacing: 0) {
@@ -785,7 +785,7 @@ struct ResultsScreen: View {
     private var buttons: some View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); show.goHome(again: true) } label: {
-                Text("Show again").font(SK.font(17, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
+                Text("Show again").font(SK.font(17, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(DT.card))
             }.buttonStyle(.plain).accessibilityIdentifier("results-again")
             ShowCTA(title: "Done", id: "results-done", height: 54) { show.goHome() }
         }
@@ -806,7 +806,7 @@ struct PracticeChrome: View {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     Button { AudioHub.shared.uiTap(); show.goHome() } label: {
-                        Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                        Image(systemName: "xmark").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(DT.card))
                     }.buttonStyle(.plain).accessibilityLabel("Stop practice").accessibilityIdentifier("practice-quit")
                     VStack(alignment: .leading, spacing: 0) {
                         Text("STUDIO \u{00B7} PRACTISE").font(SK.font(12, .semibold)).foregroundStyle(ShowUI.gold).tracking(0.5)
@@ -814,7 +814,7 @@ struct PracticeChrome: View {
                     }
                     Spacer()
                     let p = show.practice
-                    Text("Beat \(min((p?.judged ?? 0) + 1, p?.total ?? ShowFlow.practicePrompts)) / \(p?.total ?? ShowFlow.practicePrompts)").font(SK.font(13, .semibold)).foregroundStyle(SK.ink).monospacedDigit().padding(.horizontal, 12).frame(height: 36).background(Capsule().fill(SK.cream))
+                    Text("Beat \(min((p?.judged ?? 0) + 1, p?.total ?? ShowFlow.practicePrompts)) / \(p?.total ?? ShowFlow.practicePrompts)").font(SK.font(13, .semibold)).foregroundStyle(SK.ink).monospacedDigit().padding(.horizontal, 12).frame(height: 36).background(Capsule().fill(DT.card))
                 }
                 Spacer(minLength: 0)
                 if let r = show.practiceResult {

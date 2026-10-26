@@ -19,7 +19,7 @@ struct SleepUntilMorningButton: View {
                     }
                     .foregroundStyle(Color(red: 0.36, green: 0.32, blue: 0.55))
                     .padding(.horizontal, all ? 14 : 0).frame(minWidth: 44, minHeight: 44)
-                    .background(Capsule().fill(Color(red: 0.93, green: 0.91, blue: 0.98)).opacity(0.94))
+                    .background(Capsule().fill(DT.card).opacity(0.94))
                     .overlay(Capsule().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
                     .contentShape(Capsule())
                 }
@@ -41,7 +41,7 @@ struct DayChip: View {
                 Text("Day \(DayClock.shared.day)")
                     .font(SK.font(12, .semibold)).foregroundStyle(SK.ink.opacity(0.7)).monospacedDigit()
                     .padding(.horizontal, 10).frame(minHeight: 26)
-                    .background(Capsule().fill(SK.cream.opacity(0.8)))
+                    .background(Capsule().fill(DT.card))
                     .accessibilityLabel("Day \(DayClock.shared.day)")
                     .accessibilityIdentifier("day-chip")
             }

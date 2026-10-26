@@ -224,7 +224,7 @@ struct RacePlacingsCard: View {
         }
         .foregroundStyle(CareMenu.brown)
         .padding(.horizontal, 12).padding(.vertical, 5)
-        .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35)))
+        .background(Capsule().fill(DT.accentSoft))
         .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(id)

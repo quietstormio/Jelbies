@@ -12,7 +12,7 @@ import SwiftUI
 struct EarsButton: View {
     let ears: Ears
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
-    private let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
+    private let cream = DT.card
     private let glow = Color(red: 0.43, green: 0.70, blue: 0.82)
 
     var body: some View {

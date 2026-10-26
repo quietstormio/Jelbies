@@ -44,7 +44,7 @@ struct ShowHeader<Trailing: View>: View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); back() } label: {
                 Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(SK.ink)
-                    .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
+                    .frame(width: 44, height: 44).background(Circle().fill(DT.card))
             }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier(backID)
             VStack(alignment: .leading, spacing: 0) {
                 if let k = kicker { Text(k).font(SK.font(12, .semibold)).foregroundStyle(ShowUI.gold).tracking(0.5) }
@@ -357,7 +357,7 @@ struct StudioScreen: View {
             ShowBar(name: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))", nameWidth: 64)
             ShowBar(name: "Dance", value: skill, color: Color(hex: 0xB58BDB), note: dances == 0 ? "No dance yet" : "\(dances) dance\(dances == 1 ? "" : "s") learned", nameWidth: 64)
         }
-        .padding(14).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
+        .padding(14).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("studio-ready")
     }
 
@@ -373,7 +373,7 @@ struct StudioScreen: View {
     }
     private func pill(_ title: String, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            Text(title).font(SK.font(17, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
+            Text(title).font(SK.font(17, .semibold)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(DT.card))
         }.buttonStyle(.plain).accessibilityIdentifier(id)
     }
 }
@@ -809,7 +809,7 @@ struct ShowLobby: View {
         VStack(spacing: compact ? 8 : 12) {
             ShowHeader(title: "Jelly Show", backID: "show-back", back: back) {
                 Button { AudioHub.shared.uiTap(); card() } label: {
-                    Text("\(care.jelly(who)?.name ?? "Bob")'s card").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(SK.cream))
+                    Text("\(care.jelly(who)?.name ?? "Bob")'s card").font(SK.font(15, .semibold)).foregroundStyle(SK.ink).padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(DT.card))
                 }.buttonStyle(.plain).accessibilityIdentifier("show-card")
             }
             if compact {
@@ -886,7 +886,7 @@ struct ShowLobby: View {
                 }
             }
         }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
+        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("show-ranks")
     }
 
@@ -923,7 +923,7 @@ struct ShowLobby: View {
             }
             .accessibilityIdentifier("show-prizes")
         }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
+        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("show-today")
     }
 
@@ -953,7 +953,7 @@ struct ShowLobby: View {
             .padding(.top, 6).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xD9C9AE)).frame(height: 2) }
             .accessibilityIdentifier("show-estimate")
         }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
+        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(DT.card))
         .accessibilityElement(children: .contain).accessibilityIdentifier("show-ready")
     }
 

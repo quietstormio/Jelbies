@@ -345,7 +345,7 @@ struct VolleyResultsCard: View {
             Image(systemName: UIImage(systemName: symbol) != nil ? symbol : "star.fill").font(.system(size: 14, weight: .semibold))
             Text(text).playFont(14, .semibold)
         }.foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 5)
-            .background(Capsule().fill(Color(red: 0.98, green: 0.80, blue: 0.35))).accessibilityElement(children: .combine).accessibilityIdentifier(id)
+            .background(Capsule().fill(DT.accentSoft)).accessibilityElement(children: .combine).accessibilityIdentifier(id)
     }
 
     var body: some View {
@@ -584,7 +584,7 @@ struct VolleyTrophiesSection: View {
                         Text("\(t.title) \u{00D7}\(n)").font(SK.font(12, .semibold))
                     }
                     .foregroundStyle(n > 0 ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(n > 0 ? Color(red: 0.98, green: 0.80, blue: 0.35) : DT.card))
+                    .background(Capsule().fill(n > 0 ? DT.accentSoft : DT.card))
                     .accessibilityElement(children: .ignore).accessibilityLabel("\(t.title) volleyball ribbon: \(n) win\(n == 1 ? "" : "s")")
                 }
                 ForEach(Trophy.allVolley.filter { $0.id.hasPrefix("vwins") }) { t in
@@ -594,7 +594,7 @@ struct VolleyTrophiesSection: View {
                         Text(has ? t.title : t.detail).font(SK.font(12, .semibold))
                     }
                     .foregroundStyle(has ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(Capsule().fill(has ? Color(red: 0.98, green: 0.80, blue: 0.35) : DT.card))
+                    .background(Capsule().fill(has ? DT.accentSoft : DT.card))
                     .accessibilityElement(children: .ignore).accessibilityLabel(has ? "\(t.title), earned" : "\(t.detail), not yet")
                 }
             }
