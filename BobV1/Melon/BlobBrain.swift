@@ -95,6 +95,7 @@ final class BlobBrain {
 
     var walkSpeed: Float = 0.7          // world units / s (~0.6 body widths per second)
     var turnRate: Float = 1.9             // rad / s while turning with small steps (reference: 110-120 deg/s)
+    var turnHopW: Float = 0, hopCount = 0          // BlobBrain+Turn: the running turn step is a hop-turn
     /// His current floor position (xz) and heading as last driven / measured.
     var position: SIMD2<Float> { SIMD2(px, pz) }
     var heading: Float { yaw }
@@ -934,8 +935,8 @@ final class BlobBrain {
         if feet.active { return true }
         let err = wrapAngle(goal - yaw)
         guard abs(err) > tol else { return false }
-        let m = turnRate * amplitude.clamped(0.5, 1) * feet.stepTime
-        startStep(dyaw: max(-m, min(m, err)), peak: turnLift * amplitude)
+        let tp = turnPlan(err: err, idle: true)
+        startStep(dyaw: tp.dyaw, peak: turnLift * amplitude * (turnHopW > 0 ? 1.8 : 1), rate: stepRate * runRateMul * locoRateMul * tp.rate)
         return true
     }
 
@@ -952,6 +953,7 @@ final class BlobBrain {
         pitch += rockPitch * a * rock * cosf(2 * .pi * feet.stepU)     // forward at contact, back at mid swing
         runAir = 0
         if runW > 0 { runPose(a) }
+        turnFollowThrough()
         pivotSide = 1 - feet.side; pivotNominal = true
         nubTarget = a
     }
@@ -1100,11 +1102,15 @@ final class BlobBrain {
         if D < 0.06 && abs(s) < 0.08 && !intermediate { return 1 }
         if scriptT > 14 + D / 0.25 { return 1 }
         if stuckT > 1.5 { return 2 }
-        if abs(err) > 0.5 {                                // not facing the target yet: turn on the spot first
-            startStep(dyaw: max(-m, min(m, err)), peak: turnLift * amplitude)
+        let arc = abs(err) <= 1.2 && D > 0.4 && !intermediate         // turn while moving: a short arc into the new direction
+        if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
+            let tp = turnPlan(err: err, idle: false)
+            startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)
             return 0
         }
-        let L = stride * runStrideMul * amplitude.clamped(0.6, 1)
+        turnHopW = 0
+        let arcK: Float = abs(err) > 0.5 ? 0.6 : 1
+        let L = stride * runStrideMul * amplitude.clamped(0.6, 1) * arcK
         var a: Float, r: Float
         if !intermediate && (abs(D - s) < 0.06 || D < s) { a = max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
         else if D > s + 1.1 * L || intermediate { r = 0.5 * L; a = s + r }                        // regular step: lands half a step ahead
@@ -1115,7 +1121,8 @@ final class BlobBrain {
         let got = SIMD2(rv.x, rv.z) - root
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
-        startStep(rootD: rootD, dyaw: max(-m, min(m, err)), reach: u * r, peak: stepLift * amplitude)
+        let wm = abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err))
+        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude)
         return 0
     }
 
