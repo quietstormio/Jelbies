@@ -10,12 +10,12 @@ import simd
 import Foundation
 
 nonisolated enum PipSpikes {
-    static let backFractions: [Float] = [0.76, 0.62, 0.48, 0.36]       // of his height, from just below the hat line down to the lower back
+    static let backFractions: [Float] = [0.80, 0.665, 0.53, 0.395]       // of his height, from just below the hat line down to the lower back
     static let backTemplates = ["spike_00", "spike_00", "spike_00", "spike_00"]
-    static let backScale: [Float] = [1.0, 0.92, 0.84, 0.76]
-    static let tailU: [Double] = [0.40, 0.64, 0.84]                    // along the tail (fraction of its centre line)
-    static let tailScale: [Float] = [0.8, 0.65, 0.5]
-    static let tailTemplates = ["spike_03", "spike_03", "spike_03"]
+    static let backScale: [Float] = [0.95, 0.88, 0.81, 0.74]
+    static let tailU: [Double] = [0.42, 0.66, 0.86]                    // along the tail (fraction of its centre line)
+    static let tailScale: [Float] = [0.8, 0.68, 0.56]
+    static let tailTemplates = ["spike_00", "spike_00", "spike_00"]
 
     struct Mesh {
         var pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = [], idx: [UInt32] = []
@@ -56,7 +56,7 @@ nonisolated enum PipSpikes {
             let c = centre(body, y: backFractions[k] * h)
             let first = m.pos.count
             let base = c.p - c.n * 0.03
-            m.spike(backTemplates[k], base: base, normal: simd_normalize(c.n * 0.6 + SIMD3(0, 0.9, 0)), scale: backScale[k], spec: spec)
+            m.spike(backTemplates[k], base: base, normal: simd_normalize(c.n * 0.35 + SIMD3(0, 1.0, 0)), scale: backScale[k], spec: spec)
             parts.append(("spike\(k)", first, m.pos.count - first, base))
         }
         let sh = TailBean.shape
@@ -67,7 +67,7 @@ nonisolated enum PipSpikes {
             let up = SIMD3<Float>(Float(rg.up.x), Float(rg.up.y), Float(rg.up.z))
             let c = SIMD3<Float>(Float(rg.p.x), Float(rg.p.y), Float(rg.p.z))
             let tg = SIMD3<Float>(Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).x), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).y), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).z))
-            m.spike(tailTemplates[k], base: c + up * Float(rg.r) * 0.82, normal: simd_normalize(up * 1.0 + tg * 0.15), scale: tailScale[k], spec: spec)
+            m.spike(tailTemplates[k], base: c + up * Float(rg.r) * 0.9, normal: simd_normalize(up * 1.0 + tg * 0.1), scale: tailScale[k], spec: spec)
         }
         parts.append(("tail", first, m.pos.count - first, root))
         for (pi, pp) in parts.enumerated() {
