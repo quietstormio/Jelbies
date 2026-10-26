@@ -75,7 +75,7 @@ nonisolated enum TailBean {
         while t <= length + step {
             table.append(cur)
             let u = max(0, (t - sink) / vis)
-            let ang = (14 + 34 * pow(u, 1.1)) * Double.pi / 180           // nearly level at the base, lifting up to a ~42 degree tip
+            let ang = (20 + 36 * pow(u, 1.1)) * Double.pi / 180           // nearly level at the base, lifting up to a ~42 degree tip
             cur += SIMD3(0, sin(ang), -cos(ang)) * step
             t += step
         }

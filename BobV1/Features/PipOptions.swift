@@ -10,12 +10,16 @@ import simd
 import Foundation
 
 nonisolated enum PipSpikes {
-    static let backFractions: [Float] = [0.86, 0.735, 0.61, 0.485]       // of his height, from just below the hat line down to the lower back
-    static let backTemplates = ["spike_00", "spike_00", "spike_00", "spike_00"]
-    static let backScale: [Float] = [0.9, 0.84, 0.78, 0.72]
-    static let tailU: [Double] = [0.30, 0.55, 0.78]                    // along the tail (fraction of its centre line)
-    static let tailScale: [Float] = [0.75, 0.62, 0.5]
-    static let tailTemplates = ["spike_00", "spike_00", "spike_00"]
+    /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
+    static let count = 6
+    static let startFraction: Float = 0.74          // of his height, on the back silhouette line
+    static let tailEnd: Double = 0.85               // fraction of the tail's length the row reaches
+    static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
+    static let tiltDeg: Float = 12                  // each spike leans this far from the surface normal toward the tail
+    static let slim: Float = 0.8                    // sideways thinning
+    static let backFractions: [Float] = [0]          // (marker: the back spikes are rigid on the skin, see FeatureSet.partRotation)
+    /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
+    nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
 
     struct Mesh {
         var pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = [], idx: [UInt32] = []
@@ -28,7 +32,7 @@ nonisolated enum PipSpikes {
             let q = simd_quatf(from: n0, to: simd_normalize(normal))
             let off = UInt32(pos.count)
             for k in 0..<p.positions.count {
-                var lv = (crown + p.positions[k]) - piv; lv.x *= 0.8                  // slimmer sideways
+                var lv = (crown + p.positions[k]) - piv; lv.x *= PipSpikes.slim                  // slimmer sideways
                 pos.append(base + q.act(lv) * s)
                 nrm.append(q.act(p.normals[k])); col.append(p.colors[k]); ao.append(p.ao[k])
             }
@@ -36,16 +40,17 @@ nonisolated enum PipSpikes {
         }
     }
 
-    /// Surface point + normal on the centre line at height y (back: z < 0).
-    static func centre(_ body: WearBody, y: Float) -> (p: SIMD3<Float>, n: SIMD3<Float>) {
-        var best = -1, bz = Float.infinity
-        for i in 0..<body.eggVertexLimit {
-            let q = body.pos[i]
-            guard abs(q.x) < 0.05, abs(q.y - y) < 0.04, q.z < 0 else { continue }
-            if q.z < bz { bz = q.z; best = i }
+    /// Base width (along the spike's lean plane) of a template, measured just above its sunk base.
+    static func baseWidth(_ part: String, spec: FeatureSpec) -> Float {
+        guard let art = FeatureMeshes.art("pip_c_final"), let p = art.parts.first(where: { $0.name == part }), let sp = spec.spines.first(where: { $0.part == part }) else { return 0.1 }
+        let crown = SIMD3<Float>(0, spec.top, 0), piv = crown + sp.pivot.v3, n0 = simd_normalize(sp.normal.v3)
+        let along = simd_normalize(simd_cross(SIMD3<Float>(1, 0, 0), n0))
+        var lo = Float.infinity, hi = -Float.infinity
+        for q in p.positions {
+            let lv = crown + q - piv, h = simd_dot(lv, n0)
+            if h > 0.02 && h < 0.07 { let a = simd_dot(lv, along); lo = min(lo, a); hi = max(hi, a) }
         }
-        guard best >= 0 else { return (SIMD3(0, y, -0.45), SIMD3(0, 0, -1)) }
-        return (body.pos[best], simd_normalize(body.nrm[best]))
+        return hi > lo ? hi - lo : 0.1
     }
 
     static func build(body: WearBody, spec: FeatureSpec) -> FeaturePrepared {
@@ -53,24 +58,58 @@ nonisolated enum PipSpikes {
         var m = Mesh()
         var parts: [(String, Int, Int, SIMD3<Float>)] = []
         let h = spec.top
-        for k in 0..<backFractions.count {
-            let c = centre(body, y: backFractions[k] * h)
-            let first = m.pos.count
-            let base = c.p - c.n * 0.03
-            m.spike(backTemplates[k], base: base, normal: simd_normalize(c.n * 0.35 + SIMD3(0, 1.0, 0)), scale: backScale[k], spec: spec)
-            parts.append(("spike\(k)", first, m.pos.count - first, base))
-        }
+        func f3(_ v: SIMD3<Double>) -> SIMD3<Float> { SIMD3(Float(v.x), Float(v.y), Float(v.z)) }
+        // ---- one continuous ridge curve: the back silhouette line from 74% of his height down to the tail root, then the tail's top centre line
         let sh = TailBean.shape
-        let root = SIMD3<Float>(Float(sh.root.x), Float(sh.root.y), Float(sh.root.z))
-        let first = m.pos.count
-        for k in 0..<tailU.count {
-            let rg = sh.ridge(sh.sink + tailU[k] * (sh.length - sh.sink))
-            let up = SIMD3<Float>(Float(rg.up.x), Float(rg.up.y), Float(rg.up.z))
-            let c = SIMD3<Float>(Float(rg.p.x), Float(rg.p.y), Float(rg.p.z))
-            let tg = SIMD3<Float>(Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).x), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).y), Float(sh.tangent(sh.sink + tailU[k] * (sh.length - sh.sink)).z))
-            m.spike(tailTemplates[k], base: c + up * Float(rg.r) * 0.95, normal: simd_normalize(up * 1.0 + tg * 0.3), scale: tailScale[k], spec: spec)
+        var tailPts: [(p: SIMD3<Float>, n: SIMD3<Float>)] = []
+        let t0 = sh.sink, t1 = sh.sink + tailEnd * (sh.length - sh.sink)
+        var t = t0
+        while t <= t1 { let rg = sh.ridge(t); tailPts.append((f3(rg.p + rg.up * (rg.r * 0.95)), f3(rg.up))); t += 0.01 }
+        var curve: [(p: SIMD3<Float>, n: SIMD3<Float>)] = []
+        var y = startFraction * h
+        let yTail = tailPts.first?.p.y ?? 0.5
+        while y > yTail {
+            var lo = -1.2, hi = 0.0
+            for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, Double(y), mid)) > 0 { lo = mid } else { hi = mid } }
+            let p = SIMD3<Double>(0, Double(y), hi)
+            curve.append((f3(p), f3(BobForm.normal(p)))); y -= 0.01
         }
-        parts.append(("tail", first, m.pos.count - first, root))
+        let backCount = curve.count
+        curve += tailPts
+        var arc: [Float] = [0]
+        for i in 1..<curve.count { arc.append(arc[i - 1] + simd_distance(curve[i].p, curve[i - 1].p)) }
+        let L = arc.last ?? 1, d = L / (Float(count) - 0.5)
+        let wt: Float = 0.10                              // the shipped spike's base width at scale 1 (measured by eye on the renders)
+        var widths: [Float] = [], centres: [Float] = []
+        let first = m.pos.count
+        var tailFirst = -1
+        for k in 0..<count {
+            let sK = d * 0.5 + Float(k) * d
+            var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
+            let a = max(0, min(1, (sK - arc[i - 1]) / max(arc[i] - arc[i - 1], 1e-5)))
+            let p = curve[i - 1].p * (1 - a) + curve[i].p * a
+            let nrm = simd_normalize(curve[i - 1].n * (1 - a) + curve[i].n * a)
+            var tg = curve[min(i + 1, curve.count - 1)].p - curve[max(i - 2, 0)].p
+            tg -= nrm * simd_dot(tg, nrm); tg = simd_normalize(tg)
+            // size from the spacing: biggest at index 1, stepping smoothly down to 45% at the last spike; the base width never exceeds 55% of the spacing
+            let taper: Float = k == 0 ? 0.85 : (k == 1 ? 1.0 : 1.0 - 0.55 * Float(k - 1) / Float(count - 2))
+            let w = taper * widthOfSpacing * d
+            let scale = min(w / wt, taper * 0.85 * d / 0.2022)        // base never over 55% of the spacing, and the HEIGHT stays under the spacing too (no leaning onto the neighbour)
+            widths.append(w); centres.append(sK)
+            let ax = simd_normalize(nrm * cosf(tiltDeg * .pi / 180) + tg * sinf(tiltDeg * .pi / 180))
+            let base = p - nrm * (0.03 * scale)
+            let isTail = i - 1 >= backCount
+            let start = m.pos.count
+            m.spike("spike_00", base: base, normal: ax, scale: scale, spec: spec)
+            if isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, base)) }
+        }
+        var gap = Float.infinity
+        for k in 1..<count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
+        lastLayout = (d, widths, gap)
+        assert(gap > 0.3 * d, "Pip's spikes overlap")
+        _ = first
+        let root = f3(sh.root)
+        if tailFirst >= 0 { parts.append(("tail", tailFirst, m.pos.count - tailFirst, root)) }
         for (pi, pp) in parts.enumerated() {
             var pr = FeaturePrepared.Part(name: pp.0)
             pr.first = r.rest.count; pr.count = pp.2; pr.pivot = pp.3
@@ -81,13 +120,13 @@ nonisolated enum PipSpikes {
             r.parts.append(pr)
         }
         r.anchor = root
-        var t = 0
-        while t + 2 < m.idx.count {
-            let i0 = m.idx[t], i1 = m.idx[t + 1], i2 = m.idx[t + 2]
+        var ti = 0
+        while ti + 2 < m.idx.count {
+            let i0 = m.idx[ti], i1 = m.idx[ti + 1], i2 = m.idx[ti + 2]
             let g = simd_cross(m.pos[Int(i1)] - m.pos[Int(i0)], m.pos[Int(i2)] - m.pos[Int(i0)])
             let nn = m.nrm[Int(i0)] + m.nrm[Int(i1)] + m.nrm[Int(i2)]
             if simd_dot(g, nn) >= 0 { r.idx += [i0, i1, i2] } else { r.idx += [i0, i2, i1] }
-            t += 3
+            ti += 3
         }
         return r
     }

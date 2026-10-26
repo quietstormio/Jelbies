@@ -193,7 +193,7 @@ final class FeatureCaptureTests: XCTestCase {
     }
 
     /// A 900 x 900 close-up of rig 0 of a one-character lab from `yaw` radians round his facing (0 front, pi back).
-    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
+    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, dist: Float = 3.4, lookY: Float = 0.25, lookBack: Float = 0, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
         W = 900; H = 900
         let chars = [c]
         let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: seed)
@@ -206,7 +206,7 @@ final class FeatureCaptureTests: XCTestCase {
         fwd = simd_normalize(fwd)
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let cc = pose.centroid
-        let cam = Self.lookCamera(target: SIMD3(cc.x, cc.y + 0.25, cc.z), dir: dir, dist: 3.4, aspect: 1)
+        let cam = Self.lookCamera(target: SIMD3(cc.x - fwd.x * lookBack, cc.y + lookY, cc.z - fwd.z * lookBack), dir: dir, dist: dist, aspect: 1)
         let img = composite(lab, d, chars, ren, target, cam: cam)
         return labelled(img.uiImage()!, label)
     }
@@ -479,7 +479,11 @@ final class FeatureCaptureTests: XCTestCase {
             r.brain.feature = .spines
         })
         t.append(try closeup(Char(id: 1, outfit: [.head: .beret]), yaw: 0.7, label: "Pip: beret 3/4"))
-        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6]))]), d + "/pip_teardrop.png")
+        // large close-ups on the back and tail: the side, and a back 3/4
+        let z1 = try closeup(Char(id: 1), yaw: Float.pi / 2, label: "Pip: side close-up (back + tail)", dist: 1.7, lookY: 0.0, lookBack: 0.45)
+        let z2 = try closeup(Char(id: 1), yaw: Float.pi * 0.8, label: "Pip: back 3/4 close-up", dist: 1.7, lookY: 0.0, lookBack: 0.4)
+        NSLog("PIPLAYOUT spacing=%.3f widths=%@ minGap=%.3f", PipSpikes.lastLayout.spacing, PipSpikes.lastLayout.widths.map { String(format: "%.3f", $0) }.joined(separator: ","), PipSpikes.lastLayout.minGap)
+        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro3.png")
     }
 
     // MARK: roam corners (2026-10-21 room movement v2)
