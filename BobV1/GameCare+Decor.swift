@@ -60,7 +60,8 @@ extension GameCare {
         if refreshGroomFx(room) { return }          // the Jelly Spa street: the door, the glow, bubbles and steam (Groomer/GameCare+Groom.swift)
         if refreshVolleyBall(room) { return }          // the beach: the ball and its shadow are the animating decor (Volley/GameCare+Volley.swift)
         let f = DecorField.shared
-        let active = Set(f.anim.filter { $0.value.active }.keys)
+        var active = Set<Int>()          // (built only when something animates: no per-step dictionary filter + Set for the common idle room)
+        for (k, v) in f.anim where v.active { active.insert(k) }
         if f.version != decorDrawn.fieldVersion || active != decorDrawn.active {
             decorDrawn.fieldVersion = f.version; decorDrawn.active = active
             room.setDecorStatic(DecorModels.build(feet: f.feet.filter { !active.contains($0.uid) }, field: f, time: time))

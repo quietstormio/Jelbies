@@ -1204,6 +1204,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     private func publishReadouts() {
+        guard !game else { return }          // only the sandbox stats panel reads these; in the game each write re-ran observers for nothing, 8x a second
         model.volumePct = Double(sim.volumeRatio() * 100)
         let ke = sim.kineticEnergy() / sim.totalMass * (massG / 1000) * powf(bobScaleCm / 100, 2)
         model.kineticMicroJ = Double(ke) * 1e6
