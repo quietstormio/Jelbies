@@ -286,6 +286,7 @@ final class BlobBrain {
     var simFootCap: Float = 0.03
     // Foot beans (FootBean): grow when any foot leaves its rest spot, stay until both have been still for `beanHoldTime`, then shrink back.
     var beanG: Float = 0                 // 0 = hidden (plain embedded feet) ... 1 = beans out, embedded feet retracted
+    var beanForce = false                // a spin move (flip / cartwheel) owns the beans: out for the whole flight, placed on the FITTED pose
     var beanHold: Float = 0              // seconds the beans stay out after the last foot motion
     var beanHoldTime: Float = 0.7
     /// He wears shoes (GameCare.syncPerks sets it): the beans stay out for good so the rendered foot IS the bean the shell is grown from (no soft-skin foot sagging out under the sole).
@@ -1464,7 +1465,7 @@ final class BlobBrain {
         let fit = sim.bodyPose(iterations: 3)
         let attQ = sim.attractor.rotation
         let drift = simd_length(simd_float3x3(fit.rotation).columns.1 - simd_float3x3(attQ).columns.1) + simd_length(simd_float3x3(fit.rotation).columns.2 - simd_float3x3(attQ).columns.2)
-        let useFit = activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.1 || drift > 0.12
+        let useFit = beanForce || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.1 || drift > 0.12
         let fitted: BodyPose? = useFit ? fit : nil
         for s in 0..<2 {
             let c = geom.contact[s]
@@ -1494,14 +1495,16 @@ final class BlobBrain {
         }
     }
 
-    func driveBeansRigid(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, tuck: Float = 0) {
+    func driveBeansRigid(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, tuck: Float = 0, force: Bool = false) {
+        beanForce = force
+        defer { beanForce = false }
         guard beanFirstIdx.count == 2, geom.valid || { if !geom.valid { geom = FootGeom(sim: sim) }; return geom.valid }() else { return }
         prepareBeans(sim, skinner)
         guard footSkin.valid else { return }
         if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
         footShift = [.zero, .zero]
         fillBeansRigid(sim, into: &beanScratch, tuck: tuck)
-        commitBeans(sim, skinner, dt, want: tuck > 0.002)
+        commitBeans(sim, skinner, dt, want: tuck > 0.002 || force)
     }
 
     /// Test / tool access: the embedded foot's render vertices (the beans' sole contacts come from `Skinner.beanFirst`).

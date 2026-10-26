@@ -347,7 +347,9 @@ struct GaitDriver {
             let sy = launch - 0.06 * amp * sinf(.pi * v)
             let xzAir = cartSide != 0 ? from + (to - from) * smooth(u) : from
             setUpright(sim, xz: xzAir, yaw: yaw0, squash: sy, lift: h + sim.restCentroid.y * 0.06 * amp * sinf(.pi * v), strength: kFlip)       // the tuck lowers the centre: lift it back so the apex is the centre's (only the tuck: the crouch's squash rises out of the floor by itself, not in one step)
-            tuckFeet(sim, u: u, amp: 0, ramp: Self.flipFootGrip)       // (the soles already follow the rigid crouch pose, see the crouch case: no catch-up kick at take-off)
+            // 2026-10-25 (legs2): NO sim-sole targets in the air. They pulled the foot slab toward the ATTRACTOR's pose while the soft body lags it by tens of
+            // degrees in a flip / cartwheel, so the embedded feet stretched off the surface ("feet come off"). The feet are the rigid beans there (`beanForce`).
+            if !sim.targets.isEmpty { sim.targets = [] }; tuck = 0
             if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 }; if cartSide != 0 { from = to } }
 
         case .land where move == .flip && flipFail:
