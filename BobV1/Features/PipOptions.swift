@@ -11,46 +11,83 @@ import Foundation
 
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
-    static let count = 6
-    static let startFraction: Float = 0.74          // of his height, on the back silhouette line
+    static let count = 7
+    static let startFraction: Float = 0.82          // of his height, on the back silhouette line
     static let tailEnd: Double = 0.85               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
-    static let tiltDeg: Float = 12                  // each spike leans this far from the surface normal toward the tail
+    static let tiltDeg: Float = 30                  // each spike leans this far from the surface normal toward the tail
     static let slim: Float = 0.8                    // sideways thinning
     static let backFractions: [Float] = [0]          // (marker: the back spikes are rigid on the skin, see FeatureSet.partRotation)
     /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
 
-    struct Mesh {
-        var pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = [], idx: [UInt32] = []
-        /// A template spike of the shipped Pip art with its sunk base (pivot) at `base`, pointing along `normal`, scaled `s` about the base.
-        mutating func spike(_ part: String, base: SIMD3<Float>, normal: SIMD3<Float>, scale s: Float, spec: FeatureSpec) {
-            guard let art = FeatureMeshes.art("pip_c_final"), let p = art.parts.first(where: { $0.name == part }),
-                  let sp = spec.spines.first(where: { $0.part == part }) else { return }
-            let crown = SIMD3<Float>(0, spec.top, 0)
-            let n0 = simd_normalize(sp.normal.v3), piv = crown + sp.pivot.v3
-            let q = simd_quatf(from: n0, to: simd_normalize(normal))
-            let off = UInt32(pos.count)
-            for k in 0..<p.positions.count {
-                var lv = (crown + p.positions[k]) - piv; lv.x *= PipSpikes.slim                  // slimmer sideways
-                pos.append(base + q.act(lv) * s)
-                nrm.append(q.act(p.normals[k])); col.append(p.colors[k]); ao.append(p.ao[k])
-            }
-            idx += p.indices.map { $0 + off }
+    /// The orange of the shipped spikes: the base tone and the lighter tip tone (sampled from the art: lowest / highest vertices along the spike).
+    static func tones(spec: FeatureSpec) -> (base: SIMD3<Float>, tip: SIMD3<Float>) {
+        guard let art = FeatureMeshes.art("pip_c_final"), let p = art.parts.first(where: { $0.name == "spike_00" }), let sp = spec.spines.first(where: { $0.part == "spike_00" }) else {
+            return (SIMD3(0.72, 0.30, 0.06), SIMD3(0.95, 0.55, 0.15))
         }
+        let n0 = simd_normalize(sp.normal.v3), piv = sp.pivot.v3
+        let order = p.positions.indices.sorted { simd_dot(p.positions[$0] - piv, n0) < simd_dot(p.positions[$1] - piv, n0) }
+        func mean(_ idx: ArraySlice<Int>) -> SIMD3<Float> { idx.reduce(SIMD3<Float>(0, 0, 0)) { $0 + p.colors[$1] } / Float(max(idx.count, 1)) }
+        let k = max(order.count / 6, 1)
+        return (mean(order[0..<k]), mean(order[(order.count - k)...]))
     }
 
-    /// Base width (along the spike's lean plane) of a template, measured just above its sunk base.
-    static func baseWidth(_ part: String, spec: FeatureSpec) -> Float {
-        guard let art = FeatureMeshes.art("pip_c_final"), let p = art.parts.first(where: { $0.name == part }), let sp = spec.spines.first(where: { $0.part == part }) else { return 0.1 }
-        let crown = SIMD3<Float>(0, spec.top, 0), piv = crown + sp.pivot.v3, n0 = simd_normalize(sp.normal.v3)
-        let along = simd_normalize(simd_cross(SIMD3<Float>(1, 0, 0), n0))
-        var lo = Float.infinity, hi = -Float.infinity
-        for q in p.positions {
-            let lv = crown + q - piv, h = simd_dot(lv, n0)
-            if h > 0.02 && h < 0.07 { let a = simd_dot(lv, along); lo = min(lo, a); hi = max(hi, a) }
+    struct Mesh {
+        var pos: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = [], idx: [UInt32] = []
+        /// A clean slightly pointed cone: sunk base with a soft flare that blends into the skin, straight taper to a softly rounded tip (like the tail's), smooth normals.
+        mutating func cone(base: SIMD3<Float>, axis a: SIMD3<Float>, height H: Float, baseR b: Float, lateral: SIMD3<Float>, tones t: (base: SIMD3<Float>, tip: SIMD3<Float>)) {
+            let seg = 18, tipR = 0.11 * b
+            var u0 = lateral - a * simd_dot(lateral, a); u0 = simd_normalize(u0)
+            let v0 = simd_cross(a, u0)
+            var prof: [(h: Float, r: Float)] = []
+            prof.append((-0.35 * b, 1.30 * b))                              // buried flare
+            prof.append((0, 1.12 * b))
+            prof.append((0.06 * H, 1.0 * b))
+            let nBody = 7
+            let hTip = H - tipR
+            for i in 1...nBody {
+                let u = Float(i) / Float(nBody)
+                let h = 0.06 * H + (hTip - 0.06 * H) * u
+                let r = tipR + (b - tipR) * (1 - (h - 0.06 * H) / (hTip - 0.06 * H))                   // straight cone
+                prof.append((h, r))
+            }
+            let base0 = UInt32(pos.count)
+            var rings = 0
+            func slopeAngle(_ i: Int) -> Float {
+                let a0 = prof[max(i - 1, 0)], a1 = prof[min(i + 1, prof.count - 1)]
+                return atanf(-(a1.r - a0.r) / max(a1.h - a0.h, 1e-5))
+            }
+            func color(_ h: Float) -> SIMD3<Float> { let u = max(0, min(1, h / H)); let w = u * u * (3 - 2 * u); return t.base + (t.tip - t.base) * w }
+            for (i, p) in prof.enumerated() {
+                let al = slopeAngle(i)
+                for j in 0..<seg {
+                    let ph = 2 * Float.pi * Float(j) / Float(seg)
+                    let rad = u0 * (cosf(ph) * PipSpikes.slim) + v0 * sinf(ph)
+                    let radN = simd_normalize(u0 * (cosf(ph) / PipSpikes.slim) + v0 * sinf(ph))
+                    pos.append(base + a * p.h + rad * p.r)
+                    nrm.append(simd_normalize(radN * cosf(al) + a * sinf(al))); col.append(color(p.h)); ao.append(1)
+                }
+                rings += 1
+            }
+            let capRings = 4
+            for k in 1...capRings {                                           // the softly rounded tip: a small hemisphere
+                let th = Float.pi / 2 * Float(k) / Float(capRings)
+                for j in 0..<seg {
+                    let ph = 2 * Float.pi * Float(j) / Float(seg)
+                    let rad = u0 * (cosf(ph) * PipSpikes.slim) + v0 * sinf(ph)
+                    let radN = simd_normalize(u0 * (cosf(ph) / PipSpikes.slim) + v0 * sinf(ph))
+                    pos.append(base + a * (hTip + tipR * sinf(th)) + rad * (tipR * cosf(th)))
+                    nrm.append(simd_normalize(radN * cosf(th) + a * sinf(th))); col.append(color(H)); ao.append(1)
+                }
+                rings += 1
+            }
+            for i in 0..<(rings - 1) { for j in 0..<seg {
+                let p0 = base0 + UInt32(i * seg + j), p1 = base0 + UInt32(i * seg + (j + 1) % seg)
+                let p2 = base0 + UInt32((i + 1) * seg + j), p3 = base0 + UInt32((i + 1) * seg + (j + 1) % seg)
+                idx += [p0, p2, p1, p1, p2, p3]
+            } }
         }
-        return hi > lo ? hi - lo : 0.1
     }
 
     static func build(body: WearBody, spec: FeatureSpec) -> FeaturePrepared {
@@ -79,7 +116,8 @@ nonisolated enum PipSpikes {
         var arc: [Float] = [0]
         for i in 1..<curve.count { arc.append(arc[i - 1] + simd_distance(curve[i].p, curve[i - 1].p)) }
         let L = arc.last ?? 1, d = L / (Float(count) - 0.5)
-        let wt: Float = 0.10                              // the shipped spike's base width at scale 1 (measured by eye on the renders)
+        let tn0 = tones(spec: spec)
+        let tn = (base: tn0.base * 0.85, tip: tn0.base * 1.08)          // the shipped orange, a little deeper (the art's pale tip washes out on a thin cone)
         var widths: [Float] = [], centres: [Float] = []
         let first = m.pos.count
         var tailFirst = -1
@@ -91,22 +129,21 @@ nonisolated enum PipSpikes {
             let nrm = simd_normalize(curve[i - 1].n * (1 - a) + curve[i].n * a)
             var tg = curve[min(i + 1, curve.count - 1)].p - curve[max(i - 2, 0)].p
             tg -= nrm * simd_dot(tg, nrm); tg = simd_normalize(tg)
-            // size from the spacing: biggest at index 1, stepping smoothly down to 45% at the last spike; the base width never exceeds 55% of the spacing
-            let taper: Float = k == 0 ? 0.85 : (k == 1 ? 1.0 : 1.0 - 0.55 * Float(k - 1) / Float(count - 2))
-            let w = taper * widthOfSpacing * d
-            let scale = min(w / wt, taper * 0.85 * d / 0.2022)        // base never over 55% of the spacing, and the HEIGHT stays under the spacing too (no leaning onto the neighbour)
-            widths.append(w); centres.append(sK)
+            // size from the spacing: small at the top, largest at the lower back (index 3), then tapering down along the tail; base width <= 55% of the spacing
+            let taper: [Float] = [0.62, 0.78, 0.92, 1.0, 0.82, 0.62, 0.45]
+            let H = taper[k] * 1.3 * d, bR = 0.30 * H
+            widths.append(2 * bR); centres.append(sK)
             let ax = simd_normalize(nrm * cosf(tiltDeg * .pi / 180) + tg * sinf(tiltDeg * .pi / 180))
-            let base = p - nrm * (0.03 * scale)
+            let base = p - nrm * (0.2 * bR)
             let isTail = i - 1 >= backCount
             let start = m.pos.count
-            m.spike("spike_00", base: base, normal: ax, scale: scale, spec: spec)
+            m.cone(base: base, axis: ax, height: H, baseR: bR, lateral: SIMD3(1, 0, 0), tones: tn)
             if isTail { if tailFirst < 0 { tailFirst = start } } else { parts.append(("spike\(k)", start, m.pos.count - start, base)) }
         }
         var gap = Float.infinity
         for k in 1..<count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
         lastLayout = (d, widths, gap)
-        assert(gap > 0.3 * d, "Pip's spikes overlap")
+        assert(gap > 0.15 * d, "Pip's spikes overlap")
         _ = first
         let root = f3(sh.root)
         if tailFirst >= 0 { parts.append(("tail", tailFirst, m.pos.count - tailFirst, root)) }
