@@ -16,6 +16,7 @@ struct SettingsScreen: View {
     @Bindable private var hub = AudioHub.shared
     private var theme = ThemeStore.shared
     @State private var showA11y = false
+    @State private var matchIcon = AppIconSwitcher.enabled
     @State private var confirmReset = false
     @State private var replayIntro = UserDefaults.standard.integer(forKey: "Intro") != 0
     @State private var followReal = DayClock.shared.followReal
@@ -92,14 +93,22 @@ struct SettingsScreen: View {
             HStack(alignment: .top, spacing: 16) {
                 ThemeMiniPreview(palette: pal).frame(width: 96, height: 210).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Theme colour").font(CloudTheme.font(15, .semibold)).foregroundStyle(ink.opacity(0.8))
+                    HStack(spacing: 10) {
+                        Text("Theme colour").font(CloudTheme.font(15, .semibold)).foregroundStyle(ink.opacity(0.8))
+                        Spacer(minLength: 4)
+                        ThemeIconView(preset: theme.currentPreset).frame(width: 56, height: 56)
+                            .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+                            .accessibilityLabel("App icon preview")
+                    }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 10)], spacing: 10) {
                         ForEach(ThemePreset.allCases) { p in swatch(p) }
                     }
-                    ColorPicker(selection: Binding(get: { theme.customColor }, set: { theme.chooseCustom($0) }), supportsOpacity: false) {
-                        Text("Custom colour").font(CloudTheme.font(15, .semibold)).foregroundStyle(ink)
+                    Toggle(isOn: $matchIcon) {
+                        Text("Match app icon to theme").font(CloudTheme.font(15, .semibold)).foregroundStyle(ink)
                     }
-                    .accessibilityIdentifier("theme-custom")
+                    .tint(pal.newGame)
+                    .onChange(of: matchIcon) { _, on in AppIconSwitcher.enabled = on; if on { AppIconSwitcher.apply(theme.currentPreset) } }
+                    .accessibilityIdentifier("theme-match-icon")
                 }
             }
         }
@@ -266,7 +275,7 @@ struct ThemeMiniPreview: View {
                 .frame(width: 440, height: 956)
                 .scaleEffect(k, anchor: .topLeading)
                 .frame(width: 96, height: 956 * k, alignment: .topLeading)
-            Image("JelbiesLogo").resizable().scaledToFit().frame(width: 364 * k)
+            Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: 364 * k)
                 .shadow(color: palette.shadow, radius: 0, y: 7 * k)
                 .position(x: 48, y: 250 * k)
             VStack(spacing: 6 * k) {

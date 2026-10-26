@@ -87,33 +87,131 @@ enum ThemeMath {
     }
 }
 
-/// The saved choice. `selection` is a preset's raw value or "custom:RRGGBB".
+/// The saved choice: a preset's raw value. (Older builds could save "custom:RRGGBB"; that migrates to the nearest preset.)
 @Observable @MainActor final class ThemeStore {
     static let shared = ThemeStore()
     static let key = "ThemeColor.v1"
     var selection: String { didSet { if selection != oldValue { UserDefaults.standard.set(selection, forKey: Self.key) } } }
 
-    init() { selection = UserDefaults.standard.string(forKey: Self.key) ?? ThemePreset.sky.rawValue }
+    init() {
+        let saved = UserDefaults.standard.string(forKey: Self.key) ?? ThemePreset.sky.rawValue
+        if ThemePreset(rawValue: saved) != nil { selection = saved }
+        else if saved.hasPrefix("custom:"), let v = UInt32(saved.dropFirst(7), radix: 16) {
+            selection = ThemePreset.nearest(toHex: v).rawValue
+            UserDefaults.standard.set(selection, forKey: Self.key)
+        } else { selection = ThemePreset.sky.rawValue }
+    }
 
     var preset: ThemePreset? { ThemePreset(rawValue: selection) }
-    var palette: ThemePalette {
-        if let p = preset { return ThemeMath.palette(p) }
-        if selection.hasPrefix("custom:"), let v = UInt32(selection.dropFirst(7), radix: 16) {
-            // one colour in: keep the hue, clamp lightness so the derived palette stays readable
-            let (h, s, b) = ThemeMath.hsb(ThemeMath.ui(v))
-            let bg = UIColor(hue: h, saturation: min(max(s, 0.25), 0.85), brightness: min(max(b, 0.3), 0.92), alpha: 1)
-            return ThemeMath.palette(id: selection, bg: bg)
+    var currentPreset: ThemePreset { preset ?? .sky }
+    var palette: ThemePalette { ThemeMath.palette(currentPreset) }
+    /// The logo's outline tone for this theme: the accent itself, deepened only where needed to reach 3:1 on white.
+    var logoOutline: Color { currentPreset.logoRim.map { Color(hex: $0) } ?? palette.rim }
+    func choose(_ p: ThemePreset) {
+        selection = p.rawValue
+        AppIconSwitcher.syncIfEnabled(p)
+    }
+}
+
+extension ThemePreset {
+    /// Deeper logo outline (the accent itself, deepened only where a preset is under 3:1 on white).
+    var logoRim: UInt32? {
+        switch self {
+        case .pink: 0xD9668F; case .mint: 0x2E9C78; case .lavender: 0x7A66CC; case .yellow: 0xC08A1E
+        case .peach: 0xD9774A; case .teal: 0x1F8A8D; case .sky: 0x5A97D6; case .navy: 0x26335F
         }
-        return ThemeMath.palette(.sky)
     }
-    func choose(_ p: ThemePreset) { selection = p.rawValue }
-    func chooseCustom(_ c: Color) {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
-        selection = String(format: "custom:%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+    static func nearest(toHex v: UInt32) -> ThemePreset {
+        func c(_ h: UInt32) -> (Double, Double, Double) { (Double(h >> 16 & 255), Double(h >> 8 & 255), Double(h & 255)) }
+        let a = c(v)
+        return allCases.min { l, r in dist(a, c(l.hex)) < dist(a, c(r.hex)) } ?? .sky
     }
-    var customColor: Color {
-        if selection.hasPrefix("custom:"), let v = UInt32(selection.dropFirst(7), radix: 16) { return Color(hex: v) }
-        return Color(hex: 0x8B5CF6)
+    private static func dist(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> Double {
+        (a.0 - b.0) * (a.0 - b.0) + (a.1 - b.1) * (a.1 - b.1) + (a.2 - b.2) * (a.2 - b.2)
+    }
+    /// Alternate app icon set name; Sky Blue is the primary icon (nil).
+    var alternateIconName: String? { self == .sky ? nil : "AppIcon-" + rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+    /// Suffix of the pre-rendered intro clip ("jelbies_intro_<id>"); Sky Blue uses the original.
+    var introResource: String { "jelbies_intro_" + rawValue }
+}
+
+/// Switches the home-screen icon to match the theme ("Match app icon to theme", on by default).
+enum AppIconSwitcher {
+    static let key = "ThemeIcon.match.v1"
+    static var enabled: Bool {
+        get { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+    @MainActor static func syncIfEnabled(_ p: ThemePreset) { if enabled { apply(p) } }
+    @MainActor static func apply(_ p: ThemePreset) {
+        let app = UIApplication.shared
+        guard app.supportsAlternateIcons, app.alternateIconName != p.alternateIconName else { return }
+        app.setAlternateIconName(p.alternateIconName) { _ in }
+    }
+}
+
+/// Recolours the logo's blue-to-white ramp onto outline-to-white (see LogoTint.metal). 
+extension View {
+    @MainActor func themedLogo() -> some View {
+        colorEffect(ShaderLibrary.logoTint(.color(ThemeStore.shared.logoOutline)))
+    }
+}
+
+/// The "Peek" app icon's colours for a theme (mirrors tools/themeicon/make_theme_assets.py).
+struct IconPalette {
+    var bg, body, line, ink, hi, shine: Color
+    init(_ p: ThemePreset) {
+        let (h, s, b) = ThemeMath.hsb(ThemeMath.ui(p.hex))
+        let dark = b < 0.45
+        func hsb(_ s: CGFloat, _ b: CGFloat) -> Color { Color(UIColor(hue: h, saturation: min(max(s, 0), 1), brightness: min(max(b, 0), 1), alpha: 1)) }
+        bg = Color(hex: p.hex); body = .white; hi = .white
+        line = dark ? hsb(s, b + 0.3) : hsb(s + 0.1, b * 0.72)
+        ink = hsb(s * 0.9 + 0.1, min(b * 0.4, 0.28))
+        shine = hsb(s * 0.3, 1)
+    }
+}
+
+struct ThemeIconView: View {
+    let preset: ThemePreset
+    var body: some View {
+        Canvas { ctx, size in
+            let pal = IconPalette(preset)
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(pal.bg))
+            let k = size.width / 1024
+            var body = Path()
+            body.move(to: CGPoint(x: 0, y: -545))
+            body.addCurve(to: CGPoint(x: 500, y: 0), control1: CGPoint(x: 276, y: -545), control2: CGPoint(x: 500, y: -301))
+            body.addCurve(to: CGPoint(x: 0, y: 1100), control1: CGPoint(x: 500, y: 608), control2: CGPoint(x: 276, y: 1100))
+            body.addCurve(to: CGPoint(x: -500, y: 0), control1: CGPoint(x: -276, y: 1100), control2: CGPoint(x: -500, y: 608))
+            body.addCurve(to: CGPoint(x: 0, y: -545), control1: CGPoint(x: -500, y: -301), control2: CGPoint(x: -276, y: -545))
+            body.closeSubpath()
+            let t = CGAffineTransform(translationX: 512 * k, y: 700 * k).scaledBy(x: 0.84 * k, y: 0.84 * k)
+            let bp = body.applying(t)
+            ctx.fill(bp, with: .color(pal.line))
+            ctx.stroke(bp, with: .color(pal.line), style: StrokeStyle(lineWidth: 52 * 0.84 * k, lineJoin: .round))
+            ctx.fill(bp, with: .color(pal.body))
+            func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: 512 * k + x * 0.84 * k, y: 700 * k + y * 0.84 * k) }
+            func E(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, _ c: Color) {
+                let m = P(cx, cy)
+                ctx.fill(Path(ellipseIn: CGRect(x: m.x - rx * 0.84 * k, y: m.y - ry * 0.84 * k, width: 2 * rx * 0.84 * k, height: 2 * ry * 0.84 * k)), with: .color(c))
+            }
+            var arc = Path()
+            let a0 = atan2(-137.5 / 445, -385.2 / 405), a1 = atan2(-350.7 / 445, -249.3 / 405)
+            for i in 0...40 {
+                let a = a0 + (a1 - a0) * Double(i) / 40
+                let q = P(405 * cos(a), 445 * sin(a))
+                if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) }
+            }
+            ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 44 * 0.84 * k, lineCap: .round))
+            E(-164.7, -406.5, 22, 22, pal.shine)
+            for sx: CGFloat in [-1, 1] {
+                var brow = Path(); brow.move(to: P(sx < 0 ? -260 : 120, -191)); brow.addLine(to: P(sx < 0 ? -120 : 260, -191))
+                ctx.stroke(brow, with: .color(pal.ink), style: StrokeStyle(lineWidth: 36 * 0.84 * k, lineCap: .round))
+                E(190 * sx, -65, 56, 72, pal.ink)
+                E(sx * 190 - sx * 17.9, -93.8, 16.8, 19.4, pal.hi)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(.rect(cornerRadius: 22, style: .continuous))
     }
 }
