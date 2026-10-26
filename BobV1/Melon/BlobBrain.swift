@@ -286,6 +286,8 @@ final class BlobBrain {
     var shoesWorn = false
     var beanGrowTime: Float = 0.12
     var beanFirstIdx: [Int] = []
+    /// Pip's tail block in the render mesh (-1 = none) and whether it shows now: Pip only, not while he lies on his back / flips (like the spikes).
+    var tailFirstIdx = -1
     var retractReady = false
     var beanScratch: [[SIMD3<Float>]] = [[], []]
     /// Planted boot (0) ... lifted ball (1) morph of each foot bean as last drawn (tests / captures).
@@ -476,6 +478,7 @@ final class BlobBrain {
         renderRest = rm.rest
         guard let cap = rm.armCapsule else { return }
         beanFirstIdx = [cap.beanFirst(side: -1), cap.beanFirst(side: 1)]
+        tailFirstIdx = cap.tailFirst
         armFirstIdx = [cap.first(side: -1), cap.first(side: 1)]
         let rest = rm.rest, mat = rm.mat, scale = Self.waveArmScale
         let index = rm.index
@@ -1506,6 +1509,8 @@ final class BlobBrain {
     /// Fade of the rigid render foot over a swing: in over the first 20 % (squared, so the first frame is < 2 mm), out over the last 20 % (no pop at lift-off / touch-down).
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
+        skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
         var list: [ParticleTarget] = []
         let beanLive = beanG > 0 || beanHold > 0 || shoesWorn
         let footOn = feetInit && geom.valid && feetDrive && (poseW > 0 || beanLive) && debugFeet

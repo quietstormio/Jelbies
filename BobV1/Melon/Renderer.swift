@@ -881,6 +881,7 @@ final class MelonRenderer {
                 let a = info.first(side: side), e = info.beanFirst(side: side) + FootBean.vertexCount
                 for i in a..<min(e, f.count) { f[i] = 0 }
             }
+            if info.tailFirst >= 0 { for i in info.tailFirst..<min(info.tailFirst + TailBean.vertexCount, f.count) { f[i] = 0 } }
         }
         eggFlagBuf = device.makeBuffer(bytes: f, length: max(f.count, 1), options: .storageModeShared)
         eggFlagBuf?.label = "jersey egg flags"
