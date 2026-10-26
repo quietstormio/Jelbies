@@ -187,7 +187,7 @@ struct VolleyChrome: View {
                     Spacer(minLength: 0).allowsHitTesting(false)
                 }
                 if !volley.ui.calls.isEmpty {
-                    TimelineView(.animation) { _ in
+                    TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
                         ZStack {
                             ForEach(volley.ui.calls, id: \.self) { i in
                                 if volley.bodyPos.indices.contains(i), let pt = GameCamera.screenPoint(floor: SIMD2(volley.bodyPos[i].x, volley.bodyPos[i].z), y: volley.bodyPos[i].y + 0.75, size: g.size) {

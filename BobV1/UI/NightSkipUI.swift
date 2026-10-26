@@ -73,7 +73,7 @@ struct NightSkipVeil: View {
 
 private struct StarsAndZzz: View {
     var body: some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height, u = min(w, h) / 400

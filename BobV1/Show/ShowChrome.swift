@@ -384,7 +384,7 @@ struct PromptLane: View {
     let care: GameCare
     var body: some View {
         let show = care.show
-        TimelineView(.animation) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.songTime(of: show.track) ?? show.song
             let items = (show.isPractice ? show.practice?.visible(at: song) : show.sim?.dance?.visible(at: song)) ?? []
             ZStack(alignment: .leading) {
@@ -461,7 +461,7 @@ struct TrickRound: View {
         let outer = body.radius * 2.6, inner = body.radius * 1.15
         return ZStack {
             Circle().strokeBorder(ShowUI.light.opacity(0.6), style: StrokeStyle(lineWidth: 2.5, dash: [4, 7])).frame(width: outer * 2, height: outer * 2).position(body.centre)
-            TimelineView(.animation(paused: show.trickStage != .ring)) { _ in
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: show.trickStage != .ring)) { _ in
                 let p = show.trickStage == .ring ? min(max(CGFloat(show.ringProgress), 0), 1.3) : 0
                 let r = outer + (inner - outer) * min(p, 1)
                 Circle().strokeBorder(p > 1 ? ShowUI.goldDeep.opacity(0.5) : ShowUI.gold, lineWidth: 5).frame(width: r * 2, height: r * 2).position(body.centre)
@@ -610,7 +610,7 @@ struct Confetti: View {
     }
 
     private var confetti: some View {
-        TimelineView(.animation) { ctx in
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
             let t = ctx.date.timeIntervalSince(start)
             Canvas { g, _ in
                 guard t < 1.8 else { return }

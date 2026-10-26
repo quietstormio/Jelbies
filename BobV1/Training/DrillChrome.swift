@@ -176,7 +176,7 @@ struct DrillChrome: View {
     }
 
     private var promptRow: some View {
-        TimelineView(.animation) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.trainingSongTime() ?? race.drillState.song
             let items = race.drill?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
