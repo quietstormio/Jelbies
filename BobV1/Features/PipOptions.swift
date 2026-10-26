@@ -158,6 +158,7 @@ nonisolated enum PipOptions {
         let h = ymax - ymin
         var m = Mesh()
         var pivotPoint = SIMD3<Float>.zero
+        var sparts: [(String, Int, Int, SIMD3<Float>)] = []
         switch opt {
         case "A":
             // a plump kawaii comma: a very wide base (about half his height tall, centred at 30%) melting into the lower back, tapering quickly into a short
@@ -201,14 +202,18 @@ nonisolated enum PipOptions {
             }
             pivotPoint = o
         case "B":
-            let n = 7
-            for k in 0..<n {
-                let t = Float(k) / Float(n - 1)
-                let yy = ymin + (0.80 - 0.45 * t) * h                     // shoulder line -> lower back
-                let c = centre(body, y: yy, back: true)
-                m.spike("spike_03", base: c.p - c.n * 0.03, normal: c.n, scale: 1.45 - 0.5 * t, spec: spec)
+            // the ORIGINAL spikes (exact mesh / colour, scale 1.0) in a single row down his back, from just below the hat brim (~70% height) to the lower back
+            // (~30%); largest in the middle. One rigid part per spike on its own sunk, surface-bound pivot, so each follows the skin like the old ones.
+            let fr: [Float] = [0.69, 0.585, 0.485, 0.39, 0.30]
+            let tpl = ["spike_03", "spike_01", "spike_00", "spike_01", "spike_02"]
+            for k in 0..<fr.count {
+                let c = centre(body, y: ymin + fr[k] * h, back: true)
+                let first = m.pos.count
+                let base = c.p - c.n * 0.03
+                m.spike(tpl[k], base: base, normal: simd_normalize(c.n + SIMD3(0, 0.4, 0)), scale: 1.0, spec: spec)
+                sparts.append(("spike\(k)", first, m.pos.count - first, base))
             }
-            pivotPoint = centre(body, y: ymin + 0.55 * h, back: true).p
+            pivotPoint = centre(body, y: ymin + 0.5 * h, back: true).p
         case "C":
             let root = centre(body, y: ymin + 0.38 * h, back: true)
             let o = root.p
@@ -224,7 +229,7 @@ nonisolated enum PipOptions {
         _ = pivotPoint
         // D's cheek bolts: tangent-plane zig-zag strokes, flattened onto the skin
         var parts: [(String, Int, Int, SIMD3<Float>)] = []
-        parts.append(("main", 0, m.pos.count, pivotPoint))
+        if sparts.isEmpty { parts.append(("main", 0, m.pos.count, pivotPoint)) } else { parts = sparts }
         if opt == "D" {
             for side: Float in [-1, 1] {
                 let f = front(body, x: 0.36 * side, y: 0.60)

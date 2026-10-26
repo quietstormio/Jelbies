@@ -460,7 +460,7 @@ final class FeatureCaptureTests: XCTestCase {
 
     // MARK: Pip signature-feature prototypes (PipOptions)
 
-    private func pipTiles(_ o: Character, hop: Bool = false) throws -> [UIImage] {
+    private func pipTiles(_ o: Character, hop: Bool = false, beret: Bool = false) throws -> [UIImage] {
         PipOptions.current = o
         FeatureMeshes.clearCache()
         defer { PipOptions.current = nil; FeatureMeshes.clearCache() }
@@ -479,7 +479,13 @@ final class FeatureCaptureTests: XCTestCase {
                 r.brain.feature = .spines
             })
         }
+        if beret { t.append(try closeup(Char(id: 1, outfit: [.head: .beret]), yaw: 0.7, label: "\(o): beret 3/4")) }
         return t
+    }
+    func testCapturePipBackRidge() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        let t = try pipTiles("B", hop: true, beret: true)
+        try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6]))]), d + "/pip_back_ridge.png")
     }
     func testCapturePipDinoTail() throws {
         let d = try dir(); DayClock.shared.forcedHour = 12
