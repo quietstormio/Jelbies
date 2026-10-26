@@ -274,10 +274,10 @@ struct TitleBackdrop: View {
                     sc.fill(Self.sparkle(x * sx, y * sy, r * sk * (landscape ? 1.2 : 1), t), with: .color(.white))
                 }
                 // Peeking Jelbie
-                let scale: Double = landscape ? (h * 0.40 / 102) : 2.4 * w / 440
+                let scale: Double = landscape ? h * 0.0087 : 4.8 * w / 440      // zoomed in: just the head dome, brows and eyes
                 let cx = landscape ? w * 0.5 : w / 2
                 let bob = still ? 0 : -10 * (w / 440) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
-                let cy = landscape ? h + bob + 0.03 * h : h - 36 * (w / 440) + bob
+                let cy = 0.91 * h + 14 * scale + bob                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)

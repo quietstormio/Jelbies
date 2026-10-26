@@ -105,8 +105,8 @@ enum ThemeMath {
     var preset: ThemePreset? { ThemePreset(rawValue: selection) }
     var currentPreset: ThemePreset { preset ?? .sky }
     var palette: ThemePalette { ThemeMath.palette(currentPreset) }
-    /// The logo's outline tone for this theme (the palette's rim; Sky Blue keeps the original #8DB8E0).
-    var logoOutline: Color { palette.rim }
+    /// The logo's outline tone for this theme: the accent itself, deepened only where needed to reach 3:1 on white.
+    var logoOutline: Color { currentPreset.logoRim.map { Color(hex: $0) } ?? palette.rim }
     func choose(_ p: ThemePreset) {
         selection = p.rawValue
         AppIconSwitcher.syncIfEnabled(p)
@@ -114,6 +114,13 @@ enum ThemeMath {
 }
 
 extension ThemePreset {
+    /// Deeper logo outline (the accent itself, deepened only where a preset is under 3:1 on white).
+    var logoRim: UInt32? {
+        switch self {
+        case .pink: 0xD9668F; case .mint: 0x2E9C78; case .lavender: 0x7A66CC; case .yellow: 0xC08A1E
+        case .peach: 0xD9774A; case .teal: 0x1F8A8D; case .sky: 0x5A97D6; case .navy: 0x26335F
+        }
+    }
     static func nearest(toHex v: UInt32) -> ThemePreset {
         func c(_ h: UInt32) -> (Double, Double, Double) { (Double(h >> 16 & 255), Double(h >> 8 & 255), Double(h & 255)) }
         let a = c(v)
@@ -125,7 +132,7 @@ extension ThemePreset {
     /// Alternate app icon set name; Sky Blue is the primary icon (nil).
     var alternateIconName: String? { self == .sky ? nil : "AppIcon-" + rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
     /// Suffix of the pre-rendered intro clip ("jelbies_intro_<id>"); Sky Blue uses the original.
-    var introResource: String { self == .sky ? "jelbies_intro" : "jelbies_intro_" + rawValue }
+    var introResource: String { "jelbies_intro_" + rawValue }
 }
 
 /// Switches the home-screen icon to match the theme ("Match app icon to theme", on by default).
@@ -143,7 +150,7 @@ enum AppIconSwitcher {
     }
 }
 
-/// Recolours the logo's blue-to-white ramp onto outline-to-white (see LogoTint.metal). Sky Blue is the identity.
+/// Recolours the logo's blue-to-white ramp onto outline-to-white (see LogoTint.metal). 
 extension View {
     @MainActor func themedLogo() -> some View {
         colorEffect(ShaderLibrary.logoTint(.color(ThemeStore.shared.logoOutline)))

@@ -11,7 +11,9 @@ def hsb(hx): return colorsys.rgb_to_hsv((hx>>16&255)/255,(hx>>8&255)/255,(hx&255
 def rgb(h,s,b):
     r,g,bl = colorsys.hsv_to_rgb(h,min(max(s,0),1),min(max(b,0),1)); return (round(r*255),round(g*255),round(bl*255))
 
-def outline(pid):   # the logo outline tone = the palette's rim
+LOGO_RIM={"sky":0x5A97D6,"navy":0x26335F,"pink":0xD9668F,"mint":0x2E9C78,"lavender":0x7A66CC,"yellow":0xC08A1E,"peach":0xD9774A,"teal":0x1F8A8D}
+def outline(pid):   # deeper logo outline; sky/navy use the palette rim
+    if pid in LOGO_RIM: h=LOGO_RIM[pid]; return (h>>16&255,h>>8&255,h&255)
     if pid=="sky": return (0x8D,0xB8,0xE0)
     h,s,b = hsb(PRESETS[pid]); dark = b<0.45
     return rgb(h, s*0.64, min(1, b+0.3 if dark else b+0.04))
@@ -75,7 +77,6 @@ def main():
     # intro videos
     src=f"{root}/BobV1/Start/Resources/jelbies_intro.mp4"
     for pid in PRESETS:
-        if pid=="sky": continue
         A=outline(pid); W=255; v=[W-BLUE[i] for i in range(3)]; vv=sum(x*x for x in v)
         t="clip(((255-r(X,Y))*%d+(255-g(X,Y))*%d+(255-b(X,Y))*%d)/%d,0,1)"%(v[0],v[1],v[2],vv)
         ch=lambda i:"255+(%d-255)*%s"%(A[i],t)

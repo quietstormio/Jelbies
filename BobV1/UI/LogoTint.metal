@@ -1,6 +1,6 @@
 //  LogoTint.metal
 //  Recolours the Jelbies logo: each pixel is projected onto the white-to-blue line (t = 0 white, 1 the logo's #8DB8E0-ish outline blue)
-//  and re-mixed as white-to-`outline`. Alpha is kept. With the Sky Blue outline this is the identity.
+//  and re-mixed as white-to-`outline`. Alpha is kept.
 #include <metal_stdlib>
 #include <SwiftUI/SwiftUI.h>
 using namespace metal;
