@@ -18,23 +18,24 @@ import simd
 extension SocialKind {
     /// The "we like each other" kinds (the Park gives friendship a bonus while one is on).
     var isFriendly: Bool {
-        switch self { case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: return true; default: return false }
+        switch self { case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround: return true; default: return false }
     }
 }
 
 enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
-    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 1.8), (.twirl, 2.0), (.hopAlong, 2.0)]
+    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 1.8), (.twirl, 2.0), (.hopAlong, 2.0),
+                                                      (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.noseBoop, 1.4), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
     /// How much a close pair raises the chance that a social starts at all (per unit of closeness above 1).
     static let pickBoost: Float = 0.4
     /// Per-character taste: the kinds a character likes a bit more (JellyFeature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender).
     static let taste: [JellyFeature: Set<SocialKind>] = [
-        .none: [.highFive, .chestBump],
-        .spines: [.chestBump, .highFive, .hopAlong],
-        .daisy: [.hum, .cheekSquish],
-        .wings: [.twirl, .hum, .hopAlong],
+        .none: [.highFive, .chestBump, .littleRace, .peekaboo],
+        .spines: [.chestBump, .highFive, .hopAlong, .tag, .leapfrog, .littleRace],
+        .daisy: [.hum, .cheekSquish, .noseBoop, .cuddleLean, .backToBack],
+        .wings: [.twirl, .hum, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
     ]
     static let tasteMul: Float = 1.5
 }
@@ -59,7 +60,7 @@ extension BlobBrain {
             if k.isFast && !fastOK { continue }
             if k == socialBook.lastKind || k == o.socialBook.lastKind { continue }
             var x = base * c
-            let tender = k == .hum || k == .cheekSquish
+            let tender = k == .hum || k == .cheekSquish || k == .cuddleLean || k == .backToBack || k == .noseBoop
             if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - 0.8 * night } }
             if taste.contains(k) { x *= FriendTuning.tasteMul }
             w.append((k, x))
@@ -81,10 +82,10 @@ extension BlobBrain {
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .chestBump, .highFive, .hum, .twirl:
             guard d > 0.5, d < 5.5 else { return false }
-            let gapK: Float = kind == .twirl ? 1.1 : (kind == .highFive ? 0.98 : 0.92)
+            let gapK: Float = kind == .twirl ? 1.1 : (kind == .highFive ? 0.70 : (kind == .hum ? 0.82 : 0.78))
             let away = (me - you) / max(d, 1e-3)
             let want = you + away * peerGap * gapK
-            let spot = fixed(want)
+            let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: kind == .hum ? vDur(4.6) : 0)
             s.goal = spot
@@ -110,7 +111,7 @@ extension BlobBrain {
     }
 
     /// The shared opening of the face-to-face kinds: the one who walked up (a) arrives, both square up and settle. True = still opening.
-    private func openFaceToFace(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
+    func openFaceToFace(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
         switch s.phase {
         case 0:
             if !isA { socialBook.hold = true; socialBook.faceYaw = yawTo(o.position); return true }
@@ -125,7 +126,7 @@ extension BlobBrain {
     }
 
     /// Same, side by side facing the room.
-    private func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
+    func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
         switch s.phase {
         case 0:
             if !isA { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw(); return true }
@@ -141,7 +142,7 @@ extension BlobBrain {
         }
     }
 
-    private func finishHappy(_ s: SocialSession, _ o: BlobBrain) {
+    func finishHappy(_ s: SocialSession, _ o: BlobBrain) {
         s.finish(.done)
         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
     }

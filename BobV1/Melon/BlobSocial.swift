@@ -48,6 +48,8 @@ enum SocialKind: String, CaseIterable, Sendable {
     case cheekSquish    // side by side: two gentle presses
     case twirl          // face to face: each spins once, then a bow
     case hopAlong       // side by side: one hops, the other copies half a second later
+    // 2026-10-26 (more friends): BlobSocial+Friends2.swift
+    case littleRace, tag, leapfrog, peekaboo, bellyBounce, mirrorDance, noseBoop, backToBack, cuddleLean, ringAround
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -80,6 +82,8 @@ enum SocialTuning {
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
     static let greetApart: Float = 20
     static let squabbleBase: Float = 0.35, squabbleGrumpy: Float = 3.0
+    /// Two on a close social (boop, bump, hug ...) stand this fraction of the usual gap apart (bodies ~1.0 wide: the stubby arm nubs reach nub to nub, the sides touch).
+    static let closeGapFactor: Float = 0.74
 }
 
 /// Per-brain bookkeeping and the render-side overlay state.
@@ -116,6 +120,11 @@ struct SocialBook {
     var wakeGreet: Float = -1
     var greetWho = -1
     var greetHop = false
+    /// A hop over a partner (leapfrog): the room's peer push does not move this Jelly while it is set.
+    var passThrough = false
+    var closePending = false
+    var contactCool: Float = 0
+    var contactPrev: [Int: Float] = [:]
 }
 
 final class SocialSession {
@@ -133,11 +142,13 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo }
     var round = 0, roles = 0, fastMoves = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
     var goal = SIMD2<Float>.zero
+    /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
+    var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }
     nonisolated deinit {}
     func involves(_ id: Int) -> Bool { id == idA || id == idB || id == idC }
@@ -186,7 +197,7 @@ extension BlobBrain {
 
     /// Centre distance this brain keeps from `id` (the closer gap for his boop / squabble partner only).
     func socialGap(at pos: SIMD2<Float>) -> Float {
-        if let s = social, s.closeOK, s.end == nil, let o = (s.a === self ? s.b : s.a), simd_distance(o.position, pos) < 0.05 { return peerGap * 0.92 }
+        if let s = social, s.closeOK, s.end == nil, let o = (s.a === self ? s.b : s.a), simd_distance(o.position, pos) < 0.05 { return peerGap * SocialTuning.closeGapFactor }
         return peerGap
     }
     var followGap: Float { max(1.15, peerGap + 0.15) }
@@ -312,6 +323,8 @@ extension BlobBrain {
             return socialStartPlay(kind, with: o, sim)
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong:
             return socialStartFriends(kind, with: o, sim)
+        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround:
+            return socialStartMore(kind, with: o, sim)
         case .zoomies:
             guard d < 6 else { return false }
             guard idleState.kind == nil else { return false }
@@ -470,6 +483,7 @@ extension BlobBrain {
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         let blocked = held || !autonomy
+        contactTick(dt)          // (the soft meeting: BlobBrain+Contact.swift)
         if !blocked { socialBook.cooldown -= dt }
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
@@ -509,7 +523,7 @@ extension BlobBrain {
 
     private func socialRelease(_ skinner: Skinner?, hard: Bool) {
         let s = social
-        socialBook.hold = false; socialBook.faceYaw = nil
+        socialBook.hold = false; socialBook.faceYaw = nil; socialBook.passThrough = false; leapGaitOff()
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
         if hard { socialBook.pitch = 0; socialBook.roll = 0; socialBook.squash = 1 }
         if socialBook.squinting { socialBook.squinting = false; skinner?.setEyeOpenness(1) }
@@ -614,6 +628,7 @@ extension BlobBrain {
         case .look: driveLook(s, o, isA, sim, dt)
         case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
+        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         }
         if let e = s.end, isA { _ = e }
     }

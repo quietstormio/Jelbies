@@ -1045,6 +1045,7 @@ final class BlobBrain {
             else { route = [] }
         }
         if let w = route.first { return w }
+        if let w = lookAheadSidestep(root, target) { route = [w]; return w }          // (curve round a Jelly early: BlobBrain+Contact.swift)
         if legClear(root, target, margin: steerMargin) { return target }
         if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless

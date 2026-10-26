@@ -25,7 +25,7 @@ extension BlobBrain {
         let dir: Float = position.x >= o.position.x ? 1 : -1
         for sgn in [dir, -dir] {
             let p = o.position + SIMD2(sgn * gap, 0)
-            let q = fixed(p)
+            let q = closeFixed(p)
             if simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) { return q }
         }
         return nil
@@ -386,7 +386,7 @@ extension BlobBrain {
     }
 
     /// A run goal 2.2...4 u away from where I stand that is as far as possible from `from` (the chaser).
-    private func awayGoal(from: SIMD2<Float>, minD: Float = 2.2, maxD: Float = 4.0) -> SIMD2<Float>? {
+    func awayGoal(from: SIMD2<Float>, minD: Float = 2.2, maxD: Float = 4.0) -> SIMD2<Float>? {
         var best: (SIMD2<Float>, Float)?
         for _ in 0..<7 {
             guard let g = pickRunGoal(from: position, minD: minD, maxD: maxD) else { continue }
