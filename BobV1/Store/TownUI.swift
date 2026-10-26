@@ -160,6 +160,7 @@ struct TownView: View {
     var home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @AppStorage("townCategory") private var categoryRaw = TownCategory.all.rawValue
 
     enum TownCategory: String, CaseIterable {
@@ -214,7 +215,7 @@ struct TownView: View {
                 VStack(spacing: 12) {
                     if !compact { MapStrip().frame(height: 84) }
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: compact ? 4 : 2), spacing: 12) {
-                        ForEach(shown) { p in tile(p) }
+                        ForEach(shown) { p in tile(p, compact: compact) }
                     }
                 }
                 .padding(.bottom, 16)
@@ -246,17 +247,33 @@ struct TownView: View {
         .padding(3).background(Capsule().fill(Color.white.opacity(0.8)))
     }
 
-    private func tile(_ p: Place) -> some View {
-        Button { AudioHub.shared.uiTap(); p.action() } label: {
-            VStack(spacing: 6) {
-                Image(systemName: p.symbol).font(.system(size: 28, weight: .heavy)).foregroundStyle(SK.ink)
-                    .frame(width: 58, height: 58).background(Circle().fill(p.color.opacity(0.85)))
-                Text(p.title).font(SK.font(17, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                Text(p.sub).font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            .padding(10).frame(maxWidth: .infinity).aspectRatio(1.1, contentMode: .fit)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
-            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    private func tile(_ p: Place, compact: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        return Button { AudioHub.shared.uiTap(); p.action() } label: {
+            Color.clear.aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    ZStack(alignment: .topLeading) {
+                        SK.card
+                        if !reduceTransparency {
+                            // a sneak peek of the place: low-opacity picture under a cream wash (decorative)
+                            Image("town_preview_" + p.id.replacingOccurrences(of: "town-", with: ""))
+                                .resizable().scaledToFill().opacity(0.3).accessibilityHidden(true)
+                            LinearGradient(colors: [SK.cream.opacity(0.55), SK.cream.opacity(0.88)], startPoint: .top, endPoint: .bottom)
+                        }
+                        VStack(alignment: .leading, spacing: 0) {
+                            Image(systemName: p.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink)
+                                .frame(width: 46, height: 46).background(Circle().fill(p.color.opacity(0.9)))
+                            Spacer(minLength: 4)
+                            Text(p.title).font(SK.font(compact ? 16 : 20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                            Text(p.sub).font(SK.font(compact ? 11 : 13, .bold)).foregroundStyle(SK.ink.opacity(0.85)).lineLimit(2).minimumScaleFactor(0.8)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                }
+                .clipShape(shape)
+                .background(shape.fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
+                .contentShape(shape)
         }
         .buttonStyle(TownTilePress())
         .accessibilityElement(children: .ignore).accessibilityLabel("\(p.title), \(p.sub)").accessibilityAddTraits(.isButton)
