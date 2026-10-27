@@ -176,39 +176,28 @@ struct ThemeIconView: View {
     var body: some View {
         Canvas { ctx, size in
             let pal = IconPalette(preset)
-            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(pal.bg))
             let k = size.width / 1024
-            var body = Path()
-            body.move(to: CGPoint(x: 0, y: -545))
-            body.addCurve(to: CGPoint(x: 500, y: 0), control1: CGPoint(x: 276, y: -545), control2: CGPoint(x: 500, y: -301))
-            body.addCurve(to: CGPoint(x: 0, y: 1100), control1: CGPoint(x: 500, y: 608), control2: CGPoint(x: 276, y: 1100))
-            body.addCurve(to: CGPoint(x: -500, y: 0), control1: CGPoint(x: -276, y: 1100), control2: CGPoint(x: -500, y: 608))
-            body.addCurve(to: CGPoint(x: 0, y: -545), control1: CGPoint(x: -500, y: -301), control2: CGPoint(x: -276, y: -545))
-            body.closeSubpath()
-            let t = CGAffineTransform(translationX: 512 * k, y: 700 * k).scaledBy(x: 0.84 * k, y: 0.84 * k)
-            let bp = body.applying(t)
-            ctx.fill(bp, with: .color(pal.line))
-            ctx.stroke(bp, with: .color(pal.line), style: StrokeStyle(lineWidth: 52 * 0.84 * k, lineJoin: .round))
-            ctx.fill(bp, with: .color(pal.body))
-            func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: 512 * k + x * 0.84 * k, y: 700 * k + y * 0.84 * k) }
+            ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(pal.bg))
             func E(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, _ c: Color) {
-                let m = P(cx, cy)
-                ctx.fill(Path(ellipseIn: CGRect(x: m.x - rx * 0.84 * k, y: m.y - ry * 0.84 * k, width: 2 * rx * 0.84 * k, height: 2 * ry * 0.84 * k)), with: .color(c))
+                ctx.fill(Path(ellipseIn: CGRect(x: (cx - rx) * k, y: (cy - ry) * k, width: 2 * rx * k, height: 2 * ry * k)), with: .color(c))
             }
+            // the round head dome (mirrors tools/themeicon/make_theme_assets.py)
+            let cx: CGFloat = 512, cy: CGFloat = 860, rx: CGFloat = 450, ry: CGFloat = 450, ow: CGFloat = 44
+            E(cx, cy, rx + ow / 2, ry + ow / 2, pal.line)
+            E(cx, cy, rx - ow / 2, ry - ow / 2, pal.body)
+            let a = rx - ow / 2 - 55, b = ry - ow / 2 - 55
+            func onArc(_ deg: Double) -> CGPoint { CGPoint(x: (cx + a * cos(deg * .pi / 180)) * k, y: (cy + b * sin(deg * .pi / 180)) * k) }
             var arc = Path()
-            let a0 = atan2(-137.5 / 445, -385.2 / 405), a1 = atan2(-350.7 / 445, -249.3 / 405)
-            for i in 0...40 {
-                let a = a0 + (a1 - a0) * Double(i) / 40
-                let q = P(405 * cos(a), 445 * sin(a))
-                if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) }
-            }
-            ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 44 * 0.84 * k, lineCap: .round))
-            E(-164.7, -406.5, 22, 22, pal.shine)
+            for i in 0...40 { let q = onArc(212 + Double(i) * 0.9); if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) } }
+            ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 40 * k, lineCap: .round))
+            let dot = onArc(204)
+            ctx.fill(Path(ellipseIn: CGRect(x: dot.x - 18 * k, y: dot.y - 18 * k, width: 36 * k, height: 36 * k)), with: .color(pal.shine))
             for sx: CGFloat in [-1, 1] {
-                var brow = Path(); brow.move(to: P(sx < 0 ? -260 : 120, -191)); brow.addLine(to: P(sx < 0 ? -120 : 260, -191))
-                ctx.stroke(brow, with: .color(pal.ink), style: StrokeStyle(lineWidth: 36 * 0.84 * k, lineCap: .round))
-                E(190 * sx, -65, 56, 72, pal.ink)
-                E(sx * 190 - sx * 17.9, -93.8, 16.8, 19.4, pal.hi)
+                var brow = Path()
+                brow.move(to: CGPoint(x: (cx + sx * 105) * k, y: 690 * k)); brow.addLine(to: CGPoint(x: (cx + sx * 225) * k, y: 690 * k))
+                ctx.stroke(brow, with: .color(pal.ink), style: StrokeStyle(lineWidth: 30 * k, lineCap: .round))
+                E(cx + sx * 165, 788, 40, 52, pal.ink)
+                E(cx + sx * 165 - sx * 11, 768, 11, 13, pal.hi)
             }
         }
         .aspectRatio(1, contentMode: .fit)
