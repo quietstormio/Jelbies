@@ -187,7 +187,7 @@ extension BlobBrain {
         let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
-        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 2.5 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
+        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 6 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
         for (f, _) in ranked {
             if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0

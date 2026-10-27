@@ -31,6 +31,8 @@ struct ToyBrain {
     var bored: [Int: Float] = [:]
     /// The piece of his last toy session (the next choice leans away from it: variety across the toys that are out).
     var lastUID = -1
+    /// Variety clock of his last direct toy start.
+    var lastDirect: Float = -999
     var burstHandled = 0
     var chaseSpot: SIMD2<Float>?
     var chaseUntil: Float = 0
