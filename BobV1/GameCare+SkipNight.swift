@@ -11,8 +11,11 @@
 import Foundation
 
 enum NightSkipTuning {
-    static let dimEnd: Float = 1.4, starsEnd: Float = 2.2, jumpAt: Float = 2.2, starsFade: Float = 2.8, wakeAt: Float = 3.4, total: Float = 4.2
+    /// bedtime 0-1.5 (HUD fades out, room dims, everybody settles) | sleeping 1.5-4.8 (dim hold, lullaby fades in) | night to morning 4.8-7.6 (stars, jump at 5.6, 2 s time-lapse) | morning 7.6-9.1 (wake, HUD back)
+    static let dimEnd: Float = 1.5, sleepEnd: Float = 4.8, starsEnd: Float = 5.6, jumpAt: Float = 5.6, starsFade: Float = 6.2, wakeAt: Float = 7.6, total: Float = 9.1
     static let lapse: Double = 2.0
+    /// A tap is ignored for the first second; the lullaby fades in over `musicFade` as the Jelbies settle.
+    static let tapAfter: Float = 1.0, musicFade: TimeInterval = 1.5
     /// Reduce Motion
     static let rmIn: Float = 0.5, rmWake: Float = 0.7, rmTotal: Float = 1.3
     static let dimOpacity: Double = 0.55
@@ -43,13 +46,14 @@ extension GameCare {
         nightSkip = NightSkipState(active: true, t: 0, reduce: A11ySettings.shared.reduceMotion)
         select.cancel()
         if !nightSkip.reduce { bedtimeAll() }
-        AudioHub.shared.playClip(Self.nightClip)          // the lullaby that swells into the morning chime and birds (follows the sound settings)
+        AudioHub.shared.playClip(Self.nightClip, fadeIn: nightSkip.reduce ? 0 : NightSkipTuning.musicFade)          // the lullaby that swells into the morning chime and birds (follows the sound settings)
         CaptionCenter.shared.post("Lullaby, then morning birds")
     }
 
     /// A tap during the cut-scene: finish everything now.
-    func skipNightCutscene() {
-        guard nightSkip.active else { return }
+    /// `force` (the app came back from the background) skips the first-second tap lock.
+    func skipNightCutscene(force: Bool = false) {
+        guard nightSkip.active, force || nightSkip.t >= NightSkipTuning.tapAfter else { return }
         AudioHub.shared.stopClip(Self.nightClip, fade: 0.4)
         nightSkip.t = nightSkip.reduce ? NightSkipTuning.rmTotal : NightSkipTuning.total
         tickNightSkip(dt: 0)
@@ -69,7 +73,8 @@ extension GameCare {
         } else {
             let t = s.t
             if t < T.dimEnd { s.cover = T.dimOpacity * Double(t / T.dimEnd); s.stars = 0 }
-            else if t < T.starsEnd { let f = Double((t - T.dimEnd) / (T.starsEnd - T.dimEnd)); s.cover = T.dimOpacity + (1 - T.dimOpacity) * f; s.stars = f }
+            else if t < T.sleepEnd { s.cover = T.dimOpacity; s.stars = 0 }
+            else if t < T.starsEnd { let f = Double((t - T.sleepEnd) / (T.starsEnd - T.sleepEnd)); s.cover = T.dimOpacity + (1 - T.dimOpacity) * f; s.stars = f }
             else if t < T.starsFade { s.cover = 1; s.stars = 1 }
             else { let f = Double(min((t - T.starsFade) / (T.total - T.starsFade), 1)); s.cover = 1 - f * f * (3 - 2 * f); s.stars = max(0, 1 - f * 1.4) }
             if t >= T.starsEnd - 0.2, !s.timeDone { nightSkip = s; putEveryoneDown() ; s = nightSkip }

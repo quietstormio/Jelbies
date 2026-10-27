@@ -208,6 +208,9 @@ struct GameScreen: View {
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
             }.photoHidden()
+            .opacity(model.care.nightSkip.active ? 0 : 1)          // "Sleep until morning": the HUD is away until the morning has been shown
+            .allowsHitTesting(!model.care.nightSkip.active)
+            .animation(.easeInOut(duration: 0.6), value: model.care.nightSkip.active)
 
             BathChrome(care: model.care)
 
@@ -302,6 +305,7 @@ struct GameScreen: View {
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
         .onChange(of: scenePhase) { _, p in
             if p == .active {
+                model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
                 AudioHub.shared.setForeground(true)
