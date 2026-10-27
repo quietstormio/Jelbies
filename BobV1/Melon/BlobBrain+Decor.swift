@@ -30,6 +30,7 @@ extension BlobBrain {
         if uid >= 0 {
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
+            toy.lastUID = uid
             idleState.decorUID = -1
         }
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
@@ -145,7 +146,18 @@ extension BlobBrain {
             // behind the slide, where the steps start (the JSON's approach point)
             let p = c + f.turned(SIMD2(0, -DecorKind.slideApproach))
             let q = fixed(p)
-            return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil
+            if simd_distance(p, q) < 0.08 && peerFree(q) { return q }
+            // the exact spot is taken or blocked (a friend, a wall, a bench): the nearest free floor within a step or so of it will do (the first hop covers the rest)
+            let toward = simd_length(here - p) > 1e-3 ? simd_normalize(here - p) : SIMD2<Float>(0, 1)
+            for r: Float in [0.35, 0.7, 1.0] {
+                for a: Float in [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, .pi] {
+                    let c0 = cosf(a), s0 = sinf(a)
+                    let d = SIMD2(toward.x * c0 - toward.y * s0, toward.x * s0 + toward.y * c0) * r
+                    let cand = p + d, fq = fixed(cand)
+                    if simd_distance(cand, fq) < 0.06, peerFree(fq), f.distance(fq) > 0.3 { return fq }
+                }
+            }
+            return nil
         case .soccerKick: return soccerStand(f, from: here)
         case .decorSit where f.kind == .beanbag, .decorBoop, .decorPeek:
             if !DecorKind.original.contains(f.kind) { return edgeStand(f, from: here, gap: max(0.8, footprint * f.spec.reach + 0.06)) }
@@ -175,7 +187,7 @@ extension BlobBrain {
         let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
-        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
+        let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 2.5 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
         for (f, _) in ranked {
             if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0

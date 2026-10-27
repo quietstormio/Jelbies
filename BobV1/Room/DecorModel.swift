@@ -400,7 +400,8 @@ enum DecorPlacement {
         if deep, walked, kind != .slide, p.y + s.half.y + 0.9 < GameCamera.walkMinZ { return false }
         if kind == .slide {
             let ap = p + turn(SIMD2(0, -DecorKind.slideApproach), q)          // (where a Jelly stands to climb it)
-            if ap.y < GameCamera.walkMinZ + 0.1 || abs(ap.x) > visibleHalf(z: ap.y) { return false }
+            // (the same bounds the stand spot is clamped to in `BlobBrain.decorStand`, so a placement the player is allowed never leaves the slide without a climb spot)
+            if ap.y < GameCamera.walkMinZ + 0.1 || ap.y > min(GameCamera.walkMaxZ, GameCamera.roamRect.max.y) - 0.15 || abs(ap.x) > GameCamera.roamRectWide.max.x - 0.2 || abs(ap.x) > max(0, GameCamera.visibleHalfWidthAtBody(z: ap.y) * 0.93 - 0.2) { return false }
         }
         guard sofaClearance(kind, at: p, quarter: q) > gap else { return false }
         for c in RoomLayout.cylinders {

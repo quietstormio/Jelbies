@@ -18,7 +18,7 @@ enum VarietyFamily: Int, CaseIterable, Sendable { case movement, spot, rest, dec
 enum VarietyTuning {
     /// Seconds for a kind to come back to full weight (x floor right after); the big specials take longer.
     static let recover: Float = 210, bigRecover: Float = 360, floor: Float = 0.05
-    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .cartwheel, .soccerKick, .decorSlide, .flapHop, .lieDown, .tail, .decorKick]
+    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .cartwheel, .soccerKick, .flapHop, .lieDown, .tail]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
     static let socialRecover: Float = 150
     /// A friend did / is doing the same lately.
     static let syncWindow: Float = 20, syncMul: Float = 0.25, startGap: Float = 10
@@ -27,7 +27,7 @@ enum VarietyTuning {
     /// Plain wander's share with three in the room.
     static let crowdWander: Float = 0.6
     /// Shuffle-bag counts per family (rest grows at night).
-    static let bag: [(VarietyFamily, Int)] = [(.movement, 3), (.spot, 3), (.rest, 1), (.decor, 1), (.social, 2)]
+    static let bag: [(VarietyFamily, Int)] = [(.movement, 3), (.spot, 3), (.rest, 1), (.decor, 3), (.social, 2)]          // (decor 1 -> 3: toys that are out are played with ~35-50 % of the time; the family only counts while a toy is out)
     static let socialBoost: Float = 2.5, socialBoostFor: Float = 15
 
     /// Personality per CHARACTER (the roster's feature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender). Edit here.
@@ -135,7 +135,7 @@ extension BlobBrain {
                 if f == .social, variedPeers.isEmpty || !socialBook.enabled { continue }
                 if f == .decor, !decorOffered { continue }
                 if f == .rest { n += Int((2 * idleNight).rounded()) }
-                if f == .decor { n += toyBagBonus() }
+                if f == .decor { n += toyBagBonus() + (DecorField.shared.feet.filter { $0.kind.activeInteraction != nil }.count >= 2 ? 1 : 0) }
                 variety.bag += Array(repeating: f, count: n)
             }
             var i = variety.bag.count - 1
