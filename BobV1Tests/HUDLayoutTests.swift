@@ -12,8 +12,9 @@ final class HUDLayoutTests: XCTestCase {
 
     private func rects(_ size: CGSize) -> [CGRect] {
         let h = HUDLayout.railHeightFraction * size.height
+        let hr = HUDLayout.railRightHeightFraction * size.height
         return [CGRect(x: 16, y: size.height - h, width: 60, height: h),
-                CGRect(x: size.width - 20 - 72, y: size.height - h, width: 72, height: h)]
+                CGRect(x: size.width - 20 - 72, y: size.height - hr, width: 72, height: hr)]
     }
 
     /// Every sampled spot the floor lets a body centre use (rows x free spans, ends and middle) must have a body box clear of both rail rectangles.

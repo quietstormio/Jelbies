@@ -130,7 +130,7 @@ struct GameScreen: View {
                                     .accessibilityIdentifier("sound-button")
                                 }
                                 .padding(.horizontal, 4)
-                                .glassEffect(.regular.interactive(), in: .capsule)
+                                .hudFrost(in: .capsule)
                             }
                             .transition(.opacity)
                         }
@@ -149,7 +149,7 @@ struct GameScreen: View {
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     if !focus.isActive, !cleaning, !racing {
-                        HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer(); DayChip(); PerkBadgeRow(care: model.care) }
+                        HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer(); PerkBadgeRow(care: model.care) }
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudPerkH = $0 }
                     }
                     Spacer()
@@ -176,26 +176,14 @@ struct GameScreen: View {
                                 }
                                 .padding(.vertical, 6)
                                 .frame(width: HUDTuning.railWidth)
-                                .glassEffect(.regular.interactive(), in: .capsule)
+                                .hudFrost(in: .capsule)
                             }
                             .accessibilityElement(children: .contain)
                             .accessibilitySortPriority(3)
                             Spacer()
                             // RIGHT: the one main control (group / individual), alone
                             if !focus.isActive {
-                                VStack(alignment: .trailing, spacing: 10) {
-                                    if !menuOpen {          // the camera sits above the heart; it steps aside while the care rows unfold upward
-                                        GameCircleButton(systemName: "camera", label: "Photo mode", size: 54) {
-                                            AudioHub.shared.uiTap()
-                                            menuOpen = false; settingsOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
-                                            PhotoMode.shared.open(care: model.care)
-                                        }
-                                        .accessibilityIdentifier("photo-button")
-                                        .padding(.trailing, 4)
-                                        .transition(.opacity)
-                                    }
-                                    careSlot
-                                }
+                                careSlot
                                 .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
                                 .accessibilityElement(children: .contain)
                                 .accessibilitySortPriority(1)
@@ -298,6 +286,10 @@ struct GameScreen: View {
                     model.care.voice.cancel()
                     settingsOpen = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { StartFlow.shared.startOver() }
+                },
+                openPhoto: {
+                    settingsOpen = false; menuOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { PhotoMode.shared.open(care: model.care) }          // after the Settings cover is gone
                 },
                 close: { settingsOpen = false })
         }
@@ -687,13 +679,13 @@ struct GameCircleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: size > 44 ? 21 : 15, weight: .semibold))
+                .font(.system(size: size > 44 ? 23 : 20, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
                 .frame(width: size, height: size)          // 44 pt minimum hit target
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)          // Liquid Glass (iOS 26)
+        .hudFrost(in: .circle)          // Liquid Glass (iOS 26)
         .accessibilityLabel(label)
         .accessibilityShowsLargeContentViewer { Label(label, systemImage: systemName) }
     }
@@ -963,7 +955,7 @@ struct CareMenu: View {
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }
             .buttonStyle(.plain)
-            .glassEffect(.regular.tint(FocusStyle.pink).interactive(), in: .circle)
+            .glassEffect(HUDGlass.pink, in: .circle)
             .accessibilityIdentifier("care-menu")
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
             .accessibilityValue(open ? "expanded" : "collapsed")
@@ -1006,7 +998,7 @@ struct ReleaseButton: View {
             .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .hudFrost(in: .capsule)
         .accessibilityIdentifier("focus-release")
         .accessibilityLabel(title)
         .accessibilityHint("Goes back to the room")
@@ -1062,7 +1054,7 @@ struct HUDGlassIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(CareMenu.brown)
                 .frame(width: 48, height: 44)
                 .contentShape(Rectangle())

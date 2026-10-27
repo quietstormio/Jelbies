@@ -19,9 +19,9 @@ struct RosterButton: View {
         } label: {
             ZStack {
                 if open {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "xmark").font(.system(size: 19, weight: .semibold))
                 } else {
-                    JelbieGlyph().frame(width: 26, height: 26)
+                    JelbieGlyph().frame(width: 30, height: 30)
                 }
             }
             .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
@@ -35,7 +35,7 @@ struct RosterButton: View {
                 }
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
+        .hudFrost(in: .circle)
         .accessibilityIdentifier("roster-button")
         .accessibilityLabel(wanting > 0 ? "All Jelbies, \(wanting) need\(wanting == 1 ? "s" : "") you" : "All Jelbies")
         .accessibilityValue(open ? "expanded" : "collapsed")
@@ -45,47 +45,61 @@ struct RosterButton: View {
     }
 }
 
-/// The panel under the button: a scrim plus the cards.
+/// The panel under the button: a scrim plus a frosted card (width min(screen - 32, 380), 16 pt inside padding, scrolls when the cards do not fit).
 struct RosterPanel: View {
     let care: GameCare
     @Binding var open: Bool
     var onPick: (Int) -> Void = { _ in }
+    @State private var contentH: CGFloat = 0
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if open {
-                Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.22)
-                    .ignoresSafeArea()
-                    .onTapGesture { withAnimation(CareMenu.spring) { open = false } }
-                    .transition(.opacity)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Your Jelbies")
-                        .jFont(17, .bold)
-                        .foregroundStyle(FocusStyle.brown)
-                        .padding(.leading, 6)
-                    ScrollView {
-                        VStack(spacing: 10) {
-                            ForEach(care.select.blobs) { b in
-                                BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id)) {
-                                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                                    withAnimation(CareMenu.spring) { open = false }
-                                    onPick(b.id)
+        GeometryReader { g in
+            let width = min(g.size.width - 32, 380)
+            let top: CGFloat = 52
+            let chrome: CGFloat = 32 + 10 + 28          // padding, spacing, header
+            let avail = max(120, g.size.height - top - 16 - chrome)
+            ZStack(alignment: .topTrailing) {
+                if open {
+                    Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.22)
+                        .ignoresSafeArea()
+                        .onTapGesture { withAnimation(CareMenu.spring) { open = false } }
+                        .transition(.opacity)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Your Jelbies")
+                                .jFont(17, .bold)
+                                .foregroundStyle(FocusStyle.brown)
+                            Spacer(minLength: 8)
+                            DayChip()
+                        }
+                        .frame(minHeight: 28)
+                        ScrollView {
+                            VStack(spacing: 10) {
+                                ForEach(care.select.blobs) { b in
+                                    BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id)) {
+                                        UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                                        withAnimation(CareMenu.spring) { open = false }
+                                        onPick(b.id)
+                                    }
                                 }
                             }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentH = $0 }
                         }
+                        .frame(height: contentH > 0 ? min(contentH, avail) : avail)
+                        .scrollBounceBehavior(.basedOnSize)
                     }
-                    .scrollBounceBehavior(.basedOnSize)
+                    .padding(16)
+                    .frame(width: width)
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        shape.fill(HUDGlass.cream.opacity(0.85)).glassEffect(.regular.tint(HUDGlass.cream.opacity(0.78)), in: shape)
+                    }
+                    .padding(.top, top).padding(.trailing, 16)
+                    .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
+                    .accessibilityIdentifier("roster-panel")
                 }
-                .padding(14)
-                .frame(width: 300)
-                .frame(maxHeight: 500)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.28), radius: 14, y: 6))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-                .padding(.top, 52).padding(.trailing, 16)
-                .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
-                .accessibilityIdentifier("roster-panel")
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         }
     }
 }
@@ -113,16 +127,18 @@ struct BlobCard: View {
                         .frame(width: 22, height: 22)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
                         .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
-                    Text(blob.name).jFont(18, .bold).foregroundStyle(FocusStyle.brown)
-                    Spacer()
+                    Text(blob.name).jFont(18, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
+                    Spacer(minLength: 4)
                     Text(needs.mood.word)
                         .jFont(13, .semibold).foregroundStyle(FocusStyle.brown)
+                        .lineLimit(1).fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Capsule().fill(Self.moodColor(needs.mood)))
                 }
                 let meters = dts.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 12))
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 6))
                 meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }
+                    .frame(maxWidth: .infinity)
                 status
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -160,18 +176,21 @@ struct BlobCard: View {
     private func meter(_ k: NeedKind) -> some View {
         let v = CGFloat(needs.levels[k.rawValue])
         let want = needs.wantedNeed == k || v < CGFloat(NeedsTuning.wanting)
-        return HStack(spacing: 4) {
+        return HStack(spacing: 3) {
             NeedGlyph(kind: k, size: 18)
-            ZStack(alignment: .leading) {
-                Capsule().fill(FocusStyle.brown.opacity(0.12))
-                Capsule().fill(want ? SK.pinkStrong : Color(red: 0.62, green: 0.82, blue: 0.62))
-                    .overlay { if want { StripePattern(color: .white.opacity(0.7)).clipShape(Capsule()) } }          // wanting = stripes + "!", not only pink vs green
-                    .frame(width: max(5, 44 * v))
-            }
-            .frame(width: 44, height: 8)
+            Capsule().fill(FocusStyle.brown.opacity(0.12))
+                .overlay(alignment: .leading) {
+                    GeometryReader { bar in
+                        Capsule().fill(want ? SK.pinkStrong : Color(red: 0.62, green: 0.82, blue: 0.62))
+                            .overlay { if want { StripePattern(color: .white.opacity(0.7)).clipShape(Capsule()) } }          // wanting = stripes + "!", not only pink vs green
+                            .frame(width: max(5, bar.size.width * v))
+                    }
+                }
+                .frame(minWidth: 12, maxWidth: .infinity).frame(height: 8)          // the bar shrinks to fit the card
             if want { Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(SK.pinkStrong) }
         }
-        .padding(.horizontal, 5).padding(.vertical, 4)
+        .padding(.horizontal, 4).padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
         .background(Capsule().fill(want ? FocusStyle.pink.opacity(0.16) : Color.clear))
         .overlay(Capsule().strokeBorder(want ? FocusStyle.pink.opacity(0.7) : Color.clear, lineWidth: 1.2))
     }

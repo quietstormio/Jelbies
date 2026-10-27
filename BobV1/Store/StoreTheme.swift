@@ -61,7 +61,7 @@ private struct DropsPillBack: ViewModifier {
     let dark: Bool, glass: Bool
     func body(content: Content) -> some View {
         if glass {
-            content.glassEffect(.regular.interactive(), in: .capsule)
+            content.hudFrost(in: .capsule)
         } else {
             content
                 .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))

@@ -34,7 +34,7 @@ struct VoiceMicButton: View {
         var progress: Double?
         if case .needsDownload(let p) = voice.availability { progress = p }
         return Image(systemName: slashed ? "mic.slash.fill" : "mic.fill")
-            .font(.system(size: 17, weight: .semibold))
+            .font(.system(size: 21, weight: .semibold))
             .foregroundStyle(listening ? Color.white : Color(red: 0.42, green: 0.34, blue: 0.30))
             .frame(width: 44, height: 44)
             .background(Circle().fill(listening ? FocusStyle.pink : Color.clear).opacity(0.94))
@@ -166,7 +166,7 @@ struct VoiceBookButton: View {
             action()
         } label: {
             Image(systemName: "book.closed.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
                 .frame(width: HUDTuning.railWidth, height: HUDTuning.railRow).contentShape(Rectangle())
         }

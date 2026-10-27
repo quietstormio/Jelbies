@@ -16,7 +16,7 @@ struct GoOutButton: View {
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action()
         } label: {
-            Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .heavy))
+            Image(systemName: "door.left.hand.open").font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(CareMenu.brown).frame(width: HUDTuning.railWidth, height: HUDTuning.railRow).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -32,7 +32,7 @@ struct BagButton: View {
     var action: () -> Void
     var body: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action() } label: {
-            Image(systemName: "bag.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(CareMenu.brown)
+            Image(systemName: "bag.fill").font(.system(size: 22, weight: .semibold)).foregroundStyle(CareMenu.brown)
                 .frame(width: HUDTuning.railWidth, height: HUDTuning.railRow).contentShape(Rectangle())
                 .overlay(alignment: .topTrailing) {
                     if store.newCount > 0 {
