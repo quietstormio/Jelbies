@@ -67,9 +67,12 @@ final class ToyShareTests: XCTestCase {
         return t
     }
 
-    func testToysOutGetPlayedWith() { share(park: false) }
+    func testToysOutGetPlayedWith() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TOYSHARE_SIM"] != nil, "slow: set TOYSHARE_SIM=1")
+        share(park: false)
+    }
     func testParkToysGetPlayedWith() throws {
-        try XCTSkipUnless(ProcessInfo.processInfo.environment["TOYSHARE_PARK"] != nil, "slow: set TOYSHARE_PARK=1")
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TOYSHARE_SIM"] != nil && ProcessInfo.processInfo.environment["TOYSHARE_PARK"] != nil, "slow: set TOYSHARE_SIM=1 and TOYSHARE_PARK=1")
         share(park: true)
     }
 
