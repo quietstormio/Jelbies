@@ -20,6 +20,11 @@ final class ParkTrip {
     var picked: [Int] = []
     /// The friendly line for a blocked entry or a happening (a level up, a gift); cleared after `toastSeconds`.
     var toast: String?
+    /// The gift reveal on screen (a friend's present: who and what), for `ParkTuning.giftCardSeconds`; a tap closes it early.
+    var gift: (friend: String, itemID: String)?
+    @ObservationIgnored var giftT: Float = 0
+    /// SF Symbols shown before the toast text (a gift: the present, then the item), nil for plain toasts.
+    var toastSymbols: [String] = []
     /// The visitor whose card is open (pool id).
     var card: Int?
     private(set) var serial = 0
@@ -54,11 +59,12 @@ final class ParkTrip {
         guard canGoHome else { return }
         card = nil; phase = .leaveOut
     }
-    func finish() { phase = .off; wipe = 0; holdFrames = 0; card = nil }
+    func finish() { gift = nil; phase = .off; wipe = 0; holdFrames = 0; card = nil }
 
     /// Once per fixed step. `blocked`: something started under the fade (checked while fading out to the park).
     func step(dt: Float, blocked: Bool = false) {
-        if toast != nil { toastT += dt; if toastT > ParkTuning.toastSeconds { toast = nil } }
+        if gift != nil { giftT += dt; if giftT > ParkTuning.giftCardSeconds { gift = nil } }
+        if toast != nil { toastT += dt; if toastT > ParkTuning.toastSeconds { toast = nil; toastSymbols = [] } }
         switch phase {
         case .off, .pick, .playing: break
         case .goOut:
@@ -83,5 +89,6 @@ final class ParkTrip {
         }
     }
 
-    func say(_ s: String) { toast = s; toastT = 0 }
+    func showGift(friend: String, itemID: String) { gift = (friend, itemID); giftT = 0 }
+    func say(_ s: String, symbols: [String] = []) { toast = s; toastSymbols = symbols; toastT = 0 }
 }

@@ -20,7 +20,11 @@ final class ParkWork {
     var autonomy: [Int: Bool] = [:]
     var arena: [Int: Float] = [:]
     var owed: [Int: Float] = [:]
-    var giftNear: Float = 0
+    /// The visit's gift (ParkGifts.swift): 0 none planned, 1 waiting to start, 2 the friend is walking over. Who gives (index in the cast), to whom (roster slot), timers.
+    var giftState = 0
+    var giftWait: Float = 0, giftT: Float = 0
+    var giftGiver = 0, giftSlot = 0
+    var giftNicer = false
     var saveT: Float = 0
     /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
     var friendSession: [Int: ObjectIdentifier] = [:]
@@ -140,10 +144,9 @@ extension GameCare {
         features.tick(id: a.id, brain: b, sim: a.sim, feature: .none, worn: [], hideAll: true, dt: 1.0 / 60)
     }
 
-    /// Friendship, love and the daily gift, from who stands near whom.
+    /// Friendship and love, from who stands near whom.
     private func tickFriends(_ actors: [JellyActor], dt: Float) {
         let book = parkBook, work = book.work
-        var giftPair: (visitor: Int, slot: Int)?
         for k in book.comers {
             guard actors.indices.contains(k), let prof = jelly(k) else { continue }
             let me = actors[k]
@@ -166,7 +169,6 @@ extension GameCare {
                 }
                 nearest = max(nearest ?? before, before)
                 if let up = book.add(points: rate, visitor: vid, character: prof.character) { parkLevelUp(visitor: vid, slot: k, level: up, visitorBody: a) }
-                if before == .best, giftPair == nil { giftPair = (vid, k) }
             }
             // love: twice the petting rate near a friend (less near a stranger), capped per day
             if let lvl = nearest, prof.needs.level(.attention) < 0.999 {
@@ -178,11 +180,7 @@ extension GameCare {
                 }
             }
         }
-        // a gift from a best friend, once a day, after a while playing near
-        if let g = giftPair, !book.giftGivenToday {
-            work.giftNear += dt
-            if work.giftNear >= ParkTuning.giftNearSeconds { work.giftNear = 0; parkGift(visitor: g.visitor, slot: g.slot) }
-        } else { work.giftNear = 0 }
+        tickGift(actors, dt: dt)
     }
 
     func parkLevelUp(visitor vid: Int, slot: Int, level: ParkFriendLevel, visitorBody: JellyActor) {
@@ -201,26 +199,56 @@ extension GameCare {
         if let b = visitorBody.brain, b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script { b.startHopPlay(sim: visitorBody.sim, distance: 0.0001) }
     }
 
-    /// A few Drops or a snack, from a best friend.
-    private func parkGift(visitor vid: Int, slot: Int) {
-        let book = parkBook
-        guard let v = book.visitor(vid), let prof = jelly(slot) else { return }
-        var text: String
-        let snacks = StoreCatalog.items.filter { $0.kind == .food && $0.price > 0 }.sorted { $0.price < $1.price }
-        if Bool.random() || snacks.isEmpty {
-            let n = Int.random(in: ParkTuning.giftDrops)
-            bath.wallet.add(n)
-            text = "\(v.name) brought \(prof.name) a gift: \(n) Drops!"
-        } else {
-            let item = snacks[Int.random(in: 0..<min(3, snacks.count))]
-            store.grant(item.id)
-            AudioHub.shared.play(.perkSparkle, volume: 0.9)
-            text = "\(v.name) brought \(prof.name) a gift: \(item.name)!"
+    /// Plans the visit's gift: due on about every other visit (the rhythm is saved in the ledger), the giver one of the visitors, the receiver one of the Jelbies that came.
+    private func parkPlanGift() {
+        let book = parkBook, work = book.work
+        work.giftState = 0
+        var rng = SystemRandomNumberGenerator()
+        let was = book.lastVisitGifted
+        if was { book.setLastVisitGifted(false); return }          // a gift last time: none this time
+        guard !book.actors.isEmpty, !book.comers.isEmpty, ParkGifts.isDue(lastVisitGifted: was, using: &rng) else { return }
+        work.giftState = 1; work.giftT = 0
+        work.giftWait = Float.random(in: ParkTuning.giftWait)
+        work.giftGiver = Int.random(in: 0..<book.actors.count)
+        work.giftSlot = book.comers.randomElement() ?? 0
+        work.giftNicer = Double.random(in: 0..<1) < ParkGifts.nicerShare
+    }
+
+    /// The friend waits a while into the visit, trots over to the Jelbie, then hands the present over.
+    private func tickGift(_ actors: [JellyActor], dt: Float) {
+        let book = parkBook, work = book.work
+        guard work.giftState != 0, park.phase == .playing, book.actors.indices.contains(work.giftGiver), actors.indices.contains(work.giftSlot),
+              let gb = book.actors[work.giftGiver].brain, let rb = actors[work.giftSlot].brain else { return }
+        work.giftT += dt
+        if work.giftState == 1 {
+            guard work.giftT >= work.giftWait, gb.scriptIsNone, rb.scriptIsNone else { return }
+            let spot = gb.fixed(rb.position + SIMD2<Float>(0.9, 0.5))
+            gb.request(.goTo(spot))
+            work.giftState = 2; work.giftT = 0
+        } else if simd_distance(gb.position, rb.position) < 1.8 || work.giftT > ParkTuning.giftWalkTimeout {
+            work.giftState = 0
+            parkGift(giverIndex: work.giftGiver, slot: work.giftSlot)
         }
-        book.markGift()
-        park.say(text)
+    }
+
+    /// The hand-off: a real store item into the bag (never Drops), a short toast with the present and the item art, a hop and a heart.
+    private func parkGift(giverIndex gi: Int, slot: Int) {
+        let book = parkBook, work = book.work
+        guard book.cast.indices.contains(gi), let v = book.visitor(book.cast[gi]), let prof = jelly(slot) else { return }
+        var rng = SystemRandomNumberGenerator()
+        guard let item = ParkGifts.pick(owns: { self.store.owns($0) }, count: { self.store.count($0.id) }, nicer: work.giftNicer, using: &rng) else { return }
+        store.grant(item.id)
+        book.setLastVisitGifted(true)
+        AudioHub.shared.play(.perkSparkle, volume: 0.9); AudioHub.shared.play(.sparkle)
+        park.showGift(friend: v.name, itemID: item.id)
+        A11yAnnounce.say("Gift from \(v.name)! \(item.name). Added to your bag.")
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
-        if let i = book.cast.firstIndex(of: vid), book.actors.indices.contains(i), let b = book.actors[i].brain { b.face(.joyArc, hold: 2.5); b.startHopPlay(sim: book.actors[i].sim, distance: 0.0001) }
+        AudioHub.shared.chirp(jelly: slot, .happy)
+        if book.actors.indices.contains(gi), let b = book.actors[gi].brain { b.face(.joyArc, hold: 2.5); b.startHopPlay(sim: book.actors[gi].sim, distance: 0.0001) }
+        if book.roster.indices.contains(slot), let rb = book.roster[slot].brain {          // the receiver cheers
+            rb.face(.joyArc, hold: 2.5)
+            if rb.scriptIsNone, rb.idleState.kind == nil { rb.startHopPlay(sim: book.roster[slot].sim, distance: 0.0001) }
+        }
     }
 
     /// A tap in the park: a visitor's card (a body id), or nothing (closes it).
@@ -242,7 +270,7 @@ extension GameCare {
         let roster = book.roster
         switch dest {
         case .park:
-            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftNear = 0; work.saveT = 0; work.friendSession = [:]
+            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]
             book.comers = park.picked.filter { roster.indices.contains($0) && $0 < jellies.count }
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
@@ -257,9 +285,10 @@ extension GameCare {
                 for a in roster where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
             }
             syncDecor()
-            // who is there: the Jelbies that came and 2...4 visitors, five at most
+            // who is there: the Jelbies that came and 1...4 visitors (a different number each visit), five at most
             let comers = book.comers
-            let n = min(max(ParkTuning.maxTotal - comers.count, ParkTuning.minVisitors), ParkTuning.maxVisitors)
+            var countRNG = SystemRandomNumberGenerator()
+            let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
             let cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970)
             let spots = ParkLayout.spots(count: comers.count + cast.count)
@@ -268,6 +297,7 @@ extension GameCare {
             if book.actors.count != cast.count { book.cast = Array(book.cast.prefix(book.actors.count)) }
             book.markSeen(book.cast, at: Date().timeIntervalSince1970)
             book.warmLines(book.cast)
+            parkPlanGift()
             for (k, slot) in comers.enumerated() where roster.indices.contains(slot) {
                 let a = roster[slot]
                 rehome(a, at: spots[k])

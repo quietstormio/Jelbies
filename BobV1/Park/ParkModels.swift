@@ -98,8 +98,8 @@ nonisolated enum ParkTuning {
     // The trip (the same feel as the café's fade)
     static let fadeOut: Float = 0.4, fadeIn: Float = 0.5, holdSteps = 3
     static let toastSeconds: Float = 3.2
-    // The cast: at most five Jelbies in the park, the player's plus 2...4 visitors
-    static let maxTotal = 5, minVisitors = 2, maxVisitors = 4
+    // The cast: at most five Jelbies in the park, the player's plus 1...4 visitors (ParkVisit.visitorCount)
+    static let maxTotal = 5, minVisitors = 1, maxVisitors = 4
     static let poolSize = 16
     static let poolSeed: UInt64 = 0x9A2B_17C3_5D41
     // Friendship (points per second near each other; a social together is faster). Doubled on 2026-10-25 (friends come in a couple of visits, not ages):
@@ -117,9 +117,10 @@ nonisolated enum ParkTuning {
     static let loveMul: [Float] = [0.5, 1.0, 2.0, 2.0]          // stranger, pal, friend, best friend (times petRate)
     static let loveDailyCap: Float = 0.8
     static let loveChunk: Float = 0.02
-    // Gifts: a best friend, once a day, after a while playing near
-    static let giftNearSeconds: Float = 20
-    static let giftDrops: ClosedRange<Int> = 4...8
+    // Gifts (ParkGifts.swift): a friend walks over on about every other visit, after this many seconds of play
+    static let giftWait: ClosedRange<Float> = 12...30
+    static let giftWalkTimeout: Float = 9
+    static let giftCardSeconds: Float = 3.6
     // Saves
     static let saveEvery: Float = 20
     static let music: MusicScene = .park

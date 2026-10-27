@@ -138,7 +138,7 @@ final class ParkBook {
 
     // MARK: the daily ledger (love given, the gift)
 
-    struct Ledger: Codable { var day = ""; var love: [String: Float] = [:]; var giftDay = "" }
+    struct Ledger: Codable { var day = ""; var love: [String: Float] = [:]; var giftDay = ""; var lastVisitGifted: Bool? }
     @ObservationIgnored private var ledgerCache: Ledger?
     static func dayString(_ d: Date = Date()) -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: d)
@@ -155,6 +155,7 @@ final class ParkBook {
     /// Love still allowed today for a character.
     func loveLeft(_ character: Int) -> Float { max(ParkTuning.loveDailyCap - (ledger.love[String(character)] ?? 0), 0) }
     func spendLove(_ amount: Float, character: Int) { var l = ledger; l.love[String(character), default: 0] += amount; ledger = l }
-    var giftGivenToday: Bool { ledger.giftDay == Self.dayString() }
-    func markGift() { var l = ledger; l.giftDay = Self.dayString(); ledger = l }
+    /// The every-other-visit rhythm (kept across launches): did the last visit that planned for a gift give one?
+    var lastVisitGifted: Bool { ledger.lastVisitGifted ?? false }
+    func setLastVisitGifted(_ v: Bool) { var l = ledger; l.lastVisitGifted = v; if v { l.giftDay = Self.dayString() }; ledger = l }
 }
