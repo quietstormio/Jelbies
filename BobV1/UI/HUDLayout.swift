@@ -13,17 +13,18 @@ enum HUDTuning {
     /// Landscape: 0 when the front-corner Jelbies do not reach under the rails; otherwise the band (the test decides).
     static let frontBandLandscape: CGFloat = 0
     static let railGap: CGFloat = 10            // space between buttons in a rail
+    static let railWidth: CGFloat = 60, railRow: CGFloat = 54          // the left glass capsule: 60 wide, 54 pt rows
     static let goOutSize: CGFloat = 56, goOutSizeTight: CGFloat = 46
 }
 
 enum HUDLayout {
-    /// Screen rectangles (fractions of width/height, top-left origin) of the bottom-corner rails in portrait: the left column (16 pt in, 64 wide: book, bag, Go out, mic) and the right
-    /// paw button (the paw button alone, 64), measured from a 393 pt wide phone (wider phones have slimmer fractions, so this is a touch conservative), up to
+    /// Screen rectangles (fractions of width/height, top-left origin) of the bottom-corner rails in portrait: the left glass capsule (16 pt in, 60 wide: book, bag, Go out, mic) and the right
+    /// camera + heart stack (72), measured from a 393 pt wide phone (wider phones have slimmer fractions, so this is a touch conservative), up to
     /// `railHeightFraction` of the screen height from the bottom.
-    static let railHeightFraction: CGFloat = 0.20
+    static let railHeightFraction: CGFloat = 0.29          // the tall left capsule: 4 rows + divider + padding is ~245 pt of an 852 pt phone
     static let railRects: [CGRect] = [
-        CGRect(x: 0, y: 1 - railHeightFraction, width: (16 + 64 + 4) / 393, height: railHeightFraction),
-        CGRect(x: 1 - (16 + 64 + 4) / 393, y: 1 - railHeightFraction, width: (16 + 64 + 4) / 393, height: railHeightFraction),
+        CGRect(x: 0, y: 1 - railHeightFraction, width: (16 + 60 + 4) / 393, height: railHeightFraction),
+        CGRect(x: 1 - (16 + 4 + 72 + 4) / 393, y: 1 - railHeightFraction, width: (16 + 4 + 72 + 4) / 393, height: railHeightFraction),
     ]
 
     /// True when a Jelbie centred at floor (x, z) has its body box (the same one the roam margins use) overlapping a rail rectangle on screen.

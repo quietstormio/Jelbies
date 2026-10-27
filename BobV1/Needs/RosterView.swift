@@ -17,13 +17,15 @@ struct RosterButton: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             withAnimation(CareMenu.spring) { open.toggle() }
         } label: {
-            Image(systemName: open ? "xmark" : "person.2.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
-                .frame(width: 44, height: 44).contentShape(Circle())
+            ZStack {
+                if open {
+                    Image(systemName: "xmark").font(.system(size: 15, weight: .semibold))
+                } else {
+                    JelbieGlyph().frame(width: 26, height: 26)
+                }
+            }
+            .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
+            .frame(width: 44, height: 44).contentShape(Circle())
                 .overlay(alignment: .topTrailing) {
                     if wanting > 0 && !open {
                         Circle().fill(FocusStyle.pink).frame(width: 12, height: 12)
@@ -33,6 +35,7 @@ struct RosterButton: View {
                 }
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityIdentifier("roster-button")
         .accessibilityLabel(wanting > 0 ? "All Jelbies, \(wanting) need\(wanting == 1 ? "s" : "") you" : "All Jelbies")
         .accessibilityValue(open ? "expanded" : "collapsed")

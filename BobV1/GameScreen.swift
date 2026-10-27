@@ -115,40 +115,32 @@ struct GameScreen: View {
                             .accessibilityIdentifier("focus-card")
                             .transition(.opacity)
                         } else if !focus.isActive, !cleaning, !racing {
-                            GameCircleButton(systemName: "gearshape", label: "Settings") {
-                                AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = false; menuOpen = false }; settingsOpen = true
+                            GlassEffectContainer(spacing: 8) {
+                                HStack(spacing: 0) {
+                                    HUDGlassIcon(systemName: "gearshape", label: "Settings") {
+                                        AudioHub.shared.uiTap()
+                                        withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = false; menuOpen = false }; settingsOpen = true
+                                    }
+                                    .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
+                                    .accessibilityIdentifier("studio-button")
+                                    HUDGlassIcon(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
+                                        AudioHub.shared.uiTap()
+                                        withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
+                                    }
+                                    .accessibilityIdentifier("sound-button")
+                                }
+                                .padding(.horizontal, 4)
+                                .glassEffect(.regular.interactive(), in: .capsule)
                             }
-                            .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
-                            .accessibilityIdentifier("studio-button")
-                            .transition(.opacity)
-                            GameCircleButton(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
-                                AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
-                            }
-                            .accessibilityIdentifier("sound-button")
-                            .transition(.opacity)
-                            EarsButton(ears: Ears.shared)                  // "Ears on" (Audio/EarsHUD.swift)
-                                .transition(.opacity)
-                            GameCircleButton(systemName: extrasOpen ? "sparkles.rectangle.stack.fill" : "sparkles.rectangle.stack", label: "Siri and Lock Screen") {
-                                AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false; settingsOpen = false } }
-                            }
-                            .accessibilityIdentifier("extras-button")
-                            .transition(.opacity)
-                            GameCircleButton(systemName: "camera", label: "Photo mode") {
-                                AudioHub.shared.uiTap()
-                                menuOpen = false; settingsOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
-                                PhotoMode.shared.open(care: model.care)
-                            }
-                            .accessibilityIdentifier("photo-button")
                             .transition(.opacity)
                         }
                         Spacer()
                         if !focus.isActive, !cleaning, !racing {
-                            HStack(spacing: 8) {
-                                DropsPill(wallet: model.care.bath.wallet)
-                                RosterButton(care: model.care, open: $rosterOpen)
+                            GlassEffectContainer(spacing: 8) {
+                                HStack(spacing: 8) {
+                                    DropsPill(wallet: model.care.bath.wallet, glass: true)
+                                    RosterButton(care: model.care, open: $rosterOpen)
+                                }
                             }
                             .transition(.opacity)
                         }
@@ -169,25 +161,44 @@ struct GameScreen: View {
                     if !cleaning, !racing {
                         HStack(alignment: .bottom, spacing: 10) {
                             // LEFT RAIL: the trick book, the bag, Go out (a menu) and the mic (at the bottom)
-                            VStack(spacing: HUDTuning.railGap) {
-                                VoiceBookButton { bookOpen = true }
-                                if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
-                                if !focus.isActive {
-                                    GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
-                                }
-                                VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
-                                    .overlay(alignment: .topLeading) {
-                                        VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
+                            GlassEffectContainer(spacing: 8) {
+                                VStack(spacing: 0) {
+                                    VoiceBookButton { bookOpen = true }
+                                    if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
+                                    if !focus.isActive {
+                                        GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
                                     }
+                                    Capsule().fill(CareMenu.brown.opacity(0.22)).frame(width: 28, height: 1.5).padding(.vertical, 4)
+                                    VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
+                                        .overlay(alignment: .topLeading) {
+                                            VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
+                                        }
+                                }
+                                .padding(.vertical, 6)
+                                .frame(width: HUDTuning.railWidth)
+                                .glassEffect(.regular.interactive(), in: .capsule)
                             }
                             .accessibilityElement(children: .contain)
                             .accessibilitySortPriority(3)
                             Spacer()
                             // RIGHT: the one main control (group / individual), alone
                             if !focus.isActive {
-                                careSlot.transition(a11yMotionReduced ? .opacity : .scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
-                                    .accessibilityElement(children: .contain)
-                                    .accessibilitySortPriority(1)
+                                VStack(alignment: .trailing, spacing: 10) {
+                                    if !menuOpen {          // the camera sits above the heart; it steps aside while the care rows unfold upward
+                                        GameCircleButton(systemName: "camera", label: "Photo mode", size: 54) {
+                                            AudioHub.shared.uiTap()
+                                            menuOpen = false; settingsOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
+                                            PhotoMode.shared.open(care: model.care)
+                                        }
+                                        .accessibilityIdentifier("photo-button")
+                                        .padding(.trailing, 4)
+                                        .transition(.opacity)
+                                    }
+                                    careSlot
+                                }
+                                .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
+                                .accessibilityElement(children: .contain)
+                                .accessibilitySortPriority(1)
                             }
                         }
                         .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
@@ -241,7 +252,7 @@ struct GameScreen: View {
                 .padding(.top, 8)
 
             if soundOpen {
-                SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }
+                SoundSettingsPanel(hub: AudioHub.shared, openExtras: { withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = true } }) { withAnimation(CareMenu.spring) { soundOpen = false } }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, 16).padding(.top, 52)
                     .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
@@ -670,20 +681,19 @@ struct GameScreen: View {
 struct GameCircleButton: View {
     let systemName: String
     let label: String
+    var size: CGFloat = 44
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: size > 44 ? 21 : 15, weight: .semibold))
                 .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Color(red: 0.97, green: 0.94, blue: 0.88)).opacity(0.92))
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
-                .frame(width: 44, height: 44)          // 44 pt hit target around the 36 pt disc
+                .frame(width: size, height: size)          // 44 pt minimum hit target
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)          // Liquid Glass (iOS 26)
         .accessibilityLabel(label)
         .accessibilityShowsLargeContentViewer { Label(label, systemImage: systemName) }
     }
@@ -936,8 +946,8 @@ struct CareMenu: View {
                 withAnimation(Self.spring) { open.toggle() }
             } label: {
                 ZStack {
-                    Image(systemName: "pawprint.fill")
-                        .font(.system(size: 27, weight: .semibold))
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 29, weight: .semibold))
                         .opacity(open ? 0 : 1)
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .scaleEffect(open ? 0.4 : 1)
@@ -947,19 +957,19 @@ struct CareMenu: View {
                         .rotationEffect(.degrees(open ? 0 : -90))
                         .scaleEffect(open ? 1 : 0.4)
                 }
-                .foregroundStyle(Self.brown)
-                .frame(width: tight ? 54 : 64, height: tight ? 54 : 64)
-                .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.28), radius: 9, y: 4))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
+                .foregroundStyle(Color.white)
+                .frame(width: tight ? 58 : 72, height: tight ? 58 : 72)
+                .contentShape(Circle())
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }
             .buttonStyle(.plain)
+            .glassEffect(.regular.tint(FocusStyle.pink).interactive(), in: .circle)
             .accessibilityIdentifier("care-menu")
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
             .accessibilityValue(open ? "expanded" : "collapsed")
             .accessibilityHint(who.map { "Shows care actions for \($0)" } ?? "Shows care actions for everyone")
             .accessibilityAction(.escape) { withAnimation(Self.spring) { open = false } }
-            .accessibilityShowsLargeContentViewer { Label(who.map { "\($0)'s menu" } ?? "Care menu", systemImage: "pawprint.fill") }
+            .accessibilityShowsLargeContentViewer { Label(who.map { "\($0)'s menu" } ?? "Care menu", systemImage: "heart.fill") }
             .keyboardShortcut("p", modifiers: .command)
         }
         .animation(Self.spring, value: who)
@@ -994,10 +1004,9 @@ struct ReleaseButton: View {
             }
             .foregroundStyle(FocusStyle.brown)
             .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
-            .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .capsule)
         .accessibilityIdentifier("focus-release")
         .accessibilityLabel(title)
         .accessibilityHint("Goes back to the room")
@@ -1042,5 +1051,24 @@ struct FocusHint: View {
                     withAnimation(.easeOut(duration: 0.5)) { visible = false }
                 }
         }
+    }
+}
+
+/// An icon button inside a shared glass capsule (no disc of its own): 44 pt wide x 44 pt tall hit target.
+struct HUDGlassIcon: View {
+    let systemName: String
+    let label: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(CareMenu.brown)
+                .frame(width: 48, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityShowsLargeContentViewer { Label(label, systemImage: systemName) }
     }
 }

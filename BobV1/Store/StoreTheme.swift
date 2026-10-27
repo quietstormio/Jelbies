@@ -43,17 +43,30 @@ enum SK {
 struct DropsPill: View {
     let wallet: DropsWallet
     var dark = false
+    var glass = false          // Liquid Glass capsule (home HUD)
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "drop.fill").font(.system(size: 15, weight: .black)).foregroundStyle(dark ? SK.honey : SK.sky)
             Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
-        .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+        .modifier(DropsPillBack(dark: dark, glass: glass))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(wallet.count) Drops")
         .accessibilityIdentifier("drops-pill")
+    }
+}
+
+private struct DropsPillBack: ViewModifier {
+    let dark: Bool, glass: Bool
+    func body(content: Content) -> some View {
+        if glass {
+            content.glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            content
+                .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+        }
     }
 }
 

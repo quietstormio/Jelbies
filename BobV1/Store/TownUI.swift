@@ -17,9 +17,7 @@ struct GoOutButton: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action()
         } label: {
             Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(SK.ink).frame(width: 48, height: 48)
-                .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                .foregroundStyle(CareMenu.brown).frame(width: HUDTuning.railWidth, height: HUDTuning.railRow).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
@@ -34,15 +32,13 @@ struct BagButton: View {
     var action: () -> Void
     var body: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action() } label: {
-            Image(systemName: "bag.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(SK.ink)
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+            Image(systemName: "bag.fill").font(.system(size: 19, weight: .heavy)).foregroundStyle(CareMenu.brown)
+                .frame(width: HUDTuning.railWidth, height: HUDTuning.railRow).contentShape(Rectangle())
                 .overlay(alignment: .topTrailing) {
                     if store.newCount > 0 {
                         Text("\(store.newCount)").font(SK.font(11, .black)).foregroundStyle(.white)
                             .frame(minWidth: 20, minHeight: 20).background(Circle().fill(SK.pink))
-                            .overlay(Circle().strokeBorder(SK.cream, lineWidth: 2)).offset(x: 4, y: -4)
+                            .overlay(Circle().strokeBorder(SK.cream, lineWidth: 2)).offset(x: -6, y: 8)
                     }
                 }
         }

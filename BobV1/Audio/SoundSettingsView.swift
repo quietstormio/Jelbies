@@ -10,6 +10,7 @@ struct SoundSettingsPanel: View {
     @Bindable var hub: AudioHub
     var ears: Ears = .shared
     var nowPlaying: NowPlaying? = nil          // override for captures / tests (the XCTest hub is muted)
+    var openExtras: (() -> Void)? = nil          // the "Siri and Lock Screen" row (opens AppleExtrasPanel)
     var close: () -> Void
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side (~400 pt tall): a tighter layout
     private var tight: Bool { vsc == .compact }
@@ -31,6 +32,19 @@ struct SoundSettingsPanel: View {
             row("Sound effects", symbol: "speaker.wave.2.fill", on: $hub.settings.sfxOn, volume: $hub.settings.sfxVolume, id: "sfx")
             Divider().overlay(ink.opacity(0.2))
             EarsSettingsRow(ears: ears, tight: tight)
+            if let openExtras {
+                Divider().overlay(ink.opacity(0.2))
+                Button(action: openExtras) {
+                    HStack {
+                        Label("Siri and Lock Screen", systemImage: "sparkles.rectangle.stack").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(ink.opacity(0.5))
+                    }
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("extras-button")
+            }
         }
         .padding(tight ? 12 : 16)
         .frame(width: tight ? 300 : 270)
