@@ -16,7 +16,7 @@ nonisolated enum PipSpikes {
     static let tailEnd: Double = 0.80               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
     static let tiltDeg: Float = 30                  // each spike leans this far from the surface normal toward the tail
-    static let slim: Float = 0.8                    // sideways thinning
+    static let slim: Float = 1.0                    // sideways thinning
     static let backFractions: [Float] = [0]          // (marker: the back spikes are rigid on the skin, see FeatureSet.partRotation)
     /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
@@ -96,37 +96,55 @@ nonisolated enum PipSpikes {
         // ---- a short row of small rounded cones along the TOP ridge of the tail only (none on the head or the back), evenly spaced from the root to near the tip
         let sh = TailBean.shape
         let tn = tones(spec: spec)
-        let t0 = sh.sink + 0.12 * (sh.length - sh.sink), t1 = sh.sink + tailEnd * (sh.length - sh.sink)
+        // spike 1 sits on the body's back above the root (its own rigid part on the skin); spike 2 just above the root; spikes 3-6 along the tail's top ridge
+        var parts: [(String, Int, Int, SIMD3<Float>)] = []
         var widths: [Float] = [], centres: [Float] = []
+        let W = Float(sh.width)
+        func hOf(_ u: Float) -> Float { 0.17 * W * (1 - 0.4 * u) }                       // height; base diameter = height / 1.3
+        // spike 1: on the back silhouette line, 35% of the way up from the root to the top
+        do {
+            let y = Double(sh.root.y) + 0.33 * (Double(spec.top) - sh.root.y)
+            var lo = -1.2, hi = 0.0
+            for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y, mid)) > 0 { lo = mid } else { hi = mid } }
+            let p = SIMD3<Double>(0, y, hi), n = f3(BobForm.normal(p))
+            var tg = SIMD3<Float>(0, -1, 0); tg -= n * simd_dot(tg, n); tg = simd_normalize(tg)
+            let H = hOf(0), bR = H / 2.6
+            let ax = simd_normalize(n * cosf(0.44) + tg * sinf(0.44))
+            let base = f3(p) - n * (0.3 * bR)
+            let start = m.pos.count
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.06, tipSoft: 0.2, lateral: SIMD3(1, 0, 0), tones: tn)
+            parts.append(("spike0", start, m.pos.count - start, base))
+            widths.append(2 * bR); centres.append(0)
+        }
+        let tailStart = m.pos.count
+        let ts: [Double] = [0.03, 0.17, 0.34, 0.50, 0.70].map { sh.sink + $0 * (sh.length - sh.sink) }
         var arcS: Float = 0, lastP: SIMD3<Float>? = nil
-        for k in 0..<count {
-            let u = count > 1 ? Double(k) / Double(count - 1) : 0
-            let t = t0 + (t1 - t0) * u
+        for (k, t) in ts.enumerated() {
             let rg = sh.ridge(t), fr = sh.frame(t), tg = sh.tangent(t)
             let ridgeP = f3(rg.p + rg.up * rg.r)
             if let lp = lastP { arcS += simd_distance(lp, ridgeP) }
             lastP = ridgeP
-            let size = Float(0.5 + 0.5 * (1 - u * 0.55))                    // slightly smaller toward the tip
-            let H = Float(sh.baseR) * 0.62 * size, bR = 0.50 * H
+            let H = hOf(Float(k + 1) / 5), bR = H / 2.6
             let up = f3(rg.up), tgF = f3(tg)
-            let tilt = Float(34) * Float.pi / 180
-            let ax = simd_normalize(up * cosf(tilt) + tgF * sinf(tilt))
-            let base = ridgeP - up * (0.35 * bR)
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.10, tipSoft: 0.5, lateral: f3(fr.side), tones: tn)
-            widths.append(2 * bR); centres.append(arcS)
+            let ax = simd_normalize(up * cosf(0.40) + tgF * sinf(0.40))
+            let base = ridgeP - up * (0.3 * bR)
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.2, lateral: f3(fr.side), tones: tn)
+            widths.append(2 * bR); centres.append(arcS + 10 * Float(k + 1))
         }
         var gap = Float.infinity
         for k in 1..<centres.count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
         lastLayout = (centres.count > 1 ? centres[1] - centres[0] : 0, widths, gap)
-        // one part: the whole row rides the tail (FeatureSet.partRotation sways it about the tail root like the skin)
         let root = f3(sh.root)
-        var pr = FeaturePrepared.Part(name: "tail")
-        pr.first = 0; pr.count = m.pos.count; pr.pivot = root
-        pr.bind = body.bind(root) ?? SurfaceBind(); pr.side = 0
-        for k in 0..<m.pos.count {
-            r.rest.append(m.pos[k]); r.off.append(m.pos[k] - root); r.nrm.append(m.nrm[k]); r.col.append(m.col[k]); r.ao.append(m.ao[k]); r.partOfVertex.append(0)
+        parts.append(("tail", tailStart, m.pos.count - tailStart, root))
+        for (pi, pp) in parts.enumerated() {
+            var pr = FeaturePrepared.Part(name: pp.0)
+            pr.first = r.rest.count; pr.count = pp.2; pr.pivot = pp.3
+            pr.bind = body.bind(pp.3) ?? SurfaceBind(); pr.side = pi
+            for k in pp.1..<(pp.1 + pp.2) {
+                r.rest.append(m.pos[k]); r.off.append(m.pos[k] - pp.3); r.nrm.append(m.nrm[k]); r.col.append(m.col[k]); r.ao.append(m.ao[k]); r.partOfVertex.append(pi)
+            }
+            r.parts.append(pr)
         }
-        r.parts.append(pr)
         r.anchor = root
         var ti = 0
         while ti + 2 < m.idx.count {

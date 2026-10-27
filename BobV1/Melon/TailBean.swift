@@ -49,8 +49,8 @@ nonisolated enum TailBean {
             if t < sink { let a = max(t, 0) / sink; return radius(sink) * (0.45 + 0.55 * a * a) }     // buried: narrows so it never pokes out of the sides
             let u = min(t / length, 1)
             let uu = min(max((t - sink) / (length - sink), 0), 1)
-            let taper = tipR + (baseR - tipR) * pow(1 - uu, 0.9) * (1 - 0.18 * uu)
-            let flare = 1 + 0.30 * exp(-(t - sink) / 0.14) * (1 - u)
+            let taper = tipR + (baseR - tipR) * pow(1 - uu, 1.25)
+            let flare = 1 + 0.16 * exp(-(t - sink) / 0.14) * (1 - u)
             return taper * flare
         }
         /// Cross-section frame at `t`: sideways (+x side) and the way up, both perpendicular to the centre line.
@@ -67,16 +67,16 @@ nonisolated enum TailBean {
     }
 
     static let shape: Shape = {
-        let y0 = 0.42                                                    // the lower back
+        let y0 = 0.66                                                    // the lower back
         var lo = -1.2, hi = 0.0
         for _ in 0..<50 { let m = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y0, m)) > 0 { lo = m } else { hi = m } }
         let root = SIMD3(0, y0, hi)
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.02, sink = 0.26, ys = 0.95
-        let baseR = width / 4.6                                             // about a third of the body width across
-        let vis = 1.1 * width - tipR                                      // surface -> start of the round tip cap
+        let tipR = 0.025, sink = 0.26, ys = 0.95
+        let baseR = width / 6                                             // about a third of the body width across
+        let vis = 1.35 * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var shape = Shape(root: root, table: [], step: step, length: length, sink: sink, tipR: tipR, baseR: baseR, xs: 1.0, ys: ys, width: width)
@@ -86,9 +86,9 @@ nonisolated enum TailBean {
         while t <= length + step {
             table.append(cur)
             let u = max(0, (t - sink) / vis)
-            let psi = 88 * pow(u, 1.05) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
-            let floorY = shape.radius(t) * ys + 0.004                     // rest on the floor
-            let th = -min(0.62, atan2(max(cur.y - floorY, 0), 0.16))      // sweeps down, easing onto the floor
+            let psi = 112 * pow(u, 1.2) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
+            let floorY = shape.radius(t) * ys + Double(restFloor) + 0.004 + 0.07 * pow(max(0, (u - 0.8) / 0.2), 2)                     // rest on the floor
+            let th = -min(0.95, atan2(max(cur.y - floorY, 0), 0.12))      // sweeps down, easing onto the floor
             cur += SIMD3(sin(psi) * cos(th), sin(th), -cos(psi) * cos(th)) * step
             cur.y = max(cur.y, floorY)
             t += step
@@ -128,6 +128,8 @@ nonisolated enum TailBean {
         return (pos, nrm)
     }()
 
+    /// The rest-space height of the floor under the tail (the egg sits about this much below its rest y once settled).
+    static let restFloor: Float = 0.14
     static let rootF = SIMD3<Float>(Float(shape.root.x), Float(shape.root.y), Float(shape.root.z))
     static let localF: [SIMD3<Float>] = local.pos.map { SIMD3(Float($0.x), Float($0.y), Float($0.z)) }
 

@@ -428,7 +428,18 @@ nonisolated final class Skinner {
         let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
         let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
         let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
-        for i in 0..<n { let p = Cs + Rot * (TailBean.localF[i] - Cr); let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z }
+        // The long tail lies on the floor: its high part (the root) follows the body's tilt rigidly, but the low part only follows the body's heading and position
+        // (a long lever would otherwise swing it through the floor whenever the egg sags or leans); the blend is by rest height.
+        let fwd = Rot * SIMD3<Float>(0, 0, 1)
+        let RotY = simd_quatf(angle: atan2f(fwd.x, fwd.z), axis: SIMD3(0, 1, 0))
+        for i in 0..<n {
+            let L = TailBean.localF[i]
+            let full = Cs + Rot * (L - Cr)
+            var flat = Cs + RotY.act(L - Cr); flat.y = L.y - TailBean.restFloor
+            let w = 1 - simd_smoothstep(0.22, 0.5, L.y)
+            let p = full + (flat - full) * w
+            let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
+        }
         let B = P(0), T = P(n - 1)
         if !tailInit { tailScale = tailOn ? 1 : 0; tailInit = true }
         tailScale += max(-dt / 0.15, min(dt / 0.15, (tailOn ? 1 : 0) - tailScale))
