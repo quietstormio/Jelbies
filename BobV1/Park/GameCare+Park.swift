@@ -158,7 +158,7 @@ extension GameCare {
                 // how close they are shapes how often they do the friendly socials (BlobSocial+Friends.swift), both ways
                 let closeness = FriendTuning.closeMul[before.rawValue]
                 me.brain?.socialBook.close[a.id] = closeness; a.brain?.socialBook.close[me.id] = closeness
-                if let partner = me.brain?.socialPartnerID, partner == a.id {          // playing together
+                if a.id != me.id, me.brain?.social?.involves(a.id) == true {          // playing together
                     if let s = me.brain?.social, s.kind.isFriendly, s.end == nil {
                         rate *= ParkTuning.friendlyMul
                         if work.friendSession[k] != ObjectIdentifier(s) {          // a new friendly social: a bonus

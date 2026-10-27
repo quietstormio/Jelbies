@@ -170,7 +170,7 @@ final class AnticsTests: XCTestCase {
     }
 
     func testEveryNewSocialKindCompletesWithFeetAttachedAndArmsStubby() {
-        for kind in [SocialKind.chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line] {
+        for kind in [SocialKind.chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .swayHug, .danceOff, .whisperGiggle] {
             let (lab, secs, ok) = runKind(kind)
             XCTAssertTrue(ok, "\(kind): completes (took \(secs) s)")
             XCTAssertGreaterThan(secs, 2, "\(kind) takes a while")
