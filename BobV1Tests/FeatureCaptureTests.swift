@@ -486,6 +486,17 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro8.png")
     }
 
+    func testCapturePipHatsRidge() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        var rows: [UIImage] = []
+        for (name, look) in [("cowboy", WearLook.cowboyHat), ("beret", .beret), ("bucket", .bucketHat), ("beanie", .beanieHoney)] {
+            let a = try closeup(Char(id: 1, outfit: [.head: look]), yaw: Float.pi * 0.85, label: "Pip + \(name): back 3/4", dist: 2.6, lookY: 0.35, lookBack: 0.15)
+            let b = try closeup(Char(id: 1, outfit: [.head: look]), yaw: Float.pi / 2, label: "Pip + \(name): side", dist: 2.6, lookY: 0.35, lookBack: 0.15)
+            rows.append(hstack([a, b]))
+        }
+        try write(vstack([hstack([rows[0], rows[1]]), hstack([rows[2], rows[3]])]), d + "/pip_hats_ridge.png")
+    }
+
     // MARK: roam corners (2026-10-21 room movement v2)
 
     /// A Jelbie at each extreme corner of the roaming polygon (front-left, front-right, back-left, back-right), the real renderer, the real room camera, with
