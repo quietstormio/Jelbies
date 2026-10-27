@@ -20,7 +20,7 @@ import Foundation
 
 nonisolated enum FeatureTuning {
     static let popTime: Float = 0.25
-    static let partFade: Float = 0.25
+    static let partFade: Float = 0.15
     /// A spine's base sinks this far into the crown it grows through.
     static let crownSink: Float = 0.015
     /// Spine wobble: how hard body acceleration (u/s^2) and squash rate (1/s) push, in degrees.
@@ -185,11 +185,8 @@ final class FeatureSet {
     }
 
     private func stepSpines(_ s: inout Slot, spec: FeatureSpec, dt: Float) {
-        let n = spec.spines.count
-        if s.spineA.count != n { s.spineA = Array(repeating: .zero, count: n); s.spineV = Array(repeating: .zero, count: n) }
-        let Rinv = simd_float3x3(s.carry.rotation).transpose
-        // under a hat that encloses his head the small spikes whose base sits under the hat (inside its footprint, at or above its brim line) are
-        // covered: tucked away. The ones below the brim line (down his back) and outside the footprint stay; perch items leave all showing.
+        // Pip's ridge spikes under a hat that encloses his head: a back spike whose base sits under the hat's crown footprint at or above (a margin below) its brim line
+        // shrinks away (so no tip peeks out under the edge) and scales back in when the hat comes off. Perch items (bows, headphones, antennae) cover nothing.
         var hat: (crown: [Float], brimY: Float)?
         if let art = s.fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
            let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
@@ -197,27 +194,19 @@ final class FeatureSet {
             for v in piece.rest { lo = min(lo, v.y) }
             hat = (piece.crown, lo)
         }
-        for (k, sp) in spec.spines.enumerated() {
-            let a = Rinv * accel(s, lag: sp.lag, dt: dt)                    // body frame
-            let axis = sp.axis.v3
-            // push: lateral (across = x) and along-spine (the tangent in the sagittal plane) acceleration tips the spine the other way; squash rate nods it
-            let along = simd_normalize(SIMD3<Float>(0, -axis.z, axis.y))      // sagittal tangent, perpendicular to the spine axis
-            let push = SIMD2<Float>(-simd_dot(a, along) * FeatureTuning.spineAccelGain + s.squashRate * FeatureTuning.spineSquashGain * 0.15,
-                                    -a.x * FeatureTuning.spineAccelGain)
-            let w = 2 * .pi * sp.hz, z = sp.damping
-            s.spineV[k] += (-w * w * s.spineA[k] - 2 * z * w * s.spineV[k] + push * w * w * 0.02) * dt
-            s.spineA[k] += s.spineV[k] * dt
-            let l = simd_length(s.spineA[k])
-            if l > sp.maxDeg { s.spineA[k] *= sp.maxDeg / l }
-            if !l.isFinite { s.spineA[k] = .zero; s.spineV[k] = .zero }
-            // a spine under a hat shrinks away
-            let want: Float = (Self.coveredByHat(sp, hat) || s.fit.hiddenParts.contains(sp.part)) ? 0 : 1
-            let cur = s.partScale[sp.part] ?? want
-            s.partScale[sp.part] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
+        guard let body, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec) else { return }
+        for part in prep.parts where part.name != "tail" {
+            let b = part.pivot
+            var covered = false
+            if let h = hat, let ch = CrownFit.height(h.crown, b.x, b.z) { covered = b.y >= h.brimY - Self.hatMargin && ch >= b.y - 0.02 }
+            let want: Float = covered ? 0 : 1
+            let cur = s.partScale[part.name] ?? want
+            s.partScale[part.name] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
     }
+    /// How far below a hat's brim line a spike's base still counts as covered (the spike leans down the back, so its tip must not peek out under the edge).
+    static let hatMargin: Float = 0.07
 
-    /// The tail spikes follow the tail: the sway / wag / bob angles come from the Skinner that moves the tail in the body mesh (Skinner.applyTail).
     private func stepTail(_ s: inout Slot, brain: BlobBrain, dt: Float) {
         s.tailYaw = brain.skinnerRef?.tailYaw ?? 0
         s.tailPitch = brain.skinnerRef?.tailPitch ?? 0
@@ -390,6 +379,7 @@ final class FeatureSet {
             let tuck = s.partScale[part.name] ?? 1
             let ps = (s.feature == .spines ? 1 : tuck) * s.scale
             if ps * tuck <= 0.001 { keep[pi] = false }
+            let ownTuck: Float = s.feature == .spines ? tuck : 1
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
@@ -425,6 +415,7 @@ final class FeatureSet {
                     q = pivotW + M * (rot * o)
                     n = R * (rot * n)
                 }
+                if ownTuck != 1 { q = pivotW + (q - pivotW) * ownTuck }           // a covered ridge spike shrinks onto its own base
                 if ps != 1 { q = anchorW + (q - anchorW) * ps }
                 m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
