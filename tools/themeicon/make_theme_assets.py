@@ -32,26 +32,30 @@ def bez(p0,p1,p2,p3,n=60):
 BODY = (bez((0,-545),(276,-545),(500,-301),(500,0))+bez((500,0),(500,608),(276,1100),(0,1100))
         +bez((0,1100),(-276,1100),(-500,608),(-500,0))+bez((-500,0),(-500,-301),(-276,-545),(0,-545)))
 
+# Peek v2: a wide round head dome rising from the bottom edge (1024 space). Mirrored by ThemeIconView in ThemeColor.swift.
+CX, CY, RX, RY = 512, 860, 450, 450          # dome ellipse: ~88% of the width, top at y=410 (40%)
+EYE_Y, EYE_DX, EYE_RX, EYE_RY = 788, 165, 40, 52   # eyes ~23% above the bottom
+BROW_Y, BROW_IN, BROW_OUT, BROW_W = 690, 105, 225, 30
+OUTLINE_W = 44
+
 def render_icon(c, S=4):
-    N=1024*S; im=Image.new("RGB",(N,N),c["bg"]); d=ImageDraw.Draw(im)
-    k=0.84*S; T=lambda p:(512*S+p[0]*k, 700*S+p[1]*k)
-    pts=[T(p) for p in BODY]
-    d.polygon(pts,fill=c["line"]); d.line(pts+[pts[0]],fill=c["line"],width=round(52*k),joint="curve")
-    for p in pts: r=26*k; d.ellipse([p[0]-r,p[1]-r,p[0]+r,p[1]+r],fill=c["line"])
-    d.polygon(pts,fill=c["body"])
-    # shine arc: ellipse (405,445) centre (0,0)-ish from -385.2,-137.5 to -249.3,-350.7
     import math
-    a0=math.atan2(-137.5/445,-385.2/405); a1=math.atan2(-350.7/445,-249.3/405)
-    arc=[T((405*math.cos(a),445*math.sin(a))) for a in [a0+(a1-a0)*i/40 for i in range(41)]]
-    w=round(44*k); d.line(arc,fill=c["shine"],width=w)
-    for p in (arc[0],arc[-1]): r=22*k; d.ellipse([p[0]-r,p[1]-r,p[0]+r,p[1]+r],fill=c["shine"])
-    def ell(cx,cy,rx,ry,col): x,y=T((cx,cy)); d.ellipse([x-rx*k,y-ry*k,x+rx*k,y+ry*k],fill=col)
-    ell(-164.7,-406.5,22,22,c["shine"])
-    for x1,x2 in ((-260,-120),(120,260)):
-        a,b=T((x1,-191)),T((x2,-191)); d.line([a,b],fill=c["ink"],width=round(36*k)); r=18*k
-        for p in (a,b): d.ellipse([p[0]-r,p[1]-r,p[0]+r,p[1]+r],fill=c["ink"])
+    N=1024*S; im=Image.new("RGB",(N,N),c["bg"]); d=ImageDraw.Draw(im)
+    P=lambda x,y:(x*S,y*S)
+    def ell(cx,cy,rx,ry,col): d.ellipse([(cx-rx)*S,(cy-ry)*S,(cx+rx)*S,(cy+ry)*S],fill=col)
+    # outline = a larger dome in the line colour, then the white dome on top
+    ell(CX,CY,RX+OUTLINE_W/2,RY+OUTLINE_W/2,c["line"]); ell(CX,CY,RX-OUTLINE_W/2,RY-OUTLINE_W/2,c["body"])
+    # shine: an arc just inside the upper-left of the dome, with a dot beyond it
+    a,b=RX-OUTLINE_W/2-55,RY-OUTLINE_W/2-55
+    arc=[P(CX+a*math.cos(math.radians(t)),CY+b*math.sin(math.radians(t))) for t in [212+i*0.9 for i in range(41)]]
+    d.line(arc,fill=c["shine"],width=40*S)
+    for q in (arc[0],arc[-1]): r=20*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
+    q=P(CX+a*math.cos(math.radians(204)),CY+b*math.sin(math.radians(204))); r=18*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
     for sx in (-1,1):
-        ell(190*sx,-65,56,72,c["ink"]); ell(sx*190-sx*17.9,-93.8,16.8,19.4,c["hi"])
+        x1,x2=sorted((CX+sx*BROW_IN,CX+sx*BROW_OUT)); a_,b_=P(x1,BROW_Y),P(x2,BROW_Y)
+        d.line([a_,b_],fill=c["ink"],width=BROW_W*S); r=BROW_W/2*S
+        for q in (a_,b_): d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["ink"])
+        ell(CX+sx*EYE_DX,EYE_Y,EYE_RX,EYE_RY,c["ink"]); ell(CX+sx*EYE_DX-sx*11,EYE_Y-20,11,13,c["hi"])
     return im.resize((1024,1024),Image.LANCZOS)
 
 def recolor(im,pid):
