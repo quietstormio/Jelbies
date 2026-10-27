@@ -34,7 +34,7 @@ final class ParkBook {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { visitors = v }
+        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { visitors = v.map { var x = $0; x.signature = .none; return x } }   // (old saves had signatures; visitors are plain now)
         else { visitors = ParkPool.generate() }
     }
 

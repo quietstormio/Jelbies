@@ -188,11 +188,13 @@ nonisolated enum ParkPool {
         for i in stride(from: colours.count - 1, to: 0, by: -1) { colours.swapAt(i, Int(r.next() % UInt64(i + 1))) }
         var names = ParkWords.names
         for i in stride(from: names.count - 1, to: 0, by: -1) { names.swapAt(i, Int(r.next() % UInt64(i + 1))) }
+        // Signatures belong only to the player's starters; visitors are plain. The draw is still consumed so the rest of the pool stays identical.
         let signatures: [JellyFeature] = [.none, .none, .none, .spines, .daisy, .wings]
         var out: [ParkVisitor] = []
         for i in 0..<count {
             let style = ParkStyle.allCases[Int(r.next() % UInt64(ParkStyle.allCases.count))]
-            let sig = r.pick(signatures)
+            _ = r.pick(signatures)
+            let sig: JellyFeature = .none
             let wear: WearLook? = r.unit() < 0.45 ? r.pick(wearables) : nil
             let name = names[i % names.count]
             out.append(ParkVisitor(id: i, name: name, colour: colours[i % colours.count], signature: sig, wear: wear, style: style,
