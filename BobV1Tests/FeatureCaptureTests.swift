@@ -193,7 +193,7 @@ final class FeatureCaptureTests: XCTestCase {
     }
 
     /// A 900 x 900 close-up of rig 0 of a one-character lab from `yaw` radians round his facing (0 front, pi back).
-    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, dist: Float = 3.4, lookY: Float = 0.25, lookBack: Float = 0, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
+    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, dist: Float = 3.4, lookY: Float = 0.25, lookBack: Float = 0, lift: Float = 0.1, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
         W = 900; H = 900
         let chars = [c]
         let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: seed)
@@ -201,12 +201,18 @@ final class FeatureCaptureTests: XCTestCase {
         let d = dress(lab, chars)
         prepare?(lab, d)
         let r = lab.rigs[0]
+        var sk0 = skin(r); for _ in 0..<30 { sk0 = skin(r) }                    // the tail eases in over 0.15 s of skinner updates: let it finish
+        if label.contains("back34"), let tf = MotionRig.renderMesh.armCapsule?.tailFirst {
+            var t = "tailOn=\(r.skinner.tailOn) tailFirst=\(tf)\n"
+            for ring in stride(from: 0, to: TailBean.rings, by: 3) { let i = tf + 1 + TailBean.around * ring; t += String(format: "ring %d: (%.2f,%.2f,%.2f)\n", ring, sk0[6 * i], sk0[6 * i + 1], sk0[6 * i + 2]) }
+            try? t.write(toFile: (ProcessInfo.processInfo.environment["CHAR_CAP_DIR"] ?? "/tmp") + "/dbg2.txt", atomically: true, encoding: .utf8)
+        }
         let pose = r.sim.bodyPose(iterations: 3)
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_normalize(fwd)
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let cc = pose.centroid
-        let cam = Self.lookCamera(target: SIMD3(cc.x - fwd.x * lookBack, cc.y + lookY, cc.z - fwd.z * lookBack), dir: dir, dist: dist, aspect: 1)
+        let cam = Self.lookCamera(target: SIMD3(cc.x - fwd.x * lookBack, cc.y + lookY, cc.z - fwd.z * lookBack), dir: dir, dist: dist, aspect: 1, lift: lift)
         let img = composite(lab, d, chars, ren, target, cam: cam)
         return labelled(img.uiImage()!, label)
     }
@@ -484,6 +490,43 @@ final class FeatureCaptureTests: XCTestCase {
         let z2 = try closeup(Char(id: 1), yaw: Float.pi * 0.8, label: "Pip: back 3/4 close-up", dist: 1.7, lookY: 0.0, lookBack: 0.4)
         NSLog("PIPLAYOUT spacing=%.3f widths=%@ minGap=%.3f", PipSpikes.lastLayout.spacing, PipSpikes.lastLayout.widths.map { String(format: "%.3f", $0) }.joined(separator: ","), PipSpikes.lastLayout.minGap)
         try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro8.png")
+    }
+
+    /// Pip's new long tail: back 3/4, side, front 3/4, top-ish close-ups and a walking frame (piptail2_*.png).
+    func testPipTailDbg() throws {
+        let d = try dir()
+        let sh = TailBean.shape
+        var dbg = String(format: "width=%.3f length=%.3f sink=%.3f root=(%.2f,%.2f,%.2f)\n", sh.width, sh.length, sh.sink, sh.root.x, sh.root.y, sh.root.z)
+        var tt = 0.0; while tt <= sh.length { let q = sh.point(tt); dbg += String(format: "t%.2f (%.2f,%.2f,%.2f) r%.3f\n", tt, q.x, q.y, q.z, sh.radius(tt)); tt += 0.15 }
+        let r = MotionRig(game: true); Self.keepRigs.append(r)
+        r.skinner.tailOn = true
+        r.sim.teleport(toXZ: SIMD2(0, 0)); for _ in 0..<120 { r.sim.step() }
+        r.brain.currentPose(r.sim)
+        var dd = skin(r); dd = skin(r)
+        let tf = MotionRig.renderMesh.armCapsule!.tailFirst; r.skinner.tailFirst = tf
+        dbg += "tailFirst=\(tf) vertexCount=\(MotionRig.renderMesh.vertexCount) tailV=\(TailBean.vertexCount)\n"
+        var ymin: Float = 9; for i in 0..<tf { ymin = min(ymin, dd[6 * i + 1]) }
+        dbg += "min y of body+feet verts = \(ymin)\n"
+        for ring in stride(from: 0, to: TailBean.rings, by: 3) { let i = tf + 1 + TailBean.around * ring; dbg += String(format: "ring %d centre-ish v: (%.2f,%.2f,%.2f)\n", ring, dd[6 * i], dd[6 * i + 1], dd[6 * i + 2]) }
+        try dbg.write(toFile: d + "/dbg.txt", atomically: true, encoding: .utf8)
+    }
+    static var keepRigs: [MotionRig] = []
+
+    func testCapturePipTail2() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        let c = Char(id: 1)
+        let sh = TailBean.shape
+        var dbg = String(format: "TAILDBG width=%.3f length=%.3f sink=%.3f root=(%.2f,%.2f,%.2f)", sh.width, sh.length, sh.sink, sh.root.x, sh.root.y, sh.root.z)
+        var tt = 0.0; while tt <= sh.length { let q = sh.point(tt); dbg += String(format: " | t%.2f (%.2f,%.2f,%.2f) r%.3f", tt, q.x, q.y, q.z, sh.radius(tt)); tt += 0.2 }
+        try dbg.write(toFile: d + "/dbg.txt", atomically: true, encoding: .utf8)
+        let views: [(String, Float)] = [("back34", Float.pi * 1.2), ("view1.3", Float.pi * 1.4), ("front34", 0.9)]
+        for (n, y) in views { try write(try closeup(c, yaw: y, label: "Pip \(n)", dist: 4.6, lookY: 0.15, lookBack: 0.5, lift: 0.3), d + "/piptail2_\(n).png") }
+        try write(try closeup(c, yaw: Float.pi * 0.8, label: "walk back 3/4", dist: 4.6, lookY: 0.15, lookBack: 0.5, lift: 0.3) { lab, dr in
+            let r = lab.rigs[0]
+            let p0 = r.sim.bodyPose(iterations: 3).centroid
+            r.brain.script = .walk(target: SIMD2(p0.x - 2.0, p0.z + 0.3), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            for _ in 0..<70 { lab.tick(watching: false); self.tick(dr, 0, r, c) }
+        }, d + "/piptail2_walk.png")
     }
 
     func testCapturePipHatsRidge() throws {

@@ -16,7 +16,7 @@ final class PickerCamera {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.object(forKey: "PickerYaw") != nil { return UserDefaults.standard.float(forKey: "PickerYaw") }
         #endif
-        switch character { case 1: return 1.3; case 3: return 0.7; default: return 0.5 }
+        switch character { case 1: return 1.2; case 3: return 0.7; default: return 0.5 }
     }
     private var yaw0: Float = 0.5
     /// Page changed: the new species' resting view (zoom and tilt reset).

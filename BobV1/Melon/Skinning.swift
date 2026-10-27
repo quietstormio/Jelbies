@@ -428,7 +428,18 @@ nonisolated final class Skinner {
         let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
         let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
         let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
-        for i in 0..<n { let p = Cs + Rot * (TailBean.localF[i] - Cr); let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z }
+        // The long tail lies on the floor: its high part (the root) follows the body's tilt rigidly, but the low part only follows the body's heading and position
+        // (a long lever would otherwise swing it through the floor whenever the egg sags or leans); the blend is by rest height.
+        let fwd = Rot * SIMD3<Float>(0, 0, 1)
+        let RotY = simd_quatf(angle: atan2f(fwd.x, fwd.z), axis: SIMD3(0, 1, 0))
+        for i in 0..<n {
+            let L = TailBean.localF[i]
+            let full = Cs + Rot * (L - Cr)
+            var flat = Cs + RotY.act(L - Cr); flat.y = L.y - TailBean.restFloor
+            let w = 1 - simd_smoothstep(0.22, 0.5, L.y)
+            let p = full + (flat - full) * w
+            let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
+        }
         let B = P(0), T = P(n - 1)
         if !tailInit { tailScale = tailOn ? 1 : 0; tailInit = true }
         tailScale += max(-dt / 0.15, min(dt / 0.15, (tailOn ? 1 : 0) - tailScale))
@@ -446,7 +457,7 @@ nonisolated final class Skinner {
         tailYaw += (yawT - tailYaw) * min(1, dt * 14); tailPitch += (pitchT - tailPitch) * min(1, dt * 10)
         if !tailYaw.isFinite { tailYaw = 0 }; if !tailPitch.isFinite { tailPitch = 0 }
         let D = simd_normalize(T - B)
-        let pivot = B + (T - B) * 0.30                               // about where the tail leaves the back
+        let pivot = Cs + Rot * (TailBean.rootF - Cr)                   // exactly where the tail leaves the back (the spikes' pivot too)
         let axis = simd_normalize(simd_cross(D, SIMD3<Float>(0, 1, 0)))
         let q = simd_quatf(angle: tailYaw * .pi / 180, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: tailPitch * .pi / 180, axis: simd_length(axis) > 1e-4 ? axis : SIMD3(1, 0, 0))
         let sc = tailScale
