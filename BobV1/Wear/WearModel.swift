@@ -56,7 +56,7 @@ nonisolated struct WearHide: OptionSet, Sendable {
     let rawValue: Int
     /// Poofs off while he sleeps (the eye mask goes on), back when he wakes. Hats and face items.
     static let asleep = WearHide(rawValue: 1)
-    /// Off while he eats (the food reaches for his mouth): sunglasses.
+    /// UNUSED since the drink fix (2026-10-26): worn items stay on while he eats or drinks (food and bottle go to the mouth, below the eyes; the mouth keep-out is the clothes' side of that).
     static let eating = WearHide(rawValue: 2)
     /// Off in the wash scene (like the shoes). EVERYTHING.
     static let wash = WearHide(rawValue: 4)
@@ -72,7 +72,6 @@ nonisolated enum WearRules {
         default: break
         }
         switch l {
-        case .sunglassesStar, .heartShades: h.insert(.eating)
         case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky, .cowboyHat, .beeAntennae: h.insert(.flip)
         default: break
         }

@@ -194,8 +194,13 @@ final class WearTests: XCTestCase {
         // the eye mask and a hat are never both out
         XCTAssertFalse(SleepMaskSet.wanted(b) && w.shown(0, .head) != nil)
         // hide flags
-        XCTAssertTrue(WearRules.hide(.sunglassesStar).contains(.eating))
-        XCTAssertFalse(WearRules.hide(.glassesRound).contains(.eating))
+        for l in WearLook.allCases { XCTAssertFalse(WearRules.hide(l).contains(.eating), "\(l) stays on while he eats or drinks") }
+        // eating / drinking: heart shades + beanie stay on and fully scaled
+        let drinkFit: [WearSlot: WearLook] = [.head: .beaniePink, .face: .heartShades]
+        b.script = .eat(t: 0.5, bowl: SIMD2(0, 0), dur: 3, drink: true)
+        XCTAssertTrue(WornSet.eating(b))
+        for _ in 0..<40 { w.tick(id: 0, brain: b, sim: a.sim, outfit: drinkFit, role: .none, hideAll: false, dt: 1.0 / 60) }
+        XCTAssertEqual(w.shown(0, .face), .heartShades); XCTAssertEqual(w.shown(0, .head), .beaniePink)
         XCTAssertTrue(WearRules.hide(.capeHero).contains(.flip))
         for l in WearLook.allCases { XCTAssertTrue(WearRules.hide(l).contains(.wash), "\(l) hides in the wash") }
         for l in WearLook.looks(.head) + WearLook.looks(.face) { XCTAssertTrue(WearRules.hide(l).contains(.asleep), "\(l)") }

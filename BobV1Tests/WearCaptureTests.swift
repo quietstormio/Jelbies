@@ -199,6 +199,33 @@ final class WearCaptureTests: XCTestCase {
         }, d + (isLand ? "/outfits_land.png" : "/outfits_ingame.png"))
     }
 
+    /// Pip in heart shades + beanie with the mouth open (a drink): the shades now stay on (left: the old behaviour for comparison, shades poofed off).
+    func testCaptureDrinkWear() throws {
+        let d = try dir()
+        W = 900; H = 900
+        DayClock.shared.forcedHour = 12
+        let full: Outfit = [.head: .beaniePink, .face: .heartShades]
+        var rows: [UIImage] = []
+        for (label, outfit, yaw, mouth) in [("BEFORE (old rule: shades hidden mid-drink)", [.head: .beaniePink] as Outfit, Float(0.6), Float(1)),
+                                             ("AFTER 3/4 mid-drink", full, Float(0.6), Float(1)), ("AFTER front mid-drink", full, Float(0), Float(1))] {
+            let lab = setUpLab([SIMD2(0.2, 0.6), SIMD2(30, 30), SIMD2(32, 30)], seed: 3)
+            let (ren, target) = try renderer(lab)
+            let sets = dress(lab, [outfit])
+            mouthRig = 0
+            let r = lab.rigs[0]
+            if outfit[.face] != nil { r.brain.script = .eat(t: 0.5, bowl: SIMD2(0, 0), dur: 3, drink: true); for _ in 0..<30 { sets[0].tick(id: 0, brain: r.brain, sim: r.sim, outfit: outfit, role: .none, hideAll: false, dt: 1.0 / 60) } }
+            let pose = r.sim.bodyPose(iterations: 3)
+            var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
+            fwd = simd_normalize(fwd)
+            let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
+            let c = pose.centroid
+            let cam = Self.lookCamera(target: SIMD3(c.x, c.y + 0.25, c.z), dir: dir, dist: 3.4, aspect: 1)
+            rows.append(labelled(composite(lab, sets, [outfit], ren, target, cam: cam, mouth: mouth).uiImage()!, label))
+        }
+        mouthRig = -1
+        try write(hstack(rows), d + "/wear_drink.png")
+    }
+
     func testCaptureCloseups() throws {
         let d = try dir()
         W = 900; H = 900
