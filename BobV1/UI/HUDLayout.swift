@@ -68,16 +68,16 @@ enum HUDLayout {
     }
 }
 
-/// The one glass look of the home HUD: bright cream frosted glass (the clear glass picked up the brown room and hid the brown icons).
+/// The one glass look of the home HUD: neutral white frosted glass (the clear glass picked up the brown room and hid the brown icons).
 enum HUDGlass {
-    static let cream = Color(red: 0.98, green: 0.96, blue: 0.92)
-    static let frost: Glass = .regular.tint(cream.opacity(0.78)).interactive()
+    static let white = Color.white          // neutral, so it works over every room's colours
+    static let frost: Glass = .regular.tint(white.opacity(0.55)).interactive()
     static let pink: Glass = .regular.tint(Color(red: 0.95, green: 0.38, blue: 0.56)).interactive()
 }
 
 extension View {
-    /// Cream frosted Liquid Glass in `shape`, with a cream fill under it so the room only shows through a little.
+    /// White frosted Liquid Glass in `shape`, with a white fill under it so the room only shows through a little.
     func hudFrost<S: SwiftUI.Shape>(in shape: S) -> some View {
-        background(shape.fill(HUDGlass.cream.opacity(0.55))).glassEffect(HUDGlass.frost, in: shape)
+        background(shape.fill(HUDGlass.white.opacity(0.4))).glassEffect(HUDGlass.frost, in: shape)
     }
 }
