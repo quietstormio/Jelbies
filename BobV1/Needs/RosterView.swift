@@ -76,7 +76,7 @@ struct RosterPanel: View {
                         ScrollView {
                             VStack(spacing: 10) {
                                 ForEach(care.select.blobs) { b in
-                                    BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id)) {
+                                    BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? []) {
                                         UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { open = false }
                                         onPick(b.id)
@@ -109,6 +109,7 @@ struct BlobCard: View {
     let blob: SelectBlob
     let needs: BlobNeeds
     var coat: BlobGrime.CoatTier = .normal
+    var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active food boosts, shown as chips under the status words
     let action: () -> Void
 
     static func moodColor(_ m: BlobMood) -> Color {
@@ -140,6 +141,11 @@ struct BlobCard: View {
                 meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }
                     .frame(maxWidth: .infinity)
                 status
+                if !perks.isEmpty {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {          // wraps instead of clipping
+                        ForEach(perks, id: \.kind.rawValue) { p in PerkChip(kind: p.kind, left: p.left) }
+                    }
+                }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))

@@ -31,7 +31,7 @@ struct GameScreen: View {
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
-    @State private var hudPerkH: CGFloat = 0          // measured: the perk badge row under it
+    @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
     @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
@@ -149,8 +149,8 @@ struct GameScreen: View {
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     if !focus.isActive, !cleaning, !racing {
-                        HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer(); PerkBadgeRow(care: model.care) }
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudPerkH = $0 }
+                        HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer() }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudInfoH = $0 }
                     }
                     Spacer()
                     if focus.showsDock {
@@ -205,7 +205,7 @@ struct GameScreen: View {
                 }
             }
             .jHUDCap()
-            .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudPerkH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
+            .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
             }.photoHidden()
 
