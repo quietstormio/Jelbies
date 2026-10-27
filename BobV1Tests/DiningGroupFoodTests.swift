@@ -25,9 +25,13 @@ final class DiningGroupFoodTests: XCTestCase {
         r.run(1)
         r.care.feed()
         XCTAssertTrue(r.care.groupActive)
-        var places = 0, together = false
+        var places = 0, together = false, earlyRelease = false
         r.run(90) {
             if r.care.dining.isPresent { places = max(places, r.care.dining.n) }
+            // a diner who is done is let go (no longer held / reserved) while the others are still at the tray
+            if r.care.group.isActive, r.care.trayOut, r.actors.contains(where: { a in
+                guard let b = a.brain, r.sawEating[a.id], !r.care.group.isHolding(a.id) else { return false }
+                return !b.reserved && r.care.group.memberIDs.contains(a.id) }) { earlyRelease = true }
             if r.actors.filter({ $0.brain?.activity == .eating }).count >= 3 { together = true }
             return r.t > 2 && !r.care.trayOut
         }
@@ -35,6 +39,7 @@ final class DiningGroupFoodTests: XCTestCase {
         XCTAssertEqual(places, 3)
         XCTAssertTrue(r.sawEating.allSatisfy { $0 }, "all three ate \(r.sawEating)")
         XCTAssertTrue(together, "they ate at the same time")
+        XCTAssertTrue(earlyRelease, "the first to finish was released before the group ended")
         for i in 0..<3 { XCTAssertGreaterThanOrEqual(r.level(i, .hunger), 0.85, "Jelly \(i) is at or near Full: \(r.level(i, .hunger))") }
     }
 

@@ -218,6 +218,9 @@ final class DiningGroup {
         for i in brains.indices where finished[i] && !released[i] && i < savedFinished.count {
             let b = brains[i]
             guard isIdle(b) else { continue }          // (his dine job has returned; wait until he has settled)
+            // `finished` alone is not proof he ate: a retried or preempted dine request also reports .dine / .sip. He is released only once the serving is really
+            // down (his planned pieces eaten, tray still out), never before he has started.
+            guard started[i], trayOut, eaten(i) >= piecesFor[i] else { continue }
             if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
             released[i] = true
             b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.peers = savedPeers[i]
