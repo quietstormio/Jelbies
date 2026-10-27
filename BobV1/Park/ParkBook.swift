@@ -34,7 +34,7 @@ final class ParkBook {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { visitors = v.map { var x = $0; x.signature = .none; return x } }   // (old saves had signatures; visitors are plain now)
+        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { visitors = v.map { var x = $0; x.signature = x.colour.speciesFeature; return x } }   // (old saves had random signatures; they follow the colour species now)
         else { visitors = ParkPool.generate() }
     }
 
