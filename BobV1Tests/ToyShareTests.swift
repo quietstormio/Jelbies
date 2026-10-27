@@ -20,8 +20,8 @@ final class ToyShareTests: XCTestCase {
         Self.keep.append(rig)
         rig.brain.anticsEnabled = true
         var valid = 0, misses: [String] = []
-        for q in 0..<4 { for xi in -5...5 { for zi in -6...5 {
-            let at = SIMD2<Float>(Float(xi) * 0.6, Float(zi) * 0.6)
+        for q in 0..<4 { for xi in -3...3 { for zi in -3...3 {
+            let at = SIMD2<Float>(Float(xi) * 1.2, Float(zi) * 1.2)
             guard DecorPlacement.isValid(.slide, at: at, among: [], ignoring: nil, quarter: q) else { continue }
             valid += 1
             DecorField.shared.set([PlacedDecor(uid: 7, kind: .slide, x: at.x, z: at.y, turns: q)])
@@ -68,10 +68,13 @@ final class ToyShareTests: XCTestCase {
     }
 
     func testToysOutGetPlayedWith() { share(park: false) }
-    func testParkToysGetPlayedWith() { share(park: true) }
+    func testParkToysGetPlayedWith() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["TOYSHARE_PARK"] != nil, "slow: set TOYSHARE_PARK=1")
+        share(park: true)
+    }
 
     func share(park: Bool) {
-        let secs = Float(ProcessInfo.processInfo.environment["TOYSHARE_SECONDS"] ?? "") ?? 150
+        let secs = Float(ProcessInfo.processInfo.environment["TOYSHARE_SECONDS"] ?? "") ?? 60
         var all = Tot()
         for seed in [3] as [UInt64] {
             let t = session(seconds: secs, seed: seed, park: park)

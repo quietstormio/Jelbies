@@ -24,6 +24,10 @@ enum ToyTuning {
     static let boredFor: Float = 90
     /// Idle weight of a decor behaviour = 1 + gain * pull of the best piece for it (see BlobBrain.toyWeight).
     static let weightGain: Float = 2.4
+    /// When he picks his next idle activity and a toy is out: the direct chance he goes to play with one, before the variety bag (the single knob for how much toy play there is).
+    static let directChance: Float = 0.40
+    /// Least seconds between two of his toy sessions' starts (so toy play is mixed with roaming, socials and rest).
+    static let directGap: Float = 20
     /// Founding set-up (launch, room switches) is not news.
     nonisolated(unsafe) static var settle: TimeInterval = 5
 }
