@@ -208,9 +208,11 @@ struct GameScreen: View {
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
             }.photoHidden()
-            .opacity(model.care.nightSkip.active ? 0 : 1)          // "Sleep until morning": the HUD is away until the morning has been shown
-            .allowsHitTesting(!model.care.nightSkip.active)
+            .opacity(model.care.nightSkip.active || model.care.arranging ? 0 : 1)          // "Sleep until morning": the HUD is away until the morning has been shown; arranging the room hides it too
+            .allowsHitTesting(!model.care.nightSkip.active && !model.care.arranging)
+            .accessibilityHidden(model.care.arranging)
             .animation(.easeInOut(duration: 0.6), value: model.care.nightSkip.active)
+            .animation(.easeInOut(duration: 0.2), value: model.care.arranging)
 
             BathChrome(care: model.care)
 

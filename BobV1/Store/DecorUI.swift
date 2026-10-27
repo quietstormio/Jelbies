@@ -84,8 +84,11 @@ struct ArrangeOverlay: View {
     }
 
     var body: some View {
+        // The outer reader respects the safe area, so its insets are the real ones; the inner one (and so the touch surface) ignores it.
+        // (Reading `safeAreaInsets` inside the `.ignoresSafeArea()` reader gave 0, which put the banner under the status bar.)
+        GeometryReader { outer in
+        let inset = outer.safeAreaInsets
         GeometryReader { g in
-            let inset = g.safeAreaInsets
             ZStack {
                 Color.clear.contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0)
@@ -163,6 +166,7 @@ struct ArrangeOverlay: View {
             }
         }
         .ignoresSafeArea()
+        }
         .transition(.opacity)
         .accessibilityIdentifier("arrange-overlay")
     }
