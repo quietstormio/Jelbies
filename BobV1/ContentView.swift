@@ -34,7 +34,7 @@ struct ContentView: View {
         case .menu: MainMenuView(flow: flow)
         case .wiping: SK.cream.ignoresSafeArea()
         case .adopt(let mode):
-            AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { flow.cancelAdoption() })
+            AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
         case .game: GameHost(session: flow.session)
         }
     }

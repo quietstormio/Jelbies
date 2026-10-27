@@ -67,6 +67,9 @@ final class StartFlow {
         }
     }
 
+    /// The first-adoption picker's back button: to the title menu.
+    func backToMenu() { if case .adopt = phase { phase = .menu } }
+
     /// Town: Adoption Center row.
     func openAdoption() { phase = .adopt(.more) }
 

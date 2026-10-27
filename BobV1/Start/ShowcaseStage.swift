@@ -11,6 +11,10 @@ struct ShowcaseStage: View {
     var focusFirst = false
     /// The room with nobody in it (the main menu): the one Jelly the stage needs is drawn hidden.
     var empty = false
+    /// False inside a framed window (the species picker); the main menu and the old full-screen use fill the screen.
+    var fullScreen = true
+    /// Called once the focused Jelbie has walked to the front (`focusFirst`), with the model (so the picker can ask for moves).
+    var onReady: ((MelonModel) -> Void)?
     @State private var model: MelonModel?
 
     var body: some View {
@@ -18,7 +22,7 @@ struct ShowcaseStage: View {
             Color.black
             if let model { MelonStage(model: model) }
         }
-        .ignoresSafeArea()
+        .modifier(SafeAreaIf(on: fullScreen))
         .allowsHitTesting(false)
         .onAppear { build() }
         .onDisappear { model?.paused = true }
@@ -38,6 +42,14 @@ struct ShowcaseStage: View {
             for _ in 0..<40 where m.status != .live { try? await Task.sleep(nanoseconds: 100_000_000) }
             try? await Task.sleep(nanoseconds: 900_000_000)
             if !m.paused { m.care.comeHere(jelly: 0) }
+            for _ in 0..<50 where !m.paused && !m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 100_000_000) }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if !m.paused { onReady?(m) }
         }
     }
+}
+
+private struct SafeAreaIf: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View { if on { content.ignoresSafeArea() } else { content } }
 }

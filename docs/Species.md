@@ -15,6 +15,24 @@ Signature features belong to a colour **species**, not to individual characters.
 
 Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
 
+## Species names and lore (2026-10-26)
+
+World: Jelbies are baby jellies from Wobble Isle, the little floating island in the sky. Every morning, dewdrops gather in the Jelly Spring at the middle of the island, and when a drop catches the sound of someone laughing, it wobbles awake as a Jelbie. Jelbies never grow up, which is why they need someone to look after them. Each one takes after the first colour of sky it ever saw.
+
+Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `BobV1/Start/SpeciesInfo.swift`), in the order blue, yellow, purple, green. The default name is the character's name (Bob / Pip / Lavender / Moss); the player can change it when adopting. Signature features follow the rule above.
+
+| Species | Colour (character) | Epithet | Signature | Best at | Loves |
+|---|---|---|---|---|---|
+| **Blueberry** | Blue (0, default name Bob) | The unbothered one | Side-eye (no body feature) | Cool | Sushi roll |
+| **Lemon Drop** | Yellow (1, Pip) | The sunny one | Tail wag (pointed tail + orange spikes) | Sporty | Donut |
+| **Taro** | Purple (3, Lavender) | The dreamy one | Little wings | Sparkly | Bedtime cookie |
+| **Matcha** | Green (2, Moss) | The sleepy one | Head daisy | Sweet | Onigiri |
+
+- **Blueberry:** "Cool as a cucumber. Acts like they don't care, then follows you everywhere." Lore: Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person. Starting jars: Cute 50, Sweet 45, Sparkly 30, Cool 85, Sporty 55.
+- **Lemon Drop:** "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone." Lore: Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language. Jars: Cute 58, Sweet 60, Sparkly 46, Cool 28, Sporty 85.
+- **Taro:** "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles." Lore: Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling. Jars: Cute 70, Sweet 55, Sparkly 84, Cool 40, Sporty 45.
+- **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
+
 **Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
 
 **2026-10-20: one size, called Jelbies; no growth stages.**
