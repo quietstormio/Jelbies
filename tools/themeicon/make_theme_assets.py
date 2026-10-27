@@ -33,7 +33,7 @@ BODY = (bez((0,-545),(276,-545),(500,-301),(500,0))+bez((500,0),(500,608),(276,1
         +bez((0,1100),(-276,1100),(-500,608),(-500,0))+bez((-500,0),(-500,-301),(-276,-545),(0,-545)))
 
 # Peek v2: a wide round head dome rising from the bottom edge (1024 space). Mirrored by ThemeIconView in ThemeColor.swift.
-CX, CY, RX, RY = 512, 860, 450, 450          # dome ellipse: ~88% of the width, top at y=410 (40%)
+CX, CY, RX, RY = 512, 891, 643, 459          # dome ellipse: ~88% of the width, top at y=410 (40%)
 EYE_Y, EYE_DX, EYE_RX, EYE_RY = 788, 165, 40, 52   # eyes ~23% above the bottom
 BROW_Y, BROW_IN, BROW_OUT, BROW_W = 690, 105, 225, 30
 OUTLINE_W = 44
@@ -47,10 +47,10 @@ def render_icon(c, S=4):
     ell(CX,CY,RX+OUTLINE_W/2,RY+OUTLINE_W/2,c["line"]); ell(CX,CY,RX-OUTLINE_W/2,RY-OUTLINE_W/2,c["body"])
     # shine: an arc just inside the upper-left of the dome, with a dot beyond it
     a,b=RX-OUTLINE_W/2-55,RY-OUTLINE_W/2-55
-    arc=[P(CX+a*math.cos(math.radians(t)),CY+b*math.sin(math.radians(t))) for t in [212+i*0.9 for i in range(41)]]
+    arc=[P(CX+a*math.cos(math.radians(t)),CY+b*math.sin(math.radians(t))) for t in [228+i*0.85 for i in range(41)]]
     d.line(arc,fill=c["shine"],width=40*S)
     for q in (arc[0],arc[-1]): r=20*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
-    q=P(CX+a*math.cos(math.radians(204)),CY+b*math.sin(math.radians(204))); r=18*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
+    q=P(CX+a*math.cos(math.radians(220)),CY+b*math.sin(math.radians(220))); r=18*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
     for sx in (-1,1):
         x1,x2=sorted((CX+sx*BROW_IN,CX+sx*BROW_OUT)); a_,b_=P(x1,BROW_Y),P(x2,BROW_Y)
         d.line([a_,b_],fill=c["ink"],width=BROW_W*S); r=BROW_W/2*S

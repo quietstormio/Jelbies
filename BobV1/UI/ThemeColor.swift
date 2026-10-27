@@ -182,15 +182,15 @@ struct ThemeIconView: View {
                 ctx.fill(Path(ellipseIn: CGRect(x: (cx - rx) * k, y: (cy - ry) * k, width: 2 * rx * k, height: 2 * ry * k)), with: .color(c))
             }
             // the round head dome (mirrors tools/themeicon/make_theme_assets.py)
-            let cx: CGFloat = 512, cy: CGFloat = 860, rx: CGFloat = 450, ry: CGFloat = 450, ow: CGFloat = 44
+            let cx: CGFloat = 512, cy: CGFloat = 891, rx: CGFloat = 643, ry: CGFloat = 459, ow: CGFloat = 44
             E(cx, cy, rx + ow / 2, ry + ow / 2, pal.line)
             E(cx, cy, rx - ow / 2, ry - ow / 2, pal.body)
             let a = rx - ow / 2 - 55, b = ry - ow / 2 - 55
             func onArc(_ deg: Double) -> CGPoint { CGPoint(x: (cx + a * cos(deg * .pi / 180)) * k, y: (cy + b * sin(deg * .pi / 180)) * k) }
             var arc = Path()
-            for i in 0...40 { let q = onArc(212 + Double(i) * 0.9); if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) } }
+            for i in 0...40 { let q = onArc(228 + Double(i) * 0.85); if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) } }
             ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 40 * k, lineCap: .round))
-            let dot = onArc(204)
+            let dot = onArc(220)
             ctx.fill(Path(ellipseIn: CGRect(x: dot.x - 18 * k, y: dot.y - 18 * k, width: 36 * k, height: 36 * k)), with: .color(pal.shine))
             for sx: CGFloat in [-1, 1] {
                 var brow = Path()
