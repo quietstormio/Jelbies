@@ -108,27 +108,27 @@ nonisolated enum PipSpikes {
             for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y, mid)) > 0 { lo = mid } else { hi = mid } }
             let p = SIMD3<Double>(0, y, hi), n = f3(BobForm.normal(p))
             var tg = SIMD3<Float>(0, -1, 0); tg -= n * simd_dot(tg, n); tg = simd_normalize(tg)
-            let H: Float = 0.24, bR = H / 2.6
+            let H: Float = 0.20, bR = H / 2.0
             let ax = simd_normalize(n * cosf(0.21) + tg * sinf(0.21))
             let base = f3(p) - n * (0.3 * bR)
             let start = m.pos.count
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.06, tipSoft: 0.2, lateral: SIMD3(1, 0, 0), tones: tn)
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.06, tipSoft: 0.38, lateral: SIMD3(1, 0, 0), tones: tn)
             parts.append(("spike0", start, m.pos.count - start, base))
             widths.append(2 * bR); centres.append(0)
         }
         let tailStart = m.pos.count
-        let ts: [Double] = [0.09, 0.22, 0.38, 0.54, 0.72].map { sh.sink + $0 * (sh.length - sh.sink) }
+        let ts: [Double] = [0.10, 0.33, 0.56, 0.78].map { sh.sink + $0 * (sh.length - sh.sink) }
         var arcS: Float = 0, lastP: SIMD3<Float>? = nil
         for (k, t) in ts.enumerated() {
             let rg = sh.ridge(t), fr = sh.frame(t), tg = sh.tangent(t)
             let ridgeP = f3(rg.p + rg.up * rg.r)
             if let lp = lastP { arcS += simd_distance(lp, ridgeP) }
             lastP = ridgeP
-            let H = min(0.30, max(0.12, 1.15 * Float(rg.r))), bR = H / 2.6
+            let H = min(0.24, max(0.09, 0.8 * Float(rg.r))), bR = H / 2.0
             let up = f3(rg.up), tgF = f3(tg)
             let ax = simd_normalize(up * cosf(0.21) + tgF * sinf(0.21))
             let base = ridgeP - up * (0.3 * bR)
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.2, lateral: f3(fr.side), tones: tn)
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.38, lateral: f3(fr.side), tones: tn)
             widths.append(2 * bR); centres.append(arcS + 10 * Float(k + 1))
         }
         var gap = Float.infinity
