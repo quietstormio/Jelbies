@@ -2,6 +2,19 @@
 
 # Blob Species
 
+## Species signature rule (user decision, 2026-10-26)
+
+Signature features belong to a colour **species**, not to individual characters. A signature **never appears on another colour**.
+
+| Species (colour) | Signature |
+|---|---|
+| Purple / lavender (incl. park plum) | Wings (fold under worn items, flap-hops, short flights) |
+| Yellow | Pointed body-mesh tail plus 7 rounded orange spikes down the back onto the tail, none on the head (Pip's approved "pro8"; hidden under enclosing hats). Enum case `JellyFeature.spines`. |
+| Green (incl. park mint, lime) | Head daisy, sits on the hat band under hats |
+| Blue and every other colour | None |
+
+Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
+
 **Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
 
 **2026-10-20: one size, called Jelbies; no growth stages.**
@@ -70,7 +83,7 @@ Premium variants with special materials, sold separately from the normal kennel.
 Not in v1. When built, a special edition should be a material/finish layered on an existing species (e.g. Glitter Berry), not a new body.
 
 ## 1.0 updates (2026-10-25)
-- **Pip:** spikes are smaller by default (60% height). Enclosing hats go over them and cover them; perch items show them. A new signature (dino tail) is pending the user's pick.
+- **Pip:** spikes are smaller by default (60% height). Enclosing hats go over them and cover them; perch items show them. Signature (approved, "pro8"): a pointed body-mesh tail plus 7 rounded orange spikes down the back flowing onto the tail, none on the head; enclosing hats cover the spikes. (Enum case `JellyFeature.spines`.)
 - **Moss:** the daisy sits on the hat band when a hat is worn.
 - **Lavender:** wings fold rather than vanish under worn items, with periodic flap bursts and short flights.
 - Features are never hidden outright by wearables.

@@ -24,6 +24,16 @@ nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
     case pink, orange, mint, teal, cream, grey, red, peach, lime, plum, coral, cocoa
 
     var title: String { rawValue.capitalized }
+    /// The species signature for this colour. A signature belongs to a colour SPECIES, never to one character, and never appears on another colour
+    /// (user decision 2026-10-26; see docs/Species.md): purple -> wings, green -> head daisy, yellow -> pointed tail + 7 spikes (`.spines`), all else none.
+    /// No visitor colour is yellow today (cream / peach / orange stay plain), so the yellow case is reserved.
+    var speciesFeature: JellyFeature {
+        switch self {
+        case .plum: return .wings
+        case .mint, .lime: return .daisy
+        default: return .none
+        }
+    }
     /// (flesh, deep) in the same units the starters' palettes use.
     var flesh: (SIMD3<Float>, SIMD3<Float>) {
         switch self {
@@ -188,13 +198,13 @@ nonisolated enum ParkPool {
         for i in stride(from: colours.count - 1, to: 0, by: -1) { colours.swapAt(i, Int(r.next() % UInt64(i + 1))) }
         var names = ParkWords.names
         for i in stride(from: names.count - 1, to: 0, by: -1) { names.swapAt(i, Int(r.next() % UInt64(i + 1))) }
-        // Signatures belong only to the player's starters; visitors are plain. The draw is still consumed so the rest of the pool stays identical.
+        // The signature follows the colour species (ParkColour.speciesFeature). The old random draw is still consumed so names, colours and wear stay identical.
         let signatures: [JellyFeature] = [.none, .none, .none, .spines, .daisy, .wings]
         var out: [ParkVisitor] = []
         for i in 0..<count {
             let style = ParkStyle.allCases[Int(r.next() % UInt64(ParkStyle.allCases.count))]
             _ = r.pick(signatures)
-            let sig: JellyFeature = .none
+            let sig = colours[i % colours.count].speciesFeature
             let wear: WearLook? = r.unit() < 0.45 ? r.pick(wearables) : nil
             let name = names[i % names.count]
             out.append(ParkVisitor(id: i, name: name, colour: colours[i % colours.count], signature: sig, wear: wear, style: style,

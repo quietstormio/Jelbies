@@ -2,6 +2,7 @@
 
 ## START HERE (2026-10-25): Jelbies 1.0, feature lock
 
+- **Species signature rule (2026-10-26):** signatures belong to a colour species and never appear on another colour; see [Species.md](Species.md).
 - **Feature lock:** this is the first release (1.0). No new features; fixes, polish, performance, accessibility and App Store prep only. Only Pip's new signature (plush dino tail, redone after the user rejected the first render) is still in flight. Landed on g-int: toy play, Jelly Volleyball + training, blue title screen, theme colour, full Settings, Park redesign, Groomer (the user's explicit "one last feature"), friends/guests/sleepovers, hat crown fit. See [RELEASE-1.0.md](RELEASE-1.0.md) for what is in the game, the Post-1.0 list, known issues and the App Store checklist.
 - **Integration branch:** `g-int` (worktree `.claude/worktrees/g-int`). `round-1022` is older. **Nothing is pushed.** Work branches (g-docs, g-social, etc.) merge into `g-int`.
 - **Build Release and install to the phone** (UDID 00008150-000261C63ED8401C, team 5VVYA96U3R). Release, not Debug: Debug makes the jelly sim choppy.
