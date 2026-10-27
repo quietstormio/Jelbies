@@ -33,8 +33,11 @@ struct ContentView: View {
         switch flow.phase {
         case .menu: MainMenuView(flow: flow)
         case .wiping: SK.cream.ignoresSafeArea()
+        case .opening:
+            OpeningStoryView(replay: flow.replaying) { withAnimation(.easeInOut(duration: 1.0)) { flow.finishOpening() } }.transition(.opacity)
         case .adopt(let mode):
             AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
+                .transition(.opacity)
         case .game: GameHost(session: flow.session)
         }
     }

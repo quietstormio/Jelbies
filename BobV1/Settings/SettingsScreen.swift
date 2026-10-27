@@ -12,6 +12,7 @@ struct SettingsScreen: View {
     var mainMenu: () -> Void
     var resetSave: () -> Void
     var openPhoto: () -> Void = {}
+    var watchOpening: () -> Void = {}
     var close: () -> Void
 
     @Bindable private var hub = AudioHub.shared
@@ -25,8 +26,8 @@ struct SettingsScreen: View {
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
 
-    init(openStudio: @escaping () -> Void, mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, close: @escaping () -> Void) {
-        self.openStudio = openStudio; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.close = close
+    init(openStudio: @escaping () -> Void, mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, close: @escaping () -> Void) {
+        self.openStudio = openStudio; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.close = close
     }
 
     var body: some View {
@@ -177,6 +178,7 @@ struct SettingsScreen: View {
         card("Game", "gamecontroller") {
             actionRow("Photo mode", "camera", id: "photo-button", action: openPhoto)
             actionRow("Main menu", "house", id: "settings-main-menu", action: mainMenu)
+            actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
             Toggle("Replay intro next launch", isOn: Binding(get: { replayIntro }, set: { replayIntro = $0; UserDefaults.standard.set($0 ? 1 : 0, forKey: "Intro") }))
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-replay-intro")

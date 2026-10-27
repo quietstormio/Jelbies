@@ -17,11 +17,13 @@ final class StartFlow {
     static let shared = StartFlow()
 
     enum AdoptMode: Equatable { case first, more }
-    enum Phase: Equatable { case menu, wiping, adopt(AdoptMode), game }
+    enum Phase: Equatable { case menu, wiping, opening, adopt(AdoptMode), game }
 
     var phase: Phase
     /// Bumped to rebuild the room (GameHost).
     private(set) var session = 0
+    /// Settings > Watch the opening: the story plays over the room and ends back in it (no picker, no save changes).
+    var replaying = false
     /// The name of the Jelbie just brought home: the room shows a welcome banner for it.
     var welcome: String?
     /// Photo mode registers the album screen here; the menu's Photos button shows only when it is set.
@@ -41,6 +43,7 @@ final class StartFlow {
         else { phase = .menu }
         #if targetEnvironment(simulator)
         if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
+        if d.object(forKey: "OpeningBeat") != nil { phase = .opening }                  // capture aid: the opening story at a given beat
         #endif
     }
     nonisolated deinit {}
@@ -60,15 +63,26 @@ final class StartFlow {
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
     func returnToMenu() { if phase == .game { phase = .menu } }
 
-    /// Menu: New game / Start. Clears the screen first (so the room stops writing), wipes, then the Adoption Center.
+    /// Menu: New game / Start. Clears the screen first (so the room stops writing), wipes, then the opening story, then the Adoption Center.
     func startOver() {
         phase = .wiping
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
             Self.wipeAll()
-            phase = .adopt(.first)
+            phase = .opening
         }
     }
+
+    /// The opening story is over (or skipped) on a new game: on to the species picker (the cross-fade is the caller's animation).
+    /// A replay (Settings > Watch the opening) goes back to the room as it was saved instead.
+    func finishOpening() {
+        guard phase == .opening else { return }
+        if replaying { replaying = false; enterGame() } else { phase = .adopt(.first) }
+    }
+
+    /// Settings: play the opening again. The room is dropped like the main menu does (the caller saved first); nothing is wiped or changed,
+    /// and `finishOpening` rebuilds the room from the save. No picker.
+    func replayOpening() { replaying = true; phase = .opening }
 
     /// The first-adoption picker's back button: to the title menu.
     func backToMenu() { if case .adopt = phase { phase = .menu } }

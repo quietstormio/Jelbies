@@ -344,6 +344,33 @@ final class AudioHub {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { p.stop() }
     }
 
+    // MARK: opening story (Start/OpeningStory.swift)
+
+    @ObservationIgnored private var openingPlayers: [String: AVAudioPlayer] = [:]
+
+    /// A clip of the game opening. `music` follows the Music setting (the underscore), otherwise the sound-effects level. Sets the session up itself
+    /// (the opening plays before the room exists). Muted / the setting off = silent.
+    func playOpening(_ name: String, volume: Float = 1, music: Bool = false, fadeIn: TimeInterval = 0) {
+        guard !muted else { return }
+        let level = music ? settings.musicLevel : settings.sfxLevel
+        guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
+        if !started { setUpSession() }
+        let target = min(1, volume * level * (music ? 1 : AudioMix.sfxMaster * 1.2))
+        p.volume = fadeIn > 0 ? 0 : target
+        p.prepareToPlay(); p.play()
+        if fadeIn > 0 { p.setVolume(target, fadeDuration: fadeIn) }
+        if music { openingPlayers[name]?.stop(); openingPlayers[name] = p }
+        else { let key = name + "#\(openingPlayers.count)"; openingPlayers[key] = p; DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.openingPlayers[key] = nil } }
+    }
+
+    /// Fades the opening's sounds out (a skip, or the end).
+    func stopOpening(fade: TimeInterval = 0.5) {
+        let all = openingPlayers
+        openingPlayers = [:]
+        for (_, p) in all { p.setVolume(0, fadeDuration: fade) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + fade + 0.05) { for (_, p) in all { p.stop() } }
+    }
+
     // MARK: effects
 
     private func url(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "m4a") }

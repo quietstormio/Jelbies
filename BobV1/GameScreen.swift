@@ -296,6 +296,11 @@ struct GameScreen: View {
                     settingsOpen = false; menuOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { PhotoMode.shared.open(care: model.care) }          // after the Settings cover is gone
                 },
+                watchOpening: {
+                    model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving for the menu
+                    settingsOpen = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.replayOpening() } }          // after the Settings cover is gone; no picker, no save changes
+                },
                 close: { settingsOpen = false })
         }
         .sheet(isPresented: $a11yOpen) {
