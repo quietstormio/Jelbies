@@ -187,6 +187,12 @@ struct TownView: View {
         ]
     }
 
+    /// The island node's place (same destination and filter categories as its tile), nil when the chip filter hides it.
+    private func island(_ node: String) -> Place? {
+        let id = ["shop": "town-shop", "track": "town-track", "studio": "town-studio", "cafe": "town-cafe", "park": "town-park", "groom": "town-groom"][node]
+        return shown.first { $0.id == id }
+    }
+
     private var shown: [Place] { category == .all ? places : places.filter { $0.cats.contains(category) } }
 
     var body: some View {
@@ -209,7 +215,8 @@ struct TownView: View {
             chips
             ScrollView {
                 VStack(spacing: 12) {
-                    if !compact { MapStrip().frame(height: 84) }
+                    AroundTownIsland(active: { island($0) != nil }, go: { island($0)?.action() }, home: home)
+                        .frame(maxWidth: 520)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: compact ? 4 : 2), spacing: 12) {
                         ForEach(shown) { p in tile(p, compact: compact) }
                     }
