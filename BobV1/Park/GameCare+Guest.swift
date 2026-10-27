@@ -261,7 +261,7 @@ extension GameCare {
             me.brain?.socialBook.close[a.id] = closeness; a.brain?.socialBook.close[me.id] = closeness
             if me.brain?.isSleeping == true, a.brain?.isSleeping == true { continue }
             var rate = ParkTuning.pointsPerSecond * ParkTuning.homeMul * dt
-            if let partner = me.brain?.socialPartnerID, partner == a.id {
+            if a.id != me.id, me.brain?.social?.involves(a.id) == true {
                 if let s = me.brain?.social, s.kind.isFriendly, s.end == nil {
                     rate *= ParkTuning.friendlyMul
                     if g.friendSession[k] != ObjectIdentifier(s) {

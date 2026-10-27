@@ -50,6 +50,10 @@ enum SocialKind: String, CaseIterable, Sendable {
     case hopAlong       // side by side: one hops, the other copies half a second later
     // 2026-10-26 (more friends): BlobSocial+Friends2.swift
     case littleRace, tag, leapfrog, peekaboo, bellyBounce, mirrorDance, noseBoop, backToBack, cuddleLean, ringAround
+    /// Pairs (BlobSocial+Friends3): a side hug that sways, a take-turns dance-off, a whisper and a giggle, a shy wave from afar then a run to each other
+    case swayHug, danceOff, whisperGiggle, shyWave
+    /// Groups of 3...5 (BlobSocial+Group): one session, every free Jelly nearby
+    case groupHug, groupCheer, conga, circleDance
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -125,7 +129,12 @@ struct SocialBook {
     var closePending = false
     var contactCool: Float = 0
     var contactPrev: [Int: Float] = [:]
+    /// Group socials: cooldown, the seconds a crowd of free Jelbies has been together, the wait before one asks for a group move, the last group kind.
+    var groupCool: Float = 25, groupIdle: Float = 0, groupLimit: Float = 60
+    var lastGroup: SocialKind?
 }
+
+struct CrewBox { weak var b: BlobBrain? }
 
 final class SocialSession {
     let kind: SocialKind
@@ -133,6 +142,11 @@ final class SocialSession {
     weak var b: BlobBrain?                       // follow: the leader
     weak var c: BlobBrain?                       // line: the second follower (follows `a`)
     var idC = -1
+    /// Group kinds: everybody in the session (the initiator first), and their ids; a / b / c are the first three.
+    var crew: [CrewBox] = []
+    var crewIDs: [Int] = []
+    var slotAng: [Int: Float] = [:], slotSpot: [Int: SIMD2<Float>] = [:], ringR: Float = 0
+    var members: [BlobBrain] { crew.compactMap { $0.b } }
     let idA: Int, idB: Int
     var phase = 0
     var t: Float = 0, phaseT: Float = 0
@@ -142,7 +156,7 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo }
     var round = 0, roles = 0, fastMoves = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
@@ -151,7 +165,7 @@ final class SocialSession {
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }
     nonisolated deinit {}
-    func involves(_ id: Int) -> Bool { id == idA || id == idB || id == idC }
+    func involves(_ id: Int) -> Bool { id == idA || id == idB || id == idC || crewIDs.contains(id) }
     func setPhase(_ p: Int) { phase = p; phaseT = 0 }
     func finish(_ how: SocialEnd) { if end == nil { end = how } }
 }
@@ -171,6 +185,7 @@ final class SocialRoster {
         r.boxes = list.map { Box(b: $0) }
         for (i, b) in list.enumerated() {
             b.steerID = i
+            b.socialBook.groupLimit = 38 + 15 * Float(i % 4); b.socialBook.groupCool = 22 + 9 * Float(i % 4)          // (the first group move: staggered)
             b.zoomUrge = IdleTuning.zoomUrgeFirst + 12 * Float(i)          // (the first zoomies urge: staggered, so they do not all go at once)
             b.socialOthers = { [weak r] in r.map { $0.brains.filter { $0 !== b } } ?? [] }
             b.bus = r.eventBus
@@ -197,6 +212,7 @@ extension BlobBrain {
 
     /// Centre distance this brain keeps from `id` (the closer gap for his boop / squabble partner only).
     func socialGap(at pos: SIMD2<Float>) -> Float {
+        if let s = social, s.kind.isGroup, s.closeOK, s.end == nil, s.members.contains(where: { $0 !== self && simd_distance($0.position, pos) < 0.05 }) { return peerGap * 0.6 }
         if let s = social, s.closeOK, s.end == nil, let o = (s.a === self ? s.b : s.a), simd_distance(o.position, pos) < 0.05 { return peerGap * SocialTuning.closeGapFactor }
         return peerGap
     }
@@ -325,6 +341,10 @@ extension BlobBrain {
             return socialStartFriends(kind, with: o, sim)
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround:
             return socialStartMore(kind, with: o, sim)
+        case .swayHug, .danceOff, .whisperGiggle, .shyWave:
+            return socialStartFriends3(kind, with: o, sim)
+        case .groupHug, .groupCheer, .conga, .circleDance:
+            return socialStartGroup(kind, with: [o], sim)          // (the others near by join; a pair is not enough)
         case .zoomies:
             guard d < 6 else { return false }
             guard idleState.kind == nil else { return false }
@@ -484,7 +504,7 @@ extension BlobBrain {
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         let blocked = held || !autonomy
         contactTick(dt)          // (the soft meeting: BlobBrain+Contact.swift)
-        if !blocked { socialBook.cooldown -= dt }
+        if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt }
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
@@ -500,6 +520,7 @@ extension BlobBrain {
             socialInviteTick(sim, dt)
             if social == nil { socialWakeGreetTick(sim, dt) }
             if social == nil { socialWatch(sim, dt) }
+            if social == nil { socialGroupWatch(sim, dt) }
         }
         // ease the overlays (exactly neutral when nothing asks for them)
         let k = min(1, 16 * dt), b = socialBook
@@ -541,6 +562,10 @@ extension BlobBrain {
             socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
             socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
+            if s.kind.isGroup {
+                for id in s.crewIDs where id != steerID { socialBook.pair[id] = socialBook.pair[pid] }
+                socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1); socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
+            }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble
@@ -616,6 +641,13 @@ extension BlobBrain {
             if how == .stopped, !(scriptIsNone && idleState.kind == nil) { abortAll(sim, skinner) }
             return
         }
+        if s.kind.isGroup {
+            let mem = s.members
+            if mem.count < s.crewIDs.count || mem.contains(where: { $0.socialTaken }) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
+            if isA { s.t += dt; s.phaseT += dt }
+            driveGroup(s, mem, isA, sim, dt)
+            return
+        }
         guard let o else { s.finish(.aborted); socialRelease(skinner, hard: true); return }
         if socialTaken || o.socialTaken || (s.c?.socialTaken ?? false) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
         if isA { s.t += dt; s.phaseT += dt }          // the initiator keeps the session clock (one tick per frame)
@@ -629,6 +661,8 @@ extension BlobBrain {
         case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
+        case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)
+        case .groupHug, .groupCheer, .conga, .circleDance: break          // (handled above)
         }
         if let e = s.end, isA { _ = e }
     }

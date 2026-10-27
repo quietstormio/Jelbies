@@ -168,6 +168,6 @@ extension BlobBrain {
 extension SocialKind {
     /// The kinds that are fast play (counted by the cap on fast moves).
     var isFast: Bool {
-        switch self { case .chase, .dance, .keepAway, .zoomies, .greet, .chestBump, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .mirrorDance, .ringAround: return true; default: return false }          // (.greet: the two hop together, so it is two fast movers for the cap)
+        switch self { case .chase, .dance, .keepAway, .zoomies, .greet, .chestBump, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .mirrorDance, .ringAround, .danceOff, .shyWave, .groupCheer, .conga, .circleDance: return true; default: return false }          // (.greet: the two hop together, so it is two fast movers for the cap)
     }
 }
