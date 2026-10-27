@@ -61,7 +61,7 @@ extension DecorField {
 
     func toyAdvance(_ dt: Float) {
         toys.clock += dt
-        if !toys.news.isEmpty { toys.news.removeAll { toys.clock - $0.t > ToyTuning.newsLife } }
+        if !toys.news.isEmpty { let now = toys.clock; toys.news.removeAll { now - $0.t > ToyTuning.newsLife } }
     }
     func toyPostNews(_ uid: Int, _ pos: SIMD2<Float>) {
         toys.serial += 1
