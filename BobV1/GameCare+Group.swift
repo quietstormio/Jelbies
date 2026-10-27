@@ -94,7 +94,7 @@ extension GameCare {
         }
         for a in actors {
             guard let b = a.brain else { continue }
-            if group.memberIDs.contains(a.id) { b.idleBlocked = true; continue }
+            if group.memberIDs.contains(a.id) { if group.isHolding(a.id) { b.idleBlocked = true; continue } }          // (a diner who is done is released on his own: he is a free Jelly again)
             if groupQueue.contains(a.id) {
                 // he waits where he stands (look / step / bounce), like a diner, so he never walks into the tray corridor
                 if groupWaitSaved[a.id] == nil { groupWaitSaved[a.id] = GroupWaiter(brain: b, was: b.reserved) }
