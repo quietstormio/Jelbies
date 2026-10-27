@@ -49,8 +49,15 @@ nonisolated enum TailBean {
             if t < sink { let a = max(t, 0) / sink; return radius(sink) * (0.45 + 0.55 * a * a) }     // buried: narrows so it never pokes out of the sides
             let u = min(t / length, 1)
             let uu = min(max((t - sink) / (length - sink), 0), 1)
-            let taper = tipR + (baseR - tipR) * pow(1 - uu, 1.25)
-            let flare = 1 + 0.16 * exp(-(t - sink) / 0.14) * (1 - u)
+            // chunky plush profile (half-widths as fractions of the body width at 0 / 40% / 75% / 100% of the visible length), smooth between the knots
+            let knots: [(Double, Double)] = [(0, 0.21), (0.4, 0.13), (0.75, 0.08), (1, 0.03)]
+            var taper = knots[3].1 * width
+            for k in 1..<knots.count where uu <= knots[k].0 {
+                let a = knots[k - 1], b = knots[k], f = (uu - a.0) / (b.0 - a.0), sm = f * f * (3 - 2 * f)
+                taper = (a.1 + (b.1 - a.1) * (0.5 * f + 0.5 * sm)) * width
+                break
+            }
+            let flare = 1 + 0.10 * exp(-(t - sink) / 0.2) * (1 - u)
             return taper * flare
         }
         /// Cross-section frame at `t`: sideways (+x side) and the way up, both perpendicular to the centre line.
@@ -74,9 +81,9 @@ nonisolated enum TailBean {
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.025, sink = 0.26, ys = 0.95
-        let baseR = width / 6                                             // about a third of the body width across
-        let vis = 1.35 * width - tipR                                      // surface -> start of the round tip cap
+        let tipR = 0.04, sink = 0.26, ys = 0.95
+        let baseR = width * 0.21                                             // about a third of the body width across
+        let vis = 1.12 * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var shape = Shape(root: root, table: [], step: step, length: length, sink: sink, tipR: tipR, baseR: baseR, xs: 1.0, ys: ys, width: width)
@@ -86,7 +93,7 @@ nonisolated enum TailBean {
         while t <= length + step {
             table.append(cur)
             let u = max(0, (t - sink) / vis)
-            let psi = 112 * pow(u, 1.2) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
+            let psi = 140 * pow(u, 1.1) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
             let floorY = shape.radius(t) * ys + Double(restFloor) + 0.004 + 0.07 * pow(max(0, (u - 0.8) / 0.2), 2)                     // rest on the floor
             let th = -min(0.95, atan2(max(cur.y - floorY, 0), 0.12))      // sweeps down, easing onto the floor
             cur += SIMD3(sin(psi) * cos(th), sin(th), -cos(psi) * cos(th)) * step

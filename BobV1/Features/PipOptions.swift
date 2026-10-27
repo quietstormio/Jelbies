@@ -100,16 +100,16 @@ nonisolated enum PipSpikes {
         var parts: [(String, Int, Int, SIMD3<Float>)] = []
         var widths: [Float] = [], centres: [Float] = []
         let W = Float(sh.width)
-        func hOf(_ u: Float) -> Float { 0.17 * W * (1 - 0.4 * u) }                       // height; base diameter = height / 1.3
+        func hOf(_ u: Float) -> Float { 0.23 * W * (1 - 0.4 * u) }                       // height; base diameter = height / 1.3
         // spike 1: on the back silhouette line, 35% of the way up from the root to the top
         do {
-            let y = Double(sh.root.y) + 0.33 * (Double(spec.top) - sh.root.y)
+            let y = Double(sh.root.y) + 0.5 * (Double(spec.top) - sh.root.y)
             var lo = -1.2, hi = 0.0
             for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y, mid)) > 0 { lo = mid } else { hi = mid } }
             let p = SIMD3<Double>(0, y, hi), n = f3(BobForm.normal(p))
             var tg = SIMD3<Float>(0, -1, 0); tg -= n * simd_dot(tg, n); tg = simd_normalize(tg)
-            let H = hOf(0), bR = H / 2.6
-            let ax = simd_normalize(n * cosf(0.44) + tg * sinf(0.44))
+            let H: Float = 0.24, bR = H / 2.6
+            let ax = simd_normalize(n * cosf(0.21) + tg * sinf(0.21))
             let base = f3(p) - n * (0.3 * bR)
             let start = m.pos.count
             m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.06, tipSoft: 0.2, lateral: SIMD3(1, 0, 0), tones: tn)
@@ -117,16 +117,16 @@ nonisolated enum PipSpikes {
             widths.append(2 * bR); centres.append(0)
         }
         let tailStart = m.pos.count
-        let ts: [Double] = [0.03, 0.17, 0.34, 0.50, 0.70].map { sh.sink + $0 * (sh.length - sh.sink) }
+        let ts: [Double] = [0.09, 0.22, 0.38, 0.54, 0.72].map { sh.sink + $0 * (sh.length - sh.sink) }
         var arcS: Float = 0, lastP: SIMD3<Float>? = nil
         for (k, t) in ts.enumerated() {
             let rg = sh.ridge(t), fr = sh.frame(t), tg = sh.tangent(t)
             let ridgeP = f3(rg.p + rg.up * rg.r)
             if let lp = lastP { arcS += simd_distance(lp, ridgeP) }
             lastP = ridgeP
-            let H = hOf(Float(k + 1) / 5), bR = H / 2.6
+            let H = min(0.30, max(0.12, 1.15 * Float(rg.r))), bR = H / 2.6
             let up = f3(rg.up), tgF = f3(tg)
-            let ax = simd_normalize(up * cosf(0.40) + tgF * sinf(0.40))
+            let ax = simd_normalize(up * cosf(0.21) + tgF * sinf(0.21))
             let base = ridgeP - up * (0.3 * bR)
             m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.2, lateral: f3(fr.side), tones: tn)
             widths.append(2 * bR); centres.append(arcS + 10 * Float(k + 1))
