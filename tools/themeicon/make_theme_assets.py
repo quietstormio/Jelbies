@@ -47,12 +47,13 @@ def unit_front(t):
         return max(0,1-u**F_PB)**(1/F_PB)
     s=(t-F_TW)/(1-F_TW); return max(0,1-s**F_PT)**(1/F_PT)
 def half_width(wy): return F_HALFW*unit_front(min(max((wy-F_LIFT)/F_BODYH,0),1))
-SC = 850                    # px per world unit
-TOP_Y = 430                 # crown at ~42% down
+Z = 1.07                    # whole Jelbie scaled by Z about the bottom-centre (512,1024)
+SC = 850*Z                  # px per world unit
+TOP_Y = 1024+(430-1024)*Z   # crown ~38% down
 def px_y(wy): return TOP_Y+(F_TOP-wy)*SC
 CX = 512
-OUTLINE_W = 44
-def contour(n=1500, y_end=1100, k=1.0, pivot_y=900):
+OUTLINE_W = 44*Z
+def contour(n=1500, y_end=1100, k=1.0, pivot_y=1024+(900-1024)*Z):
     """left-half contour (x<=CX) from the crown down to y_end; k insets about (CX,pivot_y)."""
     pts=[]
     wy_end=F_TOP-(y_end-TOP_Y)/SC
@@ -67,27 +68,28 @@ def render_icon(c, S=4):
     P=lambda x,y:(x*S,y*S)
     def ell(cx,cy,rx,ry,col): d.ellipse([(cx-rx)*S,(cy-ry)*S,(cx+rx)*S,(cy+ry)*S],fill=col)
     L=contour(); R=[(2*CX-x,y) for x,y in L]
-    poly=[P(*q) for q in L]+[P(*q) for q in reversed(R)]
-    d.polygon(poly,fill=c["body"])
-    # outline: a band of width OUTLINE_W centred on the contour, built from offset polygons (smooth, no stroke joins)
-    for side in (L,R):
+    # outline: a band of width OUTLINE_W centred on the contour, from offset polygons; outer and inner are each ONE closed polygon (no seam at the crown)
+    def offs(side):
         outer=[];inner=[]
         for i,(x,y) in enumerate(side):
             a=side[max(i-1,0)]; b=side[min(i+1,len(side)-1)]; tx,ty=b[0]-a[0],b[1]-a[1]; n=math.hypot(tx,ty) or 1
-            nx,ny=-ty/n,tx/n                        # normal; flip so it points away from the head centre
-            if nx*(x-CX)+ny*(y-900)<0: nx,ny=-nx,-ny
-            outer.append(P(x+nx*OUTLINE_W/2,y+ny*OUTLINE_W/2)); inner.append(P(x-nx*OUTLINE_W/2,y-ny*OUTLINE_W/2))
-        d.polygon(outer+inner[::-1],fill=c["line"])
+            nx,ny=-ty/n,tx/n
+            if nx*(x-CX)+ny*(y-(1024+(900-1024)*Z))<0: nx,ny=-nx,-ny
+            outer.append((x+nx*OUTLINE_W/2,y+ny*OUTLINE_W/2)); inner.append((x-nx*OUTLINE_W/2,y-ny*OUTLINE_W/2))
+        return outer,inner
+    oL,iL=offs(L); oR=[(2*CX-x,y) for x,y in oL]; iR=[(2*CX-x,y) for x,y in iL]
+    d.polygon([P(*q) for q in oL+oR[::-1]],fill=c["line"])
+    d.polygon([P(*q) for q in iL+iR[::-1]],fill=c["body"])
     # shine: an arc just inside the upper-left of the head, with a dot beyond it
     I=contour(k=0.88); acc=[0.0]
     for i in range(1,len(I)): acc.append(acc[-1]+math.dist(I[i],I[i-1]))
     def at(sl):
         for i in range(len(I)):
             if acc[i]>=sl: return I[i]
-    arc=[P(*at(70+i*7.5)) for i in range(41)]
-    d.line(arc,fill=c["shine"],width=40*S,joint="curve")
-    for q in (arc[0],arc[-1]): r=20*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
-    q=P(*at(430)); r=18*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
+    arc=[P(*at((70+i*7.5)*Z)) for i in range(41)]
+    d.line(arc,fill=c["shine"],width=round(40*Z*S),joint="curve")
+    for q in (arc[0],arc[-1]): r=20*Z*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
+    q=P(*at(430*Z)); r=18*Z*S; d.ellipse([q[0]-r,q[1]-r,q[0]+r,q[1]+r],fill=c["shine"])
     ey=px_y(EYE_Y); by=px_y(BROW_Y); ex=EYE_X*SC; hl=BROW_HL*SC; ht=BROW_HT*SC
     for sx in (-1,1):
         # brow: capsule, inner end raised by atan(BROW_TILT) like the in-game brow

@@ -179,30 +179,30 @@ struct ThemeIconView: View {
             let kk = Double(size.width) / 1024
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(pal.bg))
             // the top of the real Jelbie head, zoomed (mirrors tools/themeicon/make_theme_assets.py; proportions from BobForm)
-            let sc = 850.0, topY = 430.0, cx = 512.0, ow = 44.0
+            let z = 1.07, sc = 850.0 * z, topY = 1024 + (430.0 - 1024) * z, cx = 512.0, ow = 44.0 * z, pivot = 1024 + (900.0 - 1024) * z   // whole Jelbie scaled by z about (512,1024)
             func py(_ wy: Double) -> Double { topY + (BobForm.top - wy) * sc }
             let n = 600, wyEnd = BobForm.top - (1100 - topY) / sc
             func contour(_ k: Double) -> [CGPoint] {   // left half, crown down; k insets about (cx, 900)
                 (0...n).map { i in
                     let wy = BobForm.top - (BobForm.top - wyEnd) * Double(i) / Double(n)
                     let x = cx - BobForm.halfWidth(t: (wy - BobForm.lift) / BobForm.bodyH) * sc, y = py(wy)
-                    return CGPoint(x: (cx + (x - cx) * k) * Double(kk), y: (900 + (y - 900) * k) * Double(kk))
+                    return CGPoint(x: (cx + (x - cx) * k) * Double(kk), y: (pivot + (y - pivot) * k) * Double(kk))
                 }
             }
             func mirror(_ p: CGPoint) -> CGPoint { CGPoint(x: (2 * cx * Double(kk)) - p.x, y: p.y) }
             let L = contour(1), R = L.map(mirror)
             var head = Path(); head.addLines(L); head.addLines(R.reversed()); head.closeSubpath()
             ctx.fill(head, with: .color(pal.body))
-            for side in [L, R] { var p = Path(); p.addLines(side); ctx.stroke(p, with: .color(pal.line), style: StrokeStyle(lineWidth: ow * kk, lineCap: .round, lineJoin: .round)) }
+            ctx.stroke(head, with: .color(pal.line), style: StrokeStyle(lineWidth: ow * kk, lineCap: .round, lineJoin: .round))
             // shine: arc just inside the upper-left, dot beyond it
             let I = contour(0.88)
             var acc = [0.0]; for i in 1..<I.count { acc.append(acc[i - 1] + hypot(I[i].x - I[i - 1].x, I[i].y - I[i - 1].y)) }
             func at(_ s: Double) -> CGPoint { I[acc.firstIndex { $0 * 1024 / size.width >= s } ?? I.count - 1] }
             var arc = Path()
-            for i in 0...40 { let q = at(70 + Double(i) * 7.5); if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) } }
-            ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 40 * kk, lineCap: .round, lineJoin: .round))
-            let dot = at(430)
-            ctx.fill(Path(ellipseIn: CGRect(x: dot.x - 18 * kk, y: dot.y - 18 * kk, width: 36 * kk, height: 36 * kk)), with: .color(pal.shine))
+            for i in 0...40 { let q = at((70 + Double(i) * 7.5) * z); if i == 0 { arc.move(to: q) } else { arc.addLine(to: q) } }
+            ctx.stroke(arc, with: .color(pal.shine), style: StrokeStyle(lineWidth: 40 * z * kk, lineCap: .round, lineJoin: .round))
+            let dot = at(430 * z)
+            ctx.fill(Path(ellipseIn: CGRect(x: dot.x - 18 * z * kk, y: dot.y - 18 * z * kk, width: 36 * z * kk, height: 36 * z * kk)), with: .color(pal.shine))
             let ey = py(BobForm.eyeY), by = py(BobForm.browY), ex = BobForm.eyeX * sc, hl = BobForm.browHalfLen * sc, ht = BobForm.browHalfThick * sc
             let rx = BobForm.eyeHalfW * sc, ry = BobForm.eyeHalfH * sc
             let dy = sin(atan(BobForm.browTilt)) * (hl - ht)
