@@ -29,6 +29,8 @@ struct ToyBrain {
     var checkAt: Float = 0
     var lookAt: Float = 0
     var bored: [Int: Float] = [:]
+    /// The piece of his last toy session (the next choice leans away from it: variety across the toys that are out).
+    var lastUID = -1
     var burstHandled = 0
     var chaseSpot: SIMD2<Float>?
     var chaseUntil: Float = 0
