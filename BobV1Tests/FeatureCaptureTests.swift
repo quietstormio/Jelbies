@@ -486,6 +486,20 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack([hstack(Array(t[0..<3])), hstack(Array(t[3..<6])), hstack([z1, z2])]), d + "/pip_tail_pro8.png")
     }
 
+    /// Pip's new long tail: back 3/4, side, front 3/4, top-ish close-ups and a walking frame (piptail2_*.png).
+    func testCapturePipTail2() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        let c = Char(id: 1)
+        let views: [(String, Float)] = [("view1.3", 1.3), ("back34", Float.pi * 0.9), ("front34", 0.9)]
+        for (n, y) in views { try write(try closeup(c, yaw: y, label: "Pip \(n)", dist: 4.0, lookY: 0.3, lookBack: 0.5), d + "/piptail2_\(n).png") }
+        try write(try closeup(c, yaw: Float.pi * 0.8, label: "walk back 3/4", dist: 4.0, lookY: 0.3, lookBack: 0.5) { lab, dr in
+            let r = lab.rigs[0]
+            let p0 = r.sim.bodyPose(iterations: 3).centroid
+            r.brain.script = .walk(target: SIMD2(p0.x - 2.0, p0.z + 0.3), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            for _ in 0..<70 { lab.tick(watching: false); self.tick(dr, 0, r, c) }
+        }, d + "/piptail2_walk.png")
+    }
+
     func testCapturePipHatsRidge() throws {
         let d = try dir(); DayClock.shared.forcedHour = 12
         var rows: [UIImage] = []

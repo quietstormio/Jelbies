@@ -446,7 +446,7 @@ nonisolated final class Skinner {
         tailYaw += (yawT - tailYaw) * min(1, dt * 14); tailPitch += (pitchT - tailPitch) * min(1, dt * 10)
         if !tailYaw.isFinite { tailYaw = 0 }; if !tailPitch.isFinite { tailPitch = 0 }
         let D = simd_normalize(T - B)
-        let pivot = B + (T - B) * 0.30                               // about where the tail leaves the back
+        let pivot = Cs + Rot * (TailBean.rootF - Cr)                   // exactly where the tail leaves the back (the spikes' pivot too)
         let axis = simd_normalize(simd_cross(D, SIMD3<Float>(0, 1, 0)))
         let q = simd_quatf(angle: tailYaw * .pi / 180, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: tailPitch * .pi / 180, axis: simd_length(axis) > 1e-4 ? axis : SIMD3(1, 0, 0))
         let sc = tailScale
