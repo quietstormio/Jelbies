@@ -20,6 +20,11 @@ struct MelonStage: UIViewRepresentable {
         let controller = context.coordinator
         let view = MelonStageView(frame: .zero, device: controller.device)
         controller.attach(to: view)
+        if model.cutout {          // transparent: the SwiftUI backdrop shows through where nothing is drawn
+            view.isOpaque = false; view.layer.isOpaque = false
+            view.backgroundColor = .clear
+            view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        }
         return view
     }
 
@@ -1050,6 +1055,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.bathBody = washed
             renderer.raceCourse = model.care.race.course.tier
             renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
+            renderer.cutout = model.cutout
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
             renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene

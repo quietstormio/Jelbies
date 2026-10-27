@@ -39,6 +39,9 @@ final class StartFlow {
         let save = Self.hasSave(d)
         if d.object(forKey: "MainMenu") != nil, d.integer(forKey: "MainMenu") == 0 { phase = save ? .game : .adopt(.first) }
         else { phase = .menu }
+        #if targetEnvironment(simulator)
+        if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
+        #endif
     }
     nonisolated deinit {}
 

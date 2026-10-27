@@ -504,7 +504,7 @@ final class MelonRenderer {
         useMatte = palette.matte
         u.shape = params.shape
         Self.applyPalette(&u, palette)
-        u.misc = SIMD4(params.exposure, params.meshAlpha, 0, palette.marking)
+        u.misc = SIMD4(params.exposure, params.meshAlpha, cutout ? 1 : 0, palette.marking)
         u.bg = SIMD4(params.bg, 1)
         uniforms = u
         // Writes target shared buffers the GPU may still be reading from the previous frame; call beginFrame() first.
@@ -898,6 +898,8 @@ final class MelonRenderer {
     /// When on and the target (drawable) is larger than the render size set by `resize`, post renders at render size and MetalFX upscales
     /// to the target. Off: the old path (the OS scales a smaller drawable). `-MetalFX 1`; never on in the simulator (no MetalFX there).
     var metalFXEnabled = false
+    /// Transparent cut-out (the species picker): the room is not drawn, the colour target clears to a sentinel alpha that `postFS` turns into coverage.
+    var cutout = false
     private var upscaler: GfxUpscaler?
     private(set) var upscaledFrames = 0
     /// "off" / "on 804x1748->1206x2622" / "unavailable (simulator)" for the env log.
@@ -990,10 +992,11 @@ final class MelonRenderer {
             let fullPx = Double(width * height)
 
             // Room cache: decide before the main pass (a build is its own pass, first).
+            room.cutout = cutout
             var action = RoomCacheAction.bypass(.disabled)
             var scissor: MTLScissorRect?                  // the box around every footprint
             var scissors: [MTLScissorRect] = []           // the footprints themselves (disjoint)
-            if roomCacheEnabled {
+            if roomCacheEnabled && !cutout {
                 // One Jelly: one footprint with the tray / bath pieces folded in (the original single rect). Several: one footprint per visible
                 // Jelly (Bob's with the bath pieces) plus the tray's, merged where they touch, so spread-out Jellies keep the saving.
                 var rects: [RoomFootprint.Rect] = []
@@ -1066,7 +1069,7 @@ final class MelonRenderer {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
             ca.texture = msScene; ca.resolveTexture = hdrTex
-            ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+            ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: cutout ? 8 : 0)
             ca.storeAction = perfPasses ? .storeAndMultisampleResolve : .multisampleResolve
             rp.depthAttachment.texture = msDepth
             rp.depthAttachment.loadAction = .clear; rp.depthAttachment.clearDepth = 1
@@ -1259,7 +1262,7 @@ final class MelonRenderer {
 
     /// Post (tone map) straight into `target`, or - with MetalFX on and a bigger target - into a render-size texture that is upscaled and presented.
     private func encodePostOrUpscale(_ cmd: MTLCommandBuffer, target: MTLTexture, hdrTex: MTLTexture) {
-        guard metalFXEnabled, GfxUpscaler.compiledIn, target.width > width || target.height > height else {
+        guard metalFXEnabled, !cutout, GfxUpscaler.compiledIn, target.width > width || target.height > height else {
             encodePost(cmd, target: target, hdrTex: hdrTex); return
         }
         if upscaler == nil || upscaler!.inW != width || upscaler!.inH != height || upscaler!.outW != target.width || upscaler!.outH != target.height {
@@ -1285,7 +1288,7 @@ final class MelonRenderer {
         do {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
-            ca.texture = target; ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
+            ca.texture = target; ca.loadAction = .clear; ca.clearColor = cutout ? MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0) : MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
             ca.storeAction = .store
             guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
             e.label = "post"

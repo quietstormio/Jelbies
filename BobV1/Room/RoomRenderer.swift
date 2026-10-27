@@ -453,6 +453,8 @@ nonisolated final class RoomRenderer {
 
     /// Which opaque parts `encode` draws: the static room (+ care props) can be cached, the dining tray is per-frame.
     enum Parts { case all, staticOnly, diningOnly }
+    /// The species picker: draw only what the Jelly wears / grows (no walls, floor, props, decor, dining, shoes).
+    var cutout = false
 
     func encode(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                 lightViewProj: simd_float4x4?, shadowTex: MTLTexture?,
@@ -525,7 +527,7 @@ nonisolated final class RoomRenderer {
         enc.setFragmentBytes(&u, length: MemoryLayout<RoomUniforms>.stride, index: 0)
         enc.setFragmentTexture(shadowTex ?? dummyShadow, index: 0)
         enc.setFragmentTexture(heightTex ?? dummyShadow, index: 1)
-        if parts != .diningOnly {
+        if parts != .diningOnly && !cutout {
         enc.drawIndexedPrimitives(type: .triangle, indexCount: indexCount, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
         if propIndexCount > 0, let pv = propVB, let pi = propIB {
             enc.setVertexBuffer(pv, offset: 0, index: 1)
@@ -538,25 +540,25 @@ nonisolated final class RoomRenderer {
             enc.popDebugGroup()
         }
         }
-        if parts != .staticOnly, decorActive.indexCount > 0, let dv = decorActive.vb[decorActive.slot], let di = decorActive.ib[decorActive.slot] {
+        if parts != .staticOnly, !cutout, decorActive.indexCount > 0, let dv = decorActive.vb[decorActive.slot], let di = decorActive.ib[decorActive.slot] {
             enc.pushDebugGroup("decor (animating)")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: decorActive.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
-        if parts != .staticOnly, diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {
+        if parts != .staticOnly, !cutout, diningOpaque.indexCount > 0, let dv = diningOpaque.vb[diningOpaque.slot], let di = diningOpaque.ib[diningOpaque.slot] {
             enc.pushDebugGroup("dining")
             enc.setVertexBuffer(dv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: diningOpaque.indexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
-        if parts != .staticOnly, maskOpaque.indexCount > 0, let mv = maskOpaque.vb[maskOpaque.slot], let mi = maskOpaque.ib[maskOpaque.slot] {
+        if parts != .staticOnly, !cutout, maskOpaque.indexCount > 0, let mv = maskOpaque.vb[maskOpaque.slot], let mi = maskOpaque.ib[maskOpaque.slot] {
             enc.pushDebugGroup("sleep mask")
             enc.setVertexBuffer(mv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: maskOpaque.indexCount, indexType: .uint32, indexBuffer: mi, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
-        if parts != .staticOnly, shoeMesh.indexCount > 0, let sv = shoeMesh.vb[shoeMesh.slot], let si = shoeMesh.ib[shoeMesh.slot] {
+        if parts != .staticOnly, !cutout, shoeMesh.indexCount > 0, let sv = shoeMesh.vb[shoeMesh.slot], let si = shoeMesh.ib[shoeMesh.slot] {
             enc.pushDebugGroup("shoes")
             enc.setVertexBuffer(sv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: shoeMesh.indexCount, indexType: .uint32, indexBuffer: si, indexBufferOffset: 0)

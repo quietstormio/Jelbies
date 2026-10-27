@@ -575,11 +575,18 @@ fragment float4 postFS(float4 fc [[position]],
                        texture2d<float> hdr [[texture(0)]]) {
     uint2 px = min(uint2(fc.xy), uint2(hdr.get_width() - 1, hdr.get_height() - 1));
     float4 hv = hdr.read(px);
+    // cut-out (species picker): the target cleared to alpha 8; what was drawn has alpha 0...1, so coverage falls out of the resolved alpha
+    float cov = 1.0;
+    if (u.misc.z > 0.5) {
+        cov = clamp((8.0 - hv.a) / 7.0, 0.0, 1.0);
+        if (cov < 0.002) return float4(0.0);
+        hv.rgb /= cov; hv.a = clamp(hv.a - 8.0 * (1.0 - cov), 0.0, cov) / cov;
+    }
     float3 c = hv.rgb * u.misc.x;
     // alpha 0 marks matte pixels that already hold display-linear colour (no film curve)
     float3 cm = clamp(c, float3(0.0), float3(1.0));
     c = u.shadowTint.w > 1.5 ? cm : mix(cm, neutral(max(c, float3(0.0))), clamp(hv.a, 0.0, 1.0));
     float3 s = oetf(clamp(c, float3(0.0), float3(1.0)));
     s += (hash3(float3(fc.xy, 1.0)) - 0.5) / 255.0;
-    return float4(s, 1.0);
+    return float4(s * cov, cov);
 }

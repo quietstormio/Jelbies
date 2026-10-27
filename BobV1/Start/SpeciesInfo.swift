@@ -47,8 +47,8 @@ struct SpeciesInfo {
                     about: "Cool as a cucumber. Acts like they don't care, then follows you everywhere.",
                     signature: "Side-eye", signatureIcon: "eye.fill",
                     lore: "Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person.",
-                    bestAt: "Cool", bestAtKey: .cool, loves: "Sushi roll", traits: [50, 45, 30, 85, 55],
-                    moves: [SpeciesMoveInfo(title: "Side-eye", subtitle: "A slow, unimpressed glance", icon: "eye.fill", move: .idle(.look)),
+                    bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [50, 45, 30, 85, 55],
+                    moves: [SpeciesMoveInfo(title: "Side-eye", subtitle: "Signature move", icon: "eye.fill", move: .idle(.look)),
                             SpeciesMoveInfo(title: "Shrug-hop", subtitle: "A lazy little hop", icon: "arrow.up", move: .hop),
                             SpeciesMoveInfo(title: "Roll over", subtitle: "Knows it already", icon: "arrow.left.arrow.right", move: .idle(.roll))],
                     emotes: [.idle(.look), .blink, .hop, .face(.focused), .blink]),
@@ -57,7 +57,7 @@ struct SpeciesInfo {
                     signature: "Tail wag", signatureIcon: "sun.max.fill",
                     lore: "Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language.",
                     bestAt: "Sporty", bestAtKey: .sporty, loves: "Donut", traits: [58, 60, 46, 28, 85],
-                    moves: [SpeciesMoveInfo(title: "Tail wag", subtitle: "Spins after that spiky tail", icon: "sun.max.fill", move: .idle(.tail)),
+                    moves: [SpeciesMoveInfo(title: "Tail wag", subtitle: "Signature move", icon: "sun.max.fill", move: .idle(.tail)),
                             SpeciesMoveInfo(title: "Cartwheel", subtitle: "Shows off", icon: "figure.gymnastics", move: .idle(.cartwheel)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.bounce), .hop, .face(.excited), .idle(.tail), .hop]),
@@ -65,8 +65,8 @@ struct SpeciesInfo {
                     about: "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles.",
                     signature: "Little wings", signatureIcon: "bird.fill",
                     lore: "Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling.",
-                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Bedtime cookie", traits: [70, 55, 84, 40, 45],
-                    moves: [SpeciesMoveInfo(title: "Flutter hop", subtitle: "A flap and a float", icon: "bird.fill", move: .idle(.flapHop)),
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Cookie", traits: [70, 55, 84, 40, 45],
+                    moves: [SpeciesMoveInfo(title: "Flutter hop", subtitle: "Signature move", icon: "bird.fill", move: .idle(.flapHop)),
                             SpeciesMoveInfo(title: "Twirl", subtitle: "A dreamy spin", icon: "arrow.triangle.2.circlepath", move: .idle(.tail)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.flapHop), .face(.hopeful), .idle(.flapHop), .blink, .idle(.sway)]),
@@ -75,21 +75,44 @@ struct SpeciesInfo {
                     signature: "Head daisy", signatureIcon: "camera.macro",
                     lore: "Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Onigiri", traits: [62, 82, 40, 50, 30],
-                    moves: [SpeciesMoveInfo(title: "Big stretch", subtitle: "Reaches for the sky", icon: "figure.arms.open", move: .idle(.stretch)),
+                    moves: [SpeciesMoveInfo(title: "Big stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
                             SpeciesMoveInfo(title: "Sleepy sway", subtitle: "When it's nap time", icon: "moon.zzz.fill", move: .idle(.sway)),
                             SpeciesMoveInfo(title: "Roll over", subtitle: "Knows it already", icon: "arrow.left.arrow.right", move: .idle(.roll))],
                     emotes: [.idle(.stretch), .face(.sleepy), .blink, .idle(.sway), .blink]),
     ]
 
-    /// The species colour (the game's own tint) and a deeper shade for rims and the selected tab.
-    var tint: Color { let t = JellyRoster.tint(character); return Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z)) }
-    var deep: Color { let t = JellyRoster.tint(character); return Color(red: Double(t.x) * 0.62, green: Double(t.y) * 0.62, blue: Double(t.z) * 0.66) }
-    /// The tint lightened for the page background (top, bottom).
-    var skyTop: Color { Self.mix(tint, 0.62) }
-    var skyBottom: Color { Self.mix(tint, 0.28) }
-    private static func mix(_ c: Color, _ w: Double) -> Color {
+    /// The mockup's palette for the picker screen (saturated page colours sampled from the design boards; purple follows the same family).
+    var look: SpeciesLook { SpeciesLook.of(character) }
+}
+
+/// Colours of one species page, taken from the design boards.
+struct SpeciesLook {
+    let top: Color, bottom: Color          // page gradient
+    let dot: Color                         // the colour dot
+    let tabFill: Color, tabLine: Color     // selected tab (light tint + outline)
+    let card: Color                        // info card
+    let rowHi: Color                       // the signature move row
+    let padTop: Color                      // pedestal top (a white tinted a little)
+    let glow: Color                        // inner glow / contact shadow on the pedestal
+
+    static func of(_ c: Int) -> SpeciesLook {
+        switch c {
+        case 1: return SpeciesLook(top: Color(hex: 0xFFDD7E), bottom: Color(hex: 0xFFC04B), dot: Color(hex: 0xFFCB45), tabFill: Color(hex: 0xFFEBA9), tabLine: Color(hex: 0xF1C24C),
+                                   card: Color(hex: 0xFFF8EC), rowHi: Color(hex: 0xFFEBB0), padTop: Color(hex: 0xF6EFE0), glow: Color(hex: 0xE59A52))
+        case 2: return SpeciesLook(top: Color(hex: 0xACE0BF), bottom: Color(hex: 0x79C598), dot: Color(hex: 0x7FCB9E), tabFill: Color(hex: 0xD3F1DF), tabLine: Color(hex: 0x8BD1A7),
+                                   card: Color(hex: 0xF9F8ED), rowHi: Color(hex: 0xD3F1DF), padTop: Color(hex: 0xE8F0EB), glow: Color(hex: 0x4F9A76))
+        case 3: return SpeciesLook(top: Color(hex: 0xD1BBF3), bottom: Color(hex: 0xA98BDD), dot: Color(hex: 0xAF8FE3), tabFill: Color(hex: 0xE7DBFA), tabLine: Color(hex: 0xBA9FEA),
+                                   card: Color(hex: 0xF9F6F2), rowHi: Color(hex: 0xE7DBFA), padTop: Color(hex: 0xF0ECF6), glow: Color(hex: 0x7E62B8))
+        default: return SpeciesLook(top: Color(hex: 0x9DD0F2), bottom: Color(hex: 0x6DADE0), dot: Color(hex: 0x79B7E6), tabFill: Color(hex: 0xD4EAFA), tabLine: Color(hex: 0x8DC1EA),
+                                    card: Color(hex: 0xF8F6F1), rowHi: Color(hex: 0xD4EAFA), padTop: Color(hex: 0xEAF0F5), glow: Color(hex: 0x4F83B5))
+        }
+    }
+    /// Pedestal side: lighter under the top edge, darker at the bottom (the page colour, deepened).
+    var rimTop: Color { Self.shade(bottom, 0.98) }
+    var rimBottom: Color { Self.shade(bottom, 0.76) }
+    static func shade(_ c: Color, _ k: Double) -> Color {
         let u = UIColor(c); var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         u.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return Color(red: Double(r) + (1 - Double(r)) * w, green: Double(g) + (1 - Double(g)) * w, blue: Double(b) + (1 - Double(b)) * w)
+        return Color(red: Double(r) * k, green: Double(g) * k, blue: Double(b) * k)
     }
 }

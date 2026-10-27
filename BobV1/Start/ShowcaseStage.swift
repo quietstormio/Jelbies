@@ -13,13 +13,15 @@ struct ShowcaseStage: View {
     var empty = false
     /// False inside a framed window (the species picker); the main menu and the old full-screen use fill the screen.
     var fullScreen = true
+    /// Transparent, no room: only the Jelbie (the species picker draws its own stage and backdrop).
+    var cutout = false
     /// Called once the focused Jelbie has walked to the front (`focusFirst`), with the model (so the picker can ask for moves).
     var onReady: ((MelonModel) -> Void)?
     @State private var model: MelonModel?
 
     var body: some View {
         ZStack {
-            Color.black
+            if !cutout { Color.black }
             if let model { MelonStage(model: model) }
         }
         .modifier(SafeAreaIf(on: fullScreen))
@@ -36,6 +38,7 @@ struct ShowcaseStage: View {
         let m = GameScreen.makeGameModel(jellyCount: roster.count)
         m.care.touchPlay = m.touch
         m.hideJellies = empty
+        m.cutout = cutout
         model = m
         guard focusFirst else { return }
         Task { @MainActor in

@@ -9,15 +9,26 @@ import Foundation
 
 @MainActor
 final class PickerCamera {
-    static let yawLimit: Float = 1.0, pitchRange: ClosedRange<Float> = -0.06...0.26, zoomRange: ClosedRange<Float> = 0.8...1.35, startZoom: Float = 1.16
+    static let yawLimit: Float = .infinity,  pitchRange: ClosedRange<Float> = -0.06...0.26, zoomRange: ClosedRange<Float> = 1.1...2.6, startZoom: Float = 1.6
+    /// The resting 3/4 view per character: Pip's tail and spikes sit behind the body and only clear its silhouette past ~70 degrees, so his view is turned
+    /// further (a simulator capture flag, -PickerYaw, can try others).
+    static func startYaw(_ character: Int) -> Float {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "PickerYaw") != nil { return UserDefaults.standard.float(forKey: "PickerYaw") }
+        #endif
+        switch character { case 1: return 1.3; case 3: return 0.7; default: return 0.5 }
+    }
+    private var yaw0: Float = 0.5
+    /// Page changed: the new species' resting view (zoom and tilt reset).
+    func setSpecies(_ c: Int) { coasting?.cancel(); vYaw = 0; yaw0 = Self.startYaw(c); PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0 }
     private var vYaw: Float = 0
     private var coasting: Task<Void, Never>?
     private var zoomBase: Float = 1
     var reduceMotion = false
 
-    func engage() { PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.active = true }
+    func engage() { PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0; PhotoCam.active = true }
     func release() { coasting?.cancel(); PhotoCam.active = false; PhotoCam.reset() }
-    func reset() { coasting?.cancel(); vYaw = 0; PhotoCam.reset(); PhotoCam.zoom = Self.startZoom }
+    func reset() { coasting?.cancel(); vYaw = 0; PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0 }
 
     func drag(dx: Float, dy: Float) {
         coasting?.cancel()
