@@ -1449,18 +1449,28 @@ final class BlobBrain {
     /// 2026-10-27 (cartwheel feet): the brain places the beans BEFORE the sim step, the body then moves (a cartwheel turns it ~0.1 rad per step, a hitch frame runs
     /// two steps), so the drawn bean trailed the drawn body and its buried part came up out of the belly (only ~0.01 u inside at take-off). Called by the stage after the
     /// steps: the beans placed on the fitted pose are carried rigidly onto the pose the body has NOW, then the always-attached clamp runs again.
+    nonisolated(unsafe) static var refitWorldPlaced = true          // (false = the cartwheel-only behaviour: the gait stress test's "before")
     func refitBeans(_ sim: SoftBody, _ skinner: Skinner) {
-        guard let old = beanFitUsed, skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { return }
+        guard skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { return }
+        if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
-        let dq = now.rotation * old.rotation.inverse
+        // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
+        // not moved with the body, but the always-attached clamp runs again against the pose the body has NOW (it ran before the step against the pose before it).
+        let dq: simd_quatf? = beanFitUsed.map { now.rotation * $0.rotation.inverse }
         for s in 0..<2 {
-            for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i] = now.centroid + dq.act(skinner.beanPos[s][i] - old.centroid) }
-            if skinner.beanStart[s].count == FootBean.vertexCount { for i in 0..<FootBean.vertexCount { skinner.beanStart[s][i] = now.centroid + dq.act(skinner.beanStart[s][i] - old.centroid) } }
+            if let old = beanFitUsed, let dq {
+                for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i] = now.centroid + dq.act(skinner.beanPos[s][i] - old.centroid) }
+                if skinner.beanStart[s].count == FootBean.vertexCount { for i in 0..<FootBean.vertexCount { skinner.beanStart[s][i] = now.centroid + dq.act(skinner.beanStart[s][i] - old.centroid) } }
+            }
             attachBean(sim, now, lifted: now.tilt > 0.3 || (skinner.beanPos[s].map(\.y).min() ?? 0) - sim.floorY > 0.02, &skinner.beanPos[s])
+            // a planted foot only slides toward the belly; when that cannot bury it (a stretched body turning on the spot rides up off a planted foot) the last millimetres lift it
+            attachBean(sim, now, lifted: true, &skinner.beanPos[s])
             for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) }
         }
-        skinner.retractMatrix = simd_float3x3(now.rotation) * simd_float3x3(diagonal: SIMD3(1 / sim.attractor.squash.squareRoot(), sim.attractor.squash, 1 / sim.attractor.squash.squareRoot()))
-        beanFitUsed = now
+        if beanFitUsed != nil {
+            skinner.retractMatrix = simd_float3x3(now.rotation) * simd_float3x3(diagonal: SIMD3(1 / sim.attractor.squash.squareRoot(), sim.attractor.squash, 1 / sim.attractor.squash.squareRoot()))
+            beanFitUsed = now
+        }
     }
 
     /// Hand the bean state to the skinner: hysteresis (stay out until both feet were still for `beanHoldTime`), growth blend, retract matrix.

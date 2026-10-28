@@ -94,4 +94,60 @@ final class CartwheelStressTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(v.cartwheels, n * 3 / 4, "most attempts started")
         XCTAssertEqual(v.bad, 0, "no detached-foot frames in \(v.cartwheels) cartwheels: \(v.worst)")
     }
+
+    /// Walking, running, zoomies and toy play: random entry, spot, character, shoes and hitch frames; the drawn bean's burial (and radius) judged every frame.
+    static func gaitStress(count: Int, seed: UInt64) -> (frames: Int, bad: Int, worst: Float, cases: Int, badCases: Int) {
+        var s = seed, frames = 0, bad = 0, worst: Float = -.infinity, badCases = 0
+        let entries = ["walk", "run", "zoomies", "ball", "mat", "cushion", "walk-turns"]
+        let features: [JellyFeature] = [.none, .spines, .daisy, .wings]
+        for n in 0..<count {
+            let entry = entries[n % entries.count]
+            let r = MotionRig(game: true, settle: 0.5)
+            keep.append(r); r.renderSamples = false
+            r.brain.feature = features[(n / entries.count) % 4]
+            r.brain.shoesWorn = (n / 28) % 2 == 1
+            r.brain.seed = UInt64(7 + n)
+            let px = (lcg(&s) - 0.5) * 2.0, pz = (lcg(&s) - 0.3) * 1.6
+            r.sim.teleport(toXZ: SIMD2(px, pz)); r.run(0.4)
+            r.brain.currentPose(r.sim)
+            r.brain.idleForced = true
+            let goal = SIMD2<Float>(-px + 0.6 * (lcg(&s) - 0.5), 0.6 + 1.2 * lcg(&s))
+            var secs: Float = 4
+            switch entry {
+            case "walk": r.brain.requestNow(.goTo(goal))
+            case "walk-turns": r.brain.requestNow(.goTo(goal)); r.run(1.0 + lcg(&s)); r.brain.requestNow(.goTo(SIMD2(goal.y - 0.4, -goal.x)))
+            case "run": _ = r.brain.idleStart(.run, r.sim)
+            case "zoomies": r.brain.seed = 11; _ = r.brain.idleStart(.zoomies, r.sim); secs = 6
+            case "ball": FeetAttachTests.decorStart(r, .ball, SIMD2(0.9, 0.9), .decorKick); secs = 12
+            case "mat": FeetAttachTests.decorStart(r, .bouncymat, SIMD2(-1.1, 0.9), .decorHop); secs = 12
+            default: FeetAttachTests.decorStart(r, .cushion, SIMD2(-1.1, 0.9), .decorSit); secs = 14
+            }
+            var caseBad = 0, k = 0
+            let hitch = n % 3 == 2
+            for _ in 0..<Int(secs * 60) {
+                k += 1
+                r.tick()
+                if hitch && k % 13 < 3 { r.sim.step(); r.brain.refitBeans(r.sim, r.skinner) }
+                guard r.skinner.beansActive && r.skinner.beanBlend > 0.05 else { continue }
+                let f = FeetAttachTests.drawnFootFrame(r)
+                frames += 1; worst = max(worst, f.overlap)
+                if f.overlap > FeetAttachTests.minOverlap || f.radius > FeetAttachTests.maxRadius { bad += 1; caseBad += 1; if caseBad == 1 { MotionLog.write(String(format: "GAIT BAD #%d %@ t=%.2f ov=%.3f rad=%.3f cen=%.3f sole=%.3f act=%@ kind=%@ sy=%.2f tilt=%.2f shoes=%d", n, entry, r.t, f.overlap, f.radius, f.centreHeight, f.soleRise, "\(r.brain.activity)", "\(String(describing: r.brain.idleState.kind))", r.sim.attractor.squash, r.sim.bodyPose(iterations: 3).tilt, r.brain.shoesWorn ? 1 : 0)) } }
+            }
+            if caseBad > 0 { badCases += 1 }
+            DecorField.shared.clear()
+            keep.removeAll()
+        }
+        MotionLog.write("GAIT STRESS (refitWorldPlaced=\(BlobBrain.refitWorldPlaced)): cases=\(count) beanFrames=\(frames) detachedFrames=\(bad) casesWithDetach=\(badCases) worstOverlap=\(worst)")
+        return (frames, bad, worst, count, badCases)
+    }
+
+    func testGaitsAndToyPlayNeverDetachFeet() {
+        let n = Int(ProcessInfo.processInfo.environment["GAIT_N"] ?? "") ?? 28
+        BlobBrain.refitWorldPlaced = ProcessInfo.processInfo.environment["CW_NOREFIT"] == nil
+        defer { BlobBrain.refitWorldPlaced = true }
+        let v = Self.gaitStress(count: n, seed: 0xBEEF)
+        XCTAssertGreaterThan(v.frames, 1000)
+        XCTAssertEqual(v.bad, 0, "detached bean frames in \(v.cases) gait / toy-play cases (worst overlap \(v.worst))")
+        XCTAssertLessThanOrEqual(v.worst, -0.035, "comfortable burial margin")
+    }
 }
