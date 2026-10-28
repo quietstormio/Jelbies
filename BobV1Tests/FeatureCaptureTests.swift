@@ -503,6 +503,66 @@ final class FeatureCaptureTests: XCTestCase {
     func testCaptureCartwheelLavender() throws { try cartwheelSheet(id: 3, name: "lavender") }
     func testCaptureCartwheelMossShoes() throws { try cartwheelSheet(id: 2, name: "moss_shoes", shoes: true) }
 
+    /// Walk with a mid-route turn, before (refitWorldPlaced false) vs after (true): the same frames side by side, and the drawn feet's per-vertex difference.
+    private func walkRun(id: Int, refit: Bool, shots: [Int]) throws -> (imgs: [UIImage], feet: [[SIMD3<Float>]], detaching: [Bool]) {
+        BlobBrain.refitWorldPlaced = refit
+        defer { BlobBrain.refitWorldPlaced = true }
+        W = 603; H = 1311
+        let chars = [Char(id: id)]
+        let lab = setUpLab([SIMD2(-0.6, 0.4)], chars: chars, seed: 3)
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let r = lab.rigs[0]
+        r.brain.seed = 99
+        r.brain.requestNow(.goTo(SIMD2(0.9, 1.3)))
+        var imgs: [UIImage] = [], feet: [[SIMD3<Float>]] = [], det: [Bool] = []
+        let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+        for k in 0..<200 {
+            lab.tick(watching: false)
+            tick(dd, 0, r, chars[0])
+            if k == 70 { r.brain.requestNow(.goTo(SIMD2(-0.7, 1.5))) }
+            r.render()
+            var f: [SIMD3<Float>] = []
+            for s in 0..<2 { for v in r.bean[s] { let o = 6 * Int(v); f.append(SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2])) } }
+            feet.append(f)
+            let ff = FeetAttachTests.drawnFootFrame(r)
+            det.append(r.skinner.beansActive && ff.overlap > FeetAttachTests.minOverlap)
+            if shots.contains(k) {
+                let img = composite(lab, dd, chars, ren, target, cam: cam)
+                if let c = cropJellies(img, lab, cam: cam, pad: 0.12) { imgs.append(labelled(c, "\(refit ? "after" : "before") f\(k)")) }
+            }
+        }
+        return (imgs, feet, det)
+    }
+    func testCaptureWalkBeforeAfter() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let shots = [15, 40, 65, 80, 100, 120, 145, 170]
+        var rows: [UIImage] = []
+        var log = ""
+        for (name, id) in [("Pip", 1), ("Bob", 0)] {
+            let b = try walkRun(id: id, refit: false, shots: shots), a = try walkRun(id: id, refit: true, shots: shots)
+            var maxD: Float = 0, n = 0, skipped = 0, maxAll: Float = 0, hist = ""
+            for k in 0..<min(a.feet.count, b.feet.count) {
+                var m: Float = 0, dv = SIMD3<Float>.zero
+                for i in 0..<min(a.feet[k].count, b.feet[k].count) { let q = simd_distance(a.feet[k][i], b.feet[k][i]); if q > m { m = q; dv = a.feet[k][i] - b.feet[k][i] } }
+                maxAll = max(maxAll, m)
+                if m > 0.004 { hist += String(format: "f%d:%.3f(d %.3f,%.3f,%.3f)%@ ", k, m, dv.x, dv.y, dv.z, b.detaching[k] ? "(old detaching)" : "") }
+                if b.detaching[k] { skipped += 1; continue }
+                maxD = max(maxD, m); n += 1
+            }
+            var maxStep: Float = 0
+            for k in 1..<min(a.feet.count, b.feet.count) where !b.detaching[k] && !b.detaching[k - 1] {
+                for i in 0..<min(a.feet[k].count, b.feet[k].count) { maxStep = max(maxStep, simd_distance(a.feet[k][i] - b.feet[k][i], a.feet[k - 1][i] - b.feet[k - 1][i])) }
+            }
+            log += String(format: "max frame-to-frame change of the after-before difference %.5f u\n", maxStep)
+            log += String(format: "WALKDIFF %@: frames compared %d, skipped (old detaching) %d, max per-vertex foot difference %.5f u (all frames incl. detaching %.5f)\n  frames differing > 0.004: %@\n", name, n, skipped, maxD, maxAll, hist)
+            rows.append(hstack(b.imgs)); rows.append(hstack(a.imgs))
+        }
+        try log.write(toFile: d + "/walkdiff.txt", atomically: true, encoding: .utf8)
+        try write(vstack(rows), d + "/feet2_walk_before_after.png")
+    }
+
     // MARK: Pip's teardrop tail + back spikes
 
     func testCapturePipTeardrop() throws {
@@ -564,6 +624,111 @@ final class FeatureCaptureTests: XCTestCase {
             r.brain.script = .walk(target: SIMD2(p0.x - 2.0, p0.z + 0.3), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
             for _ in 0..<70 { lab.tick(watching: false); self.tick(dr, 0, r, c) }
         }, d + "/piptail2_walk.png")
+    }
+
+    /// The production-readiness sheet for Pip's tail: views, motions, wearables, the other Jelbies. Files: tail_final_<name>.png (CHAR_CAP_DIR). TAIL_GROUP picks a group.
+    func testCapturePipFinal() throws {
+        let d = try dir(); DayClock.shared.forcedHour = 12
+        let group = ProcessInfo.processInfo.environment["TAIL_GROUP"] ?? "views"
+        defer { try? PipSpikes.debug.write(toFile: d + "/tail_final_debug_\(group).txt", atomically: true, encoding: .utf8) }
+        let c = Char(id: 1)
+        func save(_ img: UIImage, _ n: String) throws { try write(img, d + "/tail_final_\(n).png") }
+        func go(_ r: MotionRig, _ lab: SocialTests.Lab, _ dr: Dressed, _ ch: Char, _ n: Int) { for _ in 0..<n { lab.tick(watching: false); self.tick(dr, 0, r, ch) } }
+        let far: (dist: Float, lookY: Float, lookBack: Float, lift: Float) = (4.6, 0.15, 0.5, 0.3)
+        switch group {
+        case "views":
+            let views: [(String, Float, Float, Float)] = [("back", Float.pi, 4.2, 0.3), ("sideL", Float.pi / 2, 4.6, 0.2), ("sideR", Float.pi * 1.5, 4.6, 0.2), ("front34", 0.9, 4.6, 0.3), ("back34", Float.pi * 1.2, 4.6, 0.3), ("top", Float.pi, 4.2, 3.0)]
+            for (n, y, dist, lift) in views { try save(try closeup(c, yaw: y, label: "Pip \(n)", dist: dist, lookY: 0.15, lookBack: 0.5, lift: lift), n) }
+        case "motion":
+            let yaw = Float.pi * 1.35
+            func mo(_ name: String, _ kind: IdleKind?, _ frames: [Int], script: ((MotionRig) -> Void)? = nil) throws {
+                for (fi, fr) in frames.enumerated() {
+                    try save(try closeup(c, yaw: yaw, label: "Pip \(name) \(fi + 1)", dist: far.dist, lookY: far.lookY, lookBack: far.lookBack, lift: far.lift) { lab, dr in
+                        let r = lab.rigs[0]
+                        if let k = kind { r.brain.idleForced = true; _ = r.brain.idleStart(k, r.sim); if k == .sleep { r.brain.sleep.hold = 500 } }
+                        script?(r)
+                        go(r, lab, dr, c, fr)
+                    }, "motion_\(name)\(fi + 1)")
+                }
+            }
+            try mo("idle", nil, [90])
+            try mo("walk", nil, [50, 80]) { r in let p = r.sim.bodyPose(iterations: 3).centroid; r.brain.script = .walk(target: SIMD2(p.x - 2.5, p.z + 0.5), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0 }
+            try mo("run", .run, [40, 70])
+            try mo("turn", nil, [25, 45]) { r in r.brain.script = .turn(to: r.brain.yaw + Float.pi, then: .none) }
+            try mo("sit", .sit, [60, 120])
+            try mo("sleep", .sleep, [120, 200])
+            try mo("hop", .joy, [30, 50])
+            try mo("cartwheel", .cartwheel, [30, 55])
+            try mo("flip", nil, [30, 50]) { r in r.brain.script = .flipPlay }
+        case "wear":
+            let outs: [(String, Outfit)] = [("cowboy", [.head: .cowboyHat]), ("beanie", [.head: .beanieHoney]), ("witch", [.head: .witchHat]), ("backpack", [.body: .backpackSky]), ("cape", [.body: .capeHero]), ("hoodie", [.body: .hoodie])]
+            for (n, o) in outs {
+                for (vn, y) in [("a", Float.pi * 1.2), ("b", Float.pi), ("c", 0.9)] {
+                    try save(try closeup(Char(id: 1, outfit: o), yaw: y, label: "Pip + \(n) \(vn)", dist: far.dist, lookY: far.lookY, lookBack: far.lookBack, lift: far.lift), "wear_\(n)_\(vn)")
+                }
+            }
+        case "others":
+            for (n, id) in [("bob", 0), ("moss", 2), ("lavender", 3)] {
+                try save(try closeup(Char(id: id), yaw: Float.pi * 1.2, label: "\(n) back 3/4", dist: far.dist, lookY: far.lookY, lookBack: far.lookBack, lift: far.lift), "other_\(n)")
+            }
+        case "rigonly":
+            // MotionRig-style (no lab, no brain feature, no configureTail): every Jelbie must show NO tail
+            guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+            W = 900; H = 900
+            var tiles: [UIImage] = []
+            for (n, id) in [("bob", 0), ("pip-unconfigured", 1), ("moss", 2), ("lavender", 3)] {
+                let r = MotionRig(game: true); Self.keepRigs.append(r)
+                for _ in 0..<60 { r.tick() }
+                guard let ren = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: MotionRig.renderMesh, simEdges: r.sim.edges, particleCount: r.sim.n, game: true), ren.room != nil else { throw XCTSkip("no renderer") }
+                ren.resize(width: W, height: H)
+                let td = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: W, height: H, mipmapped: false)
+                td.usage = [.renderTarget, .shaderRead]; td.storageMode = .shared
+                ren.roomCacheEnabled = false
+                let target = device.makeTexture(descriptor: td)!
+                ren.beginFrame()
+                r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: ren.dynPointer)
+                let pose = r.sim.bodyPose(iterations: 3)
+                let cc = pose.centroid
+                let cam = Self.lookCamera(target: SIMD3(cc.x, cc.y + 0.15, cc.z - 0.4), dir: simd_normalize(SIMD3(0.5, 0, -1)), dist: 4.2, aspect: 1, lift: 0.3)
+                var fp = FrameParams(); fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale); fp.exposure = 1; fp.meshAlpha = 0
+                let pal = JellyRoster.palette(id) ?? PaletteKey.blue.palette
+                fp.bg = pal.matte ? melonCreamLinear : melonBackgroundLinear
+                ren.setUniforms(camera: cam, light: GameCamera.light(centroid: cc), palette: pal, params: fp, viewSize: SIMD2<Float>(Float(W), Float(H)))
+                let cmd = ren.queue.makeCommandBuffer()!
+                ren.draw(to: target, commandBuffer: cmd, showMesh: false)
+                cmd.waitUntilCompleted()
+                var px = [UInt8](repeating: 0, count: W * H * 4)
+                px.withUnsafeMutableBytes { target.getBytes($0.baseAddress!, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0) }
+                tiles.append(labelled(LockImage(w: W, h: H, bgra: px).uiImage()!, "MotionRig-style \(n)"))
+            }
+            try save(hstack(Array(tiles[0..<2])), "rigonly_a")
+            try save(hstack(Array(tiles[2..<4])), "rigonly_b")
+        default: break
+        }
+    }
+
+    /// Walk head-bob amplitude: Bob vs Pip personality (and Pip with the tail on / off), measured on the skinned head-top vertex and the body centroid.
+    func testPipWalkBob() throws {
+        let d = try dir()
+        var out = ""
+        let rm = MotionRig.renderMesh
+        var topV = 0; var topY: Float = -9
+        for v in 0..<(rm.armCapsule?.firstVertex.min() ?? rm.vertexCount) where rm.rest[3 * v + 1] > topY { topY = rm.rest[3 * v + 1]; topV = v }
+        for (name, feat, tail) in [("bob", JellyFeature.none, false), ("pip-tail-off", .spines, false), ("pip-tail-on", .spines, true), ("moss", .daisy, false)] {
+            let r = MotionRig(game: true); Self.keepRigs.append(r)
+            r.skinner.configureTail(rm); r.skinner.tailOn = tail; r.brain.skinnerRef = r.skinner
+            r.brain.feature = feat; r.brain.personalityOverride = feat
+            r.brain.script = .walk(target: SIMD2(2.2, 0), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            var ys: [Float] = [], cs: [Float] = []
+            for k in 0..<420 {
+                r.tick()
+                r.skinner.tailOn = tail
+                if k > 90 { let sk = skin(r); ys.append(sk[6 * topV + 1]); cs.append(r.sim.centroid().y) }
+            }
+            let a = (ys.max() ?? 0) - (ys.min() ?? 0), b = (cs.max() ?? 0) - (cs.min() ?? 0)
+            out += String(format: "%@: head-top bob %.4f, centroid bob %.4f (frames %d)\n", name, a, b, ys.count)
+        }
+        try out.write(toFile: d + "/tail_final_walkbob.txt", atomically: true, encoding: .utf8)
     }
 
     func testCapturePipHatsRidge() throws {
