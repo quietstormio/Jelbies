@@ -119,15 +119,19 @@ final class StoreTests: XCTestCase {
                 XCTAssertNotNil(c, "\(i.id) feeds a real food")
                 XCTAssertTrue(c?.stored ?? false)
                 XCTAssertEqual(c?.perk, i.perk, "\(i.id): the card's perk is what eating gives")
-                XCTAssertNotNil(c?.piece == nil ? nil : 1, "\(i.id) has a 3D piece")
+                XCTAssertTrue(c?.piece != nil || c?.container != nil, "\(i.id) has a 3D piece (a drink: a cup)")
+                XCTAssertEqual(c?.kind == .drink, i.kind == .drink, "\(i.id): drinks are the Drinks tab")
             }
             if i.kind == .trickPage { XCTAssertNotNil(i.trick); XCTAssertFalse(i.trick!.isStarter) }
             if i.kind == .shoes { XCTAssertNotNil(i.wear) }
             if i.kind == .supply { XCTAssertNotNil(i.perk) }
         }
-        XCTAssertEqual(Consumables.storeFoods.count, 10)
+        XCTAssertEqual(Consumables.storeFoods.count, 18)
+        XCTAssertEqual(Consumables.storeDrinks.count, 4)
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "the Decor tab shows now that part B has items")
-        XCTAssertEqual(StoreCatalog.items(.decor).count, 29)          // (the mini goal joined; the football became the soccer ball)
+        let decor = StoreCatalog.items(.decor)          // counted from the catalog (batches 3 and 4 keep adding): every one is a placeable piece with spots
+        XCTAssertGreaterThanOrEqual(decor.count, 29)
+        XCTAssertTrue(decor.allSatisfy { $0.decor != nil && $0.roomUnits > 0 }, "every decor item is a placeable decor kind")
         XCTAssertEqual(StoreTuning.roomCapacity, 10)
         XCTAssertFalse(Consumables.foods.contains { $0.stored }, "store foods stay out of the free Feed picker")
         XCTAssertTrue(Consumables.foods.map(\.id).contains("berries"))

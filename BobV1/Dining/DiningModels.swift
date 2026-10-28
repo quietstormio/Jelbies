@@ -697,6 +697,11 @@ nonisolated enum DiningModels {
     }
 
     /// Container placement on the tray, and the straw roots / paths for every place (tray-local).
+    /// One Jelbie with a cup that stands further out to his right (`Consumable.cupSide`).
+    static func cupShifted(_ L: TrayLayout, for d: Consumable) -> TrayLayout {
+        guard L.n == 1, d.cupSide != 0 else { return L }
+        var l = L; l.drinkCentre.x -= d.cupSide; return l
+    }
     static func containerModel(_ d: Consumable, layout L: TrayLayout, palette: ConsumablePalette? = nil, fill: Float = 1) -> ContainerModel? {
         d.container?(L.n, palette ?? d.palette, fill)
     }
@@ -714,13 +719,15 @@ nonisolated enum DiningModels {
     }
     /// Centreline of place `i`'s straw in tray-local coordinates. One Blob: straight up out of the neck to 0.10 above the lip, ONE rounded elbow of
     /// 65 degrees from vertical, a short arm toward the place. N >= 2: see `strawLongPath`. The last point is the straw TIP (`DiningSet.strawTip`).
-    static func strawPath(layout L: TrayLayout, drink d: Consumable, place i: Int) -> [SIMD3<Float>] {
+    static func strawPath(layout L0: TrayLayout, drink d: Consumable, place i: Int) -> [SIMD3<Float>] {
+        let L = cupShifted(L0, for: d)
         guard let cm = containerModel(d, layout: L) else { return [] }
         let s = L.scale
         let off = strawRootOffset(layout: L, place: i, neckRadius: cm.openingRadius) + L.drinkCentre
         let rimY = DiningDims.trayTop + cm.openingY * s
         let root = SIMD3<Float>(off.x, DiningDims.trayTop + 0.1 * s, off.y)
-        if L.n > 1 {
+        // a tall cup (its rim near his mouth height) takes the bendy straw too: up out of the cup, one elbow, across to his mouth
+        if L.n > 1 || rimY > DiningDims.strawTipHeight - 0.12 {
             return strawLongPath(root: root, elbowY: max(rimY + 0.012, DiningDims.mouthRestHeight - 0.005), target: L.sipTipXZ(i))
         }
         // one Blob: one straight straw slanted out of the neck toward his mouth (passes through the neck axis at the rim)
@@ -794,12 +801,12 @@ nonisolated enum DiningModels {
             append(fb.mesh, to: b, transform: matrix_identity_float4x4)
             // fork foods: NO fork on the tray; the fork poofs straight into his hand (DiningSet draws `fork(withBite:)` at the held pose)
         } else if let cm = containerModel(f, layout: L, fill: Float(state.totalLeft) / Float(DiningTiming.gulpsPerDrink * L.n)) {
-            let s = L.scale
-            let m = translation(SIMD3(L.drinkCentre.x, DiningDims.trayTop, L.drinkCentre.y), scale: s)
+            let s = L.scale, cup = cupShifted(L, for: f).drinkCentre          // the cup stands out to his right; the straw path shifts itself
+            let m = translation(SIMD3(cup.x, DiningDims.trayTop, cup.y), scale: s)
             append(cm.opaque, to: b, transform: m)
             let colors = f.strawColors ?? (f.palette.accent, SIMD3(repeating: 1))
             for i in 0..<L.n {
-                appendTube(b, centre: strawPath(layout: L, drink: f, place: i), radius: DiningDims.strawRadius, color: colors.0, stripe: colors.1, accordion: L.n > 1)
+                appendTube(b, centre: strawPath(layout: L, drink: f, place: i), radius: DiningDims.strawRadius * f.thinStraw, color: colors.0, stripe: colors.1, accordion: L.n > 1 || f.thinStraw < 1)
             }
             append(cm.translucent, to: t, transform: m)
         }

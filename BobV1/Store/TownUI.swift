@@ -657,8 +657,8 @@ struct BagSheet: View {
     @ViewBuilder
     private func actionButton(_ item: StoreItem) -> some View {
         switch item.kind {
-        case .food, .treat:
-            pink("Feed", item, enabled: !care.trayOut && !care.bath.active && !care.race.active) {
+        case .food, .treat, .drink:
+            pink(item.kind == .drink ? "Give" : "Feed", item, enabled: !care.trayOut && !care.bath.active && !care.race.active) {
                 close(); care.feedSnack(item.id, jelly: who)
             }
         case .shoes, .wear:

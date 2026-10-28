@@ -133,7 +133,7 @@ final class StoreBook {
     func ownsLook(_ l: WearLook) -> Bool { saved.wearables.contains(l.rawValue) }
     /// Foods the player can feed now (count > 0), in catalogue order.
     var snacks: [(item: StoreItem, count: Int)] {
-        StoreCatalog.items.compactMap { i in i.food != nil && count(i.id) > 0 ? (i, count(i.id)) : nil }
+        StoreCatalog.items.compactMap { i in i.food != nil && i.kind != .drink && count(i.id) > 0 ? (i, count(i.id)) : nil }          // (drinks are offered in the Drink picker)
     }
 
     // MARK: buy / use

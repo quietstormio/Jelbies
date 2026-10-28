@@ -116,7 +116,7 @@ enum StoreThumb {
     /// The mesh a store item is drawn with (nil = an icon card).
     static func mesh(for item: StoreItem) -> RoomMesh? {
         if let f = item.food, let c = Consumables.with(id: f) {
-            return c.pizzaLayout && c.piece == nil ? DiningModels.heldSlice(scale: 1.25, palette: c.palette) : DiningModels.heldPiece(c, index: 0, scale: 1.25)
+            return c.pizzaLayout && c.piece == nil ? DiningModels.heldSlice(scale: 1.25, palette: c.palette) : foodMesh(c)
         }
         if let w = item.wear { return w.isShoe ? shoeMesh(w) : (wornMesh(w) ?? WearMeshes.restMesh(w)) }
         if let d = item.decor { return DecorModels.thumbnail(d) }
@@ -168,14 +168,34 @@ enum StoreThumb {
         return g
     }
 
+    /// The translucent part of a drink: per-vertex alpha, drawn after the solid parts and not written to the depth buffer.
+    private static func glassNode(_ m: RoomMesh) -> SCNNode {
+        func srgb(_ x: Float) -> Float { powf(max(x, 0), 1 / 2.2) }
+        let pos = m.vertices.map { SCNVector3($0.pos.x, $0.pos.y, $0.pos.z) }
+        let nrm = m.vertices.map { SCNVector3($0.normal.x, $0.normal.y, $0.normal.z) }
+        var col: [Float] = []
+        for v in m.vertices { col += [srgb(v.color.x), srgb(v.color.y), srgb(v.color.z), v.color.w * 0.6] }          // (thinner glass in a thumbnail: on a white card it would wash the colours out)
+        let colSrc = SCNGeometrySource(data: col.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .color, vectorCount: m.vertices.count, usesFloatComponents: true,
+                                       componentsPerVector: 4, bytesPerComponent: 4, dataOffset: 0, dataStride: 16)
+        let el = SCNGeometryElement(data: m.indices.withUnsafeBufferPointer { Data(buffer: $0) }, primitiveType: .triangles, primitiveCount: m.indices.count / 3, bytesPerIndex: 4)
+        let g = SCNGeometry(sources: [SCNGeometrySource(vertices: pos), SCNGeometrySource(normals: nrm), colSrc], elements: [el])
+        let mat = SCNMaterial()
+        mat.lightingModel = .lambert; mat.diffuse.contents = UIColor.white; mat.isDoubleSided = true
+        mat.blendMode = .alpha; mat.writesToDepthBuffer = false
+        g.materials = [mat]
+        let n = SCNNode(geometry: g); n.renderingOrder = 10
+        return n
+    }
+
     /// The cached thumbnail of a mesh (one render per key).
-    static func image(_ key: String, mesh: RoomMesh, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil) -> UIImage? {
+    static func image(_ key: String, mesh: RoomMesh, glass: RoomMesh? = nil, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil) -> UIImage? {
         if let c = cache[key] { return c }
         guard !mesh.vertices.isEmpty, let device else { return nil }
         let scene = SCNScene()
         let node = SCNNode(geometry: geometry(mesh))
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
-        for v in mesh.vertices { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
+        for v in mesh.vertices + (glass?.vertices ?? []) { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
+        if let glass, !glass.vertices.isEmpty { node.addChildNode(glassNode(glass)) }          // a drink's glass and what is seen through it
         var c = (lo + hi) / 2, r = max(simd_length(hi - lo) / 2, 0.01)
         if let focus { c = focus.0; r = focus.1 }
         node.pivot = SCNMatrix4MakeTranslation(c.x, c.y, c.z)
@@ -215,7 +235,8 @@ enum StoreThumb {
         guard let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
-        return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch)
+        let glass = item.food.flatMap { Consumables.with(id: $0) }.flatMap { glassMesh($0) }
+        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch)
     }
 }
 
@@ -238,7 +259,7 @@ struct ItemArt: View {
     }
     private var tint: Color {
         switch item.kind {
-        case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .supply: return SK.sky.opacity(0.35)
+        case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .drink: return SK.sky.opacity(0.4); case .supply: return SK.sky.opacity(0.35)
         case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3)
         }
     }

@@ -112,6 +112,10 @@ nonisolated struct Consumable {
     var condition: [ConditionKey: Float] = [:]
     var chew: SFX = .chomp
     var storeID: String? = nil
+    /// Drinks: the straw's thickness relative to the standard straw (the bought drinks use a slim one), and how far (tray-local x, one Jelbie) the cup stands
+    /// to his right of the standard bottle spot: a big cup beside the mouth would hide it.
+    var thinStraw: Float = 1
+    var cupSide: Float = 0
 }
 
 nonisolated enum Consumables {
@@ -148,9 +152,10 @@ nonisolated enum Consumables {
         strawColors: (srgb(0.62, 0.84, 0.96), srgb(1.0, 1.0, 1.0)))
 
     /// Menu order.
-    static let all: [Consumable] = [berries, pizza, water, soda] + storeFoods
+    static let all: [Consumable] = [berries, pizza, water, soda] + storeFoods + storeDrinks
     /// The FREE foods of the Feed picker (store foods are fed from the inventory).
     static var foods: [Consumable] { all.filter { $0.kind == .food && !$0.stored } }
-    static var drinks: [Consumable] { all.filter { $0.kind == .drink } }
+    /// The FREE drinks (water, soda). The store's drinks (`storeDrinks`) are offered from the bag: `GameCare.drinkChoices`.
+    static var drinks: [Consumable] { all.filter { $0.kind == .drink && !$0.stored } }
     static func with(id: String) -> Consumable? { all.first { $0.id == id } }
 }

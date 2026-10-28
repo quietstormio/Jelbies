@@ -12,7 +12,7 @@ extension GameCare {
     /// Feeds the snack `itemID` (a store food or treat from the bag) to `jelly` (nil = nobody singled out: a group serving with several Jellies).
     func feedSnack(_ itemID: String, jelly: Int? = nil) {
         guard let item = StoreCatalog.item(itemID), let f = item.food, store.count(itemID) > 0 else { return }
-        feed(f, jelly: jelly)
+        if item.kind == .drink { drink(f, jelly: jelly) } else { feed(f, jelly: jelly) }          // a drink is sipped, not tossed
     }
 
     /// A Jelly ate `pieces` more of `c` (single or group meal). Store foods use up one serving from the bag on the first bite of a serving, and

@@ -11,16 +11,16 @@
 import Foundation
 
 nonisolated enum StoreKind: String, CaseIterable, Codable, Sendable {
-    case food, treat, supply, trickPage, shoes, wear, decor, room
+    case food, treat, drink, supply, trickPage, shoes, wear, decor, room
     var title: String {
         switch self {
-        case .food: return "Food"; case .treat: return "Treats"; case .supply: return "Care"; case .trickPage: return "Tricks"
+        case .food: return "Food"; case .treat: return "Treats"; case .drink: return "Drinks"; case .supply: return "Care"; case .trickPage: return "Tricks"
         case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"
         }
     }
     var symbol: String {
         switch self {
-        case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
+        case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .drink: return "cup.and.saucer.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
         case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"
         }
     }
@@ -85,7 +85,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems
+    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems + food4Items
 
     /// The rooms for sale (home is never sold).
     static let roomItems: [StoreItem] = [

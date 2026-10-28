@@ -157,6 +157,7 @@ final class MealRun {
     /// Whole meal: from the tap to the tray gone (and a short settle).
     func meal(_ id: String, limit: Float = 40) {
         let c = Consumables.with(id: id)!
+        if c.stored { care.store.grant(id, 1) }          // a bought food / drink needs one in the bag
         if c.kind == .food { care.feed(id) } else { care.drink(id) }
         started = rig.t
         run(limit) { self.tray.phase == .absent && !self.care.trayOut && self.rig.t - (self.started ?? 0) > 2 }
@@ -392,6 +393,26 @@ final class DiningFlowTests: XCTestCase {
         checkReturnsToRest(m, before: before, id)
     }
     func testWaterSip() { checkSip("water") }
+    // store sweep 4: bought drinks are sipped like water (hands-free, straw to the mouth), the level drops with each gulp
+    func testBobaSip() { checkSip("boba") }
+    func testCocoaSip() { checkSip("cocoa") }
+    func testSmoothieSip() { checkSip("smoothie") }
+    func testLemonadeSip() { checkSip("lemonade") }
+    // and the new foods are tossed into his mouth, the stub never reaching
+    private func checkStoreFoodToss(_ id: String) {
+        let (m, before) = setup()
+        m.meal(id)
+        // a sugar-rush food (zoomies perk) sends him running the moment the tray poofs, so the "idle again / rest shape" checks do not apply to it
+        let rush = Consumables.with(id: id)?.perk == .zoomies
+        if !rush { checkCommon(m, id) }
+        XCTAssertEqual(m.tray.bitesLeft, [0], "\(id): all three pieces eaten")
+        XCTAssertEqual(m.runs { $0.holding }, 3, "\(id): three bites, one piece each")
+        checkToss(m, id)
+        if !rush { checkReturnsToRest(m, before: before, id) }
+    }
+    func testRamenToss() { checkStoreFoodToss("ramen") }
+    func testCheeseburgerToss() { checkStoreFoodToss("cheeseburger") }
+    func testPancakesToss() { checkStoreFoodToss("pancakestack") }
     func testSodaSip() { checkSip("soda") }
 
     // MARK: the hand-off
