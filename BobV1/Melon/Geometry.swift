@@ -1005,7 +1005,17 @@ private func buildRenderMeshBob() -> RenderMesh {
     }
     // Pip's tail (TailBean): after the foot beans, still in the body index range; skinned like the body, collapsed for every Jelly but Pip (Skinner)
     let tailFirst = pos.count / 3
-    for i in 0..<TailBean.vertexCount { add(TailBean.local.pos[i], TailBean.local.nrm[i], 0) }
+    TailBean.builtFirst = tailFirst
+    // the root rings carry the egg's own baked crease occlusion (as projected onto the egg, fading down the tail), so there is no tonal step at the junction
+    for i in 0..<TailBean.vertexCount {
+        let w = Double(TailBean.normalBlend[i])
+        var m: Float = 0
+        if w > 0.001 {
+            let ps = BobForm.project(TailBean.local.pos[i]), n = BobForm.normal(ps)
+            m = Float(0.4 * BobForm.occlusion(ps, n) * w * 0.75)
+        }
+        add(TailBean.local.pos[i], TailBean.local.nrm[i], m)
+    }
     idx += TailBean.triangles(firstVertex: tailFirst)
     let bodyIndexCount = idx.count
 
