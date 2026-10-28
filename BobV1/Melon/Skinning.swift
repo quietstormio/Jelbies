@@ -126,6 +126,102 @@ nonisolated final class Skinner {
     func clearBeans() { beanBlend = 0; beanPos = [[], []]; beanStart = [[], []] }
     var beansActive: Bool { beanBlend > 0 && beanPos[0].count == FootBean.vertexCount && beanStart[0].count == FootBean.vertexCount && beanFirst.count == 2 }
 
+    // MARK: drawn-space bean guard
+    // 2026-10-28 (legs come off): the brain buries the beans against the REST egg in the fitted rigid pose (BlobBrain.attachBean), but what is drawn is the skinned soft
+    // body (squash, retract, jiggle, sit / slide deformation): in a drawn-space audit the bean crown was seen 9 mm OUTSIDE the drawn belly while the rest-egg check said
+    // -3 cm. So the last step of the skin looks at the DRAWN triangles near each foot: if the deepest sampled crown vertex lies less than `guardTrigger` inside the drawn body,
+    // the whole bean is moved along that triangle's inward normal to `guardBury`. Per foot a precomputed list of the egg's triangles around the foot's rest place (no
+    // allocation per frame; ~50 us per Jelly).
+    static let guardTrigger: Float = 0.010, guardBury: Float = 0.014, guardMaxShift: Float = 0.05, guardReach: Float = 0.55
+    static let guardCrown: [Int] = { let c = FootBean.crownIndices; let pole = FootBean.vertexCount - 1; return [pole] + c.enumerated().filter { $0.offset % 3 == 0 && $0.element != pole }.map { $0.element } }()
+    var guardEnabled = true
+    /// Extra burial while shoes are worn (set by the brain): the shoe shell is a little thicker than the bean, and its own top must lie in the body too.
+    var guardExtra: Float = 0
+    private(set) var guardTris: [[Int32]] = [[], []]
+    private var guardCand: [Int32] = []
+    /// What the guard moved each bean by last frame (world), for tests and captures.
+    private(set) var guardShift: [SIMD3<Float>] = [.zero, .zero]
+    var guardReady: Bool { !guardTris[0].isEmpty && !guardTris[1].isEmpty }
+    /// `limit` = index count of the egg proper (RenderMesh.armCapsule.indexFirst): the arm / bean / tail blocks and the decals are not body.
+    func configureBeanGuard(rest: [Float], index: [UInt32], limit: Int) {
+        for s in 0..<2 {
+            let sx: Float = s == 0 ? -1 : 1
+            let c = SIMD3<Float>(sx * Float(BobForm.footX), 0.12, Float(BobForm.footZ))
+            var list: [Int32] = []
+            var t = 0
+            while t + 2 < limit {
+                var near = false
+                for k in 0..<3 {
+                    let v = 3 * Int(index[t + k])
+                    if simd_distance_squared(SIMD3(rest[v], rest[v + 1], rest[v + 2]), c) < Self.guardReach * Self.guardReach { near = true; break }
+                }
+                if near { list.append(Int32(index[t])); list.append(Int32(index[t + 1])); list.append(Int32(index[t + 2])) }
+                t += 3
+            }
+            guardTris[s] = list
+        }
+        guardCand = [Int32](repeating: 0, count: max(guardTris[0].count, guardTris[1].count) / 3 + 8)
+    }
+
+    private func applyBeanGuard(_ dyn: UnsafeMutablePointer<Float>) {
+        guardShift[0] = .zero; guardShift[1] = .zero
+        guard guardEnabled, guardReady, beansActive, beanBlend > 0.05 else { return }
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        let crown = Self.guardCrown            // (the top pole first: nearly always the deepest vertex, so a buried bean costs one point against ~100 triangles)
+        for s in 0..<2 {
+            let f = beanFirst[s]
+            guardTris[s].withUnsafeBufferPointer { tb in
+                /// Triangles with a vertex within `r` of `c`.
+                func gather(_ c: SIMD3<Float>, _ r: Float) -> Int {
+                    var n = 0, t = 0
+                    let R2 = r * r
+                    while t < tb.count {
+                        if simd_distance_squared(P(Int(tb[t])), c) < R2 { guardCand[n] = Int32(t); n += 1 }
+                        t += 3
+                    }
+                    return n
+                }
+                /// Burial of `p` (+ inside) by its nearest candidate triangle and that triangle's inward normal.
+                func burial(_ p: SIMD3<Float>, _ n: Int) -> (Float, SIMD3<Float>)? {
+                    var bd = Float.infinity, sgn: Float = 1, nn = SIMD3<Float>(0, 1, 0)
+                    for k in 0..<n {
+                        let t = Int(guardCand[k])
+                        let a = P(Int(tb[t])), b = P(Int(tb[t + 1])), cc = P(Int(tb[t + 2]))
+                        let q = DrawnGeom.closest(p, a, b, cc).0
+                        let dd = simd_distance_squared(p, q)
+                        if dd < bd { bd = dd; let fn = simd_cross(b - a, cc - a); nn = fn; sgn = simd_dot(p - q, fn) >= 0 ? 1 : -1 }
+                    }
+                    guard bd.isFinite else { return nil }
+                    let l = simd_length(nn)
+                    return (-sgn * bd.squareRoot(), l > 1e-12 ? -nn / l : SIMD3(0, 1, 0))
+                }
+                // the pole: no triangle within 12 cm = buried by more than that
+                let pole = P(f + crown[0])
+                let n0 = gather(pole, 0.12)
+                if n0 == 0 { return }
+                var deepest = -Float.infinity, inward = SIMD3<Float>(0, 1, 0)
+                if let r = burial(pole, n0) { deepest = r.0; inward = r.1 }
+                if deepest >= Self.guardTrigger + guardExtra { return }
+                // not clearly buried: the other crown vertices decide
+                var c = SIMD3<Float>.zero
+                for i in crown { c += P(f + i) }
+                c /= Float(crown.count)
+                var rho: Float = 0
+                for i in crown { rho = max(rho, simd_distance(P(f + i), c)) }
+                let n = gather(c, rho + 0.07)
+                for i in crown.dropFirst() {
+                    if let r = burial(P(f + i), n), r.0 > deepest { deepest = r.0; inward = r.1 }
+                    if deepest >= Self.guardTrigger + guardExtra { return }
+                }
+                guard deepest.isFinite else { return }
+                let sh = inward * min(Self.guardBury + guardExtra - deepest, Self.guardMaxShift)
+                guardShift[s] = sh
+                for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); dyn[o] += sh.x; dyn[o + 1] += sh.y; dyn[o + 2] += sh.z }
+            }
+        }
+    }
+
+
     // MARK: walking arm capsules
     // The same scheme for the arms: while the walking arm is active the brain poses the closed ArmCapsule of each side in world space (`armPos`,
     // blended from `armStart` = the rest nub by `armBlend`) and the rest nub's skin (`armRetract*`, rest-space deltas onto the ARMLESS egg, sunk a
@@ -435,6 +531,7 @@ nonisolated final class Skinner {
         }
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
+        applyBeanGuard(dyn)
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
@@ -607,6 +704,7 @@ nonisolated final class Skinner {
         lap("eyes+antennae")
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }
         lap("jiggle")
+        applyBeanGuard(dyn)
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         lap(Skinner.scatterNormals ? "normals (scatter+normalize)" : "normals (gather)")
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
@@ -974,5 +1072,28 @@ nonisolated final class TriangleAdjacency {
         let a = TriangleAdjacency(index: index, vertexCount: vertexCount)
         cache[key] = a
         return a
+    }
+}
+
+/// Closest point on a triangle (Ericson, Real-Time Collision Detection) and its barycentric weights; shared by the bean guard and the drawn-space audit.
+nonisolated enum DrawnGeom {
+    static func closest(_ p: SIMD3<Float>, _ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) {
+        let ab = b - a, ac = c - a, ap = p - a
+        let d1 = simd_dot(ab, ap), d2 = simd_dot(ac, ap)
+        if d1 <= 0 && d2 <= 0 { return (a, SIMD3(1, 0, 0)) }
+        let bp = p - b
+        let d3 = simd_dot(ab, bp), d4 = simd_dot(ac, bp)
+        if d3 >= 0 && d4 <= d3 { return (b, SIMD3(0, 1, 0)) }
+        let vc = d1 * d4 - d3 * d2
+        if vc <= 0 && d1 >= 0 && d3 <= 0 { let v = d1 / (d1 - d3); return (a + ab * v, SIMD3(1 - v, v, 0)) }
+        let cp = p - c
+        let d5 = simd_dot(ab, cp), d6 = simd_dot(ac, cp)
+        if d6 >= 0 && d5 <= d6 { return (c, SIMD3(0, 0, 1)) }
+        let vb = d5 * d2 - d1 * d6
+        if vb <= 0 && d2 >= 0 && d6 <= 0 { let w = d2 / (d2 - d6); return (a + ac * w, SIMD3(1 - w, 0, w)) }
+        let va = d3 * d6 - d5 * d4
+        if va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0 { let w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return (b + (c - b) * w, SIMD3(0, 1 - w, w)) }
+        let den = 1 / (va + vb + vc), v = vb * den, w = vc * den
+        return (a + ab * v + ac * w, SIMD3(1 - v - w, v, w))
     }
 }

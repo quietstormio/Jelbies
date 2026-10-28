@@ -286,6 +286,7 @@ final class BlobBrain {
     var geom = FootGeom()
     var footSkin = FootSkin()
     var renderRest: [Float] = []
+    var renderIndex: [UInt32] = [], bodyIndexLimit = 0          // (the render mesh's index list: the skinner's drawn-space bean guard looks at the egg's triangles near each foot)
     /// The sim foot is a thin slab: its sole targets may lift / swing out at most this far (world units) so no slab tet ever inverts; the
     /// full motion is drawn by the rigid render foot (`Skinner.feetVertices`).
     var simFootCap: Float = 0.03
@@ -492,6 +493,7 @@ final class BlobBrain {
     func attach(renderMesh rm: RenderMesh, synchronous: Bool = false) {
         attached = true
         renderRest = rm.rest
+        renderIndex = rm.index; bodyIndexLimit = rm.armCapsule?.indexFirst ?? 0
         guard let cap = rm.armCapsule else { return }
         beanFirstIdx = [cap.beanFirst(side: -1), cap.beanFirst(side: 1)]
         tailFirstIdx = cap.tailFirst
@@ -1402,6 +1404,8 @@ final class BlobBrain {
         if !geom.valid { geom = FootGeom(sim: sim) }
         if !footSkin.valid && geom.valid && !renderRest.isEmpty { footSkin = FootSkin(renderRest: renderRest, skinner: skinner, footParticles: geom.particles) }
         if skinner.beanFirst.isEmpty && beanFirstIdx.count == 2 { skinner.beanFirst = beanFirstIdx }
+        skinner.guardExtra = shoesWorn ? 0.012 : 0
+        if !skinner.guardReady && !renderRest.isEmpty && bodyIndexLimit > 0 { skinner.configureBeanGuard(rest: renderRest, index: renderIndex, limit: bodyIndexLimit) }
         if !retractReady && footSkin.valid {
             // the embedded foot (slab + fillet ring) retracts onto the FOOTLESS egg, sunk 1 cm so the egg skin hides it: rest-space delta per vertex
             // weighted by its distance to the foot ellipsoid (1 on / in the foot, smooth to 0 across the fillet band)

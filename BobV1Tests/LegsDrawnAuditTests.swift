@@ -17,29 +17,6 @@ import simd
 import UIKit
 @testable import BobV1
 
-nonisolated enum DrawnGeom {
-    /// Closest point on triangle abc to p and its barycentric weights (Ericson, Real-Time Collision Detection).
-    static func closest(_ p: SIMD3<Float>, _ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) {
-        let ab = b - a, ac = c - a, ap = p - a
-        let d1 = simd_dot(ab, ap), d2 = simd_dot(ac, ap)
-        if d1 <= 0 && d2 <= 0 { return (a, SIMD3(1, 0, 0)) }
-        let bp = p - b
-        let d3 = simd_dot(ab, bp), d4 = simd_dot(ac, bp)
-        if d3 >= 0 && d4 <= d3 { return (b, SIMD3(0, 1, 0)) }
-        let vc = d1 * d4 - d3 * d2
-        if vc <= 0 && d1 >= 0 && d3 <= 0 { let v = d1 / (d1 - d3); return (a + ab * v, SIMD3(1 - v, v, 0)) }
-        let cp = p - c
-        let d5 = simd_dot(ab, cp), d6 = simd_dot(ac, cp)
-        if d6 >= 0 && d5 <= d6 { return (c, SIMD3(0, 0, 1)) }
-        let vb = d5 * d2 - d1 * d6
-        if vb <= 0 && d2 >= 0 && d6 <= 0 { let w = d2 / (d2 - d6); return (a + ac * w, SIMD3(1 - w, 0, w)) }
-        let va = d3 * d6 - d5 * d4
-        if va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0 { let w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return (b + (c - b) * w, SIMD3(0, 1 - w, w)) }
-        let den = 1 / (va + vb + vc), v = vb * den, w = vc * den
-        return (a + ab * v + ac * w, SIMD3(1 - v - w, v, w))
-    }
-}
-
 @MainActor
 final class LegsDrawnAuditTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
@@ -58,11 +35,12 @@ final class LegsDrawnAuditTests: XCTestCase {
         var crownOut: Float = -.infinity         // the crown vertex farthest outside the drawn body
         var ideal: Float = -.infinity            // the old measurement: deepest bean vertex vs the REST egg in the fitted frame (needs <= -0.02)
         var stretch: Float = 0, coreDisp: Float = 0      // embedded foot (beans in): extent over rest extent; largest distance from its place on the rigid fitted body
-        var shoeOff: Float = 0                   // shoes: largest distance between the vertices the shoe is built from and the bean that is drawn
+        var shoeBurial: Float = .infinity        // shoes: deepest vertex of the SHOE SHELL inside the drawn body (<= 0 = the shell floats off the body); min over legs
+        var shoeBeanOff: Float = 0               // shoes: largest distance between the vertices the shoe is built from and the bean that is drawn
         var gap: Float { max(0, -burial) }
     }
 
-    static func measure(_ r: MotionRig, shoes: Bool) -> LegM {
+    static func measure(_ r: MotionRig, shoes: Bool, look: WearLook = .shoes[0]) -> LegM {
         var m = LegM()
         m.beans = r.skinner.beansActive && r.skinner.beanBlend > 0.05; m.blend = r.skinner.beanBlend
         let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
@@ -107,10 +85,39 @@ final class LegsDrawnAuditTests: XCTestCase {
                     }
                     m.ideal = max(m.ideal, ideal)
                 }
-                if shoes, let w = GameCare.footBeans(brain: r.brain, sim: r.sim, skinner: r.skinner) {
-                    for s in 0..<2 where w[s].count == FootBean.vertexCount {
-                        let first = Int(r.bean[s][0])
-                        for i in 0..<FootBean.vertexCount { m.shoeOff = max(m.shoeOff, simd_distance(w[s][i], P(first + i))) }
+                if shoes {
+                    let w: [[SIMD3<Float>]]? = r.dyn.withUnsafeBufferPointer { GameCare.footBeans(brain: r.brain, sim: r.sim, skinner: r.skinner, drawn: $0.baseAddress) }
+                    if let w {
+                        for s in 0..<2 where w[s].count == FootBean.vertexCount {
+                            let first = Int(r.bean[s][0])
+                            for i in 0..<FootBean.vertexCount { m.shoeBeanOff = max(m.shoeBeanOff, simd_distance(w[s][i], P(first + i))) }
+                            let b = RoomMeshBuilder(); b.material = .plain
+                            ShoeModel.buildShell(look, bean: w[s], floorY: r.sim.floorY, body: SIMD3(0.35, 0.5, 0.9), time: 0, gpuPaint: true, side: s, into: b)
+                            var pts: [SIMD3<Float>] = []
+                            var k = 0
+                            for v in b.mesh.vertices { if k % 5 == 0 { pts.append(SIMD3(v.pos.x, v.pos.y, v.pos.z)) }; k += 1 }
+                            guard !pts.isEmpty else { continue }
+                            var c = SIMD3<Float>.zero; for p in pts { c += p }; c /= Float(pts.count)
+                            var rho: Float = 0; for p in pts { rho = max(rho, simd_distance(p, c)) }
+                            var cand: [Int] = []
+                            var t = 0
+                            while t < tri.count {
+                                if simd_distance_squared(P(Int(tri[t])), c) < (rho + 0.07) * (rho + 0.07) { cand.append(t) }
+                                t += 3
+                            }
+                            var deepest = -Float.infinity
+                            for p in pts {
+                                var bd = Float.infinity, sgn: Float = 1
+                                for t in cand {
+                                    let ia = Int(tri[t]), ib = Int(tri[t + 1]), ic = Int(tri[t + 2])
+                                    let (q, ww) = DrawnGeom.closest(p, P(ia), P(ib), P(ic))
+                                    let dd = simd_distance_squared(p, q)
+                                    if dd < bd { bd = dd; let n = N(ia) * ww.x + N(ib) * ww.y + N(ic) * ww.z; sgn = simd_dot(p - q, n) >= 0 ? 1 : -1 }
+                                }
+                                deepest = max(deepest, -sgn * bd.squareRoot())
+                            }
+                            m.shoeBurial = min(m.shoeBurial, deepest)
+                        }
                     }
                 }
             } else {
@@ -163,7 +170,7 @@ final class LegsDrawnAuditTests: XCTestCase {
         var frames = 0, beanFrames = 0, coreFrames = 0, off = 0, gap5 = 0, marginal = 0, started = true, hitches = 0
         var minBurial: Float = .infinity, minBurialFrame = -1, minBurialBlend: Float = 0, maxCrownOut: Float = -.infinity, maxIdeal: Float = -.infinity
         var idealOkButOff = 0
-        var maxStretch: Float = 0, maxCoreDisp: Float = 0, maxShoeOff: Float = 0
+        var maxStretch: Float = 0, maxCoreDisp: Float = 0, maxShoeBeanOff: Float = 0, minShoeBurial: Float = .infinity, shoeOff = 0, shoeMarginal = 0
     }
 
     /// One scenario run. `onFrame` is called after the skin of every frame (frame index, the rig, the measurement or nil when not measured).
@@ -210,7 +217,7 @@ final class LegsDrawnAuditTests: XCTestCase {
             frame += 1
             var mm: LegM? = nil
             if frame % sc.measureEvery == 0 {
-                let m = measure(r, shoes: shoes)
+                let m = measure(r, shoes: shoes, look: WearLook.shoes[Int(seed) % WearLook.shoes.count])
                 mm = m
                 out.frames += 1
                 if m.beans {
@@ -222,7 +229,12 @@ final class LegsDrawnAuditTests: XCTestCase {
                         if m.burial < out.minBurial { out.minBurial = m.burial; out.minBurialFrame = frame; out.minBurialBlend = m.blend }
                         out.maxCrownOut = max(out.maxCrownOut, m.crownOut); out.maxIdeal = max(out.maxIdeal, m.ideal)
                     }
-                    out.maxShoeOff = max(out.maxShoeOff, m.shoeOff)
+                    out.maxShoeBeanOff = max(out.maxShoeBeanOff, m.shoeBeanOff)
+                    if shoes, m.blend > 0.05, m.shoeBurial.isFinite {
+                        out.minShoeBurial = min(out.minShoeBurial, m.shoeBurial)
+                        if m.shoeBurial <= 0 { out.shoeOff += 1 }
+                        if m.shoeBurial < 0.005 { out.shoeMarginal += 1 }
+                    }
                 } else { out.coreFrames += 1; out.maxStretch = max(out.maxStretch, m.stretch); out.maxCoreDisp = max(out.maxCoreDisp, m.coreDisp) }
             }
             onFrame?(frame, r, mm)
@@ -286,8 +298,8 @@ final class LegsDrawnAuditTests: XCTestCase {
     struct Row { let sc: Scenario; let fi: Int; let shoes: Bool; let cad: Int; let seed: UInt64; var res: Run }
 
     func line(_ sc: String, _ fi: Int, _ shoes: Bool, _ cad: Int, _ seed: UInt64, _ x: Run) -> String {
-        String(format: "AUDIT %@ | %@ shoes=%d cad=%@ seed=%d | frames=%d bean=%d core=%d off=%d gap>5mm=%d marginal(<1cm)=%d idealOKbutOff=%d | minBurial=%.4f@%d(blend %.2f) maxCrownOut=%.4f idealOverlap=%.3f | coreStretch=%.2f coreDisp=%.3f shoeOff=%.3f hitches=%d",
-               sc, Self.features[fi].0, shoes ? 1 : 0, Self.cadences[cad].name, Int(seed), x.frames, x.beanFrames, x.coreFrames, x.off, x.gap5, x.marginal, x.idealOkButOff, x.minBurial, x.minBurialFrame, x.minBurialBlend, x.maxCrownOut, x.maxIdeal, x.maxStretch, x.maxCoreDisp, x.maxShoeOff, x.hitches)
+        String(format: "AUDIT %@ | %@ shoes=%d cad=%@ seed=%d | frames=%d bean=%d core=%d off=%d gap>5mm=%d marginal(<1cm)=%d idealOKbutOff=%d | minBurial=%.4f@%d(blend %.2f) maxCrownOut=%.4f idealOverlap=%.3f | coreStretch=%.2f coreDisp=%.3f shoeVsBean=%.3f shoeShellBurial=%.4f shoeOff=%d shoeMarg=%d hitches=%d",
+               sc, Self.features[fi].0, shoes ? 1 : 0, Self.cadences[cad].name, Int(seed), x.frames, x.beanFrames, x.coreFrames, x.off, x.gap5, x.marginal, x.idealOkButOff, x.minBurial, x.minBurialFrame, x.minBurialBlend, x.maxCrownOut, x.maxIdeal, x.maxStretch, x.maxCoreDisp, x.maxShoeBeanOff, x.minShoeBurial, x.shoeOff, x.shoeMarginal, x.hitches)
     }
 
     // MARK: sweep
@@ -347,8 +359,9 @@ final class LegsDrawnAuditTests: XCTestCase {
             try renderWorst(Array(worst.prefix(8)), dir: dir)
         }
         XCTAssertGreaterThan(rows.count, 4)
-        // (evidence suite: the strict bars are enforced only with AUDIT_STRICT=1 until the drawn-space guarantee lands)
-        guard env["AUDIT_STRICT"] != nil else { return }
+        // (strict by default; AUDIT_LAX=1 only logs)
+        guard env["AUDIT_LAX"] == nil else { return }
+        XCTAssertGreaterThanOrEqual(rows.map { $0.res.minShoeBurial }.min() ?? 0, -0.006, "a shoe shell floats more than 6 mm off the drawn body (the shell is a collar around the bean, so it may touch the belly from outside; a 5 mm sliver is not visible)")
         XCTAssertEqual(totalOff, 0, "frames where a leg's bean is not inside the DRAWN body")
         XCTAssertEqual(rows.reduce(0) { $0 + $1.res.gap5 }, 0, "frames with a visible gap > 5 mm")
         XCTAssertEqual(rows.reduce(0) { $0 + $1.res.marginal }, 0, "frames where the bean is buried less than 1 cm in the DRAWN body")
@@ -468,5 +481,36 @@ final class LegsDrawnAuditTests: XCTestCase {
             Self.compose(tiles, T: 300, cols: 10, labels: labels, header: "\(tag) cartwheel, 120 fps, every 2nd frame, side view, close on the legs. minBurial \(res.minBurial)", to: dir + "/cartwheel_strip_\(tag).png")
             MotionLog.write("AUDITPNG \(dir)/cartwheel_strip_\(tag).png frames=\(tiles.count) minBurial=\(res.minBurial) off=\(res.off) core=\(res.coreFrames)")
         }
+    }
+
+    /// Cost of the drawn-space bean guard: Skinner.update for 3 Jelbies walking / cartwheeling with the guard on vs off (best of 5 batches, microseconds per frame for all three).
+    func testBeanGuardCost() throws {
+        let rigs = (0..<3).map { _ in MotionRig(game: true, settle: 0.5) }
+        Self.keep += rigs
+        for (k, r) in rigs.enumerated() {
+            r.brain.idleForced = true
+            if k == 0 { _ = r.brain.idleStart(.run, r.sim) } else if k == 1 { r.brain.shoesWorn = true; _ = r.brain.idleStart(.zoomies, r.sim) } else { _ = r.brain.idleStart(.jacks, r.sim) }
+        }
+        var best: [Bool: Double] = [:]
+        var guardMoved = 0
+        for on in [false, true, false, true] {
+            for r in rigs { r.skinner.guardEnabled = on }
+            var bestBatch = Double.infinity
+            for _ in 0..<5 {
+                for _ in 0..<60 { for r in rigs { r.tick() } }
+                var t = 0.0
+                let n = 120
+                for _ in 0..<n {
+                    for r in rigs { r.tick() }
+                    let t0 = CFAbsoluteTimeGetCurrent()
+                    for r in rigs { r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &r.dyn) }
+                    t += CFAbsoluteTimeGetCurrent() - t0
+                    for r in rigs where r.skinner.guardShift.contains(where: { $0 != .zero }) { guardMoved += 1 }
+                }
+                bestBatch = min(bestBatch, t / Double(n) * 1e6)
+            }
+            best[on] = min(best[on] ?? .infinity, bestBatch)
+        }
+        MotionLog.write(String(format: "GUARDCOST 3 Jelbies: skin %.0f us/frame with the guard off, %.0f us/frame on (delta %.0f us); guard moved a bean on %d jelly-frames", best[false]!, best[true]!, best[true]! - best[false]!, guardMoved))
     }
 }
