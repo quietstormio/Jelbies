@@ -239,7 +239,7 @@ final class JelbieA11yTests: XCTestCase {
         XCTAssertTrue(said.contains { $0.hasPrefix("Close-up with Pip") }, "\(said)")
         XCTAssertEqual(A11yEvents.needAppeared(name: "Pip", kind: .hunger, tier: .hungry), "Pip is hungry")
         XCTAssertEqual(A11yEvents.needFixed(name: "Pip", kind: .hunger), "Pip is full")
-        XCTAssertEqual(A11yEvents.raceFinish(name: "Pip", place: 2, drops: 7), "Pip finished 2nd. 7 Drops")
+        XCTAssertEqual(A11yEvents.raceFinish(name: "Pip", place: 2, drops: 7), "Pip finished 2nd. 7 JellyCoins")
         XCTAssertEqual(A11yEvents.trickLearned(name: "Moss", trick: "Sit"), "Moss learned Sit")
     }
 

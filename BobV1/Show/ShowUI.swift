@@ -914,11 +914,11 @@ struct ShowLobby: View {
                 ForEach(1...4, id: \.self) { p in
                     VStack(spacing: 1) {
                         Text(ShowUI.ordinal(p)).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
-                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
+                        HStack(spacing: 3) { JellyCoinIcon(size: 15); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p == 1 ? Color(hex: 0xFFE7A8) : p == 2 ? Color(hex: 0xECE8EE) : p == 3 ? Color(hex: 0xF3E1D0) : Color(hex: 0xF2ECE6)))
-                    .accessibilityElement(children: .combine).accessibilityLabel("\(ShowUI.ordinal(p)) pays \(rank.drops(place: p)) Drops")
+                    .accessibilityElement(children: .combine).accessibilityLabel("\(ShowUI.ordinal(p)) pays \(rank.drops(place: p)) JellyCoins")
                 }
             }
             .accessibilityIdentifier("show-prizes")

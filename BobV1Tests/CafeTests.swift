@@ -56,7 +56,7 @@ final class CafeTests: XCTestCase {
         XCTAssertFalse(CafeOrder(picks: [0: .swirl, 1: .sundae]).isComplete(jellies: [0, 1, 2]))
         XCTAssertTrue(t.isComplete(jellies: [0, 1, 2]))
         XCTAssertNil(CafeOrder.refusal(total: 20, wallet: 20))
-        XCTAssertEqual(CafeOrder.refusal(total: 48, wallet: 20), "You need 28 more Drops. Races pay Drops!")
+        XCTAssertEqual(CafeOrder.refusal(total: 48, wallet: 20), "You need 28 more JellyCoins. Races pay JellyCoins!")
     }
 
     // 2/3. ordering
@@ -67,7 +67,7 @@ final class CafeTests: XCTestCase {
         r.care.bath.wallet.add(20 - r.care.bath.wallet.count, silent: true)
         let big = CafeOrder(picks: [0: .sundae, 1: .sundae, 2: .sundae, ]); XCTAssertEqual(big.total(jellies: [0, 1, 2]), 54)
         let msg = r.care.orderCafe(big)
-        XCTAssertEqual(msg, "You need 34 more Drops. Races pay Drops!")
+        XCTAssertEqual(msg, "You need 34 more JellyCoins. Races pay JellyCoins!")
         XCTAssertEqual(r.care.bath.wallet.count, 20)
         XCTAssertEqual(r.care.cafe.phase, .menu)
         XCTAssertNil(r.care.groupWanted)

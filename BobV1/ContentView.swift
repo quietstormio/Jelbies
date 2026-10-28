@@ -38,6 +38,8 @@ struct ContentView: View {
         case .adopt(let mode):
             AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
                 .transition(.opacity)
+        case .firstDay(let c, let n, let replay):
+            FirstDayHomeView(character: c, name: n, replay: replay) { withAnimation(.easeInOut(duration: 0.8)) { flow.finishFirstDay() } }.transition(.opacity)
         case .game: GameHost(session: flow.session)
         }
     }

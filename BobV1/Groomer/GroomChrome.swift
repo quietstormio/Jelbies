@@ -132,14 +132,14 @@ struct GroomChrome: View {
                                 Spacer(minLength: 4)
                                 VStack(spacing: 0) {
                                     Text("\(total)").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                                    Text("Drops").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                                    Text("JellyCoins").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
                                 }
                             }
                             .padding(10).frame(maxWidth: .infinity, minHeight: 66)
                             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.white.opacity(0.85)))
                             .opacity(total <= care.bath.wallet.count ? 1 : 0.65)
                         }
-                        .buttonStyle(.plain).accessibilityLabel("\(tier.name), \(total) Drops. \(tier.blurb)").accessibilityIdentifier("groom-tier-\(tier.rawValue)")
+                        .buttonStyle(.plain).accessibilityLabel("\(tier.name), \(total) JellyCoins. \(tier.blurb)").accessibilityIdentifier("groom-tier-\(tier.rawValue)")
                     }
                     if let r = groom.refusal {
                         Text(r).font(SK.font(14, .heavy)).foregroundStyle(SK.pinkStrong).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("groom-refusal")

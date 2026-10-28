@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import UIKit
 import Observation
 import simd
 
@@ -36,6 +37,7 @@ final class DropsWallet {
         guard n >= 0, n <= count else { return false }
         count -= n
         if persists { UserDefaults.standard.set(count, forKey: Self.key) }
+        if n > 0 { AudioHub.shared.play(.purchase); UIImpactFeedbackGenerator(style: .light).impactOccurred() }          // every spend: food, toys, decor, wearables, café, spa, trick pages, the adoption fee
         return true
     }
 }

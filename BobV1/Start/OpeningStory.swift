@@ -3,10 +3,10 @@
 //  The game opening: a ~30 s animated story that plays on a NEW game (title screen -> this -> the species picker) and from Settings > "Watch the
 //  opening" (which replays it and returns to the room; no picker, no save changes). Seven beats on one camera (OpeningArt.swift):
 //    1 night sky, drifting down through clouds   2 the clouds part on Wobble Isle, dawn   3 push in to the Jelly Spring, dewdrops fall
-//    4 the four coloured drops shiver; "Tap to giggle" (auto-continues after ~4 s)   5 each drop pops into its real 3D Jelbie (ShowcaseStage cutout)
+//    (the four coloured drops shimmer at the end of beat 3)   4 each drop pops into its real 3D Jelbie (ShowcaseStage cutout)
 //    6 they turn to the player, blink and hop   7 "Which one will you take home?" and a cross-fade into the picker's blue page.
 //  A tap anywhere moves on; "Skip" (top right) always leaves. Reduce Motion: no camera travel, no drifting, plain fades. VoiceOver reads each
-//  caption. Audio: Resources/opening_underscore (piano + strings) and opening_twinkle / dew_chime / giggle / pop plus the app's sparkles.
+//  caption. Audio: Resources/opening_underscore (piano + strings) and opening_twinkle / dew_chime / pop plus the app's sparkles.
 //  Simulator-only capture flag: -OpeningBeat 1...7 starts at that beat (and holds it: no auto-advance) for screenshots.
 //
 
@@ -16,19 +16,19 @@ enum OpeningScript {
     /// Each caption is split into word groups that fade in one after the other. Joined with spaces they are the exact story text.
     static let captions: [[String]] = [
         ["High above", "the clouds…"],
-        ["…floats a little island", "called Wobble Isle."],
-        ["Every morning,", "dewdrops gather", "in the Jelly Spring."],
-        ["And when a drop", "hears someone laugh…"],
-        ["…it wobbles awake", "as a Jelbie!"],
-        ["Jelbies never grow up.", "So they need someone", "to look after them."],
-        ["Which one will you", "take home?"],
+        ["…floats a little town", "called Wobble Isle.", "You've just moved in!"],
+        ["In the middle of town", "is the Jelly Spring.", "Every morning, a few", "of its dewdrops wobble awake…"],
+        ["…as Jelbies!"],
+        ["Every Jelbie needs", "someone to take care", "of them."],
+        ["Look after them,", "and they'll grow:", "learning tricks,", "making friends,", "and competing around town", "in races, shows and volleyball."],
+        ["The Spring has a welcome gift", "for its newest neighbour.", "Which one will you take home?"],
     ]
-    /// Seconds each beat lasts on its own (beat 4 also ends ~2 s after the giggle).
-    static let durations: [Double] = [5.2, 5.4, 5.0, 4.0, 5.6, 5.0, 3.6]
+    /// Seconds each beat lasts on its own.
+    static let durations: [Double] = [5.2, 6.6, 8.2, 4.6, 4.8, 7.4, 6.0]
     /// The Jelbies, in the picker's order (blue, yellow, purple, green): character ids.
     static let characters = [0, 1, 3, 2]
     static let names = ["Blueberry", "Lemon Drop", "Taro", "Matcha"]
-    static let popTimes: [Double] = [0.5, 1.4, 2.3, 3.2]
+    static let popTimes: [Double] = [0.4, 1.1, 1.8, 2.5]
     static func full(_ beat: Int) -> String { captions[beat].joined(separator: " ") }
 }
 
@@ -42,7 +42,6 @@ enum OpeningScript {
     var camT0 = Date()
     var camDur = 1.0
     var dropStart: Date?
-    var giggleAt: Date?
     var popAt: [Date?] = [nil, nil, nil, nil]
     var appearAt: [Date?] = [nil, nil, nil, nil]
     var mounted = [false, false, false, false]
@@ -107,11 +106,11 @@ struct OpeningStoryView: View {
         d.motion = motion
         d.t = motion ? now.timeIntervalSince(st.storyStart) : 0
         d.dropT = st.dropStart.map { motion ? now.timeIntervalSince($0) : 9 }
-        d.giggleT = st.giggleAt.map { now.timeIntervalSince($0) }
-        d.shiver = st.beat == 3 ? OArt.smooth(local / 0.9) * (st.giggleAt == nil ? 1 : 0.2) : 0
+        d.home = st.beat == 1 ? OArt.smooth(local / 1.6) : (st.beat == 2 ? OArt.smooth(1 - local / 1.0) : 0)
+        d.shiver = st.beat == 2 ? OArt.smooth((local - 4.6) / 1.2) : (st.beat == 3 ? max(0, 1 - local / 0.5) : 0)          // the four drops shimmer just before they wake
         for k in 0..<4 {
             d.gone[k] = st.popAt[k] != nil
-            if st.beat == 4, st.popAt[k] == nil { d.swell[k] = OArt.smooth(1 - (OpeningScript.popTimes[k] - local) / 0.45) }
+            if st.beat == 3, st.popAt[k] == nil { d.swell[k] = OArt.smooth(1 - (OpeningScript.popTimes[k] - local) / 0.45) }
         }
         let bob = d.bob
         return ZStack {
@@ -151,9 +150,8 @@ struct OpeningStoryView: View {
         case 0: return OpeningCam(cy: 500, zoom: 1, warm: 0.03, part: 0, hand: 0)
         case 1: return OpeningCam(cy: 818, zoom: 1, warm: 1, part: 1, hand: 0)
         case 2: return OpeningCam(cy: 790, zoom: land ? 2.1 : 2.3, warm: 1, part: 1, hand: 0)
-        case 3: return OpeningCam(cy: 790, zoom: land ? 2.3 : 2.55, warm: 1, part: 1, hand: 0)
-        case 4: return OpeningCam(cy: 800, zoom: land ? 2.15 : 1.75, warm: 1, part: 1, hand: 0)
-        case 5: return OpeningCam(cy: 800, zoom: land ? 2.2 : 1.8, warm: 1, part: 1, hand: 0.15)
+        case 3: return OpeningCam(cy: 800, zoom: land ? 2.15 : 1.75, warm: 1, part: 1, hand: 0)
+        case 4, 5: return OpeningCam(cy: 800, zoom: land ? 2.2 : 1.8, warm: 1, part: 1, hand: 0)
         default: return OpeningCam(cy: 800, zoom: land ? 2.2 : 1.8, warm: 1, part: 1, hand: 1)
         }
     }
@@ -292,7 +290,7 @@ struct OpeningStoryView: View {
             }
         }
         // beats 6 and 7: little twinkles over the Jelbies' heads
-        if st.beat >= 5, motion {
+        if st.beat >= 4, motion {
             let t = now.timeIntervalSince(st.storyStart)
             for k in 0..<4 {
                 let base = restPoint(k, pr, bob: bob)
@@ -313,7 +311,7 @@ struct OpeningStoryView: View {
         let portrait = size.height >= size.width
         ZStack {
             captionView(now: now, local: local, size: size, portrait: portrait)
-            if st.beat == 3 { giggleHint(now: now, local: local, size: size, portrait: portrait) }
+            if st.beat == 5 { careIcons(now: now, local: local, size: size, portrait: portrait) }
             if A11ySettings.shared.captions, let sc = st.soundCaption, now.timeIntervalSince(sc.at) < 2.2 {
                 Text(sc.text).font(SK.font(15, .semibold)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.85)))
@@ -324,11 +322,13 @@ struct OpeningStoryView: View {
 
     private func captionView(now: Date, local: Double, size: CGSize, portrait: Bool) -> some View {
         let groups = OpeningScript.captions[st.beat]
-        let fontSize: CGFloat = portrait ? min(34, size.width * 0.087) : min(32, size.height * 0.085)
+        let longK: CGFloat = OpeningScript.full(st.beat).count > 55 ? 0.86 : 1          // the long captions get a little smaller
+        let fontSize: CGFloat = (portrait ? min(34, size.width * 0.087) : min(32, size.height * 0.085)) * longK
         let out = st.beatEnd.timeIntervalSince(now)
+        let gap = groups.count > 4 ? 0.6 : 0.95
         let outFade = holdBeat != nil ? 1 : OArt.smooth(out / 0.5)
         let pieces: [Text] = groups.enumerated().map { i, g in
-            let a = motion ? OArt.smooth((local - 0.35 - Double(i) * 0.95) / 0.7) : (local > 0.2 + Double(i) * 0.5 ? 1 : 0)
+            let a = motion ? OArt.smooth((local - 0.35 - Double(i) * gap) / 0.7) : (local > 0.2 + Double(i) * 0.5 ? 1 : 0)
             return Text(g).foregroundStyle(Color.white.opacity(a))
         }
         let joined = pieces.dropFirst().reduce(pieces[0]) { Text("\($0) \($1)") }
@@ -340,7 +340,7 @@ struct OpeningStoryView: View {
             .shadow(color: Color(hex: 0x2A2060).opacity(0.35), radius: 1, y: 1)
             .padding(.horizontal, size.width * (portrait ? 0.08 : 0.16))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, size.height * (portrait ? 0.10 : 0.075))
+            .padding(.bottom, size.height * (portrait ? (st.beat == 5 ? 0.175 : 0.10) : (st.beat == 5 ? 0.17 : 0.075)))
             .opacity(outFade)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(OpeningScript.full(st.beat))
@@ -348,37 +348,25 @@ struct OpeningStoryView: View {
             .id(st.beat)
     }
 
-    private func giggleHint(now: Date, local: Double, size: CGSize, portrait: Bool) -> some View {
-        let show = local > 1.0 && st.giggleAt == nil
-        let pulse = motion ? 1 + 0.06 * sin(now.timeIntervalSinceReferenceDate * 5) : 1
-        let heeAge = st.giggleAt.map { now.timeIntervalSince($0) } ?? 9
-        return ZStack {
-            if show {
-                HStack(spacing: 8) {
-                    Image(systemName: "hand.tap.fill").font(.system(size: 18, weight: .bold))
-                    Text("Tap to giggle").font(SK.font(20, .heavy))
-                }
-                .foregroundStyle(SK.ink)
-                .padding(.horizontal, 20).frame(minHeight: 48)
-                .background(Capsule().fill(Color.white.opacity(0.92)).shadow(color: Color(hex: 0xBFF2FF).opacity(0.9), radius: 12 * pulse))
-                .scaleEffect(pulse)
-                .transition(.opacity)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Tap to giggle")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { giggle() }
-            }
-            if heeAge < 1.6 {
-                Text("hee hee!").font(SK.font(26, .black)).foregroundStyle(.white)
-                    .shadow(color: Color(hex: 0x2A2060).opacity(0.6), radius: 5, y: 2)
-                    .opacity(1 - OArt.smooth(heeAge / 1.6))
-                    .offset(y: -heeAge * 26)
-                    .rotationEffect(.degrees(sin(heeAge * 9) * 4))
-                    .accessibilityHidden(true)
+    /// Beat 6: three tiny badges pop in under the caption: a checkered flag (races), a star with ribbons (shows) and a volleyball.
+    private func careIcons(now: Date, local: Double, size: CGSize, portrait: Bool) -> some View {
+        let d: CGFloat = portrait ? 54 : 46
+        return Canvas { ctx, sz in
+            let y = sz.height * (portrait ? 0.935 : 0.915)
+            for i in 0..<3 {
+                let t0 = 3.4 + Double(i) * 0.55
+                let age = local - t0
+                guard age > 0 else { continue }
+                let u = st.leaving ? 1 : min(age / 0.45, 1)
+                let c1 = 1.70158, c3 = c1 + 1
+                let k = motion ? max(0.05, 1 + c3 * pow(u - 1, 3) + c1 * pow(u - 1, 2)) : 1
+                let cx = sz.width / 2 + (Double(i) - 1) * Double(d) * 1.9
+                var c = ctx
+                c.translateBy(x: cx, y: y); c.scaleBy(x: k, y: k); c.opacity = min(1, age / 0.15)
+                OpeningIcons.badge(c, i, d: Double(d))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .offset(y: size.height * (portrait ? 0.20 : 0.17))
+        .allowsHitTesting(false).accessibilityHidden(true)
     }
 
     private func skipPill(_ geo: GeometryProxy) -> some View {
@@ -425,7 +413,7 @@ struct OpeningStoryView: View {
         st.camFrom = initial && b == 0 ? OpeningCam() : camera(at: now)
         st.camTo = target(b, size: size)
         st.camT0 = now
-        st.camDur = !motion ? 0.01 : (initial && b > 0 ? 0.01 : (tapped ? 1.3 : [6.2, 6.0, 3.4, 4.0, 3.2, 3.5, 3.6][b]))
+        st.camDur = !motion ? 0.01 : (initial && b > 0 ? 0.01 : (tapped ? 1.3 : [6.2, 6.0, 3.4, 3.2, 3.0, 3.5, 3.6][b]))
         if initial && b > 0 { st.camFrom = st.camTo }
         st.beat = b
         st.beatStart = now
@@ -434,8 +422,8 @@ struct OpeningStoryView: View {
         st.beatEnd = now.addingTimeInterval(dur)
         if !motion && !initial { st.sceneOpacity = 0; withAnimation(.easeInOut(duration: 0.6)) { st.sceneOpacity = 1 } }
         if b >= 2 && st.dropStart == nil { st.dropStart = now.addingTimeInterval(initial && holdBeat != nil && b >= 3 ? -5 : 0) }
-        if b >= 2 { mountStages(fast: b >= 4) }
-        if b >= 5 { for k in 0..<4 where st.popAt[k] == nil { popOrb(k, loud: false) } }
+        if b >= 2 { mountStages(fast: b >= 3) }
+        if b >= 4 { for k in 0..<4 where st.popAt[k] == nil { popOrb(k, loud: false) } }
         A11yAnnounce.say(OpeningScript.full(b), priority: .high)
         schedule(b, token: st.token)
         if holdBeat == nil { startTimer(after: dur) }
@@ -459,18 +447,8 @@ struct OpeningStoryView: View {
 
     private func tapped() {
         guard !st.leaving else { return }
-        if st.beat == 3 && st.giggleAt == nil { giggle(); return }
         if holdBeat != nil { return }
         advance(tapped: true)
-    }
-
-    private func giggle() {
-        guard st.giggleAt == nil, st.beat == 3 else { return }
-        st.giggleAt = Date()
-        sfx("opening_giggle", "A giggle", 1)
-        sfx("opening_dew_chime", "A soft chime", 0.7, after: 0.15)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        if holdBeat == nil { startTimer(after: 2.3) }
     }
 
     private func skip() {
@@ -525,11 +503,10 @@ struct OpeningStoryView: View {
             cue(0.8, t) { sfx("sparkle_2", "A soft sparkle", 0.5) }
         case 2:
             for (i, tm) in OArt.orbLand.enumerated() { cue(tm + 0.05, t) { sfx("opening_dew_chime", "A dew chime", 0.5 + 0.1 * Float(i)) } }
+            cue(4.8, t) { sfx("opening_twinkle", "A tingly shimmer", 0.55) }
         case 3:
-            cue(0.4, t) { sfx("opening_twinkle", "A tingly shimmer", 0.45) }
-        case 4:
             for k in 0..<4 { cue(OpeningScript.popTimes[k], t) { popOrb(k, loud: true) } }
-        case 5:
+        case 4:
             for k in 0..<4 {
                 cue(0.4 + Double(k) * 0.3, t) {
                     perform(k, [.blink])
@@ -537,6 +514,8 @@ struct OpeningStoryView: View {
                 }
             }
             cue(0.3, t) { sfx("sparkle_1", "A sparkle", 0.6) }
+        case 5:
+            for i in 0..<3 { cue(3.4 + Double(i) * 0.55, t) { sfx("opening_pop", "A tiny pop", 0.45) } }
         default:
             cue(0.5, t) { sfx("perk_sparkle_1", "A sparkle", 0.55) }
         }
@@ -575,12 +554,12 @@ struct OpeningStoryView: View {
     private static func keys() -> [String] {
         (0..<4).flatMap { c in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c)] }
     }
-    private static func saveSnapshot() -> [String: Any] {
+    static func saveSnapshot() -> [String: Any] {
         var s: [String: Any] = [:]
         for k in keys() { if let v = UserDefaults.standard.object(forKey: k) { s[k] = v } }
         return s
     }
-    private static func restoreSnapshot(_ s: [String: Any]) {
+    static func restoreSnapshot(_ s: [String: Any]) {
         for k in keys() { if let v = s[k] { UserDefaults.standard.set(v, forKey: k) } else { UserDefaults.standard.removeObject(forKey: k) } }
     }
 }

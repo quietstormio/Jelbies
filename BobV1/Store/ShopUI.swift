@@ -80,7 +80,7 @@ struct ShopScreen: View {
                 .buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("shop-back")
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Shop").font(SK.font(28, .black)).foregroundStyle(.white)
-                    Text("Spend your Drops on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
+                    Text("Spend your JellyCoins on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
                 }
                 Spacer()
                 DropsPill(wallet: care.bath.wallet)
@@ -123,7 +123,7 @@ struct ShopScreen: View {
                 else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : item.kind == .trickPage ? "New trick" : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
                     HStack(spacing: 4) {
-                        Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(afford ? SK.sky : SK.muted.opacity(0.6))
+                        JellyCoinIcon(size: 17).opacity(afford ? 1 : 0.5)
                         Text("\(item.price)").font(SK.font(15, .black)).foregroundStyle(afford ? SK.ink : SK.muted)
                     }
                     .padding(.horizontal, 10).frame(minHeight: 44)
@@ -140,7 +140,7 @@ struct ShopScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("shop-item-\(item.id)")
-        .accessibilityLabel("\(item.name), \(item.price) Drops\(owned > 0 ? ", owned \(owned)" : "")")
+        .accessibilityLabel("\(item.name), \(item.price) JellyCoins\(owned > 0 ? ", owned \(owned)" : "")")
     }
 }
 
@@ -268,7 +268,7 @@ struct ItemSheet: View {
             var ok = 0
             for _ in 0..<(item.unique ? 1 : qty) where book.buy(item.id) == .bought { ok += 1 }
             if ok > 0 {
-                AudioHub.shared.play(.buyCoins); AudioHub.shared.play(.unwrap, volume: 0.8)
+                AudioHub.shared.play(.unwrap, volume: 0.8)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 bought += ok; qty = 1
                 if item.unique, item.kind != .room { close() }
@@ -276,10 +276,10 @@ struct ItemSheet: View {
         } label: {
             HStack(spacing: 8) {
                 if owned { Text("You have it").font(SK.font(18, .black)) }
-                else if left < 0 { Text("Need \(-left) more Drops").font(SK.font(18, .black)) }
+                else if left < 0 { Text("Need \(-left) more JellyCoins").font(SK.font(18, .black)) }
                 else {
                     Text("Buy for").font(SK.font(18, .black))
-                    Image(systemName: "drop.fill").font(.system(size: 16, weight: .black)).foregroundStyle(SK.honey)
+                    JellyCoinIcon(size: 22)
                     Text("\(total)").font(SK.font(18, .black))
                 }
             }
@@ -287,16 +287,16 @@ struct ItemSheet: View {
             .background(Capsule().fill(can ? SK.ink : SK.muted.opacity(0.55)))
         }
         .buttonStyle(.plain).disabled(!can)
-        .accessibilityLabel(owned ? "\(item.name), you have it" : left < 0 ? "Buy \(item.name), need \(-left) more Drops" : "Buy \(item.unique ? "" : "\(qty) ")\(item.name) for \(total) Drops")
+        .accessibilityLabel(owned ? "\(item.name), you have it" : left < 0 ? "Buy \(item.name), need \(-left) more JellyCoins" : "Buy \(item.unique ? "" : "\(qty) ")\(item.name) for \(total) JellyCoins")
         .accessibilityIdentifier("item-buy")
     }
 
     private var footer: String {
         if item.kind == .room && book.owns(item) { return "Live there from Rooms" }
         if item.unique && book.owns(item) { return "In your Bag" }
-        if left < 0 { return "Win races to earn more Drops" }
+        if left < 0 { return "Win races to earn more JellyCoins" }
         let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : item.kind == .trickPage ? "Unlocks in the trick book" : "goes to your Bag"
-        return "You'll have \(left) Drops left \u{00B7} \(dest)"
+        return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
     private var conditions: [(ConditionKey, Float)] {

@@ -112,7 +112,7 @@ struct AdoptionCenter: View {
             .frame(width: half, height: size.height)
             VStack(spacing: 0) {
                 VStack(spacing: 6) {
-                    headerBlock.frame(width: 440, height: 150).offset(x: slideX * 0.4).opacity(slideO)
+                    headerBlock.frame(width: 440, height: mode == .more ? 172 : 150, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
                     sheetCard.frame(width: 408, height: 252)
                     cta.frame(width: 400, height: 68)
                 }
@@ -142,13 +142,13 @@ struct AdoptionCenter: View {
     /// The Drops balance: a white pill with the blue drop (top right when adopting more).
     private var dropsPill: some View {
         HStack(spacing: 7) {
-            Image(systemName: "drop.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(Color(hex: 0x5BA9E0))
+            JellyCoinIcon(size: 28)
             Text(wallet.count.formatted()).font(SK.font(22, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 14).frame(minWidth: 100, minHeight: 40)
         .background(Capsule().fill(Color.white).shadow(color: look.glow.opacity(0.25), radius: 6, y: 2))
         .fixedSize()
-        .accessibilityElement(children: .ignore).accessibilityLabel("\(wallet.count) Drops").accessibilityIdentifier("drops-pill")
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(wallet.count) JellyCoins").accessibilityIdentifier("drops-pill")
     }
 
     private func roundButton(_ symbol: String, label: String, id: String? = nil, _ action: @escaping () -> Void) -> some View {
@@ -166,10 +166,14 @@ struct AdoptionCenter: View {
     /// Overline, name, epithet and the four colour dots (design: overline y 18, name y 61, epithet y 104, dots y 134 in this 150-high block).
     private var headerBlock: some View {
         ZStack(alignment: .top) {
-            Text(mode == .first ? "CHOOSE YOUR FIRST JELBIE" : "ADOPT A JELBIE").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
+            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
                 .frame(height: 20).position(x: 220, y: 18)
             Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
             Text(info.epithet).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
+            if mode == .more {
+                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
+                    .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8).frame(width: 380).position(x: 220, y: 160)
+            }
             HStack(spacing: 4) {
                 ForEach(0..<SpeciesInfo.order.count, id: \.self) { i in
                     let s = SpeciesInfo.of(SpeciesInfo.order[i])
@@ -188,7 +192,7 @@ struct AdoptionCenter: View {
         }
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(info.name), \(info.epithet). \(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
+        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Bring your Drops to the Spring to wake a new friend. " : "")\(info.name), \(info.epithet). \(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
         .accessibilityHint("Swipe up or down to change Jelbie")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
@@ -391,16 +395,17 @@ struct AdoptionCenter: View {
         }
     }
 
-    private var ctaLabel: Text {
-        if isHome { return Text("Already home") }
-        guard let p = price else { return Text("Your room is full: 3 Jelbies") }
-        if mode == .first { return Text("Choose \(info.name)") }
-        if p > wallet.count { return Text("Need \(p - wallet.count) more Drops") }
-        return Text("Adopt for \(Image(systemName: "drop.fill")) \(p)")
+    @ViewBuilder private var ctaLabel: some View {
+        if isHome { Text("Already home") }
+        else if let p = price {
+            if mode == .first { Text("Choose \(info.name)") }
+            else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
+            else { HStack(spacing: 8) { Text("Adopt for"); JellyCoinIcon(size: 28); Text("\(p)") } }
+        } else { Text("Your room is full: 3 Jelbies") }
     }
 
     /// The big dark-brown pill with a darker bottom lip.
-    private func ctaButton(_ title: Text, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
+    private func ctaButton<T: View>(_ title: T, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             ZStack(alignment: .top) {
                 Capsule().fill(Color(hex: 0x2E1E12)).frame(height: 63).offset(y: 5)
@@ -498,7 +503,6 @@ struct AdoptionCenter: View {
         if p > 0, !wallet.spend(p) { return }
         nameFocused = false
         emoteTask?.cancel()
-        AudioHub.shared.play(.coin)
         withAnimation(.easeIn(duration: 0.2)) { celebrating = true }
         let c = pick, n = name
         Task { @MainActor in

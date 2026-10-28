@@ -45,7 +45,7 @@ nonisolated struct CafeOrder: Equatable, Sendable {
     }
     /// nil = affordable; else the friendly line.
     static func refusal(total: Int, wallet: Int) -> String? {
-        total <= wallet ? nil : "You need \(total - wallet) more Drops. Races pay Drops!"
+        total <= wallet ? nil : "You need \(total - wallet) more JellyCoins. Races pay JellyCoins!"
     }
 }
 
@@ -85,7 +85,7 @@ nonisolated enum CafeBlock: String, Sendable {
         case .arranging: return "Finish arranging first."
         case .moving: return "One moment, moving rooms."
         case .listening: return "They are listening to you."
-        case .noDrops: return "Café treats start at \(CafeMenu.cheapest) Drops. Win a race first!"
+        case .noDrops: return "Café treats start at \(CafeMenu.cheapest) JellyCoins. Win a race first!"
         case .busy: return "Already out!"
         }
     }

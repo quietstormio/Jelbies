@@ -36,7 +36,7 @@ nonisolated enum GroomTier: String, CaseIterable, Identifiable, Sendable {
     static var cheapest: Int { GroomTier.quick.price }
     func total(count: Int) -> Int { price * max(count, 0) }
     /// nil = affordable; else the friendly line (the café's pattern).
-    static func refusal(total: Int, wallet: Int) -> String? { total <= wallet ? nil : "You need \(total - wallet) more Drops. Races pay Drops!" }
+    static func refusal(total: Int, wallet: Int) -> String? { total <= wallet ? nil : "You need \(total - wallet) more JellyCoins. Races pay JellyCoins!" }
 }
 
 nonisolated enum GroomTuning {

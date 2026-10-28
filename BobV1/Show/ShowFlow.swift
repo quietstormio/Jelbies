@@ -417,7 +417,7 @@ final class ShowFlow {
                                  perfectDance: s.perfectDance, hatTrick: s.hatTrick)
         cardAge = 0
         cue(.jingle(win: place <= 2))
-        A11yEvents.say("\(playerName) placed \(A11yEvents.ordinal(place)) in the show. \(earned) Drops", .high)
+        A11yEvents.say("\(playerName) placed \(A11yEvents.ordinal(place)) in the show. \(earned) JellyCoins", .high)
         onResults(place)
         revision += 1
     }

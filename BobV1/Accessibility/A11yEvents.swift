@@ -33,7 +33,7 @@ final class A11yEvents {
     static func ordinal(_ p: Int) -> String { p == 1 ? "1st" : p == 2 ? "2nd" : p == 3 ? "3rd" : "\(p)th" }
     static func raceFinish(name: String, place: Int?, drops: Int) -> String {
         guard let place else { return "\(name) finished" }
-        return "\(name) finished \(ordinal(place)). \(drops) Drops"
+        return "\(name) finished \(ordinal(place)). \(drops) JellyCoins"
     }
     static func trickLearned(name: String, trick: String) -> String { "\(name) learned \(trick)" }
 
@@ -82,7 +82,7 @@ final class A11yEvents {
         }
         seenPhase = phase
         let drops = care.bath.wallet.count
-        if let l = lastDrops, drops > l, !care.tripActive { Self.say("+\(drops - l) Drops") }
+        if let l = lastDrops, drops > l, !care.tripActive { Self.say("+\(drops - l) JellyCoins") }
         lastDrops = drops
     }
 }

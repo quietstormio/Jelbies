@@ -53,6 +53,7 @@ struct OpeningDraw {
     var dropT: Double?               // seconds since the dewdrops began
     var giggleT: Double?             // seconds since the tap
     var shiver: Double = 0           // 0...1
+    var home: Double = 0             // 0...1, the player's new house is picked out (beat 2)
     var gone: [Bool] = [false, false, false, false]       // the orb has popped
     var swell: [Double] = [0, 0, 0, 0]                    // 0...1, just before the pop
     var bob: Double { motion ? sin(t * 1.25) * 4 : 0 }
@@ -282,6 +283,7 @@ enum OArt {
         // back trees, houses, front trees (sorted by depth by hand)
         tree(ctx, 152, 62, 0.8, 0); tree(ctx, 258, 60, 0.82, 1); tree(ctx, 98, 76, 1.0, 2); tree(ctx, 306, 74, 1.05, 3)
         cottage(ctx, 66, 110, 1.0, roof: 0xF7B3C5)
+        movingBoxes(ctx, f)
         cottage(ctx, 334, 108, 0.95, roof: 0x8CC4E6)
         tree(ctx, 40, 118, 1.15, 4); tree(ctx, 362, 124, 1.1, 5)
         // stepping stones to the Spring
@@ -302,6 +304,25 @@ enum OArt {
             ctx.fill(ell(x, y, 0.8, 0.7), with: .color(C(0xFFC94D)))
         }
         spring(ctx, pr, f)
+    }
+
+    /// The player's new house (the pink one on the left): a couple of moving boxes by the door and, in beat 2, a soft pulsing glow and a bobbing star.
+    private static func movingBoxes(_ ctx: GraphicsContext, _ f: OpeningDraw) {
+        func box(_ x: Double, _ y: Double, _ w: Double, _ h: Double, _ rot: Double) {
+            var c = ctx
+            c.translateBy(x: x, y: y); c.rotate(by: .degrees(rot))
+            c.fill(ell(0, 0.8, w * 0.7, 1.6), with: .color(Color(hex: 0x2E4A2E).opacity(0.18)))
+            c.fill(Path(roundedRect: CGRect(x: -w / 2, y: -h, width: w, height: h), cornerRadius: 1.2), with: .linearGradient(Gradient(colors: [C(0xDDB47E), C(0xC49A63)]), startPoint: CGPoint(x: 0, y: -h), endPoint: CGPoint(x: 0, y: 0)))
+            c.fill(Path(CGRect(x: -1.1, y: -h, width: 2.2, height: h)), with: .color(C(0xF3E2BC, 0.9)))
+        }
+        box(90, 116, 11, 8, -3); box(100, 117, 8, 6, 5); box(92, 108, 7, 5, 2)
+        guard f.home > 0.01 else { return }
+        let pulse = f.motion ? 0.75 + 0.25 * sin(f.t * 3.2) : 1
+        let a = f.home * pulse
+        ctx.fill(ell(70, 100, 46, 34), with: .radialGradient(Gradient(colors: [C(0xFFF0B0, 0.55 * a), C(0xFFF0B0, 0)]), center: CGPoint(x: 70, y: 100), startRadius: 0, endRadius: 46))
+        let bob = f.motion ? sin(f.t * 3.2) * 2 : 0
+        ctx.fill(star4(CGPoint(x: 66, y: 70 + bob), 5.5 * f.home, squash: 0.25), with: .color(C(0xFFFFFF, f.home)))
+        ctx.fill(star4(CGPoint(x: 78, y: 78 - bob), 3 * f.home, squash: 0.25), with: .color(C(0xFFE07A, f.home)))
     }
 
     private static func underside(_ ctx: GraphicsContext, _ t: Double, _ motion: Bool) {
@@ -516,6 +537,62 @@ enum OArt {
             c.fill(ell(0, 0, r, r), with: .radialGradient(Gradient(colors: [C(0xFFFFFF, 0.95), C(col), mix(col, 0x4A3A7A, 0.25)]), center: CGPoint(x: -r * 0.3, y: -r * 0.35), startRadius: 0, endRadius: r * 1.25))
             c.stroke(ell(0, 0, r, r), with: .color(C(0xFFFFFF, 0.7)), lineWidth: 1)
             c.fill(ell(-r * 0.36, -r * 0.42, r * 0.28, r * 0.2), with: .color(C(0xFFFFFF, 0.95)))
+        }
+    }
+}
+
+
+/// Beat 6's tiny badges (centred on the origin, `d` points across): 0 a checkered flag (races), 1 a star on a ribbon (shows), 2 a volleyball.
+enum OpeningIcons {
+    static func badge(_ ctx: GraphicsContext, _ i: Int, d: Double) {
+        let r = d / 2
+        func C(_ h: UInt32, _ o: Double = 1) -> Color { OArt.C(h, o) }
+        ctx.fill(OArt.ell(0, r * 0.12, r, r), with: .color(Color(hex: 0x2A2060).opacity(0.22)))
+        ctx.fill(OArt.ell(0, 0, r, r), with: .linearGradient(Gradient(colors: [C(0xFFFFFF), C([0xFFE9F0, 0xFFF3CF, 0xE3F3FF][i])]), startPoint: CGPoint(x: 0, y: -r), endPoint: CGPoint(x: 0, y: r)))
+        ctx.stroke(OArt.ell(0, 0, r, r), with: .color(C(0xFFFFFF, 0.9)), lineWidth: 2)
+        let k = r / 24                      // the drawings below are in a 48-unit space
+        switch i {
+        case 0:
+            // pole and a waving checkered pennant
+            var pole = Path(); pole.move(to: CGPoint(x: -9 * k, y: 15 * k)); pole.addLine(to: CGPoint(x: -9 * k, y: -15 * k))
+            ctx.stroke(pole, with: .color(C(0x4D331F)), style: StrokeStyle(lineWidth: 2.6 * k, lineCap: .round))
+            let cols = 4, rows = 3, cw = 6.4 * k, ch = 5.4 * k
+            for rr in 0..<rows { for cc in 0..<cols {
+                let x = -7.5 * k + Double(cc) * cw, y = -14 * k + Double(rr) * ch + sin(Double(cc) * 0.9) * 1.2 * k
+                ctx.fill(Path(CGRect(x: x, y: y, width: cw, height: ch)), with: .color((rr + cc) % 2 == 0 ? C(0x4D331F) : C(0xFFFFFF)))
+            } }
+            ctx.stroke(Path(CGRect(x: -7.5 * k, y: -14 * k, width: Double(cols) * cw, height: Double(rows) * ch + 2.4 * k)), with: .color(C(0x4D331F, 0.25)), lineWidth: 0.8)
+        case 1:
+            // ribbon tails and a gold star
+            for s in [-1.0, 1.0] {
+                var t = Path()
+                t.move(to: CGPoint(x: s * 3 * k, y: 4 * k)); t.addLine(to: CGPoint(x: s * 13 * k, y: 4 * k)); t.addLine(to: CGPoint(x: s * 9 * k, y: 17 * k))
+                t.addLine(to: CGPoint(x: s * 5 * k, y: 12 * k)); t.addLine(to: CGPoint(x: s * 1 * k, y: 17 * k)); t.closeSubpath()
+                ctx.fill(t, with: .color(C(0xEE96AC)))
+            }
+            var star = Path()
+            for n in 0..<10 {
+                let a = -Double.pi / 2 + Double(n) * .pi / 5, rad = n % 2 == 0 ? 12.5 * k : 5.4 * k
+                let p = CGPoint(x: cos(a) * rad, y: -4 * k + sin(a) * rad)
+                if n == 0 { star.move(to: p) } else { star.addLine(to: p) }
+            }
+            star.closeSubpath()
+            ctx.fill(star, with: .linearGradient(Gradient(colors: [C(0xFFE07A), C(0xF9CC59)]), startPoint: CGPoint(x: 0, y: -16 * k), endPoint: CGPoint(x: 0, y: 8 * k)))
+            ctx.stroke(star, with: .color(C(0xE0A92E)), style: StrokeStyle(lineWidth: 1.2 * k, lineJoin: .round))
+        default:
+            // a volleyball: white with three curved panels
+            ctx.fill(OArt.ell(0, 0, 15 * k, 15 * k), with: .radialGradient(Gradient(colors: [C(0xFFFFFF), C(0xF2F2F2)]), center: CGPoint(x: -4 * k, y: -5 * k), startRadius: 0, endRadius: 20 * k))
+            ctx.stroke(OArt.ell(0, 0, 15 * k, 15 * k), with: .color(C(0x4D331F, 0.55)), lineWidth: 1.4 * k)
+            // three seams, like a volleyball's panels
+            var seam = Path()
+            seam.move(to: CGPoint(x: -13 * k, y: -6 * k)); seam.addQuadCurve(to: CGPoint(x: 13 * k, y: -6 * k), control: CGPoint(x: 0, y: 6 * k))
+            ctx.stroke(seam, with: .color(C(0x79B7E6, 0.9)), style: StrokeStyle(lineWidth: 2.4 * k, lineCap: .round))
+            var seam2 = Path()
+            seam2.move(to: CGPoint(x: -12 * k, y: 8 * k)); seam2.addQuadCurve(to: CGPoint(x: 12 * k, y: 8 * k), control: CGPoint(x: 0, y: -4 * k))
+            ctx.stroke(seam2, with: .color(C(0xFFCB45, 0.95)), style: StrokeStyle(lineWidth: 2.4 * k, lineCap: .round))
+            var seam3 = Path()
+            seam3.move(to: CGPoint(x: 1 * k, y: -15 * k)); seam3.addQuadCurve(to: CGPoint(x: 1 * k, y: 15 * k), control: CGPoint(x: 9 * k, y: 0))
+            ctx.stroke(seam3, with: .color(C(0x79B7E6, 0.9)), style: StrokeStyle(lineWidth: 2.4 * k, lineCap: .round))
         }
     }
 }

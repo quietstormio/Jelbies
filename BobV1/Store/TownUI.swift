@@ -86,7 +86,7 @@ struct TownFlow: View {
     var park: () -> Void = {}
     /// The Groomer: closes the Town and opens the tier menu (Groomer/GroomChrome.swift).
     var groom: () -> Void = {}
-    /// The Adoption Center: leaves the room for the adoption screen (StartFlow).
+    /// The Jelly Spring (the adoption screen): leaves the room for the adoption screen (StartFlow).
     var adopt: () -> Void = { StartFlow.shared.openAdoption() }
     /// The screen the flow opened on: its back button leaves the flow (the Go out button opens the Town, so Track / Store go back to it).
     @State private var root: TownScreen
@@ -176,14 +176,14 @@ struct TownView: View {
         let full = JellyRoster.savedIDs().count >= JellyRoster.maxCount
         return [
             Place(id: "town-shop", title: "Shop", sub: "Snacks, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
-            Place(id: "town-track", title: "Track", sub: "Race for Drops", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
+            Place(id: "town-track", title: "Track", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
             Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
             Place(id: "town-cafe", title: "Café", sub: "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
             Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
             Place(id: "town-groom", title: "Groomer", sub: "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops]) { groom() },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Beach", sub: "Volleyball fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Adoption Center", sub: full ? "Room full" : "Welcome a new Jelbie", symbol: "heart.fill", color: SK.pink, cats: [.friends]) { adopt() },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends]) { adopt() },
         ]
     }
 
@@ -489,7 +489,7 @@ struct TrackPanel: View {
     private func prize(_ place: String, _ n: Int) -> some View {
         VStack(spacing: 4) {
             Text(place).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-            HStack(spacing: 4) { Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
+            HStack(spacing: 4) { JellyCoinIcon(size: 18); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
         }
         .frame(maxWidth: .infinity, minHeight: 68)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(place == "1st" ? SK.honey : SK.card))

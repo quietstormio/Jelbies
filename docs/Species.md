@@ -17,7 +17,7 @@ Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball op
 
 ## Species names and lore (2026-10-26)
 
-World: Jelbies are baby jellies from Wobble Isle, the little floating island in the sky. Every morning, dewdrops gather in the Jelly Spring at the middle of the island, and when a drop catches the sound of someone laughing, it wobbles awake as a Jelbie. Jelbies never grow up, which is why they need someone to look after them. Each one takes after the first colour of sky it ever saw.
+World: Jelbies are baby jellies from Wobble Isle, the little floating island in the sky. Every morning, a few of the dewdrops that gather in the Jelly Spring at the middle of the island wobble awake as Jelbies. Every Jelbie needs someone to take care of it; look after them and they grow, learning tricks, making friends and competing around town. Each one takes after the first colour of sky it ever saw.
 
 Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `BobV1/Start/SpeciesInfo.swift`), in the order blue, yellow, purple, green. The default name is the character's name (Bob / Pip / Lavender / Moss); the player can change it when adopting. Signature features follow the rule above.
 
@@ -32,6 +32,23 @@ Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `Bob
 - **Lemon Drop:** "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone." Lore: Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language. Jars: Cute 58, Sweet 60, Sparkly 46, Cool 28, Sporty 85.
 - **Taro:** "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles." Lore: Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling. Jars: Cute 70, Sweet 55, Sparkly 84, Cool 40, Sporty 45.
 - **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
+
+### Wobble Isle story (2026-10-27)
+
+This reframes why adopting costs money. Gameplay, prices, balances and save logic are unchanged; only the words, the opening's ending, the money's name and icon, and the adoption screen's wording changed.
+
+- **You live on Wobble Isle.** It is a little floating *town* (the "Where to?" island map, with Home in the middle). The player has **just moved in**.
+- **The Jelly Spring is in the middle of town.** Dewdrops gather there every morning, and a few of them wobble awake as Jelbies (no trigger needed). A **Spring Keeper** (never on screen, only mentioned in text) looks after newly woken Jelbies until they find a home.
+- **The first Jelbie is the Spring's welcome gift** for its newest neighbour. That is why the first pick is free.
+- **Adopting later costs an adoption fee in JellyCoins, like a rescue shelter:** the fee helps the Spring care for the Jelbies still waiting.
+- **JellyCoins are the money of Wobble Isle** (code name still `DropsWallet`, saved key `BlobDrops.v1`, so balances carry over; "Drops" no longer means money anywhere user-facing, and the dewdrops are only dewdrops). They are earned by winning races, the Jelly Show and volleyball, and by caring for your Jelbies, and spent at the shops, the café, the spa and the Spring (the adoption fee). The icon is a gold coin with a stamped "JC" (`BobV1/Store/JellyCoinIcon.swift`).
+- **Jelbies need someone to take care of them,** and they grow by being looked after: learning tricks, making friends and competing around town (Jelly Circuit, Jelly Show, Jelly Volleyball). "Grow" means skills, bond and stats (the trait jars fill up); Jelbies stay one size.
+
+Where it shows up:
+- The opening story (`BobV1/Start/OpeningStory.swift`, plays on a new game and from Settings > Watch the opening): "High above the clouds... floats a little town called Wobble Isle. You've just moved in! In the middle of town is the Jelly Spring. Every morning, a few of its dewdrops wobble awake... as Jelbies! Every Jelbie needs someone to take care of them. Look after them, and they'll grow: learning tricks, making friends, and competing around town in races, shows and volleyball. The Spring has a welcome gift for its newest neighbour. Which one will you take home?" (A race-flag, a star-ribbon and a volleyball badge pop in under the care caption.)
+- A "First day home" beat after the first Jelbie is chosen and named (`BobV1/Start/FirstDayHome.swift`): a cozy room with moving boxes, "Welcome home, <name>!" then "Take good care of them, earn JellyCoins around town, and one day you can adopt another friend from the Spring." Settings > Watch the opening shows it too, with the player's first Jelbie.
+- The adoption screen is now called the **Jelly Spring** (Town tile and the picker's overline "THE JELLY SPRING"). First pick: overline "THE SPRING'S WELCOME GIFT", button "Choose <Species>". Later: "Every adoption helps the Spring care for the Jelbies still waiting.", button "Adopt for [coin] <price>", disabled states "Already home" / "Need N more JellyCoins". Code names (`AdoptionCenter`, `StartFlow.openAdoption`) are unchanged.
+- Every spend plays a bright register "ka-ching" (`purchase_1/2`, `SFX.purchase`, played from `DropsWallet.spend`) with a light haptic; earning plays the lighter coin clinks (`coin_1...3`).
 
 **Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
 

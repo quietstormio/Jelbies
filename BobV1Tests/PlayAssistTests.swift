@@ -86,7 +86,7 @@ final class PlayAssistTests: XCTestCase {
         let idx = ["3", "2", "1", "Go!"].map { said.firstIndex(of: $0) }
         XCTAssertFalse(idx.contains { $0 == nil }, "\(said)")
         XCTAssertEqual(idx.compactMap { $0 }, idx.compactMap { $0 }.sorted(), "in order")
-        XCTAssertTrue(said.contains { $0.hasPrefix("Bob finished") && $0.hasSuffix("Drops") }, "\(said)")
+        XCTAssertTrue(said.contains { $0.hasPrefix("Bob finished") && $0.hasSuffix("JellyCoins") }, "\(said)")
     }
 
     // MARK: drill

@@ -28,7 +28,7 @@ extension GameCare {
         if isBedtimeHours { return "The Jelly Spa is closed at night. Come back in the morning!" }
         if tripActive || raceBusy || raceBook.returner != nil { return "Finish this trip first." }
         if let b = cafeBlocker(), b != .noDrops { return b.message }
-        if bath.wallet.count < GroomTier.cheapest { return "The Jelly Spa starts at \(GroomTier.cheapest) Drops per Jelbie. Win a race first!" }
+        if bath.wallet.count < GroomTier.cheapest { return "The Jelly Spa starts at \(GroomTier.cheapest) JellyCoins per Jelbie. Win a race first!" }
         return nil
     }
 
@@ -142,7 +142,6 @@ extension GameCare {
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
         book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []
-        AudioHub.shared.play(.buyCoins)
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)

@@ -256,13 +256,13 @@ struct RacePlacingsCard: View {
                 }
             }
             HStack(spacing: 8) {
-                Image(systemName: "drop.fill").foregroundStyle(SK.pinkStrong)
-                Text("+\(race.ui.earned) Drops")
+                JellyCoinIcon(size: 22)
+                Text("+\(race.ui.earned) JellyCoins")
                     .playFont(20, .bold)
                     .foregroundStyle(CareMenu.brown)
             }
             if race.assist == .auto {
-                Text("Auto run pays half the Drops")
+                Text("Auto run pays half the JellyCoins")
                     .playFont(14, .medium)
                     .foregroundStyle(CareMenu.brown.opacity(0.85))
                     .accessibilityIdentifier("race-auto-note")

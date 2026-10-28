@@ -744,9 +744,9 @@ struct ResultsScreen: View {
         return VStack(spacing: 6) {
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
-                    Image(systemName: "drop.fill").font(.system(size: 26, weight: .black)).foregroundStyle(.white)
+                    JellyCoinIcon(size: 36)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("+\(show.earned) Drops").font(SK.font(20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        Text("+\(show.earned) JellyCoins").font(SK.font(20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                         Text("\(ShowUI.ordinal(show.sim?.playerPlace ?? 4)) at \(show.rank.title)").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
                     }
                 }

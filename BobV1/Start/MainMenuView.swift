@@ -83,7 +83,7 @@ struct MainMenuView: View {
             Color.white.opacity(0.6).ignoresSafeArea().onTapGesture { confirmNew = false }
             VStack(spacing: 12) {
                 Text("Start over?").font(CloudTheme.font(26, .bold)).foregroundStyle(CloudTheme.ink).accessibilityAddTraits(.isHeader)
-                Text("Your Jelbies, Drops and items will be gone.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
+                Text("Your Jelbies, JellyCoins and items will be gone.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button("Keep playing") { confirmNew = false }
                     .buttonStyle(JellyButtonStyle(.primary, size: 20, minHeight: 48)).accessibilityIdentifier("menu-keep")

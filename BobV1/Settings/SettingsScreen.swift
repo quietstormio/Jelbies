@@ -223,7 +223,7 @@ struct SettingsScreen: View {
             Color.black.opacity(0.35).ignoresSafeArea().onTapGesture { confirmReset = false }
             VStack(spacing: 12) {
                 Text("Reset your save?").font(CloudTheme.font(24, .bold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
-                Text("Your Jelbies, Drops and items will be gone for good. Press and hold the red button to confirm.")
+                Text("Your Jelbies, JellyCoins and items will be gone for good. Press and hold the red button to confirm.")
                     .font(CloudTheme.font(15, .medium)).foregroundStyle(ink.opacity(0.85)).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 HoldToConfirm(title: "Hold to reset") { confirmReset = false; resetSave() }

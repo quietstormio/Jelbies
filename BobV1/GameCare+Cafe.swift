@@ -203,7 +203,6 @@ extension GameCare {
         let total = o.total(jellies: ids)
         if let why = CafeOrder.refusal(total: total, wallet: bath.wallet.count) { AudioHub.shared.play(.notEnough); return why }
         guard bath.wallet.spend(total) else { return nil }
-        AudioHub.shared.play(.buyCoins)
         let book = cafeBook
         book.serial += 1
         book.charged = total; book.ate = [:]

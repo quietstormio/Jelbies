@@ -17,7 +17,7 @@ final class StartFlow {
     static let shared = StartFlow()
 
     enum AdoptMode: Equatable { case first, more }
-    enum Phase: Equatable { case menu, wiping, opening, adopt(AdoptMode), game }
+    enum Phase: Equatable { case menu, wiping, opening, adopt(AdoptMode), firstDay(Int, String, Bool), game }
 
     var phase: Phase
     /// Bumped to rebuild the room (GameHost).
@@ -43,6 +43,7 @@ final class StartFlow {
         else { phase = .menu }
         #if targetEnvironment(simulator)
         if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
+        if d.object(forKey: "FirstDayChar") != nil { let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3); phase = .firstDay(c, JellyRoster.baseNames[c], true) }          // capture aid: the first-day-home beat
         if d.object(forKey: "OpeningBeat") != nil { phase = .opening }                  // capture aid: the opening story at a given beat
         #endif
     }
@@ -77,7 +78,10 @@ final class StartFlow {
     /// A replay (Settings > Watch the opening) goes back to the room as it was saved instead.
     func finishOpening() {
         guard phase == .opening else { return }
-        if replaying { replaying = false; enterGame() } else { phase = .adopt(.first) }
+        if replaying {
+            replaying = false
+            if let c = JellyRoster.savedIDs().first { phase = .firstDay(c, JellyRoster.names[c], true) } else { enterGame() }          // the replay shows the first-day beat with the player's own Jelbie
+        } else { phase = .adopt(.first) }
     }
 
     /// Settings: play the opening again. The room is dropped like the main menu does (the caller saved first); nothing is wiped or changed,
@@ -95,14 +99,23 @@ final class StartFlow {
 
     /// A Jelbie is chosen and named (and paid for): the roster, his name and a fresh start for his state, then the room.
     func bringHome(character c: Int, name: String) {
-        var ids = phase == .adopt(.first) ? [] : JellyRoster.savedIDs()
+        let first = phase == .adopt(.first)
+        var ids = first ? [] : JellyRoster.savedIDs()
         if !ids.contains(c) { Self.resetCharacterState(c) }
         if !ids.contains(c) { ids.append(c) }
         JellyRoster.save(ids)
         JellyRoster.setName(c, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
-        welcome = JellyRoster.names[c]
         GameCare.newcomerPending = true
+        if first { welcome = nil; phase = .firstDay(c, name, false); return }          // the first day at home says "Welcome home" itself
+        welcome = JellyRoster.names[c]
+        enterGame()
+    }
+
+    /// The first-day-home beat is over (or skipped): into the room. A new game's Jelbie starts fresh again (the preview wrote to his keys).
+    func finishFirstDay() {
+        guard case .firstDay(let c, _, let replay) = phase else { return }
+        if !replay { Self.resetCharacterState(c) }
         enterGame()
     }
 

@@ -85,7 +85,7 @@ extension JelbiesActivityAttributes {
         switch (kind, s.phase) {
         case (.race, .finished):
             let p = s.place ?? s.position
-            let drops = s.drops > 0 ? " +\(s.drops) Drops" : ""
+            let drops = s.drops > 0 ? " +\(s.drops) JellyCoins" : ""
             return p == 1 ? "\(ContentState.medal(1)) \(jellyName) won!\(drops)" : "\(ContentState.medal(p)) \(jellyName) came \(ContentState.ordinal(p))!\(drops)"
         case (.race, _): return course.map { "\(jellyName) is racing on the \($0)!" } ?? "\(jellyName) is racing!"
         case (.nap, .awake): return s.sleepers.count > 1 ? "The Jelbies are up!" : "\(s.sleepers.first ?? jellyName) is up!"

@@ -139,10 +139,10 @@ struct CafeMenuCard: View {
     }
     private var totalView: some View {
         HStack(spacing: 4) {
-            Image(systemName: "drop.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.skyDeep)
+            JellyCoinIcon(size: 18)
             Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
         }
-        .accessibilityElement(children: .ignore).accessibilityLabel("\(total) Drops").accessibilityIdentifier("cafe-total")
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(total) JellyCoins").accessibilityIdentifier("cafe-total")
     }
 
     var body: some View {
@@ -216,7 +216,7 @@ struct CafeMenuCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
                     HStack(spacing: 3) {
-                        Image(systemName: "drop.fill").font(.system(size: 9, weight: .black)).foregroundStyle(SK.skyDeep)
+                        JellyCoinIcon(size: 15)
                         Text("\(t.price)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
                         Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.muted).accessibilityLabel(t.perk.title)
                     }
@@ -228,7 +228,7 @@ struct CafeMenuCard: View {
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(isChosen(t) ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
-        .accessibilityLabel("\(t.name), \(t.price) Drops. \(t.blurb)")
+        .accessibilityLabel("\(t.name), \(t.price) JellyCoins. \(t.blurb)")
         .accessibilityAddTraits(isChosen(t) ? .isSelected : [])
     }
 
@@ -248,7 +248,7 @@ struct CafeMenuCard: View {
                 thumb(t.id, size: 40)
                 Text(t.name).font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
                 HStack(spacing: 3) {
-                    Image(systemName: "drop.fill").font(.system(size: 10, weight: .black)).foregroundStyle(SK.skyDeep)
+                    JellyCoinIcon(size: 15)
                     Text("\(t.price)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
                 HStack(spacing: 2) {
@@ -262,7 +262,7 @@ struct CafeMenuCard: View {
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
-        .accessibilityLabel("\(t.name), \(t.price) Drops. \(t.blurb)")
+        .accessibilityLabel("\(t.name), \(t.price) JellyCoins. \(t.blurb)")
         .accessibilityAddTraits(isChosen(t) ? .isSelected : [])
     }
 }

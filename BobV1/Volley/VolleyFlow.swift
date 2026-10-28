@@ -159,7 +159,7 @@ final class VolleyFlow {
             wallet?.add(earned)
             unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: s.closeLoss)
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
-            A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) Drops" : "They won \(s.score[1]) to \(s.score[0]). \(earned) Drops", .high)
+            A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
             for tr in awards.trophies { A11yEvents.say("Trophy! \(tr.title)", .normal) }
         case .drill(let k):

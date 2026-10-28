@@ -103,14 +103,14 @@ struct RoomPickerSheet: View {
         } else {
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
-                    Image(systemName: "drop.fill").font(.system(size: 12, weight: .black)).foregroundStyle(SK.skyDeep)
+                    JellyCoinIcon(size: 17)
                     Text("\(StoreTuning.roomPrices[d.id] ?? 0)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
                 }
                 .padding(.horizontal, 10).frame(minHeight: 44).background(Capsule().fill(Color.white.opacity(0.85)))
                 Text("In the Shop").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(d.title) is locked, costs \(StoreTuning.roomPrices[d.id] ?? 0) Drops in the Shop")
+            .accessibilityLabel("\(d.title) is locked, costs \(StoreTuning.roomPrices[d.id] ?? 0) JellyCoins in the Shop")
             .accessibilityIdentifier("room-locked-\(d.id.rawValue)")
         }
     }

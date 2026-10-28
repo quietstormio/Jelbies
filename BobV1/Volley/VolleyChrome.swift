@@ -362,8 +362,8 @@ struct VolleyResultsCard: View {
                 Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).foregroundStyle(CareMenu.brown)
                 Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
                 HStack(spacing: 8) {
-                    Image(systemName: "drop.fill").foregroundStyle(SK.pink)
-                    Text("+\(volley.earned) Drops").playFont(20, .bold).foregroundStyle(CareMenu.brown)
+                    JellyCoinIcon(size: 22)
+                    Text("+\(volley.earned) JellyCoins").playFont(20, .bold).foregroundStyle(CareMenu.brown)
                 }
                 if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
                 if !volley.awards.isEmpty {
@@ -491,7 +491,7 @@ struct VolleyLobby: View {
                             Text(open ? t.blurb : "Win a match (or three close ones) at \(t.below?.title ?? "") to open").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
                         }
                         Spacer()
-                        HStack(spacing: 3) { Image(systemName: "drop.fill").font(.system(size: 11, weight: .black)).foregroundStyle(SK.sky); Text("\(VolleyTuning.drops(win: true, tier: t))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
+                        HStack(spacing: 3) { JellyCoinIcon(size: 15); Text("\(VolleyTuning.drops(win: true, tier: t))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
                     }
                     .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(on ? SK.honey : Color.white.opacity(0.6)))
