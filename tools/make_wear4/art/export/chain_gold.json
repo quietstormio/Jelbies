@@ -1,97 +1,137 @@
 {
  "id": "chain_gold",
- "tris": 952,
- "verts": 666,
+ "tris": 2468,
+ "verts": 2672,
  "parts": [
   {
    "name": "link0",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link1",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link2",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link3",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link4",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link5",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link6",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link7",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link8",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link9",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link10",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link11",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link12",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link13",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link14",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link15",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link16",
-   "tris": 36,
-   "verts": 20
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "link17",
-   "tris": 36,
-   "verts": 22
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link18",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link19",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link20",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link21",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link22",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link23",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link24",
+   "tris": 80,
+   "verts": 88
+  },
+  {
+   "name": "link25",
+   "tris": 80,
+   "verts": 88
   },
   {
    "name": "coin",
@@ -105,8 +145,8 @@
   },
   {
    "name": "bail",
-   "tris": 36,
-   "verts": 22
+   "tris": 120,
+   "verts": 118
   }
  ],
  "anchor_rest": [
@@ -115,19 +155,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6816,
+  -0.6824,
   -0.275,
-  -1.1416
+  -1.1331
  ],
  "bounds_local_max": [
-  0.6816,
-  0.1392,
-  0.0941
+  0.6824,
+  0.1441,
+  0.1061
  ],
  "size": [
-  1.3632,
-  0.4142,
-  1.2356
+  1.3649,
+  0.4191,
+  1.2392
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -137,7 +177,7 @@
  ],
  "price": 70,
  "title": "Gold chain",
- "desc": "A chunky Cuban-link gold chain: eighteen bold flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a bail at the front (y~0.31).",
+ "desc": "A chunky Cuban-link gold chain: twenty-six real oval rings, alternately flat and on edge so each is threaded through its neighbours, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a ring bail at the front (y~0.31). Its own budget (2800 vertices / 3000 triangles).",
  "colourway": "chain_gold",
  "batch": 4
 }

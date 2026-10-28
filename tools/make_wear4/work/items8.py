@@ -2,6 +2,7 @@
 rising at the back over Pip's tail root and between Lavender's wings): gold chain, silk scarf, pearls, whistle lanyard, cosy scarves, bow-tie band,
 and the new Diamond J chain."""
 from kit5 import *
+from items5 import circle_poly
 import items3
 import items_other as IO
 
@@ -21,26 +22,25 @@ def loop_beads(prefix, n, front, off, radii, col, side=0.50, back=0.56, segs=6, 
 def chain_gold(gold=hx('#E8B84A'), **k):
     reset()
     def gcol(p, n):
-        # high-polish gold: a hot highlight on the upward/outward faces, deep amber in the creases
         w = max(0.0, n[1] * 0.55 + n[2] * 0.45)
         return mix(deep(gold, 0.50), mix(tint(gold, 0.78), (1.0, 0.97, 0.80), 0.4), 0.10 + 0.90 * w ** 1.3)
     FR = 0.43
-    n = 18
+    n = 26                                   # truly interlocking oval links: alternately flat on the body and on edge, each threaded through its neighbours
     for k_ in range(n):
         phi = 2 * math.pi * (k_ + 0.5) / n
-        p, t, h, up = ring_frame(phi, FR, 0.044)
-        if k_ % 2 == 0: r = (0.112, 0.036, 0.074)          # a flat link facing outward
-        else: r = (0.112, 0.074, 0.032)                    # the next one standing on edge, interlocked through it
-        bead('link%d' % k_, p, r, gcol, rot=np.stack([t, h, up], 1), segs=6)
+        p, t, h, up = ring_frame(phi, FR, 0.046)
+        if k_ % 2 == 0: X, Y, N = t, up, h        # flat link: lies against the body
+        else: X, Y, N = t, h, up                   # link on edge
+        ring_loop('link%d' % k_, p, X, Y, N, circle_poly(1.0, 10, 0.098, 0.046), lambda px, py: 0.040, 0.020, gcol, n=10, e=2.2, sides=4)
     p, t, h, up = ring_frame(math.pi / 2, FR, 0.058)
     Rm = np.stack([t, h, -up], 1).tolist()
     pc = p - up * 0.120
     lathe_y('coin', [(0.0, -0.020), (0.100, -0.020), (0.118, -0.008), (0.118, 0.014), (0.100, 0.026), (0.0, 0.026)], 14, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.45), 0.5 + 0.5 * nq[1]), centre=tuple(pc), rotm=Rm, sharp=45)
     sp = star_poly(0.060, 0.028, 5, rad=0.007)
     slab_part('star', sp, 0.008, lambda q, nq: tint(gold, 0.55), lambda px, py, pz: tuple(pc + t * px + up * py + h * (0.026 + pz)), cuts=0)
-    bead('bail', p - up * 0.030, (0.030, 0.046, 0.018), gcol, rot=np.stack([t, h, up], 1), segs=6)
+    ring_loop('bail', p - up * 0.040, t, h, up, circle_poly(1.0, 12, 0.030, 0.048), lambda px, py: 0.020, 0.010, gcol, n=12, e=2.2, sides=5)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly'], price=70, title='Gold chain',
-                desc='A chunky Cuban-link gold chain: eighteen bold flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a bail at the front (y~0.31).')
+                desc='A chunky Cuban-link gold chain: twenty-six real oval rings, alternately flat and on edge so each is threaded through its neighbours, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a ring bail at the front (y~0.31). Its own budget (2800 vertices / 3000 triangles).')
 
 # ============================ SILK SCARF (full loop, knot, tails) ==============
 def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
@@ -58,13 +58,13 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
     FR = 0.462
     def lf(phi):
         y = neck_y(phi, FR, 0.47, 0.54)
-        return [eloop(y, phi, h, v) for h, v in ((0.014, 0.040), (0.042, 0.030), (0.050, 0.0), (0.042, -0.030), (0.014, -0.040))]
+        return [eloop(y, phi, h, v) for h, v in ((0.014, 0.060), (0.052, 0.048), (0.076, 0.0), (0.052, -0.048), (0.014, -0.060))]
     torus('wrap', 32, lf, pat, sharp=60)
-    kc, kn = body_pt(0.0, FR - 0.004, 0.100)
+    kc, kn = body_pt(0.0, FR - 0.052, 0.112)
     xx, yy, nn = axes(kn)
-    bead('knot', kc, (0.098, 0.074, 0.070), lambda p, n: mix(deep(base, 0.10), tint(base, 0.2), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=8)
+    bead('knot', kc, (0.120, 0.078, 0.088), lambda p, n: mix(deep(base, 0.10), tint(base, 0.2), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=8)
     for s_ in (-1, 1):
-        bead('ear%+d' % s_, kc + xx * (s_ * 0.080) + yy * 0.018 + nn * 0.004, (0.046, 0.052, 0.044), lambda p, n: mix(deep(base, 0.14), tint(base, 0.18), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=6)
+        bead('ear%+d' % s_, kc + xx * (s_ * 0.105) + yy * 0.018 + nn * 0.004, (0.062, 0.070, 0.058), lambda p, n: mix(deep(base, 0.14), tint(base, 0.18), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=6)
     def tail(cx0, cx1, y0, y1, w, name, off, wav):
         nu, nv = 4, 6
         def fn(i, j):
@@ -74,8 +74,8 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
             ww = w * (1 + 0.65 * v)
             return body_pt(cx + u * ww, y, off + 0.010 * math.sin(3.0 * v + wav) * v)
         thick_sheet(name, fn, nu, nv, 0.012, lambda p, n: pat(p, n))
-    tail(-0.040, -0.150, 0.430, 0.150, 0.085, 'tail_a', 0.090, 0.0)
-    tail(0.040, 0.120, 0.430, 0.175, 0.078, 'tail_b', 0.094, 1.7)
+    tail(-0.040, -0.150, 0.430, 0.150, 0.115, 'tail_a', 0.096, 0.0)
+    tail(0.040, 0.120, 0.430, 0.175, 0.105, 'tail_b', 0.100, 1.7)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly', 'sweet'], price=55, title='Silk scarf',
                 desc='A silk neckerchief in navy printed with gold medallions: a thick rolled wrap in one continuous loop round the belly (y~0.46, rising at the back), a fat knot with two folded ends at the front centre (top y 0.52) and two flowing tails of fuller fabric.')
 
@@ -153,10 +153,12 @@ def diamond_j(**k):
         return hdr(mix(base, (1.0, 1.0, 1.0), sp), 1.25 if sp else 0.95)
     FR = 0.470
     n = 56
-    for k_ in range(n):                            # a fine tennis chain: small round brilliants set shoulder to shoulder, no wire
-        phi = 2 * math.pi * (k_ + 0.5) / n
-        p, t, h, up = ring_frame(phi, FR, 0.036)
-        brilliant('gemC%d' % k_, p, 0.032, stone, np.stack([t, h, up], 1))
+    loop_tube('band', FR, 0.034, 0.030, 5, plat, n=40)             # a bright platinum base band so the stones read as one continuous strip
+    for row, dy in enumerate((0.026, -0.026)):                      # two rows of tightly packed brilliants, offset by half a stone, touching
+        for k_ in range(n):
+            phi = 2 * math.pi * (k_ + 0.5 + 0.5 * row) / n
+            p, t, h, up = ring_frame(phi, FR, 0.040)
+            brilliant('gemC%d_%d' % (row, k_), p + up * dy, 0.034, stone, np.stack([t, h, up], 1), sides=5)
     # the pendant: a big bold rounded J, solid mirror white gold with a polished bevel and micro-sparkle pave
     c, t, h, up = ring_frame(math.pi / 2, FR, 0.052)
     top = c - up * 0.060
@@ -170,14 +172,14 @@ def diamond_j(**k):
     serif = [((stem_x - 0.050) * S, 0.100 * S), ((stem_x + 0.050) * S, 0.100 * S)]
     def xf(dz):
         return lambda px, py, pz: tuple(top + t * px + up * (py - 0.100 * S) + h * (pz + dz))
-    slab_part('jbase', stroke_poly(path, 0.078 * S, 8), 0.020, plat, xf(-0.006), cuts=0, sharp=30)
-    slab_part('jbevel', stroke_poly(path, 0.066 * S, 8), 0.006, lambda p_, n_: hdr(mix((0.8, 0.88, 1.0), (1, 1, 1), max(0.0, n_[1] * 0.5 + 0.5)), 1.05), xf(0.012), cuts=0, sharp=30)
-    slab_part('jpave', stroke_poly(path, 0.050 * S, 8), 0.006, pave, xf(0.018), cuts=0, sharp=30)
-    slab_part('serifb', stroke_poly(serif, 0.056 * S, 6), 0.020, plat, xf(-0.006), cuts=0, sharp=30)
-    slab_part('serifp', stroke_poly(serif, 0.036 * S, 6), 0.006, pave, xf(0.018), cuts=0, sharp=30)
+    slab_part('jbase', stroke_poly(path, 0.082 * S, 8), 0.046, plat, xf(-0.016), cuts=0, sharp=30)
+    slab_part('jbevel', stroke_poly(path, 0.070 * S, 8), 0.010, lambda p_, n_: hdr(mix((0.8, 0.88, 1.0), (1, 1, 1), max(0.0, n_[1] * 0.5 + 0.5)), 1.12), xf(0.028), cuts=0, sharp=30)
+    slab_part('jpave', stroke_poly(path, 0.050 * S, 8), 0.008, pave, xf(0.038), cuts=0, sharp=30)
+    slab_part('serifb', stroke_poly(serif, 0.060 * S, 6), 0.046, plat, xf(-0.016), cuts=0, sharp=30)
+    slab_part('serifp', stroke_poly(serif, 0.036 * S, 6), 0.008, pave, xf(0.038), cuts=0, sharp=30)
     # four bigger accent stones on the J (they also carry the glints)
     for q, (gx, gy) in enumerate(((stem_x * S, 0.100 * S), (stem_x * S, 0.030 * S), (cx, cy - r * 0.2), (cx + r * 0.9, cy - r * 0.95))):
-        brilliant('gemJ%d' % q, top + t * gx + up * (gy - 0.100 * S) + h * 0.030, 0.026, stone, np.stack([t, h, up], 1))
+        brilliant('gemJ%d' % q, top + t * gx + up * (gy - 0.100 * S) + h * 0.050, 0.026, stone, np.stack([t, h, up], 1))
     # the bail: a bright loop that carries the J from the front stone of the chain
     bp = []
     for a in np.linspace(0, 2 * math.pi, 13):

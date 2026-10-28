@@ -1,287 +1,572 @@
 {
  "id": "diamond_j",
- "tris": 2948,
- "verts": 2093,
+ "tris": 4692,
+ "verts": 3082,
  "parts": [
   {
-   "name": "gemC0",
-   "tris": 36,
-   "verts": 20
+   "name": "band",
+   "tris": 400,
+   "verts": 205
   },
   {
-   "name": "gemC1",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_0",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC2",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_1",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC3",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_2",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC4",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_3",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC5",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_4",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC6",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_5",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC7",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_6",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC8",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_7",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC9",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_8",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC10",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_9",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC11",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_10",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC12",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_11",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC13",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_12",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC14",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_13",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC15",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_14",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC16",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_15",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC17",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_16",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC18",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_17",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC19",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_18",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC20",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_19",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC21",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_20",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC22",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_21",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC23",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_22",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC24",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_23",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC25",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_24",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC26",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_25",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC27",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_26",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC28",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_27",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC29",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_28",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC30",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_29",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC31",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_30",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC32",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_31",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC33",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_32",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC34",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_33",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC35",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_34",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC36",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_35",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC37",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_36",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC38",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_37",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC39",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_38",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC40",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_39",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC41",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_40",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC42",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_41",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC43",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_42",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC44",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_43",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC45",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_44",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC46",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_45",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC47",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_46",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC48",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_47",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC49",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_48",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC50",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_49",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC51",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_50",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC52",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_51",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC53",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_52",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC54",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_53",
+   "tris": 30,
+   "verts": 17
   },
   {
-   "name": "gemC55",
-   "tris": 36,
-   "verts": 20
+   "name": "gemC0_54",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC0_55",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_0",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_1",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_2",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_3",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_4",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_5",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_6",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_7",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_8",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_9",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_10",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_11",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_12",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_13",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_14",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_15",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_16",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_17",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_18",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_19",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_20",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_21",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_22",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_23",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_24",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_25",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_26",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_27",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_28",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_29",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_30",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_31",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_32",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_33",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_34",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_35",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_36",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_37",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_38",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_39",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_40",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_41",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_42",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_43",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_44",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_45",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_46",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_47",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_48",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_49",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_50",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_51",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_52",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_53",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_54",
+   "tris": 30,
+   "verts": 17
+  },
+  {
+   "name": "gemC1_55",
+   "tris": 30,
+   "verts": 17
   },
   {
    "name": "jbase",
@@ -340,19 +625,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6234,
-  -0.3454,
-  -1.0722
+  -0.633,
+  -0.3479,
+  -1.0833
  ],
  "bounds_local_max": [
-  0.6234,
-  0.1171,
-  0.0924
+  0.6328,
+  0.1473,
+  0.1124
  ],
  "size": [
-  1.2467,
-  0.4625,
-  1.1646
+  1.2658,
+  0.4953,
+  1.1957
  ],
  "anchor": "neck",
  "slot": "neck",

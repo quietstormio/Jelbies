@@ -2039,8 +2039,8 @@
     "sparkly"
    ],
    "price": 70,
-   "tris": 952,
-   "verts": 666,
+   "tris": 2468,
+   "verts": 2672,
    "files": [
     "chain_gold.obj",
     "chain_gold.json"
@@ -2187,8 +2187,8 @@
     "cool"
    ],
    "price": 450,
-   "tris": 2948,
-   "verts": 2093,
+   "tris": 4692,
+   "verts": 3082,
    "files": [
     "diamond_j.obj",
     "diamond_j.json"

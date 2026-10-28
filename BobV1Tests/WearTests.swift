@@ -120,9 +120,13 @@ final class WearTests: XCTestCase {
             let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
             if ms > worst.0 { worst = (ms, l.rawValue) }
             // the Diamond J chain is the 450-coin hero item: a ring of round brilliants and a paved pendant need more geometry, so it has its own budget
-            let heroBudget = l == .diamondJ
-            XCTAssertLessThanOrEqual(p.rest.count, heroBudget ? 2500 : WearMeshes.vertexBudget, "\(l)")
-            XCTAssertLessThanOrEqual(p.triangles, heroBudget ? 3800 : WearMeshes.triangleBudget, "\(l)")
+            // the gold chain is built from truly interlocking oval links (dozens of small rings), so it has a raised budget as well
+            let heroBudget = l == .diamondJ || l == .chainGold
+            let vMax = l == .diamondJ ? 3200 : l == .chainGold ? 2800 : WearMeshes.vertexBudget
+            let tMax = l == .diamondJ ? 5000 : l == .chainGold ? 3000 : WearMeshes.triangleBudget
+            _ = heroBudget
+            XCTAssertLessThanOrEqual(p.rest.count, vMax, "\(l)")
+            XCTAssertLessThanOrEqual(p.triangles, tMax, "\(l)")
             XCTAssertGreaterThan(p.triangles, 50, "\(l)")
             XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table")
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })

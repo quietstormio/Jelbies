@@ -313,7 +313,7 @@ final class WornSet {
             let c = SIMD3<Float>(v.pos.x, v.pos.y, v.pos.z), n = simd_normalize(SIMD3<Float>(v.normal.x, v.normal.y, v.normal.z))
             let ref: SIMD3<Float> = abs(n.y) > 0.9 ? SIMD3(1, 0, 0) : SIMD3(0, 1, 0)
             let r = simd_normalize(simd_cross(n, ref)), up = simd_cross(n, r)
-            let L = 0.085 * scale * a, S = L * 0.2
+            let L = 0.060 * scale * a, S = L * 0.2
             let centre = c + n * 0.020
             let col = SIMD4<Float>(2.2, 2.4, 2.9, 1)
             let first = UInt32(m.vertices.count)

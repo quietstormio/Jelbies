@@ -47,9 +47,9 @@ nonisolated extension WearLook {
     static let medal: WearLook = .medalGold
     /// Looks that are drawn from art (hats, glasses, ...): everything but the shoes.
     /// Pulled from the shop for now (2026-10-25: the hoodie and raincoat read as a bucket / diaper): not sold, taken off and refunded once. The art stays.
-    /// 2026-10-28: the open-front cardigan and vest, the silk scarf, the gold chain and the Diamond J chain are held back until their art is production-ready
+    /// 2026-10-28: the Diamond J chain is held back (the cardigan, vest, silk scarf and gold chain were released the same day) until their art is production-ready
     /// (hiddenUntilReady): not sold, taken off and refunded if a save ever has one; the art, rules and Pip variants stay in code.
-    static let unlisted: Set<WearLook> = [.hoodie, .raincoat, .cardiganCable, .vestPuffer, .scarfSilk, .chainGold, .diamondJ]
+    static let unlisted: Set<WearLook> = [.hoodie, .raincoat, .diamondJ]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet }.map(\.look)
 }
 

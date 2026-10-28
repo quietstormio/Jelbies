@@ -109,7 +109,7 @@ nonisolated enum WearMeshes {
                 t += 3
             }
         }
-        if l == .diamondJ { for (pi, name) in p.partNames.enumerated() where name.hasPrefix("gem") { if let v = p.partOfVertex.lastIndex(of: UInt8(pi)) { p.sparkleSites.append(v) } } }
+        if l == .diamondJ { for (pi, name) in p.partNames.enumerated() where name.hasPrefix("gem") && (name.hasPrefix("gemJ") || pi % 7 == 0) { if let v = p.partOfVertex.lastIndex(of: UInt8(pi)) { p.sparkleSites.append(v) } } }
         p.pivot = isArm ? .zero : anchor
         p.bind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         if let body, !isArm {
