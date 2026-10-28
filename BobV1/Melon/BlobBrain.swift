@@ -289,6 +289,7 @@ final class BlobBrain {
     var simFootCap: Float = 0.03
     // Foot beans (FootBean): grow when any foot leaves its rest spot, stay until both have been still for `beanHoldTime`, then shrink back.
     var beanG: Float = 0                 // 0 = hidden (plain embedded feet) ... 1 = beans out, embedded feet retracted
+    var beanFitUsed: BodyPose? = nil     // the fitted body pose the beans were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
     var beanForce = false                // a spin move (flip / cartwheel) owns the beans: out for the whole flight, placed on the FITTED pose
     var beanHold: Float = 0              // seconds the beans stay out after the last foot motion
     var beanHoldTime: Float = 0.7
@@ -1443,6 +1444,23 @@ final class BlobBrain {
         }
     }
 
+    /// 2026-10-27 (cartwheel feet): the brain places the beans BEFORE the sim step, the body then moves (a cartwheel turns it ~0.1 rad per step, a hitch frame runs
+    /// two steps), so the drawn bean trailed the drawn body and its buried part came up out of the belly (only ~0.01 u inside at take-off). Called by the stage after the
+    /// steps: the beans placed on the fitted pose are carried rigidly onto the pose the body has NOW, then the always-attached clamp runs again.
+    func refitBeans(_ sim: SoftBody, _ skinner: Skinner) {
+        guard let old = beanFitUsed, skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { return }
+        let now = sim.bodyPose(iterations: 3)
+        let dq = now.rotation * old.rotation.inverse
+        for s in 0..<2 {
+            for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i] = now.centroid + dq.act(skinner.beanPos[s][i] - old.centroid) }
+            if skinner.beanStart[s].count == FootBean.vertexCount { for i in 0..<FootBean.vertexCount { skinner.beanStart[s][i] = now.centroid + dq.act(skinner.beanStart[s][i] - old.centroid) } }
+            attachBean(sim, now, lifted: now.tilt > 0.3 || (skinner.beanPos[s].map(\.y).min() ?? 0) - sim.floorY > 0.02, &skinner.beanPos[s])
+            for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) }
+        }
+        skinner.retractMatrix = simd_float3x3(now.rotation) * simd_float3x3(diagonal: SIMD3(1 / sim.attractor.squash.squareRoot(), sim.attractor.squash, 1 / sim.attractor.squash.squareRoot()))
+        beanFitUsed = now
+    }
+
     /// Hand the bean state to the skinner: hysteresis (stay out until both feet were still for `beanHoldTime`), growth blend, retract matrix.
     func commitBeans(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, want: Bool) {
         if want {
@@ -1459,7 +1477,8 @@ final class BlobBrain {
         skinner.beanStart = beanStartScratch
         skinner.beanBlend = beanBlend
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot()
-        let RS = simd_float3x3(att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
+        // (on the FITTED pose when the beans follow it: the attractor's rotation is tens of degrees ahead of the real body in a flip / cartwheel and would push the sunk foot slab the wrong way)
+        let RS = simd_float3x3(beanFitUsed?.rotation ?? att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
         skinner.retractMatrix = RS
         skinner.retractShift = footShift
         skinnerRef = skinner
@@ -1481,6 +1500,7 @@ final class BlobBrain {
         let drift = simd_length(simd_float3x3(fit.rotation).columns.1 - simd_float3x3(attQ).columns.1) + simd_length(simd_float3x3(fit.rotation).columns.2 - simd_float3x3(attQ).columns.2)
         let useFit = beanForce || activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.1 || drift > 0.12
         let fitted: BodyPose? = useFit ? fit : nil
+        if scale == 1 { beanFitUsed = fitted }
         for s in 0..<2 {
             let c = geom.contact[s]
             func place(_ i: Int, _ m: Float) -> SIMD3<Float> {
