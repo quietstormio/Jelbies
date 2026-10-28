@@ -503,6 +503,66 @@ final class FeatureCaptureTests: XCTestCase {
     func testCaptureCartwheelLavender() throws { try cartwheelSheet(id: 3, name: "lavender") }
     func testCaptureCartwheelMossShoes() throws { try cartwheelSheet(id: 2, name: "moss_shoes", shoes: true) }
 
+    /// Walk with a mid-route turn, before (refitWorldPlaced false) vs after (true): the same frames side by side, and the drawn feet's per-vertex difference.
+    private func walkRun(id: Int, refit: Bool, shots: [Int]) throws -> (imgs: [UIImage], feet: [[SIMD3<Float>]], detaching: [Bool]) {
+        BlobBrain.refitWorldPlaced = refit
+        defer { BlobBrain.refitWorldPlaced = true }
+        W = 603; H = 1311
+        let chars = [Char(id: id)]
+        let lab = setUpLab([SIMD2(-0.6, 0.4)], chars: chars, seed: 3)
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let r = lab.rigs[0]
+        r.brain.seed = 99
+        r.brain.requestNow(.goTo(SIMD2(0.9, 1.3)))
+        var imgs: [UIImage] = [], feet: [[SIMD3<Float>]] = [], det: [Bool] = []
+        let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+        for k in 0..<200 {
+            lab.tick(watching: false)
+            tick(dd, 0, r, chars[0])
+            if k == 70 { r.brain.requestNow(.goTo(SIMD2(-0.7, 1.5))) }
+            r.render()
+            var f: [SIMD3<Float>] = []
+            for s in 0..<2 { for v in r.bean[s] { let o = 6 * Int(v); f.append(SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2])) } }
+            feet.append(f)
+            let ff = FeetAttachTests.drawnFootFrame(r)
+            det.append(r.skinner.beansActive && ff.overlap > FeetAttachTests.minOverlap)
+            if shots.contains(k) {
+                let img = composite(lab, dd, chars, ren, target, cam: cam)
+                if let c = cropJellies(img, lab, cam: cam, pad: 0.12) { imgs.append(labelled(c, "\(refit ? "after" : "before") f\(k)")) }
+            }
+        }
+        return (imgs, feet, det)
+    }
+    func testCaptureWalkBeforeAfter() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let shots = [15, 40, 65, 80, 100, 120, 145, 170]
+        var rows: [UIImage] = []
+        var log = ""
+        for (name, id) in [("Pip", 1), ("Bob", 0)] {
+            let b = try walkRun(id: id, refit: false, shots: shots), a = try walkRun(id: id, refit: true, shots: shots)
+            var maxD: Float = 0, n = 0, skipped = 0, maxAll: Float = 0, hist = ""
+            for k in 0..<min(a.feet.count, b.feet.count) {
+                var m: Float = 0, dv = SIMD3<Float>.zero
+                for i in 0..<min(a.feet[k].count, b.feet[k].count) { let q = simd_distance(a.feet[k][i], b.feet[k][i]); if q > m { m = q; dv = a.feet[k][i] - b.feet[k][i] } }
+                maxAll = max(maxAll, m)
+                if m > 0.004 { hist += String(format: "f%d:%.3f(d %.3f,%.3f,%.3f)%@ ", k, m, dv.x, dv.y, dv.z, b.detaching[k] ? "(old detaching)" : "") }
+                if b.detaching[k] { skipped += 1; continue }
+                maxD = max(maxD, m); n += 1
+            }
+            var maxStep: Float = 0
+            for k in 1..<min(a.feet.count, b.feet.count) where !b.detaching[k] && !b.detaching[k - 1] {
+                for i in 0..<min(a.feet[k].count, b.feet[k].count) { maxStep = max(maxStep, simd_distance(a.feet[k][i] - b.feet[k][i], a.feet[k - 1][i] - b.feet[k - 1][i])) }
+            }
+            log += String(format: "max frame-to-frame change of the after-before difference %.5f u\n", maxStep)
+            log += String(format: "WALKDIFF %@: frames compared %d, skipped (old detaching) %d, max per-vertex foot difference %.5f u (all frames incl. detaching %.5f)\n  frames differing > 0.004: %@\n", name, n, skipped, maxD, maxAll, hist)
+            rows.append(hstack(b.imgs)); rows.append(hstack(a.imgs))
+        }
+        try log.write(toFile: d + "/walkdiff.txt", atomically: true, encoding: .utf8)
+        try write(vstack(rows), d + "/feet2_walk_before_after.png")
+    }
+
     // MARK: Pip's teardrop tail + back spikes
 
     func testCapturePipTeardrop() throws {
