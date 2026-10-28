@@ -244,17 +244,17 @@ def diamond_j(**k):
         phi = float(np.interp(spacing * k_, cum, ph))
         p, t, h, up = ring_frame(phi, FR, OFF)
         brilliant_stone('gem%02d' % k_, p, rb, (t, h, up))
-    # ---- the J: a classic capital J (stem on the right, round bowl curving left, hook tip at ~37 % of the height, slim serif bar mostly left of the stem),
+    # ---- the J: a classic capital J (stem on the right, round bowl curving left, hook tip at ~40 % of the height, slim serif bar mostly left of the stem),
     # stroke ~21 % of the height, shallow soft-edged body with a thin polished rim round the pave face. Absolute rest coordinates, wrapped on the belly.
-    H = 0.29; yTop = 0.408
+    H = 0.25; yTop = 0.408
     c_ = 0.0185; bev, lip = 0.006, 0.006
     w_ = 2 * c_ + 2 * (bev + lip)                        # 0.061
-    R = 0.0565; stem_x = 0.056
+    R = 0.052; stem_x = 0.056
     cy = yTop - H + R + w_ / 2
     y0 = yTop - w_ / 2
     path = [(stem_x, y0 + (cy - y0) * i / 4) for i in range(4)]
     cx = stem_x - R
-    sweep = math.radians(203)
+    sweep = math.radians(200)
     for k_ in range(0, 13):
         a_ = -sweep * k_ / 12
         path.append((cx + R * math.cos(a_), cy + R * math.sin(a_)))
