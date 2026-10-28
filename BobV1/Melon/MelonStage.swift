@@ -949,6 +949,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
         // fixed-step simulation
         let s0 = CACurrentMediaTime()
+        var steppedThisFrame = false
         if !paused {
             acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale * GameCare.volleySlowScale : 1)          // (-VolleySlow: capture aid)
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
@@ -964,8 +965,9 @@ final class MelonController: NSObject, MTKViewDelegate {
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
+            steppedThisFrame = steps > 0
             if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
-            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
+            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps
         }
@@ -984,6 +986,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0
+        if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
         for a in actors.dropFirst() {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }

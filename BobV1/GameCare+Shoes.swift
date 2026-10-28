@@ -10,21 +10,45 @@ import simd
 
 extension GameCare {
     /// The 418 world vertices of each foot (nil until the body's foot geometry exists). The beans blend from the rigid rest foot to the world-driven bean.
-    func footBeans(_ a: JellyActor) -> [[SIMD3<Float>]]? {
+    func footBeans(_ a: JellyActor, drawn: ((JellyActor) -> UnsafePointer<Float>?)? = nil) -> [[SIMD3<Float>]]? {
         guard let b = a.brain else { return nil }
-        return Self.footBeans(brain: b, sim: a.sim, skinner: a.skinner)
+        return Self.footBeans(brain: b, sim: a.sim, skinner: a.skinner, drawn: drawn?(a))
     }
-    static func footBeans(brain b: BlobBrain, sim: SoftBody, skinner sk: Skinner) -> [[SIMD3<Float>]]? {
+    /// `drawn`: the skinned dyn buffer of this frame. The shell is then built from the bean vertices as DRAWN (blend, jiggle and the drawn-space guard included), so a shoe can never drift off the leg it wears.
+    static func footBeans(brain b: BlobBrain, sim: SoftBody, skinner sk: Skinner, drawn: UnsafePointer<Float>? = nil) -> [[SIMD3<Float>]]? {
         if !b.geom.valid { b.geom = FootGeom(sim: sim) }
         guard b.geom.valid else { return nil }
         var rigid: [[SIMD3<Float>]] = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)]
         b.fillBeansRigid(sim, into: &rigid, tuck: 0)
         guard sk.beansActive else { return rigid }
+        if let d = drawn, sk.beanFirst.count == 2 {
+            for s in 0..<2 { let f = sk.beanFirst[s]; for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); rigid[s][i] = SIMD3(d[o], d[o + 1], d[o + 2]) } }
+            Self.poofShoes(&rigid, brain: b)
+            return rigid
+        }
         // the SAME blend the skin draws (Skinner.update): beanStart -> beanPos by the bean blend, so the shell is grown from the foot that is on screen
         let bl = sk.beanBlend
         guard sk.beanStart.count == 2, sk.beanStart[0].count == FootBean.vertexCount, sk.beanPos.count == 2, sk.beanPos[0].count == FootBean.vertexCount else { return rigid }
         for s in 0..<2 { for i in 0..<FootBean.vertexCount { let a = sk.beanStart[s][i]; rigid[s][i] = a + (sk.beanPos[s][i] - a) * bl } }
+        Self.poofShoes(&rigid, brain: b)
         return rigid
+    }
+
+    /// 2026-10-28 (legs stay legs): in a flip / cartwheel the body is upside down for most of the flight and the shoe soles would show as black discs on its side / two
+    /// sneakers on top of the head. While the leg points more than ~30 degrees away from straight down the shoe shrinks into the top of the leg (the leg itself stays a leg), and
+    /// grows back as the leg comes down to the floor (smooth in the angle, so no pop). Only while a spin move owns the body: the walk and every other move are untouched.
+    static func poofShoes(_ w: inout [[SIMD3<Float>]], brain b: BlobBrain) {
+        guard b.gait.isSpinMove, BlobBrain.forceLegsFix else { return }
+        for s in 0..<w.count where w[s].count == FootBean.vertexCount {
+            let hip = w[s][FootBean.vertexCount - 1], sole = w[s][0]
+            let d = sole - hip, l = simd_length(d)
+            guard l > 1e-4 else { continue }
+            let down = -d.y / l
+            let k = smooth01((down - 0.35) / 0.5)
+            if k >= 0.999 { continue }
+            let f = max(k, 0.02)
+            for i in w[s].indices { w[s][i] = hip + (w[s][i] - hip) * f }
+        }
     }
 
     /// Does this actor wear shoes on screen right now?
@@ -40,14 +64,14 @@ extension GameCare {
     struct ShoeEntry { var look: WearLook; var floorY: Float; var bean: [SIMD3<Float>]; var mesh: RoomMesh }
 
     /// The world-space shoe mesh of every wearing Jelly (tests and captures).
-    func shoeMesh(_ actors: [JellyActor], time: Float) -> RoomMesh { shoeFrame(actors, time: time).mesh }
+    func shoeMesh(_ actors: [JellyActor], time: Float, drawn: ((JellyActor) -> UnsafePointer<Float>?)? = nil) -> RoomMesh { shoeFrame(actors, time: time, drawn: drawn).mesh }
 
     /// The mesh and whether it differs from the one drawn last frame (a foot moved, a look changed, someone put shoes on or took them off, glitter twinkles).
-    func shoeFrame(_ actors: [JellyActor], time: Float) -> (mesh: RoomMesh, changed: Bool) {
+    func shoeFrame(_ actors: [JellyActor], time: Float, drawn: ((JellyActor) -> UnsafePointer<Float>?)? = nil) -> (mesh: RoomMesh, changed: Bool) {
         let b = RoomMeshBuilder(); b.material = .plain
         var changed = false, sig: [Int] = []
         for a in actors {
-            guard let look = shoeLook(for: a), let beans = footBeans(a) else { continue }
+            guard let look = shoeLook(for: a), let beans = footBeans(a, drawn: drawn) else { continue }
             let li = WearLook.allCases.firstIndex(of: look) ?? 0
             let bodyCol = a.appearance?.flesh ?? SIMD3<Float>(0.35, 0.5, 0.9)
             for s in 0..<2 {
@@ -86,7 +110,7 @@ extension GameCare {
         let any = !room.bathVisible && actors.contains { shoeLook(for: $0) != nil }          // not in the wash scene (the bodies of the others are not drawn there); the track keeps them
         guard any || shoesDrawn else { return }
         if any {
-            let f = shoeFrame(actors, time: time)
+            let f = shoeFrame(actors, time: time, drawn: { [weak renderer] a in renderer?.skinPointer(body: a.id) })
             if f.changed || !shoesDrawn { room.setShoes(f.mesh) }              // nothing moved: the buffer from last frame is still right
         } else {
             room.setShoes(RoomMesh()); shoeCache = [:]; shoeSig = []
