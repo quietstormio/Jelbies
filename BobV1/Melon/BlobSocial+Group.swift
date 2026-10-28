@@ -17,14 +17,18 @@ import simd
 
 enum GroupTuning {
     /// Seconds spent together (3+ free and close) before a group move is asked for, drawn per Jelby.
-    static let wait: (Float, Float) = (35, 95)
+    static let wait: (Float, Float) = (15, 40)
     /// Cooldown after any group move (per member).
-    static let cooldown: (Float, Float) = (40, 75)
+    static let cooldown: (Float, Float) = (20, 35)
     /// How near a free Jelby must be (to the one who asks) to be pulled in, and the most that play together.
-    static let radius: Float = 5.4
+    static let radius: Float = 7.0
+    /// A busy-for-a-moment housemate (mid-antic, mid-walk) is waited for this long before the group goes without him.
+    static let busyWait: Float = 3
+    /// The farthest a member may have to walk to his place.
+    static let walkMax: Float = 6.5
     static let maxCrew = 5
     /// Pick weights (the hug is the favourite).
-    static let weights: [(SocialKind, Float)] = [(.groupHug, 4.5), (.groupCheer, 2.0), (.conga, 1.8), (.circleDance, 2.0)]
+    static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
     static let touch: Float = 0.78, loose: Float = 1.15
     static let steps = 8, stepAngle: Float = .pi / 4.5
@@ -46,29 +50,36 @@ extension BlobBrain {
 
     /// Per tick while no session is on him: the wait for a crowd, then the roll.
     func socialGroupWatch(_ sim: SoftBody, _ dt: Float) {
-        guard anticsEnabled, socialBook.enabled, socialFree, idleDeepNight < 0.5, idleMood != .grumpy else { return }
+        guard anticsEnabled, socialBook.enabled, social == nil, !held, autonomy || idleForced, idleState.kind != .sleep, idleDeepNight < 0.5, idleMood != .grumpy else { return }          // (the wait runs while he walks about too; the start needs him standing: `socialFree` below)
         guard socialBook.groupCool <= 0 else { return }
         // the wait runs while there is company close by (awake, not held); the start needs them free (or just walking) at the moment it is time
         let company = socialOthers().filter { $0 !== self && !$0.held && $0.idleState.kind != .sleep && simd_distance($0.position, position) < GroupTuning.radius }
         guard company.count >= 2 else { socialBook.groupIdle = max(0, socialBook.groupIdle - 0.5 * dt); return }
         socialBook.groupIdle += dt * (watching ? 1.5 : 1) * (perkFlags.social ? 1.25 : 1)
         guard socialBook.groupIdle >= socialBook.groupLimit else { return }
+        guard socialFree else { return }
         let near = groupCandidates()
+        // somebody close is only busy for a moment (mid-antic, mid-hop; not asleep / eating / held / taken): the group waits up to `busyWait` s for him so nobody is left out
+        let momentarily = company.filter { c in !near.contains { $0 === c } && c.social == nil && !c.socialTaken && c.autonomy && c.attached && c.idleDeepNight < 0.5 && c.idleMood != .grumpy }
+        if !momentarily.isEmpty, socialBook.groupBusy < GroupTuning.busyWait { socialBook.groupBusy += dt; return }
+        if momentarily.isEmpty { socialBook.groupBusy = 0 }
         guard near.count >= 2 else { return }          // (somebody is busy: it is tried again every tick until the crowd is free)
         let crew = Array(near.prefix(GroupTuning.maxCrew - 1))
         let night = max(idleNight, crew.map { $0.idleNight }.max() ?? 0)
         var w: [(SocialKind, Float)] = []
         for (k, x) in GroupTuning.weights {
-            if k == socialBook.lastGroup || crew.contains(where: { $0.socialBook.lastGroup == k }) { continue }
+            let repeated = k == socialBook.lastGroup || crew.contains(where: { $0.socialBook.lastGroup == k })
+            if repeated, k != .groupHug { continue }
             if k.isFast, fastOthers(except: crew) > 0 { continue }
-            w.append((k, k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)))
+            let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
+            w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
         if w.isEmpty { w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
         socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1)
-        socialBook.groupIdle = 0
+        socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
 
@@ -101,7 +112,7 @@ extension BlobBrain {
                 let a = ang[m.steerID]!
                 let want = c + SIMD2(sinf(a), cosf(a)) * r
                 let p = fixed(want)
-                if simd_distance(p, want) > 0.12 || simd_distance(p, m.position) > 4.8 { ok = false; break }
+                if simd_distance(p, want) > 0.12 || simd_distance(p, m.position) > GroupTuning.walkMax { ok = false; break }
                 if socialOthers().contains(where: { x in !members.contains { $0 === x } && simd_distance(x.position, p) < peerGap * 0.9 }) { ok = false; break }
                 spots[m.steerID] = p
             }
@@ -193,7 +204,7 @@ extension BlobBrain {
             if isA {
                 let arrived = everyone(mem) { $0.socialBook.hopStarted && $0.fxFree && simd_distance($0.position, $0.slot(s)) < 0.45 }
                 if arrived, s.phaseT > 0.3 { s.setPhase(1) }
-                else if s.phaseT > 12 { s.finish(.aborted) }
+                else if s.phaseT > 16 { s.finish(.aborted) }
             }
             return true
         case 1:
