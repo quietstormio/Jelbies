@@ -91,6 +91,10 @@ extension BlobBrain {
         var spots = [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
         // a rocker long on its runners may sit where its front has no floor (the near edge of the room): he climbs on from behind it too
         if f.kind.rockRide { spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(sp.x + $0, sp.z - dz)) } }
+        // a piece in a corner or against a wall has no floor in front of it: he climbs on from either side, or from behind, the same way
+        spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(f.kind.spec.half.x + Self.bagHopGap, sp.z + $0)) }
+        spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(-f.kind.spec.half.x - Self.bagHopGap, sp.z + $0)) }
+        if !f.kind.rockRide { spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(sp.x + $0, sp.z - dz)) } }
         return spots
     }
     /// The first spot in front of the seat he can stand on, nil when there is none.
@@ -105,7 +109,7 @@ extension BlobBrain {
     func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         var angles: [Float]
-        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6, 0.95, -0.95, 1.4, -1.4].map { $0 + f.yaw } }          // (the sides only as a fallback: a piece at the front edge has no floor in front of it)
+        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6, 0.95, -0.95, 1.4, -1.4, 1.9, -1.9, 2.5, -2.5, .pi].map { $0 + f.yaw } }          // (the sides only as a fallback: a piece at the front edge has no floor in front of it)
         else {
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
             let a0 = atan2f(base.x, base.y)
@@ -155,7 +159,7 @@ extension BlobBrain {
             if simd_distance(p, q) < 0.08 && peerFree(q) { return q }
             // the exact spot is taken or blocked (a friend, a wall, a bench): the nearest free floor within a step or so of it will do (the first hop covers the rest)
             let toward = simd_length(here - p) > 1e-3 ? simd_normalize(here - p) : SIMD2<Float>(0, 1)
-            for r: Float in [0.35, 0.7, 1.0] {
+            for r: Float in [0.35, 0.7, 1.0, 1.5, 2.0] {
                 for a: Float in [0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, .pi] {
                     let c0 = cosf(a), s0 = sinf(a)
                     let d = SIMD2(toward.x * c0 - toward.y * s0, toward.x * s0 + toward.y * c0) * r
