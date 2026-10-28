@@ -96,6 +96,8 @@ nonisolated enum WearRules {
         case .scarfSilk:
             if part.hasPrefix("tail") { return PartRule(w0: 1, w1: 0.3, h0: 0, h1: 1) }
             return part == "knot" ? rigid : surface
+        case .diamondJ: return part.hasPrefix("gemJ") || part == "gemBail" || part == "jbase" || part == "jtop" || part == "serifb" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
+        case .bowtiePink, .bowtieSky: return part == "band" ? surface : rigid
         case .chainGold: return part == "coin" || part == "coinring" || part == "star" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .capeHero: return part == "panel" ? PartRule(w0: 1, w1: 0.35, h0: 0, h1: 1) : surface
         case .monocleGold: return part == "chain" || part.hasPrefix("link") ? PartRule(w0: 1, w1: 0.4, h0: 0, h1: 1) : rigid
@@ -114,7 +116,7 @@ nonisolated enum WearRules {
         switch l {
         case .bandanaCoral, .bandanaMint, .bibPink, .bibSky, .sashPink, .sashSky, .heroPatch, .sweatband, .scarfCosy, .scarfSky, .medalGold,
              .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator, .lei, .hoodie, .raincoat,
-             .vestPuffer, .cardiganCable, .bagCrossbody, .scarfSilk, .chainGold: return true
+             .vestPuffer, .cardiganCable, .bagCrossbody, .scarfSilk, .chainGold, .diamondJ, .bowtiePink, .bowtieSky: return true
         default: return false
         }
     }

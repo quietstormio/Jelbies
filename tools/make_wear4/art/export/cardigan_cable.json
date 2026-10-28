@@ -1,87 +1,42 @@
 {
  "id": "cardigan_cable",
- "tris": 4548,
- "verts": 2840,
+ "tris": 1292,
+ "verts": 704,
  "parts": [
   {
    "name": "body",
-   "tris": 2760,
-   "verts": 1440
+   "tris": 720,
+   "verts": 396
   },
   {
-   "name": "hem",
-   "tris": 480,
-   "verts": 480
-  },
-  {
-   "name": "collar",
-   "tris": 480,
-   "verts": 480
-  },
-  {
-   "name": "placket",
-   "tris": 168,
-   "verts": 86
+   "name": "edge",
+   "tris": 392,
+   "verts": 198
   },
   {
    "name": "button0",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole0",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "button1",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "button2",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole2",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "button3",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole3",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "button4",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole4",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "pocket-1",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "pocket+1",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   }
  ],
  "anchor_rest": [
@@ -90,19 +45,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.6402,
-  -0.2038,
-  -1.0449
+  -0.6211,
+  -0.155,
+  -1.0622
  ],
  "bounds_local_max": [
-  0.6402,
-  0.164,
-  0.1204
+  0.6268,
+  0.269,
+  0.0714
  ],
  "size": [
-  1.2805,
-  0.3678,
-  1.1653
+  1.2478,
+  0.424,
+  1.1336
  ],
  "anchor": "chest",
  "slot": "body",
@@ -112,7 +67,7 @@
  ],
  "price": 60,
  "title": "Cable cardigan",
- "desc": "Rust cable-knit cardigan: braided ridges, ribbed hem, a shawl collar (top 0.51), a cream button band with five buttons and two patch pockets. Sleeveless over the belly; arms stay free.",
+ "desc": "A rust cable-knit cardigan: an open front falling to a deep V (front never above y 0.51) with a cream button band and five buttons, armholes round the arm nubs, a higher back with a collar edge, cable ridges and a ribbed hem.",
  "colourway": "cardigan_cable",
  "batch": 4
 }

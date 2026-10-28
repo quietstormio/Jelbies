@@ -1,0 +1,67 @@
+{
+ "id": "vest_puffer_pip",
+ "tris": 1088,
+ "verts": 594,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 580,
+   "verts": 330
+  },
+  {
+   "name": "edge",
+   "tris": 328,
+   "verts": 166
+  },
+  {
+   "name": "slot0",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "slot1",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "zip",
+   "tris": 64,
+   "verts": 34
+  },
+  {
+   "name": "pull",
+   "tris": 36,
+   "verts": 20
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6247,
+  -0.1498,
+  -0.9251
+ ],
+ "bounds_local_max": [
+  0.6237,
+  0.267,
+  0.0736
+ ],
+ "size": [
+  1.2484,
+  0.4168,
+  0.9987
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 65,
+ "title": "Puffer vest",
+ "desc": "A teal quilted puffer vest: a deep V open front (nothing on the front above y 0.51), armholes cut round the arm nubs, a higher back with a piped collar edge, quilted baffles, hem and a gold zip. Open sleeveless: the arms stay free.",
+ "colourway": "vest_puffer_pip"
+}

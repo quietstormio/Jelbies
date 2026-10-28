@@ -1,157 +1,62 @@
 {
  "id": "viking_hat",
- "tris": 2868,
- "verts": 1641,
+ "tris": 1232,
+ "verts": 755,
  "parts": [
   {
    "name": "dome",
-   "tris": 684,
-   "verts": 361
+   "tris": 408,
+   "verts": 217
   },
   {
    "name": "band",
-   "tris": 432,
-   "verts": 324
+   "tris": 288,
+   "verts": 240
   },
   {
    "name": "rivet0",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "rivet1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "rivet2",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "rivet3",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet4",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet5",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet6",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet7",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet8",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet9",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet10",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet11",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet12",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet13",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet14",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet15",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet16",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet17",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet18",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "rivet19",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "ridge",
-   "tris": 576,
-   "verts": 294
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "boss",
-   "tris": 120,
-   "verts": 82
+   "tris": 72,
+   "verts": 50
   },
   {
    "name": "cup-1",
-   "tris": 80,
-   "verts": 42
+   "tris": 48,
+   "verts": 26
   },
   {
    "name": "horn-1",
-   "tris": 168,
-   "verts": 86
-  },
-  {
-   "name": "collar-1",
-   "tris": 80,
-   "verts": 42
+   "tris": 112,
+   "verts": 58
   },
   {
    "name": "cup+1",
-   "tris": 80,
-   "verts": 42
+   "tris": 48,
+   "verts": 26
   },
   {
    "name": "horn+1",
-   "tris": 168,
-   "verts": 86
-  },
-  {
-   "name": "collar+1",
-   "tris": 80,
-   "verts": 42
+   "tris": 112,
+   "verts": 58
   }
  ],
  "anchor_rest": [
@@ -160,19 +65,19 @@
   0.0
  ],
  "bounds_local_min": [
-  -0.7716,
+  -0.7906,
   -0.3558,
-  -0.5322
+  -0.5422
  ],
  "bounds_local_max": [
-  0.7716,
-  0.1421,
-  0.5215
+  0.7906,
+  0.1384,
+  0.53
  ],
  "size": [
-  1.5432,
-  0.4979,
-  1.0537
+  1.5812,
+  0.4942,
+  1.0722
  ],
  "anchor": "head_top",
  "slot": "head",
@@ -182,7 +87,7 @@
  ],
  "price": 80,
  "title": "Viking helmet",
- "desc": "Rounded steel helmet with a thick rolled brim band (no nose guard), a ridge line, golden rivets and a front boss, topped by two curved bone horns on metal cups. Encloses the head (CrownFit); front band edge y~1.08, above the brows.",
+ "desc": "A proper rounded steel dome (crown about 0.12 above the head, enclosing it: CrownFit) with a thick rolled brim band (no nose guard), golden rivets and a front boss, topped by two curved bone horns on metal cups. Front band edge y~1.08, above the brows.",
  "colourway": "viking_hat",
  "batch": 4
 }

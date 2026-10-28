@@ -1,12 +1,12 @@
 {
  "id": "cowboy_hat",
- "tris": 1406,
- "verts": 955,
+ "tris": 1196,
+ "verts": 823,
  "parts": [
   {
    "name": "crown",
-   "tris": 544,
-   "verts": 289
+   "tris": 442,
+   "verts": 235
   },
   {
    "name": "crease",
@@ -15,13 +15,13 @@
   },
   {
    "name": "brim",
-   "tris": 384,
-   "verts": 320
+   "tris": 312,
+   "verts": 260
   },
   {
    "name": "edge",
-   "tris": 192,
-   "verts": 99
+   "tris": 156,
+   "verts": 81
   },
   {
    "name": "star",
@@ -35,19 +35,19 @@
   0.0
  ],
  "bounds_local_min": [
-  -0.7917,
-  -0.3308,
-  -0.6997
+  -0.7918,
+  -0.33,
+  -0.6956
  ],
  "bounds_local_max": [
-  0.792,
+  0.7921,
   0.04,
-  0.6623
+  0.6587
  ],
  "size": [
-  1.5837,
-  0.3708,
-  1.3619
+  1.5838,
+  0.37,
+  1.3543
  ],
  "anchor": "head_top",
  "slot": "head",

@@ -13,10 +13,10 @@ def surf_frame(x, y, off):
 
 # ============================ SASH ==========================================
 def sash(field=SKY, trim=CREAM, star=PINK, **k):
-    reset(); nL = 17; W_ = 0.074
+    reset(); nL = 11; W_ = 0.074
     a = np.array([-0.42, 0.600]); b = np.array([0.33, 0.255])
     d = (b - a) / np.linalg.norm(b - a); perp = np.array([-d[1], d[0]])
-    rows = [(-1.0, 0.012), (-0.90, 0.024), (-0.72, 0.034), (-0.4, 0.040), (0.0, 0.042), (0.4, 0.040), (0.72, 0.034), (0.90, 0.024), (1.0, 0.012)]
+    rows = [(-1.0, 0.012), (-0.90, 0.024), (-0.5, 0.036), (0.0, 0.042), (0.5, 0.036), (0.90, 0.024), (1.0, 0.012)]
     def pt(i, j):
         t = i / (nL - 1); w, off = rows[j]
         taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
@@ -27,25 +27,25 @@ def sash(field=SKY, trim=CREAM, star=PINK, **k):
     # raised piping along both edges
     for s in (-1, 1):
         pts = []
-        for t in np.linspace(0.03, 0.97, 18):
+        for t in np.linspace(0.03, 0.97, 12):
             taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
             q = a + (b - a) * t + perp * W_ * 0.93 * s * taper
             pts.append(body_pt(q[0], q[1], 0.040)[0])
-        tube_curve('pipe%+d' % s, pts, 0.0085, 6, lambda p, n: mix(deep(trim, 0.12), tint(trim, 0.2), 0.5 + 0.5 * n[1]), cap=True)
+        tube_curve('pipe%+d' % s, pts, 0.0085, 4, lambda p, n: mix(deep(trim, 0.12), tint(trim, 0.2), 0.5 + 0.5 * n[1]), cap=True)
     ang = math.atan2(d[1], d[0])
     for k_, t in enumerate((0.22, 0.5, 0.78)):
         q = a + (b - a) * t
         p, xx, yy, nn = surf_frame(q[0], q[1], 0.046)
         sp = star_poly(0.040, 0.019, 5, rad=0.007)
         slab_part('star%d' % k_, sp, 0.014, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.3), 0.5 + 0.5 * nq[2]),
-                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * (px * math.cos(ang) - py * math.sin(ang)) + yy * (px * math.sin(ang) + py * math.cos(ang)) + nn * (pz - 0.004)), cuts=1, sharp=40)
+                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * (px * math.cos(ang) - py * math.sin(ang)) + yy * (px * math.sin(ang) + py * math.cos(ang)) + nn * (pz - 0.004)), cuts=0, sharp=40)
     # a ruffled rosette at the low end with two short ribbon tails
     p, xx, yy, nn = surf_frame(0.305, 0.262, 0.052)
     Rm = np.stack([xx, nn, -yy], 1).tolist()
     prof = [(0.0, 0.0), (0.062, 0.0), (0.072, 0.010), (0.062, 0.022), (0.044, 0.028), (0.0, 0.030)]
-    lathe_y('rosette', prof, 20, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
-    lathe_y('rosette2', [(0.0, 0.0), (0.040, 0.0), (0.044, 0.010), (0.030, 0.018), (0.0, 0.020)], 16, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
-    ico_part('rbutton', tuple(p + nn * 0.052), (0.016, 0.016, 0.012), GOLD, sub=1)
+    lathe_y('rosette', prof, 12, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
+    lathe_y('rosette2', [(0.0, 0.0), (0.040, 0.0), (0.044, 0.010), (0.030, 0.018), (0.0, 0.020)], 10, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
+    bead('rbutton', p + nn * 0.052, (0.016, 0.016, 0.012), GOLD, segs=6)
     for s_, dx in ((1, 0.020), (-1, -0.026)):
         def fn(i, j, s_=s_, dx=dx):
             v = j / 5.0; u = i / 2.0 - 0.5
@@ -88,7 +88,7 @@ def bib(field=CREAM, trim=SKY, **k):
 def bandana(main=CORAL, dots=CREAM, trim=CREAM, **k):
     reset()
     yc = 0.505; X0 = 0.46
-    torus('band', 36, lambda phi: [eloop(yc + 0.020 * max(0.0, math.sin(phi)) ** 2 * 0.0 + 0.0, phi, h, v) for h, v in ((0.020, 0.024), (0.034, 0.018), (0.040, 0.0), (0.034, -0.018), (0.020, -0.024))], lambda p, n: mix(deep(main, 0.12), tint(main, 0.16), 0.5 + 0.5 * n[1] * 0.6), sharp=60)
+    torus('band', 36, lambda phi: [eloop(neck_y(phi, yc, yc, 0.55), phi, h, v) for h, v in ((0.020, 0.024), (0.034, 0.018), (0.040, 0.0), (0.034, -0.018), (0.020, -0.024))], lambda p, n: mix(deep(main, 0.12), tint(main, 0.16), 0.5 + 0.5 * n[1] * 0.6), sharp=60)
     nu, nv = 9, 7; y_top = yc - 0.012; y_tip = 0.270; hw = 0.215
     def tri(i, j):
         v = j / (nv - 1); u = (i / (nu - 1)) * 2 - 1
@@ -118,79 +118,96 @@ def bandana(main=CORAL, dots=CREAM, trim=CREAM, **k):
                 desc='A neckerchief: a plumped rolled band across the belly at y~0.505 (top <=0.54), big side knots, and a thick polka-dot triangle with rolled cream hems hanging to y 0.27. All below the mouth keep-out.')
 
 # ============================ TUTU =========================================
-def tutu(pink=PINK, lav=LAV, band=None, **k):
-    reset(); NS = 40; yb = 0.255
+def tutu(pink=PINK, lav=LAV, band=None, pip=False, **k):
+    """pip=True: open over Pip's tail root (a slot +-40 deg round the back centre): the layers are open sweeps instead of closed rings."""
+    reset(); yb = 0.255
     band = band or deep(pink, 0.22)
-    torus('waistband', 28, lambda phi: [eloop(yb, phi, h, v) for h, v in ((0.012, 0.030), (0.040, 0.030), (0.046, 0.0), (0.040, -0.030), (0.012, -0.030))], lambda p, n: mix(deep(band, 0.1), tint(band, 0.25), 0.5 + 0.5 * n[1] * 0.6))
-    LAY = [(mix(tint(pink, 0.40), CREAM, 0.10), 0.140, 0.0, 0.0), (mix(CREAM, tint(pink, 0.5), 0.32), 0.215, -0.016, 0.7), (tint(lav, 0.22), 0.285, -0.032, 1.4), (tint(pink, 0.30), 0.345, -0.048, 2.1)]
+    p0, p1 = (math.radians(310.0), math.radians(590.0)) if pip else (0.0, 2 * math.pi)
+    NS = 18 if pip else 24
+    def sweep_ring(name, loopfn, colfn, K):
+        if not pip:
+            torus(name, NS, lambda phi: loopfn(phi), colfn, sharp=70); return
+        def pt(i, j):
+            return loopfn(p0 + (p1 - p0) * j / (NS - 1))[i]
+        grid_surface(name, pt, K, NS, None, closed_u=True, hint=lambda p: np.array([p[0], 0.2, p[2]]), gcol=lambda i, j: colfn(np.array([0, 0.2, 0]), np.array([0, 0.5, 0])))
+    sweep_ring('waistband', lambda phi: [eloop(yb, phi, h, v) for h, v in ((0.012, 0.030), (0.044, 0.026), (0.050, 0.0), (0.044, -0.026), (0.012, -0.030))], lambda p, n: mix(deep(band, 0.1), tint(band, 0.25), 0.5 + 0.5 * n[1] * 0.6), 5)
+    LAY = [(mix(tint(pink, 0.40), CREAM, 0.10), 0.125, 0.0, 0.0), (tint(lav, 0.22), 0.205, -0.045, 1.0), (tint(pink, 0.30), 0.285, -0.090, 2.0)]
     for li, (c, hem, dy, ph) in enumerate(LAY):
         def lf(phi, c=c, hem=hem, dy=dy, ph=ph):
-            rf = 1 + 0.07 * math.cos(10 * phi + ph)
-            sag = 0.040 * (0.5 + 0.5 * math.cos(10 * phi + ph + 1.0))
+            rf = 1 + 0.07 * math.cos(8 * phi + ph)
+            sag = 0.026 * (0.5 + 0.5 * math.cos(8 * phi + ph + 1.0))
             out = []
-            for t, th in ((0.0, 0.0), (0.35, 0.002), (0.7, -0.006), (1.0, -0.012 - sag * 0.4)):
+            for t in (0.0, 0.5, 1.0):
                 h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.030 + dy * t + 0.030 * t - 0.060 * t * t - sag * t ** 3
-                out.append(eloop(y + 0.014, phi, h, 0.0))
-            for t in (1.0, 0.7, 0.35, 0.0):
+                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
+                out.append(eloop(y + 0.022, phi, h, 0.0))
+            for t in (1.0, 0.5, 0.0):
                 h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.030 + dy * t + 0.030 * t - 0.060 * t * t - sag * t ** 3
-                out.append(eloop(y - 0.004, phi, h, 0.0))
+                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
+                out.append(eloop(y - 0.014, phi, h, 0.0))
             return out
-        torus('layer%d' % li, NS, lf, lambda p, n, c=c: mix(deep(c, 0.14), tint(c, 0.18), min(1.0, max(0.0, (0.30 - p[1]) / 0.22) * 0.8 + 0.2 * (0.5 + 0.5 * n[1]))), sharp=70)
-    # a satin bow on the front of the waistband
+        sweep_ring('layer%d' % li, lf, lambda p, n, c=c: mix(deep(c, 0.14), tint(c, 0.18), min(1.0, max(0.0, (0.30 - p[1]) / 0.22) * 0.8 + 0.2 * (0.5 + 0.5 * n[1]))), 6)
     p, xx, yy, nn = surf_frame(0.0, yb, 0.064)
+    Rm = np.stack([xx, yy, nn], 1)
     for s_ in (-1, 1):
-        Rm = np.stack([xx, yy, nn], 1).tolist()
-        ico_part('bow%+d' % s_, tuple(p + xx * s_ * 0.050 + nn * 0.004), (0.058, 0.032, 0.022), lambda q, nq: mix(deep(pink, 0.28), tint(pink, 0.1), 0.5 + 0.5 * nq[2]), sub=2, rot=Rm)
-    ico_part('bowknot', tuple(p + nn * 0.012), (0.026, 0.026, 0.022), deep(pink, 0.32), sub=2)
+        bead('bow%+d' % s_, p + xx * s_ * 0.050 + nn * 0.004, (0.058, 0.032, 0.022), lambda q, nq: mix(deep(pink, 0.28), tint(pink, 0.1), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
+    bead('bowknot', p + nn * 0.012, (0.026, 0.026, 0.022), deep(pink, 0.32), segs=6)
     return dict(anchor='waist', slot='body', tags=['cute', 'sweet', 'sparkly'], price=60, title='Ballet tutu',
-                desc='A fuller four-layer ruffled tulle tutu (thick edged layers with scalloped hems) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet.')
+                desc='A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip\'s variant is open over his tail root.')
 
 # ============================ CAPE =========================================
-def cape(main=None, lining=HONEY, trim=CREAM, **k):
+def cape(main=None, lining=HONEY, trim=CREAM, pip=False, **k):
+    """pip=True: two half-capes with a slot between them over Pip's tail root (the tail leaves the lower back at y~0.47)."""
     main = main or IO2.RED
-    reset(); nu = 17; nv = 9
+    reset(); nv = 7
     y_top = 0.68; y_bot = 0.16
-    def fn(i, j):
-        u = i / (nu - 1); v = j / (nv - 1)
-        phi = math.radians(200 + 140 * u)
-        fold = 0.018 * math.sin(math.pi * u * 5.0 + 0.6) * v ** 1.2
-        y = y_top + (y_bot - y_top) * v - 0.030 * v ** 3 * math.cos(math.pi * (u * 4)) - 0.012 * v * abs(math.sin(math.pi * u * 2.5))
-        off = 0.040 + 0.215 * v ** 1.5 + fold
-        base = B.egg_point(y, phi); h = hdir(base); p = base + h * off
-        n = h + np.array([0, 0.15 * v, 0]); return p, n
+    panels = [(200.0, 238.0, 6), (302.0, 340.0, 6)] if pip else [(200.0, 340.0, 13)]
     def col(p, nn):
         r = np.array([p[0], 0, p[2]]); outer = float(np.dot(np.array([nn[0], nn[1], nn[2]]), r)) > 0
         c = main if outer else lining
         if p[1] < 0.225: c = trim if outer else tint(lining, 0.2)
-        # fold shading: darker in the valleys of the pleats
         s = math.sin(5.0 * math.atan2(p[2], p[0]) * 2.0)
         return mix(c, deep(c, 0.18), 0.22 * max(0.0, s))
-    thick_sheet('panel', fn, nu, nv, 0.024, col)
+    def surf(u, v, a0, a1):
+        phi = math.radians(a0 + (a1 - a0) * u)
+        fold = 0.018 * math.sin(math.pi * (u * (1 if pip else 5.0) + 0.6)) * v ** 1.2
+        y = y_top + (y_bot - y_top) * v - 0.030 * v ** 3 * math.cos(math.pi * (u * 4)) - 0.012 * v * abs(math.sin(math.pi * u * 2.5))
+        off = 0.040 + 0.215 * v ** 1.5 + fold
+        base = B.egg_point(y, phi); h = hdir(base); p = base + h * off
+        n = h + np.array([0, 0.15 * v, 0]); return p, n
+    for pi_, (a0, a1, nu) in enumerate(panels):
+        thick_sheet('panel%d' % pi_, lambda i, j, a0=a0, a1=a1, nu=nu: surf(i / (nu - 1), j / (nv - 1), a0, a1), nu, nv, 0.024, col)
     pts = []
-    for i in range(18):
-        phi = math.radians(200 + 140 * i / 17); base = B.egg_point(y_top + 0.004, phi); pts.append(base + hdir(base) * 0.046)
-    tube_curve('collar', pts, 0.036, 7, lambda p, nn: mix(deep(trim, 0.10), tint(trim, 0.1), 0.5 + 0.5 * nn[1]), cap=True, flat=0.9)
-    # cream trim along both side edges
-    for ph in (200, 340):
+    for i in range(12):
+        phi = math.radians(200 + 140 * i / 11); base = B.egg_point(y_top + 0.004, phi); pts.append(base + hdir(base) * 0.046)
+    tube_curve('collar', pts, 0.036, 6, lambda p, nn: mix(deep(trim, 0.10), tint(trim, 0.1), 0.5 + 0.5 * nn[1]), cap=True, flat=0.9)
+    edges = [panels[0][0], panels[0][1]] + ([panels[1][0], panels[1][1]] if pip else [])
+    for ph in edges:
         pp = []
-        for v in np.linspace(0.02, 0.98, 10):
-            y = y_top + (y_bot - y_top) * v - 0.030 * v ** 3 * (1 if ph == 340 else 1)
-            base = B.egg_point(y, math.radians(ph)); pp.append(base + hdir(base) * (0.040 + 0.215 * v ** 1.5 + 0.006))
-        tube_curve('edge%d' % ph, pp, 0.0095, 5, lambda p, nn: mix(deep(trim, 0.1), tint(trim, 0.15), 0.5 + 0.5 * nn[1]), cap=True)
+        for v in np.linspace(0.02, 0.98, 7):
+            y = y_top + (y_bot - y_top) * v - 0.030 * v ** 3
+            base = B.egg_point(y, math.radians(ph)); pp.append(base + hdir(base) * (0.040 + 0.215 * v ** 1.5 + 0.008))
+        tube_curve('edge%d' % int(ph), pp, 0.0095, 4, lambda p, nn: mix(deep(trim, 0.1), tint(trim, 0.15), 0.5 + 0.5 * nn[1]), cap=True)
     for ph in (340, 200):
         base = B.egg_point(y_top + 0.004, math.radians(ph)); c = base + hdir(base) * 0.064
-        ico_part('clasp%d' % ph, tuple(c), (0.044, 0.044, 0.036), lambda p, nn: mix(deep(HONEY, 0.12), tint(HONEY, 0.2), 0.5 + 0.5 * nn[1]), sub=2)
+        bead('clasp%d' % ph, c, (0.044, 0.044, 0.036), lambda p, nn: mix(deep(HONEY, 0.12), tint(HONEY, 0.2), 0.5 + 0.5 * nn[1]), segs=8)
     sp = star_poly(0.115, 0.050, 5, rad=0.012)
-    yst = 0.43; vst = (y_top - yst) / (y_top - y_bot); zst = -(float(B.halfDepth((yst - B.lift) / B.bodyH)) + 0.040 + 0.215 * vst ** 1.5 + 0.022)
-    slab_part('emblem', sp, 0.020, lambda p, nn: mix(deep(HONEY, 0.1), tint(HONEY, 0.25), 0.5 + 0.5 * nn[2]), lambda px, py, pz: (px, yst + py, zst - pz), cuts=1, sharp=40)
+    yst = 0.43; vst = (y_top - yst) / (y_top - y_bot)
+    if pip:      # the emblem moves onto the left half (the centre back is the tail slot)
+        ph = math.radians(219.0)
+        base = B.egg_point(yst, ph); h = hdir(base); cen = base + h * (0.040 + 0.215 * vst ** 1.5 + 0.022)
+        tx = np.array([-h[2], 0, h[0]])
+        slab_part('emblem', sp, 0.020, lambda p, nn: mix(deep(HONEY, 0.1), tint(HONEY, 0.25), 0.5 + 0.5 * nn[2]), lambda px, py, pz: tuple(cen + tx * px * 0.8 + np.array([0, py, 0]) + h * pz), cuts=0, sharp=40)
+    else:
+        zst = -(float(B.halfDepth((yst - B.lift) / B.bodyH)) + 0.040 + 0.215 * vst ** 1.5 + 0.022)
+        slab_part('emblem', sp, 0.020, lambda p, nn: mix(deep(HONEY, 0.1), tint(HONEY, 0.25), 0.5 + 0.5 * nn[2]), lambda px, py, pz: (px, yst + py, zst - pz), cuts=0, sharp=40)
     return dict(anchor='back', slot='body', tags=['cool', 'sparkly', 'cute'], price=70, title='Hero cape',
-                desc='A fuller hero cape (honey lining, cream trim) with pleated folds, a thick rolled collar, trimmed edges, gold clasps and a puffy star emblem; same footprint as before (back arc 200..340, collar y 0.68, hem y~0.16). Nothing on the front.')
+                desc='A fuller hero cape (honey lining, cream trim) with pleated folds, a thick rolled collar, trimmed edges, gold clasps and a puffy star emblem; hem y~0.16. Nothing on the front. Pip\'s variant is split into two halves over his tail root.')
 
 # ============================ PEARLS =======================================
 def pearls(pearl=hx('#FBF4EC'), clasp=HONEY, **k):
     reset()
+    pcol = lambda q, n_v: mix(deep(pearl, 0.12), tint(pearl, 0.14), 0.5 + 0.5 * n_v[1])
     def swag(x0, ytop, depth, n_, rad, name):
         def pxy(t):
             x = -x0 + 2 * x0 * t; return x, ytop - depth * (1 - (x / x0) ** 2)
@@ -199,41 +216,43 @@ def pearls(pearl=hx('#FBF4EC'), clasp=HONEY, **k):
         for k_ in range(n_):
             d = L[-1] * (k_ + 0.5) / n_; i = int(np.searchsorted(L, d)); x, y = xy[min(i, len(xy) - 1)]
             p, nn = body_pt(x, y, 0.042)
-            ico_part('%s%d' % (name, k_), tuple(p), (rad, rad, rad), lambda q, n_v: mix(deep(pearl, 0.12), tint(pearl, 0.14), 0.5 + 0.5 * n_v[1]), sub=2)
-    swag(0.34, 0.520, 0.110, 11, 0.0405, 'pearl')
-    swag(0.30, 0.545, 0.072, 10, 0.031, 'inner')
-    # gold spacer beads at the shoulders
+            bead('%s%d' % (name, k_), p, (rad, rad, rad), pcol, segs=8)
+    swag(0.34, 0.520, 0.110, 9, 0.0470, 'pearl')
+    swag(0.30, 0.545, 0.072, 7, 0.036, 'inner')
     for s_ in (-1, 1):
         p, nn = body_pt(s_ * 0.345, 0.520, 0.044)
-        ico_part('spacer%+d' % s_, tuple(p), (0.022, 0.030, 0.022), clasp, sub=1)
+        bead('spacer%+d' % s_, p, (0.022, 0.030, 0.022), clasp, segs=6)
     p, nn = body_pt(0.0, 0.378, 0.060); xx, yy, z = axes(nn)
-    ico_part('drop', tuple(p), (0.046, 0.058, 0.040), lambda q, n_v: mix(deep(hx('#E98AA4'), 0.1), tint(hx('#E98AA4'), 0.25), 0.5 + 0.5 * n_v[1]), sub=2, rot=np.stack([xx, yy, z], 1).tolist())
-    ico_part('cap', tuple(p + yy * 0.062), (0.026, 0.018, 0.020), clasp, sub=1, rot=np.stack([xx, yy, z], 1).tolist())
+    bead('drop', p, (0.046, 0.058, 0.040), lambda q, n_v: mix(deep(hx('#E98AA4'), 0.1), tint(hx('#E98AA4'), 0.25), 0.5 + 0.5 * n_v[1]), rot=np.stack([xx, yy, z], 1), segs=8)
+    bead('cap', p + yy * 0.062, (0.026, 0.018, 0.020), clasp, rot=np.stack([xx, yy, z], 1), segs=6)
     return dict(anchor='neck', slot='neck', tags=['sparkly', 'sweet', 'cute'], price=65, title='Pearl necklace',
-                desc='A two-strand pearl necklace: eleven big pearls on the long swag down to a pink drop in a gold cap at y~0.38, and a shorter strand of ten above it, with gold spacer beads at the shoulders. The lowest points are on the centre line, below the mouth keep-out.')
+                desc='A two-strand pearl necklace: nine big pearls on the long swag down to a pink drop in a gold cap at y~0.38, and a shorter strand of seven above it, with gold spacer beads at the shoulders. Lowest points on the centre line, below the mouth keep-out.')
 
 # ============================ LEI ==========================================
 def lei(cols=None, leaf=MINT, **k):
-    reset(); cols = cols or [CORAL, PINK, HONEY, LAV, CORAL, PINK, HONEY, LAV, CORAL, PINK, HONEY, LAV, CORAL]
+    reset(); cols = cols or [CORAL, PINK, HONEY, LAV, CORAL, PINK, HONEY, LAV]
     NF = len(cols)
     def ring_y(phi):
-        s = max(0.0, math.sin(phi)); return 0.462 - 0.062 * s ** 2 + 0.045 * max(0.0, -math.sin(phi))
+        s = max(0.0, math.sin(phi)); return 0.462 - 0.062 * s ** 2 + pip_rise(phi)
     pts = []
-    for i in range(61):
-        phi = 2 * math.pi * i / 60; e = B.egg_point(ring_y(phi), phi); pts.append(e + hdir(e) * 0.040)
-    tube_curve('string', pts, 0.024, 7, lambda p, n: mix(deep(leaf, 0.2), tint(leaf, 0.2), 0.5 + 0.5 * n[1]), cap=False)
+    for i in range(37):
+        phi = 2 * math.pi * i / 36; e = B.egg_point(ring_y(phi), phi); pts.append(e + hdir(e) * 0.040)
+    tube_curve('string', pts, 0.024, 4, lambda p, n: mix(deep(leaf, 0.2), tint(leaf, 0.2), 0.5 + 0.5 * n[1]), cap=False)
+    lobes = []
+    for q in range(10):
+        a = 2 * math.pi * q / 10
+        r = 0.080 if q % 2 == 0 else 0.042
+        lobes.append((r * math.cos(a), r * math.sin(a)))
+    petals = [(x_, y_) for x_, y_ in lobes][::-1]
     for i, c in enumerate(cols):
         phi = math.pi / 2 + 2 * math.pi * (i - NF / 2 + 0.5) / NF
-        e = B.egg_point(ring_y(phi), phi); n = egg_n(e); x, y, nn = axes(n); ctr = e + hdir(e) * 0.066
-        for pI in range(6):
-            a = 2 * math.pi * pI / 6 + 0.4
-            pc = ctr + (x * math.cos(a) + y * math.sin(a)) * 0.056 + nn * 0.008
-            ico_part('p%d_%d' % (i, pI), tuple(pc), (0.050, 0.050, 0.022), lambda p, nn_, c=c: mix(deep(c, 0.12), tint(c, 0.28), 0.5 + 0.5 * nn_[2]), sub=1, rot=np.stack([x, y, nn], 1).tolist())
-        ico_part('c%d' % i, tuple(ctr + nn * 0.026), (0.034, 0.034, 0.026), HONEY if c != HONEY else CORAL, sub=1, rot=np.stack([x, y, nn], 1).tolist())
+        e = B.egg_point(ring_y(phi), phi); n = egg_n(e); x, y, nn = axes(n); ctr = e + hdir(e) * 0.060
+        slab_part('f%d' % i, petals, 0.020, lambda p, nn_, c=c: mix(deep(c, 0.10), tint(c, 0.28), 0.5 + 0.5 * nn_[2]), lambda px, py, pz, ctr=ctr, x=x, y=y, nn=nn: tuple(ctr + x * px + y * py + nn * (pz - 0.004)), cuts=0, sharp=45)
+        bead('c%d' % i, ctr + nn * 0.020, (0.026, 0.026, 0.018), HONEY if c != HONEY else CORAL, rot=np.stack([x, y, nn], 1), segs=6)
         phl = phi + math.pi / NF; e2 = B.egg_point(ring_y(phl), phl); n2 = egg_n(e2); x2, y2, nn2 = axes(n2)
-        ico_part('l%d' % i, tuple(e2 + hdir(e2) * 0.050), (0.064, 0.030, 0.016), lambda p, nn_: mix(deep(leaf, 0.2), tint(leaf, 0.2), 0.5 + 0.5 * nn_[2]), sub=1, rot=np.stack([x2, y2, nn2], 1).tolist())
+        bead('l%d' % i, e2 + hdir(e2) * 0.050, (0.064, 0.030, 0.016), lambda p, nn_: mix(deep(leaf, 0.2), tint(leaf, 0.2), 0.5 + 0.5 * nn_[2]), rot=np.stack([x2, y2, nn2], 1), segs=6)
     return dict(anchor='neck', slot='neck', tags=['sweet', 'cute', 'sparkly'], price=45, title='Flower lei',
-                desc='A fuller flower lei: thirteen big six-petal blooms with domed centres and leaves on a thick green cord circling the belly, dipping to a V at the front (y~0.40; nothing above 0.51).')
+                desc='A fuller flower lei: ten big five-lobe blooms with domed centres and leaves on a thick green cord circling the belly, dipping to a V at the front (y~0.40; nothing above 0.51).')
 
 # ============================ WHISTLE ======================================
 def whistle(strap=SKY, metal=hx('#C9D3DC'), mouth=CORAL, **k):
@@ -260,17 +279,20 @@ def whistle(strap=SKY, metal=hx('#C9D3DC'), mouth=CORAL, **k):
                 desc='A coach whistle on a thick rounded sky lanyard in a V from the shoulders to a ring at (0,0.44); a big silver whistle with a coral mouthpiece hangs to y~0.31. All below the mouth keep-out.')
 
 # ============================ BACKPACK =====================================
-def backpack(main=SKY, flap=CORAL, strap=None, **k):
+def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
     reset(); strap = strap or deep(main, 0.28)
     zc = -0.625
-    IO2.sellip('pack', (0, 0.55, zc), (0.225, 0.255, 0.125), 0.5, lambda p, n: mix(deep(main, 0.12), tint(main, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=18, nv=9)
-    IO2.sellip('flap', (0, 0.675, zc - 0.006), (0.232, 0.110, 0.134), 0.5, lambda p, n: mix(deep(flap, 0.12), tint(flap, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=18, nv=7)
-    IO2.sellip('pocket', (0, 0.455, zc - 0.116), (0.150, 0.088, 0.056), 0.5, lambda p, n: mix(deep(flap, 0.18), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=14, nv=7)
+    F = 0.50 if pip else 1.0                      # the Pip variant: a smaller pack high between the shoulder blades, above his tail root
+    Y0 = 1.15 if pip else 0.55
+    if pip: zc = -(float(B.halfDepth((Y0 - B.lift) / B.bodyH)) + 0.10)
+    IO2.sellip('pack', (0, Y0, zc), (0.225 * F, 0.255 * F, 0.125 * F), 0.5, lambda p, n: mix(deep(main, 0.12), tint(main, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=14, nv=7)
+    IO2.sellip('flap', (0, Y0 + 0.125 * F, zc - 0.006 * F), (0.232 * F, 0.110 * F, 0.134 * F), 0.5, lambda p, n: mix(deep(flap, 0.12), tint(flap, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=14, nv=5)
+    IO2.sellip('pocket', (0, Y0 - 0.095 * F, zc - 0.116 * F), (0.150 * F, 0.088 * F, 0.056 * F), 0.5, lambda p, n: mix(deep(flap, 0.18), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=10, nv=5)
     # side bottle pockets
     for s in (-1, 1):
-        IO2.sellip('side%+d' % s, (s * 0.200, 0.470, zc + 0.01), (0.050, 0.100, 0.070), 0.55, lambda p, n: mix(deep(flap, 0.2), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=12, nv=7)
-    ico_part('buckle', (0, 0.585, zc - 0.142), (0.040, 0.030, 0.016), GOLD, sub=1)
-    tube_curve('handle', [(-0.06, 0.82, zc), (-0.06, 0.88, zc), (0.06, 0.88, zc), (0.06, 0.82, zc)], 0.016, 6, strap, cap=True)
+        IO2.sellip('side%+d' % s, (s * 0.200 * F, Y0 - 0.080 * F, zc + 0.01 * F), (0.050 * F, 0.100 * F, 0.070 * F), 0.55, lambda p, n: mix(deep(flap, 0.2), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=8, nv=5)
+    bead('buckle', (0, Y0 + 0.035 * F, zc - 0.142 * F), (0.040 * F, 0.030 * F, 0.016 * F), GOLD, segs=6)
+    tube_curve('handle', [(-0.06 * F, Y0 + 0.27 * F, zc), (-0.06 * F, Y0 + 0.33 * F, zc), (0.06 * F, Y0 + 0.33 * F, zc), (0.06 * F, Y0 + 0.27 * F, zc)], 0.016 * F, 6, strap, cap=True)
     for s in (1, -1):
         spec = [(0.58, 282, 0.040), (0.64, 298, 0.042), (0.690, 318, 0.046), (0.715, 336, 0.050), (0.712, 346, 0.054), (0.700, 353, 0.058)]
         Pc = []
@@ -282,7 +304,7 @@ def backpack(main=SKY, flap=CORAL, strap=None, **k):
             u = i / 2 - 0.5; c = Pc[j]; t = tg[j] / np.linalg.norm(tg[j]); n = hdir(c)
             ac = np.cross(n, t); ac /= np.linalg.norm(ac); return c + ac * u * 0.085, n
         thick_sheet('strap%+d' % s, fn, 3, len(Pc), 0.030, lambda p, nn: mix(deep(strap, 0.05), tint(strap, 0.14), 0.5 + 0.5 * nn[1] * 0.5))
-    return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack',
+    return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack', variant='backpack_sky_pip' if pip else None,
                 desc='A rounded backpack on the back (pack centre y 0.42, z -0.585) with a flap, a zipped front pocket, two side bottle pockets, a buckle and a top handle, on padded shoulder straps that end tucked behind the arm roots.')
 
 REG = [
@@ -294,8 +316,7 @@ REG = [
     ('bandana_mint', bandana, dict(main=MINT), NECK_ANCHOR),
     ('tutu_pink', tutu, dict(), WAIST_ANCHOR),
     ('cape_hero', cape, dict(), BACK_ANCHOR),
-    ('pearls', pearls, dict(), NECK_ANCHOR),
     ('lei', lei, dict(), NECK_ANCHOR),
-    ('whistle_coach', whistle, dict(), NECK_ANCHOR),
     ('backpack_sky', backpack, dict(), BACK_ANCHOR),
 ]
+VARIANTS = [('backpack_sky_pip', backpack, dict(pip=True), BACK_ANCHOR), ('cape_hero_pip', cape, dict(pip=True), BACK_ANCHOR), ('tutu_pink_pip', tutu, dict(pip=True), WAIST_ANCHOR)]

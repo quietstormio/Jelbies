@@ -277,8 +277,8 @@
     "cool"
    ],
    "price": 30,
-   "tris": 488,
-   "verts": 386,
+   "tris": 768,
+   "verts": 582,
    "deform_class": "rigid",
    "files": [
     "bowtie_pink.obj",
@@ -309,8 +309,8 @@
     "cool"
    ],
    "price": 30,
-   "tris": 488,
-   "verts": 386,
+   "tris": 768,
+   "verts": 582,
    "deform_class": "rigid",
    "files": [
     "bowtie_sky.obj",
@@ -515,8 +515,8 @@
     "cute"
    ],
    "price": 40,
-   "tris": 3712,
-   "verts": 1870,
+   "tris": 1196,
+   "verts": 608,
    "deform_class": "rigid",
    "files": [
     "glasses_round.obj",
@@ -690,8 +690,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 2492,
-   "verts": 1951,
+   "tris": 1108,
+   "verts": 991,
    "deform_class": "surface_bound",
    "files": [
     "sash_pink.obj",
@@ -727,8 +727,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 2492,
-   "verts": 1951,
+   "tris": 1108,
+   "verts": 991,
    "deform_class": "surface_bound",
    "files": [
     "sash_sky.obj",
@@ -764,8 +764,8 @@
     "sparkly"
    ],
    "price": 60,
-   "tris": 6064,
-   "verts": 3582,
+   "tris": 1260,
+   "verts": 800,
    "deform_class": "rigid",
    "files": [
     "sunglasses_star.obj",
@@ -1240,8 +1240,8 @@
     "cute"
    ],
    "price": 55,
-   "tris": 5688,
-   "verts": 3260,
+   "tris": 1084,
+   "verts": 712,
    "deform_class": "rigid (opaque lenses)",
    "files": [
     "heart_shades.obj",
@@ -1280,8 +1280,8 @@
     "sporty"
    ],
    "price": 55,
-   "tris": 6880,
-   "verts": 4014,
+   "tris": 924,
+   "verts": 764,
    "deform_class": "rigid lenses+strap hugging the head (strap surface_bound to the egg)",
    "files": [
     "goggles_aviator.obj",
@@ -1321,8 +1321,8 @@
     "sweet"
    ],
    "price": 45,
-   "tris": 3640,
-   "verts": 2104,
+   "tris": 820,
+   "verts": 430,
    "deform_class": "ring rigid; chain surface_bound + free swing",
    "files": [
     "monocle_gold.obj",
@@ -1361,8 +1361,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1046,
-   "verts": 666,
+   "tris": 1238,
+   "verts": 750,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_cosy.obj",
@@ -1402,8 +1402,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1046,
-   "verts": 666,
+   "tris": 1238,
+   "verts": 750,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_sky.obj",
@@ -1443,8 +1443,8 @@
     "cute"
    ],
    "price": 65,
-   "tris": 1820,
-   "verts": 960,
+   "tris": 1024,
+   "verts": 558,
    "deform_class": "each pearl surface_bound (point on the belly + normal offset), spacing preserved",
    "files": [
     "pearls.obj",
@@ -1483,8 +1483,8 @@
     "cool"
    ],
    "price": 30,
-   "tris": 708,
-   "verts": 398,
+   "tris": 660,
+   "verts": 370,
    "deform_class": "lanyard surface_bound; ring+whistle rigid, hangs (may swing)",
    "files": [
     "whistle_coach.obj",
@@ -1524,8 +1524,8 @@
     "sparkly"
    ],
    "price": 60,
-   "tris": 3080,
-   "verts": 2052,
+   "tris": 1212,
+   "verts": 900,
    "deform_class": "surface_bound ring: bind every vertex to egg (y,phi)+horizontal offset; waistband rigid-on-surface, layers flare and may bob (jiggle the hem vertices, y<0.27, along y/out only)",
    "files": [
     "tutu_pink.obj",
@@ -1568,8 +1568,8 @@
     "cute"
    ],
    "price": 70,
-   "tris": 1684,
-   "verts": 1124,
+   "tris": 868,
+   "verts": 616,
    "deform_class": "collar+clasps surface_bound at y=0.68 over the shoulders; panel is a cloth: top row bound to the surface, lower rows hang/follow (sim or bend with walk, always stay behind the arms)",
    "files": [
     "cape_hero.obj",
@@ -1611,8 +1611,8 @@
     "sporty"
    ],
    "price": 50,
-   "tris": 1016,
-   "verts": 598,
+   "tris": 600,
+   "verts": 392,
    "deform_class": "pack rigid on the back surface (carry like head_top); STRAPS surface_bound over the shoulder (follow the egg squash)",
    "files": [
     "backpack_sky.obj",
@@ -1796,8 +1796,8 @@
     "sporty"
    ],
    "price": 55,
-   "tris": 1406,
-   "verts": 955,
+   "tris": 1196,
+   "verts": 823,
    "files": [
     "cowboy_hat.obj",
     "cowboy_hat.json"
@@ -1841,8 +1841,8 @@
     "sweet"
    ],
    "price": 30,
-   "tris": 1360,
-   "verts": 702,
+   "tris": 640,
+   "verts": 342,
    "files": [
     "hair_bow.obj",
     "hair_bow.json"
@@ -1886,8 +1886,8 @@
     "sparkly"
    ],
    "price": 45,
-   "tris": 2920,
-   "verts": 1675,
+   "tris": 1152,
+   "verts": 964,
    "files": [
     "lei.obj",
     "lei.json"
@@ -1975,8 +1975,8 @@
     "sweet"
    ],
    "price": 45,
-   "tris": 1480,
-   "verts": 763,
+   "tris": 832,
+   "verts": 433,
    "files": [
     "beanie_cable.obj",
     "beanie_cable.json"
@@ -1996,8 +1996,8 @@
     "sweet"
    ],
    "price": 60,
-   "tris": 4548,
-   "verts": 2840,
+   "tris": 1292,
+   "verts": 704,
    "files": [
     "cardigan_cable.obj",
     "cardigan_cable.json"
@@ -2018,8 +2018,8 @@
     "sweet"
    ],
    "price": 75,
-   "tris": 5256,
-   "verts": 3066,
+   "tris": 1276,
+   "verts": 792,
    "files": [
     "cat_eye_shades.obj",
     "cat_eye_shades.json"
@@ -2039,8 +2039,8 @@
     "sparkly"
    ],
    "price": 70,
-   "tris": 1916,
-   "verts": 1208,
+   "tris": 1212,
+   "verts": 798,
    "files": [
     "chain_gold.obj",
     "chain_gold.json"
@@ -2061,8 +2061,8 @@
     "sweet"
    ],
    "price": 55,
-   "tris": 696,
-   "verts": 460,
+   "tris": 624,
+   "verts": 466,
    "files": [
     "scarf_silk.obj",
     "scarf_silk.json"
@@ -2082,8 +2082,8 @@
     "sporty"
    ],
    "price": 65,
-   "tris": 2620,
-   "verts": 1678,
+   "tris": 1212,
+   "verts": 648,
    "files": [
     "vest_puffer.obj",
     "vest_puffer.json"
@@ -2103,8 +2103,8 @@
     "sporty"
    ],
    "price": 80,
-   "tris": 2868,
-   "verts": 1641,
+   "tris": 1232,
+   "verts": 755,
    "files": [
     "viking_hat.obj",
     "viking_hat.json"
@@ -2145,8 +2145,8 @@
     "cute"
    ],
    "price": 60,
-   "tris": 5088,
-   "verts": 2926,
+   "tris": 1276,
+   "verts": 784,
    "files": [
     "wayfarer_black.obj",
     "wayfarer_black.json"
@@ -2166,11 +2166,32 @@
     "cute"
    ],
    "price": 70,
-   "tris": 5088,
-   "verts": 2926,
+   "tris": 1276,
+   "verts": 784,
    "files": [
     "wayfarer_tortoise.obj",
     "wayfarer_tortoise.json"
+   ]
+  },
+  "diamond_j": {
+   "title": "Diamond J chain",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sparkly",
+    "cool"
+   ],
+   "price": 450,
+   "tris": 1212,
+   "verts": 989,
+   "files": [
+    "diamond_j.obj",
+    "diamond_j.json"
    ]
   }
  },

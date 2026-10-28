@@ -1,0 +1,77 @@
+{
+ "id": "bowtie_sky_pip",
+ "tris": 768,
+ "verts": 592,
+ "parts": [
+  {
+   "name": "wing-1",
+   "tris": 164,
+   "verts": 148
+  },
+  {
+   "name": "dot-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dotb-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "wing+1",
+   "tris": 164,
+   "verts": 148
+  },
+  {
+   "name": "dot+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dotb+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "knot",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "band",
+   "tris": 280,
+   "verts": 206
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6087,
+  -0.0738,
+  -0.9919
+ ],
+ "bounds_local_max": [
+  0.6087,
+  0.686,
+  0.0796
+ ],
+ "size": [
+  1.2174,
+  0.7598,
+  1.0715
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cute",
+  "cool"
+ ],
+ "price": 30,
+ "title": "Bow tie",
+ "desc": "Fat bow tie pinned to the front at y=0.47, below the mouth keep-out zone (the open mouth reaches down to y~0.59). A slim band of the same colour continues round the sides and the back so the bow sits on a continuous loop.",
+ "colourway": "bowtie_sky_pip"
+}

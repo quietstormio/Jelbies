@@ -1,67 +1,37 @@
 {
  "id": "goggles_aviator",
- "tris": 6880,
- "verts": 4014,
+ "tris": 924,
+ "verts": 764,
  "parts": [
   {
    "name": "strap",
-   "tris": 224,
-   "verts": 224
+   "tris": 192,
+   "verts": 192
   },
   {
    "name": "rim-1",
-   "tris": 1568,
-   "verts": 784
-  },
-  {
-   "name": "ridge-1",
-   "tris": 1568,
-   "verts": 1008
+   "tris": 264,
+   "verts": 220
   },
   {
    "name": "glass-1",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "glint-1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "screw-1",
-   "tris": 20,
-   "verts": 12
+   "tris": 72,
+   "verts": 50
   },
   {
    "name": "rim+1",
-   "tris": 1568,
-   "verts": 784
-  },
-  {
-   "name": "ridge+1",
-   "tris": 1568,
-   "verts": 1008
+   "tris": 264,
+   "verts": 220
   },
   {
    "name": "glass+1",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "glint+1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "screw+1",
-   "tris": 20,
-   "verts": 12
+   "tris": 72,
+   "verts": 50
   },
   {
    "name": "bridge",
-   "tris": 144,
-   "verts": 74
+   "tris": 60,
+   "verts": 32
   }
  ],
  "anchor_rest": [
@@ -71,18 +41,18 @@
  ],
  "bounds_local_min": [
   -0.5389,
-  0.1781,
+  0.1872,
   -0.9851
  ],
  "bounds_local_max": [
   0.5389,
-  0.3697,
-  0.0023
+  0.3606,
+  -0.0067
  ],
  "size": [
   1.0779,
-  0.1916,
-  0.9874
+  0.1733,
+  0.9784
  ],
  "anchor": "face",
  "slot": "face",
@@ -92,7 +62,7 @@
  ],
  "price": 55,
  "title": "Aviator goggles",
- "desc": "Brass-rim goggles with teal glass pushed up on the forehead on a wide coral strap at y~1.06; thick rims (0.034 wide) with a ridge ring, studs and a chunky bridge. Lens bottoms y>=0.98, above the brows.",
+ "desc": "Brass-rim goggles with teal glass pushed up on the forehead on a wide coral strap at y~1.06; thick rims (0.034 wide). Lens bottoms y>=0.98, above the brows.",
  "colourway": "goggles_aviator",
  "batch": 2
 }

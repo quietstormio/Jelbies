@@ -106,6 +106,23 @@ extension StoreThumb {
         let base = UInt32(m.vertices.count)
         m.vertices += piece.vertices
         m.indices += piece.indices.map { $0 + base }
+        if look == .diamondJ {
+            // two or three frozen twinkles on the pendant and the chain (the shop picture is a still)
+            let b = RoomMeshBuilder(); b.material = .plain
+            let col = SIMD3<Float>(2.2, 2.4, 2.9)
+            for (c, L) in [(SIMD3<Float>(0.03, 0.40, 0.60), Float(0.12)), (SIMD3<Float>(-0.045, 0.27, 0.60), 0.085), (SIMD3<Float>(-0.26, 0.45, 0.545), 0.07)] {
+                let n = simd_normalize(SIMD3<Float>(c.x * 0.4, 0.1, 1))
+                let r = simd_normalize(simd_cross(n, SIMD3(0, 1, 0))), up = simd_cross(n, r)
+                let first = b.vertex(c, n, ao: 1, color: col)
+                let dirs: [SIMD3<Float>] = [r, (r + up) * 0.7071, up, (up - r) * 0.7071, -r, (-r - up) * 0.7071, -up, (r - up) * 0.7071]
+                var ids: [UInt32] = []
+                for (q, d) in dirs.enumerated() { ids.append(b.vertex(c + d * (q % 2 == 0 ? L : L * 0.2), n, ao: 1, color: col)) }
+                for q in 0..<8 { b.triangle(first, ids[q], ids[(q + 1) % 8]) }
+            }
+            let gb = UInt32(m.vertices.count)
+            m.vertices += b.mesh.vertices
+            m.indices += b.mesh.indices.map { $0 + gb }
+        }
         return m
     }
 

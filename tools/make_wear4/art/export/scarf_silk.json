@@ -1,27 +1,37 @@
 {
  "id": "scarf_silk",
- "tris": 696,
- "verts": 460,
+ "tris": 624,
+ "verts": 466,
  "parts": [
   {
    "name": "wrap",
-   "tris": 336,
-   "verts": 170
+   "tris": 320,
+   "verts": 224
   },
   {
    "name": "knot",
-   "tris": 80,
-   "verts": 42
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "ear-1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "ear+1",
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "tail_a",
-   "tris": 140,
-   "verts": 124
+   "tris": 92,
+   "verts": 88
   },
   {
    "name": "tail_b",
-   "tris": 140,
-   "verts": 124
+   "tris": 92,
+   "verts": 88
   }
  ],
  "anchor_rest": [
@@ -30,19 +40,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.4454,
-  -0.3235,
-  -0.2414
+  -0.6423,
+  -0.3367,
+  -1.0939
  ],
  "bounds_local_max": [
-  0.4454,
-  0.0572,
-  0.1009
+  0.6423,
+  0.116,
+  0.1239
  ],
  "size": [
-  0.8907,
-  0.3807,
-  0.3423
+  1.2845,
+  0.4527,
+  1.2178
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -53,7 +63,7 @@
  ],
  "price": 55,
  "title": "Silk scarf",
- "desc": "A silky neck scarf in navy printed with gold medallions (abstract rings and dots): a slim wrap across the belly at y~0.49 (top <=0.54), a side knot and two fluttering tails. Everything below the mouth keep-out.",
+ "desc": "A silk neckerchief in navy printed with gold medallions: a thick rolled wrap in one continuous loop round the belly (y~0.46, rising at the back), a fat knot with two folded ends at the front centre (top y 0.52) and two flowing tails of fuller fabric.",
  "colourway": "scarf_silk",
  "batch": 4
 }

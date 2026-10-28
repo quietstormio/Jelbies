@@ -1,0 +1,73 @@
+{
+ "id": "tutu_pink_pip",
+ "tris": 890,
+ "verts": 478,
+ "parts": [
+  {
+   "name": "waistband",
+   "tris": 170,
+   "verts": 90
+  },
+  {
+   "name": "layer0",
+   "tris": 204,
+   "verts": 108
+  },
+  {
+   "name": "layer1",
+   "tris": 204,
+   "verts": 108
+  },
+  {
+   "name": "layer2",
+   "tris": 204,
+   "verts": 108
+  },
+  {
+   "name": "bow-1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "bow+1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "bowknot",
+   "tris": 36,
+   "verts": 20
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.28,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.7171,
+  -0.1368,
+  -0.5144
+ ],
+ "bounds_local_max": [
+  0.7198,
+  0.037,
+  0.6465
+ ],
+ "size": [
+  1.4369,
+  0.1738,
+  1.1609
+ ],
+ "anchor": "waist",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet",
+  "sparkly"
+ ],
+ "price": 60,
+ "title": "Ballet tutu",
+ "desc": "A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip's variant is open over his tail root.",
+ "colourway": "tutu_pink_pip"
+}

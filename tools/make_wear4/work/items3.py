@@ -73,13 +73,13 @@ def strands_part(name,strands,r,colors,taper=0.7):
 # ======================= SCARF ====================================================
 def scarf(a=CORAL,b=CREAM,**k):
     reset()
-    K=12; NS=25; PH0=-62.0; PH1=242.0
+    K=12; NS=33; PH0=-62.0; PH1=298.0
     TN=0.052; VH=0.060
-    def yfn(ph): return 0.466+0.046*math.cos(ph)**2
+    def yfn(ph): return 0.466+0.046*math.cos(ph)**2+__import__('kit5').pip_rise(ph)
     def rr_k(kk): return 1.0 if kk%2==0 else 0.80
     def pt(i,j):
         ph=math.radians(PH0+(PH1-PH0)*j/(NS-1)); u=j/(NS-1)
-        tap=0.35+0.65*min(_sstep(0.0,0.08,u),_sstep(1.0,0.92,u))
+        tap=1.0
         th=2*math.pi*i/K; r=rr_k(i)*tap
         base=B.egg_point(yfn(ph),ph); h=hdir(base)
         return base+h*(0.012+TN*tap+TN*r*math.cos(th))+np.array([0,VH*r*math.sin(th),0])

@@ -1,72 +1,62 @@
 {
  "id": "cat_eye_shades",
- "tris": 5256,
- "verts": 3066,
+ "tris": 1276,
+ "verts": 792,
  "parts": [
   {
    "name": "frame-1",
-   "tris": 1792,
-   "verts": 896
+   "tris": 384,
+   "verts": 192
   },
   {
    "name": "lens-1",
-   "tris": 488,
-   "verts": 414
+   "tris": 92,
+   "verts": 100
   },
   {
    "name": "shine-1",
-   "tris": 60,
-   "verts": 72
+   "tris": 12,
+   "verts": 24
   },
   {
    "name": "stud-1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "stud2-1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "frame+1",
-   "tris": 1792,
-   "verts": 896
+   "tris": 384,
+   "verts": 192
   },
   {
    "name": "lens+1",
-   "tris": 488,
-   "verts": 414
+   "tris": 92,
+   "verts": 100
   },
   {
    "name": "shine+1",
-   "tris": 60,
-   "verts": 72
+   "tris": 12,
+   "verts": 24
   },
   {
    "name": "stud+1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "stud2+1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "bridge",
-   "tris": 176,
-   "verts": 90
+   "tris": 84,
+   "verts": 44
   },
   {
    "name": "temple-1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   },
   {
    "name": "temple+1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   }
  ],
  "anchor_rest": [
@@ -75,19 +65,19 @@
   0.5052
  ],
  "bounds_local_min": [
-  -0.5898,
-  -0.0801,
-  -0.4354
+  -0.398,
+  -0.0823,
+  -0.1301
  ],
  "bounds_local_max": [
-  0.5898,
-  0.123,
-  0.0591
+  0.398,
+  0.1139,
+  0.0588
  ],
  "size": [
-  1.1796,
-  0.2031,
-  0.4944
+  0.796,
+  0.1962,
+  0.1888
  ],
  "anchor": "face",
  "slot": "face",
@@ -98,7 +88,7 @@
  ],
  "price": 75,
  "title": "Cat-eye shades",
- "desc": "Ivory cat-eye sunglasses with plum lenses, a winged tip with gold studs, thick frame and temples. Bottom edge y>=0.745.",
+ "desc": "Ivory cat-eye sunglasses with plum lenses and gold studs at the winged tips; temples wrap back along the head toward the ear. Bottom edge y>=0.745.",
  "colourway": "cat_eye_shades",
  "batch": 4
 }

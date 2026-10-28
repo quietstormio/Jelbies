@@ -1,42 +1,27 @@
 {
  "id": "vest_puffer",
- "tris": 2620,
- "verts": 1678,
+ "tris": 1212,
+ "verts": 648,
  "parts": [
   {
    "name": "body",
-   "tris": 1680,
-   "verts": 880
+   "tris": 720,
+   "verts": 396
   },
   {
-   "name": "hem",
-   "tris": 320,
-   "verts": 320
-  },
-  {
-   "name": "collar",
-   "tris": 320,
-   "verts": 320
+   "name": "edge",
+   "tris": 392,
+   "verts": 198
   },
   {
    "name": "zip",
-   "tris": 100,
-   "verts": 52
+   "tris": 64,
+   "verts": 34
   },
   {
    "name": "pull",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "pocket-1",
-   "tris": 60,
-   "verts": 32
-  },
-  {
-   "name": "pocket+1",
-   "tris": 60,
-   "verts": 32
+   "tris": 36,
+   "verts": 20
   }
  ],
  "anchor_rest": [
@@ -45,19 +30,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.6364,
-  -0.1649,
-  -1.0411
+  -0.6251,
+  -0.14,
+  -1.068
  ],
  "bounds_local_max": [
-  0.6364,
-  0.163,
-  0.1138
+  0.6241,
+  0.2669,
+  0.0738
  ],
  "size": [
-  1.2727,
-  0.3279,
-  1.1549
+  1.2493,
+  0.4069,
+  1.1418
  ],
  "anchor": "chest",
  "slot": "body",
@@ -67,7 +52,7 @@
  ],
  "price": 65,
  "title": "Puffer vest",
- "desc": "Teal quilted puffer vest: horizontal baffles with vertical seams, ribbed hem, stand-up collar (top 0.51), gold zip and pull, two zip pockets. Sleeveless: the arms stay free. Nothing on the front above y 0.51.",
+ "desc": "A teal quilted puffer vest: a deep V open front (nothing on the front above y 0.51), armholes cut round the arm nubs, a higher back with a piped collar edge, quilted baffles, hem and a gold zip. Open sleeveless: the arms stay free.",
  "colourway": "vest_puffer",
  "batch": 4
 }

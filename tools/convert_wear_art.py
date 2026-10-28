@@ -104,6 +104,15 @@ def main():
     for n in range(10):
         data, nv, nt, names = convert(os.path.join(exp, "digit_%d.obj" % n))
         open(os.path.join(res, "wear_digit_%d.bin" % n), "wb").write(data)
+    # species variants of a piece (another mesh for the same look: Pip's smaller, higher backpack) live with the character features' own variant hats
+    vdir = os.path.join(art, "variants")
+    if os.path.isdir(vdir):
+        fres = os.path.join(out, "..", "Features", "Resources")
+        for f in sorted(os.listdir(vdir)):
+            if f.endswith(".obj"):
+                data, nv, nt, names = convert(os.path.join(vdir, f))
+                open(os.path.join(fres, "wear_%s.bin" % f[:-4]), "wb").write(data)
+                print("variant", f[:-4], nv, "verts", nt, "tris")
     for s in ("shoe_paint_spec.json", "shoe_paint_spec_2.json"): shutil.copy(os.path.join(art, s), os.path.join(res, s))
     bib = json.load(open(os.path.join(exp, "bib_sky.json")))
 

@@ -1,52 +1,52 @@
 {
  "id": "sash_sky",
- "tris": 2492,
- "verts": 1951,
+ "tris": 1108,
+ "verts": 991,
  "parts": [
   {
    "name": "band",
-   "tris": 256,
-   "verts": 153
+   "tris": 120,
+   "verts": 77
   },
   {
    "name": "pipe-1",
-   "tris": 216,
-   "verts": 110
+   "tris": 96,
+   "verts": 50
   },
   {
    "name": "pipe+1",
-   "tris": 216,
-   "verts": 110
+   "tris": 96,
+   "verts": 50
   },
   {
    "name": "star0",
-   "tris": 464,
-   "verts": 414
+   "tris": 156,
+   "verts": 180
   },
   {
    "name": "star1",
-   "tris": 464,
-   "verts": 414
+   "tris": 156,
+   "verts": 180
   },
   {
    "name": "star2",
-   "tris": 464,
-   "verts": 414
+   "tris": 156,
+   "verts": 180
   },
   {
    "name": "rosette",
-   "tris": 160,
-   "verts": 102
+   "tris": 96,
+   "verts": 62
   },
   {
    "name": "rosette2",
-   "tris": 96,
-   "verts": 82
+   "tris": 60,
+   "verts": 52
   },
   {
    "name": "rbutton",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "tail+1",
@@ -65,18 +65,18 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.4482,
+  -0.4471,
   -0.2447,
   -0.4696
  ],
  "bounds_local_max": [
-  0.3971,
-  0.2805,
-  0.0894
+  0.3965,
+  0.2816,
+  0.0895
  ],
  "size": [
-  0.8453,
-  0.5252,
+  0.8436,
+  0.5263,
   0.5591
  ],
  "anchor": "chest",

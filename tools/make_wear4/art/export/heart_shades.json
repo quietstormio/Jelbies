@@ -1,52 +1,42 @@
 {
  "id": "heart_shades",
- "tris": 5688,
- "verts": 3260,
+ "tris": 1084,
+ "verts": 712,
  "parts": [
   {
    "name": "frame-1",
-   "tris": 2240,
-   "verts": 1171
+   "tris": 360,
+   "verts": 208
   },
   {
    "name": "lens-1",
-   "tris": 296,
-   "verts": 264
-  },
-  {
-   "name": "shine-1",
-   "tris": 60,
-   "verts": 68
+   "tris": 68,
+   "verts": 88
   },
   {
    "name": "frame+1",
-   "tris": 2240,
-   "verts": 1171
+   "tris": 360,
+   "verts": 208
   },
   {
    "name": "lens+1",
-   "tris": 296,
-   "verts": 264
-  },
-  {
-   "name": "shine+1",
-   "tris": 60,
-   "verts": 68
+   "tris": 68,
+   "verts": 88
   },
   {
    "name": "bridge",
-   "tris": 176,
-   "verts": 90
+   "tris": 84,
+   "verts": 44
   },
   {
    "name": "temple-1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   },
   {
    "name": "temple+1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   }
  ],
  "anchor_rest": [
@@ -55,19 +45,19 @@
   0.5052
  ],
  "bounds_local_min": [
-  -0.5976,
-  -0.1255,
-  -0.4344
+  -0.3994,
+  -0.1098,
+  -0.1266
  ],
  "bounds_local_max": [
-  0.5976,
-  0.1301,
-  0.0707
+  0.3994,
+  0.128,
+  0.0685
  ],
  "size": [
-  1.1951,
-  0.2556,
-  0.5051
+  0.7988,
+  0.2378,
+  0.1952
  ],
  "anchor": "face",
  "slot": "face",
@@ -78,7 +68,7 @@
  ],
  "price": 55,
  "title": "Heart sunglasses",
- "desc": "Coral heart sunglasses: thick glossy heart frame (0.029 wide), berry lenses with a highlight, chunky temples.",
+ "desc": "Coral heart sunglasses: a thick glossy heart frame, berry lenses, temples wrapping back along the head.",
  "colourway": "heart_shades",
  "batch": 2
 }

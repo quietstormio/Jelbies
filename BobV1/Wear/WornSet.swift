@@ -294,6 +294,37 @@ final class WornSet {
         }
         m.indices.reserveCapacity(m.indices.count + p.idx.count)
         for i in p.idx { m.indices.append(i + base) }
+        if !p.sparkleSites.isEmpty { emitGlints(p, into: &m, base: Int(base), slot: s, scale: scale, time: time) }
+    }
+
+    /// Twinkles on jewellery: a handful of small 4-point star glints that pop and fade at the gems (each site on its own phase and period, busier while
+    /// the Jelbie moves). Written into the mesh already being built: no allocation beyond the reserved capacity.
+    static func emitGlints(_ p: WearPrepared, into m: inout RoomMesh, base: Int, slot s: Slot, scale: Float, time: Float) {
+        let speed = min(1, simd_length(s.lastVel) * 0.25)
+        let rate = 0.65 + 1.9 * speed
+        m.vertices.reserveCapacity(m.vertices.count + 9 * 6)
+        for (k, site) in p.sparkleSites.enumerated() {
+            let h1 = Float((k &* 2654435761) & 1023) / 1023, h2 = Float((k &* 40503 &+ 7) & 255) / 255
+            var u = time * rate * (0.65 + 0.7 * h2) + h1 * 7
+            u -= u.rounded(.down)
+            guard u < 0.22 else { continue }
+            let a = sinf(Float.pi * u / 0.22)
+            let v = m.vertices[base + site]
+            let c = SIMD3<Float>(v.pos.x, v.pos.y, v.pos.z), n = simd_normalize(SIMD3<Float>(v.normal.x, v.normal.y, v.normal.z))
+            let ref: SIMD3<Float> = abs(n.y) > 0.9 ? SIMD3(1, 0, 0) : SIMD3(0, 1, 0)
+            let r = simd_normalize(simd_cross(n, ref)), up = simd_cross(n, r)
+            let L = 0.085 * scale * a, S = L * 0.2
+            let centre = c + n * 0.020
+            let col = SIMD4<Float>(2.2, 2.4, 2.9, 1)
+            let first = UInt32(m.vertices.count)
+            m.vertices.append(RoomVertex(pos: SIMD4(centre, 0), normal: SIMD4(n, 1), color: col))
+            let dirs: [SIMD3<Float>] = [r, (r + up) * 0.7071, up, (up - r) * 0.7071, -r, (-r - up) * 0.7071, -up, (r - up) * 0.7071]
+            for (q, d) in dirs.enumerated() {
+                let len = q % 2 == 0 ? L : S
+                m.vertices.append(RoomVertex(pos: SIMD4(centre + d * len, 0), normal: SIMD4(n, 1), color: col))
+            }
+            for q in 0..<8 { m.indices.append(first); m.indices.append(first + 1 + UInt32(q)); m.indices.append(first + 1 + UInt32((q + 1) % 8)) }
+        }
     }
 
     /// Mitts and wristbands on both arms: the arm-local mesh in the posed capsule frame (origin B, +y toward the shoulder, +z body forward, +x outward),

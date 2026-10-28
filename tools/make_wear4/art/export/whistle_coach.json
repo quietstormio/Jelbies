@@ -1,47 +1,37 @@
 {
  "id": "whistle_coach",
- "tris": 708,
- "verts": 398,
+ "tris": 660,
+ "verts": 370,
  "parts": [
   {
-   "name": "strap-1",
-   "tris": 176,
-   "verts": 90
-  },
-  {
-   "name": "strap+1",
-   "tris": 176,
-   "verts": 90
+   "name": "strap",
+   "tris": 400,
+   "verts": 205
   },
   {
    "name": "ring",
-   "tris": 168,
-   "verts": 90
+   "tris": 100,
+   "verts": 55
   },
   {
    "name": "chamber",
-   "tris": 80,
-   "verts": 42
+   "tris": 48,
+   "verts": 26
   },
   {
    "name": "cap",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "mouthpiece",
-   "tris": 48,
-   "verts": 50
+   "tris": 40,
+   "verts": 42
   },
   {
    "name": "hole",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "shine",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 22
   }
  ],
  "anchor_rest": [
@@ -50,19 +40,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.3301,
-  -0.2316,
-  -0.056
+  -0.6342,
+  -0.213,
+  -1.0838
  ],
  "bounds_local_max": [
-  0.3301,
-  0.0585,
-  0.107
+  0.6341,
+  0.1076,
+  0.1425
  ],
  "size": [
-  0.6603,
-  0.2902,
-  0.163
+  1.2682,
+  0.3206,
+  1.2264
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -72,7 +62,7 @@
  ],
  "price": 30,
  "title": "Coach whistle",
- "desc": "A coach whistle on a thick rounded sky lanyard in a V from the shoulders to a ring at (0,0.44); a big silver whistle with a coral mouthpiece hangs to y~0.31. All below the mouth keep-out.",
+ "desc": "A coach whistle on a thick rounded sky lanyard in one continuous loop round the body at the neck line, dipping to a ring at the front (y~0.44) with a big silver whistle and coral mouthpiece hanging to y~0.31; the loop rises at the back. Below the mouth keep-out.",
  "colourway": "whistle_coach",
  "batch": 2
 }

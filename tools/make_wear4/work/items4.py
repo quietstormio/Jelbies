@@ -24,7 +24,7 @@ def headphones(band=INK,cup=CORAL,pad=CREAM,**k):
 
 # ============================ COWBOY HAT =====================================
 def cowboy_hat(main=hx('#B98552'),band=hx('#7A4A2B'),star=HONEY,**k):
-    reset(); segs=32
+    reset(); segs=26
     y0=lambda phi: 1.07+0.035*math.sin(phi)
     def pinch(base):
         return lambda phi: base-0.020*math.cos(2*phi-math.pi)*0   # sides neutral (dent comes from the crease row)
@@ -88,12 +88,12 @@ def hair_bow(main=PINK,knot=None,dots=CREAM,**k):
         loopx=x*math.cos(ang)+y*math.sin(ang)
         loopy=-x*math.sin(ang)+y*math.cos(ang)
         Rm=np.stack([loopx,loopy,nn],1).tolist()
-        ico_part('loop%+d'%s,tuple(c+loopx*s*0.115+nn*0.040),(0.125,0.074,0.040),lambda p,nn_: mix(deep(main,0.12),tint(main,0.2),0.5+0.5*nn_[2]),sub=3,rot=Rm)
+        ico_part('loop%+d'%s,tuple(c+loopx*s*0.115+nn*0.040),(0.125,0.074,0.040),lambda p,nn_: mix(deep(main,0.12),tint(main,0.2),0.5+0.5*nn_[2]),sub=2,rot=Rm)
         ico_part('fold%+d'%s,tuple(c+loopx*s*0.100+nn*0.066),(0.070,0.040,0.014),lambda p,nn_: mix(deep(main,0.22),tint(main,0.10),0.5+0.5*nn_[2]),sub=2,rot=Rm)
         # tail
         tl=c+y*(-0.100)+x*s*0.045+nn*0.020
         ico_part('tail%+d'%s,tuple(tl),(0.030,0.085,0.012),lambda p,nn_: mix(deep(main,0.14),tint(main,0.15),0.5+0.5*nn_[2]),sub=2,rot=np.stack([x*math.cos(math.radians(14*s))+y*math.sin(math.radians(14*s)),-x*math.sin(math.radians(14*s))+y*math.cos(math.radians(14*s)),nn],1).tolist())
-    ico_part('knot',tuple(c+nn*0.054),(0.050,0.056,0.044),_lit(knot),sub=3,rot=np.stack([x,y,nn],1).tolist())
+    ico_part('knot',tuple(c+nn*0.054),(0.050,0.056,0.044),_lit(knot),sub=2,rot=np.stack([x,y,nn],1).tolist())
     for i,(dx,dy_) in enumerate(((0.12,0.02),(-0.12,0.02),(0.095,-0.03),(-0.095,-0.03))):
         ico_part('dot%d'%i,tuple(c+x*dx+y*dy_+nn*0.074),(0.014,0.014,0.006),dots,sub=1,rot=np.stack([x,y,nn],1).tolist())
     return dict(anchor='head_top',slot='head',tags=['cute','sweet'],price=30,title='Big hair bow',

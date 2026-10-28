@@ -1,142 +1,122 @@
 {
  "id": "chain_gold",
- "tris": 1916,
- "verts": 1208,
+ "tris": 1212,
+ "verts": 798,
  "parts": [
   {
-   "name": "link0",
-   "tris": 80,
-   "verts": 42
+   "name": "wire",
+   "tris": 240,
+   "verts": 124
   },
   {
-   "name": "hole0",
-   "tris": 20,
-   "verts": 12
+   "name": "link0",
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link1",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link2",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole2",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link3",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link4",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole4",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link5",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link6",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole6",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link7",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link8",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole8",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link9",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link10",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole10",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link11",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link12",
-   "tris": 80,
-   "verts": 42
-  },
-  {
-   "name": "hole12",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "link13",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "link14",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 20
   },
   {
-   "name": "hole14",
-   "tris": 20,
-   "verts": 12
+   "name": "link15",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link16",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link17",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link18",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link19",
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "coin",
-   "tris": 192,
-   "verts": 146
-  },
-  {
-   "name": "coinring",
-   "tris": 188,
-   "verts": 144
+   "tris": 96,
+   "verts": 74
   },
   {
    "name": "star",
    "tris": 156,
    "verts": 180
-  },
-  {
-   "name": "bail",
-   "tris": 20,
-   "verts": 12
   }
  ],
  "anchor_rest": [
@@ -145,19 +125,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.3764,
-  -0.1758,
-  -0.0661
+  -0.6461,
+  -0.195,
+  -1.096
  ],
  "bounds_local_max": [
-  0.3777,
-  0.0646,
-  0.0758
+  0.6463,
+  0.1221,
+  0.0701
  ],
  "size": [
-  0.7541,
-  0.2403,
-  0.1419
+  1.2924,
+  0.3171,
+  1.1661
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -167,7 +147,7 @@
  ],
  "price": 70,
  "title": "Gold chain",
- "desc": "A chunky gold curb chain in a swag from (+-0.34,0.52) down to a coin pendant at y~0.39: nineteen big alternating links. Lowest point on the centre line; nothing near the mouth keep-out.",
+ "desc": "A chunky gold curb chain in one continuous loop round the body at the neck line (twenty big alternating links), dipping to a coin pendant at the front (y~0.40) and rising at the back. Nothing near the mouth keep-out.",
  "colourway": "chain_gold",
  "batch": 4
 }

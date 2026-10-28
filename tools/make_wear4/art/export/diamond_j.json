@@ -1,0 +1,228 @@
+{
+ "id": "diamond_j",
+ "tris": 1212,
+ "verts": 989,
+ "parts": [
+  {
+   "name": "wire",
+   "tris": 144,
+   "verts": 75
+  },
+  {
+   "name": "gemC0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC7",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC8",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC9",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC10",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC11",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC12",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC13",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC14",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC15",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC16",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC17",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC18",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC19",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC20",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC21",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC22",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemC23",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "jbase",
+   "tris": 172,
+   "verts": 212
+  },
+  {
+   "name": "jtop",
+   "tris": 172,
+   "verts": 210
+  },
+  {
+   "name": "serifb",
+   "tris": 44,
+   "verts": 84
+  },
+  {
+   "name": "gemJ0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ7",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemJ8",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "gemBail",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6318,
+  -0.3347,
+  -1.08
+ ],
+ "bounds_local_max": [
+  0.6318,
+  0.1312,
+  0.0854
+ ],
+ "size": [
+  1.2636,
+  0.4659,
+  1.1653
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sparkly",
+  "cool"
+ ],
+ "price": 450,
+ "title": "Diamond J chain",
+ "desc": "An icy tennis chain of chunky faceted gems in one continuous loop round the body at the neck line, with a big bold rounded J pendant (platinum, bevelled rim) paved with tiny gems hanging at the front centre (J top y~0.43, bottom y~0.28), below the mouth keep-out. The gems twinkle (Swift adds the glints).",
+ "colourway": "diamond_j",
+ "batch": 4
+}

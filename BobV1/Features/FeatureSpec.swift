@@ -76,13 +76,21 @@ extension FeatureSpec {
         "viking_hat": "pirate_hat", "beanie_cable": "pirate_hat", "visor_tennis": "sweatband",
         "wayfarer_black": "sunglasses_star", "wayfarer_tortoise": "sunglasses_star", "cat_eye_shades": "sunglasses_star",
         "vest_puffer": "bib_sky", "cardigan_cable": "bib_sky", "bag_crossbody": "bib_sky",
-        "scarf_silk": "scarf_cosy", "chain_gold": "pearls",
+        "scarf_silk": "scarf_cosy", "chain_gold": "pearls", "diamond_j": "pearls",
     ]
+    /// Shipped pieces whose wing table was missing (the wings clipped them at a full flap): they take the pirate hat's measured table.
+    static let wingBorrow: [String: String] = ["beret": "pirate_hat"]
     mutating func applyAliases() {
+        for (new, base) in Self.wingBorrow {
+            if let p = pairs[base], var q = pairs[new] { q.lav = p.lav; pairs[new] = q }
+            if let w = wingLimits[base] { wingLimits[new] = w }
+        }
         for (new, base) in Self.aliases {
             if pairs[new] == nil, let p = pairs[base] { pairs[new] = p }
             if wingLimits[new] == nil, let w = wingLimits[base] { wingLimits[new] = w }
         }
+        // the Viking helmet's dome is taller than the pirate hat's crown: the sprout sits on top of it
+        if var p = pairs["viking_hat"], p.moss.rule == "adjust" { p.moss.anchor = [0.0, 1.494, 0.0]; pairs["viking_hat"] = p }
     }
 }
 
@@ -110,6 +118,8 @@ nonisolated struct FeatureFit: Equatable, Sendable {
 }
 
 nonisolated enum FeatureCompat {
+    /// Pieces that have a Pip variant mesh (Features/Resources/wear_<id>_pip.bin): his dino tail leaves the lower back at about y 0.47.
+    static let pipVariants: Set<String> = ["backpack_sky", "cape_hero", "vest_puffer", "cardigan_cable", "tutu_pink", "chain_gold", "scarf_silk", "pearls", "whistle_coach", "bowtie_pink", "bowtie_sky", "diamond_j", "scarf_cosy", "scarf_sky", "bandana_coral", "bandana_mint", "lei"]
     static let fullFlap: ClosedRange<Float> = -40...75
     /// Where Moss's daisy sits on the hats whose art-lab rule was "hide" (placement as the other rules: crown moved to `anchor`, tilted, sunk).
     static let hatDaisy: [String: FeatureSpec.MossRule] = [
@@ -127,6 +137,9 @@ nonisolated enum FeatureCompat {
             // Pip's spines NEVER vanish under what he wears. Under a hat that encloses his head they grow through the TOP of its crown (a mohawk through
             // the hat: FeatureSet.emit seats each base on the fitted crown); with the perch items (bows, headphones, antennae ...) they stay as they are.
             for w in worn { if spec.pairs[w]?.slot == "head" { fit.spineHat = w } }
+            // his dino tail leaves the lower back right where a backpack sits: the pack he wears is the smaller one high between the shoulder blades
+            // (the same for the pieces that cover the lower back: the cape, the tutu, the puffer vest and the cardigan have a slot over the tail root on Pip)
+            for w in worn where Self.pipVariants.contains(w) { fit.hatVariant[w] = w + "_pip" }
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {

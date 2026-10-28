@@ -149,3 +149,68 @@ def plate_shell(name, ys, offs, col, segs=40, phi0=0.0, phi1=2 * math.pi, wrap=T
 def keepout_value(p):
     """Mouth keep-out ellipse c(0,.651) r(.15,.10): < 1 means inside."""
     return math.hypot((p[0]) / 0.15, (p[1] - 0.651) / 0.10)
+
+def bead(name, c, radii, color, rot=None, segs=8):
+    """A cheap ellipsoid (a revolved 5-ring profile, ~segs*6 tris): radii = (x, y, z) in the local frame, rot = columns (x, y, z) in rest space."""
+    rx, ry, rz = radii
+    prof = [(0.0, -ry), (rx * 0.80, -ry * 0.62), (rx, 0.0), (rx * 0.80, ry * 0.62), (0.0, ry)]
+    return lathe_y(name, prof, segs, color, centre=tuple(c), scale=(1.0, rz / max(rx, 1e-6)), rotm=(None if rot is None else np.array(rot).tolist()), sharp=85)
+
+def dome_round(name, c, r, color, segs=8):
+    return bead(name, c, (r, r, r), color, segs=segs)
+
+PIP_MODE = False
+
+def pip_rise(phi):
+    """Pip variants only: the loop climbs the back in a smooth arch (up to 0.60 higher at the back centre) to pass over his tail root and his back spike."""
+    if not PIP_MODE: return 0.0
+    th = (phi - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi
+    return 0.60 * math.exp(-(th / 0.6) ** 2)
+
+def neck_y(phi, front, side=0.50, back=0.56):
+    """Height of a neck-line loop round the body at angle phi (pi/2 = front): dips to `front` at the front, `side` round the sides, rises to `back` at
+    the back centre so it rides over Pip's tail root and passes between Lavender's wings."""
+    s = math.sin(phi)
+    f = max(0.0, s) ** 2
+    b = max(0.0, -s) ** 8
+    return side - (side - front) * f + (back - side) * b + pip_rise(phi)
+
+def ring_pt(phi, front, off, side=0.50, back=0.56):
+    y = neck_y(phi, front, side, back)
+    e = B.egg_point(y, phi)
+    return e + hdir(e) * off
+
+def ring_frame(phi, front, off, side=0.50, back=0.56):
+    """(point, tangent, outward, up) on a neck-line loop."""
+    p = ring_pt(phi, front, off, side, back)
+    d = 0.01
+    t = ring_pt(phi - d, front, off, side, back) - ring_pt(phi + d, front, off, side, back)      # screen-right at the front (+x)
+    t = t / np.linalg.norm(t)
+    h = hdir(p)
+    up = np.cross(h, t)
+    up = up / np.linalg.norm(up)
+    return p, t, h, up
+
+def stroke_poly(path, w, cap_n=6):
+    """Outline of a thick stroke along a 2D polyline with round ends (CCW)."""
+    P = [np.array(p, float) for p in path]
+    n = len(P)
+    L, R, tans = [], [], []
+    for i in range(n):
+        t = P[min(i + 1, n - 1)] - P[max(i - 1, 0)]
+        t = t / np.linalg.norm(t)
+        tans.append(t)
+        o = np.array([-t[1], t[0]])
+        L.append(P[i] + o * w / 2)
+        R.append(P[i] - o * w / 2)
+    def cap(c, t):
+        o = np.array([-t[1], t[0]])
+        return [c + (o * math.sin(math.pi / 2 - math.pi * k / cap_n) + t * math.cos(math.pi / 2 - math.pi * k / cap_n)) * w / 2 for k in range(1, cap_n)]
+    out = R + cap(P[-1], tans[-1]) + L[::-1] + cap(P[0], -tans[0])
+    return [tuple(q) for q in out]
+
+def gem(name, c, r, color, rot=None, sides=5):
+    """A small faceted-looking bipyramid brilliant (about 10 triangles)."""
+    prof = [(0.0, -r * 0.85), (r, 0.0), (r * 0.55, r * 0.40), (0.0, r * 0.46)]
+    return lathe_y(name, prof, sides, color, centre=tuple(c), rotm=(None if rot is None else np.array(rot).tolist()), sharp=88)
+

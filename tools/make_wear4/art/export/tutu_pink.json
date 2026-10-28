@@ -1,47 +1,42 @@
 {
  "id": "tutu_pink",
- "tris": 3080,
- "verts": 2052,
+ "tris": 1212,
+ "verts": 900,
  "parts": [
   {
    "name": "waistband",
-   "tris": 280,
-   "verts": 252
+   "tris": 240,
+   "verts": 168
   },
   {
    "name": "layer0",
-   "tris": 640,
-   "verts": 400
+   "tris": 288,
+   "verts": 196
   },
   {
    "name": "layer1",
-   "tris": 640,
-   "verts": 406
+   "tris": 288,
+   "verts": 232
   },
   {
    "name": "layer2",
-   "tris": 640,
-   "verts": 428
-  },
-  {
-   "name": "layer3",
-   "tris": 640,
-   "verts": 440
+   "tris": 288,
+   "verts": 240
   },
   {
    "name": "bow-1",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "bow+1",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 22
   },
   {
    "name": "bowknot",
-   "tris": 80,
-   "verts": 42
+   "tris": 36,
+   "verts": 20
   }
  ],
  "anchor_rest": [
@@ -50,19 +45,19 @@
   0.0
  ],
  "bounds_local_min": [
-  -0.7907,
-  -0.117,
-  -0.7174
+  -0.7185,
+  -0.132,
+  -0.6406
  ],
  "bounds_local_max": [
-  0.7907,
-  0.022,
-  0.7174
+  0.7185,
+  0.037,
+  0.6406
  ],
  "size": [
-  1.5815,
-  0.139,
-  1.4347
+  1.437,
+  0.169,
+  1.2812
  ],
  "anchor": "waist",
  "slot": "body",
@@ -73,7 +68,7 @@
  ],
  "price": 60,
  "title": "Ballet tutu",
- "desc": "A fuller four-layer ruffled tulle tutu (thick edged layers with scalloped hems) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet.",
+ "desc": "A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip's variant is open over his tail root.",
  "colourway": "tutu_pink",
  "batch": 2
 }

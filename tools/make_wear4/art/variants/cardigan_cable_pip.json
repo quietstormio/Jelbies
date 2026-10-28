@@ -1,0 +1,82 @@
+{
+ "id": "cardigan_cable_pip",
+ "tris": 1168,
+ "verts": 650,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 580,
+   "verts": 330
+  },
+  {
+   "name": "edge",
+   "tris": 328,
+   "verts": 166
+  },
+  {
+   "name": "slot0",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "slot1",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "button0",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button2",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button3",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button4",
+   "tris": 36,
+   "verts": 22
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.62,
+  -0.1681,
+  -0.9256
+ ],
+ "bounds_local_max": [
+  0.6271,
+  0.269,
+  0.0699
+ ],
+ "size": [
+  1.2471,
+  0.4371,
+  0.9955
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 60,
+ "title": "Cable cardigan",
+ "desc": "A rust cable-knit cardigan: an open front falling to a deep V (front never above y 0.51) with a cream button band and five buttons, armholes round the arm nubs, a higher back with a collar edge, cable ridges and a ribbed hem.",
+ "colourway": "cardigan_cable_pip"
+}

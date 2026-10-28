@@ -18,6 +18,8 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     var bind: [SurfaceBind] = [], w: [Float] = [], h: [Float] = [], spin: [Bool] = []
     var anyBound = false, anySwing = false
     var partNames: [String] = [], partOfVertex: [UInt8] = []
+    /// Vertices the jewellery twinkles on (the top vertex of every part named gem*): WornSet.emit pops 4-point star glints there.
+    var sparkleSites: [Int] = []
     /// Where the piece scales about when it poofs on / off.
     var pivot = SIMD3<Float>.zero
     /// Head wear: the crown height map (CrownFit) and whether the piece encloses the head top (then it is fitted to the skin every frame).
@@ -107,6 +109,7 @@ nonisolated enum WearMeshes {
                 t += 3
             }
         }
+        if l == .diamondJ { for (pi, name) in p.partNames.enumerated() where name.hasPrefix("gem") { if let v = p.partOfVertex.lastIndex(of: UInt8(pi)) { p.sparkleSites.append(v) } } }
         p.pivot = isArm ? .zero : anchor
         p.bind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         if let body, !isArm {

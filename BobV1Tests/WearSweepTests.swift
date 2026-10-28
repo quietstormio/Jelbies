@@ -28,7 +28,7 @@ final class WearSweepTests: XCTestCase {
 
     /// Shipped pieces rebuilt in this sweep.
     static let upgraded: [WearLook] = [.glassesRound, .sunglassesStar, .heartShades, .gogglesAviator, .monocleGold, .sashPink, .sashSky, .bibPink, .bibSky, .bandanaCoral, .bandanaMint,
-                                       .tutuPink, .capeHero, .pearls, .lei, .whistleCoach, .backpackSky]
+                                       .tutuPink, .capeHero, .pearls, .lei, .whistleCoach, .backpackSky, .scarfCosy, .scarfSky, .bowtiePink, .bowtieSky]
 
     private func env(_ k: String) -> String? { ProcessInfo.processInfo.environment[k].flatMap { $0.isEmpty ? nil : $0 } }
     private func dir() throws -> String {
@@ -116,14 +116,15 @@ final class WearSweepTests: XCTestCase {
     }
 
     /// A frame of the stage from `yaw` radians round his facing.
-    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0) -> UIImage {
+    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0, time: Float = 0.4, tight: Bool = false) -> UIImage {
         let r = st.rig, ren = st.ren
         let pose = r.sim.bodyPose(iterations: 3)
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_normalize(fwd)
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let c = pose.centroid
-        let (ly, dist) = framing(look.slot, full: full)
+        var (ly, dist) = framing(look.slot, full: full)
+        if tight { ly = 0.05; dist = 2.0 }
         let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z), dir: dir, dist: dist + extra)
         ren.dayHourOverride = masks ? 15 : 12
         let light = GameCamera.light(centroids: [r.sim.centroid()])
@@ -131,7 +132,7 @@ final class WearSweepTests: XCTestCase {
         r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: ren.dynPointer)
         let sk = skin(r)
         if st.worn.shown(0, .hands) != nil { st.worn.setArms(0, GameCare.armFrames(brain: r.brain, sim: r.sim)) }
-        var f = sk.withUnsafeBufferPointer { p in st.worn.frame(theme: ren.room!.theme, time: 0.4) { _ in p.baseAddress } }
+        var f = sk.withUnsafeBufferPointer { p in st.worn.frame(theme: ren.room!.theme, time: time) { _ in p.baseAddress } }
         let ff = sk.withUnsafeBufferPointer { p in st.feat.frame { _ in p.baseAddress } }
         let base = UInt32(f.opaque.vertices.count)
         f.opaque.vertices += ff.vertices; f.opaque.indices += ff.indices.map { $0 + base }
@@ -180,7 +181,7 @@ final class WearSweepTests: XCTestCase {
     // MARK: the sweep
 
     /// Cells: [look][jelbie] -> (static: front, 3/4, back?), (walk: 1 frame), (sleep: 1 frame, head and face only)
-    struct Cells { var front: Data?, tq: Data?, back: Data?, walk: Data?, sleep: Data? }
+    struct Cells { var front: Data?, tq: Data?, side: Data?, backq: Data?, back: Data?, walk: Data?, sleep: Data? }
 
     func testSweep() throws {
         let d = try dir()
@@ -199,6 +200,7 @@ final class WearSweepTests: XCTestCase {
                 var c = cells[l]![id]
                 c.front = caption(shot(st, l, yaw: 0), "\(Self.names[id]) \(l.rawValue) front").pngData()
                 c.tq = caption(shot(st, l, yaw: 0.65), "\(Self.names[id]) \(l.title) 3/4").pngData()
+                if l.slot == .neck || l.slot == .body { c.side = caption(shot(st, l, yaw: 1.5), "\(Self.names[id]) side").pngData(); c.backq = caption(shot(st, l, yaw: 2.4), "\(Self.names[id]) 3/4 back").pngData() }
                 if l.anchor == .back || l.slot == .body || l.slot == .neck { c.back = caption(shot(st, l, yaw: .pi), "\(Self.names[id]) back").pngData() }
                 cells[l]![id] = c
             }
@@ -249,17 +251,20 @@ final class WearSweepTests: XCTestCase {
                 // static page: front + 3/4 (+ back for neck/body) of the four Jelbies
                 var rows: [[UIImage]] = [], wrows: [[UIImage]] = []
                 for l in chunk {
-                    var row: [UIImage] = [], wrow: [UIImage] = []
+                    var row: [UIImage] = [], row2: [UIImage] = [], wrow: [UIImage] = []
+                    let wide = slot == .body || slot == .neck
                     for id in 0..<4 {
                         let c = cells[l]![id]
-                        row += [c.front, c.tq].compactMap { $0.flatMap { UIImage(data: $0) } }
-                        if let b = c.back.flatMap({ UIImage(data: $0) }), slot == .body || slot == .neck { row.append(b) }
+                        var mine: [UIImage] = [c.front, c.tq].compactMap { $0.flatMap { UIImage(data: $0) } }
+                        if wide { mine += [c.side, c.backq, c.back].compactMap { $0.flatMap { UIImage(data: $0) } } }
+                        if wide && id >= 2 { row2 += mine } else { row += mine }
                         wrow += [c.walk, c.sleep].compactMap { $0.flatMap { UIImage(data: $0) } }
                     }
-                    rows.append(row); wrows.append(wrow)
+                    rows.append(row); if wide { rows.append(row2) }
+                    wrows.append(wrow)
                 }
                 let suffix = (ls.count > per ? "_p\(pageNo)" : "") + tag
-                try write(stack(rows, header: "\(slot.rawValue): \(chunk.map(\.rawValue).joined(separator: ", ")) (Bob, Pip, Moss, Lavender; front | 3/4\(slot == .body || slot == .neck ? " | back" : ""))"), d + "/wear4_\(slot.rawValue)\(suffix).png")
+                try write(stack(rows, header: "\(slot.rawValue): \(chunk.map(\.rawValue).joined(separator: ", ")) (Bob, Pip, Moss, Lavender; front | 3/4\(slot == .body || slot == .neck ? " | side | 3/4 back | back (Bob + Pip on the first row, Moss + Lavender on the second)" : ""))"), d + "/wear4_\(slot.rawValue)\(suffix).png")
                 try write(stack(wrows, header: "\(slot.rawValue) walk\(slot == .head || slot == .face ? " + asleep" : ""): \(chunk.map(\.rawValue).joined(separator: ", "))"), d + "/wear4_\(slot.rawValue)_walk\(suffix).png")
                 pageNo += 1; i += per
             }
@@ -298,5 +303,29 @@ final class WearSweepTests: XCTestCase {
             }
         }
         try write(sheet, d + "/wear4_thumbs.png")
+    }
+
+    /// Closeups of the Diamond J chain on all four Jelbies (front, 3/4, side, back, mid-walk, and the twinkle at three moments): wear4_diamond_j.png.
+    func testDiamondCloseups() throws {
+        let d = try dir()
+        let l = WearLook.diamondJ
+        var rows: [[UIImage]] = []
+        for id in 0..<4 {
+            DayClock.shared.forcedHour = 12
+            let st = try makeStage(id)
+            dress(st, l)
+            var row: [UIImage] = []
+            for (label, yaw, t) in [("front t0", Float(0), Float(0.35)), ("front t1", Float(0), Float(1.05)), ("front t2", Float(0), Float(1.85)), ("3/4", Float(0.65), Float(0.7)), ("side", Float(1.5), Float(0.7)), ("back", Float.pi, Float(0.7))] {
+                row.append(caption(shot(st, l, yaw: yaw, time: t, tight: true), "\(Self.names[id]) \(label)"))
+            }
+            let r = st.rig
+            r.brain.request(.goTo(SIMD2(1.6, 0.4)))
+            for _ in 0..<90 { st.lab.tick(watching: false) }
+            dress(st, l, ticks: 1)
+            for _ in 0..<26 { st.lab.tick(watching: false); tick(st, l) }
+            row.append(caption(shot(st, l, yaw: 0.65, extra: 0.6, time: 0.9, tight: true), "\(Self.names[id]) mid-walk"))
+            rows.append(row)
+        }
+        try write(stack(rows, header: "Diamond J chain: Bob, Pip, Moss, Lavender (front at three twinkle moments, 3/4, side, back, mid-walk)"), d + "/wear4_diamond_j.png")
     }
 }

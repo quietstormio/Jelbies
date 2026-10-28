@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wl import *
 import items5
 mods = [items5]
-for name in ("items6", "items7"):
+for name in ("items6", "items7", "items8"):
     try:
         mods.append(__import__(name))
     except ImportError as e:
@@ -32,3 +32,11 @@ for iid, fn, kw, anchor in REG:
     else:
         meta['batch'] = 4
     info = export(iid, a, meta); print("EXPORT", iid, info['tris'], info['verts'], flush=True)
+
+# species variants (art/variants/*.obj -> Features/Resources/wear_<id>.bin by the converter): same look, another mesh
+for m in mods:
+    for iid, fn, kw, anchor in getattr(m, 'VARIANTS', []):
+        if only and iid not in only: continue
+        reset(); meta = fn(**kw); a = meta.pop('anchor_rest', None) or anchor
+        meta['colourway'] = iid
+        info = export(iid, a, meta, outdir=W + "/variants"); print("EXPORT", iid, info['tris'], info['verts'], flush=True)

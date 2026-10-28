@@ -1,52 +1,42 @@
 {
  "id": "glasses_round",
- "tris": 3712,
- "verts": 1870,
+ "tris": 1196,
+ "verts": 608,
  "parts": [
   {
    "name": "rim-1",
-   "tris": 1568,
-   "verts": 784
+   "tris": 448,
+   "verts": 224
   },
   {
    "name": "hinge-1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "glint-1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "rim+1",
-   "tris": 1568,
-   "verts": 784
+   "tris": 448,
+   "verts": 224
   },
   {
    "name": "hinge+1",
-   "tris": 20,
-   "verts": 12
-  },
-  {
-   "name": "glint+1",
-   "tris": 20,
-   "verts": 12
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "bridge",
-   "tris": 176,
-   "verts": 90
+   "tris": 84,
+   "verts": 44
   },
   {
    "name": "temple-1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   },
   {
    "name": "temple+1",
-   "tris": 160,
-   "verts": 82
+   "tris": 72,
+   "verts": 38
   }
  ],
  "anchor_rest": [
@@ -55,19 +45,19 @@
   0.5052
  ],
  "bounds_local_min": [
-  -0.6017,
+  -0.4003,
   -0.1071,
-  -0.4338
+  -0.1253
  ],
  "bounds_local_max": [
-  0.6017,
+  0.4003,
   0.1103,
-  0.0652
+  0.0643
  ],
  "size": [
-  1.2035,
+  0.8007,
   0.2174,
-  0.499
+  0.1896
  ],
  "anchor": "face",
  "slot": "face",
@@ -77,7 +67,7 @@
  ],
  "price": 40,
  "title": "Round glasses",
- "desc": "Round honey acetate glasses: thick glossy rims (0.027 wide, 0.031 deep), end-piece hinges and flat chunky temples. Frames only, no lens fill, so the eyes stay readable.",
+ "desc": "Round honey acetate glasses with thick glossy rims, end-piece hinges and temples that wrap back along the head. Frames only, no lens fill, so the eyes stay readable.",
  "colourway": "glasses_round",
  "batch": 1
 }

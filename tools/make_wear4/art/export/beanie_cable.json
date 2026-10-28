@@ -1,17 +1,17 @@
 {
  "id": "beanie_cable",
- "tris": 1480,
- "verts": 763,
+ "tris": 832,
+ "verts": 433,
  "parts": [
   {
    "name": "knit",
-   "tris": 1160,
-   "verts": 601
+   "tris": 812,
+   "verts": 421
   },
   {
    "name": "pom",
-   "tris": 320,
-   "verts": 162
+   "tris": 20,
+   "verts": 12
   }
  ],
  "anchor_rest": [
@@ -26,12 +26,12 @@
  ],
  "bounds_local_max": [
   0.56,
-  0.0969,
+  0.084,
   0.4727
  ],
  "size": [
   1.12,
-  0.4642,
+  0.4513,
   0.9823
  ],
  "anchor": "head_top",

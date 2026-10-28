@@ -113,7 +113,8 @@ final class WearTests: XCTestCase {
     func testEveryWearableLoadsWithinBudget() {
         let body = WearBody.shared
         var worst = (0.0, "")
-        for l in WearLook.pieces {
+        // (the unlisted hoodie and raincoat are retired from the game: their art stays but nothing loads it, so they are not held to the budget)
+        for l in WearLook.pieces where !WearLook.unlisted.contains(l) {
             let t0 = CFAbsoluteTimeGetCurrent()
             guard let p = WearMeshes.prepare(l, body: body) else { XCTFail("\(l) did not load"); continue }
             let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
