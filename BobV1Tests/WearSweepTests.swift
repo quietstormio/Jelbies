@@ -116,7 +116,7 @@ final class WearSweepTests: XCTestCase {
     }
 
     /// A frame of the stage from `yaw` radians round his facing.
-    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0, time: Float = 0.4, tight: Bool = false) -> UIImage {
+    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0, time: Float = 0.4, tight: Bool = false, focus: (Float, Float)? = nil, side: Float = 0) -> UIImage {
         let r = st.rig, ren = st.ren
         let pose = r.sim.bodyPose(iterations: 3)
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
@@ -125,7 +125,8 @@ final class WearSweepTests: XCTestCase {
         let c = pose.centroid
         var (ly, dist) = framing(look.slot, full: full)
         if tight { ly = 0.05; dist = 2.0 }
-        let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z), dir: dir, dist: dist + extra)
+        if let focus { (ly, dist) = focus }
+        let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z) + SIMD3(dir.z, 0, -dir.x) * side, dir: dir, dist: dist + extra)
         ren.dayHourOverride = masks ? 15 : 12
         let light = GameCamera.light(centroids: [r.sim.centroid()])
         ren.beginFrame()
@@ -309,24 +310,36 @@ final class WearSweepTests: XCTestCase {
     func testDiamondCloseups() throws {
         let d = try dir()
         let l = WearLook.diamondJ
-        var rows: [[UIImage]] = []
+        var rows: [[UIImage]] = [], bigRows: [[UIImage]] = []
         for id in 0..<4 {
             DayClock.shared.forcedHour = 12
             let st = try makeStage(id)
             dress(st, l)
             var row: [UIImage] = []
             for (label, yaw, t) in [("front t0", Float(0), Float(0.35)), ("front t1", Float(0), Float(1.05)), ("front t2", Float(0), Float(1.85)), ("3/4", Float(0.65), Float(0.7)), ("side", Float(1.5), Float(0.7)), ("back", Float.pi, Float(0.7))] {
-                row.append(caption(shot(st, l, yaw: yaw, time: t, tight: true), "\(Self.names[id]) \(label)"))
+                row.append(caption(shot(st, l, yaw: yaw, time: t, focus: (-0.14, 2.35)), "\(Self.names[id]) \(label)"))
             }
             let r = st.rig
             r.brain.request(.goTo(SIMD2(1.6, 0.4)))
             for _ in 0..<90 { st.lab.tick(watching: false) }
             dress(st, l, ticks: 1)
             for _ in 0..<26 { st.lab.tick(watching: false); tick(st, l) }
-            row.append(caption(shot(st, l, yaw: 0.65, extra: 0.6, time: 0.9, tight: true), "\(Self.names[id]) mid-walk"))
+            row.append(caption(shot(st, l, yaw: 0.65, extra: 0.6, time: 0.9, focus: (-0.14, 2.35)), "\(Self.names[id]) mid-walk"))
             rows.append(row)
+            // large close-ups of the J and the chain (front, a twist to the side, tilted), then the game-distance pair
+            var big: [UIImage] = []
+            let r2 = st.rig; r2.brain.abortScript(r2.sim, r2.skinner)
+            for _ in 0..<40 { st.lab.tick(watching: false) }
+            dress(st, l)
+            for (label, yaw, t, fo, sd) in [("J close", Float(0), Float(0.35), (Float(-0.28), Float(1.7)), Float(0)), ("J close t2", Float(0.35), Float(1.4), (Float(-0.28), Float(1.7)), Float(0)),
+                                            ("chain close", Float(0.9), Float(0.7), (Float(-0.12), Float(1.6)), Float(0)), ("chain close 2", Float(-0.7), Float(1.1), (Float(-0.12), Float(1.6)), Float(0))] {
+                big.append(caption(shot(st, l, yaw: yaw, time: t, focus: fo, side: sd), "\(Self.names[id]) \(label)"))
+            }
+            for (yaw, t) in [(Float(0), Float(0.5)), (Float(0.65), Float(1.3))] { big.append(caption(shot(st, l, yaw: yaw, full: true, extra: 3.4, time: t), "\(Self.names[id]) game distance")) }
+            bigRows.append(big)
         }
         try write(stack(rows, header: "Diamond J chain: Bob, Pip, Moss, Lavender (front at three twinkle moments, 3/4, side, back, mid-walk)"), d + "/wear4_diamond_j.png")
+        try write(stack(bigRows, header: "Diamond J chain close-ups (J, J at another twinkle, chain 3/4, chain other side) + game distance"), d + "/wear4_diamond_j_close.png")
     }
 
     /// The held-back pieces at about the game camera's distance (a whole Jelbie in a small frame), front and 3/4 on all four: wear4_five_game_distance.png.

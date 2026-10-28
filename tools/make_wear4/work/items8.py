@@ -19,11 +19,11 @@ def loop_beads(prefix, n, front, off, radii, col, side=0.50, back=0.56, segs=6, 
         bead('%s%d' % (prefix, k), p, radii, col, rot=np.stack([t, h, up], 1), segs=segs)
 
 # ============================ GOLD CHAIN (chunky Cuban links, full loop) =======
-def chain_gold(gold=hx('#E8B84A'), **k):
+def chain_gold(gold=hx('#FFC41F'), **k):
     reset()
     def gcol(p, n):
         w = max(0.0, n[1] * 0.55 + n[2] * 0.45)
-        return mix(deep(gold, 0.50), mix(tint(gold, 0.78), (1.0, 0.97, 0.80), 0.4), 0.10 + 0.90 * w ** 1.3)
+        return mix((0.80, 0.46, 0.02), mix((1.0, 0.84, 0.18), (1.0, 0.97, 0.62), 0.55), 0.18 + 0.82 * w ** 1.1)      # saturated gold (no brown ink mix); the shader adds the polish
     FR = 0.43
     n = 26                                   # truly interlocking oval links: alternately flat on the body and on edge, each threaded through its neighbours
     for k_ in range(n):
@@ -35,9 +35,9 @@ def chain_gold(gold=hx('#E8B84A'), **k):
     p, t, h, up = ring_frame(math.pi / 2, FR, 0.058)
     Rm = np.stack([t, h, -up], 1).tolist()
     pc = p - up * 0.120
-    lathe_y('coin', [(0.0, -0.020), (0.100, -0.020), (0.118, -0.008), (0.118, 0.014), (0.100, 0.026), (0.0, 0.026)], 14, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.45), 0.5 + 0.5 * nq[1]), centre=tuple(pc), rotm=Rm, sharp=45)
+    lathe_y('coin', [(0.0, -0.020), (0.100, -0.020), (0.118, -0.008), (0.118, 0.014), (0.100, 0.026), (0.0, 0.026)], 14, lambda q, nq: mix((0.85, 0.52, 0.03), mix((1.0, 0.86, 0.2), (1.0, 0.97, 0.62), 0.5), 0.5 + 0.5 * nq[1]), centre=tuple(pc), rotm=Rm, sharp=45)
     sp = star_poly(0.060, 0.028, 5, rad=0.007)
-    slab_part('star', sp, 0.008, lambda q, nq: tint(gold, 0.55), lambda px, py, pz: tuple(pc + t * px + up * py + h * (0.026 + pz)), cuts=0)
+    slab_part('star', sp, 0.008, lambda q, nq: (1.0, 0.93, 0.5), lambda px, py, pz: tuple(pc + t * px + up * py + h * (0.026 + pz)), cuts=0)
     ring_loop('bail', p - up * 0.040, t, h, up, circle_poly(1.0, 12, 0.030, 0.048), lambda px, py: 0.020, 0.010, gcol, n=12, e=2.2, sides=5)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly'], price=70, title='Gold chain',
                 desc='A chunky Cuban-link gold chain: twenty-six real oval rings, alternately flat and on edge so each is threaded through its neighbours, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a ring bail at the front (y~0.31). Its own budget (2800 vertices / 3000 triangles).')
@@ -124,69 +124,147 @@ def bow_tie_band(main=PINK, **k):
     return meta
 
 # ============================ DIAMOND J CHAIN ==================================
-def brilliant(name, c, r, color, rot, sides=6):
-    """A round brilliant-cut stone: pavilion below, girdle, crown and flat table."""
-    prof = [(0.0, -r * 0.62), (r * 0.98, 0.0), (r * 0.80, r * 0.24), (r * 0.46, r * 0.40), (0.0, r * 0.40)]
-    return lathe_y(name, prof, sides, color, centre=tuple(c), rotm=np.array(rot).tolist(), sharp=88)
+def l2s(x):
+    """Inverse of lib.lin: the sRGB-ish number that export() turns into the LINEAR value x (used to smuggle pave grid coordinates through the colour)."""
+    return x * 12.92 if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+
+PLAT_BEZEL = (0.62, 0.68, 0.78)        # sRGB; linear r stays under 0.42 so the shader's gem mask (smoothstep .42-.55 on linear r) reads it as metal
+PLAT_BRIGHT = (0.80, 0.85, 0.94)
+
+def brilliant_stone(name, c, rb, frame):
+    """A low-profile round brilliant in a bezel: one revolved part (10 sides, 4 rings + the table centre, smooth normals).
+    Ring 0 / 1 = the platinum bezel wall + lip (metal in the shader), ring 2 = the girdle, 3 = the crown, then the table centre. The star-facet look is vertex colour
+    (alternating bright / icy sectors on the girdle and crown) + the shader's quantised-normal fire."""
+    t, h, up = frame
+    prof = [(rb, 0.0), (rb * 0.97, 0.20 * rb), (rb * 0.84, 0.31 * rb), (rb * 0.52, 0.53 * rb), (0.0, 0.64 * rb)]
+    def col(p, n):
+        d = np.array(p) - np.array(c)
+        x, y, z = float(np.dot(d, t)), float(np.dot(d, h)), float(np.dot(d, up))
+        yy = y / rb
+        if yy < 0.25: return PLAT_BEZEL
+        sec = int(round(math.atan2(z, x) / (math.pi / 5))) % 10
+        alt = sec % 2
+        r = math.hypot(x, z) / rb
+        ice, white = (0.68, 0.84, 1.0), (0.97, 0.99, 1.0)
+        if r > 0.70: return ice if alt else white                   # girdle
+        if r > 0.2: return white if alt else ice                    # crown, shifted half a facet
+        return (0.97, 0.99, 1.0)                                    # table
+    return lathe_y(name, prof, 10, col, centre=tuple(c), rotm=np.stack([t, h, up], 1).tolist(), sharp=88)
+
+def _proj_st(q, path):
+    """(arc length s, signed lateral n) of the 2D point q against the polyline `path`."""
+    P0 = np.array(path[0], float); P1 = np.array(path[1], float); Pn = np.array(path[-1], float); Pm = np.array(path[-2], float)
+    e0 = (P0 - P1) / np.linalg.norm(P0 - P1); e1 = (Pn - Pm) / np.linalg.norm(Pn - Pm)
+    pre = 0.15
+    path = [tuple(P0 + e0 * pre)] + list(path) + [tuple(Pn + e1 * 0.15)]        # extend the ends so the round caps keep a running cell grid
+    best = None; acc = -pre
+    for i in range(len(path) - 1):
+        a = np.array(path[i]); b = np.array(path[i + 1]); d = b - a; L = float(np.linalg.norm(d)); d /= L
+        u = float(np.clip(np.dot(q - a, d), 0, L)); pt = a + d * u
+        dist = float(np.linalg.norm(q - pt))
+        if best is None or dist < best[0]:
+            nn = float(d[0] * (q[1] - pt[1]) - d[1] * (q[0] - pt[0]))
+            best = (dist, acc + u, nn)
+        acc += L
+    return best[1], best[2]
+
+def stroke_outline(path, w, cap_n=6):
+    """Outline (CCW) of a round-capped stroke along a 2D polyline: the right side forward, the end cap round the front from right to left, the left side
+    back, the start cap round the back (kit5.stroke_poly's caps run the wrong way round, which pinches horns out of the ends)."""
+    P = [np.array(p, float) for p in path]; n = len(P)
+    L, R, T = [], [], []
+    for i in range(n):
+        t = P[min(i + 1, n - 1)] - P[max(i - 1, 0)]; t /= np.linalg.norm(t); T.append(t)
+        o = np.array([-t[1], t[0]]); L.append(P[i] + o * w / 2); R.append(P[i] - o * w / 2)
+    def cap(c, t, a0):
+        o = np.array([-t[1], t[0]])
+        return [c + (o * math.sin(a0 + math.pi * k / cap_n) + t * math.cos(a0 + math.pi * k / cap_n)) * w / 2 for k in range(1, cap_n)]
+    return [tuple(q) for q in R + cap(P[-1], T[-1], -math.pi / 2) + L[::-1] + cap(P[0], -T[0], -math.pi / 2)]
+
+def bevelled_slab(name, path, nrows, base_off, T1, T2, T3, cell, bev, lip, edge_wall_n=0.25):
+    """A bold J stroke as ONE open mesh wrapped on the front of the body (the back is never seen): ring A (back, z 0) -> B (wall top, z T1) -> C (bevel, T2)
+    -> D (the raised pave face, T3), polished rounded edge normals, the top face D triangulated flat. The D face carries the PAVE GRID in its vertex colour
+    (rg = cell coordinates along / across the stroke, b = 2 marks pave; the shader draws a clean grid of little stones there)."""
+    from mathutils.geometry import tessellate_polygon
+    from mathutils import Vector as V3
+    wD = nrows * cell
+    w = wD + 2 * (bev + lip)
+    rings2 = [stroke_outline(path, w), stroke_outline(path, w), stroke_outline(path, w - 2 * bev), stroke_outline(path, wD)]
+    zs = [0.0, T1, T2, T3]
+    n = len(rings2[0])
+    area = sum(rings2[0][i][0] * rings2[0][(i + 1) % n][1] - rings2[0][(i + 1) % n][0] * rings2[0][i][1] for i in range(n))
+    sgn = 1.0 if area > 0 else -1.0
+    def outward(poly, i):
+        a = np.array(poly[i - 1]); b = np.array(poly[i]); c = np.array(poly[(i + 1) % len(poly)])
+        e1 = b - a; e2 = c - b
+        n1 = np.array([e1[1], -e1[0]]) / (np.linalg.norm(e1) + 1e-12); n2 = np.array([e2[1], -e2[0]]) / (np.linalg.norm(e2) + 1e-12)
+        o = (n1 + n2); o = o / (np.linalg.norm(o) + 1e-12)
+        return o * sgn
+    P = []; N = []; C = []
+    ring_n = [(1.0, 0.0), (0.92, 0.30), (0.45, 0.89), (0.0, 1.0)]
+    for k in range(4):
+        for i in range(n):
+            q = np.array(rings2[k][i])
+            p0 = B.front_surface(q[0], q[1]); nz_ = full_n(p0); nz_ = nz_ / np.linalg.norm(nz_)
+            upv = np.array([0, 1.0, 0]) - nz_ * nz_[1]; upv /= np.linalg.norm(upv)
+            tv = np.cross(upv, nz_)
+            P.append(p0 + nz_ * (base_off + zs[k]))
+            o = outward(rings2[k], i)
+            oc, zc = ring_n[k]
+            nv = (tv * o[0] + upv * o[1]) * oc + nz_ * zc
+            N.append(nv / np.linalg.norm(nv))
+            s_, n_ = _proj_st(q, path)
+            u = s_ / cell + 50.0; v = n_ / cell + nrows / 2.0 + 50.0
+            flag = 2.0 if k == 3 else 0.5
+            C.append((l2s(u), l2s(v), l2s(flag)))
+    F = []
+    for k in range(3):
+        for i in range(n):
+            j = (i + 1) % n
+            a, b_, c, d = k * n + i, k * n + j, (k + 1) * n + j, (k + 1) * n + i
+            F += [(a, b_, c), (a, c, d)]
+    tri = tessellate_polygon([[V3((x, y, 0)) for x, y in rings2[3]]])
+    for t3 in tri: F.append(tuple(3 * n + int(i) for i in t3))
+    # the winding is irrelevant (the loader trusts the vertex normals) but keep it consistent anyway
+    return add_part(name, P, F, C, N=np.array(N), flip_auto=False)
 
 def diamond_j(**k):
     reset()
-    S = 1.25
-    def hdr(c, k):                                   # light lift: values above 1 so the stones never fall into grey in shade
-        return tuple(x * k for x in c)
-    def stone(p, n):
-        # near-white base (0.94 / 0.97 / 1.0) with a faint ice-blue rim in the facets; the whole stone is lifted (emissive-like) so shade cannot grey it
-        f = 0.5 + 0.5 * math.sin(p[0] * 211.0 + p[1] * 137.0 + p[2] * 89.0)
-        top = max(0.0, n[1] * 0.5 + n[2] * 0.5)
-        base = mix((0.94, 0.97, 1.0), (0.78, 0.90, 1.0), 0.35 * f)
-        return hdr(mix(base, (1.0, 1.0, 1.0), 0.4 + 0.6 * top), 1.22)
-    def plat(p, n):
-        # mirror white gold: bright, with only a faint cool reflection toward the edges
-        w = max(0.0, n[1] * 0.4 + n[2] * 0.6)
-        return hdr(mix((0.62, 0.72, 0.86), (1.0, 1.0, 1.0), 0.15 + 0.85 * w ** 0.9), 1.0)
-    def pave(p, n):
-        # the pave as a fine micro-sparkle texture (hash speckle), not dots
-        hsh = math.sin(p[0] * 531.0 + p[1] * 947.0 + p[2] * 173.0) * 43758.5453
-        hsh -= math.floor(hsh)
-        sp = 1.0 if hsh > 0.78 else 0.0
-        base = mix((0.86, 0.93, 1.0), (1.0, 1.0, 1.0), 0.5 * max(0.0, n[2]))
-        return hdr(mix(base, (1.0, 1.0, 1.0), sp), 1.25 if sp else 0.95)
     FR = 0.470
-    n = 56
-    loop_tube('band', FR, 0.034, 0.030, 5, plat, n=40)             # a bright platinum base band so the stones read as one continuous strip
-    for row, dy in enumerate((0.026, -0.026)):                      # two rows of tightly packed brilliants, offset by half a stone, touching
-        for k_ in range(n):
-            phi = 2 * math.pi * (k_ + 0.5 + 0.5 * row) / n
-            p, t, h, up = ring_frame(phi, FR, 0.040)
-            brilliant('gemC%d_%d' % (row, k_), p + up * dy, 0.034, stone, np.stack([t, h, up], 1), sides=5)
-    # the pendant: a big bold rounded J, solid mirror white gold with a polished bevel and micro-sparkle pave
-    c, t, h, up = ring_frame(math.pi / 2, FR, 0.052)
-    top = c - up * 0.060
-    stem_x = 0.026
-    path = [(stem_x * S, (0.100 - 0.0275 * i) * S) for i in range(6)]
-    cy, r = -0.0375 * S, 0.052 * S
-    cx = stem_x * S - r
-    for k_ in range(1, 12):
-        a = -math.pi * 1.06 * k_ / 11
-        path.append((cx + r * math.cos(a), cy + r * math.sin(a)))
-    serif = [((stem_x - 0.050) * S, 0.100 * S), ((stem_x + 0.050) * S, 0.100 * S)]
-    def xf(dz):
-        return lambda px, py, pz: tuple(top + t * px + up * (py - 0.100 * S) + h * (pz + dz))
-    slab_part('jbase', stroke_poly(path, 0.082 * S, 8), 0.046, plat, xf(-0.016), cuts=0, sharp=30)
-    slab_part('jbevel', stroke_poly(path, 0.070 * S, 8), 0.010, lambda p_, n_: hdr(mix((0.8, 0.88, 1.0), (1, 1, 1), max(0.0, n_[1] * 0.5 + 0.5)), 1.12), xf(0.028), cuts=0, sharp=30)
-    slab_part('jpave', stroke_poly(path, 0.050 * S, 8), 0.008, pave, xf(0.038), cuts=0, sharp=30)
-    slab_part('serifb', stroke_poly(serif, 0.060 * S, 6), 0.046, plat, xf(-0.016), cuts=0, sharp=30)
-    slab_part('serifp', stroke_poly(serif, 0.036 * S, 6), 0.008, pave, xf(0.038), cuts=0, sharp=30)
-    # four bigger accent stones on the J (they also carry the glints)
-    for q, (gx, gy) in enumerate(((stem_x * S, 0.100 * S), (stem_x * S, 0.030 * S), (cx, cy - r * 0.2), (cx + r * 0.9, cy - r * 0.95))):
-        brilliant('gemJ%d' % q, top + t * gx + up * (gy - 0.100 * S) + h * 0.050, 0.026, stone, np.stack([t, h, up], 1))
-    # the bail: a bright loop that carries the J from the front stone of the chain
+    OFF = 0.034
+    # ---- the chain: ONE continuous row of round brilliants in touching platinum bezels, equal arc spacing, a stone at the front centre
+    ph = np.linspace(math.pi / 2, math.pi / 2 + 2 * math.pi, 721)
+    pts = np.array([ring_pt(a, FR, OFF) for a in ph])
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1); cum = np.concatenate([[0], np.cumsum(seg)]); Ltot = cum[-1]
+    N_ST = int(round(Ltot / 0.098))
+    spacing = Ltot / N_ST
+    rb = 0.5 * spacing * 1.05
+    print('DIAMOND chain length %.3f stones %d spacing %.4f bezel r %.4f' % (Ltot, N_ST, spacing, rb))
+    for k_ in range(N_ST):
+        phi = float(np.interp(spacing * k_, cum, ph))
+        p, t, h, up = ring_frame(phi, FR, OFF)
+        brilliant_stone('gem%02d' % k_, p, rb, (t, h, up))
+    # ---- the J: bold rounded, bevelled polished wall, raised pave face. Absolute rest coordinates, wrapped on the belly.
+    yTop = 0.397; w_ = 0.105
+    stem_x = 0.075; R = 0.078
+    cy = yTop - 0.255 + R + w_ / 2
+    path = [(stem_x, (yTop - 0.0525) + (cy - (yTop - 0.0525)) * i / 4) for i in range(4)]
+    cx = stem_x - R
+    for k_ in range(0, 13):
+        a = -math.radians(190) * k_ / 12
+        path.append((cx + R * math.cos(a), cy + R * math.sin(a)))
+    bevelled_slab('jbody', path, 4, 0.030, 0.042, 0.054, 0.060, 0.0155, 0.0115, 0.010)
+    yb = yTop - 0.037
+    bevelled_slab('jbar', [(-0.070, yb), (0.100, yb)], 2, 0.030, 0.048, 0.060, 0.066, 0.0155, 0.0115, 0.010)
+    # the bail: a bright ring through the front stone, carrying the J
+    p, t, h, up = ring_frame(math.pi / 2, FR, OFF)
+    bc = p - up * 0.030 + h * 0.020
     bp = []
-    for a in np.linspace(0, 2 * math.pi, 13):
-        bp.append(top + up * (0.060 + 0.034 * math.sin(a)) + t * (0.026 * math.cos(a)) + h * 0.010)
-    tube_curve('bail', bp, 0.010, 5, plat, cap=False)
+    for a in np.linspace(0, 2 * math.pi, 11):
+        bp.append(bc + up * (0.034 * math.cos(a)) + t * (0.016 * math.sin(a)))
+    tube_curve('bail', bp, 0.0095, 5, lambda q, nq: PLAT_BRIGHT, cap=False)
     return dict(anchor='neck', slot='neck', tags=['sparkly', 'cool'], price=450, title='Diamond J chain',
-                desc='A fine iced-out tennis chain of fifty-six small round brilliants set shoulder to shoulder in one continuous loop round the body at the neck line (no wire), near-white and lifted so they never grey in shade, with a big bold J pendant in solid mirror white gold with a polished bevel and a micro-sparkle pave face, on a bail at the front centre (below the mouth keep-out). The stones and four accent stones twinkle (Swift adds the glints). The hero item: its own budget (2500 vertices / 3800 triangles).')
+                desc='An iced-out tennis chain: one continuous row of round brilliant-cut stones (low domes, star-faceted by vertex colour, shader fire) in touching platinum bezels in one loop round the body at the neck line, with a bold rounded J pendant on a bail at the front centre (below the mouth keep-out): a thick bevelled mirror-platinum body with a raised pave face (a clean grid of small stones drawn by the gem shader, material 8). Parts: gemNN stones (material 6), jbody + jbar (8), bail (7). The stones and the J twinkle (Swift adds the glints). The hero item: budget 2200 vertices.')
 
 nat_of = {'scarf': 0.466, 'lei': 0.462}
 

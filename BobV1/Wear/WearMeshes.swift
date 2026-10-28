@@ -13,6 +13,8 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     let look: WearLook
     /// Rest-space positions (anchor + offset; for gloves the arm-local offsets), normals, linear colours, baked AO.
     var rest: [SIMD3<Float>] = [], nrm: [SIMD3<Float>] = [], col: [SIMD3<Float>] = [], ao: [Float] = []
+    /// Per vertex RoomMaterial id for the jewellery shader (6 = gem, 7 = polished metal, 8 = pave); EMPTY (all plain) for every other piece.
+    var mat: [Float] = []
     var idx: [UInt32] = []
     /// Surface binds (parallel to `rest`; `.zero` tri for vertices with w == 0), weights, swing weights, spin flags.
     var bind: [SurfaceBind] = [], w: [Float] = [], h: [Float] = [], spin: [Bool] = []
@@ -82,6 +84,7 @@ nonisolated enum WearMeshes {
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for (pi, part) in a.parts.enumerated() {
             let rule = WearRules.rule(l, part: part.name)
+            let material = WearRules.material(l, part: part.name)
             let base = UInt32(p.rest.count)
             p.partNames.append(part.name)
             var ylo = Float.infinity, yhi = -Float.infinity
@@ -90,6 +93,7 @@ nonisolated enum WearMeshes {
                 let v = part.positions[k]
                 let r = isArm ? v : anchor + v
                 p.rest.append(r); p.nrm.append(part.normals[k]); p.ao.append(part.ao[k])
+                if material != 0 { if p.mat.isEmpty { p.mat = [Float](repeating: 0, count: p.rest.count - 1) }; p.mat.append(material) } else if !p.mat.isEmpty { p.mat.append(0) }
                 var c = part.colors[k]
                 if let recolour { for m in recolour where simd_distance(m.from, c) < 0.04 { c = m.to; break } }
                 p.col.append(c)
@@ -109,7 +113,20 @@ nonisolated enum WearMeshes {
                 t += 3
             }
         }
-        if l == .diamondJ { for (pi, name) in p.partNames.enumerated() where name.hasPrefix("gem") && (name.hasPrefix("gemJ") || pi % 7 == 0) { if let v = p.partOfVertex.lastIndex(of: UInt8(pi)) { p.sparkleSites.append(v) } } }
+        if l == .diamondJ {
+            // twinkle sites: every third stone's own vertex facing the way the stone does, and a spread of vertices on the pave face of the J and its bar
+            for (pi, name) in p.partNames.enumerated() {
+                let vs = p.partOfVertex.indices.filter { Int(p.partOfVertex[$0]) == pi }
+                guard !vs.isEmpty else { continue }
+                if name.hasPrefix("gem") {
+                    if pi % 4 == 0 { var m = SIMD3<Float>.zero; for v in vs { m += p.nrm[v] }; m = simd_normalize(m); p.sparkleSites.append(vs.max { simd_dot(p.nrm[$0], m) < simd_dot(p.nrm[$1], m) }!) }
+                } else if name == "jbody" || name == "jbar" {
+                    let top = vs.filter { p.col[$0].z > 1.5 }                     // the pave face's rim vertices, in ring order
+                    let want = name == "jbar" ? 1 : 3
+                    for i in 0..<want where !top.isEmpty { p.sparkleSites.append(top[(top.count * (2 * i + 1)) / (2 * want)]) }
+                }
+            }
+        }
         p.pivot = isArm ? .zero : anchor
         p.bind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         if let body, !isArm {
@@ -126,7 +143,12 @@ nonisolated enum WearMeshes {
         guard let a = art(l) else { return nil }
         let p = build(l, art: a, body: nil, recolour: nil)
         var m = RoomMesh()
-        m.vertices = (0..<p.rest.count).map { RoomVertex(pos: SIMD4(p.rest[$0], 0), normal: SIMD4(p.nrm[$0], p.ao[$0]), color: SIMD4(p.col[$0], 1)) }
+        // (the shop picture is a SceneKit render with no jewellery shader: the J's pave face carries grid coordinates in its colour, so show it as plain bright platinum there)
+        m.vertices = (0..<p.rest.count).map { i in
+            let mt: Float = p.mat.isEmpty ? 0 : p.mat[i]
+            let c: SIMD3<Float> = mt == 8 ? (p.col[i].z > 1.5 ? SIMD3(2.0, 2.1, 2.4) : SIMD3(1.3, 1.4, 1.7)) : p.col[i]
+            return RoomVertex(pos: SIMD4(p.rest[i], mt), normal: SIMD4(p.nrm[i], p.ao[i]), color: SIMD4(c, 1))
+        }
         m.indices = p.idx
         return m
     }

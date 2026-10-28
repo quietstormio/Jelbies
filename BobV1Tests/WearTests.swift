@@ -119,11 +119,11 @@ final class WearTests: XCTestCase {
             guard let p = WearMeshes.prepare(l, body: body) else { XCTFail("\(l) did not load"); continue }
             let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
             if ms > worst.0 { worst = (ms, l.rawValue) }
-            // the Diamond J chain is the 450-coin hero item: a ring of round brilliants and a paved pendant need more geometry, so it has its own budget
+            // the Diamond J chain is the 450-coin hero item: 37 stones in bezels plus a bevelled J with its pave drawn by the gem shader (material 8) need more than the 1000-vertex norm, but no more than 2200 vertices (the old two-row band was 3080)
             // the gold chain is built from truly interlocking oval links (dozens of small rings), so it has a raised budget as well
             let heroBudget = l == .diamondJ || l == .chainGold
-            let vMax = l == .diamondJ ? 3200 : l == .chainGold ? 2800 : WearMeshes.vertexBudget
-            let tMax = l == .diamondJ ? 5000 : l == .chainGold ? 3000 : WearMeshes.triangleBudget
+            let vMax = l == .diamondJ ? 2200 : l == .chainGold ? 2800 : WearMeshes.vertexBudget
+            let tMax = l == .diamondJ ? 3600 : l == .chainGold ? 3000 : WearMeshes.triangleBudget
             _ = heroBudget
             XCTAssertLessThanOrEqual(p.rest.count, vMax, "\(l)")
             XCTAssertLessThanOrEqual(p.triangles, tMax, "\(l)")

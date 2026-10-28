@@ -281,6 +281,50 @@ static void roomShoe(constant float4* T, int look, float3 uvs, float ph, float p
     albedo = c;
 }
 
+/// Jewellery (materials 6, 7, 8; WearRules.material): 6 = the Diamond J chain's brilliants in their bezels, 7 = polished metal (platinum, the gold chain),
+/// 8 = the J's body: platinum with a PAVE grid of little stones drawn per pixel from the grid coordinates the art puts in the vertex colour
+/// (rg = cell coordinates, b = 2 inside the pave face). Stones stay near-white with an icy tint and never fall to grey in shade; every stone catches its own
+/// fire (a jittered normal), so they flash as the Jelbie moves. No textures, no extra passes.
+static float3 roomJewel(int m, float3 vcol, float3 N, float3 P, float3 V, float3 L, float3 keyCol, float sh, float3 amb, float ao, float3 sky, float dayK) {
+    float3 base = vcol;
+    float gem = 0.0;
+    float3 Nj = N;
+    if (m == 6) { gem = smoothstep(0.42, 0.55, vcol.r); }
+    if (m == 8) {
+        base = float3(0.60, 0.67, 0.82);
+        float pave = smoothstep(1.55, 1.9, vcol.b);
+        float2 cell = vcol.rg;
+        float2 id = floor(cell);
+        float2 f = fract(cell) - 0.5;
+        float d = length(f);
+        gem = pave * (1.0 - smoothstep(0.38, 0.47, d));
+        float3 jit = float3(roomHash(id + 1.3), roomHash(id + 5.1), roomHash(id + 9.9)) - 0.5;
+        float hs = roomHash(id + 2.2);
+        Nj = normalize(N + jit * 1.2 * gem + N * 0.0);
+        base = mix(base, mix(float3(0.80, 0.90, 1.0), float3(1.0), hs), gem);
+    }
+    float3 Rv = reflect(-V, Nj);
+    float ndl = saturate(dot(Nj, L) * 0.5 + 0.5);
+    float fr = pow(1.0 - saturate(dot(Nj, V)), 3.0);
+    // polished metal: a bright horizon-and-sky reflection, a hot key highlight with a broad sheen, tinted by the metal so gold stays warm
+    float3 env = mix(float3(0.05, 0.05, 0.08), sky * 1.6 + float3(0.45), smoothstep(-0.05, 0.55, Rv.y));
+    float sp = pow(saturate(dot(Rv, L)), 70.0) * sh;
+    float sp2 = pow(saturate(dot(Rv, L)), 9.0) * sh * 0.4;
+    float3 hot = mix(float3(1.0), base * 1.7 + 0.25, 0.55);
+    float3 metal = base * (amb * ao * 0.7 + keyCol * ndl * sh * 0.55 + 0.16 * dayK) + env * base * (0.55 + 0.45 * fr) + (sp * 2.6 + sp2) * hot * keyCol;
+    if (m == 7) { return metal; }
+    // gem: lifted so shade cannot grey it, plus fire from three fixed directions (the pave stones each get their own jittered normal, so they flash one by one)
+    float3 Rq = Rv;
+    float fire = pow(saturate(dot(Rq, L)), 18.0) * 1.5
+               + pow(saturate(dot(Rq, normalize(float3(-0.6, 0.5, 0.62)))), 22.0) * 1.0
+               + pow(saturate(dot(Rq, normalize(float3(0.1, 0.9, -0.4)))), 22.0) * 0.8
+               + pow(saturate(dot(Rq, normalize(float3(0.8, 0.2, 0.55)))), 26.0) * 0.8;
+    float3 icy = float3(0.82, 0.95, 1.25);
+    float3 gemCol = base * (0.52 + 0.26 * ndl * sh) * dayK + fire * icy * 1.25 * (0.55 + 0.45 * dayK) + base * icy * fr * 0.30 + base * 0.10;
+    if (m == 8) { gemCol *= 1.45; }
+    return mix(metal, gemCol, gem);
+}
+
 fragment float4 roomFS(RoomVOut in [[stage_in]],
                        constant RoomUniforms& u [[buffer(0)]],
                        constant float4* shoeTable [[buffer(2)]],
@@ -429,6 +473,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     float fres = pow(1.0 - saturate(dot(N, V)), 4.0) * gloss * 0.08;
     col += (keyCol * spec + u.pal4.rgb * fres) * ao;
     col += albedo * emit * 1.7;
+    if (m >= 6 && m <= 8) { col = roomJewel(m, in.color, N, P, V, L, keyCol, sh, amb, ao, u.pal4.rgb, clamp(u.ambCol.w, 0.6, 1.0)); }
     if ((m == 1 || m == 3) && u.camPos.w > 0.5) { col *= 1.0 - 0.62 * roomContactAO(u, heightMap, P); }
 
     // fog toward the background swatch

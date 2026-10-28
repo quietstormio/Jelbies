@@ -47,9 +47,8 @@ nonisolated extension WearLook {
     static let medal: WearLook = .medalGold
     /// Looks that are drawn from art (hats, glasses, ...): everything but the shoes.
     /// Pulled from the shop for now (2026-10-25: the hoodie and raincoat read as a bucket / diaper): not sold, taken off and refunded once. The art stays.
-    /// 2026-10-28: the Diamond J chain is held back (the cardigan, vest, silk scarf and gold chain were released the same day) until their art is production-ready
-    /// (hiddenUntilReady): not sold, taken off and refunded if a save ever has one; the art, rules and Pip variants stay in code.
-    static let unlisted: Set<WearLook> = [.hoodie, .raincoat, .diamondJ]
+    /// (2026-10-28: the cardigan, vest, silk scarf, gold chain and the Diamond J chain were released after their art was reworked; hoodie and raincoat stay out.)
+    static let unlisted: Set<WearLook> = [.hoodie, .raincoat]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet }.map(\.look)
 }
 
@@ -84,6 +83,15 @@ nonisolated enum WearRules {
     /// the body); `h0` / `h1`: how much it swings (hanging pieces) at its top / bottom. A part that hangs ramps from bound at the top to loose at the bottom.
     struct PartRule { var w0: Float = 0, w1: Float = 0, h0: Float = 0, h1: Float = 0; var spin = false }
 
+    /// RoomMaterial id of a part for the jewellery shader (RoomShaders.metal roomJewel): 6 gem, 7 polished metal, 8 pave; 0 = the plain wardrobe look.
+    static func material(_ l: WearLook, part: String) -> Float {
+        switch l {
+        case .diamondJ: return part.hasPrefix("gem") ? 6 : part == "jbody" || part == "jbar" ? 8 : 7
+        case .chainGold: return 7
+        default: return 0
+        }
+    }
+
     static func rule(_ l: WearLook, part: String) -> PartRule {
         let surface = PartRule(w0: 1, w1: 1)
         let rigid = PartRule()
@@ -98,7 +106,7 @@ nonisolated enum WearRules {
         case .scarfSilk:
             if part.hasPrefix("tail") { return PartRule(w0: 1, w1: 0.3, h0: 0, h1: 1) }
             return part == "knot" ? rigid : surface
-        case .diamondJ: return part.hasPrefix("gemJ") || part == "gemBail" || part == "jbase" || part == "jtop" || part == "serifb" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
+        case .diamondJ: return part == "jbody" || part == "jbar" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .bowtiePink, .bowtieSky: return part == "band" ? surface : rigid
         case .chainGold: return part == "coin" || part == "coinring" || part == "star" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .capeHero: return part == "panel" ? PartRule(w0: 1, w1: 0.35, h0: 0, h1: 1) : surface

@@ -86,7 +86,7 @@ nonisolated enum WearGenerated {
         Row(look: .visorTennis, art: "visor_tennis", storeID: "wear-visor_tennis", title: "Tennis visor", slot: .head, anchor: .headTop, anchorRest: SIMD3(0.00000, 1.34580, 0.00000), price: 35, tags: [.sporty, .cute], batch: 4, paintStyle: "", vertices: 936, triangles: 1204),
         Row(look: .wayfarerBlack, art: "wayfarer_black", storeID: "wear-wayfarer_black", title: "Classic black shades", slot: .face, anchor: .face, anchorRest: SIMD3(0.00000, 0.82000, 0.50520), price: 60, tags: [.cool, .cute], batch: 4, paintStyle: "", vertices: 784, triangles: 1276),
         Row(look: .wayfarerTortoise, art: "wayfarer_tortoise", storeID: "wear-wayfarer_tortoise", title: "Tortoise shades", slot: .face, anchor: .face, anchorRest: SIMD3(0.00000, 0.82000, 0.50520), price: 70, tags: [.cool, .cute], batch: 4, paintStyle: "", vertices: 784, triangles: 1276),
-        Row(look: .diamondJ, art: "diamond_j", storeID: "wear-diamond_j", title: "Diamond J chain", slot: .neck, anchor: .neck, anchorRest: SIMD3(0.00000, 0.47000, 0.50550), price: 450, tags: [.sparkly, .cool], batch: 4, paintStyle: "", vertices: 3082, triangles: 4692),
+        Row(look: .diamondJ, art: "diamond_j", storeID: "wear-diamond_j", title: "Diamond J chain", slot: .neck, anchor: .neck, anchorRest: SIMD3(0.00000, 0.47000, 0.50550), price: 450, tags: [.sparkly, .cool], batch: 4, paintStyle: "", vertices: 2174, triangles: 3388),
     ]
     /// The bib plate's number placement (bib_sky.json; identical for bib_pink).
     static let bibNumberAnchor = SIMD3<Float>(0.00000, 0.33940, 0.50290)
