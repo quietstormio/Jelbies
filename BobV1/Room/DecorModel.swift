@@ -30,6 +30,8 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     // batch 3 (2026-10-24, Room/DecorKind+Batch3.swift): more furniture and toys
     case roundtable, cushionpile, aquarium, plantstand, easel, mirror, clock
     case bubblemachine, rockinghorse, jackinbox, plushbear, toypiano, pinwheel
+    // batch 4 (2026-10-27, Room/DecorKind+Batch4.swift): more toys
+    case beachball, playtunnel, ringstacker, toyrocket, plushdino, kickscooter
     // Park-only (2026-10-25, Park/ParkToys.swift): never sold; placed permanently in the Park
     case seesaw, springrider, sandbox
 
@@ -41,17 +43,17 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     var category: Category {
         switch self {
         case .seesaw, .springrider, .sandbox, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
-        default: return Self.batch3Toys.contains(self) ? .toys : .furniture
+        default: return Self.batch3Toys.contains(self) || Self.batch4Toys.contains(self) ? .toys : .furniture
         }
     }
     /// Pieces that roll when kicked (the ball and its cousins).
-    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .soccerball }
+    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .soccerball || self == .beachball }
     /// Round things a pair of Jellies may pass to each other.
-    var isBallLike: Bool { self == .ball || self == .yarnball || self == .soccerball }
+    var isBallLike: Bool { self == .ball || self == .yarnball || self == .soccerball || self == .beachball }
     /// Radius of the rolling piece for the wall bounce and the roll angle.
     var rollRadius: Float {
         switch self {
-        case .ball: return 0.27; case .yarnball: return 0.30; case .soccerball: return SoccerTuning.radius; case .toycar: return 0.42
+        case .ball: return 0.27; case .yarnball: return 0.30; case .soccerball: return SoccerTuning.radius; case .toycar: return 0.42; case .beachball: return 0.34
         default: return 0.27
         }
     }

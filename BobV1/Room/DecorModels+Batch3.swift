@@ -155,7 +155,7 @@ extension DecorModels {
                 emit(w) { v, n, _ in turn(v, n, about: pv, q) }
             }
         default:
-            all()           // (the roundtable, the mirror, and every piece of an older batch that reached here)
+            return addBatch4(kind, art, o: o, anim: a, time: time, uid: uid, into: b)          // (the fourth batch; any other kind: all parts as exported)
         }
         return true
     }
