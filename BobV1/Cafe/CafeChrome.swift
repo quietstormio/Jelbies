@@ -1,7 +1,7 @@
 //
 //  CafeChrome.swift
 //  The café outing's screen furniture: the white veil, the top bar (the Café chip and the Drops pill), the menu card (a bottom card in portrait, a trailing panel in
-//  landscape), the Head home button after the treats, and the blocked-entry toast. Views only; GameCare+Cafe.swift owns the rules.
+//  landscape), the Go home pill (menu and after the treats), and the blocked-entry toast. Views only; GameCare+Cafe.swift owns the rules.
 //
 
 import SwiftUI
@@ -39,22 +39,24 @@ struct CafeChrome: View {
                         HStack { Spacer(); CafeMenuCard(care: care, compact: true).frame(width: min(320, g.size.width * 0.36)).padding(.top, 64).padding(.bottom, 8).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeMenuCard(care: care, compact: false).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.bottom, 8) }
+                        VStack { Spacer(); CafeMenuCard(care: care, compact: false).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.bottom, 84) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                if cafe.phase == .done {
+                if cafe.canGoHome {
                     VStack(spacing: 8) {
                         Spacer()
-                        Text("That was yummy!").font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
-                            .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
-                        Button { AudioHub.shared.uiTap(); cafe.goHome() } label: {
-                            HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Head home") }
+                        if cafe.phase == .done {
+                            Text("That was yummy!").font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
+                                .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(SK.cream.opacity(0.92)))
+                        }
+                        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); cafe.goHome() } label: {
+                            HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Go home") }
                                 .font(SK.font(19, .black)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
                                 .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
                         }
-                        .buttonStyle(.plain).accessibilityIdentifier("cafe-home")
+                        .buttonStyle(.plain).accessibilityLabel("Go home").accessibilityIdentifier("cafe-go-home")
                     }
                     .padding(.bottom, 24)
                     .transition(.opacity)
@@ -77,14 +79,14 @@ struct CafeChrome: View {
             }
             .frame(width: g.size.width, height: g.size.height)
             .animation(.easeInOut(duration: 0.25), value: cafe.menuOpen)
-            .animation(.easeInOut(duration: 0.25), value: cafe.phase == .done)
+            .animation(.easeInOut(duration: 0.25), value: cafe.canGoHome)
             .animation(.easeInOut(duration: 0.2), value: cafe.refusal)
         }
         .allowsHitTesting(cafe.active || cafe.refusal != nil)
     }
 }
 
-/// The menu: a chip per Jelbie, the six treats, "Same for everyone", the total, Order and Head home.
+/// The menu: a chip per Jelbie, the six treats, "Same for everyone", the total, Order.
 struct CafeMenuCard: View {
     let care: GameCare
     var compact: Bool
@@ -102,14 +104,6 @@ struct CafeMenuCard: View {
         return Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
     }
 
-    private var homeButton: some View {
-        Button { AudioHub.shared.uiTap(); care.cafe.goHome() } label: {
-            HStack(spacing: 4) { Image(systemName: "house.fill").font(.system(size: 12, weight: .bold)); Text("Head home").font(SK.font(12, .heavy)).lineLimit(1) }
-                .foregroundStyle(SK.muted).padding(.horizontal, 10).frame(minHeight: 44)
-                .background(Capsule().fill(Color.white.opacity(0.7)))
-        }
-        .buttonStyle(.plain).accessibilityIdentifier("cafe-home")
-    }
     private var tableToggle: some View {
         Button { AudioHub.shared.uiTap(); table.toggle(); refusal = nil } label: {
             HStack(spacing: 6) {
@@ -157,7 +151,6 @@ struct CafeMenuCard: View {
                     }
                 }
                 Spacer(minLength: 4)
-                homeButton
             }
             HStack(spacing: 6) {
                 ForEach(ids, id: \.self) { id in
