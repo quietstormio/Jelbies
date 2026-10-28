@@ -213,8 +213,21 @@ def kickscooter():
     add_box((-0.08, 0.277, 0.0), (0.58, 0.014, 0.25), lit(INK, 0.18, 0.0), bevel=0.004)          # grip tape
     for k in range(4): add_box((-0.26 + 0.12*k, 0.285, 0.0), (0.05, 0.007, 0.25), lit(HONEY, 0.25, 0.05), bevel=0.002)
     add_box((0.30, 0.235, 0.0), (0.14, 0.075, 0.24), lit(PINK, 0.25, 0.10), bevel=0.02)
-    # rear fender over the back wheel
-    add_box((-0.45, 0.34, 0.0), (0.26, 0.04, 0.21), lit(SKY, 0.25), bevel=0.012, rot=(0,0,0.0))
+    # rear fender: a curved strip hugging the top-back of the rear wheel, bridged to the deck's rear end (one joined piece, deck colour)
+    cx, cy, FR = -0.45, SC_WR, SC_WR + 0.045
+    fpts = [(cx + FR*math.cos(math.radians(a)), cy + FR*math.sin(math.radians(a))) for a in np.linspace(18, 172, 20)]
+    bm = bmesh.new(); rings = []
+    for k, (px, py) in enumerate(fpts):
+        a = math.radians(18 + (172-18)*k/19); rr = Vector((math.cos(a), math.sin(a), 0)); zz = Vector((0, 0, 1))
+        c = Vector((px, py, 0))
+        rings.append([bm.verts.new(c + rr*dr + zz*dz) for dr, dz in ((-0.016, -0.105), (0.016, -0.105), (0.016, 0.105), (-0.016, 0.105))])
+    for k in range(len(rings)-1):
+        for m in range(4):
+            n = (m+1) % 4; bm.faces.new([rings[k][m], rings[k][n], rings[k+1][n], rings[k+1][m]])
+    bm.faces.new(rings[0][::-1]); bm.faces.new(rings[-1])
+    commit(bm, lit(PINK, 0.25, 0.10), mods=BEV(0.012, 2), sharp=50)
+    add_box((-0.405, 0.275, 0.0), (0.10, 0.12, 0.25), lit(PINK, 0.25, 0.10), bevel=0.02)          # the bridge from the deck's rear end up into the fender
+    add_box((-0.445, 0.24, 0.0), (0.06, 0.075, 0.31), lit(PINK, 0.25, 0.10), bevel=0.02)          # the deck's rear end reaching over the axle
     # steering column (raked back) and the fork
     add_tube([(0.43, 0.20, 0.0), (0.38, 0.55, 0.0), SC_TOP], 0.05, lit(SKY, 0.25), sides=12)
     for z in (-0.075, 0.075): add_tube([SC_HUB[:2] + (z,), (0.45, 0.17, z), (0.43, 0.24, z*0.4)], 0.032, lit(SKY, 0.2), sides=8)
