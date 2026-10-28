@@ -418,7 +418,7 @@ final class BlobBrain {
         if d.object(forKey: "BlobPitch") != nil { b.attentionPitch = Float(d.double(forKey: "BlobPitch")) }
         if d.integer(forKey: "BlobNoWander") != 0 { b.autonomy = false }
         // capture aid: -BlobGameDemo gwalk|gturn|ghop|gcome|gwave|gstep runs a scripted loop in the game without the care menu
-        if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
+        if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot, .cartwheel].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
         return b
     }

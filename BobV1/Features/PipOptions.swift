@@ -103,8 +103,8 @@ nonisolated enum PipSpikes {
         // ---- ONE shared ridge path: down the back's centreline from 47% of his height, over the swell where the back becomes the tail, then along the tail's top.
         // Spikes are spaced evenly by arc length along it and sized by distance from the junction (largest there).
         struct PP { var shown: SIMD3<Float>; var rest: SIMD3<Float>; var n: SIMD3<Float>; var t: Double; var isTail: Bool }
-        let sd = TailBean.startDir, sH = TailBean.swellHeight, sg = TailBean.swellSigma, rootF = TailBean.rootF
-        func swelled(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * expf(-simd_length_squared(q - rootF) / (2 * sg * sg))) }
+        let sd = TailBean.startDir, sH = TailBean.swellHeight
+        func swelled(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * TailBean.swellWeight(q)) }          // (the skin's own swell: Skinner.configureTail)
         func inEgg(_ q: SIMD3<Float>) -> Bool { BobForm.sdf(SIMD3(Double(q.x), Double(q.y), Double(q.z))) <= 0 }
         var path: [PP] = []
         // the first tail ridge sample that stands outside the swelled back
@@ -113,7 +113,7 @@ nonisolated enum PipSpikes {
             var t = sh.sink
             while t < sh.length {
                 let rg = sh.ridge(t), rp = f3(rg.p + rg.up * rg.r)
-                let inv = rp - sd * (sH * expf(-simd_length_squared(rp - rootF) / (2 * sg * sg)))
+                let inv = rp - sd * (sH * TailBean.swellWeight(rp))
                 if !inEgg(inv) { tCross = t; break }
                 t += 0.01
             }
