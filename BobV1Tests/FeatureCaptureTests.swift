@@ -519,8 +519,9 @@ final class FeatureCaptureTests: XCTestCase {
         var dbg = String(format: "TAILDBG width=%.3f length=%.3f sink=%.3f root=(%.2f,%.2f,%.2f)", sh.width, sh.length, sh.sink, sh.root.x, sh.root.y, sh.root.z)
         var tt = 0.0; while tt <= sh.length { let q = sh.point(tt); dbg += String(format: " | t%.2f (%.2f,%.2f,%.2f) r%.3f", tt, q.x, q.y, q.z, sh.radius(tt)); tt += 0.2 }
         try dbg.write(toFile: d + "/dbg.txt", atomically: true, encoding: .utf8)
-        let views: [(String, Float)] = [("view1.3", Float.pi * 1.4), ("front34", 0.9), ("back34", Float.pi * 1.2)]
+        let views: [(String, Float)] = (ProcessInfo.processInfo.environment["TAIL_VIEWS_ONLY"] != nil ? [("view1.3", Float.pi * 1.4), ("back34", Float.pi * 1.2), ("front34", 0.9)] : [])
         for (n, y) in views { try write(try closeup(c, yaw: y, label: "Pip \(n)", dist: 4.6, lookY: 0.15, lookBack: 0.5, lift: 0.3), d + "/piptail2_\(n).png") }
+        if ProcessInfo.processInfo.environment["TAIL_VIEWS_ONLY"] != nil { return }
         try write(try closeup(c, yaw: Float.pi * 0.8, label: "walk back 3/4", dist: 4.6, lookY: 0.15, lookBack: 0.5, lift: 0.3) { lab, dr in
             let r = lab.rigs[0]
             let p0 = r.sim.bodyPose(iterations: 3).centroid

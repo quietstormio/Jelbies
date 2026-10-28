@@ -99,6 +99,7 @@ nonisolated enum PipSpikes {
         // spike 1 sits on the body's back above the root (its own rigid part on the skin); spike 2 just above the root; spikes 3-6 along the tail's top ridge
         var parts: [(String, Int, Int, SIMD3<Float>)] = []
         var widths: [Float] = [], centres: [Float] = []
+        var tailSpikes: [(String, Int, Int, SIMD3<Float>, Int, SIMD3<Float>)] = []
         let W = Float(sh.width)
         func hOf(_ u: Float) -> Float { 0.23 * W * (1 - 0.4 * u) }                       // height; base diameter = height / 1.3
         // spike 1: on the back silhouette line, 35% of the way up from the root to the top
@@ -116,7 +117,6 @@ nonisolated enum PipSpikes {
             parts.append(("spike0", start, m.pos.count - start, base))
             widths.append(2 * bR); centres.append(0)
         }
-        let tailStart = m.pos.count
         let ts: [Double] = [0.10, 0.33, 0.56, 0.78].map { sh.sink + $0 * (sh.length - sh.sink) }
         var arcS: Float = 0, lastP: SIMD3<Float>? = nil
         for (k, t) in ts.enumerated() {
@@ -128,18 +128,27 @@ nonisolated enum PipSpikes {
             let up = f3(rg.up), tgF = f3(tg)
             let ax = simd_normalize(up * cosf(0.21) + tgF * sinf(0.21))
             let base = ridgeP - up * (0.3 * bR)
+            let start = m.pos.count
             m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.38, lateral: f3(fr.side), tones: tn)
             widths.append(2 * bR); centres.append(arcS + 10 * Float(k + 1))
+            // the skin vertex on the tail's top ridge nearest this spike
+            let ring = max(1, min(TailBean.bodyRings, Int((t / sh.length * Double(TailBean.bodyRings)).rounded())))
+            let rc = sh.point(sh.length * Double(ring) / Double(TailBean.bodyRings)), ru = sh.frame(sh.length * Double(ring) / Double(TailBean.bodyRings)).up
+            var bestJ = 0, bestD = -Double.infinity
+            for j in 0..<TailBean.around { let q = TailBean.local.pos[1 + TailBean.around * (ring - 1) + j] - rc; let d = simd_dot(q, ru); if d > bestD { bestD = d; bestJ = j } }
+            let local = 1 + TailBean.around * (ring - 1) + bestJ
+            tailSpikes.append(("tail\(k)", start, m.pos.count - start, base, local, f3(TailBean.local.pos[local])))
         }
         var gap = Float.infinity
         for k in 1..<centres.count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
         lastLayout = (centres.count > 1 ? centres[1] - centres[0] : 0, widths, gap)
         let root = f3(sh.root)
-        parts.append(("tail", tailStart, m.pos.count - tailStart, root))
-        for (pi, pp) in parts.enumerated() {
+        let allParts = parts.map { ($0.0, $0.1, $0.2, $0.3, -1, SIMD3<Float>.zero) } + tailSpikes
+        for (pi, pp) in allParts.enumerated() {
             var pr = FeaturePrepared.Part(name: pp.0)
             pr.first = r.rest.count; pr.count = pp.2; pr.pivot = pp.3
-            pr.bind = body.bind(pp.3) ?? SurfaceBind(); pr.side = pi
+            pr.tailLocal = pp.4; pr.skinAnchor = pp.5
+            pr.bind = pp.4 >= 0 ? SurfaceBind() : (body.bind(pp.3) ?? SurfaceBind()); pr.side = pi
             for k in pp.1..<(pp.1 + pp.2) {
                 r.rest.append(m.pos[k]); r.off.append(m.pos[k] - pp.3); r.nrm.append(m.nrm[k]); r.col.append(m.col[k]); r.ao.append(m.ao[k]); r.partOfVertex.append(pi)
             }

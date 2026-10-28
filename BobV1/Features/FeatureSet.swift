@@ -55,6 +55,7 @@ final class FeatureSet {
         var accelHead = 0
         var squashRate: Float = 0
         /// Pip's tail spikes (PipSpikes): yaw (deg, sway / wag) and pitch (deg, bounce), plus the spring state.
+        var tailFirst = -1
         var tailYaw: Float = 0, tailPitch: Float = 0, tailSway: Float = 0, tailSwayV: Float = 0, tailPitchV: Float = 0
         /// Spines: angle (deg) about (along, across) and its rate, per spine; the visible scale of each part (hidden under a hat -> 0).
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
@@ -208,6 +209,7 @@ final class FeatureSet {
     static let hatMargin: Float = 0.07
 
     private func stepTail(_ s: inout Slot, brain: BlobBrain, dt: Float) {
+        s.tailFirst = brain.skinnerRef?.tailFirst ?? -1
         s.tailYaw = brain.skinnerRef?.tailYaw ?? 0
         s.tailPitch = brain.skinnerRef?.tailPitch ?? 0
     }
@@ -328,7 +330,7 @@ final class FeatureSet {
     static func partRotation(_ p: FeaturePrepared, _ part: FeaturePrepared.Part, slot s: Slot, spec: FeatureSpec) -> simd_float3x3 {
         switch s.feature {
         case .spines:
-            if part.name == "tail" {                // the tail spikes ride the tail: yaw sway / wag + pitch bounce about its root (rest frame)
+            if part.name.hasPrefix("tail") {                // the tail spikes ride the tail: yaw sway / wag + pitch bounce about its root (rest frame)
                 let q = simd_quatf(angle: s.tailPitch * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: s.tailYaw * .pi / 180, axis: SIMD3(0, 1, 0))
                 return simd_float3x3(q)
             }
@@ -382,6 +384,11 @@ final class FeatureSet {
             let ownTuck: Float = s.feature == .spines ? tuck : 1
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
+            // a tail spike stands on the real skinned tail: its pivot is the skin vertex under it (plus the rest offset to its own pivot, turned by the tail's sway)
+            if part.tailLocal >= 0, s.tailFirst >= 0, let skin {
+                let o = 6 * (s.tailFirst + part.tailLocal)
+                pivotW = SIMD3(skin[o], skin[o + 1], skin[o + 2]) + M * (partRotation(p, part, slot: s, spec: spec) * (part.pivot - part.skinAnchor))
+            }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
             let rot = partRotation(p, part, slot: s, spec: spec)
             var stemRot = matrix_identity_float3x3

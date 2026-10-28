@@ -87,7 +87,20 @@ nonisolated final class Skinner {
         tailFirst = cap.tailFirst
         tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
         tailLMRest = tailLM.map { SIMD3(rm.rest[3 * $0], rm.rest[3 * $0 + 1], rm.rest[3 * $0 + 2]) }
+        // the swell: the egg's own lower-back vertices near the tail root are pushed out along the tail's start direction (Gaussian falloff), so the back flows into the
+        // tail root as one surface instead of a tube meeting a wall
+        let limit = cap.firstVertex.min() ?? rm.vertexCount
+        let root = TailBean.rootF, sg = TailBean.swellSigma
+        tailBumpDir = TailBean.startDir
+        tailBump = []
+        for v in 0..<min(limit, rm.rest.count / 3) {
+            let d = SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]) - root
+            let w = expf(-simd_length_squared(d) / (2 * sg * sg))
+            if w > 0.01 { tailBump.append((v, w)) }
+        }
     }
+    private var tailBump: [(Int, Float)] = []
+    private var tailBumpDir = SIMD3<Float>(0, 0, -1)
     private(set) var tailYaw: Float = 0, tailPitch: Float = 0
     private var tailScale: Float = 0, tailInit = false, tailClock: Float = 0, tailLastB = SIMD3<Float>.zero, tailPrimed = false
     var retractVertices: [Int32] = []
@@ -436,10 +449,14 @@ nonisolated final class Skinner {
             let L = TailBean.localF[i]
             let full = Cs + Rot * (L - Cr)
             var flat = Cs + RotY.act(L - Cr); flat.y = L.y - TailBean.restFloor
-            let w = 1 - simd_smoothstep(0.22, 0.5, L.y)
+            let w = 1 - simd_smoothstep(0.22, 0.5, TailBean.ringY[i])
             let p = full + (flat - full) * w
             let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
         }
+        if tailScale > 0.001 { for (v, w) in tailBump {                                           // the swell (scaled by the tail's own ease in / out below through tailScale)
+            let o = 6 * v, d = Rot * (tailBumpDir * (TailBean.swellHeight * w * tailScale))
+            dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
+        } }
         let B = P(0), T = P(n - 1)
         if !tailInit { tailScale = tailOn ? 1 : 0; tailInit = true }
         tailScale += max(-dt / 0.15, min(dt / 0.15, (tailOn ? 1 : 0) - tailScale))
@@ -465,7 +482,9 @@ nonisolated final class Skinner {
             var p = pivot + q.act(P(i) - pivot)
             if sc < 1 { p = pivot + (p - pivot) * sc }
             let o = 6 * (f + i)
-            dyn[o] = p.x; dyn[o + 1] = max(p.y, 0.004); dyn[o + 2] = p.z
+            dyn[o] = p.x; dyn[o + 2] = p.z
+            // soft floor instead of a hard clamp: below 0.04 the height eases down onto 0.004, so the underside rounds into the floor with no flat crease
+            dyn[o + 1] = p.y >= 0.04 ? p.y : 0.004 + 0.036 * expf((p.y - 0.04) / 0.036)
         }
     }
 
