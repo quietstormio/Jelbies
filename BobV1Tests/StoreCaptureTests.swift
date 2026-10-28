@@ -141,6 +141,7 @@ final class StoreCaptureTests: XCTestCase {
 
     /// Two Jelbies sharing each bought drink (stand-in Blobs at the places): the big cup, the slim bendy straws toward each mouth.
     func testCaptureDrinksTwo() throws {
+#if DEBUG || DINING_PREVIEW
         guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
         let m = MealRun()
@@ -164,6 +165,9 @@ final class StoreCaptureTests: XCTestCase {
             }
         }
         try save(sheet(cells, cols: 2, title: "Bought drinks, 1 and 2 Jelbies (stand-in bodies)"), dir, "drinks_two.png")
+#else
+        throw XCTSkip("previewGhosts is debug-only")
+#endif
     }
 
     func testCaptureFoods() throws {
