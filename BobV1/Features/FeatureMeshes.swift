@@ -23,6 +23,9 @@ nonisolated final class FeaturePrepared: @unchecked Sendable {
         var isPetal = false
         var side = 0           // wings: 0 right (+x), 1 left (-x); spines: index; else 0
         var group = 0          // daisy: 0 stem / leaves, 1 flower
+        /// Pip's tail spikes: the index within the tail block of the skin vertex the spike stands on (its rest position `skinAnchor`), so it follows the real skinned tail; -1 = not used.
+        var tailLocal = -1
+        var skinAnchor = SIMD3<Float>.zero
     }
     let art: String
     let key: String

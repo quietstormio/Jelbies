@@ -57,7 +57,7 @@ nonisolated enum TailBean {
                 taper = (a.1 + (b.1 - a.1) * (0.5 * f + 0.5 * sm)) * width
                 break
             }
-            let flare = 1 + 0.10 * exp(-(t - sink) / 0.2) * (1 - u)
+            let flare = 1 + 0.55 * exp(-(t - sink) / 0.30) * (1 - u)
             return taper * flare
         }
         /// Cross-section frame at `t`: sideways (+x side) and the way up, both perpendicular to the centre line.
@@ -74,14 +74,14 @@ nonisolated enum TailBean {
     }
 
     static let shape: Shape = {
-        let y0 = 0.66                                                    // the lower back
+        let y0 = 0.47                                                    // the lower back
         var lo = -1.2, hi = 0.0
         for _ in 0..<50 { let m = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y0, m)) > 0 { lo = m } else { hi = m } }
         let root = SIMD3(0, y0, hi)
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.04, sink = 0.26, ys = 1.0
+        let tipR = 0.04, sink = 0.30, ys = 1.0
         let baseR = width * 0.21                                             // about a third of the body width across
         let vis = 0.92 * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
@@ -136,7 +136,19 @@ nonisolated enum TailBean {
     }()
 
     /// The rest-space height of the floor under the tail (the egg sits about this much below its rest y once settled).
-    static let restFloor: Float = 0.14
+    static let restFloor: Float = 0.12
+    /// The swell on the egg's lower back (Skinner.configureTail): how far (rest units) its vertices are pushed along the tail's start direction, and how widely.
+    static let swellHeight: Float = 0.30, swellSigma: Float = 0.42
+    static let startDir: SIMD3<Float> = { let d = shape.tangent(shape.sink + 0.05); return SIMD3(Float(d.x), Float(d.y), Float(d.z)) }()
+    /// Per vertex: the rest height of its ring's centre (so a whole ring blends rigid -> floor-lying by the same weight and is never squashed).
+    static let ringY: [Float] = {
+        let s = shape
+        var out: [Float] = [Float(s.point(0).y)]
+        for k in 1...bodyRings { out += Array(repeating: Float(s.point(s.length * Double(k) / Double(bodyRings)).y), count: around) }
+        for _ in 1...capRings { out += Array(repeating: Float(s.point(s.length).y), count: around) }
+        out.append(Float(s.point(s.length).y))
+        return out
+    }()
     static let rootF = SIMD3<Float>(Float(shape.root.x), Float(shape.root.y), Float(shape.root.z))
     static let localF: [SIMD3<Float>] = local.pos.map { SIMD3(Float($0.x), Float($0.y), Float($0.z)) }
 
