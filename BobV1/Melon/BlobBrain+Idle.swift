@@ -259,6 +259,7 @@ extension BlobBrain {
 
     /// Called from `pickAutonomous` (a pick is due, script .none): starts a special when the cooldown is over. True = a behaviour started.
     func idleMaybeStart(_ sim: SoftBody) -> Bool {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("idleMaybeStart", probe) }
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
         if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
@@ -639,6 +640,7 @@ extension BlobBrain {
 
     /// A random spot inside the roaming area `minD...maxD` from `here` that is reachable in a straight line (nil = no room).
     func pickRunGoal(from here: SIMD2<Float>, minD: Float, maxD: Float) -> SIMD2<Float>? {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRunGoal", probe) }
         for _ in 0..<160 {
             var cand: SIMD2<Float>
             if let rf = roamProvider?() { cand = rf.sampleArea(rand(), rand(), rand()) }

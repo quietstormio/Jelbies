@@ -88,7 +88,7 @@ extension DecorModels {
             }
             if t < 3 { addMachineBubbles(into: b, o: o, t: t) }
         case .rockinghorse:
-            let theta = 0.24 * k * sinf(t * 6.5)
+            let theta = arcTheta(a)
             let c = SIMD3<Float>(0, horseArcY, 0), q = simd_quatf(angle: -theta, axis: SIMD3(0, 0, 1)), roll = SIMD3<Float>(horseArcR * theta, 0, 0)
             func rock(_ v: SIMD3<Float>, _ n: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) { let (p, n2) = turn(v, n, about: c, q); return (p + roll, n2) }
             if let h = art.part("horse") { emit(h) { v, n, _ in rock(v, n) } }

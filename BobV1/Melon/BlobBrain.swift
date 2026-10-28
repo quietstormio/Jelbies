@@ -74,6 +74,8 @@ final class BlobBrain {
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
     var slideY: Float = 0
+    /// The kick scooter ride in progress (BlobBrain+Scooter.swift).
+    var ride = ScooterRide()
     /// Tests: force how a throw ends (0 plain arc, 1 bonk, 2 drop).
     /// Soccer (BlobBrain+Soccer.swift): the plan the stand-spot pick made for the kick about to start, and the tests' forced mode (0 kick, 1 dribble, 2 shoot, 3 rescue).
     var soccerPlan = SoccerIdle()
@@ -552,6 +554,8 @@ final class BlobBrain {
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
         runDt = dt
+        stepCounter &+= 1
+        planCool = max(0, planCool - dt)
         defer { expressionTick(sim, skinner, dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
@@ -622,6 +626,7 @@ final class BlobBrain {
 
         poseOn = false
         runScript(sim, skinner, dt)
+        toyPoseTick()
         drivePose(sim, dt)
         driveLimbs(sim, skinner, dt)
         updateActivity()
@@ -700,6 +705,8 @@ final class BlobBrain {
     }
 
     func pickAutonomous(_ sim: SoftBody) {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("pickAutonomous", probe) }
+        planBudget = 12; defer { planBudget = 99 }
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
@@ -981,11 +988,22 @@ final class BlobBrain {
     /// The peers the steering sees. A Jelly perched on a seat (the hop up, the sit on top) is the furniture's business - the piece is the
     /// obstacle - not a body on the floor: a leg past the sofa must not wait on the one sitting on it.
     func steerPeers() -> [(id: Int, pos: SIMD2<Float>)] {
+        // (the peers are the room's snapshot of this step: read once per step, not once per probe of the route planner - it asks hundreds of times)
+        if peerCacheStep == stepCounter { return peerCache }
         let all = peers()
         let perched = socialOthers().filter { $0 !== self && $0.isPerched }.map(\.position)
-        guard !perched.isEmpty else { return all }
-        return all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
+        let r = perched.isEmpty ? all : all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
+        peerCache = r; peerCacheStep = stepCounter
+        return r
     }
+    /// The step counter (bumped at the top of every tick) and the peers cached for it.
+    var stepCounter = 0
+    var peerCacheStep = -1
+    var peerCache: [(id: Int, pos: SIMD2<Float>)] = []
+    /// Route plans this pick may still spend (a wander / goal pick tries dozens of candidates: only a few may need the planner; the rest must be a clear straight leg).
+    var planBudget = 99
+    /// Seconds until the walker may run the route planner again after it found no way round (it re-planned every frame while blocked).
+    var planCool: Float = 0
 
     /// How deep (u) a floor point is inside something he must not stand in, with `margin` extra clearance (0 = free).
     func intrusion(_ p: SIMD2<Float>, margin: Float) -> Float {
@@ -997,6 +1015,7 @@ final class BlobBrain {
 
     /// The straight leg a -> b keeps its clearance (it may start inside the margin as long as it only leaves it, and end in it).
     func legClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, margin: Float) -> Bool {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("legClear", probe) }
         let d = b - a, L = simd_length(d)
         if L < 1e-3 { return true }
         let n = max(2, Int(L / 0.07)), a0 = intrusion(a, margin: margin)
@@ -1010,6 +1029,7 @@ final class BlobBrain {
 
     /// Waypoints from `a` to `b` around whatever blocks the straight line (nil if no route within two corners).
     func planRoute(_ a: SIMD2<Float>, _ b: SIMD2<Float>, depth: Int) -> [SIMD2<Float>]? {
+        let probe = depth == 2 ? PerfProbe.begin() : 0; defer { PerfProbe.end("planRoute", probe) }
         let m = steerMargin
         if legClear(a, b, margin: m) { return [] }
         guard depth > 0 else { return nil }
@@ -1041,6 +1061,7 @@ final class BlobBrain {
 
     /// Where to walk next: the target itself, or the next waypoint of a route around the obstacle in the way (kept until reached: no jitter).
     func steerTarget(to target: SIMD2<Float>) -> SIMD2<Float>? {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("steerTarget", probe) }
         let root = SIMD2(px, pz)
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
@@ -1050,7 +1071,10 @@ final class BlobBrain {
         if let w = route.first { return w }
         if let w = lookAheadSidestep(root, target) { route = [w]; return w }          // (curve round a Jelly early: BlobBrain+Contact.swift)
         if legClear(root, target, margin: steerMargin) { return target }
-        if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
+        if planCool <= 0 {
+            if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
+            planCool = 0.3          // (no way round: ask again in a moment, not every frame)
+        }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
         let standing = steerPeers().contains { $0.id >= Int.max / 4 }
@@ -1080,8 +1104,12 @@ final class BlobBrain {
     /// A goal he can really get to: the straight leg is clear, or a route of at most two corners goes round whatever stands in it (a goal behind a
     /// standing Jelly in a narrow strip of floor is not a goal: he would wait there and give up).
     func reachable(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("reachable", probe) }
         if steerPeers().isEmpty { return true }
-        return legClear(a, b, margin: steerMargin) || planRoute(a, b, depth: 2) != nil
+        if legClear(a, b, margin: steerMargin) { return true }
+        guard planBudget > 0 else { return false }
+        planBudget -= 1
+        return planRoute(a, b, depth: 2) != nil
     }
     /// A Blob with a higher id stands within the gap of the straight leg a -> b.
     func peerOnLeg(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {

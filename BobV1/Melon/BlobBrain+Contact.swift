@@ -21,6 +21,7 @@ enum ContactTuning {
 extension BlobBrain {
     /// A waypoint beside the leg root -> target that clears a Jelly in the way by the gap, or nil (nobody in the way, or no free spot).
     func lookAheadSidestep(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> SIMD2<Float>? {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("lookAheadSidestep", probe) }
         guard ContactTuning.lookAhead, job == nil, !commanded, pending == nil else { return nil }
         let d = target - root, L = simd_length(d)
         guard L > 1.0 else { return nil }
