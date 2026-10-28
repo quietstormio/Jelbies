@@ -21,7 +21,7 @@ struct RosterButton: View {
                 if open {
                     Image(systemName: "xmark").font(.system(size: 19, weight: .semibold))
                 } else {
-                    JelbieGlyph().frame(width: 30, height: 30)
+                    JelbieGlyph().frame(width: 34, height: 32)
                 }
             }
             .foregroundStyle(Color(red: 0.42, green: 0.34, blue: 0.30))
