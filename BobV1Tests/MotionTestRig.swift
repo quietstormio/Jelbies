@@ -63,6 +63,7 @@ final class MotionRig {
     func tick(touched: Bool = false) {
         brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: touched)
         sim.step()
+        brain.refitBeans(sim, skinner)          // (as the stage does after its steps)
         t += sim.stepDt
     }
 
