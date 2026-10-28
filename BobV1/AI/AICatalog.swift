@@ -108,5 +108,8 @@ nonisolated enum AICatalogRegistry {
         .roundtable: ["round table", "table"], .cushionpile: ["cushion pile", "pillows", "cushions"], .aquarium: ["aquarium", "fish tank", "fish"], .plantstand: ["fern", "plant stand"],
         .easel: ["easel", "painting"], .mirror: ["mirror"], .clock: ["clock", "grandfather clock"], .bubblemachine: ["bubble machine", "bubbles"], .rockinghorse: ["rocking horse", "horse"],
         .jackinbox: ["jack in the box", "jack", "clown"], .plushbear: ["bear", "teddy", "plush", "plush bear"], .toypiano: ["piano", "toy piano", "keyboard"], .pinwheel: ["pinwheel", "windmill"],
+        // batch 4
+        .beachball: ["beach ball", "beachball"], .playtunnel: ["tunnel", "play tunnel", "crawl tunnel"], .ringstacker: ["ring stacker", "rings", "stacker"], .toyrocket: ["rocket", "toy rocket"],
+        .plushdino: ["dino", "dinosaur", "plush dino"], .kickscooter: ["scooter", "kick scooter"],
     ]
 }

@@ -340,6 +340,11 @@ extension BlobBrain {
                 case .toypiano?: AudioHub.shared.play(.sparkle, jelly: steerID, x: px, volume: 0.7, rate: Float(0.85 + 0.1 * Double(Int(rand() * 5))))
                 case .plushbear?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 1.1)
                 case .rockinghorse?: AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 0.7)
+                // batch 4: the dino squishes, the rocket whooshes softly, the rings clink, the scooter's bell dings
+                case .plushdino?: AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7, rate: 0.95)
+                case .toyrocket?: AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5, rate: 0.6)
+                case .ringstacker?: AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.45, rate: 1.7); AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.3, rate: 1.6)
+                case .kickscooter?: AudioHub.shared.play(.sparkle, jelly: steerID, x: px, volume: 0.8, rate: 1.35)
                 case .clock?: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9, rate: 0.45)
                 default: AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.6)
                 }
