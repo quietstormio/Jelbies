@@ -22,10 +22,10 @@ TITLES = {  # store names (the art titles repeat across colourways)
     "sash_pink": "Pink racing sash", "sash_sky": "Sky racing sash", "bucket_hat": "Mint bucket hat", "bucket_hat_pink": "Pink bucket hat",
     "scarf_cosy": "Coral cosy scarf", "scarf_sky": "Sky cosy scarf", "wristbands_sky": "Sky wristbands",
 }
-SHOE_OLD = [  # (case, store id, title, price, tags, paint style, batch)
+SHOE_OLD = [  # (case, store id, title, price, tags, paint style, batch); 2026-10-27 shoe sweep: Sun became sandals and Coral clogs (the raw case names stay for old saves)
     ("sneakerMint", "shoe-mint", "Mint sneakers", 30, ["sporty", "cute"], "sneaker_mint", 1),
-    ("sneakerSun", "shoe-sun", "Sunny sneakers", 30, ["sporty", "sweet"], "sneaker_sun", 1),
-    ("sneakerCoral", "shoe-coral", "Coral sneakers", 30, ["sporty", "cute"], "sneaker_coral", 1),
+    ("sneakerSun", "shoe-sun", "Sunny sandals", 30, ["sweet", "cute"], "sneaker_sun", 1),
+    ("sneakerCoral", "shoe-coral", "Coral clogs", 30, ["cute", "cool"], "sneaker_coral", 1),
     ("rainBoots", "shoe-rain", "Rain boots", 45, ["cute", "cool"], "rainboot", 1),
     ("glitterShoes", "shoe-glitter", "Glitter shoes", 60, ["sparkly", "sweet"], "glitter", 1),
 ]

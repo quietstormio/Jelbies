@@ -5,6 +5,9 @@
 //  coloured by where it is on the foot (sole, toe cap, side stripe, upper). So a shoe is attached by construction (every shoe vertex is within
 //  `maxThickness` of the bean surface) in every move, and it needs no body slot: rivals on the track keep their three tinted bodies.
 //
+//  2026-10-27: the shoes are now MODELLED (Blender, tools/shoes) and bound to the bean (Wear/ShoeArt.swift); the procedural shell below is only the fallback for a look with no
+//  art and the coordinate source the old paint specs (ShoePaint) read.
+//
 //  `WearLook` carries the slot, so hats / bows / glasses can add `head` / `face` models the same way later (GameCare+Shoes.swift feeds the renderer).
 //
 
@@ -116,7 +119,10 @@ nonisolated enum ShoeModel {
     }
 
     /// Smooth vertex normals of the deformed bean (area weighted), turned outward from its centre.
-    static func normals(_ w: [SIMD3<Float>]) -> [SIMD3<Float>] {
+    static func normals(_ w: [SIMD3<Float>]) -> [SIMD3<Float>] { normalsAndFlip(w).n }
+
+    /// The same normals, and whether the bean's triangles wind INWARD (the mirrored foot): a modelled shoe's triangles are then flipped to face out.
+    static func normalsAndFlip(_ w: [SIMD3<Float>]) -> (n: [SIMD3<Float>], flip: Bool) {
         var n = [SIMD3<Float>](repeating: .zero, count: w.count)
         var c = SIMD3<Float>.zero
         for p in w { c += p }
@@ -131,12 +137,13 @@ nonisolated enum ShoeModel {
         var s: Float = 0
         for i in w.indices { s += simd_dot(n[i], w[i] - c) }
         let sign: Float = s < 0 ? -1 : 1
-        return n.map { simd_length_squared($0) > 1e-14 ? simd_normalize($0) * sign : SIMD3(0, 1, 0) }
+        return (n.map { simd_length_squared($0) > 1e-14 ? simd_normalize($0) * sign : SIMD3(0, 1, 0) }, s < 0)
     }
 
     /// The shoe of one foot as a world-space mesh. `bean` = the foot's 418 world vertices; `floorY` keeps the sole off the floor; `time` twinkles the glitter.
     static func build(_ look: WearLook, bean w: [SIMD3<Float>], floorY: Float, time: Float, side: Int, body: SIMD3<Float> = SIMD3(0.35, 0.5, 0.9), gpuPaint: Bool = false, into b: RoomMeshBuilder) {
         guard w.count == FootBean.vertexCount else { return }
+        if let art = ShoeArt.art(look) { art.build(bean: w, time: time, side: side, into: b); return }
         buildShell(look, bean: w, floorY: floorY, body: body, time: time, gpuPaint: gpuPaint, into: b)
         if look == .glitterShoes { sparkles(b, w: w, n: normals(w), time: time, side: side) }
     }
@@ -146,8 +153,9 @@ nonisolated enum ShoeModel {
     /// `gpuPaint`: the vertices carry the paint coordinates (u, v, sx), the look and the body colour and the room FRAGMENT shader paints the look per
     /// pixel (ShoeGPU); false = the per-vertex colours (store thumbnails, tests).
     static func buildShell(_ look: WearLook, bean w: [SIMD3<Float>], floorY: Float, body: SIMD3<Float> = SIMD3(0.35, 0.5, 0.9), time: Float = 0,
-                           gpuPaint: Bool = false, into b: RoomMeshBuilder) {
+                           gpuPaint: Bool = false, side: Int = 0, into b: RoomMeshBuilder) {
         guard w.count == FootBean.vertexCount else { return }
+        if let art = ShoeArt.art(look) { art.build(bean: w, time: time, side: side, into: b); return }
         let n = normals(w)
         let sb = sub
         let paint: (col: [SIMD3<Float>], glow: [Float]) = gpuPaint ? ([], []) : ShoePaint.paintVertices(look, body: body)

@@ -39,7 +39,7 @@ final class WearCaptureTests: XCTestCase {
     }
 
     private func setUpLab(_ positions: [SIMD2<Float>], seed: UInt64 = 5) -> SocialTests.Lab {
-        let lab = SocialTests.Lab(positions: positions, quiet: true, seed: seed)
+        let lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: true, seed: seed)
         SocialTests.keep.append(lab)
         for r in lab.rigs { r.skinner.autoBlink = false }
         WearBody.install(MotionRig.renderMesh)
@@ -76,7 +76,7 @@ final class WearCaptureTests: XCTestCase {
 
     /// The scene with every rig drawn alone and pasted; `sets` = each rig's wardrobe, shoes from `outfits`.
     private func composite(_ lab: SocialTests.Lab, _ sets: [WornSet], _ outfits: [Outfit], _ ren: MelonRenderer, _ target: MTLTexture,
-                           cam camOverride: CameraState? = nil, mouth: Float = 0, race: Bool = false, hour: Double? = 12) -> LockImage {
+                           cam camOverride: CameraState? = nil, mouth: Float = 0, race: Bool = false, hour: Double? = 12, rigFilter: Int? = nil) -> LockImage {
         let cam = camOverride ?? GameCamera.camera(aspect: Float(W) / Float(H), focus: 0, race: race ? 1 : 0)
         ren.dayHourOverride = hour
         ren.raceVisible = race
@@ -118,7 +118,7 @@ final class WearCaptureTests: XCTestCase {
         _ = shot(only: nil)
         let empty = shot(only: nil)
         var out = empty
-        for k in (0..<lab.rigs.count).sorted(by: { lab.rigs[$0].sim.centroid().z < lab.rigs[$1].sim.centroid().z }) {
+        for k in (0..<lab.rigs.count).sorted(by: { lab.rigs[$0].sim.centroid().z < lab.rigs[$1].sim.centroid().z }) where rigFilter == nil || rigFilter == k {
             let b = shot(only: k)
             for p in 0..<(W * H) {
                 var d = 0
@@ -487,5 +487,66 @@ extension WearCaptureTests {
             var y: CGFloat = 0
             for r in rows { r.draw(at: CGPoint(x: 0, y: y)); y += r.size.height }
         }, d + "/shoes_stand_\(tag).png")
+    }
+}
+
+extension WearCaptureTests {
+    /// STORE SWEEP (shoes): every shoe on all four Jelbies (Bob, Pip, Moss, Lavender) standing, mid-walk, mid-run, sitting and in two cartwheel frames, one
+    /// low 3/4 camera over the whole row. SHOE_LOOKS="sneakerMint,rainBoots" and SHOE_POSES="stand,walk" limit the run; writes shoes4_<look>.png.
+    func testCaptureShoesAllJelbies() throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        let env = ProcessInfo.processInfo.environment
+        let looks = (env["SHOE_LOOKS"].map { $0.isEmpty ? [] : $0.components(separatedBy: ",") } ?? []).compactMap { WearLook(rawValue: $0) }
+        let poses = (env["SHOE_POSES"].map { $0.isEmpty ? [] : $0.components(separatedBy: ",") } ?? [])
+        let allPoses = ["stand", "walk", "run", "sit", "cartwheelA", "cartwheelB"]
+        let names = ["Bob", "Pip", "Moss", "Lavender"]
+        let cell = (w: 600, h: 520)
+        W = cell.w; H = cell.h
+        var shared: (MelonRenderer, MTLTexture)?
+        for look in (looks.isEmpty ? WearLook.shoes : looks) {
+            var rows: [UIImage] = []
+            for pose in (poses.isEmpty ? allPoses : poses) {
+                let lab = setUpLab([SIMD2(-1.7, -0.3), SIMD2(1.7, -0.3), SIMD2(-0.9, 1.9), SIMD2(1.0, 1.9)], seed: 3)
+                if shared == nil { shared = try renderer(lab) }
+                let (ren, target) = shared!
+                let outfit: Outfit = [.feet: look]
+                let outfits = [Outfit](repeating: outfit, count: 4)
+                let sets = dress(lab, outfits)
+                for r in lab.rigs { r.brain.shoesWorn = true }
+                func step(_ n: Int) { for _ in 0..<n { lab.tick(watching: false); for q in lab.rigs { q.skinner.jelly.tick(brain: q.brain, sim: q.sim, dt: q.sim.stepDt) } } }
+                step(60 * 2)
+                switch pose {
+                case "walk": for r in lab.rigs { r.brain.request(.goTo(r.root + SIMD2(0, 1.2))) }; step(70)
+                case "run":
+                    for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.run, r.sim) }
+                    step(80)
+                    var n = 0
+                    while n < 120, lab.rigs[0].footBottom(0) - lab.rigs[0].sim.floorY < 0.05, lab.rigs[0].footBottom(1) - lab.rigs[0].sim.floorY < 0.05 { step(1); n += 1 }
+                case "sit": for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.sit, r.sim) }; step(60 * 3)
+                case "cartwheelA", "cartwheelB":
+                    for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.cartwheel, r.sim) }
+                    let want: Float = pose == "cartwheelA" ? 1.0 : 2.3
+                    var n = 0
+                    while n < 60 * 6, lab.rigs[0].sim.bodyPose(iterations: 4).tilt < want { step(1); n += 1 }
+                default: break
+                }
+                var cells: [UIImage] = []
+                for (k, r) in lab.rigs.enumerated() {
+                    let c = r.sim.centroid()
+                    let cam = Self.lookCamera(target: SIMD3(c.x, 0.12, c.z), dir: simd_normalize(SIMD3(0.35, 0, 1)), dist: 2.3, aspect: Float(W) / Float(H), lift: 0.3)
+                    let img = composite(lab, sets, outfits, ren, target, cam: cam, rigFilter: k)
+                    cells.append(labelled(img.uiImage()!, "\(look.title): \(pose), \(names[k])"))
+                }
+                rows.append(hstack(cells))
+                SocialTests.keep.removeAll()
+            }
+            let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+            let w = rows.map { $0.size.width }.max()!, h = rows.map { $0.size.height }.reduce(0, +)
+            try write(UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
+                var y: CGFloat = 0
+                for r in rows { r.draw(at: CGPoint(x: 0, y: y)); y += r.size.height }
+            }, d + "/shoes4_\(look.rawValue).png")
+        }
     }
 }
