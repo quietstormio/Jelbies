@@ -13,13 +13,18 @@ import Foundation
 import simd
 
 enum OutingTuning {
-    static let cutZ: Float = 5.5, targetZ: Float = 7.4, timeout: Float = 3.5, stagger: Float = 0.2
+    /// `cutZ`: the fade starts when the last runner passes this depth (he is still on screen, mid-stride). `targetZ`: the run's goal, far past the camera / the front edge, so
+    /// nobody ARRIVES (an arrival is what used to stop them: the goal sat just off the front edge and the leaders stood idle there while the fade waited for the last one).
+    static let cutZ: Float = 4.6, targetZ: Float = 18, timeout: Float = 6, stagger: Float = 0.08, maxDelay: Float = 0.9, runSpeed: Float = 1.75
+    /// How long after the fade starts the runners are kept running (the longest fade-out is 0.5 s; the swap comes right after it).
+    static let keepRunning: Float = 0.9
     static let tidyDelay: Float = 1.8
 }
 
 @MainActor
 final class OutingBook {
-    struct Runner { var delay: Float; var started = false; var autonomy = true; var home = SIMD2<Float>.zero }
+    struct Runner { var delay: Float; var lane: Float = 0; var started = false; var swapped = false; var last = SIMD2<Float>.zero; var autonomy = true; var home = SIMD2<Float>.zero }
+    var keepT: Float = 0
     var lifted: Set<Int> = []
     var runners: [Int: Runner] = [:]
     var t: Float = 0
@@ -47,7 +52,15 @@ extension GameCare {
         if going.isEmpty || A11ySettings.shared.reduceMotion { done(); return }
         outingTidy()
         o.t = 0; o.runners = [:]; o.then = done; o.released = []
-        for (k, a) in going.enumerated() { o.runners[a.id] = OutingBook.Runner(delay: Float(k) * OutingTuning.stagger) }
+        // Fanned lanes (in today's left-to-right order, so paths never cross) and a start delay that evens out the arrival: whoever is nearest the camera leaves last.
+        let byX = going.sorted { $0.floor.x < $1.floor.x }
+        let far = going.map { OutingTuning.cutZ - $0.floor.y }.max() ?? 0
+        for (k, a) in byX.enumerated() {
+            let lane = max(-2.4, min(2.4, a.floor.x * 0.9 + (Float(k) - Float(going.count - 1) / 2) * 0.5))
+            let wait = min(OutingTuning.maxDelay, max(0, (far - (OutingTuning.cutZ - a.floor.y)) / OutingTuning.runSpeed))
+            o.runners[a.id] = OutingBook.Runner(delay: wait + Float(k) * OutingTuning.stagger, lane: lane)
+        }
+        o.keepT = 0
         for a in actors where !ids.contains(a.id) {          // the ones who stay: watch and cheer them off
             guard let b = a.brain, !b.isSleeping else { continue }
             b.face(.happy, hold: 2)
@@ -69,8 +82,7 @@ extension GameCare {
                     o.lifted.insert(id); a.sim.arenaSuspended = true
                     b.autonomy = false
                     b.hurry = true
-                    let x = r.home.x * 0.8
-                    b.requestNow(.goTo(SIMD2(x, OutingTuning.targetZ)))
+                    b.requestNow(.goTo(SIMD2(r.lane, OutingTuning.targetZ)))
                     o.runners[id] = r
                 }
                 b.hurry = true
@@ -79,6 +91,19 @@ extension GameCare {
             if allOut { outingGo(actors) }
         } else if let t = o.tidyT {
             o.tidyT = t - dt
+            // Still running through the fade: nothing may stop, settle or idle before the screen is covered (and the trip's swap moves them).
+            if o.keepT > 0 {
+                o.keepT -= dt
+                for (id, r0) in o.runners where r0.started && !r0.swapped {
+                    guard let a = actors.first(where: { $0.id == id }), let b = a.brain else { continue }
+                    var r = r0
+                    let here = GameCare.floorPos(b, a.sim)
+                    if simd_distance(here, r.last) > 0.6 { r.swapped = true; o.runners[id] = r; continue }          // (the trip's swap moved him: hands off)
+                    r.last = here; o.runners[id] = r
+                    b.hurry = true
+                    if case .none = b.script, b.pending == nil { b.requestNow(.goTo(SIMD2(r.lane, OutingTuning.targetZ))) }
+                }
+            }
             if t - dt <= 0 { outingTidy() }
         }
     }
@@ -93,7 +118,9 @@ extension GameCare {
             b.autonomy = r.autonomy
             o.released.append(id)
         }
+        for (id, r0) in o.runners { if let a = actors.first(where: { $0.id == id }), let b = a.brain { var r = r0; r.last = GameCare.floorPos(b, a.sim); o.runners[id] = r } }
         o.tidyT = OutingTuning.tidyDelay
+        o.keepT = OutingTuning.keepRunning
         done?()
     }
 
