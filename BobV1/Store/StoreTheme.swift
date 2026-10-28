@@ -164,7 +164,7 @@ enum StoreThumb {
         let pos = m.vertices.map { SCNVector3($0.pos.x, $0.pos.y, $0.pos.z) }
         let nrm = m.vertices.map { SCNVector3($0.normal.x, $0.normal.y, $0.normal.z) }
         var col: [Float] = []
-        for v in m.vertices { col += [srgb(v.color.x), srgb(v.color.y), srgb(v.color.z), v.color.w] }
+        for v in m.vertices { col += [srgb(v.color.x), srgb(v.color.y), srgb(v.color.z), v.color.w * 0.6] }          // (thinner glass in a thumbnail: on a white card it would wash the colours out)
         let colSrc = SCNGeometrySource(data: col.withUnsafeBufferPointer { Data(buffer: $0) }, semantic: .color, vectorCount: m.vertices.count, usesFloatComponents: true,
                                        componentsPerVector: 4, bytesPerComponent: 4, dataOffset: 0, dataStride: 16)
         let el = SCNGeometryElement(data: m.indices.withUnsafeBufferPointer { Data(buffer: $0) }, primitiveType: .triangles, primitiveCount: m.indices.count / 3, bytesPerIndex: 4)

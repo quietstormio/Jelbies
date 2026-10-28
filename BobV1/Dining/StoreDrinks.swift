@@ -12,25 +12,27 @@ import Foundation
 
 nonisolated enum StoreDrinkModels {
     struct Spec {
-        /// Inner wall (radius, height) the liquid column follows; the first point is on the axis at the cup's inner floor.
+        /// Inner wall (radius, height) the liquid column follows; the first point is on the axis a hair BELOW the cup's inner floor (the column's base is built from the points above it).
         var wall: DiningModels.Wall
         var full: Float, empty: Float, top: Float, rim: Float
         /// An opaque liquid (the smoothie, the cocoa in its mug) is drawn with the solid parts; the others are seen through the glass.
         var opaque: Bool
         var color: SIMD3<Float>, surface: SIMD3<Float>
         var alpha: Float, shellAlpha: Float, iceAlpha: Float
+        /// The cup is drawn this much bigger than it was modelled (a real drink beside a Jelbie), straw root and rim included.
+        var size: Float = 1.5
     }
     private static func c(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { Consumables.srgb(r, g, b) }
 
     static let specs: [String: Spec] = [
-        "boba": Spec(wall: [(0, 0.014), (0.080, 0.014), (0.104, 0.29)], full: 0.25, empty: 0.05, top: 0.30, rim: 0.104, opaque: false,
-                     color: c(0.86, 0.66, 0.44), surface: c(0.92, 0.74, 0.52), alpha: 0.82, shellAlpha: 0.30, iceAlpha: 0.75),
-        "smoothie": Spec(wall: [(0, 0.02), (0.090, 0.02), (0.102, 0.034), (0.104, 0.27)], full: 0.235, empty: 0.055, top: 0.27, rim: 0.104, opaque: true,
+        "boba": Spec(wall: [(0, 0.010), (0.080, 0.014), (0.104, 0.29)], full: 0.25, empty: 0.05, top: 0.30, rim: 0.104, opaque: false,
+                     color: c(0.86, 0.66, 0.44), surface: c(0.92, 0.74, 0.52), alpha: 0.9, shellAlpha: 0.30, iceAlpha: 0.75),
+        "smoothie": Spec(wall: [(0, 0.016), (0.090, 0.02), (0.102, 0.034), (0.104, 0.27)], full: 0.235, empty: 0.055, top: 0.27, rim: 0.104, opaque: true,
                          color: c(0.92, 0.38, 0.58), surface: c(0.98, 0.52, 0.70), alpha: 1, shellAlpha: 0.30, iceAlpha: 1),
-        "lemonade": Spec(wall: [(0, 0.032), (0.076, 0.032), (0.100, 0.27)], full: 0.23, empty: 0.065, top: 0.278, rim: 0.100, opaque: false,
-                         color: c(1.0, 0.50, 0.64), surface: c(1.0, 0.70, 0.78), alpha: 0.80, shellAlpha: 0.36, iceAlpha: 0.62),
-        "cocoa": Spec(wall: [(0, 0.022), (0.088, 0.022), (0.096, 0.04), (0.096, 0.20)], full: 0.175, empty: 0.055, top: 0.20, rim: 0.096, opaque: true,
-                      color: c(0.42, 0.22, 0.14), surface: c(0.52, 0.30, 0.20), alpha: 1, shellAlpha: 1, iceAlpha: 1),
+        "lemonade": Spec(wall: [(0, 0.028), (0.076, 0.032), (0.100, 0.27)], full: 0.23, empty: 0.065, top: 0.278, rim: 0.100, opaque: true,          // a solid pink column inside the clear glass: it must read PINK
+                         color: c(1.0, 0.40, 0.60), surface: c(1.0, 0.64, 0.76), alpha: 1, shellAlpha: 0.42, iceAlpha: 0.72),
+        "cocoa": Spec(wall: [(0, 0.018), (0.088, 0.022), (0.096, 0.04), (0.096, 0.20)], full: 0.175, empty: 0.055, top: 0.20, rim: 0.096, opaque: true,
+                      color: c(0.42, 0.22, 0.14), surface: c(0.52, 0.30, 0.20), alpha: 1, shellAlpha: 1, iceAlpha: 1, size: 1.7),
     ]
 
     private static func part(_ id: String, _ p: String) -> RoomMesh? { FoodMeshes.mesh(id: "drink_\(id)_\(p)") }
@@ -58,9 +60,13 @@ nonisolated enum StoreDrinkModels {
         if fill > 0.001, let m = part(id, "float") { DiningModels.append(m, to: o, transform: lift) }
         if let m = part(id, "shell") { DiningModels.append(m, to: t, transform: id4, alpha: sp.shellAlpha) }
         if fill > 0.001, let m = part(id, "ice") { DiningModels.append(m, to: t, transform: lift, alpha: sp.iceAlpha) }
+        // a real drink beside a Jelbie: the whole cup is drawn `size` times bigger
+        let big = RoomMeshBuilder(), bigT = RoomMeshBuilder()
+        let grow = DiningModels.translation(.zero, scale: sp.size)
+        DiningModels.append(o.mesh, to: big, transform: grow); DiningModels.append(t.mesh, to: bigT, transform: grow)
         // heights do NOT grow with N (the straw tips stay at his mouth height); widths do
         let k = 1 / DiningTiming.servingScale(n: n)
-        return ContainerModel(opaque: DiningModels.stretchY(o.mesh, k), translucent: DiningModels.stretchY(t.mesh, k), openingY: sp.top * k, openingRadius: sp.rim)
+        return ContainerModel(opaque: DiningModels.stretchY(big.mesh, k), translucent: DiningModels.stretchY(bigT.mesh, k), openingY: sp.top * sp.size * k, openingRadius: sp.rim * sp.size)
     }
 }
 
@@ -69,7 +75,7 @@ extension Consumables {
                               cond: [ConditionKey: Float]) -> Consumable {
         Consumable(id: id, name: name, kind: .drink, eatStyle: .sip, symbol: symbol, palette: pal, benefits: [.thirst: 0.4, .happy: 0.1],
                    container: { n, _, fill in StoreDrinkModels.container(id, n: n, fill: fill) }, strawColors: straw,
-                   stored: true, perk: perk, condition: cond, storeID: id)
+                   stored: true, perk: perk, condition: cond, storeID: id, thinStraw: 0.4, cupSide: 0.20)
     }
 
     static let boba = drink("boba", "Boba tea", symbol: "cup.and.saucer.fill", pal((0.86, 0.66, 0.44), (0.92, 0.74, 0.52), (1.0, 0.62, 0.76), (0.17, 0.10, 0.09)),

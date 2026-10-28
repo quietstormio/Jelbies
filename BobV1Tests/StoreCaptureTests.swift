@@ -139,6 +139,33 @@ final class StoreCaptureTests: XCTestCase {
         try save(sheet(cells, cols: 2, title: "Eating moments (game camera, true proportion): tossed foods, sipped drinks"), dir, "meals_\(ids.joined(separator: "_")).png")
     }
 
+    /// Two Jelbies sharing each bought drink (stand-in Blobs at the places): the big cup, the slim bendy straws toward each mouth.
+    func testCaptureDrinksTwo() throws {
+        guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        let m = MealRun()
+        Self.keep.append(m)
+        let (ren, target) = try makeRenderer(device, m.rig, w: 720, h: 640)
+        let room = ren.room!
+        DiningModels.previewGhosts = true
+        defer { DiningModels.previewGhosts = false }
+        var cells: [(LockImage, String)] = []
+        for f in Consumables.storeDrinks {
+            for n in [1, 2] {
+                let L = DiningLayout.make(n: n)
+                let g = DiningModels.trayGroup(layout: L, serving: f, state: ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), theme: room.theme)
+                let b = RoomMeshBuilder(); b.material = .plain
+                let tb = RoomMeshBuilder(); tb.material = .plain
+                DiningModels.append(g.opaque, to: b, transform: DiningModels.translation(SIMD3(0, 0, 0.9)))
+                DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(0, 0, 0.9)))
+                room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
+                let cam = camera(eye: SIMD3(0.0, 1.35, 3.0), at: SIMD3(0, 0.5, 0.5), aspect: 720.0 / 640.0, fov: 32 * .pi / 180)
+                cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: 720, h: 640), "\(f.name), \(n) Jelbie\(n > 1 ? "s" : "")"))
+            }
+        }
+        try save(sheet(cells, cols: 2, title: "Bought drinks, 1 and 2 Jelbies (stand-in bodies)"), dir, "drinks_two.png")
+    }
+
     func testCaptureFoods() throws {
         guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
@@ -157,7 +184,7 @@ final class StoreCaptureTests: XCTestCase {
             DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(0, 0, 0.6)))
             room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
             let drink = f.kind == .drink          // a cup is taller than a plate food: the camera stands back
-            let cam = camera(eye: drink ? SIMD3(0.0, 1.0, 1.75) : SIMD3(0.0, 0.78, 1.25), at: SIMD3(0, drink ? 0.38 : 0.3, 0.46), aspect: Float(W) / Float(H), fov: 30 * .pi / 180)
+            let cam = camera(eye: drink ? SIMD3(0.0, 1.2, 2.5) : SIMD3(0.0, 0.78, 1.25), at: SIMD3(0, drink ? 0.5 : 0.3, 0.46), aspect: Float(W) / Float(H), fov: 30 * .pi / 180)
             cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: W, h: H), f.name + (StoreCatalog.item(forFood: f.id).map { "  \($0.price) JellyCoins" } ?? "")))
         }
         try save(sheet(cells, cols: 4, title: "Store foods: real 3D meshes on the tray, eaten through the toss flow"), dir, "foods_sheet.png")
@@ -212,7 +239,7 @@ final class StoreCaptureTests: XCTestCase {
     func testCaptureFoodsInGame() throws {
         guard let dir = ProcessInfo.processInfo.environment["FOOD_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("FOOD_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        let w = 1320, h = 2868, size = 330
+        let w = 1320, h = 2868, size = 400
         let m = MealRun()
         Self.keep.append(m)
         let (ren, target) = try makeRenderer(device, m.rig, w: w, h: h)
@@ -229,7 +256,7 @@ final class StoreCaptureTests: XCTestCase {
             DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(o.x, 0, o.y)))
             room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
             let full = shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: w, h: h)
-            cells.append((crop(full, cam: cam, around: SIMD3(o.x, f.kind == .drink ? 0.30 : 0.12, o.y), w: w, h: h, size: size), f.name))
+            cells.append((crop(full, cam: cam, around: SIMD3(o.x, f.kind == .drink ? 0.40 : 0.16, o.y), w: w, h: h, size: size), f.name))
         }
         try save(sheet(cells, cols: 6, title: "Store foods and drinks on the in-game tray (game camera, true proportion)"), dir, "foods_ingame.png")
 
@@ -238,7 +265,7 @@ final class StoreCaptureTests: XCTestCase {
         _ = scells
         let items = StoreCatalog.items.filter { $0.food != nil }
         let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
-        let tw = 240, th = 270, cols = 6, rows = (items.count + cols - 1) / cols
+        let tw = 240, th = 270, cols = 3, rows = (items.count + 3 - 1) / 3          // portrait, like a phone's shop screen
         let img = UIGraphicsImageRenderer(size: CGSize(width: tw * cols, height: 54 + th * rows), format: fmt).image { _ in
             UIColor(red: 1, green: 0.96, blue: 0.9, alpha: 1).setFill(); UIRectFill(CGRect(x: 0, y: 0, width: tw * cols, height: 54 + th * rows))
             ("Shop: snacks (3D thumbnails, as the Shop and Bag draw them)" as NSString).draw(at: CGPoint(x: 12, y: 12), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 24), .foregroundColor: UIColor.black])

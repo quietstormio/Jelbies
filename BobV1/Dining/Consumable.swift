@@ -112,6 +112,10 @@ nonisolated struct Consumable {
     var condition: [ConditionKey: Float] = [:]
     var chew: SFX = .chomp
     var storeID: String? = nil
+    /// Drinks: the straw's thickness relative to the standard straw (the bought drinks use a slim one), and how far (tray-local x, one Jelbie) the cup stands
+    /// to his right of the standard bottle spot: a big cup beside the mouth would hide it.
+    var thinStraw: Float = 1
+    var cupSide: Float = 0
 }
 
 nonisolated enum Consumables {

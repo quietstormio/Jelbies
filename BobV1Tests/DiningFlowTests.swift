@@ -402,14 +402,17 @@ final class DiningFlowTests: XCTestCase {
     private func checkStoreFoodToss(_ id: String) {
         let (m, before) = setup()
         m.meal(id)
-        checkCommon(m, id)
+        // a sugar-rush food (zoomies perk) sends him running the moment the tray poofs, so the "idle again / rest shape" checks do not apply to it
+        let rush = Consumables.with(id: id)?.perk == .zoomies
+        if !rush { checkCommon(m, id) }
         XCTAssertEqual(m.tray.bitesLeft, [0], "\(id): all three pieces eaten")
         XCTAssertEqual(m.runs { $0.holding }, 3, "\(id): three bites, one piece each")
         checkToss(m, id)
-        checkReturnsToRest(m, before: before, id)
+        if !rush { checkReturnsToRest(m, before: before, id) }
     }
     func testRamenToss() { checkStoreFoodToss("ramen") }
     func testCheeseburgerToss() { checkStoreFoodToss("cheeseburger") }
+    func testPancakesToss() { checkStoreFoodToss("pancakestack") }
     func testSodaSip() { checkSip("soda") }
 
     // MARK: the hand-off

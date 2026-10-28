@@ -119,6 +119,12 @@ def lemonade():
     commit(bm, lc, sharp=70, xf=xf_rt((0.55, 0.78, 2.62), rotx=math.radians(80), rotz=0.0))
     for k, (a, L) in enumerate([(0.0, 0.5), (0.9, 0.42), (-0.7, 0.4)]):
         commit(blob(0.2, 0.1, 0.02, 2), (0.30, 0.68, 0.34), sharp=80, xf=xf_rt((-0.6+0.1*k, 0.2+0.25*k, 2.95+0.05*k), rotz=a+2.0, rotx=0.3, roty=-0.4))
+    # a rolled glass rim and a long highlight streak down the front-left of the glass
+    commit(lathe([(0.99, 2.72), (1.08, 2.75), (1.12, 2.81), (1.07, 2.87), (0.99, 2.82)], 40), (1.0, 0.92, 0.95), sharp=60)
+    ang = math.radians(215)
+    def r_wall(z): return 0.90 + (z-0.10)/(2.70-0.10)*(1.10-0.90)
+    path = [((r_wall(z)+0.03)*math.cos(ang), (r_wall(z)+0.03)*math.sin(ang), z) for z in [0.8 + 0.1*k for k in range(17)]]
+    commit(sweep(path, 0.045, 6), (1.0, 1.0, 1.0), sharp=80)
     deco = grab()
     # ice cubes riding the surface
     r = random.Random(6)
@@ -128,7 +134,7 @@ def lemonade():
     ice = grab()
     return dict(id="lemonade", shell=shell, deco=deco, float=None, ice=ice,
                 wall=[(0.0, 0.32), (0.76, 0.32), (1.0, 2.7)], full=2.30, empty=0.65, top=2.78, rim=1.0, opaque=False,
-                color=(1.0, 0.62, 0.72), surface=(1.0, 0.76, 0.84), alpha=0.62, shell_alpha=0.30, ice_alpha=0.6, float_scale=1.0)
+                color=(1.0, 0.42, 0.60), surface=(1.0, 0.68, 0.78), alpha=0.85, shell_alpha=0.40, ice_alpha=0.7, float_scale=1.0)
 
 def rr_cube(h, rad):
     bm = bmesh.new(); bmesh.ops.create_cube(bm, size=2*h)

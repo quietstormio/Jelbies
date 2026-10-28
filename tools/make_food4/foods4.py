@@ -200,17 +200,15 @@ def cheeseburger(v=0):
     # tomato
     z = 0.60
     commit(lathe([(0, z), (R-0.02, z), (R, z+0.04), (R-0.02, z+0.10), (0, z+0.10)], 32), lambda p, n: mix((0.90, 0.22, 0.20), (0.97, 0.45, 0.35), sstep(0.4, 1.0, nz(p, 5.0, 1)*0.5+0.5)*0.4), sharp=60)
-    # cheese: a square rotated 45 deg with drooping corners
+    # cheese: a soft square (big rounded corners, rotated 45 deg) that sags over the patty on every side, thick like melted cheese
     z = 0.70
-    sq = rr_slab(0.74, 0.74, z, z+0.04, 0.26)
+    sq = rr_slab(0.72, 0.72, z, z+0.06, 0.36, 6)
+    bmesh.ops.subdivide_edges(sq, edges=sq.edges[:], cuts=4, use_grid_fill=True); bmesh.ops.triangulate(sq, faces=sq.faces[:])
     def droop(p):
-        c = abs(p.x)+abs(p.y)
-        d = max(0.0, c-0.95)
-        return (p.x, p.y, p.z - 0.9*d)
-    # subdivide so the corners can sag
-    bmesh.ops.subdivide_edges(sq, edges=sq.edges[:], cuts=3, use_grid_fill=True); bmesh.ops.triangulate(sq, faces=sq.faces[:])
+        d = max(0.0, math.hypot(p.x, p.y)-0.55)
+        return (p.x, p.y, p.z - 0.8*d - 1.0*d*d)
     move(sq, droop)
-    commit(sq, lambda p, n: mix((1.0, 0.78, 0.16), (1.0, 0.88, 0.40), sstep(0.3, 1.0, n.z)*0.5), sharp=70, xf=xf_rt((0, 0, 0), rotz=math.radians(45)))
+    commit(sq, lambda p, n: mix((1.0, 0.76, 0.14), (1.0, 0.88, 0.38), sstep(0.3, 1.0, n.z)*0.6), mods=BEV(0.03, 2), sharp=70, xf=xf_rt((0, 0, 0), rotz=math.radians(45)))
     # top bun (dome) with sesame
     z = 0.72
     prof = [(0, z), (R-0.04, z), (R+0.02, z+0.06)]
@@ -320,48 +318,61 @@ def mac(v=0):
 BUILD['macncheese'] = mac
 
 # ================================================================ FRUIT CUP
+def straw_half(seed):
+    """a strawberry half lying cut-face up: teardrop slab, red skin, cream flesh with a pink rim, a few seeds"""
+    pts = []
+    for k in range(28):
+        ph = 2*math.pi*k/28; r = (1+math.cos(ph))/2
+        pts.append((0.30*math.sin(ph)*(0.55+0.45*r), 0.30*math.cos(ph)))
+    bm = slab(pts, 0.0, 0.16, cuts=2)
+    def sc(p, n):
+        if n.z > 0.6:
+            d = math.hypot(p.x/0.25, (p.y+0.02)/0.28)
+            c = mix((1.0, 0.93, 0.88), (0.98, 0.45, 0.50), sstep(0.35, 0.95, d))
+            return mix(c, (0.9, 0.14, 0.22), sstep(0.85, 1.05, d))
+        return (0.90, 0.14, 0.22)
+    commit(bm, sc, mods=BEV(0.04, 2, 40), sharp=60)
+    for (x, y) in [(-0.08, 0.10), (0.08, 0.10), (0.0, 0.0), (-0.07, -0.08), (0.07, -0.08)]:
+        commit(blob(0.02, 0.03, 0.01, 1), (1.0, 0.88, 0.5), sharp=80, xf=xf_rt((x, y, 0.165)))
+    commit(blob(0.13, 0.07, 0.03, 2), (0.34, 0.70, 0.28), sharp=80, xf=xf_rt((0.0, 0.30, 0.1), rotz=0.2))      # the leafy top
+
 def fruitcup(v=0):
-    # a pastel plastic cup (tapered) with a white lip, heaped with fruit
     prof = [(0, 0), (0.34, 0), (0.40, 0.03), (0.54, 0.62), (0.58, 0.66), (0.57, 0.70), (0.52, 0.70), (0.50, 0.58), (0.0, 0.58)]
-    bm = lathe(prof, 32)
+    bm = lathe(prof, 40)
     def cc(p, n):
         if p.z > 0.64: return (1.0, 0.98, 0.94)
         k = math.floor(math.atan2(p.y, p.x)/(2*math.pi)*10) % 2
         return (0.62, 0.84, 0.96) if k == 0 else (0.80, 0.92, 0.98)
     commit(bm, cc, sharp=60)
-    r = random.Random(3)
-    # heap base of orange wedges + melon cubes
-    for k in range(5):
-        a = k*1.256 + 0.3; rd = 0.30
-        bm = blob(0.20, 0.12, 0.08, 2)
-        # half-moon: flatten one side
-        move(bm, lambda p: (p.x, p.y if p.y > -0.05 else -0.05 + (p.y+0.05)*0.1, p.z))
-        commit(bm, lambda p, n: (1.0, 0.62, 0.14) if n.z > -0.3 else (1.0, 0.8, 0.45), sharp=80, xf=xf_rt((rd*math.cos(a), rd*math.sin(a), 0.62), rotz=a+1.2, rotx=0.3))
-    for k in range(4):
-        a = 0.5 + k*1.6; rd = 0.30
-        bm = rr_slab(0.09, 0.09, 0, 0.18, 0.04)
-        commit(bm, (0.78, 0.92, 0.46), mods=BEV(0.03, 2), sharp=60, xf=xf_rt((rd*math.cos(a)+0.05, rd*math.sin(a), 0.68), rotz=a, rotx=0.2))
-    # strawberries
-    for (x, y, a) in [(-0.18, -0.14, 0.4), (0.22, 0.05, 2.0), (0.0, 0.24, 4.1)]:
-        bm = ico(3)
-        move(bm, lambda p: (p.x*0.19*(0.62+0.38*(p.z+1)/2), p.y*0.19*(0.62+0.38*(p.z+1)/2), p.z*0.21))
-        def sc(p, n, a=a):
-            c = (0.92, 0.14, 0.22)
-            if (nz(p, 55.0, 2) > 0.30) and n.z > -0.7: c = (1.0, 0.88, 0.50)
-            return mix(c, (0.99, 0.35, 0.40), sstep(0.3, 1.0, n.z)*0.4)
-        commit(bm, sc, sharp=80, xf=xf_rt((x, y, 0.80), rotz=a, rotx=0.5*math.sin(a)))
-        bm = blob(0.10, 0.10, 0.025, 2)
-        commit(bm, (0.38, 0.72, 0.30), sharp=80, xf=xf_rt((x, y, 0.98), rotz=a, rotx=0.5*math.sin(a)))
-    # blueberries
-    for (x, y) in [(0.02, -0.28), (-0.34, 0.10), (0.34, -0.12), (0.12, 0.14), (-0.10, 0.06)]:
-        bm = ico(3, 0.12)
-        commit(bm, lambda p, n: (0.30, 0.34, 0.74) if n.z < 0.92 else (0.2, 0.2, 0.45), sharp=80, xf=xf_rt((x, y, 0.78 + 0.1*(1 - (x*x+y*y)*3))))
-    # grapes + a mint leaf
-    for (x, y, z) in [(-0.32, -0.06, 0.84), (-0.22, 0.28, 0.74)]:
-        bm = ico(3, 0.13); move(bm, lambda p: (p.x, p.y, p.z*1.1))
-        commit(bm, (0.64, 0.86, 0.42), sharp=80, xf=xf_rt((x, y, z)))
-    bm = blob(0.14, 0.07, 0.015, 2)
-    commit(bm, (0.30, 0.66, 0.34), sharp=80, xf=xf_rt((0.08, -0.04, 0.96), rotz=0.7, rotx=-0.3))
+    # a filling of melon cubes below the show pieces
+    for (x, y, a) in [(-0.2, 0.0, 0.3), (0.2, 0.05, 1.0), (0.0, -0.22, 0.6)]:
+        commit(rr_slab(0.16, 0.16, 0, 0.26, 0.06), (0.80, 0.93, 0.50), mods=BEV(0.04, 2), sharp=60, xf=xf_rt((x, y, 0.52), rotz=a))
+    # two strawberry halves, cut faces up
+    for (x, y, a, z) in [(-0.17, -0.20, 0.5, 0.74), (0.22, 0.12, 3.6, 0.74)]:
+        straw_half(0)
+        P = PARTS[-6:] if False else None
+        for part in PARTS[-7:]:
+            part['P'] = [tuple(xf_rt((x, y, z), rotz=a, rotx=-0.15) @ V(p)) for p in part['P']]
+            part['N'] = [tuple((xf_rt((0, 0, 0), rotz=a, rotx=-0.15).to_3x3() @ V(n)).normalized()) for n in part['N']]
+    # kiwi slice leaning at the back rim
+    bm = lathe([(0, 0), (0.30, 0), (0.32, 0.03), (0.30, 0.07), (0, 0.07)], 36)
+    def kc(p, n):
+        if n.z < 0.5: return (0.45, 0.38, 0.18)
+        d = math.hypot(p.x, p.y)
+        c = mix((1.0, 0.97, 0.78), (0.50, 0.80, 0.20), sstep(0.04, 0.17, d))
+        c = mix(c, (0.38, 0.68, 0.14), sstep(0.2, 0.29, d))
+        return mix(c, (0.45, 0.38, 0.18), sstep(0.29, 0.32, d))
+    commit(bm, kc, sharp=70, xf=xf_rt((0.0, 0.34, 0.98), rotx=math.radians(50)))
+    for k in range(10):
+        a = 2*math.pi*k/10
+        commit(blob(0.022, 0.012, 0.012, 1), (0.08, 0.07, 0.05), sharp=80,
+               xf=xf_rt((0.0, 0.34, 0.98), rotx=math.radians(50)) @ xf_rt((0.115*math.cos(a), 0.115*math.sin(a), 0.07), rotz=a))
+    # an orange segment (a plump half-moon), blueberries, a mint leaf
+    bm = slab(poly_pts_rounded([(-0.34, -0.12), (0.34, -0.12), (0.0, 0.22)], 0.12, 4), 0, 0.14, cuts=2)
+    commit(bm, lambda p, n: (1.0, 0.82, 0.45) if n.z > 0.6 else (1.0, 0.58, 0.10), mods=BEV(0.05, 2), sharp=60, xf=xf_rt((0.18, -0.30, 0.72), rotz=0.8, rotx=0.12))
+    for (x, y, z) in [(-0.36, 0.10, 0.76), (0.04, -0.02, 0.84), (0.34, 0.30, 0.74), (-0.10, 0.26, 0.80)]:
+        commit(ico(3, 0.15), lambda p, n: (0.30, 0.34, 0.74) if n.z < 0.92 else (0.2, 0.2, 0.45), sharp=80, xf=xf_rt((x, y, z)))
+    commit(blob(0.15, 0.07, 0.02, 2), (0.30, 0.66, 0.34), sharp=80, xf=xf_rt((0.10, 0.12, 0.98), rotz=0.7, rotx=-0.3))
 BUILD['fruitcup'] = fruitcup
 
 # ================================================================ PANCAKE STACK
@@ -488,38 +499,62 @@ def cupcake(v=0):
 BUILD['cupcake'] = cupcake
 
 # ================================================================ DUMPLINGS (in a steamer)
-def dumpling(seed):
-    bm = ico(3)
-    move(bm, lambda p: (p.x*0.34, p.y*0.20*(1.0 if p.z > -0.1 else 0.8), p.z*0.22 if p.z > 0 else p.z*0.10))
-    # pleats along the crest: a ridge of small folds
-    displace(bm, lambda p, n: 0.022*math.sin(p.x*45)*max(0.0, p.z/0.22) if p.z > 0.05 else None)
+def dumpling_parts(seed):
+    """one jiaozi: a plump crescent (the long edge curls toward -y), a pleated seam of little folds along the top, glossy cream skin, golden underside"""
+    L, Wd, H = 0.40, 0.20, 0.23
+    def crescent(p):
+        d = V(p)
+        x, y, z = d.x*L, d.y*Wd, d.z*H if d.z > 0 else d.z*H*0.35
+        y -= 0.22*(x/L)**2*L*0.55          # bend into a crescent
+        y += 0.10*(1-(x/L)**2)              # the straight pleated edge sits toward +y
+        return (x, y, z)
+    bm = ico(4); move(bm, crescent)
     def dc(p, n):
-        c = (1.0, 0.96, 0.88)
-        c = mix(c, (0.96, 0.82, 0.62), sstep(0.15, 0.0, p.z)*0.5)
-        if p.z > 0.14 and abs(p.y) < 0.05: c = mix(c, (1.0, 1.0, 0.97), 0.6)
-        if nz(p, 20.0, seed) > 0.55: c = mix(c, (0.98, 0.78, 0.62), 0.5)             # a few steamed freckles
+        c = mix((1.0, 0.97, 0.90), (1.0, 1.0, 0.98), sstep(0.3, 1.0, n.z)*0.6)           # glossy top highlight
+        c = mix(c, (0.96, 0.80, 0.52), sstep(0.12, 0.0, p.z)*0.8)                        # golden seared underside
+        if nz(p, 24.0, seed) > 0.62: c = mix(c, (0.97, 0.84, 0.66), 0.4)
         return c
-    return bm, dc
+    commit(bm, dc, sharp=70)
+    # pleats: 7 fins standing along the seam, each leaning the same way
+    for k in range(7):
+        t = (k-3)/3.2; x = t*L*0.82
+        y = 0.10*(1-(x/L)**2) + Wd*0.55 - 0.22*(x/L)**2*L*0.55
+        zt = H*0.82*(1-(x/L)**2)**0.5
+        commit(blob(0.065, 0.016, 0.11, 2), lambda p, n: mix((1.0, 0.97, 0.90), (1.0, 1.0, 0.99), sstep(0.2, 1.0, n.z)*0.7),
+               sharp=80, xf=xf_rt((x, y, zt*0.9), rotz=0.0, rotx=0.0, roty=0.55*(1 if k % 2 == 0 else 1)))
+    commit(sweep([(-L*0.8+0.8*L*0.2*i/7*0, 0, 0)] if False else [((i-6)/6*L*0.85, 0.10*(1-(((i-6)/6*0.85))**2) + Wd*0.5 - 0.22*((i-6)/6*0.85)**2*L*0.55, H*0.74*(1-(((i-6)/6*0.85))**2)**0.5+0.02) for i in range(13)], 0.03, 6),
+           (1.0, 0.98, 0.94), sharp=80)
+
+def steamer_wall_col(p, n):
+    a = math.atan2(p.y, p.x); u = a/(2*math.pi)*48; v = p.z/0.07
+    cell = (math.floor(u) + math.floor(v)) % 2                       # woven checker
+    base = (0.90, 0.72, 0.44) if cell == 0 else (0.78, 0.58, 0.32)
+    return base
 
 def dumplings(v=0):
-    R = 0.74
-    # bamboo steamer: a wide short basket with bands
-    prof = [(0, 0), (R-0.1, 0), (R, 0.05), (R, 0.40), (R-0.06, 0.44), (R-0.14, 0.42), (R-0.14, 0.12), (0, 0.10)]
-    bm = lathe(prof, 40)
+    R = 0.76
+    prof = [(0, 0.0), (R-0.08, 0.0), (R, 0.04)]
+    for k in range(1, 13): prof.append((R + (0.02 if k % 3 == 0 else 0.0), 0.04 + 0.40*k/12))
+    prof += [(R+0.02, 0.45), (R-0.04, 0.50), (R-0.12, 0.47), (R-0.14, 0.40), (R-0.14, 0.14), (0, 0.12)]
+    bm = lathe(prof, 96)
     def bc(p, n):
-        if n.z > 0.3 and p.z > 0.1: return (0.80, 0.60, 0.34)                         # the inside
-        k = math.floor(p.z/0.09)
-        return (0.88, 0.70, 0.42) if k % 2 == 0 else (0.78, 0.58, 0.32)
+        if n.z > 0.3 and p.z > 0.1 and math.hypot(p.x, p.y) < R-0.1: return (0.82, 0.62, 0.36)
+        if p.z > 0.44: return (0.70, 0.50, 0.26)                                                         # the rim, a darker bound edge
+        return steamer_wall_col(p, n)
     commit(bm, bc, sharp=60)
-    # a cabbage leaf liner
-    commit(lathe([(0, 0.12), (R-0.15, 0.12), (R-0.12, 0.15), (0, 0.15)], 30), lambda p, n: mix((0.62, 0.84, 0.42), (0.80, 0.94, 0.56), sstep(0.3, 1.0, nz(p, 5.0)*0.5+0.5)), sharp=70)
-    spots = [(-0.26, -0.18, 0.5), (0.26, -0.16, -0.5), (0.0, 0.26, 3.4), (0.02, -0.02, 1.2)]
+    # two dark woven bands (bamboo hoops) round the steamer
+    for zz in (0.14, 0.34):
+        commit(lathe([(R+0.025, zz-0.03), (R+0.045, zz-0.02), (R+0.045, zz+0.02), (R+0.025, zz+0.03)], 96), (0.62, 0.42, 0.22), sharp=70)
+    # cabbage liner
+    commit(lathe([(0, 0.14), (R-0.16, 0.14), (R-0.13, 0.17), (0, 0.17)], 36), lambda p, n: mix((0.62, 0.84, 0.42), (0.82, 0.95, 0.58), sstep(0.3, 1.0, nz(p, 5.0)*0.5+0.5)), sharp=70)
+    spots = [(-0.30, -0.22, 0.45), (0.28, -0.20, -0.45), (-0.26, 0.26, -0.5), (0.30, 0.26, 0.5)]
     for k, (x, y, a) in enumerate(spots):
-        bm, dc = dumpling(k)
-        commit(bm, dc, sharp=75, xf=xf_rt((x, y, 0.22 + (0.0 if k < 3 else 0.12)), rotz=a, scale=(1.25, 1.25, 1.35)))
-    # a green onion and a sesame dot or two sprinkled
-    for (x, y) in [(0.05, -0.30), (-0.34, 0.10)]:
-        commit(blob(0.04, 0.025, 0.018, 1), (0.14, 0.12, 0.10), sharp=80, xf=xf_rt((x, y, 0.20)))
+        n0 = len(PARTS)
+        dumpling_parts(k)
+        M = xf_rt((x, y, 0.20), rotz=a); M3 = M.to_3x3()
+        for part in PARTS[n0:]:
+            part['P'] = [tuple(M @ V(p)) for p in part['P']]
+            part['N'] = [tuple((M3 @ V(nn)).normalized()) for nn in part['N']]
 BUILD['dumplings'] = dumplings
 
 foods.BUILD.update(BUILD)
