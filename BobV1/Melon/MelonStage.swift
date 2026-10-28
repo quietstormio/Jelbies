@@ -711,20 +711,20 @@ final class MelonController: NSObject, MTKViewDelegate {
         model.appearance = MelonController.debugAppearance(model.appearance)
         #endif
         let ap = model.appearance
-        let sm = buildSimMesh(appearance: ap)
-        let rm = buildRenderMesh(appearance: ap)
-        let emb = embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest)
+        let sm = LaunchTiming.span("buildSimMesh") { buildSimMesh(appearance: ap) }
+        let rm = LaunchTiming.span("buildRenderMesh") { buildRenderMesh(appearance: ap) }
+        let emb = LaunchTiming.span("embed") { ap.breed == .berry ? BobMeshCache.embedding : embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest) }
         let count = model.gameMode ? min(max(model.care.jellyCount, 1), JellyRoster.maxCount) : 1
         if model.gameMode, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { GameCamera.configureRoom(count: count) }          // 2-3 Jellies: the wider roaming camera and floor (one Jelly: the exact old pose; skipped in the test host, whose suites assume the base pose)
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
         embedding = emb
-        WearBody.install(rm)
-        actors = (0..<count).map {
+        LaunchTiming.span("WearBody.install") { WearBody.install(rm) }
+        actors = LaunchTiming.span("actors") { (0..<count).map {
             JellyActor(id: $0, name: model.care.jelly($0)?.name ?? JellyRoster.name(slot: $0), simMesh: sm, renderMesh: rm, embedding: emb, appearance: ap,
                        firmness: Float(model.firmness), damping: Float(model.damping), spawn: spots[$0])
-        }
+        } }
         for a in actors { a.profile = model.care.jelly(a.id); a.care = model.care; a.appearance = JellyRoster.palette(a.profile?.character ?? JellyRoster.character(a.id)) }
         let body = actors[0].sim
         massG = body.totalRestVolume * powf(bobScaleCm, 3) * bobDensity
@@ -775,8 +775,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         view.controller = self
         a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
-        guard let r = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: renderMesh,
-                                    simEdges: sim.edges, particleCount: sim.n, game: game, bodyCount: actors.count) else {
+        guard let r = LaunchTiming.span("MelonRenderer (pipelines)", { MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: renderMesh,
+                                    simEdges: sim.edges, particleCount: sim.n, game: game, bodyCount: actors.count) }) else {
             fail("The Metal renderer could not be created (shader library or pipeline failure).")
             return
         }
@@ -903,6 +903,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard let renderer, let stage = stageView, view.drawableSize.width >= 2, view.drawableSize.height >= 2,
               let drawable = view.currentDrawable else { return }
+        LaunchTiming.mark("first frame drawn")
         let cpu0 = CACurrentMediaTime()
         let now = cpu0
         let dt = lastTime == 0 ? Float(1.0 / 60) : min(Float(now - lastTime), 0.1)

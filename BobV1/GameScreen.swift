@@ -673,7 +673,8 @@ struct GameScreen: View {
     }
 
     static func makeGameModel(jellyCount: Int = JellyRoster.launchCount()) -> MelonModel {
-        let m = MelonModel(jellyCount: jellyCount)
+        LaunchTiming.mark("room build begins")
+        let m = LaunchTiming.span("MelonModel") { MelonModel(jellyCount: jellyCount) }
         m.gameMode = true
         m.palette = .blue   // user 2026-10-16: pink is too close to Kirby; model default stays .blush (BaseBody lock)
         return m

@@ -201,7 +201,7 @@ def bevelled_slab(name, path, nrows, base_off, T1, T2, T3, cell, bev, lip, edge_
         o = (n1 + n2); o = o / (np.linalg.norm(o) + 1e-12)
         return o * sgn
     P = []; N = []; C = []
-    ring_n = [(1.0, 0.0), (0.92, 0.30), (0.45, 0.89), (0.0, 1.0)]
+    ring_n = [(1.0, 0.0), (0.80, 0.60), (0.40, 0.92), (0.0, 1.0)]          # soft rounded edge
     for k in range(4):
         for i in range(n):
             q = np.array(rings2[k][i])
@@ -244,25 +244,31 @@ def diamond_j(**k):
         phi = float(np.interp(spacing * k_, cum, ph))
         p, t, h, up = ring_frame(phi, FR, OFF)
         brilliant_stone('gem%02d' % k_, p, rb, (t, h, up))
-    # ---- the J: bold rounded, bevelled polished wall, raised pave face. Absolute rest coordinates, wrapped on the belly.
-    yTop = 0.397; w_ = 0.105
-    stem_x = 0.075; R = 0.078
-    cy = yTop - 0.255 + R + w_ / 2
-    path = [(stem_x, (yTop - 0.0525) + (cy - (yTop - 0.0525)) * i / 4) for i in range(4)]
+    # ---- the J: a classic capital J (stem on the right, round bowl curving left, hook tip at ~40 % of the height, slim serif bar mostly left of the stem),
+    # stroke ~21 % of the height, shallow soft-edged body with a thin polished rim round the pave face. Absolute rest coordinates, wrapped on the belly.
+    H = 0.25; yTop = 0.408
+    c_ = 0.0185; bev, lip = 0.006, 0.006
+    w_ = 2 * c_ + 2 * (bev + lip)                        # 0.061
+    R = 0.052; stem_x = 0.056
+    cy = yTop - H + R + w_ / 2
+    y0 = yTop - w_ / 2
+    path = [(stem_x, y0 + (cy - y0) * i / 4) for i in range(4)]
     cx = stem_x - R
+    sweep = math.radians(200)
     for k_ in range(0, 13):
-        a = -math.radians(190) * k_ / 12
-        path.append((cx + R * math.cos(a), cy + R * math.sin(a)))
-    bevelled_slab('jbody', path, 4, 0.030, 0.042, 0.054, 0.060, 0.0155, 0.0115, 0.010)
-    yb = yTop - 0.037
-    bevelled_slab('jbar', [(-0.070, yb), (0.100, yb)], 2, 0.030, 0.048, 0.060, 0.066, 0.0155, 0.0115, 0.010)
+        a_ = -sweep * k_ / 12
+        path.append((cx + R * math.cos(a_), cy + R * math.sin(a_)))
+    bevelled_slab('jbody', path, 2, 0.030, 0.016, 0.024, 0.030, c_, bev, lip)
+    wb = 1 * c_ + 2 * (bev + lip)
+    yb = yTop - wb / 2
+    bevelled_slab('jbar', [(stem_x - 0.110, yb), (stem_x + 0.024, yb)], 1, 0.030, 0.019, 0.027, 0.034, c_, bev, lip)
     # the bail: a bright ring through the front stone, carrying the J
     p, t, h, up = ring_frame(math.pi / 2, FR, OFF)
-    bc = p - up * 0.030 + h * 0.020
+    bc = p - up * 0.026 + h * 0.020
     bp = []
     for a in np.linspace(0, 2 * math.pi, 11):
-        bp.append(bc + up * (0.034 * math.cos(a)) + t * (0.016 * math.sin(a)))
-    tube_curve('bail', bp, 0.0095, 5, lambda q, nq: PLAT_BRIGHT, cap=False)
+        bp.append(bc + up * (0.026 * math.cos(a)) + t * (0.013 * math.sin(a)))
+    tube_curve('bail', bp, 0.0075, 5, lambda q, nq: PLAT_BRIGHT, cap=False)
     return dict(anchor='neck', slot='neck', tags=['sparkly', 'cool'], price=450, title='Diamond J chain',
                 desc='An iced-out tennis chain: one continuous row of round brilliant-cut stones (low domes, star-faceted by vertex colour, shader fire) in touching platinum bezels in one loop round the body at the neck line, with a bold rounded J pendant on a bail at the front centre (below the mouth keep-out): a thick bevelled mirror-platinum body with a raised pave face (a clean grid of small stones drawn by the gem shader, material 8). Parts: gemNN stones (material 6), jbody + jbar (8), bail (7). The stones and the J twinkle (Swift adds the glints). The hero item: budget 2200 vertices.')
 

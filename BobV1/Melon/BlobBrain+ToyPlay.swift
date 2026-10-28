@@ -228,6 +228,7 @@ extension BlobBrain {
         var keepOut: [SIMD2<Float>] = []
         for o in toyPeers {
             if o.idleState.decorUID == foot.uid { keepOut.append(o.position); keepOut.append(o.idleState.target) }
+            if foot.kind == .slide, o.idleState.decorUID == foot.uid { keepOut.append(c + foot.turned(SIMD2(0, Self.slideAt(Self.slideLength).z))) }          // (and the floor where a rider comes off the end)
             if o.toy.waitUID == foot.uid { keepOut.append(o.position) }
         }
         let base = simd_length(position - c) > 1e-3 ? simd_normalize(position - c) : SIMD2<Float>(0, 1)

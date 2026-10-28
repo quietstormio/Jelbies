@@ -279,6 +279,29 @@ final class ToyRideCaptureTests: XCTestCase {
         try save(sheet(cells, cols: 3, title: "Play tunnel: walk through, follow the leader"), "toyride_tunnel.png")
     }
 
+    /// Toys pushed into the corners and against the walls (where the front of the piece faces the wall): one Jelbie goes to each and uses it.
+    func testCaptureCornerToys() throws {
+        guard dir != nil else { throw XCTSkip("TOYRIDE_CAP_DIR not set") }
+        let toys: [(DecorKind, SIMD2<Float>, Int)] = [(.slide, SIMD2(2.8, 0.6), 2), (.swing, SIMD2(-2.9, 2.3), 0), (.seesaw, SIMD2(2.8, 0.6), 1), (.loveseat, SIMD2(-2.8, -1.5), 3)]
+        var all: [(LockImage, String)] = []
+        for (k, at, q) in toys {
+            var next: Float = 3, used = false
+            let cells = try labFrames(n: 1, pieces: [PlacedDecor(uid: 1, kind: k, x: at.x, z: at.y, turns: q)], seconds: 24, w: 440, h: 470, dist: 7.0, go: { lab in
+                lab.rigs[0].brain.sleepEnabled = false
+                used = lab.rigs[0].brain.decorStart(k.activeInteraction!, lab.rigs[0].sim, only: k, uid: 1)
+            }, want: { lab, i in
+                let b = lab.rigs[0].brain, t = Float(i) / 60
+                guard b.idleState.decorUID == 1, !b.idleState.decorGo, t >= next else { return nil }
+                next = t + 5
+                return "\(k.rawValue) at (\(at.x), \(at.y)) turns \(q): t \(Int(t))s stage \(b.idleState.slideStage)/\(b.idleState.bagStage)"
+            }, focus: { _ in SIMD3(at.x, 0.7, at.y) })
+            XCTAssertTrue(used, "\(k): a stand spot was found at the corner")
+            XCTAssertFalse(cells.isEmpty, "\(k): he used it")
+            all += cells.prefix(3)
+        }
+        try save(sheet(all, cols: 3, title: "Toys in corners: slide, swing, seesaw, loveseat used from the side or behind"), "toycorner.png")
+    }
+
     /// Two (the ball: three) Jelbies on each toy: three moments of the session, for every toy.
     func testCaptureMultiJelbieToys() throws {
         guard dir != nil else { throw XCTSkip("TOYRIDE_CAP_DIR not set") }

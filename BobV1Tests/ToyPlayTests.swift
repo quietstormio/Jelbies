@@ -22,7 +22,11 @@ final class ToyPlayTests: XCTestCase {
 
     // MARK: stand spots
 
-    func testEveryInteractivePieceHasAStandSpotRotatedAndAtSeveralPlaces() {
+    func testEveryInteractivePieceHasAStandSpotRotatedAndAtSeveralPlaces() { standAudit(aspect: 440.0 / 956.0, file: "stand-audit.txt") }
+    /// The same on the landscape screen (a wider floor, the same corners).
+    func testEveryInteractivePieceHasAStandSpotInLandscape() { standAudit(aspect: 956.0 / 440.0, file: "stand-audit-landscape.txt") }
+    private func standAudit(aspect: Float, file: String) {
+        _ = GameCamera.camera(aspect: aspect)
         var lines: [String] = [], misses = 0
         let spots: [SIMD2<Float>] = [SIMD2(2.8, 0.6), SIMD2(-2.8, -1.5), SIMD2(0.4, -3.2), SIMD2(-2.9, 2.3), SIMD2(2.9, 2.6)]
         let rig = MotionRig(game: true)
@@ -49,8 +53,8 @@ final class ToyPlayTests: XCTestCase {
             }
             lines.append(row)
         }
-        Self.write("stand-audit.txt", lines.joined(separator: "\n"))
-        XCTAssertLessThanOrEqual(misses, 12, "pieces with no stand spot:\n" + lines.filter { $0.contains("MISS") }.joined(separator: "\n"))
+        Self.write(file, lines.joined(separator: "\n"))
+        XCTAssertEqual(misses, 0, "pieces with no stand spot:\n" + lines.filter { $0.contains("MISS") }.joined(separator: "\n"))
     }
 
     // MARK: every toy plays through

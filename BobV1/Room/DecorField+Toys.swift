@@ -81,7 +81,7 @@ extension DecorField {
     func toyNoteChanges(_ list: [PlacedDecor]) {
         let now = ProcessInfo.processInfo.systemUptime
         if toys.firstSet < 0 { toys.firstSet = now }
-        let settled = now - toys.firstSet > ToyTuning.settle
+        let settled = now - toys.firstSet >= ToyTuning.settle
         for p in list {
             guard let k = toys.known[p.uid] else {
                 toys.known[p.uid] = (p.at, p.quarter)
@@ -101,7 +101,7 @@ extension DecorField {
     }
     /// The piece the player was holding was put down: that is news too.
     func toyDropped(_ uid: Int) {
-        guard let f = foot(uid), toyInteresting(f.kind), ProcessInfo.processInfo.systemUptime - toys.firstSet > ToyTuning.settle else { return }
+        guard let f = foot(uid), toyInteresting(f.kind), ProcessInfo.processInfo.systemUptime - toys.firstSet >= ToyTuning.settle else { return }
         toyPostNews(uid, f.centre)
     }
 }
