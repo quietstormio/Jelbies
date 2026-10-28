@@ -1,0 +1,68 @@
+{
+ "id": "scarf_silk_pip",
+ "tris": 624,
+ "verts": 476,
+ "parts": [
+  {
+   "name": "wrap",
+   "tris": 320,
+   "verts": 234
+  },
+  {
+   "name": "knot",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "ear-1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "ear+1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "tail_a",
+   "tris": 92,
+   "verts": 88
+  },
+  {
+   "name": "tail_b",
+   "tris": 92,
+   "verts": 88
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6318,
+  -0.3367,
+  -0.9512
+ ],
+ "bounds_local_max": [
+  0.6318,
+  0.6929,
+  0.1239
+ ],
+ "size": [
+  1.2637,
+  1.0296,
+  1.0751
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cool",
+  "sparkly",
+  "sweet"
+ ],
+ "price": 55,
+ "title": "Silk scarf",
+ "desc": "A silk neckerchief in navy printed with gold medallions: a thick rolled wrap in one continuous loop round the belly (y~0.46, rising at the back), a fat knot with two folded ends at the front centre (top y 0.52) and two flowing tails of fuller fabric.",
+ "colourway": "scarf_silk_pip"
+}

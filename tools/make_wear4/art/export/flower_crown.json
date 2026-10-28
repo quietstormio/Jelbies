@@ -1,0 +1,291 @@
+{
+ "id": "flower_crown",
+ "tris": 1160,
+ "verts": 679,
+ "parts": [
+  {
+   "name": "vine",
+   "tris": 220,
+   "verts": 115
+  },
+  {
+   "name": "petal0_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal0_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal0_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal0_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal0_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal1_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal1_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal1_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal1_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal1_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal2_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal2_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal2_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal2_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal2_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal3_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal3_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal3_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal3_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal3_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal4_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal4_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal4_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal4_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal4_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal5_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal5_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal5_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal5_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal5_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal6_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal6_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal6_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal6_3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "petal6_4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "heart6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf110",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf150",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf30",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf-30",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf190",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.574,
+  -0.3287,
+  -0.4786
+ ],
+ "bounds_local_max": [
+  0.5806,
+  -0.0988,
+  0.5126
+ ],
+ "size": [
+  1.1546,
+  0.2299,
+  0.9912
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sweet",
+  "cute",
+  "sparkly"
+ ],
+ "price": 55,
+ "title": "Flower crown",
+ "desc": "A vine of seven pastel blossoms circling the head. Contest favourite.",
+ "colourway": "flower_crown",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "fit_check": {
+  "min_sdf": 0.0174,
+  "verts": 679,
+  "inside_pct": 0.0,
+  "contact_pct": 3.4,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.272,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.113
+ }
+}

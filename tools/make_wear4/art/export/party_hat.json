@@ -1,0 +1,97 @@
+{
+ "id": "party_hat",
+ "tris": 828,
+ "verts": 447,
+ "parts": [
+  {
+   "name": "cone",
+   "tris": 608,
+   "verts": 321
+  },
+  {
+   "name": "dot0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pom",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.3852,
+  -0.1232,
+  -0.3372
+ ],
+ "bounds_local_max": [
+  0.3852,
+  0.4562,
+  0.3372
+ ],
+ "size": [
+  0.7704,
+  0.5794,
+  0.6744
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sparkly",
+  "sweet"
+ ],
+ "price": 35,
+ "title": "Party cone hat",
+ "desc": "Striped party hat with confetti dots and a fluffy gold pom on the tip.",
+ "colourway": "party_hat",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "hide_rule": "hide in race/roll-over flips is optional (tall piece)",
+ "fit_check": {
+  "min_sdf": 0.023,
+  "verts": 447,
+  "inside_pct": 0.0,
+  "contact_pct": 0.0,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.438,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 5.716
+ }
+}

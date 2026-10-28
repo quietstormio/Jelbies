@@ -1,0 +1,149 @@
+{
+ "id": "pearls",
+ "tris": 1024,
+ "verts": 558,
+ "parts": [
+  {
+   "name": "string",
+   "tris": 256,
+   "verts": 132
+  },
+  {
+   "name": "pearl0",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl2",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl3",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl4",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl5",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl6",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl7",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl8",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl9",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl10",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl11",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl12",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl13",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl14",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl15",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl16",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl17",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "pearl18",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "drop",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "cap",
+   "tris": 36,
+   "verts": 20
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6626,
+  -0.193,
+  -1.1034
+ ],
+ "bounds_local_max": [
+  0.6541,
+  0.1344,
+  0.0823
+ ],
+ "size": [
+  1.3167,
+  0.3274,
+  1.1857
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sparkly",
+  "sweet",
+  "cute"
+ ],
+ "price": 65,
+ "title": "Pearl necklace",
+ "desc": "A pearl necklace in one continuous loop round the body at the neck line (nineteen big pearls on a thread), dipping to a pink drop in a gold cap at the front (y~0.34) and rising at the back. Below the mouth keep-out.",
+ "colourway": "pearls",
+ "batch": 2
+}

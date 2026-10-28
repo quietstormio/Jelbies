@@ -1,0 +1,103 @@
+{
+ "id": "pirate_hat",
+ "tris": 1104,
+ "verts": 688,
+ "parts": [
+  {
+   "name": "crown",
+   "tris": 420,
+   "verts": 225
+  },
+  {
+   "name": "brim",
+   "tris": 336,
+   "verts": 274
+  },
+  {
+   "name": "cord",
+   "tris": 168,
+   "verts": 87
+  },
+  {
+   "name": "skull",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "jaw",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "socket-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "socket1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bone-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bone1",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.7171,
+  -0.3268,
+  -0.6011
+ ],
+ "bounds_local_max": [
+  0.7176,
+  0.03,
+  0.5635
+ ],
+ "size": [
+  1.4347,
+  0.3568,
+  1.1646
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 60,
+ "title": "Pirate hat",
+ "desc": "Black bicorne with up-swept wings, gold cord and a skull-and-crossbones badge. Front brim edge y~1.07, above the brows.",
+ "colourway": "pirate_hat",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "swap_colours_srgb": {
+  "cloth": "#4D331F",
+  "trim": "#F9CC59",
+  "badge": "#F7F0E0"
+ },
+ "batch": 2,
+ "fit_check": {
+  "min_sdf": 0.0061,
+  "verts": 688,
+  "inside_pct": 0.0,
+  "contact_pct": 4.1,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.281,
+  "lowest_front_y": 1.082,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.38,
+  "verts_in_mouth_box_any_z": 0
+ }
+}

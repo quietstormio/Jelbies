@@ -118,7 +118,7 @@ enum StoreThumb {
         if let f = item.food, let c = Consumables.with(id: f) {
             return c.pizzaLayout && c.piece == nil ? DiningModels.heldSlice(scale: 1.25, palette: c.palette) : DiningModels.heldPiece(c, index: 0, scale: 1.25)
         }
-        if let w = item.wear { return w.isShoe ? shoeMesh(w) : WearMeshes.restMesh(w) }
+        if let w = item.wear { return w.isShoe ? shoeMesh(w) : (wornMesh(w) ?? WearMeshes.restMesh(w)) }
         if let d = item.decor { return DecorModels.thumbnail(d) }
         return nil
     }
@@ -169,14 +169,15 @@ enum StoreThumb {
     }
 
     /// The cached thumbnail of a mesh (one render per key).
-    static func image(_ key: String, mesh: RoomMesh, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5) -> UIImage? {
+    static func image(_ key: String, mesh: RoomMesh, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil) -> UIImage? {
         if let c = cache[key] { return c }
         guard !mesh.vertices.isEmpty, let device else { return nil }
         let scene = SCNScene()
         let node = SCNNode(geometry: geometry(mesh))
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for v in mesh.vertices { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
-        let c = (lo + hi) / 2, r = max(simd_length(hi - lo) / 2, 0.01)
+        var c = (lo + hi) / 2, r = max(simd_length(hi - lo) / 2, 0.01)
+        if let focus { c = focus.0; r = focus.1 }
         node.pivot = SCNMatrix4MakeTranslation(c.x, c.y, c.z)
         node.eulerAngles = SCNVector3(0, yaw, 0)
         scene.rootNode.addChildNode(node)
@@ -204,7 +205,7 @@ enum StoreThumb {
     /// The view of an item's thumbnail (yaw about the model, pitch above it). Most use one angle; the taco is seen from its open end so the U of the shell
     /// and the fillings in it read.
     static func angles(for item: StoreItem) -> (yaw: Float, pitch: Float) {
-        if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.5, 0.2) : w.slot == .hands ? (0.9, 0.3) : w.slot == .feet ? (0.55, 0.36) : (0.6, 0.25) }
+        if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.45, 0.12) : w.slot == .hands ? (0.35, 0.2) : w.slot == .feet ? (0.55, 0.36) : w.anchor == .back ? (3.5, 0.2) : (0.5, 0.18) }
         if item.decor != nil { return (0.5, 0.5) }
         if item.id == "taco" { return (0.38, 0.42) }
         return (0.55, 0.42)
@@ -213,6 +214,7 @@ enum StoreThumb {
         if let r = item.room { return UIImage(named: "room_thumb_\(r.rawValue)") }
         guard let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
+        if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
         return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch)
     }
 }

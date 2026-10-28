@@ -1,0 +1,87 @@
+{
+ "id": "cardigan_cable_pip",
+ "tris": 1160,
+ "verts": 646,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 540,
+   "verts": 308
+  },
+  {
+   "name": "edge",
+   "tris": 296,
+   "verts": 150
+  },
+  {
+   "name": "placket",
+   "tris": 64,
+   "verts": 34
+  },
+  {
+   "name": "slot0",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "slot1",
+   "tris": 40,
+   "verts": 22
+  },
+  {
+   "name": "button0",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button2",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button3",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "button4",
+   "tris": 36,
+   "verts": 22
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6175,
+  -0.173,
+  -0.9141
+ ],
+ "bounds_local_max": [
+  0.6253,
+  0.294,
+  0.1103
+ ],
+ "size": [
+  1.2428,
+  0.467,
+  1.0244
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 60,
+ "title": "Cable cardigan",
+ "desc": "A rust cable-knit cardigan covering the belly from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, a cream placket down the middle front with five buttons, deep armholes round the arm nubs, a higher back and a collar edge, and braided cable ridges. Pip variant: open over his tail root.",
+ "colourway": "cardigan_cable_pip"
+}

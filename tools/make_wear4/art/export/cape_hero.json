@@ -1,0 +1,74 @@
+{
+ "id": "cape_hero",
+ "tris": 868,
+ "verts": 616,
+ "parts": [
+  {
+   "name": "panel0",
+   "tris": 360,
+   "verts": 250
+  },
+  {
+   "name": "collar",
+   "tris": 144,
+   "verts": 74
+  },
+  {
+   "name": "edge200",
+   "tris": 56,
+   "verts": 30
+  },
+  {
+   "name": "edge340",
+   "tris": 56,
+   "verts": 30
+  },
+  {
+   "name": "clasp340",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "clasp200",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "emblem",
+   "tris": 156,
+   "verts": 180
+  }
+ ],
+ "anchor_rest": [
+  -0.0,
+  0.55,
+  -0.5172
+ ],
+ "bounds_local_min": [
+  -0.6568,
+  -0.4356,
+  -0.1321
+ ],
+ "bounds_local_max": [
+  0.6568,
+  0.178,
+  0.3582
+ ],
+ "size": [
+  1.3136,
+  0.6136,
+  0.4902
+ ],
+ "anchor": "back",
+ "slot": "body",
+ "tags": [
+  "cool",
+  "sparkly",
+  "cute"
+ ],
+ "price": 70,
+ "title": "Hero cape",
+ "desc": "A fuller hero cape (honey lining, cream trim) with pleated folds, a thick rolled collar, trimmed edges, gold clasps and a puffy star emblem; hem y~0.16. Nothing on the front. Pip's variant is split into two halves over his tail root.",
+ "colourway": "cape_hero",
+ "batch": 2
+}

@@ -59,11 +59,17 @@ final class FeatureTests: XCTestCase {
             guard let p = FeatureMeshes.prepare(f, placement: pl, body: body) else { XCTFail("\(f) did not load"); continue }
             let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
             if ms > worst.0 { worst = (ms, p.art) }
-            XCTAssertLessThanOrEqual(p.rest.count, FeatureMeshes.vertexBudget, p.art)
-            XCTAssertLessThanOrEqual(p.triangles, FeatureMeshes.triangleBudget, p.art)
-            XCTAssertEqual(p.rest.count, spec.meshes[p.art]?.vertices, "\(p.art) matches the converter's table")
-            XCTAssertEqual(p.triangles, spec.meshes[p.art]?.triangles, p.art)
-            XCTAssertEqual(p.parts.map(\.name), spec.meshes[p.art]?.parts ?? [], p.art)
+            // Pip's spines + dino tail (pip_spikes: spikes, the one back spike and the tail's own parts) come from the tail redo, not from the art lab's
+            // converter table: it has its own, larger budget and no table row; every other feature keeps the original budget and must match the table.
+            let isPipTail = p.art == "pip_spikes"
+            XCTAssertLessThanOrEqual(p.rest.count, isPipTail ? 1600 : FeatureMeshes.vertexBudget, p.art)
+            XCTAssertLessThanOrEqual(p.triangles, isPipTail ? 3000 : FeatureMeshes.triangleBudget, p.art)
+            if isPipTail { XCTAssertNil(spec.meshes[p.art], "pip_spikes is not in the art lab's table: it is built with the tail") }
+            else {
+                XCTAssertEqual(p.rest.count, spec.meshes[p.art]?.vertices, "\(p.art) matches the converter's table")
+                XCTAssertEqual(p.triangles, spec.meshes[p.art]?.triangles, p.art)
+                XCTAssertEqual(p.parts.map(\.name), spec.meshes[p.art]?.parts ?? [], p.art)
+            }
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })
             for part in p.parts where part.bind.tri != .zero {
                 XCTAssertLessThan(simd_distance(body.restPoint(part.bind), part.pivot), 2e-3, "\(p.art) \(part.name): the pivot binds where it was authored")
@@ -234,6 +240,8 @@ final class FeatureTests: XCTestCase {
                         }
                         if fit.onHat && part.name.hasPrefix("leaf") { continue }
                         if fit.hiddenParts.contains(part.name) { continue }
+                        // Pip's spikes grow THROUGH the crown of an enclosing hat by design (WearCrownFitTests.testPipsSpinesGrowThroughTheCrown seats them)
+                        if f == .spines, fit.spineHat != nil, part.name.hasPrefix("spike") { continue }
                         for e in 0..<3 {
                             let a = m.vertices[Int(ids[e])].pos, b = m.vertices[Int(ids[(e + 1) % 3])].pos
                             let pa = SIMD3(a.x, a.y, a.z), pb = SIMD3(b.x, b.y, b.z)
@@ -276,7 +284,8 @@ final class FeatureTests: XCTestCase {
         let chef = FeatureCompat.solve(.daisy, worn: ["chef_hat"])
         XCTAssertEqual(chef.tilt, 50); XCTAssertEqual(chef.sink, 0.1); XCTAssertNil(chef.hatVariant["chef_hat"])
         XCTAssertFalse(FeatureCompat.solve(.daisy, worn: ["flower_crown"]).onHat)
-        XCTAssertTrue(FeatureCompat.solve(.daisy, worn: ["propeller_beanie"]).hidden)
+        let prop = FeatureCompat.solve(.daisy, worn: ["propeller_beanie"])
+        XCTAssertFalse(prop.hidden, "the daisy never vanishes under a hat: it is tucked on it"); XCTAssertTrue(prop.onHat); XCTAssertEqual(prop.tilt, 55); XCTAssertEqual(prop.sink, 0.05, accuracy: 1e-5)
         // the variant hats are only for Moss
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["beanie_honey"]).hatVariant.isEmpty)
         XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["party_hat"]).hatVariant.isEmpty)
@@ -601,9 +610,9 @@ final class FeatureTests: XCTestCase {
         for _ in 0..<120 { for id in 1...3 { f.tick(id: id, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(id), worn: [], hideAll: false, dt: 1.0 / 60) } }
         XCTAssertNil(f.shown(1)); XCTAssertNil(f.shown(3)); XCTAssertEqual(f.shown(2), .daisy)
         XCTAssertGreaterThan(f.slot(2)?.close ?? 0, 0.9, "the daisy closed")
-        // a hat hides the head-zone spines (and they come back when the hat goes)
+        // Pip's spines are never hidden by a hat any more (they grow through its crown); the fit names the hat instead
         f.tick(id: 1, brain: r.brain, sim: r.sim, feature: .spines, worn: ["party_hat"], hideAll: false, dt: 1.0 / 60)
-        XCTAssertEqual(f.slot(1)?.fit.hiddenParts, ["spike_00", "spike_01", "spike_02", "spike_03"])
+        XCTAssertTrue(f.slot(1)?.fit.hiddenParts.isEmpty ?? false); XCTAssertEqual(f.slot(1)?.fit.spineHat, "party_hat")
         f.tick(id: 1, brain: r.brain, sim: r.sim, feature: .spines, worn: [], hideAll: false, dt: 1.0 / 60)
         XCTAssertTrue(f.slot(1)?.fit.hiddenParts.isEmpty ?? false)
     }

@@ -74,12 +74,21 @@ def main():
     os.makedirs(res, exist_ok=True)
     cat = json.load(open(os.path.join(art, "wear_catalog.json")))
     exp = os.path.join(art, "export")
+    # pieces whose shipped .bin was finished after its export (kept byte for byte; only their counts are read back)
+    keep = {}
+    kp = os.path.join(art, "keep_bins.json")
+    if os.path.exists(kp):
+        for i in json.load(open(kp)):
+            b = open(os.path.join(res, "wear_%s.bin" % i), "rb").read()
+            keep[i] = b
     for f in os.listdir(res):
         if f.startswith("wear_") and f.endswith(".bin"): os.remove(os.path.join(res, f))
     entries = []
     for i, meta in cat["items"].items():
         j = json.load(open(os.path.join(exp, i + ".json")))
         data, nv, nt, names = convert(os.path.join(exp, i + ".obj"))
+        if i in keep:
+            data = keep[i]; nv, ni, npart = struct.unpack("<III", data[:12]); nt = ni // 3; names = [0] * npart
         open(os.path.join(res, "wear_%s.bin" % i), "wb").write(data)
         print(i, nv, "verts", nt, "tris", len(data), "bytes", len(names), "parts")
         a = j["anchor_rest"]
@@ -95,6 +104,15 @@ def main():
     for n in range(10):
         data, nv, nt, names = convert(os.path.join(exp, "digit_%d.obj" % n))
         open(os.path.join(res, "wear_digit_%d.bin" % n), "wb").write(data)
+    # species variants of a piece (another mesh for the same look: Pip's smaller, higher backpack) live with the character features' own variant hats
+    vdir = os.path.join(art, "variants")
+    if os.path.isdir(vdir):
+        fres = os.path.join(out, "..", "Features", "Resources")
+        for f in sorted(os.listdir(vdir)):
+            if f.endswith(".obj"):
+                data, nv, nt, names = convert(os.path.join(vdir, f))
+                open(os.path.join(fres, "wear_%s.bin" % f[:-4]), "wb").write(data)
+                print("variant", f[:-4], nv, "verts", nt, "tris")
     for s in ("shoe_paint_spec.json", "shoe_paint_spec_2.json"): shutil.copy(os.path.join(art, s), os.path.join(res, s))
     bib = json.load(open(os.path.join(exp, "bib_sky.json")))
 

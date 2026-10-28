@@ -1,0 +1,72 @@
+{
+ "id": "sweatband",
+ "tris": 1088,
+ "verts": 864,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 448,
+   "verts": 288
+  },
+  {
+   "name": "stripe_a",
+   "tris": 320,
+   "verts": 288
+  },
+  {
+   "name": "stripe_b",
+   "tris": 320,
+   "verts": 288
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5518,
+  -0.3508,
+  -0.5061
+ ],
+ "bounds_local_max": [
+  0.5518,
+  -0.1548,
+  0.4588
+ ],
+ "size": [
+  1.1037,
+  0.196,
+  0.9649
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sporty",
+  "cool"
+ ],
+ "price": 20,
+ "title": "Sweatband",
+ "desc": "Terry sweatband with two raised team-colour stripes, worn across the forehead. Bottom edge y>=1.045 at the front, above the brows.",
+ "colourway": "sweatband",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "surface_bound (band hugs the egg; bind to (y,phi)+offset)",
+ "swap_colours_srgb": {
+  "terry": "#F7F0E0",
+  "stripes": "#6EB3D1"
+ },
+ "batch": 2,
+ "fit_check": {
+  "min_sdf": 0.0173,
+  "verts": 864,
+  "inside_pct": 0.0,
+  "contact_pct": 7.2,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.281,
+  "lowest_front_y": 1.073,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.44,
+  "verts_in_mouth_box_any_z": 0
+ }
+}

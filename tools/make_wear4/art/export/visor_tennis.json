@@ -1,0 +1,53 @@
+{
+ "id": "visor_tennis",
+ "tris": 1204,
+ "verts": 936,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 480,
+   "verts": 400
+  },
+  {
+   "name": "stripe",
+   "tris": 320,
+   "verts": 240
+  },
+  {
+   "name": "bill",
+   "tris": 404,
+   "verts": 296
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.6471,
+  -0.3677,
+  -0.5088
+ ],
+ "bounds_local_max": [
+  0.6471,
+  -0.2198,
+  0.7567
+ ],
+ "size": [
+  1.2942,
+  0.1479,
+  1.2655
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sporty",
+  "cute"
+ ],
+ "price": 35,
+ "title": "Tennis visor",
+ "desc": "White tennis visor: a soft headband with a coral sweat stripe and a curved bill with a blue underside, open on top so the crown (and the sprout) stay free. Perching piece (never moved by CrownFit). Bill edge above the brows.",
+ "colourway": "visor_tennis",
+ "batch": 4
+}

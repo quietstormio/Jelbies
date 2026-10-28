@@ -1,0 +1,73 @@
+{
+ "id": "bee_antennae",
+ "tris": 1184,
+ "verts": 606,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 264,
+   "verts": 134
+  },
+  {
+   "name": "stalk-1",
+   "tris": 60,
+   "verts": 32
+  },
+  {
+   "name": "ball-1",
+   "tris": 320,
+   "verts": 162
+  },
+  {
+   "name": "stripe-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "stalk+1",
+   "tris": 60,
+   "verts": 32
+  },
+  {
+   "name": "ball+1",
+   "tris": 320,
+   "verts": 162
+  },
+  {
+   "name": "stripe+1",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5717,
+  -0.3583,
+  -0.0578
+ ],
+ "bounds_local_max": [
+  0.5717,
+  0.2804,
+  0.1088
+ ],
+ "size": [
+  1.1433,
+  0.6387,
+  0.1666
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 40,
+ "title": "Bee antennae",
+ "desc": "Honey headband with two springy antennae tipped with striped bee balls.",
+ "colourway": "bee_antennae",
+ "batch": 3
+}

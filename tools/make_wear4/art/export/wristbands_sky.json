@@ -1,0 +1,87 @@
+{
+ "id": "wristbands_sky",
+ "tris": 448,
+ "verts": 280,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 448,
+   "verts": 280
+  }
+ ],
+ "anchor_rest": [
+  0.55,
+  0.46,
+  0.06
+ ],
+ "bounds_local_min": [
+  -0.156,
+  0.016,
+  -0.1404
+ ],
+ "bounds_local_max": [
+  0.156,
+  0.104,
+  0.1404
+ ],
+ "size": [
+  0.312,
+  0.088,
+  0.2808
+ ],
+ "anchor": "wrist",
+ "slot": "hands",
+ "tags": [
+  "sporty",
+  "cute"
+ ],
+ "price": 20,
+ "title": "Wristbands",
+ "desc": "Terry wristband on the arm neck (local y 0.016..0.104, outer radius 0.156 = 1.04x the arm tip). Authored for the +x arm in arm-local frame; mirror x (flip winding) for the -x arm.",
+ "authored_local": true,
+ "local_frame": {
+  "origin": "arm tip centre B (BobForm.armTip for the +x arm at rest; the posed capsule tip B when posed)",
+  "x": "outward across the arm",
+  "y": "toward the shoulder = unit(A - B)",
+  "z": "body forward (+z)",
+  "rest_matrix_columns": [
+   [
+    0.9751,
+    0.2219,
+    -0.0
+   ],
+   [
+    -0.2219,
+    0.9751,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "scale": "multiply mesh by (arm tip radius / 0.15)"
+ },
+ "colourway": "wristbands_sky",
+ "convention": "NOT rest space. Mesh is in the ARM-LOCAL frame (origin = arm tip centre B; +y = unit(A-B) toward the shoulder; +x outward = cross(y,+z_body); +z = body forward), authored for the +x arm. restPos(rest pose) = anchor_rest + R*v with R columns in local_frame.rest_matrix_columns; for a posed arm build the same frame from the posed capsule (A,B) and scale by r2/0.15. Mirror x (flip winding) for the -x arm.",
+ "deform_class": "arm_frame (mirror for -x arm, scale by tip radius/0.15)",
+ "swap_colours_srgb": {
+  "terry": "#F7F0E0",
+  "stripe_a": "#6EB3D1",
+  "stripe_b": "#E98AA4"
+ },
+ "batch": 2,
+ "fit_check": {
+  "min_sdf": -0.1702,
+  "verts": 280,
+  "inside_pct": 81.1,
+  "contact_pct": 23.2,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 3.143,
+  "verts_in_mouth_box_any_z": 0,
+  "arm_tip_ratio_max": 1.04
+ }
+}

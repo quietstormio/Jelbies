@@ -1,0 +1,73 @@
+{
+ "id": "sunglasses_star",
+ "tris": 1260,
+ "verts": 800,
+ "parts": [
+  {
+   "name": "frame-1",
+   "tris": 360,
+   "verts": 180
+  },
+  {
+   "name": "lens-1",
+   "tris": 156,
+   "verts": 160
+  },
+  {
+   "name": "frame+1",
+   "tris": 360,
+   "verts": 180
+  },
+  {
+   "name": "lens+1",
+   "tris": 156,
+   "verts": 160
+  },
+  {
+   "name": "bridge",
+   "tris": 84,
+   "verts": 44
+  },
+  {
+   "name": "temple-1",
+   "tris": 72,
+   "verts": 38
+  },
+  {
+   "name": "temple+1",
+   "tris": 72,
+   "verts": 38
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.3997,
+  -0.1363,
+  -0.1268
+ ],
+ "bounds_local_max": [
+  0.3997,
+  0.1233,
+  0.0775
+ ],
+ "size": [
+  0.7993,
+  0.2596,
+  0.2044
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "sparkly"
+ ],
+ "price": 60,
+ "title": "Star sunglasses",
+ "desc": "Pink star sunglasses: a thick glossy star frame round dark plum lenses, temples wrapping back along the head.",
+ "colourway": "sunglasses_star",
+ "batch": 1
+}

@@ -1,0 +1,73 @@
+{
+ "id": "tophat",
+ "tris": 1160,
+ "verts": 868,
+ "parts": [
+  {
+   "name": "brim",
+   "tris": 360,
+   "verts": 218
+  },
+  {
+   "name": "crown",
+   "tris": 360,
+   "verts": 254
+  },
+  {
+   "name": "ribbon",
+   "tris": 284,
+   "verts": 216
+  },
+  {
+   "name": "star",
+   "tris": 156,
+   "verts": 180
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.3554,
+  -0.069,
+  -0.3211
+ ],
+ "bounds_local_max": [
+  0.3513,
+  0.3005,
+  0.3234
+ ],
+ "size": [
+  0.7068,
+  0.3694,
+  0.6445
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cool",
+  "cute",
+  "sparkly"
+ ],
+ "price": 70,
+ "title": "Tiny top hat",
+ "desc": "A tiny ink-black top hat with a pink ribbon, perched at a jaunty tilt. Rigid; carried with the head squash.",
+ "fit_shift": 0.033,
+ "colourway": "tophat",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "hide_rule": "none",
+ "fit_check": {
+  "min_sdf": 0.0057,
+  "verts": 868,
+  "inside_pct": 0.0,
+  "contact_pct": 0.1,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.561,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 6.844
+ }
+}

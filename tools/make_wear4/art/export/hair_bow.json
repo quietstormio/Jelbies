@@ -1,0 +1,93 @@
+{
+ "id": "hair_bow",
+ "tris": 640,
+ "verts": 342,
+ "parts": [
+  {
+   "name": "loop-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "fold-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "tail-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "loop+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "fold+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "tail+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "knot",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "dot0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "dot3",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.0039,
+  -0.1583,
+  0.0612
+ ],
+ "bounds_local_max": [
+  0.3739,
+  0.0482,
+  0.3998
+ ],
+ "size": [
+  0.3778,
+  0.2065,
+  0.3386
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 30,
+ "title": "Big hair bow",
+ "desc": "A big polka-dot ribbon bow clipped on the upper right of the head (y~1.25, well above the brows). Rigid; carried with the head squash.",
+ "colourway": "hair_bow",
+ "batch": 3
+}

@@ -1,0 +1,68 @@
+{
+ "id": "scarf_cosy_pip",
+ "tris": 1238,
+ "verts": 750,
+ "parts": [
+  {
+   "name": "wrap",
+   "tris": 768,
+   "verts": 384
+  },
+  {
+   "name": "knot",
+   "tris": 120,
+   "verts": 62
+  },
+  {
+   "name": "tail_a",
+   "tris": 136,
+   "verts": 116
+  },
+  {
+   "name": "tail_a_fringe",
+   "tris": 49,
+   "verts": 42
+  },
+  {
+   "name": "tail_b",
+   "tris": 116,
+   "verts": 104
+  },
+  {
+   "name": "tail_b_fringe",
+   "tris": 49,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6933,
+  -0.3513,
+  -1.0551
+ ],
+ "bounds_local_max": [
+  0.6935,
+  0.6299,
+  0.1128
+ ],
+ "size": [
+  1.3868,
+  0.9812,
+  1.1678
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sweet",
+  "cute",
+  "cool"
+ ],
+ "price": 35,
+ "title": "Cosy scarf",
+ "desc": "Soft knitted wrap: a ribbed (lengthwise ribs, geometry + vertex colour) ring around the belly at y~0.47..0.50 that curves round the sides and ends behind the arms, a chunky ribbed knot at the side-front (x~+0.27), and two ribbed tails (slight flare) with a fringe hanging to y~0.22 / 0.29. Top of the wrap at the centre is y<=0.54, below the mouth keep-out.",
+ "colourway": "scarf_cosy_pip"
+}

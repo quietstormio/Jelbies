@@ -1,0 +1,187 @@
+{
+ "id": "chain_gold_pip",
+ "tris": 1260,
+ "verts": 842,
+ "parts": [
+  {
+   "name": "link0",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link2",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link3",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link4",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link5",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link6",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link7",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link8",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link9",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link10",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link11",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link12",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link13",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link14",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link15",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link16",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link17",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link18",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link19",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link20",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link21",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link22",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link23",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link24",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link25",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link26",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link27",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "coin",
+   "tris": 96,
+   "verts": 74
+  },
+  {
+   "name": "star",
+   "tris": 156,
+   "verts": 180
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6716,
+  -0.209,
+  -0.9809
+ ],
+ "bounds_local_max": [
+  0.6649,
+  0.7174,
+  0.0813
+ ],
+ "size": [
+  1.3366,
+  0.9264,
+  1.0622
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cool",
+  "sparkly"
+ ],
+ "price": 70,
+ "title": "Gold chain",
+ "desc": "A chunky Cuban-link gold chain: twenty-eight big flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a coin pendant at the front (y~0.34).",
+ "colourway": "chain_gold_pip"
+}

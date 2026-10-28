@@ -1,0 +1,2322 @@
+{
+ "mouth_keepout": {
+  "what": "Ellipse on the FRONT surface (rest space, front projection x,y; applies where z>0.15) that no wearable may enter.",
+  "centre_xy": [
+   0.0,
+   0.651
+  ],
+  "radii_xy": [
+   0.15,
+   0.1
+  ],
+  "test": "((x-0)/0.15)^2 + ((y-0.651)/0.10)^2 < 1  and z > 0.15  => inside",
+  "y_range_at_x0": [
+   0.551,
+   0.751
+  ],
+  "source": "Shaders.metal fsSoftMatte mouth: drawn at x=0, y=0.665 (DineGeometry.mouthRest = (0,0.665,z_surface~0.52)); at mouthOpen=1 (largest: eating chomp 0.25+0.75m reaches 1.0; yawn/snore 0.95*m) half-width 0.088, up 0.066/1.45=0.0455, down 0.066/0.9=0.0733 => open mouth spans y 0.5917..0.7105. keep-out = that D-shape + 0.04 margin, bounded by this ellipse.",
+  "food_lands": "tossed food/sip targets DineGeometry.mouthRest (0,0.665,z~0.52); the toss/straw paths come from the front/above toward that point."
+ },
+ "units": "Jelly REST space = world units (BobForm; floor y=0, crown y=1.3458, +z = face)",
+ "file_format": "OBJ: v x y z r g b ao w (rgb LINEAR vertex colour, ao 0.6..1 baked from distance to body, w=0 RoomMaterial.plain), vn, o <part>, f a//a b//b c//c (CCW). One <id>.json sidecar each.",
+ "palette_srgb": {
+  "cream": "#F7F0E0",
+  "ink": "#4D331F",
+  "sky": "#6EB3D1",
+  "pink": "#E98AA4",
+  "honey": "#F9CC59",
+  "mint": "#9FD9B0",
+  "lavender": "#B9A3E6",
+  "coral": "#F58B6E"
+ },
+ "anchor_conventions": {
+  "head_top": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+  "face": "anchor_rest = front surface at (0, eyeY=0.82), z=0.5052. Rest-space offsets, same carry as head_top. Lens/rim centres sit on frontSurface(+-eyeX=0.215, 0.82) pushed 0.050 along the body normal (>= the mask's 0.014 pad), so eye beads (eyeHalfW .0532 x eyeHalfH .0623) are never touched.",
+  "neck": "anchor_rest = front surface at (0, 0.47), z=0.5055 ('neck' = the chest just under the mouth: there is no neck on an egg). Rest-space offsets, same carry.",
+  "chest": "anchor_rest = front surface at (0, 0.355), z=0.4683 (lower belly, below the mouth keep-out zone). Rest-space offsets, same carry.",
+  "wrist": "NOT rest space. Mesh is in the ARM-LOCAL frame (origin = arm tip centre B; +y = unit(A-B) toward the shoulder; +x outward = cross(y,+z_body); +z = body forward), authored for the +x arm. restPos(rest pose) = anchor_rest + R*v with R columns in local_frame.rest_matrix_columns; for a posed arm build the same frame from the posed capsule (A,B) and scale by r2/0.15. Mirror x (flip winding) for the -x arm.",
+  "number": "Digit meshes: unit height, centred on their box, +z out of the plate, depth ~0.06. Place at bib.number_anchor_rest with the plate normal (bib.number_normal), scale by bib.number_height (0.24). Colours are baked cream: replace vertex colours to tint (team colour deep shade).",
+  "carry_verified": "Verified in SleepMask.swift: EyeMaskModel.Carry(centroid, rotation, squash, restCentroid) is applied PER VERTEX: world = centroid + R * ((rest - restCentroid) * (sxz, sy, sxz)). Same for every rest-space piece here.",
+  "back": "NEW (batch 2). anchor_rest=(0,0.55,-0.5172) = back surface of the egg at y=0.55 (B.egg_point(0.55, 270deg)). Rest-space offsets (x right-of-screen when facing the camera, y up, +z = face, so the back is z<0); restPos = anchor_rest + v. Same per-vertex Carry as head_top. Back items never have vertices at z>0.15 except none; their vertices are free-hanging (cape, backpack).",
+  "waist": "NEW (batch 2). anchor_rest=(0,0.28,0) = on-axis point at belly-waist height (like head_top, on the body axis, not on the surface). Rest-space offsets; a full ring around the egg: bind each vertex to egg param (y,phi) + horizontal-outward offset (skirt flares outward and down from y~0.27).",
+  "face_note_batch2": "goggles_aviator uses the standard 'face' anchor although it sits on the forehead (y 0.99..1.15); offsets are rest-space so nothing changes. Monocle: ring around the +x eye bead; mirror x for the other eye."
+ },
+ "jersey_body_shader_spec": {
+  "band_rest_y": [
+   0.22,
+   0.51
+  ],
+  "edge_softness_y": 0.008,
+  "cream_trim_height": 0.03,
+  "trim_at": "both band edges (inside the band)",
+  "applies_to": "egg only (bodySDF < ~0.006): NOT arms or feet",
+  "player_team_colours_srgb": [
+   "#6EB3D1",
+   "#E98AA4"
+  ],
+  "rival_palette_srgb": [
+   "#B9A3E6",
+   "#F58B6E",
+   "#F9CC59",
+   "#9FD9B0"
+  ],
+  "note": "The bib plate (cream field, team-colour trim ring) sits on top; number tint = team colour mixed 25% toward ink. Sash variant replaces the bib."
+ },
+ "items": {
+  "bandana_coral": {
+   "title": "Bandana",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 25,
+   "tris": 1192,
+   "verts": 819,
+   "deform_class": "surface_bound (band + triangle follow the egg; bind each vertex to the body surface point + normal offset)",
+   "files": [
+    "bandana_coral.obj",
+    "bandana_coral.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0014,
+    "verts": 313,
+    "inside_pct": 0.0,
+    "contact_pct": 2.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.073
+   }
+  },
+  "bandana_mint": {
+   "title": "Bandana",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 25,
+   "tris": 1192,
+   "verts": 819,
+   "deform_class": "surface_bound (band + triangle follow the egg; bind each vertex to the body surface point + normal offset)",
+   "files": [
+    "bandana_mint.obj",
+    "bandana_mint.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0014,
+    "verts": 313,
+    "inside_pct": 0.0,
+    "contact_pct": 2.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.073
+   }
+  },
+  "beanie_honey": {
+   "title": "Pom-pom beanie",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 780,
+   "verts": 407,
+   "deform_class": "rigid",
+   "files": [
+    "beanie_honey.obj",
+    "beanie_honey.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0243,
+    "verts": 407,
+    "inside_pct": 1.7,
+    "contact_pct": 8.4,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.246,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.116
+   }
+  },
+  "beanie_pink": {
+   "title": "Pom-pom beanie",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 780,
+   "verts": 407,
+   "deform_class": "rigid",
+   "files": [
+    "beanie_pink.obj",
+    "beanie_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0243,
+    "verts": 407,
+    "inside_pct": 1.7,
+    "contact_pct": 8.4,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.246,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.116
+   }
+  },
+  "bib_pink": {
+   "title": "Jersey bib (number plate)",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty"
+   ],
+   "price": 20,
+   "tris": 1024,
+   "verts": 551,
+   "deform_class": "surface_bound",
+   "files": [
+    "bib_pink.obj",
+    "bib_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0076,
+    "verts": 161,
+    "inside_pct": 0.0,
+    "contact_pct": 42.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.724
+   },
+   "swap_colours_srgb": {
+    "team_trim": "#E98AA4",
+    "field": "#F7F0E0"
+   }
+  },
+  "bib_sky": {
+   "title": "Jersey bib (number plate)",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty"
+   ],
+   "price": 20,
+   "tris": 1024,
+   "verts": 551,
+   "deform_class": "surface_bound",
+   "files": [
+    "bib_sky.obj",
+    "bib_sky.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0076,
+    "verts": 161,
+    "inside_pct": 0.0,
+    "contact_pct": 42.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.724
+   },
+   "swap_colours_srgb": {
+    "team_trim": "#6EB3D1",
+    "field": "#F7F0E0"
+   }
+  },
+  "bowtie_pink": {
+   "title": "Bow tie",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 30,
+   "tris": 768,
+   "verts": 582,
+   "deform_class": "rigid",
+   "files": [
+    "bowtie_pink.obj",
+    "bowtie_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0102,
+    "verts": 386,
+    "inside_pct": 0.0,
+    "contact_pct": 1.6,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.51
+   }
+  },
+  "bowtie_sky": {
+   "title": "Bow tie",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 30,
+   "tris": 768,
+   "verts": 582,
+   "deform_class": "rigid",
+   "files": [
+    "bowtie_sky.obj",
+    "bowtie_sky.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0102,
+    "verts": 386,
+    "inside_pct": 0.0,
+    "contact_pct": 1.6,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.51
+   }
+  },
+  "cap_team_pink": {
+   "title": "Circuit team cap",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sporty",
+    "cool"
+   ],
+   "price": 30,
+   "tris": 1064,
+   "verts": 657,
+   "deform_class": "rigid",
+   "files": [
+    "cap_team_pink.obj",
+    "cap_team_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0707,
+    "verts": 657,
+    "inside_pct": 3.3,
+    "contact_pct": 10.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.217,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.865
+   },
+   "swap_colours_srgb": {
+    "crown": "#E98AA4",
+    "band_and_emblem": "#6EB3D1"
+   }
+  },
+  "cap_team_sky": {
+   "title": "Circuit team cap",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sporty",
+    "cool"
+   ],
+   "price": 30,
+   "tris": 1064,
+   "verts": 657,
+   "deform_class": "rigid",
+   "files": [
+    "cap_team_sky.obj",
+    "cap_team_sky.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.0707,
+    "verts": 657,
+    "inside_pct": 3.3,
+    "contact_pct": 10.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.217,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.865
+   },
+   "swap_colours_srgb": {
+    "crown": "#6EB3D1",
+    "band_and_emblem": "#E98AA4"
+   }
+  },
+  "cat_ears": {
+   "title": "Cat-ear headband",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 45,
+   "tris": 792,
+   "verts": 434,
+   "deform_class": "rigid",
+   "files": [
+    "cat_ears.obj",
+    "cat_ears.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.058,
+    "verts": 434,
+    "inside_pct": 5.5,
+    "contact_pct": 16.6,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.609,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": null
+   }
+  },
+  "flower_crown": {
+   "title": "Flower crown",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sweet",
+    "cute",
+    "sparkly"
+   ],
+   "price": 55,
+   "tris": 1160,
+   "verts": 679,
+   "deform_class": "rigid",
+   "files": [
+    "flower_crown.obj",
+    "flower_crown.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0174,
+    "verts": 679,
+    "inside_pct": 0.0,
+    "contact_pct": 3.4,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.272,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.113
+   }
+  },
+  "frog_ears": {
+   "title": "Frog-ear headband",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 45,
+   "tris": 784,
+   "verts": 410,
+   "deform_class": "rigid",
+   "files": [
+    "frog_ears.obj",
+    "frog_ears.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0068,
+    "verts": 410,
+    "inside_pct": 0.0,
+    "contact_pct": 9.3,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.609,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": null
+   }
+  },
+  "glasses_round": {
+   "title": "Round glasses",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "cute"
+   ],
+   "price": 40,
+   "tris": 1196,
+   "verts": 608,
+   "deform_class": "rigid",
+   "files": [
+    "glasses_round.obj",
+    "glasses_round.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0148,
+    "verts": 395,
+    "inside_pct": 0.0,
+    "contact_pct": 5.1,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.075,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.46
+   }
+  },
+  "glove_pink": {
+   "title": "Mitten gloves",
+   "slot": "hands",
+   "anchor": "wrist",
+   "anchor_rest": [
+    0.55,
+    0.46,
+    0.06
+   ],
+   "tags": [
+    "cute",
+    "sporty",
+    "sweet"
+   ],
+   "price": 35,
+   "tris": 1048,
+   "verts": 580,
+   "deform_class": "arm_frame",
+   "files": [
+    "glove_pink.obj",
+    "glove_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.1756,
+    "verts": 580,
+    "inside_pct": 54.8,
+    "contact_pct": 32.8,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 2.927
+   },
+   "swap_colours_srgb": {
+    "mitt": "#E98AA4",
+    "stripe": "#6EB3D1",
+    "cuff": "#F7F0E0"
+   }
+  },
+  "glove_sky": {
+   "title": "Mitten gloves",
+   "slot": "hands",
+   "anchor": "wrist",
+   "anchor_rest": [
+    0.55,
+    0.46,
+    0.06
+   ],
+   "tags": [
+    "cute",
+    "sporty",
+    "sweet"
+   ],
+   "price": 35,
+   "tris": 1048,
+   "verts": 580,
+   "deform_class": "arm_frame",
+   "files": [
+    "glove_sky.obj",
+    "glove_sky.json"
+   ],
+   "fit_check": {
+    "min_sdf": -0.1756,
+    "verts": 580,
+    "inside_pct": 54.8,
+    "contact_pct": 32.8,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 2.927
+   },
+   "swap_colours_srgb": {
+    "mitt": "#6EB3D1",
+    "stripe": "#E98AA4",
+    "cuff": "#F7F0E0"
+   }
+  },
+  "medal_gold": {
+   "title": "Winner medal",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sporty",
+    "sparkly"
+   ],
+   "price": 0,
+   "tris": 508,
+   "verts": 458,
+   "deform_class": "ribbon surface_bound; disc rigid (hangs, may swing)",
+   "files": [
+    "medal_gold.obj",
+    "medal_gold.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0213,
+    "verts": 458,
+    "inside_pct": 0.0,
+    "contact_pct": 0.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.157
+   }
+  },
+  "party_hat": {
+   "title": "Party cone hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sparkly",
+    "sweet"
+   ],
+   "price": 35,
+   "tris": 828,
+   "verts": 447,
+   "deform_class": "rigid",
+   "files": [
+    "party_hat.obj",
+    "party_hat.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.023,
+    "verts": 447,
+    "inside_pct": 0.0,
+    "contact_pct": 0.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.438,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 5.716
+   }
+  },
+  "sash_pink": {
+   "title": "Racing sash",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty",
+    "sparkly"
+   ],
+   "price": 50,
+   "tris": 1108,
+   "verts": 991,
+   "deform_class": "surface_bound",
+   "files": [
+    "sash_pink.obj",
+    "sash_pink.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0132,
+    "verts": 660,
+    "inside_pct": 0.0,
+    "contact_pct": 4.5,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.567
+   },
+   "swap_colours_srgb": {
+    "team_field": "#E98AA4",
+    "stars": "#6EB3D1",
+    "trim": "#F7F0E0"
+   }
+  },
+  "sash_sky": {
+   "title": "Racing sash",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty",
+    "sparkly"
+   ],
+   "price": 50,
+   "tris": 1108,
+   "verts": 991,
+   "deform_class": "surface_bound",
+   "files": [
+    "sash_sky.obj",
+    "sash_sky.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0132,
+    "verts": 660,
+    "inside_pct": 0.0,
+    "contact_pct": 4.5,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.567
+   },
+   "swap_colours_srgb": {
+    "team_field": "#6EB3D1",
+    "stars": "#E98AA4",
+    "trim": "#F7F0E0"
+   }
+  },
+  "sunglasses_star": {
+   "title": "Star sunglasses",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "sparkly"
+   ],
+   "price": 60,
+   "tris": 1260,
+   "verts": 800,
+   "deform_class": "rigid",
+   "files": [
+    "sunglasses_star.obj",
+    "sunglasses_star.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0132,
+    "verts": 865,
+    "inside_pct": 0.0,
+    "contact_pct": 2.5,
+    "verts_over_eye_beads": 98,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.077,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.557
+   }
+  },
+  "tophat": {
+   "title": "Tiny top hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "cute",
+    "sparkly"
+   ],
+   "price": 70,
+   "tris": 1160,
+   "verts": 868,
+   "deform_class": "rigid",
+   "files": [
+    "tophat.obj",
+    "tophat.json"
+   ],
+   "fit_check": {
+    "min_sdf": 0.0057,
+    "verts": 868,
+    "inside_pct": 0.0,
+    "contact_pct": 0.1,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.561,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 6.844
+   }
+  },
+  "bucket_hat": {
+   "title": "Bucket hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 35,
+   "tris": 868,
+   "verts": 561,
+   "deform_class": "rigid",
+   "files": [
+    "bucket_hat.obj",
+    "bucket_hat.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0061,
+    "verts": 561,
+    "inside_pct": 0.0,
+    "contact_pct": 5.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.222,
+    "lowest_front_y": 1.011,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.77,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "crown": "#9FD9B0",
+    "band": "#F7F0E0"
+   }
+  },
+  "bucket_hat_pink": {
+   "title": "Bucket hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 35,
+   "tris": 868,
+   "verts": 561,
+   "deform_class": "rigid",
+   "files": [
+    "bucket_hat_pink.obj",
+    "bucket_hat_pink.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0061,
+    "verts": 561,
+    "inside_pct": 0.0,
+    "contact_pct": 5.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.222,
+    "lowest_front_y": 1.011,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.77,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "crown": "#E98AA4",
+    "band": "#F7F0E0"
+   }
+  },
+  "crown_gold": {
+   "title": "Royal crown",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sparkly",
+    "sweet"
+   ],
+   "price": 75,
+   "tris": 908,
+   "verts": 644,
+   "deform_class": "rigid",
+   "files": [
+    "crown_gold.obj",
+    "crown_gold.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0077,
+    "verts": 644,
+    "inside_pct": 2.8,
+    "contact_pct": 17.5,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.304,
+    "lowest_front_y": 1.097,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.63,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "gold": "#F9CC59",
+    "jewel": "#E98AA4",
+    "beads": "#6EB3D1"
+   }
+  },
+  "chef_hat": {
+   "title": "Chef hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 1008,
+   "verts": 631,
+   "deform_class": "rigid",
+   "files": [
+    "chef_hat.obj",
+    "chef_hat.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0191,
+    "verts": 631,
+    "inside_pct": 0.0,
+    "contact_pct": 3.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.271,
+    "lowest_front_y": 1.072,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.34,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "cloth": "#F7F0E0"
+   }
+  },
+  "pirate_hat": {
+   "title": "Pirate hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 60,
+   "tris": 1104,
+   "verts": 688,
+   "deform_class": "rigid",
+   "files": [
+    "pirate_hat.obj",
+    "pirate_hat.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0061,
+    "verts": 688,
+    "inside_pct": 0.0,
+    "contact_pct": 4.1,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.281,
+    "lowest_front_y": 1.082,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.38,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "cloth": "#4D331F",
+    "trim": "#F9CC59",
+    "badge": "#F7F0E0"
+   }
+  },
+  "bunny_ears": {
+   "title": "Bunny-ear headband",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 45,
+   "tris": 688,
+   "verts": 358,
+   "deform_class": "rigid (ears may add secondary spring)",
+   "files": [
+    "bunny_ears.obj",
+    "bunny_ears.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0435,
+    "verts": 358,
+    "inside_pct": 4.2,
+    "contact_pct": 12.8,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.609,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": null,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "band": "#E98AA4",
+    "ears": "#F7F0E0",
+    "inner": "#E98AA4"
+   }
+  },
+  "sweatband": {
+   "title": "Sweatband",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sporty",
+    "cool"
+   ],
+   "price": 20,
+   "tris": 1088,
+   "verts": 864,
+   "deform_class": "surface_bound (band hugs the egg; bind to (y,phi)+offset)",
+   "files": [
+    "sweatband.obj",
+    "sweatband.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0173,
+    "verts": 864,
+    "inside_pct": 0.0,
+    "contact_pct": 7.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.281,
+    "lowest_front_y": 1.073,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.44,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "terry": "#F7F0E0",
+    "stripes": "#6EB3D1"
+   }
+  },
+  "propeller_beanie": {
+   "title": "Propeller beanie",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 35,
+   "tris": 632,
+   "verts": 339,
+   "deform_class": "rigid; blades rotate about y at (0,1.4408,0)",
+   "files": [
+    "propeller_beanie.obj",
+    "propeller_beanie.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0059,
+    "verts": 339,
+    "inside_pct": 0.0,
+    "contact_pct": 7.7,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.269,
+    "lowest_front_y": 1.059,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.28,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "panel_a": "#E98AA4",
+    "panel_b": "#6EB3D1",
+    "panel_c": "#F9CC59",
+    "panel_d": "#9FD9B0",
+    "blade_a": "#F9CC59",
+    "blade_b": "#6EB3D1"
+   }
+  },
+  "flower_clip": {
+   "title": "Flower hair clip",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sweet",
+    "cute",
+    "sparkly"
+   ],
+   "price": 25,
+   "tris": 590,
+   "verts": 313,
+   "deform_class": "rigid",
+   "files": [
+    "flower_clip.obj",
+    "flower_clip.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0141,
+    "verts": 313,
+    "inside_pct": 0.0,
+    "contact_pct": 4.5,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.203,
+    "lowest_front_y": 0.977,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.968,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "petals": "#F58B6E",
+    "centre": "#F9CC59",
+    "leaves": "#9FD9B0"
+   }
+  },
+  "witch_hat": {
+   "title": "Little witch hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sparkly"
+   ],
+   "price": 50,
+   "tris": 900,
+   "verts": 617,
+   "deform_class": "rigid (tip may add secondary spring)",
+   "files": [
+    "witch_hat.obj",
+    "witch_hat.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0091,
+    "verts": 617,
+    "inside_pct": 0.0,
+    "contact_pct": 1.8,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.267,
+    "lowest_front_y": 1.05,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 4.19,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "cloth": "#6E4FA8",
+    "band": "#F58B6E",
+    "buckle": "#F9CC59"
+   }
+  },
+  "heart_shades": {
+   "title": "Heart sunglasses",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "sweet",
+    "sparkly",
+    "cute"
+   ],
+   "price": 55,
+   "tris": 1084,
+   "verts": 712,
+   "deform_class": "rigid (opaque lenses)",
+   "files": [
+    "heart_shades.obj",
+    "heart_shades.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.014,
+    "verts": 593,
+    "inside_pct": 0.0,
+    "contact_pct": 3.5,
+    "verts_over_eye_beads": 120,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.06,
+    "lowest_front_y": 0.72,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.697,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "frame": "#F58B6E",
+    "lens": "#8E2F5E"
+   }
+  },
+  "goggles_aviator": {
+   "title": "Aviator goggles",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 55,
+   "tris": 924,
+   "verts": 764,
+   "deform_class": "rigid lenses+strap hugging the head (strap surface_bound to the egg)",
+   "files": [
+    "goggles_aviator.obj",
+    "goggles_aviator.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0078,
+    "verts": 572,
+    "inside_pct": 0.0,
+    "contact_pct": 10.1,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.195,
+    "lowest_front_y": 1.01,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.754,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "rim": "#F9CC59",
+    "strap": "#F58B6E",
+    "glass": "#7CC4D6"
+   }
+  },
+  "monocle_gold": {
+   "title": "Monocle",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "sweet"
+   ],
+   "price": 45,
+   "tris": 820,
+   "verts": 430,
+   "deform_class": "ring rigid; chain surface_bound + free swing",
+   "files": [
+    "monocle_gold.obj",
+    "monocle_gold.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0214,
+    "verts": 207,
+    "inside_pct": 0.0,
+    "contact_pct": 0.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "min_dist_to_eye_centre": 0.085,
+    "lowest_front_y": 0.545,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.509,
+    "verts_in_mouth_box_any_z": 0
+   },
+   "swap_colours_srgb": {
+    "gold": "#F9CC59"
+   }
+  },
+  "scarf_cosy": {
+   "title": "Cosy scarf",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sweet",
+    "cute",
+    "cool"
+   ],
+   "price": 35,
+   "tris": 1238,
+   "verts": 750,
+   "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
+   "files": [
+    "scarf_cosy.obj",
+    "scarf_cosy.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0638,
+    "verts": 666,
+    "inside_pct": 4.8,
+    "contact_pct": 8.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.33,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.564
+   },
+   "swap_colours_srgb": {
+    "stripe_a": "#F58B6E",
+    "stripe_b": "#F7F0E0"
+   },
+   "revision": "polish pass 2026-10-19 (previous export kept as scarf_cosy_old.obj/.json)"
+  },
+  "scarf_sky": {
+   "title": "Cosy scarf",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sweet",
+    "cute",
+    "cool"
+   ],
+   "price": 35,
+   "tris": 1238,
+   "verts": 750,
+   "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
+   "files": [
+    "scarf_sky.obj",
+    "scarf_sky.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0638,
+    "verts": 666,
+    "inside_pct": 4.8,
+    "contact_pct": 8.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.33,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.564
+   },
+   "swap_colours_srgb": {
+    "stripe_a": "#6EB3D1",
+    "stripe_b": "#F7F0E0"
+   },
+   "revision": "polish pass 2026-10-19 (previous export kept as scarf_sky_old.obj/.json)"
+  },
+  "pearls": {
+   "title": "Pearl necklace",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sparkly",
+    "sweet",
+    "cute"
+   ],
+   "price": 65,
+   "tris": 1024,
+   "verts": 558,
+   "deform_class": "each pearl surface_bound (point on the belly + normal offset), spacing preserved",
+   "files": [
+    "pearls.obj",
+    "pearls.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0057,
+    "verts": 516,
+    "inside_pct": 0.0,
+    "contact_pct": 18.4,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 2.135,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.533
+   },
+   "swap_colours_srgb": {
+    "pearl": "#FBF4EC",
+    "drop": "#E98AA4",
+    "cap": "#F9CC59"
+   }
+  },
+  "whistle_coach": {
+   "title": "Coach whistle",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sporty",
+    "cool"
+   ],
+   "price": 30,
+   "tris": 660,
+   "verts": 370,
+   "deform_class": "lanyard surface_bound; ring+whistle rigid, hangs (may swing)",
+   "files": [
+    "whistle_coach.obj",
+    "whistle_coach.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0215,
+    "verts": 372,
+    "inside_pct": 0.0,
+    "contact_pct": 0.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.802,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.538
+   },
+   "swap_colours_srgb": {
+    "lanyard": "#6EB3D1",
+    "whistle": "#C9D3DC",
+    "mouthpiece": "#F58B6E"
+   }
+  },
+  "tutu_pink": {
+   "title": "Ballet tutu",
+   "slot": "body",
+   "anchor": "waist",
+   "anchor_rest": [
+    0.0,
+    0.28,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet",
+    "sparkly"
+   ],
+   "price": 60,
+   "tris": 1212,
+   "verts": 900,
+   "deform_class": "surface_bound ring: bind every vertex to egg (y,phi)+horizontal offset; waistband rigid-on-surface, layers flare and may bob (jiggle the hem vertices, y<0.27, along y/out only)",
+   "files": [
+    "tutu_pink.obj",
+    "tutu_pink.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0047,
+    "verts": 944,
+    "inside_pct": 5.5,
+    "contact_pct": 11.9,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.666,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.284,
+    "max_y_all": 0.284
+   },
+   "swap_colours_srgb": {
+    "layer_top": "#E98AA4",
+    "layer_mid": "#F7F0E0",
+    "layer_bottom": "#B9A3E6",
+    "band": "#C06A82"
+   },
+   "revision": "polish pass 2026-10-19 (previous export kept as tutu_pink_old.obj/.json)"
+  },
+  "cape_hero": {
+   "title": "Hero cape",
+   "slot": "body",
+   "anchor": "back",
+   "anchor_rest": [
+    -0.0,
+    0.55,
+    -0.5172
+   ],
+   "tags": [
+    "cool",
+    "sparkly",
+    "cute"
+   ],
+   "price": 70,
+   "tris": 868,
+   "verts": 616,
+   "deform_class": "collar+clasps surface_bound at y=0.68 over the shoulders; panel is a cloth: top row bound to the surface, lower rows hang/follow (sim or bend with walk, always stay behind the arms)",
+   "files": [
+    "cape_hero.obj",
+    "cape_hero.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0127,
+    "verts": 577,
+    "inside_pct": 0.0,
+    "contact_pct": 8.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": null,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": null,
+    "max_y_all": 0.716
+   },
+   "swap_colours_srgb": {
+    "outer": "#E8575F",
+    "lining": "#F9CC59",
+    "trim": "#F7F0E0",
+    "emblem": "#F9CC59"
+   },
+   "revision": "polish pass 2026-10-19 (previous export kept as cape_hero_old.obj/.json)"
+  },
+  "backpack_sky": {
+   "title": "Little backpack",
+   "slot": "body",
+   "anchor": "back",
+   "anchor_rest": [
+    -0.0,
+    0.55,
+    -0.5172
+   ],
+   "tags": [
+    "cute",
+    "sporty"
+   ],
+   "price": 50,
+   "tris": 600,
+   "verts": 392,
+   "deform_class": "pack rigid on the back surface (carry like head_top); STRAPS surface_bound over the shoulder (follow the egg squash)",
+   "files": [
+    "backpack_sky.obj",
+    "backpack_sky.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.0124,
+    "verts": 470,
+    "inside_pct": 1.3,
+    "contact_pct": 6.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": null,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": null,
+    "max_y_all": 0.76
+   },
+   "swap_colours_srgb": {
+    "pack": "#6EB3D1",
+    "flap_pocket": "#F58B6E",
+    "straps": "#4A7D93"
+   }
+  },
+  "hero_patch": {
+   "title": "Hero emblem patch",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cool",
+    "sporty",
+    "cute"
+   ],
+   "price": 30,
+   "tris": 472,
+   "verts": 430,
+   "deform_class": "surface_bound (conform to the belly)",
+   "files": [
+    "hero_patch.obj",
+    "hero_patch.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": 0.0041,
+    "verts": 430,
+    "inside_pct": 0.0,
+    "contact_pct": 37.0,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 1.798,
+    "verts_in_mouth_box_any_z": 0,
+    "max_y_front_z_gt_0.15": 0.471,
+    "max_y_all": 0.471
+   },
+   "swap_colours_srgb": {
+    "field": "#E8575F",
+    "inner": "#F9CC59",
+    "bolt": "#6EB3D1"
+   }
+  },
+  "wristbands_sky": {
+   "title": "Wristbands",
+   "slot": "hands",
+   "anchor": "wrist",
+   "anchor_rest": [
+    0.55,
+    0.46,
+    0.06
+   ],
+   "tags": [
+    "sporty",
+    "cute"
+   ],
+   "price": 20,
+   "tris": 448,
+   "verts": 280,
+   "deform_class": "arm_frame (mirror for -x arm, scale by tip radius/0.15)",
+   "files": [
+    "wristbands_sky.obj",
+    "wristbands_sky.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.1702,
+    "verts": 280,
+    "inside_pct": 81.1,
+    "contact_pct": 23.2,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.143,
+    "verts_in_mouth_box_any_z": 0,
+    "arm_tip_ratio_max": 1.04
+   },
+   "swap_colours_srgb": {
+    "terry": "#F7F0E0",
+    "stripe_a": "#6EB3D1",
+    "stripe_b": "#E98AA4"
+   }
+  },
+  "boxing_mitts": {
+   "title": "Boxing mitts",
+   "slot": "hands",
+   "anchor": "wrist",
+   "anchor_rest": [
+    0.55,
+    0.46,
+    0.06
+   ],
+   "tags": [
+    "sporty",
+    "cool"
+   ],
+   "price": 45,
+   "tris": 1132,
+   "verts": 616,
+   "deform_class": "arm_frame (mirror for -x arm, scale by tip radius/0.15)",
+   "files": [
+    "boxing_mitts.obj",
+    "boxing_mitts.json"
+   ],
+   "batch": 2,
+   "fit_check": {
+    "min_sdf": -0.1725,
+    "verts": 616,
+    "inside_pct": 50.6,
+    "contact_pct": 32.1,
+    "verts_over_eye_beads": 0,
+    "verts_over_brows": 0,
+    "verts_in_mouth_keepout": 0,
+    "min_keepout_ellipse_value": 3.046,
+    "verts_in_mouth_box_any_z": 0,
+    "arm_tip_ratio_max": 1.087
+   },
+   "swap_colours_srgb": {
+    "mitt": "#E8575F",
+    "cuff": "#F7F0E0",
+    "lace": "#6EB3D1"
+   }
+  },
+  "headphones": {
+   "title": "Headphones",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 55,
+   "tris": 1136,
+   "verts": 610,
+   "files": [
+    "headphones.obj",
+    "headphones.json"
+   ],
+   "batch": 3
+  },
+  "cowboy_hat": {
+   "title": "Cowboy hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 55,
+   "tris": 1196,
+   "verts": 823,
+   "files": [
+    "cowboy_hat.obj",
+    "cowboy_hat.json"
+   ],
+   "batch": 3
+  },
+  "beret": {
+   "title": "Beret",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "cool",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 716,
+   "verts": 385,
+   "files": [
+    "beret.obj",
+    "beret.json"
+   ],
+   "batch": 3
+  },
+  "hair_bow": {
+   "title": "Big hair bow",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 30,
+   "tris": 640,
+   "verts": 342,
+   "files": [
+    "hair_bow.obj",
+    "hair_bow.json"
+   ],
+   "batch": 3
+  },
+  "bee_antennae": {
+   "title": "Bee antennae",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 1184,
+   "verts": 606,
+   "files": [
+    "bee_antennae.obj",
+    "bee_antennae.json"
+   ],
+   "batch": 3
+  },
+  "lei": {
+   "title": "Flower lei",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sweet",
+    "cute",
+    "sparkly"
+   ],
+   "price": 45,
+   "tris": 1152,
+   "verts": 964,
+   "files": [
+    "lei.obj",
+    "lei.json"
+   ],
+   "batch": 3
+  },
+  "hoodie": {
+   "title": "Cosy hoodie",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cool",
+    "cute",
+    "sweet"
+   ],
+   "price": 65,
+   "tris": 2136,
+   "verts": 1458,
+   "files": [
+    "hoodie.obj",
+    "hoodie.json"
+   ],
+   "batch": 3
+  },
+  "raincoat": {
+   "title": "Yellow raincoat",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cute",
+    "cool"
+   ],
+   "price": 60,
+   "tris": 2038,
+   "verts": 1241,
+   "files": [
+    "raincoat.obj",
+    "raincoat.json"
+   ],
+   "batch": 3
+  },
+  "bag_crossbody": {
+   "title": "Quilted crossbody bag",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cute",
+    "sweet",
+    "sparkly"
+   ],
+   "price": 75,
+   "tris": 936,
+   "verts": 534,
+   "files": [
+    "bag_crossbody.obj",
+    "bag_crossbody.json"
+   ]
+  },
+  "beanie_cable": {
+   "title": "Cable-knit beanie",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 45,
+   "tris": 832,
+   "verts": 433,
+   "files": [
+    "beanie_cable.obj",
+    "beanie_cable.json"
+   ]
+  },
+  "cardigan_cable": {
+   "title": "Cable cardigan",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 60,
+   "tris": 1204,
+   "verts": 656,
+   "files": [
+    "cardigan_cable.obj",
+    "cardigan_cable.json"
+   ]
+  },
+  "cat_eye_shades": {
+   "title": "Cat-eye shades",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "sparkly",
+    "sweet"
+   ],
+   "price": 75,
+   "tris": 1276,
+   "verts": 792,
+   "files": [
+    "cat_eye_shades.obj",
+    "cat_eye_shades.json"
+   ]
+  },
+  "chain_gold": {
+   "title": "Gold chain",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cool",
+    "sparkly"
+   ],
+   "price": 70,
+   "tris": 1260,
+   "verts": 842,
+   "files": [
+    "chain_gold.obj",
+    "chain_gold.json"
+   ]
+  },
+  "scarf_silk": {
+   "title": "Silk scarf",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cool",
+    "sparkly",
+    "sweet"
+   ],
+   "price": 55,
+   "tris": 624,
+   "verts": 466,
+   "files": [
+    "scarf_silk.obj",
+    "scarf_silk.json"
+   ]
+  },
+  "vest_puffer": {
+   "title": "Puffer vest",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 65,
+   "tris": 1124,
+   "verts": 600,
+   "files": [
+    "vest_puffer.obj",
+    "vest_puffer.json"
+   ]
+  },
+  "viking_hat": {
+   "title": "Viking helmet",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 80,
+   "tris": 1232,
+   "verts": 755,
+   "files": [
+    "viking_hat.obj",
+    "viking_hat.json"
+   ]
+  },
+  "visor_tennis": {
+   "title": "Tennis visor",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "sporty",
+    "cute"
+   ],
+   "price": 35,
+   "tris": 1204,
+   "verts": 936,
+   "files": [
+    "visor_tennis.obj",
+    "visor_tennis.json"
+   ]
+  },
+  "wayfarer_black": {
+   "title": "Classic black shades",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "cute"
+   ],
+   "price": 60,
+   "tris": 1276,
+   "verts": 784,
+   "files": [
+    "wayfarer_black.obj",
+    "wayfarer_black.json"
+   ]
+  },
+  "wayfarer_tortoise": {
+   "title": "Tortoise shades",
+   "slot": "face",
+   "anchor": "face",
+   "anchor_rest": [
+    0.0,
+    0.82,
+    0.5052
+   ],
+   "tags": [
+    "cool",
+    "cute"
+   ],
+   "price": 70,
+   "tris": 1276,
+   "verts": 784,
+   "files": [
+    "wayfarer_tortoise.obj",
+    "wayfarer_tortoise.json"
+   ]
+  },
+  "diamond_j": {
+   "title": "Diamond J chain",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "sparkly",
+    "cool"
+   ],
+   "price": 450,
+   "tris": 2344,
+   "verts": 1835,
+   "files": [
+    "diamond_j.obj",
+    "diamond_j.json"
+   ]
+  }
+ },
+ "digits": {
+  "digit_0": {
+   "tris": 352,
+   "files": [
+    "digit_0.obj",
+    "digit_0.json"
+   ]
+  },
+  "digit_1": {
+   "tris": 200,
+   "files": [
+    "digit_1.obj",
+    "digit_1.json"
+   ]
+  },
+  "digit_2": {
+   "tris": 316,
+   "files": [
+    "digit_2.obj",
+    "digit_2.json"
+   ]
+  },
+  "digit_3": {
+   "tris": 380,
+   "files": [
+    "digit_3.obj",
+    "digit_3.json"
+   ]
+  },
+  "digit_4": {
+   "tris": 168,
+   "files": [
+    "digit_4.obj",
+    "digit_4.json"
+   ]
+  },
+  "digit_5": {
+   "tris": 356,
+   "files": [
+    "digit_5.obj",
+    "digit_5.json"
+   ]
+  },
+  "digit_6": {
+   "tris": 336,
+   "files": [
+    "digit_6.obj",
+    "digit_6.json"
+   ]
+  },
+  "digit_7": {
+   "tris": 236,
+   "files": [
+    "digit_7.obj",
+    "digit_7.json"
+   ]
+  },
+  "digit_8": {
+   "tris": 284,
+   "files": [
+    "digit_8.obj",
+    "digit_8.json"
+   ]
+  },
+  "digit_9": {
+   "tris": 336,
+   "files": [
+    "digit_9.obj",
+    "digit_9.json"
+   ]
+  }
+ },
+ "shoes_paint": {
+  "spec_file": "shoe_paint_spec.json",
+  "note": "paint only; no geometry"
+ },
+ "batch": 2,
+ "shoes_paint_2": {
+  "spec_file": "shoe_paint_spec_2.json",
+  "note": "paint only; no geometry",
+  "items": {
+   "shoe_hightop_red": {
+    "title": "High-tops",
+    "slot": "feet",
+    "tags": [
+     "sporty",
+     "cool"
+    ],
+    "price": 40,
+    "swap_note": "base+layer colours are sRGB in the spec"
+   },
+   "shoe_ballet_pink": {
+    "title": "Ballet flats",
+    "slot": "feet",
+    "tags": [
+     "sweet",
+     "cute"
+    ],
+    "price": 35,
+    "swap_note": "base+layer colours are sRGB in the spec"
+   },
+   "shoe_frog_boots": {
+    "title": "Frog boots",
+    "slot": "feet",
+    "tags": [
+     "cute",
+     "sweet"
+    ],
+    "price": 45,
+    "swap_note": "base+layer colours are sRGB in the spec"
+   },
+   "shoe_sneaker_lightup": {
+    "title": "Light-up sneakers",
+    "slot": "feet",
+    "tags": [
+     "sparkly",
+     "sporty",
+     "cool"
+    ],
+    "price": 90,
+    "swap_note": "base+layer colours are sRGB in the spec"
+   }
+  }
+ }
+}

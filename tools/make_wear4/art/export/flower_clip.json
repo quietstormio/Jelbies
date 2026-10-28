@@ -1,0 +1,104 @@
+{
+ "id": "flower_clip",
+ "tris": 590,
+ "verts": 313,
+ "parts": [
+  {
+   "name": "clip",
+   "tris": 70,
+   "verts": 37
+  },
+  {
+   "name": "petal0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "petal1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "petal2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "petal3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "petal4",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "heart",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "leaf0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "leaf1",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  0.1499,
+  -0.3692,
+  0.2972
+ ],
+ "bounds_local_max": [
+  0.3836,
+  -0.098,
+  0.4968
+ ],
+ "size": [
+  0.2337,
+  0.2711,
+  0.1996
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sweet",
+  "cute",
+  "sparkly"
+ ],
+ "price": 25,
+ "title": "Flower hair clip",
+ "desc": "One big coral blossom on a barrette, clipped high on the right side of the head (phi=58deg, y=1.10). Mirror x for the other side.",
+ "colourway": "flower_clip",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "swap_colours_srgb": {
+  "petals": "#F58B6E",
+  "centre": "#F9CC59",
+  "leaves": "#9FD9B0"
+ },
+ "batch": 2,
+ "fit_check": {
+  "min_sdf": 0.0141,
+  "verts": 313,
+  "inside_pct": 0.0,
+  "contact_pct": 4.5,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.203,
+  "lowest_front_y": 0.977,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 3.968,
+  "verts_in_mouth_box_any_z": 0
+ }
+}

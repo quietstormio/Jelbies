@@ -1,0 +1,67 @@
+{
+ "id": "chef_hat",
+ "tris": 1008,
+ "verts": 631,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 336,
+   "verts": 280
+  },
+  {
+   "name": "pouf",
+   "tris": 672,
+   "verts": 351
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5906,
+  -0.3308,
+  -0.5423
+ ],
+ "bounds_local_max": [
+  0.5906,
+  0.4492,
+  0.49
+ ],
+ "size": [
+  1.1813,
+  0.78,
+  1.0323
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 40,
+ "title": "Chef hat",
+ "desc": "Tall puffy white toque on a band. Rigid; tall piece (top y~1.52).",
+ "colourway": "chef_hat",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "swap_colours_srgb": {
+  "cloth": "#F7F0E0"
+ },
+ "batch": 2,
+ "hide_rule": "tall piece: optional hide in flips",
+ "fit_check": {
+  "min_sdf": 0.0191,
+  "verts": 631,
+  "inside_pct": 0.0,
+  "contact_pct": 3.2,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.271,
+  "lowest_front_y": 1.072,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.34,
+  "verts_in_mouth_box_any_z": 0
+ }
+}

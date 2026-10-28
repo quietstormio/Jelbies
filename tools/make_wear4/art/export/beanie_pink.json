@@ -1,0 +1,60 @@
+{
+ "id": "beanie_pink",
+ "tris": 780,
+ "verts": 407,
+ "parts": [
+  {
+   "name": "beanie",
+   "tris": 700,
+   "verts": 365
+  },
+  {
+   "name": "pom",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.553,
+  -0.3655,
+  -0.5029
+ ],
+ "bounds_local_max": [
+  0.553,
+  0.1537,
+  0.4657
+ ],
+ "size": [
+  1.106,
+  0.5192,
+  0.9686
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 40,
+ "title": "Pom-pom beanie",
+ "desc": "Knit beanie with a ribbed cuff and a fluffy pom-pom. Sits above the brows.",
+ "colourway": "beanie_pink",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "fit_check": {
+  "min_sdf": -0.0243,
+  "verts": 407,
+  "inside_pct": 1.7,
+  "contact_pct": 8.4,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.246,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.116
+ }
+}

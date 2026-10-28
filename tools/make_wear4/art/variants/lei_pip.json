@@ -1,0 +1,163 @@
+{
+ "id": "lei_pip",
+ "tris": 1152,
+ "verts": 964,
+ "parts": [
+  {
+   "name": "string",
+   "tris": 288,
+   "verts": 148
+  },
+  {
+   "name": "f0",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c0",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l0",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f1",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l1",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f2",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c2",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l2",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f3",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c3",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l3",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f4",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c4",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l4",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f5",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c5",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l5",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f6",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c6",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l6",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "f7",
+   "tris": 36,
+   "verts": 60
+  },
+  {
+   "name": "c7",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "l7",
+   "tris": 36,
+   "verts": 22
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6463,
+  -0.1163,
+  -1.0287
+ ],
+ "bounds_local_max": [
+  0.6462,
+  0.6289,
+  0.0575
+ ],
+ "size": [
+  1.2925,
+  0.7452,
+  1.0861
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sweet",
+  "cute",
+  "sparkly"
+ ],
+ "price": 45,
+ "title": "Flower lei",
+ "desc": "A fuller flower lei: ten big five-lobe blooms with domed centres and leaves on a thick green cord circling the belly, dipping to a V at the front (y~0.40; nothing above 0.51).",
+ "colourway": "lei_pip"
+}

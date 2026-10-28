@@ -1,0 +1,54 @@
+{
+ "id": "beret",
+ "tris": 716,
+ "verts": 385,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 364,
+   "verts": 197
+  },
+  {
+   "name": "puff",
+   "tris": 320,
+   "verts": 162
+  },
+  {
+   "name": "stalk",
+   "tris": 32,
+   "verts": 26
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5019,
+  -0.2832,
+  -0.4575
+ ],
+ "bounds_local_max": [
+  0.5019,
+  0.0943,
+  0.4203
+ ],
+ "size": [
+  1.0037,
+  0.3775,
+  0.8778
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "cool",
+  "sweet"
+ ],
+ "price": 40,
+ "title": "Beret",
+ "desc": "Soft red beret: a snug band with a flat pancake puff tipped to one side and a little stalk. Band lower edge y~1.08, above the brows.",
+ "colourway": "beret",
+ "batch": 3
+}

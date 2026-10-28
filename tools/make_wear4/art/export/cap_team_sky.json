@@ -1,0 +1,74 @@
+{
+ "id": "cap_team_sky",
+ "tris": 1064,
+ "verts": 657,
+ "parts": [
+  {
+   "name": "crown",
+   "tris": 612,
+   "verts": 325
+  },
+  {
+   "name": "button",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "visor",
+   "tris": 216,
+   "verts": 110
+  },
+  {
+   "name": "emblem",
+   "tris": 156,
+   "verts": 180
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5496,
+  -0.4174,
+  -0.5097
+ ],
+ "bounds_local_max": [
+  0.5496,
+  0.062,
+  0.705
+ ],
+ "size": [
+  1.0992,
+  0.4794,
+  1.2147
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sporty",
+  "cool"
+ ],
+ "price": 30,
+ "title": "Circuit team cap",
+ "desc": "Baseball cap with a rounded visor and star badge; the Jelly Circuit team cap (crown = team colour).",
+ "colourway": "cap_team_sky",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "swap_colours_srgb": {
+  "crown": "#6EB3D1",
+  "band_and_emblem": "#E98AA4"
+ },
+ "fit_check": {
+  "min_sdf": -0.0707,
+  "verts": 657,
+  "inside_pct": 3.3,
+  "contact_pct": 10.2,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.217,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 3.865
+ }
+}

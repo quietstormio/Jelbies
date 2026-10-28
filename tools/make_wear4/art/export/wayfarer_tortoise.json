@@ -1,0 +1,93 @@
+{
+ "id": "wayfarer_tortoise",
+ "tris": 1276,
+ "verts": 784,
+ "parts": [
+  {
+   "name": "frame-1",
+   "tris": 384,
+   "verts": 192
+  },
+  {
+   "name": "lens-1",
+   "tris": 76,
+   "verts": 80
+  },
+  {
+   "name": "shine-1",
+   "tris": 28,
+   "verts": 40
+  },
+  {
+   "name": "rivet-1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "frame+1",
+   "tris": 384,
+   "verts": 192
+  },
+  {
+   "name": "lens+1",
+   "tris": 76,
+   "verts": 80
+  },
+  {
+   "name": "shine+1",
+   "tris": 28,
+   "verts": 40
+  },
+  {
+   "name": "rivet+1",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "bridge",
+   "tris": 84,
+   "verts": 44
+  },
+  {
+   "name": "temple-1",
+   "tris": 72,
+   "verts": 38
+  },
+  {
+   "name": "temple+1",
+   "tris": 72,
+   "verts": 38
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.3998,
+  -0.0997,
+  -0.1289
+ ],
+ "bounds_local_max": [
+  0.3998,
+  0.0928,
+  0.0612
+ ],
+ "size": [
+  0.7996,
+  0.1925,
+  0.1901
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "cute"
+ ],
+ "price": 70,
+ "title": "Tortoise shades",
+ "desc": "Thick acetate trapezoid sunglasses with smoked lenses, a soft highlight and rivets; temples taper back along the side of the head toward the ear. Lens bottoms y>=0.74.",
+ "colourway": "wayfarer_tortoise",
+ "batch": 4
+}

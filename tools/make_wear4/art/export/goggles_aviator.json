@@ -1,0 +1,68 @@
+{
+ "id": "goggles_aviator",
+ "tris": 924,
+ "verts": 764,
+ "parts": [
+  {
+   "name": "strap",
+   "tris": 192,
+   "verts": 192
+  },
+  {
+   "name": "rim-1",
+   "tris": 264,
+   "verts": 220
+  },
+  {
+   "name": "glass-1",
+   "tris": 72,
+   "verts": 50
+  },
+  {
+   "name": "rim+1",
+   "tris": 264,
+   "verts": 220
+  },
+  {
+   "name": "glass+1",
+   "tris": 72,
+   "verts": 50
+  },
+  {
+   "name": "bridge",
+   "tris": 60,
+   "verts": 32
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.5389,
+  0.1872,
+  -0.9851
+ ],
+ "bounds_local_max": [
+  0.5389,
+  0.3606,
+  -0.0067
+ ],
+ "size": [
+  1.0779,
+  0.1733,
+  0.9784
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 55,
+ "title": "Aviator goggles",
+ "desc": "Brass-rim goggles with teal glass pushed up on the forehead on a wide coral strap at y~1.06; thick rims (0.034 wide). Lens bottoms y>=0.98, above the brows.",
+ "colourway": "goggles_aviator",
+ "batch": 2
+}

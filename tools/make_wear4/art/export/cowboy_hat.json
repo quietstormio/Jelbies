@@ -1,0 +1,63 @@
+{
+ "id": "cowboy_hat",
+ "tris": 1196,
+ "verts": 823,
+ "parts": [
+  {
+   "name": "crown",
+   "tris": 442,
+   "verts": 235
+  },
+  {
+   "name": "crease",
+   "tris": 130,
+   "verts": 67
+  },
+  {
+   "name": "brim",
+   "tris": 312,
+   "verts": 260
+  },
+  {
+   "name": "edge",
+   "tris": 156,
+   "verts": 81
+  },
+  {
+   "name": "star",
+   "tris": 156,
+   "verts": 180
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.7918,
+  -0.33,
+  -0.6956
+ ],
+ "bounds_local_max": [
+  0.7921,
+  0.04,
+  0.6587
+ ],
+ "size": [
+  1.5838,
+  0.37,
+  1.3543
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 55,
+ "title": "Cowboy hat",
+ "desc": "Tan cowboy hat with a creased crown, a wide brim curled up at the sides, a brown band and a gold star. Front brim edge y~1.07, above the brows.",
+ "colourway": "cowboy_hat",
+ "batch": 3
+}

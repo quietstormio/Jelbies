@@ -1,0 +1,84 @@
+{
+ "id": "backpack_sky",
+ "tris": 600,
+ "verts": 392,
+ "parts": [
+  {
+   "name": "pack",
+   "tris": 140,
+   "verts": 72
+  },
+  {
+   "name": "flap",
+   "tris": 84,
+   "verts": 44
+  },
+  {
+   "name": "pocket",
+   "tris": 60,
+   "verts": 32
+  },
+  {
+   "name": "side-1",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "side+1",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "buckle",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "handle",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "strap+1",
+   "tris": 68,
+   "verts": 72
+  },
+  {
+   "name": "strap-1",
+   "tris": 68,
+   "verts": 72
+  }
+ ],
+ "anchor_rest": [
+  -0.0,
+  0.55,
+  -0.5172
+ ],
+ "bounds_local_min": [
+  -0.6377,
+  -0.255,
+  -0.2784
+ ],
+ "bounds_local_max": [
+  0.6377,
+  0.3424,
+  0.4574
+ ],
+ "size": [
+  1.2754,
+  0.5974,
+  0.7358
+ ],
+ "anchor": "back",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sporty"
+ ],
+ "price": 50,
+ "title": "Little backpack",
+ "variant": null,
+ "desc": "A rounded backpack on the back (pack centre y 0.42, z -0.585) with a flap, a zipped front pocket, two side bottle pockets, a buckle and a top handle, on padded shoulder straps that end tucked behind the arm roots.",
+ "colourway": "backpack_sky",
+ "batch": 2
+}
