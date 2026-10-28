@@ -152,114 +152,51 @@ def garment(main, trim, pat, ybot, off_fn, name, segs=30, rows=11, collar=0.022,
 def vest_puffer(main=hx('#2E7C85'), trim=hx('#1F5760'), zip_=GOLD, pip=False, **k):
     reset()
     ybot = 0.205
-    BAFF = 3.5
+    BAFF = 4.0
+    def puff(ff):
+        # a pillow profile: rounded crest, pinched seam
+        return abs(math.sin(math.pi * BAFF * ff)) ** 0.6
     def off(phi, f, j):
         if j < 2: return 0.040 + 0.010 * math.cos(26 * phi) * 0.5 + 0.006
         ff = (f - 0.2) / 0.8
-        return 0.040 + 0.017 * (0.5 - 0.5 * math.cos(2 * math.pi * BAFF * ff)) * (0.8 + 0.2 * math.cos(10 * phi))
+        return 0.036 + 0.030 * puff(ff) * (0.85 + 0.15 * math.cos(10 * phi))
     def pat(i, j, segs, rows):
         f = (j / (rows - 1) - 0.2) / 0.8
-        w = 0.5 - 0.5 * math.cos(2 * math.pi * BAFF * f)
-        return mix(deep(main, 0.45), tint(main, 0.22), 0.15 + 0.85 * w)
-    cp = garment(main, trim, pat, ybot, off, 'body', segs=30, rows=11, collar=0.022, pip=pip)
-    zp = [c + np.array([0.0, 0.0, 0.012]) for c in cp]
-    tube_curve('zip', zp, 0.0085, 4, zip_, cap=True)
-    bead('pull', zp[-2] + np.array([0.0, -0.030, 0.012]), (0.018, 0.034, 0.012), zip_, segs=6)
+        w = puff(f)
+        # soft sheen on the crest of every baffle, deep teal in the seams
+        return mix(deep(main, 0.55), mix(tint(main, 0.55), (0.85, 1.0, 1.0), 0.25), 0.05 + 0.95 * w ** 1.6)
+    cp = garment(main, trim, pat, ybot, off, 'body', segs=30, rows=13, collar=0.022, pip=pip)
+    # a clear zip: dark tape either side of a gold chain of teeth, and a big pull
+    zp = [c + np.array([0.0, 0.0, 0.016]) for c in cp]
+    tube_curve('zip', zp, 0.013, 4, lambda p, n: mix(deep(zip_, 0.25), tint(zip_, 0.4), 0.5 + 0.5 * n[2]), cap=True)
+    bead('pull', zp[-2] + np.array([0.0, -0.036, 0.016]), (0.024, 0.044, 0.016), lambda p, n: mix(deep(zip_, 0.2), tint(zip_, 0.6), 0.5 + 0.5 * n[2]), segs=6)
     return dict(anchor='chest', slot='body', tags=['cool', 'sporty'], price=65, title='Puffer vest',
-                desc='A teal quilted puffer vest: puffy horizontal baffles from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V at the top, deep armholes round the arm nubs, a higher back with a piped collar edge and a gold zip down the middle front. Pip variant: open over his tail root.')
+                desc='A teal puffer vest with four puffy horizontal quilted baffles (soft sheen on the crests, pinched seams) from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, deep armholes round the arm nubs, a higher back with a piped collar edge and a chunky gold zip with a big pull down the middle front. Pip variant: open over his tail root.')
 
-def cardigan(main=hx('#C97B4E'), trim=hx('#E8C8A0'), button=hx('#F4EBDD'), pip=False, **k):
+def cardigan(main=hx('#E6D8BC'), trim=hx('#C2AC84'), button=hx('#3B2A22'), pip=False, **k):
     reset()
     ybot = 0.195
+    CAB = (0.60, 1.0, 1.55, 3.20, 4.55, 5.20, 5.85)           # three narrow cable columns on the front panels and a pair at the back (phi in radians)
+    def cab(phi):
+        w = 0.0
+        for c in CAB:
+            d = angd(phi, c)
+            w = max(w, math.exp(-(d / 0.085) ** 2))
+        return w
     def off(phi, f, j):
         if j < 2: return 0.040 + 0.010 * math.cos(26 * phi) * 0.5 + 0.006
-        return 0.040 + 0.0125 * math.cos(10 * phi + 5.0 * math.sin(f * 9.0)) + 0.004 * math.cos(5 * phi)
+        return 0.040 + 0.007 * cab(phi) * (0.6 + 0.4 * math.cos(30 * f))
     def pat(i, j, segs, rows):
-        phi = 2 * math.pi * i / segs; f = j / (rows - 1)
-        v = 0.5 + 0.5 * math.cos(10 * phi + 5.0 * math.sin(f * 9.0))
-        return mix(deep(main, 0.38), tint(main, 0.22), 0.10 + 0.90 * v)
+        phi = 2 * math.pi * i / segs
+        w = cab(phi)
+        return mix(tint(main, 0.06), deep(main, 0.22), 0.55 * w)
     cp = garment(main, trim, pat, ybot, off, 'body', segs=30, rows=11, collar=0.024, pip=pip)
     for i_ in range(5):
         t = (i_ + 0.5) / 5
         c = cp[min(len(cp) - 1, int(t * (len(cp) - 1) + 0.5))]
-        bead('button%d' % i_, c + np.array([0.0, 0.0, 0.020]), (0.026, 0.026, 0.013), button, segs=6)
+        bead('button%d' % i_, c + np.array([0.0, 0.0, 0.022]), (0.030, 0.030, 0.015), lambda p, n: mix(button, hx('#7A6256'), 0.35 * max(0.0, n[2])), segs=6)
     return dict(anchor='chest', slot='body', tags=['cute', 'sweet'], price=60, title='Cable cardigan',
-                desc='A rust cable-knit cardigan covering the belly from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, a cream placket down the middle front with five buttons, deep armholes round the arm nubs, a higher back and a collar edge, and braided cable ridges. Pip variant: open over his tail root.')
-
-# ============================ SILK NECK SCARF ==================================
-def silk_pattern(base, ring, dot):
-    def col(p, n):
-        u = p[0] * 6.0 + p[1] * 2.0
-        v = p[1] * 6.0 - p[0] * 2.0
-        fu = u - math.floor(u) - 0.5
-        fv = v - math.floor(v) - 0.5
-        r = math.hypot(fu, fv)
-        c = base
-        if 0.26 < r < 0.38: c = ring
-        elif r < 0.12: c = dot
-        return mix(deep(c, 0.06), tint(c, 0.16), 0.5 + 0.5 * n[1] * 0.5)
-    return col
-
-def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
-    reset()
-    pat = silk_pattern(base, ring, dot)
-    yc = 0.462
-    torus('wrap', 28, lambda phi: [eloop(yc + 0.004 * math.cos(phi), phi, h, v) for h, v in ((0.018, 0.034), (0.046, 0.026), (0.056, 0.0), (0.046, -0.026), (0.018, -0.034))], pat, sharp=60)
-    # a fat knot at the front with two folded ends, and two flowing tails of fuller fabric
-    kc, kn = body_pt(0.0, yc - 0.004, 0.082)
-    xx, yy, nn = axes(kn)
-    bead('knot', kc, (0.066, 0.050, 0.048), lambda p, n: mix(deep(base, 0.10), tint(base, 0.2), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=8)
-    for s_ in (-1, 1):
-        bead('ear%+d' % s_, kc + xx * (s_ * 0.050) + yy * 0.012 + nn * 0.004, (0.030, 0.034, 0.030), lambda p, n: mix(deep(base, 0.14), tint(base, 0.18), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=6)
-    def tail(cx0, cx1, y0, y1, w, name, off, wav):
-        nu, nv = 4, 6
-        def fn(i, j):
-            v = j / (nv - 1); u = i / (nu - 1) - 0.5
-            cx = cx0 + (cx1 - cx0) * v + 0.016 * math.sin(4.0 * v + wav)
-            y = y0 + (y1 - y0) * v
-            ww = w * (1 + 0.65 * v)
-            return body_pt(cx + u * ww, y, off + 0.010 * math.sin(3.0 * v + wav) * v)
-        thick_sheet(name, fn, nu, nv, 0.012, pat)
-    tail(-0.030, -0.130, 0.440, 0.190, 0.060, 'tail_a', 0.074, 0.0)
-    tail(0.030, 0.095, 0.440, 0.215, 0.054, 'tail_b', 0.078, 1.7)
-    return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly', 'sweet'], price=55, title='Silk scarf',
-                desc='A silk neckerchief in navy printed with gold medallions: a thick rolled wrap round the belly at y~0.46, a fat knot with two folded ends at the front centre (top y 0.52, below the mouth keep-out) and two flowing tails of fuller fabric.')
-
-# ============================ GOLD CHAIN ======================================
-def chain_gold(gold=hx('#E8B84A'), **k):
-    reset()
-    def pxy(t):
-        x = -0.34 + 0.68 * t
-        return x, 0.520 - 0.112 * (1 - (x / 0.34) ** 2)
-    ts = np.linspace(0, 1, 500)
-    xy = np.array([pxy(t) for t in ts])
-    seg = np.linalg.norm(np.diff(xy, axis=0), axis=1)
-    L = np.concatenate([[0], np.cumsum(seg)])
-    nlink = 13
-    gcol = lambda p, n: mix(deep(gold, 0.25), tint(gold, 0.40), 0.35 + 0.65 * max(0, n[1] * 0.7 + 0.3))
-    for k_ in range(nlink):
-        d = L[-1] * (k_ + 0.5) / nlink
-        i = min(int(np.searchsorted(L, d)), len(xy) - 2)
-        x, y = xy[i]
-        tx, ty = xy[i + 1] - xy[i]
-        p, nn = body_pt(x, y, 0.044)
-        xx, yy, z = axes(nn)
-        tdir = xx * tx + yy * ty
-        tdir /= np.linalg.norm(tdir)
-        side = np.cross(z, tdir); side /= np.linalg.norm(side)
-        if k_ % 2 == 0:
-            bead('link%d' % k_, p, (0.046, 0.030, 0.013), gcol, rot=np.stack([tdir, z, side], 1), segs=8)
-        else:
-            bead('link%d' % k_, p, (0.046, 0.013, 0.030), gcol, rot=np.stack([tdir, z, side], 1), segs=8)
-    p, nn = body_pt(0.0, 0.392, 0.058)
-    xx, yy, z = axes(nn)
-    Rm = np.stack([xx, z, -yy], 1).tolist()
-    lathe_y('coin', [(0.0, -0.014), (0.070, -0.014), (0.080, -0.006), (0.080, 0.010), (0.070, 0.018), (0.0, 0.018)], 14, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.32), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=45)
-    sp = star_poly(0.034, 0.016, 5, rad=0.005)
-    slab_part('star', sp, 0.006, lambda q, nq: tint(gold, 0.35), lambda px, py, pz: tuple(p + xx * px + yy * py + z * (0.015 + pz)), cuts=0)
-    bead('bail', p + yy * 0.086, (0.020, 0.020, 0.016), deep(gold, 0.1), segs=6)
-    return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly'], price=70, title='Gold chain',
-                desc='A chunky gold curb chain in a swag from (+-0.34,0.52) down to a coin pendant at y~0.39: thirteen big alternating links. Lowest point on the centre line; nothing near the mouth keep-out.')
+                desc='A soft oatmeal knit cardigan: mostly smooth, with just a few subtle vertical cable lines, a ribbed hem band (y 0.2), a darker-oatmeal button placket down the middle front with five dark buttons, front panels up to y 0.505 with a shallow V, deep armholes round the arm nubs and a higher back with a collar edge. Pip variant: open over his tail root.')
 
 # ============================ CROSSBODY BAG ====================================
 def bag_crossbody(main=hx('#F0D9B5'), strap=hx('#8B5A3C'), gold=GOLD, **k):

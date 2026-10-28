@@ -1,7 +1,7 @@
 {
  "id": "chain_gold",
- "tris": 1260,
- "verts": 842,
+ "tris": 952,
+ "verts": 666,
  "parts": [
   {
    "name": "link0",
@@ -94,64 +94,19 @@
    "verts": 22
   },
   {
-   "name": "link18",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link19",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link20",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link21",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link22",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link23",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link24",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link25",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link26",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link27",
-   "tris": 36,
-   "verts": 22
-  },
-  {
    "name": "coin",
-   "tris": 96,
-   "verts": 74
+   "tris": 112,
+   "verts": 86
   },
   {
    "name": "star",
    "tris": 156,
    "verts": 180
+  },
+  {
+   "name": "bail",
+   "tris": 36,
+   "verts": 22
   }
  ],
  "anchor_rest": [
@@ -160,19 +115,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6641,
-  -0.209,
-  -1.1136
+  -0.6816,
+  -0.275,
+  -1.1416
  ],
  "bounds_local_max": [
-  0.6643,
-  0.1334,
-  0.0808
+  0.6816,
+  0.1392,
+  0.0941
  ],
  "size": [
-  1.3284,
-  0.3424,
-  1.1944
+  1.3632,
+  0.4142,
+  1.2356
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -182,7 +137,7 @@
  ],
  "price": 70,
  "title": "Gold chain",
- "desc": "A chunky Cuban-link gold chain: twenty-eight big flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a coin pendant at the front (y~0.34).",
+ "desc": "A chunky Cuban-link gold chain: eighteen bold flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a bail at the front (y~0.31).",
  "colourway": "chain_gold",
  "batch": 4
 }

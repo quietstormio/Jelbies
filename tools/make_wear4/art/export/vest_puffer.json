@@ -1,12 +1,12 @@
 {
  "id": "vest_puffer",
- "tris": 1124,
- "verts": 600,
+ "tris": 1244,
+ "verts": 660,
  "parts": [
   {
    "name": "body",
-   "tris": 600,
-   "verts": 330
+   "tris": 720,
+   "verts": 390
   },
   {
    "name": "edge",
@@ -35,19 +35,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.624,
+  -0.6104,
   -0.1511,
-  -1.0658
+  -1.0514
  ],
  "bounds_local_max": [
-  0.6234,
-  0.2914,
-  0.1121
+  0.6099,
+  0.2912,
+  0.132
  ],
  "size": [
-  1.2474,
-  0.4425,
-  1.1779
+  1.2203,
+  0.4423,
+  1.1834
  ],
  "anchor": "chest",
  "slot": "body",
@@ -57,7 +57,7 @@
  ],
  "price": 65,
  "title": "Puffer vest",
- "desc": "A teal quilted puffer vest: puffy horizontal baffles from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V at the top, deep armholes round the arm nubs, a higher back with a piped collar edge and a gold zip down the middle front. Pip variant: open over his tail root.",
+ "desc": "A teal puffer vest with four puffy horizontal quilted baffles (soft sheen on the crests, pinched seams) from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, deep armholes round the arm nubs, a higher back with a piped collar edge and a chunky gold zip with a big pull down the middle front. Pip variant: open over his tail root.",
  "colourway": "vest_puffer",
  "batch": 4
 }

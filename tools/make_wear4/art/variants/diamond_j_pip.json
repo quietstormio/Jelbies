@@ -1,202 +1,312 @@
 {
  "id": "diamond_j_pip",
- "tris": 2344,
- "verts": 1774,
+ "tris": 2948,
+ "verts": 2125,
  "parts": [
   {
    "name": "gemC0",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC1",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC2",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC3",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC4",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC5",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC6",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC7",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC8",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC9",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC10",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC11",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC12",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC13",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC14",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC15",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC16",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC17",
-   "tris": 42,
-   "verts": 30
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC18",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC19",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC20",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC21",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC22",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC23",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC24",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC25",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC26",
-   "tris": 42,
-   "verts": 27
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC27",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC28",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "gemC29",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC30",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC31",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC32",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC33",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC34",
-   "tris": 42,
-   "verts": 26
+   "tris": 36,
+   "verts": 21
   },
   {
    "name": "gemC35",
-   "tris": 42,
-   "verts": 28
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC36",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC37",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC38",
+   "tris": 36,
+   "verts": 23
+  },
+  {
+   "name": "gemC39",
+   "tris": 36,
+   "verts": 23
+  },
+  {
+   "name": "gemC40",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC41",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "gemC42",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "gemC43",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC44",
+   "tris": 36,
+   "verts": 23
+  },
+  {
+   "name": "gemC45",
+   "tris": 36,
+   "verts": 23
+  },
+  {
+   "name": "gemC46",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC47",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC48",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC49",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC50",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC51",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC52",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC53",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC54",
+   "tris": 36,
+   "verts": 21
+  },
+  {
+   "name": "gemC55",
+   "tris": 36,
+   "verts": 20
   },
   {
    "name": "jbase",
-   "tris": 172,
-   "verts": 214
+   "tris": 188,
+   "verts": 218
   },
   {
-   "name": "jrim",
-   "tris": 172,
-   "verts": 212
+   "name": "jbevel",
+   "tris": 188,
+   "verts": 218
+  },
+  {
+   "name": "jpave",
+   "tris": 188,
+   "verts": 218
   },
   {
    "name": "serifb",
-   "tris": 44,
-   "verts": 84
+   "tris": 52,
+   "verts": 88
+  },
+  {
+   "name": "serifp",
+   "tris": 52,
+   "verts": 86
   },
   {
    "name": "gemJ0",
@@ -219,31 +329,6 @@
    "verts": 20
   },
   {
-   "name": "gemJ4",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "gemJ5",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "gemJ6",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "gemJ7",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "gemJ8",
-   "tris": 36,
-   "verts": 20
-  },
-  {
    "name": "bail",
    "tris": 120,
    "verts": 65
@@ -255,19 +340,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6402,
-  -0.3429,
-  -0.9489
+  -0.6292,
+  -0.3454,
+  -0.9377
  ],
  "bounds_local_max": [
-  0.6402,
-  0.7178,
-  0.0867
+  0.6292,
+  0.7002,
+  0.0924
  ],
  "size": [
-  1.2805,
-  1.0608,
-  1.0356
+  1.2583,
+  1.0456,
+  1.0301
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -277,6 +362,6 @@
  ],
  "price": 450,
  "title": "Diamond J chain",
- "desc": "An iced-out tennis chain of round brilliant-cut stones set shoulder to shoulder in one continuous loop round the body at the neck line (no wire), with a big bold rounded J pendant in mirror-polished platinum, densely paved with brilliants, on a platinum bail at the front centre (below the mouth keep-out). The gems twinkle (Swift adds the glints). The hero item: its own budget (2500 vertices / 3800 triangles).",
+ "desc": "A fine iced-out tennis chain of fifty-six small round brilliants set shoulder to shoulder in one continuous loop round the body at the neck line (no wire), near-white and lifted so they never grey in shade, with a big bold J pendant in solid mirror white gold with a polished bevel and a micro-sparkle pave face, on a bail at the front centre (below the mouth keep-out). The stones and four accent stones twinkle (Swift adds the glints). The hero item: its own budget (2500 vertices / 3800 triangles).",
  "colourway": "diamond_j_pip"
 }

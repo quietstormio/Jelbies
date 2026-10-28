@@ -1,7 +1,7 @@
 {
  "id": "chain_gold_pip",
- "tris": 1260,
- "verts": 842,
+ "tris": 952,
+ "verts": 666,
  "parts": [
   {
    "name": "link0",
@@ -94,64 +94,19 @@
    "verts": 22
   },
   {
-   "name": "link18",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link19",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link20",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link21",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link22",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link23",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link24",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link25",
-   "tris": 36,
-   "verts": 22
-  },
-  {
-   "name": "link26",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link27",
-   "tris": 36,
-   "verts": 22
-  },
-  {
    "name": "coin",
-   "tris": 96,
-   "verts": 74
+   "tris": 112,
+   "verts": 86
   },
   {
    "name": "star",
    "tris": 156,
    "verts": 180
+  },
+  {
+   "name": "bail",
+   "tris": 36,
+   "verts": 22
   }
  ],
  "anchor_rest": [
@@ -160,19 +115,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6716,
-  -0.209,
-  -0.9809
+  -0.6794,
+  -0.275,
+  -1.0044
  ],
  "bounds_local_max": [
-  0.6649,
-  0.7174,
-  0.0813
+  0.6794,
+  0.7116,
+  0.0941
  ],
  "size": [
-  1.3366,
-  0.9264,
-  1.0622
+  1.3588,
+  0.9867,
+  1.0985
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -182,6 +137,6 @@
  ],
  "price": 70,
  "title": "Gold chain",
- "desc": "A chunky Cuban-link gold chain: twenty-eight big flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a coin pendant at the front (y~0.34).",
+ "desc": "A chunky Cuban-link gold chain: eighteen bold flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a bail at the front (y~0.31).",
  "colourway": "chain_gold_pip"
 }

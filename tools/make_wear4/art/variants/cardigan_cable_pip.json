@@ -60,19 +60,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.6175,
-  -0.173,
-  -0.9141
+  -0.614,
+  -0.1719,
+  -0.9083
  ],
  "bounds_local_max": [
-  0.6253,
+  0.6126,
   0.294,
-  0.1103
+  0.1127
  ],
  "size": [
-  1.2428,
-  0.467,
-  1.0244
+  1.2265,
+  0.4659,
+  1.021
  ],
  "anchor": "chest",
  "slot": "body",
@@ -82,6 +82,6 @@
  ],
  "price": 60,
  "title": "Cable cardigan",
- "desc": "A rust cable-knit cardigan covering the belly from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, a cream placket down the middle front with five buttons, deep armholes round the arm nubs, a higher back and a collar edge, and braided cable ridges. Pip variant: open over his tail root.",
+ "desc": "A soft oatmeal knit cardigan: mostly smooth, with just a few subtle vertical cable lines, a ribbed hem band (y 0.2), a darker-oatmeal button placket down the middle front with five dark buttons, front panels up to y 0.505 with a shallow V, deep armholes round the arm nubs and a higher back with a collar edge. Pip variant: open over his tail root.",
  "colourway": "cardigan_cable_pip"
 }
