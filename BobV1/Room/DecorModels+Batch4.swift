@@ -19,7 +19,7 @@ extension DecorModels {
     static let rocketTilt: Float = 0.5
     static let rocketTail = SIMD3<Float>(0, 0.84, 0) + 0.62 * SIMD3<Float>(-cosf(0.5), -sinf(0.5), 0)
     /// The scooter's steering axis (column from its fork joint up to the top of the column) and the top.
-    static let scooterTop = SIMD3<Float>(0.30, 1.02, 0)
+    static let scooterTop = SIMD3<Float>(0.36, 1.224, 0)
     static let scooterAxis = simd_normalize(SIMD3<Float>(-0.13, 0.82, 0))
 
     static func addBatch4(_ kind: DecorKind, _ art: DecorMeshes.Art, o: SIMD3<Float>, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) -> Bool {

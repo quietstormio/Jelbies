@@ -161,7 +161,10 @@ final class Toys4CaptureTests: XCTestCase {
 
     // MARK: the contact sheet
 
-    func testCaptureToys4Sheet() throws {
+    func testCaptureToys4SheetV2() throws { try sheetFor([.plushdino, .kickscooter, .plushbear], name: "toys4_sheet_v2.png") }
+    func testCaptureToys4Sheet() throws { try sheetFor(DecorKind.batch4Toys + [.rug, .bouncymat, .ball, .plushbear, .rockinghorse], name: "toys4_sheet.png", scaleRow: DecorKind.batch4Toys) }
+
+    private func sheetFor(_ kinds: [DecorKind], name: String, scaleRow: [DecorKind]? = nil) throws {
         guard dir != nil else { throw XCTSkip("TOYS4_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
         let rig = MotionRig(game: true)
@@ -170,7 +173,6 @@ final class Toys4CaptureTests: XCTestCase {
         let w = 400, h = 400
         let (ren, target) = try makeRenderer(device, rig, w: w, h: h)
         var cells: [(LockImage, String)] = []
-        let kinds: [DecorKind] = DecorKind.batch4Toys + [.rug, .bouncymat, .ball, .plushbear, .rockinghorse]
         for k in kinds {
             DecorField.shared.set([PlacedDecor(uid: 1, kind: k, x: 0.2, z: 0.4)]); decorMesh(into: ren)
             let c = SIMD3<Float>(0.2, 0, 0.4)
@@ -179,7 +181,7 @@ final class Toys4CaptureTests: XCTestCase {
             cells.append((shot(ren, target, rig: rig, showBody: false, cam: cam, w: w, h: h), "\(k.title)  \(price) JellyCoins  \(k.spec.units) spot\(k.spec.units == 1 ? "" : "s")" + (DecorKind.batch4.contains(k) ? "  NEW" : "")))
         }
         // a Jelbie beside each new toy (true scale check): a second row of the new toys with the body shown next to them
-        for k in DecorKind.batch4Toys {
+        for k in (scaleRow ?? kinds) {
             DecorField.shared.set([PlacedDecor(uid: 1, kind: k, x: 0.2, z: 0.4)]); decorMesh(into: ren)
             rig.sim.teleport(toXZ: SIMD2(0.2 - k.spec.half.x - 0.9, 0.5)); for _ in 0..<90 { rig.sim.step() }
             rig.brain.currentPose(rig.sim)
@@ -187,7 +189,7 @@ final class Toys4CaptureTests: XCTestCase {
             let cam = camera(eye: c + SIMD3(1.0, 1.5, 4.2), at: c + SIMD3(0, 0.5, 0), aspect: Float(w) / Float(h), fov: 36 * .pi / 180)
             cells.append((shot(ren, target, rig: rig, showBody: true, cam: cam, w: w, h: h), "\(k.title) next to a Jelbie (scale)"))
         }
-        try save(sheet(cells, cols: 3, title: "Toys batch 4 (Blender art) in the room, real renderer, plus the polished rug and bouncy mat"), "toys4_sheet.png")
+        try save(sheet(cells, cols: 3, title: "Toys batch 4 (Blender art) in the room, real renderer, plus the polished rug and bouncy mat"), name)
     }
 
     // MARK: the play frames

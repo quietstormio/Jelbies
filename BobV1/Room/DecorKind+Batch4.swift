@@ -20,8 +20,8 @@ extension DecorKind {
         case .playtunnel: return DecorSpec(half: SIMD2(0.86, 0.52), height: 1.0, solid: true, units: 2, corner: 0.3, reach: 1, box: true)
         case .ringstacker: return DecorSpec(half: SIMD2(0.38, 0.38), height: 0.96, solid: true, units: 1, corner: 0.38, reach: 1, box: true)
         case .toyrocket: return DecorSpec(half: SIMD2(0.86, 0.32), height: 1.36, solid: true, units: 2, corner: 0.15, reach: 1, box: true)
-        case .plushdino: return DecorSpec(half: SIMD2(0.58, 0.56), height: 1.42, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
-        case .kickscooter: return DecorSpec(half: SIMD2(0.62, 0.42), height: 1.13, solid: true, units: 1, corner: 0.1, reach: 1, box: true)
+        case .plushdino: return DecorSpec(half: SIMD2(0.62, 0.62), height: 1.42, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
+        case .kickscooter: return DecorSpec(half: SIMD2(0.78, 0.57), height: 1.36, solid: true, units: 1, corner: 0.1, reach: 1, box: true)
         default: return parkSpec
         }
     }
