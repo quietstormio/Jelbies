@@ -16,6 +16,7 @@ struct SoundSettingsPanel: View {
     private var tight: Bool { vsc == .compact }
 
     private let ink = CloudTheme.ink
+    private var theme = ThemeStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: tight ? 6 : 12) {
@@ -100,11 +101,11 @@ struct SoundSettingsPanel: View {
             Toggle(isOn: on) {
                 Label(title, systemImage: symbol).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
             }
-            .tint(CloudTheme.deepJelly)
+            .tint(theme.controlAccent)
             .controlSize(tight ? .small : .regular)
             .accessibilityIdentifier("sound-\(id)-toggle")
             Slider(value: Binding(get: { Double(volume.wrappedValue) }, set: { volume.wrappedValue = Float($0) }), in: 0...1)
-                .tint(CloudTheme.deepJelly)
+                .tint(theme.controlAccent)
                 .disabled(!on.wrappedValue)
                 .opacity(on.wrappedValue ? 1 : 0.4)
                 .accessibilityIdentifier("sound-\(id)-volume")

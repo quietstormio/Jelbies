@@ -13,7 +13,7 @@ struct AppleExtrasPanel: View {
     @State private var tipVisible = true
 
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
-    private let tint = Color(red: 0.43, green: 0.70, blue: 0.82)
+    private var tint: Color { ThemeStore.shared.controlAccent }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

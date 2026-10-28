@@ -98,7 +98,7 @@ struct EarsSettingsRow: View {
     /// A phone on its side: smaller text, no extra spacing.
     var tight = false
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
-    private let tint = Color(red: 0.43, green: 0.70, blue: 0.82)
+    private var tint: Color { ThemeStore.shared.controlAccent }
 
     static let privacyText = "Your Jelbies listen for claps, whistles, laughter and music while the app is open, and react. Sound is understood right on your phone. Nothing is recorded or sent anywhere."
     static let deniedText = "The microphone is turned off for this app. Allow it in Settings to use Ears."
