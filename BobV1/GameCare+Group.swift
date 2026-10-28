@@ -79,6 +79,7 @@ extension GameCare {
                 group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             }
+            group.avoid = jellyFloors
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
@@ -94,7 +95,7 @@ extension GameCare {
         }
         for a in actors {
             guard let b = a.brain else { continue }
-            if group.memberIDs.contains(a.id) { b.idleBlocked = true; continue }
+            if group.memberIDs.contains(a.id) { if group.isHolding(a.id) { b.idleBlocked = true; continue } }          // (a diner who is done is released on his own: he is a free Jelly again)
             if groupQueue.contains(a.id) {
                 // he waits where he stands (look / step / bounce), like a diner, so he never walks into the tray corridor
                 if groupWaitSaved[a.id] == nil { groupWaitSaved[a.id] = GroupWaiter(brain: b, was: b.reserved) }

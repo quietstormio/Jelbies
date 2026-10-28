@@ -47,6 +47,8 @@ final class GameCare {
     @ObservationIgnored var standRetries = 0
     @ObservationIgnored var wantedAge: Float = 0
     @ObservationIgnored var wantedOrigin: SIMD2<Float>?
+    /// Every Jelbie's floor spot as of the last `tickOthers` (reused array): where food must not appear.
+    @ObservationIgnored var jellyFloors: [SIMD2<Float>] = []
     /// Appetite of the current meal (decided when the tray pops in, from his tier then): pieces he will take (0 = refuses), already paid for.
     @ObservationIgnored private(set) var mealPieces = 3
     @ObservationIgnored var mealPaid = 0
@@ -631,7 +633,7 @@ final class GameCare {
     /// it (or on the spot where it pops in) he first walks to his place with no tray out, then it pops in front of him.
     func serveWanted(_ c: Consumable, brain: BlobBrain, here: SIMD2<Float>, act: BlobActivity, dt: Float) {
         let layout = DiningLayout.make(n: 1)
-        if wantedOrigin == nil { wantedOrigin = DiningSpot.choose(bob: SIMD2(99, 99), layout: layout) }
+        if wantedOrigin == nil { wantedOrigin = DiningSpot.choose(bob: SIMD2(99, 99), layout: layout, jellies: jellyFloors + [here]) }
         let origin = wantedOrigin ?? DiningSpot.preferred
         var stand = origin + layout.places[0].rel
         stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
@@ -682,6 +684,8 @@ final class GameCare {
     /// Once per fixed step, after Bob's `tick`: the other Jellies' needs and dirt, their mood for the idle behaviours, the selection hop and the
     /// greeting after a long absence. (Meals, Clean, Come here and voice stay Jelly 0's.)
     func tickOthers(_ actors: [JellyActor], dt: Float) {
+        jellyFloors.removeAll(keepingCapacity: true)
+        for a in actors where !parkHides(a.id) { if let b = a.brain { jellyFloors.append(Self.floorPos(b, a.sim)) } }
         for a in actors where a.id > 0 {
             guard let brain = a.brain, let profile = jelly(a.id) else { continue }
             let here = Self.floorPos(brain, a.sim)
