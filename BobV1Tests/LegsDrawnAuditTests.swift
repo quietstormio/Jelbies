@@ -35,6 +35,7 @@ final class LegsDrawnAuditTests: XCTestCase {
         var crownOut: Float = -.infinity         // the crown vertex farthest outside the drawn body
         var ideal: Float = -.infinity            // the old measurement: deepest bean vertex vs the REST egg in the fitted frame (needs <= -0.02)
         var stretch: Float = 0, coreDisp: Float = 0      // embedded foot (beans in): extent over rest extent; largest distance from its place on the rigid fitted body
+        var legOut: Float = .infinity            // how far the bean's farthest vertex stands OUT of the drawn body (the visible leg length); min over legs
         var shoeBurial: Float = .infinity        // shoes: deepest vertex of the SHOE SHELL inside the drawn body (<= 0 = the shell floats off the body); min over legs
         var shoeBeanOff: Float = 0               // shoes: largest distance between the vertices the shoe is built from and the bean that is drawn
         var gap: Float { max(0, -burial) }
@@ -75,6 +76,25 @@ final class LegsDrawnAuditTests: XCTestCase {
                         deepest = max(deepest, -sd); farOut = max(farOut, sd)
                     }
                     m.burial = min(m.burial, deepest); m.crownOut = max(m.crownOut, farOut)
+                    // visible leg length: the bean vertex farthest outside the drawn body (every 4th vertex)
+                    var leg: Float = -.infinity
+                    var cand2: [Int] = []
+                    var tt = 0
+                    while tt < tri.count { if simd_distance_squared(P(Int(tri[tt])), c) < 0.35 * 0.35 { cand2.append(tt) }; tt += 3 }
+                    var vi = 0
+                    while vi < FootBean.vertexCount {
+                        let p = P(first + vi)
+                        var bd = Float.infinity, sgn: Float = 1
+                        for t in cand2 {
+                            let ia = Int(tri[t]), ib = Int(tri[t + 1]), ic = Int(tri[t + 2])
+                            let (q, w) = DrawnGeom.closest(p, P(ia), P(ib), P(ic))
+                            let dd = simd_distance_squared(p, q)
+                            if dd < bd { bd = dd; let n = N(ia) * w.x + N(ib) * w.y + N(ic) * w.z; sgn = simd_dot(p - q, n) >= 0 ? 1 : -1 }
+                        }
+                        leg = max(leg, sgn * bd.squareRoot())
+                        vi += 4
+                    }
+                    m.legOut = min(m.legOut, leg)
                     // the old idealised number, every 2nd bean vertex
                     var ideal = Float.infinity
                     var i = 0

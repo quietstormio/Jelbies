@@ -23,13 +23,32 @@ extension GameCare {
         guard sk.beansActive else { return rigid }
         if let d = drawn, sk.beanFirst.count == 2 {
             for s in 0..<2 { let f = sk.beanFirst[s]; for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); rigid[s][i] = SIMD3(d[o], d[o + 1], d[o + 2]) } }
+            Self.poofShoes(&rigid, brain: b)
             return rigid
         }
         // the SAME blend the skin draws (Skinner.update): beanStart -> beanPos by the bean blend, so the shell is grown from the foot that is on screen
         let bl = sk.beanBlend
         guard sk.beanStart.count == 2, sk.beanStart[0].count == FootBean.vertexCount, sk.beanPos.count == 2, sk.beanPos[0].count == FootBean.vertexCount else { return rigid }
         for s in 0..<2 { for i in 0..<FootBean.vertexCount { let a = sk.beanStart[s][i]; rigid[s][i] = a + (sk.beanPos[s][i] - a) * bl } }
+        Self.poofShoes(&rigid, brain: b)
         return rigid
+    }
+
+    /// 2026-10-28 (legs stay legs): in a flip / cartwheel the body is upside down for most of the flight and the shoe soles would show as black discs on its side / two
+    /// sneakers on top of the head. While the leg points more than ~30 degrees away from straight down the shoe shrinks into the top of the leg (the leg itself stays a leg), and
+    /// grows back as the leg comes down to the floor (smooth in the angle, so no pop). Only while a spin move owns the body: the walk and every other move are untouched.
+    static func poofShoes(_ w: inout [[SIMD3<Float>]], brain b: BlobBrain) {
+        guard b.gait.isSpinMove, BlobBrain.forceLegsFix else { return }
+        for s in 0..<w.count where w[s].count == FootBean.vertexCount {
+            let hip = w[s][FootBean.vertexCount - 1], sole = w[s][0]
+            let d = sole - hip, l = simd_length(d)
+            guard l > 1e-4 else { continue }
+            let down = -d.y / l
+            let k = smooth01((down - 0.35) / 0.5)
+            if k >= 0.999 { continue }
+            let f = max(k, 0.02)
+            for i in w[s].indices { w[s][i] = hip + (w[s][i] - hip) * f }
+        }
     }
 
     /// Does this actor wear shoes on screen right now?
