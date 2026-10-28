@@ -424,7 +424,7 @@ extension BlobBrain {
             let flourish = Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
-            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 4 : 6) * idleLively, rand(11, 22) * idleLively * vJit() - idleState.t) }
+            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
         if idleState.kind == .rollTrip { gait.rollTravel = 1.1 }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0

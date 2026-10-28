@@ -69,20 +69,20 @@ enum SocialEvent {
 
 enum SocialTuning {
     /// (tests turn this up to make every pick a social)
-    nonisolated(unsafe) static var pickChance: Float = 0.24
-    static let brainCooldown: (Float, Float) = (5, 10)
-    static let pairCooldown: (Float, Float) = (12.5, 22.5)
+    nonisolated(unsafe) static var pickChance: Float = 0.9
+    static let brainCooldown: (Float, Float) = (2.5, 5)
+    static let pairCooldown: (Float, Float) = (7, 13)
     /// While the player is watching the room (`BlobBrain.watching`): roughly twice the chance and half the waits.
     /// Rounds of tag / keep-away.
     static let chaseRounds = 3, keepAwayRounds = 2
     /// The social floor: a Jelly that has had no social for this long (seconds, drawn per Jelly) asks for one, whatever the pick chance (still never while another session is on).
-    static let droughtRange: (Float, Float) = (22, 32)
+    static let droughtRange: (Float, Float) = (12, 18)
     /// An invited (wandering) partner has this long to finish his leg.
     static let inviteWait: Float = 3.5
     /// Chance that a nearby free Jelly joins a zoomies, and how far he may be (the zoomies used to be solo most of the time).
     static let zoomJoin: Float = 0.8, zoomJoinRadius: Float = 6
     static let livelyChance: Float = 4.0, livelyWait: Float = 0.25
-    static let lookCooldown: Float = 20
+    static let lookCooldown: Float = 12
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
     static let greetApart: Float = 20
     static let squabbleBase: Float = 0.35, squabbleGrumpy: Float = 3.0
@@ -130,7 +130,7 @@ struct SocialBook {
     var contactCool: Float = 0
     var contactPrev: [Int: Float] = [:]
     /// Group socials: cooldown, the seconds a crowd of free Jelbies has been together, the wait before one asks for a group move, the last group kind.
-    var groupCool: Float = 25, groupIdle: Float = 0, groupLimit: Float = 60
+    var groupCool: Float = 12, groupIdle: Float = 0, groupLimit: Float = 25, groupBusy: Float = 0
     var lastGroup: SocialKind?
 }
 
@@ -185,7 +185,7 @@ final class SocialRoster {
         r.boxes = list.map { Box(b: $0) }
         for (i, b) in list.enumerated() {
             b.steerID = i
-            b.socialBook.groupLimit = 38 + 15 * Float(i % 4); b.socialBook.groupCool = 22 + 9 * Float(i % 4)          // (the first group move: staggered)
+            b.socialBook.groupLimit = 12 + 8 * Float(i % 4); b.socialBook.groupCool = 8 + 5 * Float(i % 4)          // (the first group move: staggered)
             b.zoomUrge = IdleTuning.zoomUrgeFirst + 12 * Float(i)          // (the first zoomies urge: staggered, so they do not all go at once)
             b.socialOthers = { [weak r] in r.map { $0.brains.filter { $0 !== b } } ?? [] }
             b.bus = r.eventBus
