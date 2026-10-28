@@ -1,8 +1,8 @@
 //
 //  IntroView.swift
-//  The first-launch intro (Cloud Jelly): one finished white, square clip (logo, squish, sparkles and its own sound) plays once it is ready,
+//  The launch intro (Cloud Jelly): one finished white, square clip (logo, squish, sparkles and its own sound) plays once it is ready,
 //  holds its last frame, "Tap to start" fades in, and a tap (or 2 s) fades through white to the menu. A tap during the clip jumps to the last frame.
-//  Shown before the main menu until UserDefaults "IntroSeen.v1" is set; launch argument -Intro 1 forces it (for captures).
+//  Shown before the main menu on every cold launch (ContentView reads the gate once per process, so resuming from the background never replays it); -Intro 1 is accepted and changes nothing.
 //  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource`).
 //
 
@@ -21,7 +21,7 @@ enum IntroGate {
     static let seenKey = "IntroSeen.v1"
     static let background = Color.white
     static func shouldShow(_ d: UserDefaults = .standard) -> Bool {
-        d.integer(forKey: "Intro") != 0 || !d.bool(forKey: seenKey)
+        true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
     }
     static func markSeen(_ d: UserDefaults = .standard) { d.set(true, forKey: seenKey) }
 }
