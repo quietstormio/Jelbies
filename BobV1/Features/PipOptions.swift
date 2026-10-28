@@ -148,7 +148,7 @@ nonisolated enum PipSpikes {
             let tgP = simd_normalize(tgRaw - n * simd_dot(tgRaw, n))
             // size: largest at the junction, smaller up the back and toward the tip
             let f: Float = sK <= sJ ? 1 - 0.40 * (sJ - sK) / max(sJ, 1e-3) : 1 - 0.50 * (sK - sJ) / max(L - sJ, 1e-3)
-            var H = 0.17 * f
+            var H = 0.15 * f
             if pt.isTail { H = min(H, max(0.08, 0.7 * Float(sh.ridge(pt.t).r))) }
             let bR = H / 2.0
             let ax = simd_normalize(n * cosf(0.21) + tgP * sinf(0.21))
