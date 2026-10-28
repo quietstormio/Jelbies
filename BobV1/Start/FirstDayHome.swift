@@ -9,25 +9,30 @@
 
 import SwiftUI
 
+/// The beat's state lives in a class: the stage's escaping callbacks hold early copies of this struct, whose @State would not be the live storage.
+@MainActor @Observable final class FirstDayState {
+    var model: MelonModel?
+    var readyAt: Date?
+    var startedAt = Date()
+    var step = 0                    // 0: Welcome home, 1: how Drops work
+    var stepAt = Date()
+    var leaving = false
+    var snapshot: [String: Any] = [:]
+    var task: Task<Void, Never>?
+}
+
 struct FirstDayHomeView: View {
+    @State private var st = FirstDayState()
     let character: Int
     let name: String
     let replay: Bool
     var finished: () -> Void
 
-    @State private var model: MelonModel?
-    @State private var readyAt: Date?
-    @State private var startedAt = Date()
-    @State private var step = 0                    // 0: Welcome home, 1: how Drops work
-    @State private var stepAt = Date()
-    @State private var leaving = false
-    @State private var snapshot: [String: Any] = [:]
     @State private var camera = PickerCamera()
-    @State private var task: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
 
     private var motion: Bool { !(reduceMotionEnv || A11ySettings.shared.reduceMotion) }
-    static let lines: (String, String) = ("", "Take good care of them, earn JellyCoins around town, and one day you can bring them to the Spring to wake a new friend.")
+    static let lines: (String, String) = ("", "Take good care of them, earn JellyCoins around town, and one day you can adopt another friend from the Spring.")
     private var holdCapture: Bool {
         #if targetEnvironment(simulator)
         return UserDefaults.standard.object(forKey: "FirstDayHold") != nil          // capture aid: wait for the Jelbie, then stay (-FirstDayHold <seconds before the second caption>)
@@ -35,7 +40,7 @@ struct FirstDayHomeView: View {
         return false
         #endif
     }
-    private var caption: String { step == 0 ? "Welcome home, \(name)!" : Self.lines.1 }
+    private var caption: String { st.step == 0 ? "Welcome home, \(name)!" : Self.lines.1 }
 
     var body: some View {
         GeometryReader { geo in
@@ -50,10 +55,10 @@ struct FirstDayHomeView: View {
             .frame(width: size.width, height: size.height)
         }
         .ignoresSafeArea()
-        .opacity(leaving ? 0 : 1)
-        .animation(.easeOut(duration: 0.5), value: leaving)
+        .opacity(st.leaving ? 0 : 1)
+        .animation(.easeOut(duration: 0.5), value: st.leaving)
         .task { begin() }
-        .onDisappear { task?.cancel(); if replay { Self.restore(snapshot); snapshot = [:] } }
+        .onDisappear { st.task?.cancel(); if replay { Self.restore(st.snapshot); st.snapshot = [:] } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("first-day-home")
     }
@@ -62,10 +67,10 @@ struct FirstDayHomeView: View {
 
     private func scene(now: Date, size: CGSize) -> some View {
         let portrait = size.height >= size.width
-        let t = now.timeIntervalSince(startedAt)
+        let t = now.timeIntervalSince(st.startedAt)
         let f = min(portrait ? size.width * 0.82 : size.height * 0.95, 340)
         let feet = CGPoint(x: size.width / 2, y: size.height * (portrait ? 0.66 : 0.70))
-        let age = readyAt.map { now.timeIntervalSince($0) } ?? -1
+        let age = st.readyAt.map { now.timeIntervalSince($0) } ?? -1
         return ZStack {
             Canvas { ctx, sz in FirstDayArt.room(ctx, sz, t: motion ? t : 0, feet: feet, unit: portrait ? Double(sz.width) / 400 : Double(sz.height) / 460) }
             ShowcaseStage(roster: [character], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(m) })
@@ -108,9 +113,9 @@ struct FirstDayHomeView: View {
     }
 
     private func captionView(now: Date, size: CGSize, portrait: Bool) -> some View {
-        let local = now.timeIntervalSince(stepAt)
+        let local = now.timeIntervalSince(st.stepAt)
         let a = motion ? OArt.smooth((local - 0.15) / 0.6) : 1
-        let big = step == 0
+        let big = st.step == 0
         let fs: CGFloat = big ? (portrait ? min(40, size.width * 0.1) : 34) : (portrait ? min(25, size.width * 0.065) : 22)
         return Text(caption)
             .font(SK.font(fs, big ? .black : .heavy))
@@ -122,7 +127,7 @@ struct FirstDayHomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, size.height * (portrait ? 0.08 : 0.05))
             .opacity(a)
-            .id(step)
+            .id(st.step)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(caption)
             .accessibilityAddTraits(.isHeader)
@@ -150,16 +155,16 @@ struct FirstDayHomeView: View {
     // MARK: flow
 
     private func begin() {
-        if replay { snapshot = OpeningStoryView.saveSnapshot() }
+        if replay { st.snapshot = OpeningStoryView.saveSnapshot() }
         camera.engage()
-        startedAt = Date(); stepAt = Date()
+        st.startedAt = Date(); st.stepAt = Date()
         Task { @MainActor in for _ in 0..<6 { LaunchGate.shared.stageTicked(); try? await Task.sleep(nanoseconds: 800_000_000) } }
         A11yAnnounce.say(caption, priority: .high)
-        task = Task { @MainActor in
+        st.task = Task { @MainActor in
             // wait for the Jelbie to stand (the stage builds a real room), but never longer than 9 s
-            for _ in 0..<(holdCapture ? 6000 : 90) where readyAt == nil && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
-            if readyAt == nil { readyAt = Date() }
-            stepAt = Date()
+            for _ in 0..<(holdCapture ? 6000 : 90) where st.readyAt == nil && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
+            if st.readyAt == nil { st.readyAt = Date() }
+            st.stepAt = Date()
             try? await Task.sleep(nanoseconds: UInt64(2.9 * 1e9))
             guard !Task.isCancelled else { return }
             if holdCapture { try? await Task.sleep(nanoseconds: UInt64(Double(UserDefaults.standard.integer(forKey: "FirstDayHold")) * 1e9)); if UserDefaults.standard.integer(forKey: "FirstDayHold") > 5 { goStep(1, auto: true) }; return }
@@ -171,9 +176,9 @@ struct FirstDayHomeView: View {
     }
 
     private func ready(_ m: MelonModel) {
-        model = m
-        guard readyAt == nil else { return }
-        readyAt = Date()
+        st.model = m
+        guard st.readyAt == nil else { return }
+        st.readyAt = Date()
         AudioHub.shared.playOpening("opening_pop", volume: 0.9)
         AudioHub.shared.playOpening("sparkle_1", volume: 0.6)
         Task { @MainActor in
@@ -185,20 +190,20 @@ struct FirstDayHomeView: View {
     }
 
     private func goStep(_ s: Int, auto: Bool) {
-        guard step != s else { return }
-        withAnimation(.easeInOut(duration: 0.3)) { step = s }
-        stepAt = Date()
+        guard st.step != s else { return }
+        withAnimation(.easeInOut(duration: 0.3)) { st.step = s }
+        st.stepAt = Date()
         A11yAnnounce.say(caption, priority: .high)
         if !auto { AudioHub.shared.playOpening("opening_twinkle", volume: 0.4) }
     }
 
     private func tapped() {
-        guard !leaving else { return }
-        if step == 0 { task?.cancel(); goStep(1, auto: false); restartTail() } else { finish() }
+        guard !st.leaving else { return }
+        if st.step == 0 { st.task?.cancel(); goStep(1, auto: false); restartTail() } else { finish() }
     }
     /// After a tap on the first caption, the second one stays ~5 s then leaves.
     private func restartTail() {
-        task = Task { @MainActor in
+        st.task = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(5.0 * 1e9))
             guard !Task.isCancelled else { return }
             finish()
@@ -206,11 +211,11 @@ struct FirstDayHomeView: View {
     }
 
     private func finish() {
-        guard !leaving else { return }
-        leaving = true
-        task?.cancel()
+        guard !st.leaving else { return }
+        st.leaving = true
+        st.task?.cancel()
         camera.release()          // before the room (or the picker) engages its own
-        if replay { Self.restore(snapshot); snapshot = [:] }
+        if replay { Self.restore(st.snapshot); st.snapshot = [:] }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
             finished()

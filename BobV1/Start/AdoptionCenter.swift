@@ -192,7 +192,7 @@ struct AdoptionCenter: View {
         }
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Bring your Drops to the Spring to wake a new friend. " : "")\(info.name), \(info.epithet). \(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
+        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
         .accessibilityHint("Swipe up or down to change Jelbie")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
