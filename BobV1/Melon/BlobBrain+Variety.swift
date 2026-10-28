@@ -18,7 +18,7 @@ enum VarietyFamily: Int, CaseIterable, Sendable { case movement, spot, rest, dec
 enum VarietyTuning {
     /// Seconds for a kind to come back to full weight (x floor right after); the big specials take longer.
     static let recover: Float = 210, bigRecover: Float = 360, floor: Float = 0.05
-    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .cartwheel, .soccerKick, .flapHop, .lieDown, .tail]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
+    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .cartwheel, .soccerKick, .flapHop, .lieDown, .tail, .tailThump, .tailHug]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
     static let socialRecover: Float = 150
     /// A friend did / is doing the same lately.
     static let syncWindow: Float = 20, syncMul: Float = 0.25, startGap: Float = 10
@@ -28,6 +28,8 @@ enum VarietyTuning {
     static let crowdWander: Float = 0.6
     /// Shuffle-bag counts per family (rest grows at night).
     static let bag: [(VarietyFamily, Int)] = [(.movement, 3), (.spot, 3), (.rest, 1), (.decor, 3), (.social, 2)]          // (decor 1 -> 3: toys that are out are played with ~35-50 % of the time; the family only counts while a toy is out)
+    /// Pip's tail antics (BlobBrain+TailPlay.swift); `.tail` (the spin after his own tail) is his too.
+    static let tailKinds: Set<IdleKind> = [.tailThump, .tailHug]
     static let socialBoost: Float = 2.5, socialBoostFor: Float = 15
 
     /// Personality per CHARACTER (the roster's feature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender). Edit here.
@@ -39,13 +41,13 @@ enum VarietyTuning {
     static let personality: [JellyFeature: Personality] = [
         .none: Personality(),
         .spines: Personality(     // Pip: energetic
-            idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.cartwheel], 1.2), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6)],
+            idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.cartwheel], 1.2), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6), ([.tail, .tailThump], 1.7), ([.tailHug], 1.3)],
             social: [([.chase, .zoomies, .bump, .keepAway], 1.6)]),
         .daisy: Personality(      // Moss: calm
             idle: [([.look, .window, .flop, .sit, .stretch, .sway, .decorSit, .decorBoop, .decorPeek], 1.6), ([.zoomies], 0.6)],
             social: [([.sitTogether, .bagSit, .cuddle], 1.6)]),
         .wings: Personality(      // Lavender: playful-floaty
-            idle: [([.flapHop, .tail, .legSpin, .skipHop, .chirp], 1.6)],
+            idle: [([.flapHop, .legSpin, .skipHop, .chirp], 1.6)],
             social: [([.nuzzle, .dance, .cuddle, .greet], 1.6)], socialChance: 1.6),
     ]
 }
@@ -65,7 +67,7 @@ extension BlobBrain {
     static func varietyFamily(_ k: IdleKind) -> VarietyFamily {
         switch k {
         case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return .decor
-        case .sit, .slump, .yawn, .flop, .lieDown, .sigh, .sleep, .stretch: return .rest
+        case .sit, .slump, .yawn, .flop, .lieDown, .sigh, .sleep, .stretch, .tailHug: return .rest
         case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .cartwheel, .rollTrip, .stopLook: return .movement
         default: return .spot
         }
@@ -103,6 +105,7 @@ extension BlobBrain {
     /// The weight multiplier of an idle kind: recovery x family repeat x personality x friends x crowd.
     func varietyScale(_ k: IdleKind) -> Float {
         var m: Float = 1
+        if (k == .tail || VarietyTuning.tailKinds.contains(k)) && feature != .spines { return 0 }          // (the tail antics are Pip's: a tailless Jelbie never picks one)
         if k == .wander { return variedPeers.count >= 2 ? VarietyTuning.crowdWander : 1 }
         if let t = variety.last[k] {
             let T = VarietyTuning.bigKinds.contains(k) ? VarietyTuning.bigRecover : VarietyTuning.recover
