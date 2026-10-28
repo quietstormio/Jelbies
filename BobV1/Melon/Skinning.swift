@@ -100,6 +100,20 @@ nonisolated final class Skinner {
         }
     }
     private var tailBump: [(Int, Float)] = []
+    private var tailRotLast = matrix_identity_float3x3
+    /// After the normal pass: pull the root rings' normals toward the egg's own normal there, so the shading flows from the back into the tail with no tonal step.
+    private func blendTailNormals(_ dyn: UnsafeMutablePointer<Float>) {
+        let f = tailFirst >= 0 ? tailFirst : TailBean.builtFirst, n = TailBean.vertexCount
+        guard tailScale > 0.001, tailLM.count == 3, f >= 0, f + n <= vertexCount else { return }
+        for i in 0..<n {
+            let w = TailBean.normalBlend[i]
+            if w <= 0.001 { continue }
+            let o = 6 * (f + i) + 3
+            let cur = SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]), ref = tailRotLast * TailBean.bodyNormals[i]
+            let m = simd_normalize(cur + (ref - cur) * w)
+            if m.x.isFinite { dyn[o] = m.x; dyn[o + 1] = m.y; dyn[o + 2] = m.z }
+        }
+    }
     private var tailBumpDir = SIMD3<Float>(0, 0, -1)
     private(set) var tailYaw: Float = 0, tailPitch: Float = 0
     private var tailScale: Float = 0, tailInit = false, tailClock: Float = 0, tailLastB = SIMD3<Float>.zero, tailPrimed = false
@@ -424,14 +438,21 @@ nonisolated final class Skinner {
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
+        blendTailNormals(dyn)
     }
 
     private func applyTail(_ dyn: UnsafeMutablePointer<Float>) {
-        guard tailFirst >= 0, tailFirst + TailBean.vertexCount <= vertexCount else { return }
-        let f = tailFirst, n = TailBean.vertexCount
+        let f = tailFirst >= 0 ? tailFirst : TailBean.builtFirst, n = TailBean.vertexCount
+        guard f >= 0, f + n <= vertexCount else { return }
         func P(_ i: Int) -> SIMD3<Float> { SIMD3(dyn[6 * (f + i)], dyn[6 * (f + i) + 1], dyn[6 * (f + i) + 2]) }
         let dt = frameDt
-        guard tailLM.count == 3 else { return }
+        // default OFF: a skinner nobody configured for the tail (test rigs, previews) or whose Jelbie is not Pip's .spines keeps the whole block collapsed on its base pole
+        guard tailLM.count == 3, tailOn || tailScale > 0.002 else {
+            let B = P(0)
+            for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
+            tailPrimed = false; tailYaw = 0; tailPitch = 0; tailScale = 0
+            return
+        }
         // carry the tail rigidly on the frame of its three landmark egg vertices (rest -> skinned)
         func lm(_ k: Int) -> SIMD3<Float> { let o = 6 * tailLM[k]; return SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
         func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
@@ -441,6 +462,7 @@ nonisolated final class Skinner {
         let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
         let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
         let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
+        tailRotLast = Rot
         // The long tail lies on the floor: its high part (the root) follows the body's tilt rigidly, but the low part only follows the body's heading and position
         // (a long lever would otherwise swing it through the floor whenever the egg sags or leans); the blend is by rest height.
         let fwd = Rot * SIMD3<Float>(0, 0, 1)

@@ -83,7 +83,7 @@ nonisolated enum TailBean {
         let width = 2 * xlo
         let tipR = 0.04, sink = 0.30, ys = 1.0
         let baseR = width * 0.21                                             // about a third of the body width across
-        let vis = 0.92 * width - tipR                                      // surface -> start of the round tip cap
+        let vis = 0.74 * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var shape = Shape(root: root, table: [], step: step, length: length, sink: sink, tipR: tipR, baseR: baseR, xs: 1.0, ys: ys, width: width)
@@ -93,7 +93,7 @@ nonisolated enum TailBean {
         while t <= length + step {
             table.append(cur)
             let u = max(0, (t - sink) / vis)
-            let psi = 140 * pow(u, 1.1) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
+            let psi = 140 * pow(u, 1.7) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
             let floorY = shape.radius(t) * ys + Double(restFloor) + 0.02 + 0.07 * pow(max(0, (u - 0.8) / 0.2), 2)                     // rest on the floor
             let th = -min(0.95, atan2(max(cur.y - floorY, 0), 0.12))      // sweeps down, easing onto the floor
             cur += SIMD3(sin(psi) * cos(th), sin(th), -cos(psi) * cos(th)) * step
@@ -147,6 +147,20 @@ nonisolated enum TailBean {
         for k in 1...bodyRings { out += Array(repeating: Float(s.point(s.length * Double(k) / Double(bodyRings)).y), count: around) }
         for _ in 1...capRings { out += Array(repeating: Float(s.point(s.length).y), count: around) }
         out.append(Float(s.point(s.length).y))
+        return out
+    }()
+    /// Where the tail block starts in the body mesh last built (Geometry), so a Skinner nobody configured (test rigs, previews) still collapses it instead of showing the rest tail.
+    nonisolated(unsafe) static var builtFirst = -1
+    /// Shading continuity at the junction: per tail vertex the egg's own outward normal at its rest position, and how strongly the tail's normal is pulled toward it
+    /// (1 in the buried / root rings, easing to 0 a short way down the tail), applied after the normal pass (Skinner.blendTailNormals).
+    static let bodyNormals: [SIMD3<Float>] = local.pos.map { let n = BobForm.normal($0); return SIMD3(Float(n.x), Float(n.y), Float(n.z)) }
+    static let normalBlend: [Float] = {
+        let s = shape
+        func w(_ t: Double) -> Float { let u = min(max((t - s.sink) / 0.5, 0), 1); return 1 - Float(u * u * (3 - 2 * u)) }
+        var out: [Float] = [1]
+        for k in 1...bodyRings { out += Array(repeating: w(s.length * Double(k) / Double(bodyRings)), count: around) }
+        for _ in 1...capRings { out += Array(repeating: 0, count: around) }
+        out.append(0)
         return out
     }()
     static let rootF = SIMD3<Float>(Float(shape.root.x), Float(shape.root.y), Float(shape.root.z))

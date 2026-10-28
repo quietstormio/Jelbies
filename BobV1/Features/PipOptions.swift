@@ -19,6 +19,7 @@ nonisolated enum PipSpikes {
     static let slim: Float = 1.0                    // sideways thinning
     static let backFractions: [Float] = [0]          // (marker: the back spikes are rigid on the skin, see FeatureSet.partRotation)
     /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
+    nonisolated(unsafe) static var debug = ""
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
 
     /// The shipped spikes' orange (the mean vertex colour of the art, measured from feature_pip_c_final.bin: about (0.92, 0.52, 0.15) linear).
@@ -96,49 +97,77 @@ nonisolated enum PipSpikes {
         // ---- a short row of small rounded cones along the TOP ridge of the tail only (none on the head or the back), evenly spaced from the root to near the tip
         let sh = TailBean.shape
         let tn = tones(spec: spec)
-        // spike 1 sits on the body's back above the root (its own rigid part on the skin); spike 2 just above the root; spikes 3-6 along the tail's top ridge
         var parts: [(String, Int, Int, SIMD3<Float>)] = []
         var widths: [Float] = [], centres: [Float] = []
         var tailSpikes: [(String, Int, Int, SIMD3<Float>, Int, SIMD3<Float>)] = []
-        let W = Float(sh.width)
-        func hOf(_ u: Float) -> Float { 0.23 * W * (1 - 0.4 * u) }                       // height; base diameter = height / 1.3
-        // spike 1: on the back silhouette line, 35% of the way up from the root to the top
+        // ---- ONE shared ridge path: down the back's centreline from 47% of his height, over the swell where the back becomes the tail, then along the tail's top.
+        // Spikes are spaced evenly by arc length along it and sized by distance from the junction (largest there).
+        struct PP { var shown: SIMD3<Float>; var rest: SIMD3<Float>; var n: SIMD3<Float>; var t: Double; var isTail: Bool }
+        let sd = TailBean.startDir, sH = TailBean.swellHeight, sg = TailBean.swellSigma, rootF = TailBean.rootF
+        func swelled(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * expf(-simd_length_squared(q - rootF) / (2 * sg * sg))) }
+        func inEgg(_ q: SIMD3<Float>) -> Bool { BobForm.sdf(SIMD3(Double(q.x), Double(q.y), Double(q.z))) <= 0 }
+        var path: [PP] = []
+        // the first tail ridge sample that stands outside the swelled back
+        var tCross = sh.sink
         do {
-            let y = Double(sh.root.y) + 0.5 * (Double(spec.top) - sh.root.y)
+            var t = sh.sink
+            while t < sh.length {
+                let rg = sh.ridge(t), rp = f3(rg.p + rg.up * rg.r)
+                let inv = rp - sd * (sH * expf(-simd_length_squared(rp - rootF) / (2 * sg * sg)))
+                if !inEgg(inv) { tCross = t; break }
+                t += 0.01
+            }
+        }
+        let crossRg = sh.ridge(tCross), crossRest = f3(crossRg.p + crossRg.up * crossRg.r)
+        var y = max(0.47 * Double(spec.top), Double(crossRest.y) + 0.42)          // mid-back, but always a good stretch above the junction
+        while y > Double(crossRest.y) {
             var lo = -1.2, hi = 0.0
             for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y, mid)) > 0 { lo = mid } else { hi = mid } }
-            let p = SIMD3<Double>(0, y, hi), n = f3(BobForm.normal(p))
-            var tg = SIMD3<Float>(0, -1, 0); tg -= n * simd_dot(tg, n); tg = simd_normalize(tg)
-            let H: Float = 0.20, bR = H / 2.0
-            let ax = simd_normalize(n * cosf(0.21) + tg * sinf(0.21))
-            let base = f3(p) - n * (0.3 * bR)
-            let start = m.pos.count
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tg, curve: 0.06, tipSoft: 0.38, lateral: SIMD3(1, 0, 0), tones: tn)
-            parts.append(("spike0", start, m.pos.count - start, base))
-            widths.append(2 * bR); centres.append(0)
+            let p = SIMD3<Double>(0, y, hi)
+            path.append(PP(shown: swelled(f3(p)), rest: f3(p), n: f3(BobForm.normal(p)), t: 0, isTail: false))
+            y -= 0.01
         }
-        let ts: [Double] = [0.10, 0.33, 0.56, 0.78].map { sh.sink + $0 * (sh.length - sh.sink) }
-        var arcS: Float = 0, lastP: SIMD3<Float>? = nil
-        for (k, t) in ts.enumerated() {
-            let rg = sh.ridge(t), fr = sh.frame(t), tg = sh.tangent(t)
-            let ridgeP = f3(rg.p + rg.up * rg.r)
-            if let lp = lastP { arcS += simd_distance(lp, ridgeP) }
-            lastP = ridgeP
-            let H = min(0.24, max(0.09, 0.8 * Float(rg.r))), bR = H / 2.0
-            let up = f3(rg.up), tgF = f3(tg)
-            let ax = simd_normalize(up * cosf(0.21) + tgF * sinf(0.21))
-            let base = ridgeP - up * (0.3 * bR)
-            let start = m.pos.count
-            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgF, curve: 0.06, tipSoft: 0.38, lateral: f3(fr.side), tones: tn)
-            widths.append(2 * bR); centres.append(arcS + 10 * Float(k + 1))
-            // the skin vertex on the tail's top ridge nearest this spike
-            let ring = max(1, min(TailBean.bodyRings, Int((t / sh.length * Double(TailBean.bodyRings)).rounded())))
-            let rc = sh.point(sh.length * Double(ring) / Double(TailBean.bodyRings)), ru = sh.frame(sh.length * Double(ring) / Double(TailBean.bodyRings)).up
-            var bestJ = 0, bestD = -Double.infinity
-            for j in 0..<TailBean.around { let q = TailBean.local.pos[1 + TailBean.around * (ring - 1) + j] - rc; let d = simd_dot(q, ru); if d > bestD { bestD = d; bestJ = j } }
-            let local = 1 + TailBean.around * (ring - 1) + bestJ
-            tailSpikes.append(("tail\(k)", start, m.pos.count - start, base, local, f3(TailBean.local.pos[local])))
+        let backCount = path.count
+        var tt = tCross
+        while tt <= sh.sink + 0.86 * (sh.length - sh.sink) {
+            let rg = sh.ridge(tt), rp = f3(rg.p + rg.up * rg.r)
+            path.append(PP(shown: rp, rest: rp, n: f3(rg.up), t: tt, isTail: true)); tt += 0.01
         }
+        var arc: [Float] = [0]
+        for i in 1..<path.count { arc.append(arc[i - 1] + simd_distance(path[i].shown, path[i - 1].shown)) }
+        let L = arc.last ?? 1, sJ = arc[min(max(backCount, 0), arc.count - 1)]
+        let nSp = count
+        debug = String(format: "top=%.3f crossRestY=%.3f crossT=%.3f backCount=%d pathCount=%d L=%.3f sJ=%.3f", spec.top, crossRest.y, tCross, backCount, path.count, L, sJ)
+        var arcS: Float = 0
+        for k in 0..<nSp {
+            let sK = L * (0.05 + 0.87 * Float(k) / Float(nSp - 1))
+            var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
+            let pt = path[i]
+            let tgRaw = simd_normalize(path[min(i + 1, path.count - 1)].shown - path[max(i - 1, 0)].shown)
+            let n = pt.n
+            let tgP = simd_normalize(tgRaw - n * simd_dot(tgRaw, n))
+            // size: largest at the junction, smaller up the back and toward the tip
+            let f: Float = sK <= sJ ? 1 - 0.40 * (sJ - sK) / max(sJ, 1e-3) : 1 - 0.50 * (sK - sJ) / max(L - sJ, 1e-3)
+            var H = 0.17 * f
+            if pt.isTail { H = min(H, max(0.08, 0.7 * Float(sh.ridge(pt.t).r))) }
+            let bR = H / 2.0
+            let ax = simd_normalize(n * cosf(0.21) + tgP * sinf(0.21))
+            let base = pt.rest - n * (0.3 * bR)
+            let start = m.pos.count
+            m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgP, curve: 0.06, tipSoft: 0.38, lateral: SIMD3(1, 0, 0), tones: tn)
+            widths.append(2 * bR); centres.append(sK)
+            if pt.isTail {
+                let ring = max(1, min(TailBean.bodyRings, Int((pt.t / sh.length * Double(TailBean.bodyRings)).rounded())))
+                let rc = sh.point(sh.length * Double(ring) / Double(TailBean.bodyRings)), ru = sh.frame(sh.length * Double(ring) / Double(TailBean.bodyRings)).up
+                var bestJ = 0, bestD = -Double.infinity
+                for j in 0..<TailBean.around { let q = TailBean.local.pos[1 + TailBean.around * (ring - 1) + j] - rc; let d = simd_dot(q, ru); if d > bestD { bestD = d; bestJ = j } }
+                let local = 1 + TailBean.around * (ring - 1) + bestJ
+                tailSpikes.append(("tail\(k)", start, m.pos.count - start, base, local, f3(TailBean.local.pos[local])))
+            } else {
+                parts.append(("spike\(k)", start, m.pos.count - start, base))
+            }
+        }
+        _ = arcS; arcS = 0
         var gap = Float.infinity
         for k in 1..<centres.count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
         lastLayout = (centres.count > 1 ? centres[1] - centres[0] : 0, widths, gap)
