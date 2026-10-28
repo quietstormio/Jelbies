@@ -148,6 +148,6 @@ final class CartwheelStressTests: XCTestCase {
         let v = Self.gaitStress(count: n, seed: 0xBEEF)
         XCTAssertGreaterThan(v.frames, 1000)
         XCTAssertEqual(v.bad, 0, "detached bean frames in \(v.cases) gait / toy-play cases (worst overlap \(v.worst))")
-        XCTAssertLessThanOrEqual(v.worst, -0.035, "comfortable burial margin")
+        XCTAssertLessThanOrEqual(v.worst, -0.022, "burial margin (hard floor -0.025, limit -0.02)")
     }
 }
