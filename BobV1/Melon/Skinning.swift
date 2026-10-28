@@ -116,6 +116,8 @@ nonisolated final class Skinner {
     private(set) var tailYaw: Float = 0, tailPitch: Float = 0
     /// The tail's motion (TailMotion.swift): what the brain asks (`tailDrive`), the filters / clocks, and each ring's world rotation for the spike layer.
     var tailDrive = TailDrive(), tailMotion = TailMotion()
+    /// The seat he stands on (TailSeat in TailMotion.swift): the floor-lying part of the tail lies on it; `tailSeatW` eases 0...1 so hops on / off never pop.
+    var tailSeat = TailSeat(), tailSeatW: Float = 0, tailSeatOn = false
     private(set) var tailRingQ: [simd_quatf] = []
     func setTailTip(yaw: Float, pitch: Float) { tailYaw = yaw; tailPitch = pitch }
     func setTailRings(_ q: [simd_quatf]) { tailRingQ = q }

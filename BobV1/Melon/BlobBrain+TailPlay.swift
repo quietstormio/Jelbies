@@ -49,7 +49,8 @@ extension BlobBrain {
 
     /// Every tick from driveLimbs: tells the skinner what the tail is to do.
     func tailPlayTick(_ skinner: Skinner, _ dt: Float) {
-        guard hasTailToPlay else { skinner.tailDrive = TailDrive(); tailPlay = TailPlayState(); return }
+        guard hasTailToPlay else { skinner.tailDrive = TailDrive(); tailPlay = TailPlayState(); skinner.tailSeatOn = false; return }
+        tailSeatTick(skinner)
         var d = TailDrive()
         d.stride = stridePhase; d.strideLive = feet.active
         d.run = max(runW, zoomW)
@@ -164,5 +165,25 @@ extension BlobBrain {
         armDirW = k
         armDirEl = [0.55, 0.30]; armDirSa = [0.9, -0.35]; armDirOut = 0.05          // the far arm closes in front, the tail-side arm reaches back to the tip
         if t > total && !feet.active { idleFinish(skinner) }
+    }
+}
+
+extension BlobBrain {
+    /// The floor under the tail: the seat he stands on (a hop-on seat, the swing, the seesaw ... with its current height and, for the ones that move, its current spot).
+    func tailSeatTick(_ skinner: Skinner) {
+        // (hopping on: the floor he is about to land on, so the tail is already up there when he lands)
+        let hopping = !bagFloorOn && idleState.kind == .decorSit && idleState.bagStage == 1 && gait.groundTo > 0.01
+        let floorNow = hopping ? gait.groundTo : skinner.jelly.floorY
+        if (bagFloorOn || hopping), floorNow > 0.01, idleState.kind == .decorSit, idleState.decorUID >= 0,
+           let f = DecorField.shared.foot(idleState.decorUID), let sw = DecorField.shared.seatWorld(idleState.decorUID, seat: idleState.seat) {
+            let h = f.spec.half
+            // the piece's own centre, carried by however far the seat has moved from its resting spot (the swing, the seesaw's plank, the bunny)
+            let rest = DecorModels.seatPoint(f.kind, seat: idleState.seat, anim: DecorAnim(), lift: f.lift), rw = f.turned(SIMD2(rest.x, rest.z))
+            let shift = SIMD2(sw.x, sw.z) - (f.centre + rw)
+            skinner.tailSeat = TailSeat(centre: f.centre + shift, half: h, corner: min(f.spec.corner, min(h.x, h.y)), y: floorNow, rimTop: f.kind == .sandbox ? 0.27 : 0, rimW: f.kind == .sandbox ? 0.22 : 0)
+            skinner.tailSeatOn = true
+        } else if idleState.kind == .decorSit && idleState.bagStage == 3 && skinner.tailSeat.y > 0.01 {
+            skinner.tailSeatOn = true          // (hopping off: the tail keeps the seat's shape until he is down; the lift is capped by his own height)
+        } else { skinner.tailSeatOn = false }
     }
 }

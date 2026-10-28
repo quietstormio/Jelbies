@@ -87,6 +87,7 @@ final class PipTailMotionCaptureTests: XCTestCase {
         let vc = MotionRig.renderMesh.vertexCount
         func shot(visible: Bool) -> LockImage {
             ren.beginFrame()
+            ren.room!.setDecorStatic(DecorModels.build(feet: DecorField.shared.feet, field: DecorField.shared, time: 0.4))
             ren.setHidden(!visible, body: 0)
             let p = ren.dynPointer(body: 0)
             if visible { s.skin.withUnsafeBufferPointer { p.update(from: $0.baseAddress!, count: vc * 6) } }
@@ -140,12 +141,12 @@ final class PipTailMotionCaptureTests: XCTestCase {
         switch k {
         case .game: return GameCamera.camera(aspect: aspect)
         case .close:
-            let t = SIMD3(c.x - memo.x * 0.5, 0.2, c.z - memo.z * 0.5)
+            let t = SIMD3(c.x - memo.x * 0.5, s.rig.sim.floorY + 0.2, c.z - memo.z * 0.5)
             let yaw: Float = 2.45                       // 3/4 back
             let dir = SIMD3<Float>(memo.x * cosf(yaw) + memo.z * sinf(yaw), 0, -memo.x * sinf(yaw) + memo.z * cosf(yaw))
             return camera(eye: t + dir * 3.0 + SIMD3(0, 0.6, 0), target: t, aspect: aspect)
         case .side:
-            let t = SIMD3(c.x - memo.x * 0.35, c.y + 0.1, c.z - memo.z * 0.35)
+            let t = SIMD3(c.x - memo.x * 0.35, s.rig.sim.floorY + 0.35, c.z - memo.z * 0.35)
             let yaw: Float = .pi / 2
             let dir = SIMD3<Float>(memo.x * cosf(yaw) + memo.z * sinf(yaw), 0, -memo.x * sinf(yaw) + memo.z * cosf(yaw))
             return camera(eye: t + dir * 2.8 + SIMD3(0, 0.35, 0), target: t, aspect: aspect)
@@ -305,5 +306,64 @@ final class PipTailMotionCaptureTests: XCTestCase {
             XCTAssertGreaterThan(st.minY, -0.003, "\(sc.name): tail went through the floor")
         }
         print(summary)
+    }
+
+    // MARK: on a seat
+
+    /// Pip stands on a hop-sit piece (pouf, stool, sandbox, swing, seesaw ...): 3/4 back and side views of the tail on the seat (stats: how far the tail verts sink into the seat's top).
+    func testCaptureOnSeat() throws {
+        let d = try dir()
+        guard wanted("onseat") else { throw XCTSkip("only") }
+        try FileManager.default.createDirectory(atPath: d + "/onseat", withIntermediateDirectories: true)
+        var kinds: [DecorKind] = [.pouf, .diningset, .sandbox, .swing, .seesaw]
+        if let k = ProcessInfo.processInfo.environment["TAILMOTION_KIND"] { kinds = kinds.filter { "\($0)" == k } }
+        var ctx: Ctx? = nil
+        for kind in kinds {
+            DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
+            DecorField.shared.set([PlacedDecor(uid: 1, kind: kind, x: 0.2, z: 0.3, turns: nil)])
+            let lab = SocialTests.Lab(n: 1, positions: [SIMD2(-1.6, 1.6)], quiet: false, seed: 11)
+            SocialTests.keep.append(lab)
+            let r = lab.rigs[0]
+            r.brain.anticsEnabled = true; r.brain.sleepEnabled = false; r.brain.idleMood = .okay; r.skinner.autoBlink = false
+            r.brain.feature = .spines; r.skinner.configureTail(MotionRig.renderMesh); r.skinner.tailOn = true; r.brain.skinnerRef = r.skinner
+            WearBody.install(MotionRig.renderMesh)
+            let s = Setup(lab: lab)
+            s.worn.body = WearBody.shared; s.worn.soundOn = false; s.feats.body = WearBody.shared
+            Self.keep.append(s.worn); Self.keep.append(s.feats); Self.keep.append(s)
+            if ctx == nil { ctx = try makeCtx(sim: r.sim, W: 330, H: 330) }
+            XCTAssertTrue(r.brain.decorStart(.decorSit, r.sim, only: kind, uid: 1), "\(kind) start")
+            var tick = 0, onSince = -1, rec = 0
+            var frames: [Cam: [UIImage]] = [:]
+            var memo = SIMD3<Float>(0, 0, 1)
+            var minRel: Float = 9
+            while tick < 60 * 14 {
+                step(s); DecorField.shared.tick(dt: 1.0 / 60); tick += 1
+                let on = r.brain.bagFloorOn && r.sim.floorY > 0.05 && r.brain.idleState.kind == .decorSit
+                if on { if onSince < 0 { onSince = tick } } else if onSince >= 0 && tick - onSince > 30 { break }
+                if ProcessInfo.processInfo.environment["TAILMOTION_FROMSTART"] != nil, tick % 12 == 0, rec < 40 {
+                    let cm = cam(.close, s, memo: &memo, aspect: 1)
+                    frames[.close, default: []].append(label(render(ctx!, s, cam: cm).uiImage()!, "t=\(tick) stage=\(r.brain.idleState.bagStage) fl=\(r.sim.floorY) on=\(r.skinner.tailSeatOn) w=\(r.skinner.tailSeatW)")); rec += 1
+                } else if ProcessInfo.processInfo.environment["TAILMOTION_FROMSTART"] == nil, onSince >= 0 && tick - onSince > 70 {
+                    let f = r.skinner.tailFirst
+                    for i in 1..<(TailBean.vertexCount - 1) { minRel = min(minRel, s.skin[6 * (f + i) + 1] - r.sim.floorY) }
+                    if tick % 3 == 0 && rec < 40 {
+                        for k in [Cam.close, .side] {
+                            let cm = cam(k, s, memo: &memo, aspect: 1)
+                            let ui = render(ctx!, s, cam: cm).uiImage()!
+                            frames[k, default: []].append(ui)
+                        }
+                        rec += 1
+                    }
+                }
+            }
+            for (k, imgs) in frames {
+                let n = imgs.count
+                let pick = (0..<min(ProcessInfo.processInfo.environment["TAILMOTION_FROMSTART"] != nil ? 16 : 8, n)).map { imgs[$0 * n / min(8, n)] }
+                let cells = pick.enumerated().map { label($0.element, "\(kind) \(k.rawValue) \($0.offset)") }
+                try grid(cells, cols: 4).pngData()!.write(to: URL(fileURLWithPath: d + "/onseat/\(kind)_\(k.rawValue).png"))
+            }
+            appendStats(d, String(format: "onseat %@: frames=%d floorY=%.3f lowest tail vert vs seat top=%.3f on=%d w=%.2f seatY=%.3f c=(%.2f,%.2f) half=(%.2f,%.2f)", "\(kind)", rec, r.sim.floorY, minRel, r.skinner.tailSeatOn ? 1 : 0, r.skinner.tailSeatW, r.skinner.tailSeat.y, r.skinner.tailSeat.centre.x, r.skinner.tailSeat.centre.y, r.skinner.tailSeat.half.x, r.skinner.tailSeat.half.y))
+        }
+        ToyTuning.settle = 5; DecorField.shared.clear()
     }
 }

@@ -36,6 +36,24 @@ nonisolated struct TailDrive {
     var reduce = false
 }
 
+/// The seat Pip stands on, for the tail's floor: a rounded rectangle (world xz) at height `y`. The tail's floor part lies at `y` over the seat and drapes down to the
+/// world floor over `drape` beyond its edge.
+nonisolated struct TailSeat {
+    var centre = SIMD2<Float>.zero, half = SIMD2<Float>(0.5, 0.5), corner: Float = 0.3, y: Float = 0
+    /// A raised rim round the edge (the sandbox's frame): its top height and thickness; the tail climbs over it instead of cutting through.
+    var rimTop: Float = 0, rimW: Float = 0
+    static let drape: Float = 0.4
+    /// Floor height under (x, z) at full seat weight.
+    func floor(_ x: Float, _ z: Float) -> Float {
+        if y <= 0 { return 0 }
+        let q = SIMD2(abs(x - centre.x), abs(z - centre.y)) - (half - SIMD2(repeating: corner))
+        let sd = simd_length(simd_max(q, .zero)) + min(max(q.x, q.y), 0) - corner
+        var top = y
+        if rimTop > y { top = y + (rimTop - y) * simd_smoothstep(-rimW - 0.18, -rimW, sd) }
+        return top * (1 - simd_smoothstep(0, max(Self.drape, 0.8 * top), max(0, sd)))          // (a taller seat drapes over a longer run: gentler, never a vertical hang)
+    }
+}
+
 /// The tail's own state (filters and clocks); Skinner owns one.
 nonisolated struct TailMotion {
     var walkAmp: Float = 0, runAmp: Float = 0, carry: Float = 0, wag: Float = 0, slow: Float = 0
@@ -100,6 +118,12 @@ nonisolated struct TailMotion {
         chase(&turn, max(-500, min(500, rate)), 0.08)
     }
 
+    /// How much of each ring lies on the floor (1) rather than hanging from the back (0): the same blend applyTail uses (by the rest height of the ring).
+    static let ringFloorW: [Float] = {
+        let ys = (0..<TailBean.rings).map { TailBean.ringY[1 + TailBean.around * $0] }
+        let low = ys.indices.min { ys[$0] < ys[$1] } ?? 0
+        return ys.indices.map { $0 >= low ? 1 : 1 - simd_smoothstep(0.22, 0.5, ys[$0]) }          // (from the lowest ring on, the tail lies on the floor, even where its tip curls up a little)
+    }()
     /// Ring radius (horizontal half width) of each ring.
     static let ringRad: [Float] = {
         let s = TailBean.shape
@@ -191,24 +215,30 @@ nonisolated extension Skinner {
             for _ in 0..<3 { var sm = push; for r in 1..<(rings - 1) { sm[r] = (push[r - 1] + 2 * push[r] + push[r + 1]) * 0.25 }; for r in 0..<rings { if simd_length(sm[r]) > simd_length(push[r]) { push[r] = sm[r] } } }
         }
         let sc = tailScaleNow
+        tailSeatW += max(-dt / 0.2, min(1, (tailSeat.y > 0.01 && tailSeatOn ? 1 : 0) - tailSeatW))
+        let seatW = tailSeatW
+        // the floor under the body right now, from the body itself (0 on the room floor): the seat's top can never lift the tail above where he really is, so a hop on / off blends with him
+        let underBody = max(0, (Cs.y - Cr.y) + TailBean.restFloor + 0.02) + (tailSeat.rimTop > tailSeat.y ? tailSeat.rimTop - tailSeat.y + 0.02 : 0)          // (a rim may lift the tail above his own floor)
         for r in 0..<rings {
             let o = 1 + around * r
             let q = qs[r], d = push[r]
-            for j in 0..<around { writeTail(dyn, f + o + j, newC[r] + d + q.act(P(o + j) - oldC[r]), pivot: pivot, scale: sc) }
+            let c = newC[r] + d
+            let lift = seatW > 0.001 ? seatW * min(tailSeat.floor(c.x, c.z), underBody) * TailMotion.ringFloorW[r] : 0
+            for j in 0..<around { writeTail(dyn, f + o + j, newC[r] + d + q.act(P(o + j) - oldC[r]), pivot: pivot, scale: sc, floor: lift) }
         }
         prevOld = oldC[rings - 1]; prevNew = newC[rings - 1] + push[rings - 1]
         let qt = qs[rings - 1]
-        writeTail(dyn, f + n - 1, prevNew + qt.act(T - prevOld), pivot: pivot, scale: sc)
+        writeTail(dyn, f + n - 1, prevNew + qt.act(T - prevOld), pivot: pivot, scale: sc, floor: seatW > 0.001 ? seatW * min(tailSeat.floor(prevNew.x, prevNew.z), underBody) * TailMotion.ringFloorW[rings - 1] : 0)
         setTailTip(yaw: tipYaw, pitch: tipPitch)
         setTailRings(qs)
     }
 
-    private func writeTail(_ dyn: UnsafeMutablePointer<Float>, _ vi: Int, _ pIn: SIMD3<Float>, pivot: SIMD3<Float>, scale sc: Float) {
+    private func writeTail(_ dyn: UnsafeMutablePointer<Float>, _ vi: Int, _ pIn: SIMD3<Float>, pivot: SIMD3<Float>, scale sc: Float, floor fl: Float = 0) {
         var p = pIn
         if sc < 1 { p = pivot + (p - pivot) * sc }
         let o = 6 * vi
         dyn[o] = p.x; dyn[o + 2] = p.z
         // soft floor instead of a hard clamp: below 0.04 the height eases down onto 0.004, so the underside rounds into the floor with no flat crease
-        dyn[o + 1] = p.y >= 0.04 ? p.y : 0.004 + 0.036 * expf((p.y - 0.04) / 0.036)
+        dyn[o + 1] = fl + (p.y >= 0.04 ? p.y : 0.004 + 0.036 * expf((p.y - 0.04) / 0.036))
     }
 }

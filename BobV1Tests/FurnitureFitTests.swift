@@ -244,9 +244,7 @@ final class FurnitureFitTests: XCTestCase {
             _ = sitScene(kind, n: 1, at: SIMD2(0, -0.8), pip: true) { solid, rigs in observe(&s, rigs, solid: solid) }
             log("\(kind) Pip tail", s)
             let check = { XCTAssertLessThanOrEqual(s.deepCount, 6, "\(kind): Pip's tail does not go through the seat (worst \(s.worstDepth) at \(s.worstAt))") }
-            // KNOWN GAP (not fixed here: it is in Skinning.swift, held back): Skinner.applyTail lies the long tail on the WORLD floor (y 0), ignoring the seat's floorY, so on a
-            // solid seat (pouf, stool, sandbox rim) it hangs down THROUGH the piece. Remove this expectation when applyTail takes the floor height.
-            if [.pouf, .diningset, .sandbox].contains(kind) { XCTExpectFailure("tail ignores floorY") { check() } } else { check() }
+            check()
         }
     }
 
