@@ -225,6 +225,7 @@ enum StoreThumb {
     /// The view of an item's thumbnail (yaw about the model, pitch above it). Most use one angle; the taco is seen from its open end so the U of the shell
     /// and the fillings in it read.
     static func angles(for item: StoreItem) -> (yaw: Float, pitch: Float) {
+        if item.wear == .diamondJ { return (0.2, 0.1) }          // face-on so the J reads
         if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.45, 0.12) : w.slot == .hands ? (0.35, 0.2) : w.slot == .feet ? (0.55, 0.36) : w.anchor == .back ? (3.5, 0.2) : (0.5, 0.18) }
         if item.decor != nil { return (0.5, 0.5) }
         if item.id == "taco" { return (0.38, 0.42) }

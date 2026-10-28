@@ -110,7 +110,7 @@ extension StoreThumb {
             // two or three frozen twinkles on the pendant and the chain (the shop picture is a still)
             let b = RoomMeshBuilder(); b.material = .plain
             let col = SIMD3<Float>(2.2, 2.4, 2.9)
-            for (c, L) in [(SIMD3<Float>(0.03, 0.40, 0.60), Float(0.12)), (SIMD3<Float>(-0.045, 0.27, 0.60), 0.085), (SIMD3<Float>(-0.26, 0.45, 0.545), 0.07)] {
+            for (c, L) in [(SIMD3<Float>(-0.10, 0.475, 0.60), Float(0.085)), (SIMD3<Float>(0.115, 0.30, 0.50), 0.065), (SIMD3<Float>(0.22, 0.465, 0.52), 0.05)] {
                 let n = simd_normalize(SIMD3<Float>(c.x * 0.4, 0.1, 1))
                 let r = simd_normalize(simd_cross(n, SIMD3(0, 1, 0))), up = simd_cross(n, r)
                 let first = b.vertex(c, n, ao: 1, color: col)
@@ -131,7 +131,7 @@ extension StoreThumb {
         switch look.slot {
         case .head: return (SIMD3(0, 1.02, 0.05), 0.78)
         case .face: return (SIMD3(0, 0.86, 0.30), 0.80)
-        case .neck: return (SIMD3(0, 0.52, 0.2), 0.80)
+        case .neck: return look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.50) : (SIMD3(0, 0.52, 0.2), 0.80)
         case .hands: return (SIMD3(0, 0.45, 0.10), 0.98)
         default: return look.anchor == .back ? (SIMD3(0, 0.55, -0.2), 1.1) : (SIMD3(0, 0.50, 0.1), 0.90)
         }
