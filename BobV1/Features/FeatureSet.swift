@@ -56,6 +56,7 @@ final class FeatureSet {
         var squashRate: Float = 0
         /// Pip's tail spikes (PipSpikes): yaw (deg, sway / wag) and pitch (deg, bounce), plus the spring state.
         var tailFirst = -1
+        var tailRingQ: [simd_quatf] = []
         var tailYaw: Float = 0, tailPitch: Float = 0, tailSway: Float = 0, tailSwayV: Float = 0, tailPitchV: Float = 0
         /// Spines: angle (deg) about (along, across) and its rate, per spine; the visible scale of each part (hidden under a hat -> 0).
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
@@ -213,6 +214,7 @@ final class FeatureSet {
         s.tailFirst = brain.skinnerRef?.tailFirst ?? -1
         s.tailYaw = brain.skinnerRef?.tailYaw ?? 0
         s.tailPitch = brain.skinnerRef?.tailPitch ?? 0
+        s.tailRingQ = brain.skinnerRef?.tailRingQ ?? []          // each ring's bend: the spikes lean with the bent tail (emit)
     }
 
     private func stepDaisy(_ s: inout Slot, brain: BlobBrain, spec: FeatureSpec, dt: Float) {
@@ -383,12 +385,16 @@ final class FeatureSet {
             let ps = (s.feature == .spines ? 1 : tuck) * s.scale
             if ps * tuck <= 0.001 { keep[pi] = false }
             let ownTuck: Float = s.feature == .spines ? tuck : 1
+            // the tail is a bent chain: this spike turns with its own ring (world rotation from the Skinner), not with a rigid whole-tail turn
+            var ringTurn: simd_quatf? = nil
+            if part.tailLocal >= 0, !s.tailRingQ.isEmpty { let r = (part.tailLocal - 1) / TailBean.around; if r >= 0 && r < s.tailRingQ.count { ringTurn = s.tailRingQ[r] } }
             var pivotW = c.world(part.pivot)
             if let skin, part.bind.tri != .zero { pivotW = WearBody.world(part.bind, skin: skin) }
             // a tail spike stands on the real skinned tail: its pivot is the skin vertex under it (plus the rest offset to its own pivot, turned by the tail's sway)
             if part.tailLocal >= 0, s.tailFirst >= 0, let skin {
                 let o = 6 * (s.tailFirst + part.tailLocal)
                 pivotW = SIMD3(skin[o], skin[o + 1], skin[o + 2]) + M * (partRotation(p, part, slot: s, spec: spec) * (part.pivot - part.skinAnchor))
+                if let qr = ringTurn { pivotW = SIMD3(skin[o], skin[o + 1], skin[o + 2]) + qr.act(M * (part.pivot - part.skinAnchor)) }
             }
             // for the flower parts the pivot (flower centre) is carried on the stem: the stem's rotation about the stem root moves it
             let rot = partRotation(p, part, slot: s, spec: spec)
@@ -419,6 +425,9 @@ final class FeatureSet {
                     let fromStem = (flowerC - (p.parts.first { $0.name == "stem" }?.pivot ?? flowerC)) + headLocal
                     q = stemPivotW + M * (stemRot * fromStem)
                     n = R * (stemRot * (rot * n))
+                } else if let qr = ringTurn {
+                    q = pivotW + qr.act(M * o)
+                    n = qr.act(R * n)
                 } else {
                     q = pivotW + M * (rot * o)
                     n = R * (rot * n)

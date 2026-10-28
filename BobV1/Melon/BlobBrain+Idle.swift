@@ -66,6 +66,9 @@ enum IdleKind: String, CaseIterable, Sendable {
     case hmph          // grumpy puff: squash widens, angry brows, a quick turn-away and a small stomp
     // characters (2026-10-20): Lavender's chicken-like flap-hop (BlobBrain+FlapHop.swift); the others' features only move with the body
     case flapHop
+    // Pip's tail emotes (2026-10-28, Pip only): BlobBrain+TailPlay.swift
+    case tailThump     // lifts the tail and thumps it on the floor 2...3 times
+    case tailHug       // curls the tail round to his side and hugs the tip with his stubby arms
     // liveliness round (W2, 2026-10-22): BlobBrain+Lively.swift
     case shake         // wet-dog shake: a fast body wiggle, standing
     case lieDown       // flops flat on the floor, lies there a few seconds, pushes back up
@@ -94,7 +97,7 @@ enum IdleTable {
             if let i = w.firstIndex(where: { $0.kind == k }) { w[i].weight += x } else { w.insert((k, x), at: 0) }
         }
         for i in w.indices where w[i].kind != .wander && w[i].kind != .sit && w[i].kind != .yawn && w[i].kind != .slump && w[i].kind != .sleep
-            && w[i].kind != .stretch && w[i].kind != .window && w[i].kind != .sway && w[i].kind != .decorSit && w[i].kind != .sigh && w[i].kind != .hmph { w[i].weight *= BlobBrain.fastKinds.contains(w[i].kind) ? 1 - 0.75 * night : max(0.5, 1 - 0.75 * night) }          // (the calm ones keep half their weight: the one who is still up at night keeps doing things; the fast ones still fade)
+            && w[i].kind != .stretch && w[i].kind != .window && w[i].kind != .sway && w[i].kind != .decorSit && w[i].kind != .sigh && w[i].kind != .hmph && w[i].kind != .tailHug { w[i].weight *= BlobBrain.fastKinds.contains(w[i].kind) ? 1 - 0.75 * night : max(0.5, 1 - 0.75 * night) }          // (the calm ones keep half their weight: the one who is still up at night keeps doing things; the fast ones still fade)
         add(.sit, (sleep ? 1.5 : 4) * night)
         add(.yawn, 2.5 * night + 3 * morning)
         if antics { add(.stretch, 1.5 * morning) }
@@ -108,10 +111,10 @@ enum IdleTable {
         switch m {
         case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.roll, 1.2), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
                               (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2), (.rollTrip, 0.8),
-                              (.cartwheel, 3.6), (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
+                              (.cartwheel, 3.6), (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
                              (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.rollTrip, 0.5), (.sigh, 0.8),
-                             (.cartwheel, 2.4), (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2)]
+                             (.cartwheel, 2.4), (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
         case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
         }
         for (k, x) in extra where x > 0 { w.append((k, x * mul)) }
@@ -249,7 +252,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
-        case .cartwheel, .shake, .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop: return .playing
+        case .cartwheel, .shake, .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop, .tailThump: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -584,6 +587,8 @@ extension BlobBrain {
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
             idleScootHop(sim)
+        case .tailThump, .tailHug:
+            guard tailEmoteBegin(kind, sim) else { return false }
         case .flapHop:
             guard feature == .wings else { return false }
             if wingsFolded {                                 // folded wings (a back item): the plain happy bounce, one hop
@@ -679,6 +684,8 @@ extension BlobBrain {
         case .giggle: runGiggle(sim, skinner, dt)
         case .sigh: runSigh(sim, skinner, dt)
         case .hmph: runHmph(sim, skinner, dt)
+        case .tailThump: runTailThump(sim, skinner, dt)
+        case .tailHug: runTailHug(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)
