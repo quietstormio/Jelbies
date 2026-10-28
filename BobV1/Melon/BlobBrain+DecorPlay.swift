@@ -39,12 +39,14 @@ extension BlobBrain {
     }
 
     func slideArrived(_ sim: SoftBody, _ skinner: Skinner, _ f: DecorFoot) {
+        if f.kind == .kickscooter { scooterArrived(sim, skinner, f); return }
         idleState.slideStage = 0; idleState.goalYaw = f.quarter == 0 ? faceCameraYaw() : f.yaw; idleState.slideStep = 0
         script = .idle; activity = .lookingAround
     }
 
     /// The hops up the steps own the body (like the bag's hops): true = this step is handled.
     func slideBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if let sf = scooterFoot, idleState.slideStage == 1 || idleState.slideStage == 14 || idleState.slideStage == 15, case .idle = script { return scooterBodyTick(sim, skinner, dt, sf) }
         guard idleState.kind == .decorSlide, idleState.slideStage == 1, case .idle = script, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         activity = .playing
         mouthOpen = 0
@@ -87,6 +89,7 @@ extension BlobBrain {
     /// Stage 0 (turn), 4 (sit down on the platform), 5 (ride), 6 (get up with a squash).
     func runSlide(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
+        if f.kind == .kickscooter { runScooter(sim, skinner, dt, f); return }
         let c = f.centre
         switch idleState.slideStage {
         case 0:

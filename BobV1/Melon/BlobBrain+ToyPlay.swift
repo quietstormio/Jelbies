@@ -26,6 +26,9 @@ struct ToyBrain {
     var waitUID = -1
     var waitSince: Float = 0
     var waitDeadline: Float = 0
+    /// A waiter who was moved on before his deadline (asked to step aside, a touch) goes back to the queue when he is free again.
+    var retryUID = -1
+    var retryUntil: Float = 0
     var checkAt: Float = 0
     var lookAt: Float = 0
     var bored: [Int: Float] = [:]
@@ -74,6 +77,7 @@ extension BlobBrain {
     // MARK: the tick (idleGate, no behaviour running)
 
     func toyTick(_ sim: SoftBody) {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("toyTick", probe) }
         let f = DecorField.shared
         if f.feet.isEmpty || !anticsEnabled || !autonomy || held {
             if toy.waitUID >= 0 || toy.noticeUID >= 0 || toy.chaseSpot != nil { toyClear() }
@@ -115,11 +119,16 @@ extension BlobBrain {
             } else if scriptIsNone, toy.chaseUntil - clock > 0.5 { requestNow(.goTo(spot)) }
             return
         }
+        // 2b. moved on from the queue before his deadline: back in line once he is free
+        if toy.retryUID >= 0 {
+            if clock > toy.retryUntil || f.foot(toy.retryUID) == nil { toy.retryUID = -1 }
+            else if toyFree, pending == nil, toy.noticeUID < 0 { let u = toy.retryUID; toy.retryUID = -1; toyGo(u, sim); return }
+        }
         // 3. waiting for a turn
         if toy.waitUID >= 0 { toyWaitTick(sim, f, clock) }
     }
 
-    private func toyClear() { toy.noticeUID = -1; toy.waitUID = -1; toy.chaseSpot = nil }
+    private func toyClear() { toy.noticeUID = -1; toy.waitUID = -1; toy.chaseSpot = nil; toy.retryUID = -1 }
 
     private func toyShouldNotice(_ n: ToyNews) -> Bool {
         let f = DecorField.shared
@@ -150,7 +159,7 @@ extension BlobBrain {
         if f.available(foot) {
             if foot.kind.isBallLike, toyTryPass(sim) { return }
             if decorStart(mv, sim, only: nil, uid: id) { idleState.cooldown = max(idleState.cooldown, 3); return }
-            toy.bored[id] = f.toys.clock + 45          // (no stand / no way there)
+            toyQueue(foot, sim)          // (no way in right now - the one before him is still stepping off, a friend stands in the way: wait nearby, he tries again; the deadline ends it)
             return
         }
         toyQueue(foot, sim)
@@ -169,7 +178,7 @@ extension BlobBrain {
         let uid = foot.uid
         let waiting = toyPeers.filter { $0.toy.waitUID == uid }.count
         guard waiting < ToyTuning.queueMax, let spot = toyWatchSpot(foot) else { toy.bored[uid] = f.toys.clock + 25; return }
-        toy.waitUID = uid; toy.waitSince = f.toys.clock; toy.waitDeadline = f.toys.clock + ToyTuning.queueTimeout
+        toy.waitUID = uid; toy.waitSince = f.toys.clock; toy.waitDeadline = f.toys.clock + foot.kind.queueTimeout
         toy.checkAt = f.toys.clock + 0.6; toy.lookAt = f.toys.clock + rand(1.0, 2.0)
         toy.queued += 1
         if simd_distance(position, spot) > 0.5 { requestNow(.goTo(spot)) }
@@ -178,6 +187,7 @@ extension BlobBrain {
     private func toyWaitTick(_ sim: SoftBody, _ f: DecorField, _ clock: Float) {
         guard let foot = f.foot(toy.waitUID), clock < toy.waitDeadline, toyFreeForQueue else {
             if toy.waitUID >= 0, clock >= toy.waitDeadline { toy.bored[toy.waitUID] = clock + ToyTuning.boredFor; toy.gaveUp += 1; idleState.cooldown = max(idleState.cooldown, rand(2, 4)) }
+            else if toy.waitUID >= 0, clock < toy.waitDeadline, f.foot(toy.waitUID) != nil { toy.retryUID = toy.waitUID; toy.retryUntil = toy.waitDeadline }
             toy.waitUID = -1
             return
         }
@@ -188,7 +198,7 @@ extension BlobBrain {
             if f.available(foot), toyFirstInQueue(uid) {
                 toy.waitUID = -1
                 if let mv = foot.kind.activeInteraction, decorStart(mv, sim, only: nil, uid: uid) { toy.tookTurn += 1; idleState.cooldown = max(idleState.cooldown, 3) }
-                else { toy.bored[uid] = clock + 30 }
+                else { toy.waitUID = uid; toy.checkAt = clock + 0.8 }          // (his way in is not free yet - the one before him is still stepping off: keep waiting; the deadline ends it)
                 return
             }
         }
@@ -212,6 +222,7 @@ extension BlobBrain {
 
     /// A spot outside the piece to watch from: on the side he comes from, 1.1+ from its edge, clear of the user's spot and of the other waiter.
     func toyWatchSpot(_ foot: DecorFoot) -> SIMD2<Float>? {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("toyWatchSpot", probe) }
         let f = DecorField.shared
         let c = f.position(foot)
         var keepOut: [SIMD2<Float>] = []
@@ -227,7 +238,8 @@ extension BlobBrain {
             let a = a0 + step * (k % 2 == 0 ? 1 : -1)
             let u = SIMD2(sinf(a), cosf(a))
             var t: Float = 0.3
-            while t < 5, g.distance(c + u * t) < 1.15 { t += 0.05 }
+            let clear: Float = foot.kind == .kickscooter ? 2.0 : 1.15          // (the scooter's loop sweeps the floor round it: they watch from outside it)
+            while t < 6, g.distance(c + u * t) < clear { t += 0.05 }
             let p = c + u * t
             let q = fixed(p)
             guard simd_distance(p, q) < 0.08, peerFree(q) else { continue }

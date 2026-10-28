@@ -23,7 +23,7 @@ enum DecorModels {
     static func build(feet: [DecorFoot], field: DecorField, time: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
         for f in feet {
-            let c = f.kind.rolls ? field.position(f) : f.centre, v0 = b.mesh.vertices.count
+            let c = field.position(f), v0 = b.mesh.vertices.count
             add(f.kind, at: c, lift: f.lift, anim: field.anim[f.uid] ?? DecorAnim(), time: time, uid: f.uid, into: b)
             if f.quarter != 0 { turnVertices(&b.mesh, from: v0, about: c, yaw: f.yaw) }
         }
@@ -143,6 +143,11 @@ enum DecorModels {
     /// The rocking chair's angle now (rad about game X) and the swing's.
     static func rockAngle(_ a: DecorAnim) -> Float { 0.14 * sinf(2 * .pi * a.rockT / 1.7) * min(a.rockAmp, 1) }
     static func swingAngle(_ a: DecorAnim) -> Float { 0.22 * sinf(2 * .pi * a.rockT / 2.6) * min(a.rockAmp, 1) }
+    /// The rocking horse's / toy rocket's angle on its runner arc now (rad about game Z): a boop's decaying rock plus the steady rock of a rider.
+    static func arcTheta(_ a: DecorAnim) -> Float {
+        let k = min(a.kick, 1.2), t: Float = a.kick > 0.002 ? a.kickT : 99
+        return 0.22 * sinf(2 * .pi * a.rockT / 1.5) * min(a.rockAmp, 1) + 0.24 * k * sinf(t * 6.5)
+    }
 
     /// Where a sitter's base goes on seat `seat` of a piece (piece-local x, y, z; y includes the rug lift): it follows the squash and the rock / sway.
     static func seatPoint(_ kind: DecorKind, seat: Int, anim a: DecorAnim, lift: Float) -> SIMD3<Float> {
@@ -157,6 +162,10 @@ enum DecorModels {
         case .diningset: p.y = sp.y * (1 - 0.06 * (seat == 0 ? a.seatSink.x : a.seatSink.y))
         case .rockingchair: p = rel(rockPivot, rockAngle(a))
         case .swing: p = rel(swingPivot, swingAngle(a))
+        case .rockinghorse, .toyrocket:
+            let th = arcTheta(a)
+            let c = SIMD3<Float>(0, horseArcY, 0)
+            p = c + simd_quatf(angle: -th, axis: SIMD3(0, 0, 1)).act(sp - c) + SIMD3(horseArcR * th, 0, 0)
         default: break
         }
         p.y += lift

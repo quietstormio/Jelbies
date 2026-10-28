@@ -19,8 +19,8 @@ extension DecorModels {
     static let rocketTilt: Float = 0.5
     static let rocketTail = SIMD3<Float>(0, 0.84, 0) + 0.62 * SIMD3<Float>(-cosf(0.5), -sinf(0.5), 0)
     /// The scooter's steering axis (column from its fork joint up to the top of the column) and the top.
-    static let scooterTop = SIMD3<Float>(0.36, 1.224, 0)
-    static let scooterAxis = simd_normalize(SIMD3<Float>(-0.13, 0.82, 0))
+    static let scooterTop = SIMD3<Float>(0.336, 0.924, 0)
+    static let scooterAxis = simd_normalize(SIMD3<Float>(-0.15, 0.70, 0))
 
     static func addBatch4(_ kind: DecorKind, _ art: DecorMeshes.Art, o: SIMD3<Float>, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) -> Bool {
         typealias Pose = (SIMD3<Float>, SIMD3<Float>, Float) -> (SIMD3<Float>, SIMD3<Float>)
@@ -50,7 +50,7 @@ extension DecorModels {
                 }
             }
         case .toyrocket:
-            let theta = 0.22 * k * sinf(t * 6.5)
+            let theta = arcTheta(a)
             let c = SIMD3<Float>(0, horseArcY, 0), q = simd_quatf(angle: -theta, axis: SIMD3(0, 0, 1)), roll = SIMD3<Float>(horseArcR * theta, 0, 0)
             func rock(_ v: SIMD3<Float>, _ n: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) { let (p, n2) = spin4(v, n, about: c, q); return (p + roll, n2) }
             if let r = art.part("rocket") { emit(r) { v, n, _ in rock(v, n) } }
@@ -85,16 +85,19 @@ extension DecorModels {
                 }
             }
         case .kickscooter:
-            all(except: ["bars", "wheelF", "wheelR"])
-            let wheelA = 5.0 * sm4(0, 0.9, t) * k
+            // ridden: the whole scooter is turned to its heading about its origin; the wheels turn with the distance, the bars steer with the loop
+            let yawQ = simd_quatf(angle: a.heading, axis: SIMD3(0, 1, 0))
+            func yawed(_ v: SIMD3<Float>, _ n: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) { (yawQ.act(v), yawQ.act(n)) }
+            if let fr = art.part("frame") { emit(fr) { v, n, _ in yawed(v, n) } }
+            let wheelA = a.wheel + 5.0 * sm4(0, 0.9, t) * k
             for name in ["wheelF", "wheelR"] {
                 guard let w = art.part(name) else { continue }
                 let pv = w.pivot
-                emit(w) { v, n, _ in spin4(v, n, about: pv, simd_quatf(angle: -wheelA, axis: SIMD3(0, 0, 1))) }
+                emit(w) { v, n, _ in let (p1, n1) = spin4(v, n, about: pv, simd_quatf(angle: -wheelA, axis: SIMD3(0, 0, 1))); return yawed(p1, n1) }
             }
             if let bars = art.part("bars") {
-                let ang = 0.55 * k * sinf(t * 11) * expf(-1.2 * min(t, 4))
-                emit(bars) { v, n, _ in spin4(v, n, about: scooterTop, simd_quatf(angle: ang, axis: scooterAxis)) }
+                let ang = 0.55 * k * sinf(t * 11) * expf(-1.2 * min(t, 4)) + a.steer
+                emit(bars) { v, n, _ in let (p1, n1) = spin4(v, n, about: scooterTop, simd_quatf(angle: ang, axis: scooterAxis)); return yawed(p1, n1) }
             }
         default:
             all()

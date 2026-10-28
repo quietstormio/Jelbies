@@ -358,6 +358,7 @@ extension BlobBrain {
 
     /// The scheduler's roll (top of pickAutonomous). True = a social started.
     func socialMaybeStart(_ sim: SoftBody) -> Bool {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("socialMaybeStart", probe) }
         guard socialBook.enabled, social == nil, socialBook.cooldown <= 0, socialFree, idleDeepNight < 0.5 else { return false }
         if socialBook.invite != nil { return true }          // waiting for the invited partner's leg to end
         let ps = socialOthers().map { (id: $0.steerID, pos: $0.position, b: $0) }

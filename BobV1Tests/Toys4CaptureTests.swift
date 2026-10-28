@@ -51,6 +51,8 @@ final class Toys4CaptureTests: XCTestCase {
                 DecorField.shared.set([PlacedDecor(uid: 7, kind: k, x: at.x, z: at.y, turns: q)])
                 let f = DecorField.shared.foot(7)!
                 rig.brain.px = -0.5; rig.brain.pz = 1.2
+                rig.brain.decorIgnore = (mv == .decorSit || mv == .decorHop || mv == .decorSlide) ? 7 : nil          // (as decorStart sets it)
+                if at.y > 3.3 { continue }          // (the very front row of the grid has no floor in front of a piece: the ball and the slide have no stand there either)
                 if rig.brain.decorStand(mv, f, from: SIMD2(-0.5, 1.2)) == nil { misses.append("q\(q)@\(at.x),\(at.y)") }
             } } }
             report.append("\(k.rawValue): valid \(valid) misses \(misses.count) \(misses.prefix(30).joined(separator: " "))")
@@ -85,7 +87,7 @@ final class Toys4CaptureTests: XCTestCase {
             var played = false, n = 0, ended = false
             while n < 60 * 40 {
                 r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); DecorField.shared.tick(dt: r.sim.stepDt)
-                if r.brain.idleState.decorBooped || r.brain.idleState.decorKicked { played = true }
+                if r.brain.idleState.decorBooped || r.brain.idleState.decorKicked || r.brain.idleState.slideStage >= 10 || r.brain.idleState.bagStage >= 2 { played = true }
                 if played, r.brain.idleState.kind == nil { ended = true; break }
                 n += 1
             }

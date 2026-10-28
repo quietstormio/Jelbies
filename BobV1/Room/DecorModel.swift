@@ -204,7 +204,7 @@ extension DecorKind {
     static let slideApproach: Float = (1.28 * DecorKind.slide.scale) + 0.57
     static let sleepPoint = SIMD3<Float>(0, 0.12 * DecorKind.petbed.scale, 0.05)
     /// The seat faces this way (yaw about +y from +z): the dining stools face the table, everything else the camera.
-    func seatFacing(_ seat: Int) -> Float? { self == .diningset ? (seat == 0 ? .pi / 2 : -.pi / 2) : nil }
+    func seatFacing(_ seat: Int) -> Float? { self == .diningset ? (seat == 0 ? .pi / 2 : -.pi / 2) : (rockRide ? .pi / 2 : nil) }
     /// Sideways distance from the piece's centre to where a Jelly stands for it (the seat off to one side).
     var standOffsetX: Float { sitPoints.map { abs($0.x) }.max() ?? 0 }
     /// A piece a Jelly hops onto (a bottom-sit on its seat point, like the beanbag) as opposed to the cushion's plain sit.
@@ -497,6 +497,9 @@ struct DecorAnim: Equatable, Sendable {
     /// Toy car: heading (yaw so that its nose points along its travel) and the wheels' turn. Yarn ball: where its strand trails.
     var heading: Float = 0
     var wheel: Float = 0
+    /// Kick scooter: it is being ridden (its position is `pos`, not the parked spot) and how far its bars are steered (rad).
+    var carried = false
+    var steer: Float = 0
     /// The block tower: nil = stacked. Time since it was knocked over.
     var blocks: [TumbleBlock] = []
     var tumbleT: Float = -1
@@ -508,7 +511,7 @@ struct DecorAnim: Equatable, Sendable {
     var tumbling: Bool { tumbleT >= 0 }
     var active: Bool {
         sink > 0.002 || sinkWant > 0 || kick > 0.002 || peek > 0.002 || peekWant > 0 || moving || seatSink != .zero || seatWant != .zero
-            || rockAmp > 0.002 || rockWant > 0 || spin > 0 || fallT >= 0 || tumbleT >= 0
+            || rockAmp > 0.002 || rockWant > 0 || spin > 0 || fallT >= 0 || tumbleT >= 0 || carried
     }
 }
 
@@ -534,11 +537,28 @@ final class DecorField {
     var occupant: [Int: Int] = [:]
     /// Seat by seat for the multi-seat pieces (loveseat, swing, dining stools): uid -> seat -> steer id. `occupant` also holds one of them.
     var seatOccupant: [Int: [Int: Int]] = [:]
+    /// The pieces two Jelbies may use at once (`DecorKind.maxUsers`): uid -> the steer ids using it; the tunnel's direction of travel and how far through each user is (0...1).
+    var coUsers: [Int: [Int]] = [:]
+    var tunnelDir: [Int: Float] = [:]
+    var progress: [Int: [Int: Float]] = [:]
     /// A Jelly may start using it: a single-seat piece nobody uses, or a multi-seat one with a seat free.
     func available(_ f: DecorFoot) -> Bool {
         guard f.uid != held else { return false }
         if f.kind.sitPoints.count > 1 { return (seatOccupant[f.uid]?.count ?? 0) < f.kind.sitPoints.count }
+        if f.kind.maxUsers > 1 {
+            let n = coUsers[f.uid]?.count ?? 0
+            if n >= f.kind.maxUsers { return false }
+            // follow the leader: the next one goes in only when the one ahead is well on the way through
+            if f.kind == .playtunnel, let pr = progress[f.uid], pr.values.contains(where: { $0 < 0.45 }) { return false }
+            return true
+        }
         return occupant[f.uid] == nil
+    }
+    /// One of the pieces several Jelbies use: he takes his place.
+    func use(_ uid: Int, by id: Int) {
+        guard let f = foot(uid), f.kind.maxUsers > 1 else { occupant[uid] = id; return }
+        if !(coUsers[uid]?.contains(id) ?? false) { coUsers[uid, default: []].append(id) }
+        occupant[uid] = coUsers[uid]?.first ?? id
     }
     /// The lowest free seat (or nil).
     func freeSeat(_ f: DecorFoot, preferring side: Float = 0) -> Int? {
@@ -550,6 +570,14 @@ final class DecorField {
     }
     func take(_ uid: Int, seat: Int, by id: Int) { seatOccupant[uid, default: [:]][seat] = id; occupant[uid] = id }
     func leave(_ uid: Int, by id: Int) {
+        if var u = coUsers[uid] {
+            u.removeAll { $0 == id }
+            coUsers[uid] = u.isEmpty ? nil : u
+            progress[uid]?[id] = nil
+            if u.isEmpty { tunnelDir[uid] = nil; progress[uid] = nil }
+            occupant[uid] = u.first
+            return
+        }
         if var s = seatOccupant[uid] {
             for (k, v) in s where v == id { s[k] = nil }
             seatOccupant[uid] = s.isEmpty ? nil : s
@@ -583,9 +611,11 @@ final class DecorField {
             var x = anim[p.uid] ?? DecorAnim()
             if p.kind == .yarnball, anim[p.uid] == nil { x.heading = .pi / 4 }          // (its strand as exported, until it rolls)
             if p.kind.rolls, !x.moving { x.pos = p.at }
+            if p.kind == .kickscooter, !x.carried { x.pos = p.at }
             a[p.uid] = x
         }
         anim = a
+        coUsers = coUsers.filter { a[$0.key] != nil }
         occupant = occupant.filter { o in a[o.key] != nil && list.first(where: { $0.uid == o.key })?.kind == oldKinds[o.key] }
         seatOccupant = seatOccupant.filter { so in a[so.key] != nil && list.first(where: { l in l.uid == so.key })?.kind == oldKinds[so.key] }
         RoomLayout.decorFeet = feet
@@ -624,7 +654,7 @@ final class DecorField {
     func kinds(_ k: DecorKind) -> [DecorFoot] { feet.filter { $0.kind == k } }
 
     /// Where a piece is right now (the ball moves).
-    func position(_ f: DecorFoot) -> SIMD2<Float> { f.kind.rolls ? (anim[f.uid]?.pos ?? f.centre) : f.centre }
+    func position(_ f: DecorFoot) -> SIMD2<Float> { f.kind.rolls || anim[f.uid]?.carried == true ? (anim[f.uid]?.pos ?? f.centre) : f.centre }
 
     // hooks the Jellies call
     func sit(_ uid: Int, _ k: Float) { guard let w = anim[uid]?.sinkWant else { return }; anim[uid]?.sinkWant = max(w, k) }

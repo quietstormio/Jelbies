@@ -65,13 +65,13 @@ def beachball():
 
 # ============================ PLAY TUNNEL ====================================
 TUN_X = [-0.66, -0.40, -0.14, 0.14, 0.40, 0.66]
-TUN_S = [0.84, 0.94, 1.0, 1.0, 0.94, 0.84]
+TUN_S = [0.92, 0.97, 1.0, 1.0, 0.97, 0.92]
 TUN_C = [CORAL, HONEY, MINT, SKY, LAV, PINK]
 def playtunnel():
     reset(); begin('tunnel', w=lambda p: clamp01(p.y/1.0))
     for i, (x, s) in enumerate(zip(TUN_X, TUN_S)):
         R = 0.5*s
-        prof = [(R*0.62, -0.17), (R*0.82, -0.175), (R*0.97, -0.12), (R*1.0+0.03, 0.0), (R*0.97, 0.12), (R*0.82, 0.175), (R*0.62, 0.17)]
+        prof = [(R*0.89, -0.17), (R*0.93, -0.175), (R*0.98, -0.12), (R*1.0+0.03, 0.0), (R*0.98, 0.12), (R*0.93, 0.175), (R*0.89, 0.17)]
         commit(closed_lathe_bm(prof, 36), lit(TUN_C[i], 0.2, 0.10), sharp=70, xf=T((x, R, 0), rz=-math.pi/2))
     # wire hoops at both mouths, and stitching dots along the crown
     for x, R, col in ((-0.84, 0.42, CREAM), (0.84, 0.42, CREAM)):
@@ -82,7 +82,11 @@ def playtunnel():
     for x in (-0.55, 0.55):
         for s in (-1, 1):
             add_cyl((x, 0.0, s*0.46), 0.045, 0.05, lit(SKY, 0.2), bevel=0.012)
-    return dict(footprint_half=[0.86, 0.52], height=1.0, spots=2, solid=True)
+    S = 1.6           # big enough for a Jelbie to squeeze through
+    for g in GROUPS:
+        g['pivot'] = tuple(x*S for x in g['pivot'])
+        for p in g['parts']: p['P'] = [tuple(x*S for x in q) for q in p['P']]
+    return dict(footprint_half=[0.88*S, 0.54*S], height=1.0*S, spots=2, solid=True)
 
 # ============================ RING STACKER ===================================
 RS_S = 0.86
@@ -138,9 +142,12 @@ def toyrocket():
     # saddle seat on top (local -x is up), grip bar in front of it
     add_pill((-0.30, -0.12, 0), (0.10, 0.17, 0.15), lit(HONEY, 0.22), e=0.65, rot=(0,0,0), sub=2) if False else None
     commit(pill_bm(0.085, 0.17, 0.15, 0.65, 2), lit(HONEY, 0.22, 0.10), sharp=80, xf=G @ T((-0.285, -0.10, 0)))
+    # handlebar on the nose: a post up from the hull and a cross bar with two grips (his arms rest on them)
+    commit(tube_bm([(-0.17, 0.50, 0.0), (-0.26, 0.50, 0.0), (-0.31, 0.50, 0.0)], 0.03, 8), lit(INK, 0.2, 0.0), sharp=70, xf=G)
+    commit(tube_bm([(-0.31, 0.50, -0.36), (-0.31, 0.50, 0.36)], 0.026, 8), lit(INK, 0.2, 0.0), sharp=70, xf=G)
     for z in (-1, 1):
-        commit(tube_bm([(-0.22, 0.14, z*0.06), (-0.34, 0.20, z*0.14), (-0.38, 0.22, z*0.24)], 0.022, 6), lit(INK, 0.2, 0.0), sharp=70, xf=G)
-        commit(cyl_bm(0.032, 0.11, 12, -0.055), lit(CORAL, 0.2), sharp=60, xf=G @ T((-0.385, 0.22, z*0.26), rx=math.pi/2))
+        commit(cyl_bm(0.036, 0.14, 12, -0.07), lit(CORAL, 0.2), sharp=60, xf=G @ T((-0.31, 0.50, z*0.30), rx=math.pi/2))
+        commit(sph_bm(0.04, 0.04, 0.04, 2), lit(CORAL, 0.2), sharp=80, xf=G @ T((-0.31, 0.50, z*0.375)))
     # struts from the runners up to the belly
     for z in (-0.22, 0.22):
         for x, up in ((-0.30, 0.0), (0.30, 0.0)):
@@ -199,7 +206,7 @@ def plushdino():
 
 # ============================ KICK SCOOTER ===================================
 SC_WR = 0.15
-SC_TOP = (0.30, 1.02, 0.0)
+SC_TOP = (0.28, 0.77, 0.0)
 SC_HUB = (0.50, SC_WR, 0.0)
 def wheel(c, name, col=INK, hub=CREAM):
     begin(name, pivot=tuple(c))
@@ -209,9 +216,9 @@ def wheel(c, name, col=INK, hub=CREAM):
     add_sph((c[0], c[1], c[2] - 0.07), (0.03, 0.03, 0.012), lit(CORAL), sub=1)
 def kickscooter():
     reset(); begin('frame')
-    add_box((-0.08, 0.235, 0.0), (0.72, 0.075, 0.31), lit(PINK, 0.25, 0.10), bevel=0.025)
-    add_box((-0.08, 0.277, 0.0), (0.58, 0.014, 0.25), lit(INK, 0.18, 0.0), bevel=0.004)          # grip tape
-    for k in range(4): add_box((-0.26 + 0.12*k, 0.285, 0.0), (0.05, 0.007, 0.25), lit(HONEY, 0.25, 0.05), bevel=0.002)
+    add_box((-0.08, 0.235, 0.0), (0.72, 0.075, 0.36), lit(PINK, 0.25, 0.10), bevel=0.025)
+    add_box((-0.08, 0.277, 0.0), (0.58, 0.014, 0.30), lit(INK, 0.18, 0.0), bevel=0.004)          # grip tape
+    for k in range(4): add_box((-0.26 + 0.12*k, 0.285, 0.0), (0.05, 0.007, 0.30), lit(HONEY, 0.25, 0.05), bevel=0.002)
     add_box((0.30, 0.235, 0.0), (0.14, 0.075, 0.24), lit(PINK, 0.25, 0.10), bevel=0.02)
     # rear fender: a curved strip hugging the top-back of the rear wheel, bridged to the deck's rear end (one joined piece, deck colour)
     cx, cy, FR = -0.45, SC_WR, SC_WR + 0.045
@@ -229,18 +236,18 @@ def kickscooter():
     add_box((-0.405, 0.275, 0.0), (0.10, 0.12, 0.25), lit(PINK, 0.25, 0.10), bevel=0.02)          # the bridge from the deck's rear end up into the fender
     add_box((-0.445, 0.24, 0.0), (0.06, 0.075, 0.31), lit(PINK, 0.25, 0.10), bevel=0.02)          # the deck's rear end reaching over the axle
     # steering column (raked back) and the fork
-    add_tube([(0.43, 0.20, 0.0), (0.38, 0.55, 0.0), SC_TOP], 0.05, lit(SKY, 0.25), sides=12)
+    add_tube([(0.43, 0.20, 0.0), (0.36, 0.48, 0.0), SC_TOP], 0.05, lit(SKY, 0.25), sides=12)
     for z in (-0.075, 0.075): add_tube([SC_HUB[:2] + (z,), (0.45, 0.17, z), (0.43, 0.24, z*0.4)], 0.032, lit(SKY, 0.2), sides=8)
     add_box((-0.45, 0.17, 0.0), (0.10, 0.04, 0.17), lit(SKY, 0.2), bevel=0.012)
     for z in (-0.075, 0.075): add_tube([(-0.45, 0.17, z), (-0.45, SC_WR, z)], 0.03, lit(SKY, 0.2), sides=8)
     add_cyl((0.395, 0.30, 0.0), 0.07, 0.04, lit(CORAL, 0.2), bevel=0.01)          # steering head collar
     wheel((0.50, SC_WR, 0.0), 'wheelF'); wheel((-0.45, SC_WR, 0.0), 'wheelR')
     begin('bars', pivot=SC_TOP)
-    add_tube([(SC_TOP[0], SC_TOP[1], -0.31), (SC_TOP[0]+0.015, SC_TOP[1]+0.0, -0.20), (SC_TOP[0]+0.015, SC_TOP[1], 0.20), (SC_TOP[0], SC_TOP[1], 0.31)], 0.04, lit(SKY, 0.25), sides=10)
+    add_tube([(SC_TOP[0], SC_TOP[1], -0.30), (SC_TOP[0]+0.015, SC_TOP[1]+0.0, -0.18), (SC_TOP[0]+0.015, SC_TOP[1], 0.18), (SC_TOP[0], SC_TOP[1], 0.30)], 0.04, lit(SKY, 0.25), sides=10)
     add_cyl((SC_TOP[0], SC_TOP[1]-0.03, 0.0), 0.058, 0.07, lit(CORAL, 0.2), bevel=0.012)
     for z in (-1, 1):
-        add_cyl((SC_TOP[0], SC_TOP[1], z*0.27), 0.055, 0.20, lit(CORAL, 0.25), rot=(math.pi/2,0,0), centered=True, bevel=0.016)
-        add_sph((SC_TOP[0], SC_TOP[1], z*0.38), 0.056, lit(CORAL, 0.25), sub=2)
+        add_cyl((SC_TOP[0], SC_TOP[1], z*0.24), 0.055, 0.20, lit(CORAL, 0.25), rot=(math.pi/2,0,0), centered=True, bevel=0.016)
+        add_sph((SC_TOP[0], SC_TOP[1], z*0.335), 0.056, lit(CORAL, 0.25), sub=2)
         for k in range(3): add_tube([(SC_TOP[0], SC_TOP[1], z*0.37), (SC_TOP[0]+0.0, SC_TOP[1]-0.10-0.06*k, z*(0.40+0.015*k)), (SC_TOP[0]-0.02, SC_TOP[1]-0.22-0.07*k, z*(0.42+0.02*k))], 0.012, lit([HONEY, MINT, LAV][k], 0.3), sides=4)
     # bell
     add_lathe((SC_TOP[0]+0.02, SC_TOP[1]+0.02, 0.10), [(0,0),(0.06,0),(0.065,0.012),(0.05,0.045),(0.025,0.065),(0,0.07)], lit(HONEY, 0.3), segs=20)
@@ -250,6 +257,6 @@ def kickscooter():
     for g in GROUPS:
         g['pivot'] = tuple(x*S for x in g['pivot'])
         for p in g['parts']: p['P'] = [tuple(x*S for x in q) for q in p['P']]
-    return dict(footprint_half=[0.76, 0.52], height=1.36, spots=1, solid=True)
+    return dict(footprint_half=[0.78, 0.50], height=1.0, spots=1, solid=True)
 
 REG = [('beachball', beachball), ('playtunnel', playtunnel), ('ringstacker', ringstacker), ('toyrocket', toyrocket), ('plushdino', plushdino), ('kickscooter', kickscooter)]

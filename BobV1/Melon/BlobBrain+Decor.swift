@@ -28,6 +28,7 @@ extension BlobBrain {
     func decorRelease() {
         let uid = idleState.decorUID
         if uid >= 0 {
+            if let sf = DecorField.shared.foot(uid), sf.kind == .kickscooter { scooterParked(sf) }          // (cut short mid-ride: the scooter is parked again)
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
             toy.lastUID = uid
@@ -87,7 +88,10 @@ extension BlobBrain {
         let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
         let c = f.centre
         let dz = f.kind.spec.half.y - sp.z + Self.bagHopGap          // (piece-local, then turned)
-        return [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
+        var spots = [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
+        // a rocker long on its runners may sit where its front has no floor (the near edge of the room): he climbs on from behind it too
+        if f.kind.rockRide { spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(sp.x + $0, sp.z - dz)) } }
+        return spots
     }
     /// The first spot in front of the seat he can stand on, nil when there is none.
     func hopStand(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
@@ -98,7 +102,7 @@ extension BlobBrain {
         return nil
     }
     /// A spot `gap` from the piece's edge on the side he comes from (a rounded-box piece: found by walking out from its centre).
-    private func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
+    func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         var angles: [Float]
         if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6, 0.95, -0.95, 1.4, -1.4].map { $0 + f.yaw } }          // (the sides only as a fallback: a piece at the front edge has no floor in front of it)
@@ -142,6 +146,8 @@ extension BlobBrain {
         switch kind {
         case .decorSit where f.kind.hopSit && f.kind != .beanbag:
             return hopStand(f, seat: seat)
+        case .decorSlide where f.kind == .kickscooter:
+            return scooterStand(f, from: here)
         case .decorSlide:
             // behind the slide, where the steps start (the JSON's approach point)
             let p = c + f.turned(SIMD2(0, -DecorKind.slideApproach))
@@ -159,6 +165,7 @@ extension BlobBrain {
             }
             return nil
         case .soccerKick: return soccerStand(f, from: here)
+        case .decorPeek where f.kind == .playtunnel: return tunnelEntry(f, from: here)
         case .decorSit where f.kind == .beanbag, .decorBoop, .decorPeek:
             if !DecorKind.original.contains(f.kind) { return edgeStand(f, from: here, gap: max(0.8, footprint * f.spec.reach + 0.06)) }
             // a spot just outside the piece, on the side he comes from (he walks straight up to it and turns little); the beanbag: close enough to hop up
@@ -180,6 +187,7 @@ extension BlobBrain {
     }
 
     func decorStart(_ kind: IdleKind, _ sim: SoftBody, only: DecorKind? = nil, uid onlyUID: Int? = nil) -> Bool {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("decorStart", probe) }
         guard !sleepLocked else { return false }
         let here = SIMD2(px, pz)
         let field = DecorField.shared
@@ -193,7 +201,7 @@ extension BlobBrain {
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
             decorIgnore = (kind == .decorSit || kind == .decorHop || kind == .decorSlide) ? f.uid : exiting
             guard let stand = decorStand(kind, f, from: here, seat: seat),
-                  simd_distance(here, stand) > 0.35 || kind == .decorHop || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
+                  simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   reachable(here, stand) else { decorIgnore = exiting; continue }
             idleBegin(kind)
             idleState.decorUID = f.uid; idleState.decorGo = true; idleState.decorKicked = false; idleState.decorBooped = false
@@ -202,7 +210,8 @@ extension BlobBrain {
             idleState.slideStage = 0; idleState.slideS = 0; idleState.slideStep = 0
             idleState.soccer = kind == .soccerKick ? soccerPlan : SoccerIdle()
             idleState.reps = kind == .decorKick && f.kind.rolls ? 1 + (rand() < 0.5 ? 1 : 0) : 0
-            if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.occupant[f.uid] = steerID }
+            if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
+            if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
             script = .walk(target: stand, then: .none); activity = .walking
             return true
         }
@@ -253,10 +262,12 @@ extension BlobBrain {
             script = .walk(target: idleState.target, then: .none); activity = .walking
             return
         }
+        if kind == .decorPeek, f.kind == .playtunnel, idleState.slideStage == 30 { idleState.decorGo = false; tunnelEnd(skinner); return }          // (out the other end)
         idleState.decorGo = false
         idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.steps = 0
         script = .idle; activity = .lookingAround
         let c = DecorField.shared.position(f)
+        if kind == .decorPeek, f.kind == .playtunnel, tunnelAtMouth(f) { tunnelBegin(f); return }          // (at the mouth: in he goes)
         switch kind {
         case .decorSit:
             idleState.hold = rand(7, 14)
@@ -266,7 +277,8 @@ extension BlobBrain {
         case .decorSlide: slideArrived(sim, skinner, f)
         case .soccerKick: soccerArrived(sim, skinner, f)
         case .decorBoop:
-            idleState.hold = vDur(2.6)
+            idleState.hold = f.kind.plushHug ? vDur(rand(4.2, 6.0)) : vDur(2.6)
+            idleState.slideS = 0
             let d = c - position
             idleState.goalYaw = atan2f(d.x, d.y)
         case .decorPeek:
@@ -352,6 +364,18 @@ extension BlobBrain {
             if idleState.phase == 1, idleState.phaseT > 1.7, idleState.decorBooped, idleState.decorKicked == false {
                 idleState.decorKicked = true
                 DecorField.shared.kick(uid, 0.7)
+            }
+            if let pf = DecorField.shared.foot(uid), pf.kind.plushHug, idleState.phase == 1, idleState.decorBooped {
+                // a hug: he leans into it and gives it a squeeze every so often (two huggers: both squeeze, a beat apart)
+                pitch += 0.10 * k
+                squash *= 1 - 0.05 * k
+                idleState.slideS += runDt
+                if idleState.slideS > 1.05 {
+                    idleState.slideS = 0
+                    jellyKick = max(jellyKick, 0.9)
+                    DecorField.shared.kick(uid, 0.8)
+                    AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.45, rate: 1.0 + 0.12 * Float(steerID & 3))
+                }
             }
         case .decorPeek:
             DecorField.shared.peek(uid, idleState.phase == 1 ? 1 : 0)
@@ -443,7 +467,7 @@ extension BlobBrain {
 
     /// While he sits on a rocking chair / swing the seat carries him: his root and planted feet move by the seat's change.
     func seatFollow(_ f: DecorFoot) {
-        guard f.kind == .rockingchair || f.kind == .swing || f.kind.parkRocker, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
+        guard f.kind == .rockingchair || f.kind == .swing || f.kind.parkRocker || f.kind.rockRide, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
         let rs = f.turned(SIMD2(sp.x, sp.z))
         let want = SIMD2<Float>(sw.x - (f.centre.x + rs.x), sw.z - (f.centre.y + rs.y))
@@ -523,6 +547,13 @@ extension BlobBrain {
             DecorField.shared.rock(uid, on ? 1 : 0.35)
             seatFollow(f)
             if f.kind == .springrider { pitch += DecorModels.springAngle(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9 }
+        }
+        if f.kind.rockRide {
+            // astride the horse / rocket: it rocks on its runners and carries him; he leans with it (about the piece's z axis, which is his pitch: he faces its nose)
+            let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3
+            DecorField.shared.rock(uid, on ? 1 : 0.35)
+            seatFollow(f)
+            pitch += DecorModels.arcTheta(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9
         }
         if f.kind == .rockingchair || f.kind == .swing {
             let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3

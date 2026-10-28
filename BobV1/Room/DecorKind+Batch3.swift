@@ -35,11 +35,18 @@ extension DecorKind {
         }
     }
     /// The cushion pile is hopped onto and sat on (its soft top, 0.60 up): two seats side by side, so two Jelbies sit together on it (2026-10-25).
-    var batch3SitPoints: [SIMD3<Float>] { self == .cushionpile ? [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)] : parkSitPoints }
+    var batch3SitPoints: [SIMD3<Float>] {
+        switch self {
+        case .cushionpile: return [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)]
+        case .rockinghorse: return [SIMD3(0.0, 0.97, 0)]          // (the saddle: he sits astride and rocks with it)
+        default: return batch4SitPoints
+        }
+    }
     var batch3Interaction: IdleKind? {
         switch self {
         case .cushionpile: return .decorSit
-        case .plantstand, .clock, .bubblemachine, .rockinghorse, .jackinbox, .plushbear, .toypiano, .pinwheel: return .decorBoop
+        case .rockinghorse: return .decorSit
+        case .plantstand, .clock, .bubblemachine, .jackinbox, .plushbear, .toypiano, .pinwheel: return .decorBoop
         case .easel, .mirror, .aquarium: return .decorPeek
         default: return batch4Interaction
         }
