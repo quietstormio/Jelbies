@@ -337,11 +337,13 @@ final class BlobBrain {
     /// 2026-10-24: free locomotion (roam / go-to walk, run, zoomies, trot, hurry) is 10 % faster in cadence (so speed); scripted interaction moves (swing, kicks, decor play,
     /// dining, bath ...) keep `stepRate`: the global 4.0 / 4.125 loosened the feet in the swing / kick moves. The gait shape (stride, pose, arms, feet) is unchanged.
     static let locoRate: Float = 1.10
+    /// Outing run-out only (GameCare+Outing.swift): +-10 % run pace so the runners reach the front together without waiting at the start. 1 otherwise.
+    var outingPace: Float = 1
     var locoRateMul: Float {
         if let k = idleState.kind {
             switch k { case .run, .zoomies, .trot: return Self.locoRate; default: return 1 }
         }
-        if hurry { return Self.locoRate }
+        if hurry { return Self.locoRate * outingPace }
         if case .walk = script { return Self.locoRate }
         return 1
     }
