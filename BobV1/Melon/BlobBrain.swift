@@ -252,6 +252,8 @@ final class BlobBrain {
     var slideKicks = 0
     /// Capture aid (`-RunMove zoomies|slide|scoot`): the scheduler always picks this move, with a short cooldown.
     var runMoveDemo: IdleKind?
+    /// Capture aid (`-SeatDemo <decor id>`, GameCare+SeatDemo.swift): set on ONE Jelbie; he keeps hopping onto that piece, stands/sits a few seconds, hops off, repeats.
+    var seatDemo: DecorKind?
     /// Touch play: he runs (the run blend) back to the focus spot after a throw; cleared on arrival (BlobBrain+Touch `hurryUpdate`).
     var hurry = false
     /// Idle arm override (render only): per side elevation / sweep (rad) blended in by `armDirW`; 0 = the walking arm untouched.

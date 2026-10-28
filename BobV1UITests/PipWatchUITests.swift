@@ -16,7 +16,14 @@ final class PipWatchUITests: XCTestCase {
         if let extra = env["PIPWATCH_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: " ").map(String.init) }
         app.launch()
         let cont = app.buttons["Continue"]
-        if cont.waitForExistence(timeout: 60) { cont.tap() }
+        // (the title can still be fading in / the intro running: tap until Continue is really gone, the room is behind it)
+        if cont.waitForExistence(timeout: 60) {
+            for _ in 0..<12 {
+                if cont.exists, cont.isHittable { cont.tap() }
+                let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: cont)
+                if XCTWaiter().wait(for: [gone], timeout: 5) == .completed { break }
+            }
+        }
         XCTAssertTrue(app.buttons["care-menu"].waitForExistence(timeout: 90), "the HUD is up")
         if let mark = env["PIPWATCH_MARK"] { try? "up".write(toFile: mark, atomically: true, encoding: .utf8) }
         Thread.sleep(forTimeInterval: secs)

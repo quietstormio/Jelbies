@@ -6,6 +6,7 @@
 
 import Foundation
 import Observation
+import simd
 
 nonisolated enum BuyResult: Equatable, Sendable { case bought, notEnough, alreadyOwned, unknown }
 
@@ -264,6 +265,25 @@ final class StoreBook {
         saved.placedAt = placedDecor + [p]
         save()
         return p
+    }
+    /// Capture aid (`-SeatDemo`): puts a piece in the room near `near` whether or not it is owned; clears the room first when nothing fits. False = nowhere.
+    @discardableResult
+    func seatDemoPlace(_ k: DecorKind, near: SIMD2<Float>) -> Bool {
+        if placedDecor.contains(where: { $0.kind == k }) { return true }
+        func spot() -> SIMD2<Float>? {
+            var best: (SIMD2<Float>, Float)?
+            var z: Float = -2; while z <= 3 { var x: Float = -3; while x <= 3 { let p = SIMD2<Float>(x, z); let d = simd_distance(p, near)
+                if (best == nil || d < best!.1), DecorPlacement.isValid(k, at: p, among: placedDecor) { best = (p, d) }; x += 0.1 }; z += 0.1 }
+            return best?.0 ?? DecorPlacement.findSpot(k, among: placedDecor)          // (nothing valid near the centre: the game's own free spot)
+        }
+        var at = spot()
+        if at == nil { saved.placedAt = []; save(); at = spot() }
+        guard let at else { return false }
+        let uid = saved.nextDecorUID ?? 1
+        saved.nextDecorUID = uid + 1
+        saved.placedAt = placedDecor + [PlacedDecor(uid: uid, kind: k, x: at.x, z: at.y)]
+        save()
+        return true
     }
     /// Moves a placed piece to `at` when the spot is valid (the finger's drag); false = not there.
     @discardableResult

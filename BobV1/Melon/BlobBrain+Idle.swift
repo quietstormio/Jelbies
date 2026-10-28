@@ -283,6 +283,7 @@ extension BlobBrain {
             }
         }
         guard idleState.cooldown <= 0 else { return false }
+        if let k = seatDemo { return decorStart(.decorSit, sim, only: k) }          // (capture aid -SeatDemo: the normal decorSit path onto that piece, nothing else)
         let decorOffers: Set<IdleKind> = anticsEnabled && !sleepLocked ? Self.decorOffers() : []
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
         if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= ToyTuning.directGap, rand() < ToyTuning.directChance {
@@ -428,7 +429,7 @@ extension BlobBrain {
             let flourish = Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
-            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
+            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil || seatDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
         if idleState.kind == .rollTrip { gait.rollTravel = 1.1 }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
