@@ -130,9 +130,9 @@ final class BodySlot {
 }
 
 final class MelonRenderer {
-    static let msaa = 4
-    static let hdrFormat = MTLPixelFormat.rgba16Float
-    static let depthFormat = MTLPixelFormat.depth32Float
+    nonisolated static let msaa = 4
+    nonisolated static let hdrFormat = MTLPixelFormat.rgba16Float
+    nonisolated static let depthFormat = MTLPixelFormat.depth32Float
 
     let device: MTLDevice
     let queue: MTLCommandQueue
@@ -279,7 +279,7 @@ final class MelonRenderer {
             print("MelonRenderer: MelonBathParams layout is \(MemoryLayout<MelonBathParams>.size) bytes, expected 2336")
             return nil
         }
-        guard let queue = device.makeCommandQueue(), let library = device.makeDefaultLibrary() else {
+        guard let queue = device.makeCommandQueue(), let library = MelonPipelines.library(device) else {
             print("MelonRenderer: no command queue / default library")
             return nil
         }
@@ -355,80 +355,12 @@ final class MelonRenderer {
         guard let sh = depthMap(shadowSize, "shadow map"), let tp = depthMap(topSize, "height map") else { return nil }
         shadowTex = sh; topTex = tp
 
-        // ── vertex descriptors ──
-        let posVD = MTLVertexDescriptor()
-        posVD.attributes[0].format = .float3; posVD.attributes[0].offset = 0; posVD.attributes[0].bufferIndex = 1
-        posVD.layouts[1].stride = 24
-
-        let meshVD = MTLVertexDescriptor()
-        meshVD.attributes[0].format = .float3; meshVD.attributes[0].offset = 0; meshVD.attributes[0].bufferIndex = 1
-        meshVD.attributes[1].format = .float3; meshVD.attributes[1].offset = 12; meshVD.attributes[1].bufferIndex = 1
-        meshVD.attributes[2].format = .float3; meshVD.attributes[2].offset = 0; meshVD.attributes[2].bufferIndex = 2
-        meshVD.attributes[3].format = .float; meshVD.attributes[3].offset = 12; meshVD.attributes[3].bufferIndex = 2
-        meshVD.layouts[1].stride = 24
-        meshVD.layouts[2].stride = 16
-        self.meshVD = meshVD
-
-        let lineVD = MTLVertexDescriptor()
-        lineVD.attributes[0].format = .float3; lineVD.attributes[0].offset = 0; lineVD.attributes[0].bufferIndex = 1
-        lineVD.layouts[1].stride = 12
-
-        // ── pipelines ──
-        func make(_ label: String, vs: String, fs: String?, vd: MTLVertexDescriptor?, color: MTLPixelFormat?,
-                  depth: Bool, samples: Int, blend: Bool = false) -> MTLRenderPipelineState? {
-            let d = MTLRenderPipelineDescriptor()
-            d.label = label
-            guard let v = library.makeFunction(name: vs) else { print("MelonRenderer: missing function \(vs)"); return nil }
-            d.vertexFunction = v
-            if let fs {
-                guard let f = library.makeFunction(name: fs) else { print("MelonRenderer: missing function \(fs)"); return nil }
-                d.fragmentFunction = f
-            }
-            d.vertexDescriptor = vd
-            if let color {
-                d.colorAttachments[0].pixelFormat = color
-                if blend {
-                    let c = d.colorAttachments[0]!
-                    c.isBlendingEnabled = true
-                    c.rgbBlendOperation = .add; c.alphaBlendOperation = .add
-                    c.sourceRGBBlendFactor = .one; c.sourceAlphaBlendFactor = .one
-                    c.destinationRGBBlendFactor = .oneMinusSourceAlpha; c.destinationAlphaBlendFactor = .oneMinusSourceAlpha
-                }
-            }
-            if depth { d.depthAttachmentPixelFormat = Self.depthFormat }
-            d.rasterSampleCount = samples
-            do { return try device.makeRenderPipelineState(descriptor: d) }
-            catch { print("MelonRenderer: pipeline \(label) failed: \(error)"); return nil }
-        }
-        let hdr = Self.hdrFormat, ms = Self.msaa
-        guard let a = make("depth", vs: "depthVS", fs: nil, vd: posVD, color: nil, depth: true, samples: 1),
-              let b = make("background", vs: "sceneVsFull", fs: "fsBackground", vd: nil, color: hdr, depth: true, samples: ms),
-              let c = make("props", vs: "vsMesh", fs: "fsProps", vd: meshVD, color: hdr, depth: true, samples: ms),
-              let d = make("back", vs: "backVS", fs: "backFS", vd: posVD, color: .r32Float, depth: true, samples: 1),
-              let e = make("copy", vs: "mainVsFull", fs: "fsCopy", vd: nil, color: hdr, depth: true, samples: ms),
-              let f = make("jelly", vs: "vsJelly", fs: "fsJelly", vd: meshVD, color: hdr, depth: true, samples: ms),
-              let mt = make("matte", vs: "vsJelly", fs: "fsSoftMatte", vd: meshVD, color: hdr, depth: true, samples: ms),
-              let ey = make("eyes", vs: "vsMesh", fs: "fsEyesMatte", vd: meshVD, color: hdr, depth: true, samples: ms),
-              let mtb = Self.makeBathVariant(device: device, library: library, vd: meshVD, mask: 15),
-              let g = make("lines", vs: "vsLine", fs: "fsLine", vd: lineVD, color: hdr, depth: true, samples: ms, blend: true),
-              let h = make("post", vs: "postVS", fs: "postFS", vd: nil, color: colorPixelFormat, depth: false, samples: 1)
-        else { return nil }
-        func makeGfx(_ label: String, fs: String, color: MTLPixelFormat, depth: Bool, samples: Int) -> MTLRenderPipelineState? {
-            let d = MTLRenderPipelineDescriptor()
-            d.label = label
-            d.vertexFunction = library.makeFunction(name: "gfxFullVS"); d.fragmentFunction = library.makeFunction(name: fs)
-            guard d.vertexFunction != nil, d.fragmentFunction != nil else { print("MelonRenderer: missing gfx function \(fs)"); return nil }
-            d.colorAttachments[0].pixelFormat = color
-            if depth { d.depthAttachmentPixelFormat = Self.depthFormat }
-            d.rasterSampleCount = samples
-            return try? device.makeRenderPipelineState(descriptor: d)
-        }
-        guard let cb = makeGfx("room cache blit", fs: "gfxCacheFS", color: hdr, depth: true, samples: ms),
-              let pr = makeGfx("present", fs: "gfxPresentFS", color: colorPixelFormat, depth: false, samples: 1)
-        else { return nil }
-        pCacheBlit = cb; pPresent = pr
-        pMatteBath = mtb
-        pDepth = a; pBackground = b; pProps = c; pBack = d; pCopy = e; pJelly = f; pMatte = mt; pEyes = ey; pLines = g; pPost = h
+        // ── pipelines (built once per process; MelonPipelines.warm() can do it during the launch intro) ──
+        guard let pl = MelonPipelines.set(device: device, library: library, colorPixelFormat: colorPixelFormat) else { return nil }
+        self.meshVD = pl.meshVD
+        pCacheBlit = pl.cacheBlit; pPresent = pl.present
+        pMatteBath = pl.matteBath
+        pDepth = pl.depth; pBackground = pl.background; pProps = pl.props; pBack = pl.back; pCopy = pl.copy; pJelly = pl.jelly; pMatte = pl.matte; pEyes = pl.eyes; pLines = pl.lines; pPost = pl.post
 
         func ds(_ fn: MTLCompareFunction, _ write: Bool) -> MTLDepthStencilState? {
             let d = MTLDepthStencilDescriptor()
@@ -776,7 +708,7 @@ final class MelonRenderer {
 
     /// mask 15: the plain fsSoftMatteBath (the bit-exact reference BathSootSeedZeroTests hashes). Otherwise fsSoftMatteBathSpec with the
     /// soot (1) / foam (2) / wet (4) / sparkle (8) blocks compiled in per `mask` (a specialised build folds a few ulps differently).
-    private static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int) -> MTLRenderPipelineState? {
+    nonisolated static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int) -> MTLRenderPipelineState? {
         let fsOpt: MTLFunction?
         if mask == 15 {
             fsOpt = library.makeFunction(name: "fsSoftMatteBath")

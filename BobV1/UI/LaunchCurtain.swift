@@ -59,7 +59,7 @@ final class LaunchGate {
     func evaluate() {
         guard visible else { return }
         let t = clock(), shown = t - shownAt
-        if shown >= Self.maxShow || (shown >= minNow && ticked && (settleOK || t - settleStart >= Self.settleCap)) { visible = false }
+        if shown >= Self.maxShow || (shown >= minNow && ticked && (settleOK || t - settleStart >= Self.settleCap)) { visible = false; LaunchTiming.mark("curtain lifted (room visible)") }
     }
 }
 

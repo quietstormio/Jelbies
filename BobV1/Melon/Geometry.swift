@@ -678,10 +678,22 @@ func buildAntennaRig(render rm: RenderMesh, sim: SimMesh) -> AntennaRig? {
 
 /// Simulation mesh. Berry (Bob) uses the reference egg; Mint / Honey keep the legacy surface-of-revolution mesh.
 func buildSimMesh(h: Float = 0.2, layers: Int = 7, appearance: BlobAppearance = .berry) -> SimMesh {
-    appearance.breed == .berry ? buildSimMeshBob(h: h, layers: layers) : buildSimMeshLegacy(h: h, layers: layers, appearance: appearance)
+    if appearance.breed == .berry { return h == 0.2 && layers == 7 ? BobMeshCache.sim : buildSimMeshBob(h: h, layers: layers) }
+    return buildSimMeshLegacy(h: h, layers: layers, appearance: appearance)
 }
 func buildRenderMesh(appearance: BlobAppearance = .berry) -> RenderMesh {
-    appearance.breed == .berry ? buildRenderMeshBob() : buildRenderMeshLegacy(appearance: appearance)
+    appearance.breed == .berry ? BobMeshCache.render : buildRenderMeshLegacy(appearance: appearance)
+}
+
+/// Bob's meshes at the default settings, built once per process (the render mesh is ~0.3 s, the embedding ~50 ms). Lazy statics are thread-safe and
+/// a second caller waits for the first instead of building again, so the launch intro can warm them on a background thread (`warm()`) and the room
+/// picks the finished result up. The values are immutable structs (copied on use).
+nonisolated enum BobMeshCache {
+    static let sim = buildSimMeshBob(h: 0.2, layers: 7)
+    static let render = buildRenderMeshBob()
+    static let embedding = embed(simRest: sim.rest, tets: sim.tets, verts: render.rest)
+    /// Builds them all (call off the main thread, at low priority).
+    static func warm() { _ = sim; _ = render; _ = embedding }
 }
 func buildEyeRig(render rm: RenderMesh, sim: SimMesh, appearance: BlobAppearance = .berry) -> EyeRig {
     appearance.breed == .berry ? buildEyeRigBob(render: rm, sim: sim) : buildEyeRigLegacy(render: rm, sim: sim, appearance: appearance)

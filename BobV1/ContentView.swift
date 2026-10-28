@@ -19,7 +19,7 @@ struct ContentView: View {
         } else {
             ZStack {
                 if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
-                    IntroView { withAnimation(.easeInOut(duration: 0.6)) { introOn = false } }.transition(.opacity).zIndex(1)
+                    IntroView { LaunchTiming.mark("intro done"); withAnimation(.easeInOut(duration: 0.6)) { introOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
             }

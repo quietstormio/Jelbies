@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AVFoundation
+import QuartzCore
 
 enum IntroClip {
     /// The clip recoloured for the current theme (one pre-rendered file per preset).
@@ -36,6 +37,8 @@ struct IntroView: View {
     @State private var volume: Float = 0
     @State private var statusObserver: NSKeyValueObservation?
     @State private var endObserver: NSObjectProtocol?
+    @State private var lagProbe: Any?          // times the clip against the wall clock (the warm-up must not make it stutter)
+    @State private var lagWorst = 0.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     private var still: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
 
@@ -82,6 +85,7 @@ struct IntroView: View {
 
     private func start() {
         guard player == nil else { return }
+        IntroWarmup.begin()          // quiet start-up work runs while the clip plays
         guard let url = Bundle.main.url(forResource: IntroClip.resource, withExtension: IntroClip.fileExtension) else { settle(); return }
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
@@ -110,6 +114,15 @@ struct IntroView: View {
         } else {
             ready = true
             p.play()
+            var base: Double?          // wall minus clip time at the first tick; growth beyond it is playback falling behind
+            lagProbe = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { t in
+                MainActor.assumeIsolated {
+                    guard p.rate > 0 else { return }
+                    let off = CACurrentMediaTime() - t.seconds
+                    if base == nil { base = off }
+                    lagWorst = max(lagWorst, off - (base ?? off))
+                }
+            }
         }
     }
 
@@ -157,6 +170,7 @@ struct IntroView: View {
     }
 
     private func teardown() {
+        if let o = lagProbe, let p = player { p.removeTimeObserver(o); lagProbe = nil; NSLog("%@", String(format: "[melon] launch: intro playback: worst lag behind the wall clock %.0f ms", lagWorst * 1000)) }
         player?.pause()
         statusObserver?.invalidate(); statusObserver = nil
         if let o = endObserver { NotificationCenter.default.removeObserver(o); endObserver = nil }
