@@ -228,6 +228,7 @@ final class JelbieA11yContainer {
         default: break
         }
         switch b.idleState.kind {
+        case .decorSit? where b.isStanding: return .standing          // (on a seat with no back he stands on it)
         case .sit?, .decorSit?: return .sitting
         case .wander?, .look?, nil: return .standing
         case .sleep?: return .asleep

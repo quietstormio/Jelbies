@@ -425,6 +425,8 @@ extension BlobBrain {
         guard idleState.kind == .decorSit, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         return f.kind.hopSit
     }
+    /// He is on a seat piece with no backrest (`DecorKind.standsOn`): he stands on it instead of sitting.
+    var isStanding: Bool { isBagSit && sitPiece?.kind.standsOn == true }
     var sitPiece: DecorFoot? { idleState.decorUID >= 0 ? DecorField.shared.foot(idleState.decorUID) : nil }
 
     /// The press of his seat: the beanbag / cushion / pouf / armchair use one sink, the multi-seat pieces a sink per seat.
@@ -511,22 +513,24 @@ extension BlobBrain {
                 bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.quarter == 0 ? f.kind.seatFacing(idleState.seat) : f.yaw + (f.kind.seatFacing(idleState.seat) ?? 0))
             }
         case 2:
-            // in the seat: sits down (two feet slide forward over the lip, the body lowers and leans back), rests, gets up, hops off
+            // in the seat: sits down (two feet slide forward over the lip, the body lowers and leans back), rests, gets up, hops off.
+            // A piece with no backrest: he STANDS (no slide, no lowering, no lean back): a short settle, the balance pose, a short unsettle, the hop off.
             var k = idleState.k
             let phT = idleState.phaseT
+            let stand = f.kind.standsOn
             switch idleState.phase {
             case 1:
-                k = smooth01(phT / 1.15)
-                if !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.35 { idleFootStep(reach: Self.bagFootReach); idleState.steps += 1 }
-                if phT >= 1.15 && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
+                k = smooth01(phT / (stand ? 0.45 : 1.15))
+                if !stand, !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.35 { idleFootStep(reach: Self.bagFootReach); idleState.steps += 1 }
+                if phT >= (stand ? 0.45 : 1.15) && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
             case 2:
                 k = 1
                 if phT >= idleState.hold { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
             default:
-                k = 1 - smooth01(phT / 1.0)
-                if !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
-                if phT >= 1.0 && !feet.active && idleState.steps >= 2 {
-                    idleState.k = 0; sitPose(skinner, 0, slump: false)
+                k = 1 - smooth01(phT / (stand ? 0.4 : 1.0))
+                if !stand, !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
+                if phT >= (stand ? 0.4 : 1.0) && !feet.active && (stand || idleState.steps >= 2) {
+                    idleState.k = 0; if stand { standPose(skinner, 0, f) } else { sitPose(skinner, 0, slump: false) }
                     idleState.bagStage = 3; idleState.phaseT = 0
                     let goal = hopExitSpot(f)          // forward (toward the camera) when it is clear, else the nearest clear side: never onto the plant / cushion beside the piece
                     bagHop(sim, to: goal, ground: 0, apex: Self.bagApexDown + max(0, seatGoal(f).y - 0.45) * 0.3)
@@ -535,21 +539,48 @@ extension BlobBrain {
             }
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
-            sitPose(skinner, k, slump: false)
-            skinner.setEyeOpenness(1 - 0.25 * k)
-            seatMotion(f, k: k)
+            if stand {
+                standPose(skinner, k, f)
+                seatMotion(f, k: k, ride: Self.standRide)
+            } else {
+                sitPose(skinner, k, slump: false)
+                skinner.setEyeOpenness(1 - 0.25 * k)
+                seatMotion(f, k: k)
+            }
         default: break
         }
     }
 
     /// What the seat does to a sitter: a rocking chair / swing rocks (and carries him), a loveseat with a friend on the other cushion leans him toward them.
-    private func seatMotion(_ f: DecorFoot, k: Float) {
+    /// How much of the seat's lean a stander takes (a sitter takes all of it): he looks balanced, not tipped about.
+    static let standRide: Float = 0.6
+
+    /// The stand: upright on the seat (no sit squash, no lowering, no lean back; the soles stay where the hop landed them, so the seat carries them), a small happy
+    /// knee-bob and sway, arms out a little for balance.
+    func standPose(_ skinner: Skinner, _ k: Float, _ f: DecorFoot) {
+        let t = idleState.t
+        let bob = 0.5 - 0.5 * cosf(2 * .pi * t / 1.3)
+        squash *= 1 - 0.04 * k * bob
+        roll += 0.035 * k * sinf(2 * .pi * t / 2.6)
+        decorSitPress(f.uid, 0.3 * k)
+        if k > 0.55, !idleState.decorBooped { idleState.decorBooped = true; AudioHub.shared.play(.beanbagSit, jelly: steerID, x: px) }
+        let sway = sinf(2 * .pi * t / 2.6)
+        armDirW = smooth01(k)
+        armDirEl = [0.42 + 0.06 * sway, 0.42 - 0.06 * sway]; armDirSa = [0.10, 0.10]; armDirOut = 0.12
+    }
+
+    private func seatMotion(_ f: DecorFoot, k: Float, ride: Float = 1) {
+        let pitch0 = pitch, roll0 = roll
+        // (a stander leans with a swinging / bouncing seat `ride` as much as a sitter; on a TILTING plank or saddle (seesaw, horse, rocket) he tilts with it fully, so both soles stay flat on it)
+        let flat = f.kind.standsOn && (f.kind == .seesaw || f.kind.rockRide)
+        defer { if ride != 1 { pitch = pitch0 + (pitch - pitch0) * ride; if !flat { roll = roll0 + (roll - roll0) * ride } } }
         let uid = f.uid
         if f.kind == .sandbox { DecorField.shared.rock(uid, idleState.phase == 2 ? 1 : 0.4) }          // (digging: the sand puffs)
         if f.kind.parkRocker {
             let on = idleState.phase == 2 && k > 0.5 || idleState.phase == 1 && k > 0.3
             DecorField.shared.rock(uid, on ? 1 : 0.35)
             seatFollow(f)
+            if f.kind == .seesaw, f.kind.standsOn { roll += DecorModels.seesawAngle(DecorField.shared.anim[uid] ?? DecorAnim()) }          // (the plank tilts under his feet about its z axis = his roll)
             if f.kind == .springrider { pitch += DecorModels.springAngle(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9 }
         }
         if f.kind.rockRide {
@@ -557,7 +588,8 @@ extension BlobBrain {
             let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3
             DecorField.shared.rock(uid, on ? 1 : 0.35)
             seatFollow(f)
-            pitch += DecorModels.arcTheta(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9
+            let th = DecorModels.arcTheta(DecorField.shared.anim[uid] ?? DecorAnim())
+            if f.kind.standsOn { roll -= th } else { pitch += th * 0.9 }          // (a stander faces the camera: the rock about the piece's z axis is his roll)
         }
         if f.kind == .rockingchair || f.kind == .swing {
             let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3

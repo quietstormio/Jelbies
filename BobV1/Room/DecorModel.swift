@@ -147,10 +147,10 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .bouncymat: return "A big springy mat. Jelbies hop on it and it dips."
         case .loveseat: return "A two-seat sofa. Two friends hop up and cuddle."
         case .petbed: return "A cosy pet bed. A sleepy Jelbie hops in and curls up."
-        case .pouf: return "A round pouf. Jelbies hop on and sit."
+        case .pouf: return "A round pouf. Jelbies hop on and stand on it."
         case .rockingchair: return "Jelbies sit in it and the chair rocks."
         case .armchair: return "A comfy armchair. Jelbies hop up and sit."
-        case .swing: return "A swing for two. Jelbies sit and sway."
+        case .swing: return "A swing for two. Jelbies stand on it and sway."
         case .diningset: return "A little table with two stools, one seat for each Jelbie."
         case .bookshelf: return "Jelbies lean in to look at the books."
         case .wardrobe: return "Jelbies peek at the clothes inside; the door swings."
@@ -190,12 +190,12 @@ extension DecorKind {
     private var baseSitPoints: [SIMD3<Float>] {
         switch self {
         case .beanbag: return [SIMD3(0, DecorModels.bagSeatY, DecorModels.bagSeatZ)]
-        case .pouf: return [SIMD3(0, 0.45, 0)]
+        case .pouf: return [SIMD3(0, 0.47, 0)]          // (stood on: the cushion top is 0.60 world)
         case .armchair: return [SIMD3(0, 0.52, 0.3)]
         case .loveseat: return [SIMD3(-0.57, 0.52, 0.3), SIMD3(0.57, 0.52, 0.3)]          // (x 1.4x: seats 1.6 apart, two bodies of ~1.3 do not touch)
         case .diningset: return [SIMD3(-0.85, 0.47, 0), SIMD3(0.85, 0.47, 0)]
         case .rockingchair: return [SIMD3(0, 0.6, 0.2)]
-        case .swing: return [SIMD3(-0.62, 0.6, 0), SIMD3(0.62, 0.6, 0)]
+        case .swing: return [SIMD3(-0.60, 0.6, 0), SIMD3(0.60, 0.6, 0)]          // (standing: the ropes hang at x +-1.2..1.4 world; two bodies of ~1.0 across clear them and each other)
         default: return batch3SitPoints
         }
     }
@@ -203,12 +203,24 @@ extension DecorKind {
     /// How far behind the slide's centre he stands to climb it (the JSON's approach point, scaled).
     static let slideApproach: Float = (1.28 * DecorKind.slide.scale) + 0.57
     static let sleepPoint = SIMD3<Float>(0, 0.12 * DecorKind.petbed.scale, 0.05)
-    /// The seat faces this way (yaw about +y from +z): the dining stools face the table, everything else the camera.
-    func seatFacing(_ seat: Int) -> Float? { self == .diningset ? (seat == 0 ? .pi / 2 : -.pi / 2) : (rockRide ? .pi / 2 : nil) }
+    /// The seat faces this way (yaw about +y from +z); nil = the camera (every seat now: the sat-on pieces have a back that sets the way, the stood-on ones
+    /// are faced front, also the stools (they used to face the table) and the horse / rocket (they used to be ridden side-on to the rock)).
+    func seatFacing(_ seat: Int) -> Float? { nil }
     /// Sideways distance from the piece's centre to where a Jelly stands for it (the seat off to one side).
     var standOffsetX: Float { sitPoints.map { abs($0.x) }.max() ?? 0 }
     /// A piece a Jelly hops onto (a bottom-sit on its seat point, like the beanbag) as opposed to the cushion's plain sit.
     var hopSit: Bool { !sitPoints.isEmpty }
+    /// The piece has a real backrest behind its seat point (the beanbag's raised crest counts: it is a back he leans into). Only these are SAT on.
+    var hasBackrest: Bool {
+        switch self {
+        case .beanbag, .armchair, .loveseat, .rockingchair: return true
+        default: return false
+        }
+    }
+    /// A hop-sit piece with no backrest (pouf, stools, swing, cushion pile, rocking horse, rocket, seesaw, spring bunny, sandbox): he hops up as usual but STANDS on it, upright,
+    /// both feet planted on the seat inside its footprint, a small knee-bob and arms out for balance, riding the seat's motion a little less than a sitter. One rule for
+    /// every Jelbie (the player's, the park visitors) and every new piece: a new `sitPoints` piece without a back stands without any other change.
+    var standsOn: Bool { hopSit && !hasBackrest }
     /// The pieces whose Jelly behaviour is wired (the rest are scenery that is walked round).
     static let wired: Set<DecorKind> = Set(DecorKind.allCases)
     /// What a Jelly may actually pick with it right now (`interaction` for a wired piece).
