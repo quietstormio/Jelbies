@@ -8,7 +8,7 @@ import Foundation
 nonisolated enum SFX: String, CaseIterable, Sendable {
     case squish, boop, wobble, letgo, footstep, zoomies, jump, chomp, slurp, setdown, splash, soapbubbles, bubblepop
     case lintroller, sparkle, snore, uitap, uiconfirm, coin, select
-    /// Spending JellyCoins (purchase_1/2: a bright register "ka-ching" with coins; coin_1...3 are the lighter earn clinks).
+    /// Spending JellyCoins (purchase_1: a toy register bell with a tiny coin jingle; coin_1...3 are the lighter earn clinks).
     case purchase
     /// Jelly Circuit cues (files countdown_beep_N, race_go_N, race_finish_N, stumble_N).
     case countdownBeep = "countdown_beep", raceGo = "race_go", raceFinish = "race_finish", stumble
