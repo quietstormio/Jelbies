@@ -13,6 +13,8 @@ import simd
 final class CartwheelStressTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
 
+    /// 2026-10-28: in the cartwheel's flight the legs are splayed in a V (BlobBrain.splayAngle): the sole / centre rise in the body frame by up to this much more than the walk's low-foot limits.
+    static let splayAllowance: Float = 0.04
     struct Verdict { var frames = 0, bad = 0, cartwheels = 0, noStart = 0; var worst = ""; var worstOverlap: Float = -.infinity; var byEntry: [String: Int] = [:] }
 
     static func lcg(_ s: inout UInt64) -> Float { s = s &* 6364136223846793005 &+ 1442695040888963407; return Float((s >> 40) & 0xFFFFFF) / Float(0x1000000) }
@@ -70,7 +72,7 @@ final class CartwheelStressTests: XCTestCase {
                 if beans {
                     // (after the move the walk / run it resumes may swing a foot higher than the move's own limit: only the attachment is judged then)
                     let during = r.brain.idleState.kind == .cartwheel
-                    detached = f.overlap > FeetAttachTests.minOverlap || f.radius > FeetAttachTests.maxRadius || (during && (f.centreHeight > FeetAttachTests.maxCentreHeight || f.soleRise > FeetAttachTests.maxSoleRise))
+                    detached = f.overlap > FeetAttachTests.minOverlap || f.radius > FeetAttachTests.maxRadius || (during && (f.centreHeight > FeetAttachTests.maxCentreHeight + Self.splayAllowance || f.soleRise > FeetAttachTests.maxSoleRise + Self.splayAllowance))
                 }
                 else { detached = f.stretch > FeetAttachTests.maxCoreStretch || f.overlap > FeetAttachTests.minCoreOverlap }
                 v.frames += 1
