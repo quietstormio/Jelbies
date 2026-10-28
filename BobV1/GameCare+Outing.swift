@@ -15,7 +15,7 @@ import simd
 enum OutingTuning {
     /// `cutZ`: the fade starts when the last runner passes this depth (he is still on screen, mid-stride). `targetZ`: the run's goal, far past the camera / the front edge, so
     /// nobody ARRIVES (an arrival is what used to stop them: the goal sat just off the front edge and the leaders stood idle there while the fade waited for the last one).
-    static let cutZ: Float = 4.6, targetZ: Float = 18, timeout: Float = 6, stagger: Float = 0.08, maxDelay: Float = 0.9, runSpeed: Float = 1.75
+    static let cutZ: Float = 4.6, targetZ: Float = 18, timeout: Float = 6, stagger: Float = 0.08, runSpeed: Float = 1.75
     /// How long after the fade starts the runners are kept running (the longest fade-out is 0.5 s; the swap comes right after it).
     static let keepRunning: Float = 0.9
     static let tidyDelay: Float = 1.8
@@ -23,7 +23,7 @@ enum OutingTuning {
 
 @MainActor
 final class OutingBook {
-    struct Runner { var delay: Float; var lane: Float = 0; var started = false; var swapped = false; var last = SIMD2<Float>.zero; var autonomy = true; var home = SIMD2<Float>.zero }
+    struct Runner { var delay: Float; var lane: Float = 0; var pace: Float = 1; var started = false; var swapped = false; var last = SIMD2<Float>.zero; var autonomy = true; var home = SIMD2<Float>.zero }
     var keepT: Float = 0
     var lifted: Set<Int> = []
     var runners: [Int: Runner] = [:]
@@ -57,8 +57,10 @@ extension GameCare {
         let far = going.map { OutingTuning.cutZ - $0.floor.y }.max() ?? 0
         for (k, a) in byX.enumerated() {
             let lane = max(-2.4, min(2.4, a.floor.x * 0.9 + (Float(k) - Float(going.count - 1) / 2) * 0.5))
-            let wait = min(OutingTuning.maxDelay, max(0, (far - (OutingTuning.cutZ - a.floor.y)) / OutingTuning.runSpeed))
-            o.runners[a.id] = OutingBook.Runner(delay: wait + Float(k) * OutingTuning.stagger, lane: lane)
+            // nobody waits: starts are 0.08 s apart per rank; the arrival is evened out by pace instead (the farthest runs 10 % faster, the nearest 10 % slower)
+            let d = OutingTuning.cutZ - a.floor.y
+            let pace = far > 0.5 ? 0.9 + 0.2 * max(0, min(1, d / far)) : 1
+            o.runners[a.id] = OutingBook.Runner(delay: Float(k) * OutingTuning.stagger, lane: lane, pace: pace)
         }
         o.keepT = 0
         for a in actors where !ids.contains(a.id) {          // the ones who stay: watch and cheer them off
@@ -81,7 +83,7 @@ extension GameCare {
                     r.started = true; r.autonomy = b.autonomy; r.home = a.floor
                     o.lifted.insert(id); a.sim.arenaSuspended = true
                     b.autonomy = false
-                    b.hurry = true
+                    b.hurry = true; b.outingPace = r.pace
                     b.requestNow(.goTo(SIMD2(r.lane, OutingTuning.targetZ)))
                     o.runners[id] = r
                 }
@@ -133,7 +135,7 @@ extension GameCare {
             a.outingHome = nil
             a.sim.arenaSuspended = false
             guard let b = a.brain else { continue }
-            b.hurry = false
+            b.hurry = false; b.outingPace = 1
             if o.runners[a.id]?.started == true, !busy, GameCare.floorPos(b, a.sim).y > GameCamera.walkMaxZ {
                 rehome(a, at: b.fixed(o.runners[a.id]?.home ?? Self.greetSpot(a.id)))
                 b.restTimer = 1
