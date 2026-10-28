@@ -170,16 +170,20 @@ final class ToyPlayTests: XCTestCase {
         XCTAssertGreaterThan(gapMin, 0.55, "nobody stands in anybody")
     }
 
-    func testTwoJelbiesSitTogetherOnTheCushionPile() {
+    /// The cushion pile has one flat top: ONE Jelbie stands on it at a time (a second pair of feet would hang off its sloping end); the other waits for a turn.
+    func testTheCushionPileTakesOneStanderAtATime() {
+        XCTAssertTrue(DecorKind.cushionpile.standsOn)
+        XCTAssertEqual(DecorKind.cushionpile.sitPoints.count, 1)
         let lab = lab(2, .cushionpile, at: SIMD2(2.4, 0.2))
-        var both = 0, seats = Set<Int>()
-        for _ in 0..<(60 * 40) {
+        var both = 0, turns = Set<Int>()
+        for _ in 0..<(60 * 60) {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
             let on = lab.rigs.map { $0.brain.idleState.kind == .decorSit && $0.brain.idleState.bagStage == 2 }
-            if on[0] && on[1] { both += 1; seats = [lab.rigs[0].brain.idleState.seat, lab.rigs[1].brain.idleState.seat] }
+            if on[0] && on[1] { both += 1 }
+            for (i, o) in on.enumerated() where o { turns.insert(i) }
         }
-        Self.write("pile-together.txt", "both seated frames \(both) seats \(seats)")
-        XCTAssertGreaterThan(both, 60, "both sit on it together")
-        XCTAssertEqual(seats, [0, 1])
+        Self.write("pile-together.txt", "both on frames \(both) turns \(turns)")
+        XCTAssertEqual(both, 0, "never two on the one seat")
+        XCTAssertFalse(turns.isEmpty, "someone stands on it")
     }
 }

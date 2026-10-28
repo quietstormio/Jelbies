@@ -103,7 +103,7 @@ final class FurnitureInteractionTests: XCTestCase {
         XCTAssertTrue(DecorField.shared.available(f))
         DecorField.shared.take(7, seat: 1, by: 2)
         XCTAssertFalse(DecorField.shared.available(f), "both stools taken")
-        XCTAssertEqual(DecorKind.diningset.seatFacing(0), .pi / 2); XCTAssertEqual(DecorKind.diningset.seatFacing(1), -.pi / 2)
+        XCTAssertTrue(DecorKind.diningset.standsOn, "the backless stools are stood on"); XCTAssertNil(DecorKind.diningset.seatFacing(0)); XCTAssertNil(DecorKind.diningset.seatFacing(1))          // (standing: he faces the camera, no longer the table)
         _ = r
     }
 

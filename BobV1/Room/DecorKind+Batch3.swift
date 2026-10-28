@@ -37,8 +37,8 @@ extension DecorKind {
     /// The cushion pile is hopped onto and sat on (its soft top, 0.60 up): two seats side by side, so two Jelbies sit together on it (2026-10-25).
     var batch3SitPoints: [SIMD3<Float>] {
         switch self {
-        case .cushionpile: return [SIMD3(-0.5, 0.60, 0), SIMD3(0.5, 0.60, 0)]
-        case .rockinghorse: return [SIMD3(0.0, 0.97, 0)]          // (the saddle: he sits astride and rocks with it)
+        case .cushionpile: return [SIMD3(-0.05, 0.67, 0)]          // (one stander on the flat top, 0.66-0.68 across x -0.5...0.4; the ends fall away to 0.45, too far for a second pair of feet)
+        case .rockinghorse: return [SIMD3(-0.15, 0.99, 0)]          // (the saddle, flat at 0.99 for x -0.5...0.2 and behind the neck, which rises from x 0.3: he stands on it, camera-facing, rocking side to side)
         default: return batch4SitPoints
         }
     }
@@ -63,7 +63,7 @@ extension DecorKind {
     var batch3Use: String {
         switch self {
         case .roundtable: return "A little round table with a vase of flowers."
-        case .cushionpile: return "A squashy stack of cushions. Jelbies hop on and sit."
+        case .cushionpile: return "A squashy stack of cushions. A Jelbie hops on and stands on top."
         case .aquarium: return "A fish tank. Jelbies lean in to watch, and the fish dart about."
         case .plantstand: return "A fern on a stand. Jelbies boop it and the fronds sway."
         case .easel: return "A painting on an easel. Jelbies step up to look."
