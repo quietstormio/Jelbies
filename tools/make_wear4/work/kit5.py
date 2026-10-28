@@ -162,21 +162,13 @@ def dome_round(name, c, r, color, segs=8):
 PIP_MODE = False
 
 def pip_back_height():
-    """Height Pip's neck loops must reach at the back centre to pass just above his topmost back spike. DATA-DRIVEN: read from BobV1/Features/PipOptions.swift
-    (the spike's place `root.y + f * (top - root.y)`, its height H and base radius H / 2), so a respaced spike row moves the loops with it."""
-    import re
-    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
-    f, H = 0.5, 0.20
-    try:
-        src = open(os.path.join(root, 'BobV1', 'Features', 'PipOptions.swift')).read()
-        fs = [float(m) for m in re.findall(r'sh\.root\.y\)\s*\+\s*([0-9.]+)\s*\*\s*\(Double\(spec\.top\)\s*-\s*sh\.root\.y\)', src)]
-        if fs: f = max(fs)
-        hm = re.search(r'let H: Float = ([0-9.]+)', src)
-        if hm: H = float(hm.group(1))
-    except OSError:
-        pass
-    y_s = 0.47 + f * (B.top - 0.47)
-    return y_s + H / 2.0 + 0.075            # the spike's top (base radius H/2) plus room for the loop's own thickness
+    """Height Pip's neck loops must reach at the back centre to pass just above his topmost back spike. DATA-DRIVEN from the SHIPPED geometry: the Swift test
+    WearSweepTests.testDumpPipGeometry writes the real spike vertices (PipOptions + TailBean) to art/pip_geometry.json; rerun it when the spike row changes."""
+    import json
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'art', 'pip_geometry.json')
+    g = json.load(open(path))
+    ys = [v[1] for v in g['spikeVertices'] if v[1] > 0.52 and v[2] < -0.3 and abs(v[0]) < 0.25]
+    return max(ys) + 0.045
 
 _PIP_H = None
 

@@ -347,4 +347,23 @@ final class WearSweepTests: XCTestCase {
         }
         try write(stack(rows, header: "Held-back pieces at game-camera distance: Bob, Pip, Moss, Lavender (front | 3/4)"), d + "/wear4_five_game_distance.png")
     }
+
+    /// Writes Pip's shipped spike + tail geometry (rest space) to WEAR4_DIR/pip_geometry.json: the Blender generator of the Pip wardrobe variants clears it
+    /// (tools/make_wear4/work/kit5.py reads tools/make_wear4/art/pip_geometry.json), so a respaced spike row or a new tail moves the variants with it.
+    func testDumpPipGeometry() throws {
+        let d = try dir()
+        guard let p = FeatureMeshes.prepare(.spines, placement: FeatureMeshes.Placement(), body: WearBody.shared) else { return XCTFail("no spines") }
+        var spikes: [[Float]] = []
+        for (k, part) in p.parts.enumerated() where part.name.hasPrefix("spike") || part.name.hasPrefix("tail") {
+            _ = k
+            for v in part.first..<(part.first + part.count) { let r = p.rest[v]; spikes.append([r.x, r.y, r.z]) }
+        }
+        let sh = TailBean.shape
+        var spheres: [[Double]] = []
+        var t = 0.0
+        while t <= sh.length { let c = sh.point(t); spheres.append([c.x, c.y, c.z, sh.radius(t) * sh.ys]); t += 0.02 }
+        let obj: [String: Any] = ["spikeVertices": spikes, "tailSpheres": spheres, "restTop": Double(FeatureSpec.shared.top)]
+        try JSONSerialization.data(withJSONObject: obj).write(to: URL(fileURLWithPath: d + "/pip_geometry.json"))
+        MotionLog.write("PIPGEOM \(spikes.count) spike vertices, \(spheres.count) tail spheres")
+    }
 }
