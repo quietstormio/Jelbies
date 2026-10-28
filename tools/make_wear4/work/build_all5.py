@@ -40,3 +40,9 @@ for m in mods:
         reset(); meta = fn(**kw); a = meta.pop('anchor_rest', None) or anchor
         meta['colourway'] = iid
         info = export(iid, a, meta, outdir=W + "/variants"); print("EXPORT", iid, info['tris'], info['verts'], flush=True)
+
+try:
+    import kit5
+    print("PIPGAPS (y_lo, y_hi, gap) on Pip's back centre line:", [tuple(round(x, 3) for x in g) for g in kit5.pip_gap_report()])
+except Exception as e:
+    print("PIPGAPS failed", e)

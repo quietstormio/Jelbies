@@ -75,7 +75,7 @@ def scarf(a=CORAL,b=CREAM,**k):
     reset()
     K=12; NS=33; PH0=-62.0; PH1=298.0
     TN=0.052; VH=0.060
-    def yfn(ph): return 0.466+0.046*math.cos(ph)**2+__import__('kit5').pip_rise(ph)
+    def yfn(ph): return 0.466+0.046*math.cos(ph)**2+__import__('kit5').pip_rise(ph, 0.466)
     def rr_k(kk): return 1.0 if kk%2==0 else 0.80
     def pt(i,j):
         ph=math.radians(PH0+(PH1-PH0)*j/(NS-1)); u=j/(NS-1)

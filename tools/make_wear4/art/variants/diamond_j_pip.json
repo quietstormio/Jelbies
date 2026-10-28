@@ -1,17 +1,17 @@
 {
  "id": "diamond_j_pip",
  "tris": 2948,
- "verts": 2173,
+ "verts": 2111,
  "parts": [
   {
    "name": "gemC0",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC1",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC2",
@@ -136,67 +136,67 @@
   {
    "name": "gemC26",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC27",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC28",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC29",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC30",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC31",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC32",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC33",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC34",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC35",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC36",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC37",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC38",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC39",
@@ -211,12 +211,12 @@
   {
    "name": "gemC41",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC42",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC43",
@@ -231,57 +231,57 @@
   {
    "name": "gemC45",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC46",
    "tris": 36,
-   "verts": 23
+   "verts": 21
   },
   {
    "name": "gemC47",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC48",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC49",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC50",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC51",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC52",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC53",
    "tris": 36,
-   "verts": 23
+   "verts": 20
   },
   {
    "name": "gemC54",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "gemC55",
    "tris": 36,
-   "verts": 21
+   "verts": 20
   },
   {
    "name": "jbase",
@@ -340,19 +340,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6193,
+  -0.6238,
   -0.3454,
-  -0.831
+  -1.0097
  ],
  "bounds_local_max": [
-  0.6193,
-  0.8657,
+  0.6238,
+  0.5876,
   0.0924
  ],
  "size": [
-  1.2385,
-  1.2111,
-  0.9234
+  1.2476,
+  0.933,
+  1.1021
  ],
  "anchor": "neck",
  "slot": "neck",

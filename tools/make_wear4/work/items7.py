@@ -233,7 +233,7 @@ def lei(cols=None, leaf=MINT, **k):
     reset(); cols = cols or [CORAL, PINK, HONEY, LAV, CORAL, PINK, HONEY, LAV]
     NF = len(cols)
     def ring_y(phi):
-        s = max(0.0, math.sin(phi)); return 0.462 - 0.062 * s ** 2 + pip_rise(phi)
+        s = max(0.0, math.sin(phi)); return 0.462 - 0.062 * s ** 2 + pip_rise(phi, 0.462)
     pts = []
     for i in range(37):
         phi = 2 * math.pi * i / 36; e = B.egg_point(ring_y(phi), phi); pts.append(e + hdir(e) * 0.040)

@@ -161,24 +161,72 @@ def dome_round(name, c, r, color, segs=8):
 
 PIP_MODE = False
 
-def pip_back_height():
-    """Height Pip's neck loops must reach at the back centre to pass just above his topmost back spike. DATA-DRIVEN from the SHIPPED geometry: the Swift test
-    WearSweepTests.testDumpPipGeometry writes the real spike vertices (PipOptions + TailBean) to art/pip_geometry.json; rerun it when the spike row changes."""
-    import json
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'art', 'pip_geometry.json')
-    g = json.load(open(path))
-    ys = [v[1] for v in g['spikeVertices'] if v[1] > 0.52 and v[2] < -0.3 and abs(v[0]) < 0.25]
-    return max(ys) + 0.045
+_GEO = None
+def pip_geo():
+    global _GEO
+    if _GEO is None:
+        import json
+        _GEO = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'art', 'pip_geometry.json')))
+    return _GEO
 
-_PIP_H = None
+def pip_gap_report(natural=0.56):
+    """Gaps along Pip's back centre line (|x|<0.12, behind the body), from the SHIPPED spike vertices: [(y_lo, y_hi, gap)], bottom to top, plus the tail spheres'
+    top at the root. Printed by build_all5 so the spike row can be adjusted if a gap is too narrow for a neck cord."""
+    g = pip_geo()
+    sv = sorted([v for v in g['spikeVertices'] if abs(v[0]) < 0.12 and v[2] < -0.3], key=lambda v: v[1])
+    cl = []; cur = [sv[0]]
+    for v in sv[1:]:
+        if v[1] - cur[-1][1] > 0.012: cl.append(cur); cur = [v]
+        else: cur.append(v)
+    cl.append(cur)
+    spans = [(c[0][1], c[-1][1]) for c in cl]
+    return [(spans[i][1], spans[i + 1][0], spans[i + 1][0] - spans[i][1]) for i in range(len(spans) - 1)]
 
-def pip_rise(phi):
-    """Pip variants only: the WHOLE loop is tilted smoothly (front at its normal height, rising round the sides to pass just above his back spike at the
-    back centre): (1 - sin phi) / 2 of the way from the front height to the back clearance. No peak, no kink."""
-    global _PIP_H
+_PIP_YB = {}
+PIP_THREAD = 0.024                      # the cord's half-thickness where it threads a gap (the piece is squashed vertically to this across the crossing)
+
+def pip_back_y(rad=None, natural=0.56):
+    """The height at which a neck cord crosses Pip's back centre line: the centre of the nearest spike gap (at or above `natural`) that is wide enough for a
+    cord of half-thickness PIP_THREAD and not blocked by the tail root's swell. DATA-DRIVEN from art/pip_geometry.json (gap list: pip_gap_report)."""
+    if natural in _PIP_YB: return _PIP_YB[natural]
+    g = pip_geo()
+    tl = np.array([s for s in g['tailSpheres'] if float(B.sdf(s[0], s[1], s[2])) > 0.0])
+    best = None
+    for lo, hi, gap in pip_gap_report():
+        c = 0.5 * (lo + hi)
+        if c < natural or gap < 2 * PIP_THREAD + 0.012: continue
+        t = (c - B.lift) / B.bodyH
+        p = np.array([0.0, c, -float(B.halfDepth(t)) - 0.04])
+        if np.all(np.linalg.norm(tl[:, :3] - p, axis=1) > tl[:, 3] + PIP_THREAD + 0.01):
+            best = c; break
+    if best is None: best = natural
+    _PIP_YB[natural] = best
+    return best
+
+def pip_squash(parts_filter=None, natural=0.56):
+    """Squash every vertex of the current PARTS that crosses Pip's back centre line (|x| < 0.16, behind the body) vertically about the gap height, so a
+    cord of any thickness threads the gap between two spikes."""
+    Yb = pip_back_y(None, natural)
+    for part in PARTS:
+        P = []
+        for q in part['P']:
+            if abs(q[0]) < 0.16 and q[2] < -0.3 and abs(q[1] - Yb) < 0.2:
+                w = math.exp(-(q[0] / 0.10) ** 4)
+                s = 1.0 - w * (1.0 - min(1.0, PIP_THREAD / max(PIP_RAD, 1e-6)))
+                P.append((q[0], Yb + (q[1] - Yb) * s, q[2]))
+            else: P.append(q)
+        part['P'] = P
+
+PIP_MODE = False
+PIP_RAD = 0.04
+
+def pip_rise(phi, natural=0.56):
+    """Pip variants only: the loop keeps the SAME height as on the other Jelbies all the way round and takes one small smooth bump where it crosses his back
+    centre line, threading the gap between two back spikes (height from the real geometry). No tilt, no halo."""
     if not PIP_MODE: return 0.0
-    if _PIP_H is None: _PIP_H = pip_back_height()
-    return (_PIP_H - 0.50) * (1.0 - math.sin(phi)) / 2.0
+    th = (phi - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi
+    dy = pip_back_y(None, natural) - natural
+    return dy * math.exp(-(th / 0.70) ** 2)
 
 def neck_y(phi, front, side=0.50, back=0.56):
     """Height of a neck-line loop round the body at angle phi (pi/2 = front): dips to `front` at the front, `side` round the sides, rises to `back` at

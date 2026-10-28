@@ -186,13 +186,20 @@ def diamond_j(**k):
     return dict(anchor='neck', slot='neck', tags=['sparkly', 'cool'], price=450, title='Diamond J chain',
                 desc='A fine iced-out tennis chain of fifty-six small round brilliants set shoulder to shoulder in one continuous loop round the body at the neck line (no wire), near-white and lifted so they never grey in shade, with a big bold J pendant in solid mirror white gold with a polished bevel and a micro-sparkle pave face, on a bail at the front centre (below the mouth keep-out). The stones and four accent stones twinkle (Swift adds the glints). The hero item: its own budget (2500 vertices / 3800 triangles).')
 
-def pipify(fn):
-    """The Pip variant of a neck loop: the same piece built with the loop arching over his tail root and back spike (kit5.pip_rise)."""
+nat_of = {'scarf': 0.466, 'lei': 0.462}
+
+def pipify(fn, rad=0.045):
+    """The Pip variant of a neck loop: the same piece at the SAME height, with one small smooth bump where it crosses his back centre line to thread a gap
+    between two real back spikes (kit5.pip_rise / pip_back_y read art/pip_geometry.json). `rad` = the cord's thickness there."""
     def f(**kw):
         import kit5
-        kit5.PIP_MODE = True
+        kit5.PIP_MODE = True; kit5.PIP_RAD = rad
         try:
-            return fn(**kw)
+            meta = fn(**kw)
+            for nat in (0.56, 0.466, 0.462):
+                pass
+            kit5.pip_squash(natural=nat_of.get(fn.__name__, 0.56))
+            return meta
         finally:
             kit5.PIP_MODE = False
     return f
@@ -214,16 +221,16 @@ REG = [
 
 import items7
 VARIANTS = [
-    ('chain_gold_pip', pipify(chain_gold), dict(), NECK_ANCHOR),
-    ('scarf_silk_pip', pipify(scarf_silk), dict(), NECK_ANCHOR),
-    ('pearls_pip', pipify(pearls), dict(), NECK_ANCHOR),
-    ('whistle_coach_pip', pipify(whistle), dict(), NECK_ANCHOR),
-    ('bowtie_pink_pip', pipify(bow_tie_band), dict(main=PINK), NECK_ANCHOR),
-    ('bowtie_sky_pip', pipify(bow_tie_band), dict(main=SKY), NECK_ANCHOR),
-    ('diamond_j_pip', pipify(diamond_j), dict(), NECK_ANCHOR),
-    ('scarf_cosy_pip', pipify(items3.scarf), dict(), NECK_ANCHOR),
-    ('scarf_sky_pip', pipify(items3.scarf), dict(a=SKY, b=CREAM), NECK_ANCHOR),
-    ('bandana_coral_pip', pipify(items7.bandana), dict(main=CORAL), NECK_ANCHOR),
-    ('bandana_mint_pip', pipify(items7.bandana), dict(main=MINT), NECK_ANCHOR),
-    ('lei_pip', pipify(items7.lei), dict(), NECK_ANCHOR),
+    ('chain_gold_pip', pipify(chain_gold, 0.074), dict(), NECK_ANCHOR),
+    ('scarf_silk_pip', pipify(scarf_silk, 0.07), dict(), NECK_ANCHOR),
+    ('pearls_pip', pipify(pearls, 0.05), dict(), NECK_ANCHOR),
+    ('whistle_coach_pip', pipify(whistle, 0.03), dict(), NECK_ANCHOR),
+    ('bowtie_pink_pip', pipify(bow_tie_band, 0.04), dict(main=PINK), NECK_ANCHOR),
+    ('bowtie_sky_pip', pipify(bow_tie_band, 0.04), dict(main=SKY), NECK_ANCHOR),
+    ('diamond_j_pip', pipify(diamond_j, 0.05), dict(), NECK_ANCHOR),
+    ('scarf_cosy_pip', pipify(items3.scarf, 0.075), dict(), NECK_ANCHOR),
+    ('scarf_sky_pip', pipify(items3.scarf, 0.075), dict(a=SKY, b=CREAM), NECK_ANCHOR),
+    ('bandana_coral_pip', pipify(items7.bandana, 0.045), dict(main=CORAL), NECK_ANCHOR),
+    ('bandana_mint_pip', pipify(items7.bandana, 0.045), dict(main=MINT), NECK_ANCHOR),
+    ('lei_pip', pipify(items7.lei, 0.05), dict(), NECK_ANCHOR),
 ]
