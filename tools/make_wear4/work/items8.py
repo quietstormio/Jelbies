@@ -196,9 +196,7 @@ def pipify(fn, rad=0.045):
         kit5.PIP_MODE = True; kit5.PIP_RAD = rad
         try:
             meta = fn(**kw)
-            for nat in (0.56, 0.466, 0.462):
-                pass
-            kit5.pip_squash(natural=nat_of.get(fn.__name__, 0.56))
+            kit5.tail_over()
             return meta
         finally:
             kit5.PIP_MODE = False
@@ -220,17 +218,6 @@ REG = [
 ]
 
 import items7
-VARIANTS = [
-    ('chain_gold_pip', pipify(chain_gold, 0.074), dict(), NECK_ANCHOR),
-    ('scarf_silk_pip', pipify(scarf_silk, 0.07), dict(), NECK_ANCHOR),
-    ('pearls_pip', pipify(pearls, 0.05), dict(), NECK_ANCHOR),
-    ('whistle_coach_pip', pipify(whistle, 0.03), dict(), NECK_ANCHOR),
-    ('bowtie_pink_pip', pipify(bow_tie_band, 0.04), dict(main=PINK), NECK_ANCHOR),
-    ('bowtie_sky_pip', pipify(bow_tie_band, 0.04), dict(main=SKY), NECK_ANCHOR),
-    ('diamond_j_pip', pipify(diamond_j, 0.05), dict(), NECK_ANCHOR),
-    ('scarf_cosy_pip', pipify(items3.scarf, 0.075), dict(), NECK_ANCHOR),
-    ('scarf_sky_pip', pipify(items3.scarf, 0.075), dict(a=SKY, b=CREAM), NECK_ANCHOR),
-    ('bandana_coral_pip', pipify(items7.bandana, 0.045), dict(main=CORAL), NECK_ANCHOR),
-    ('bandana_mint_pip', pipify(items7.bandana, 0.045), dict(main=MINT), NECK_ANCHOR),
-    ('lei_pip', pipify(items7.lei, 0.05), dict(), NECK_ANCHOR),
-]
+# Pip neck variants are gone: the loops keep their natural height; a covered spike hides (FeatureCompat.coveredSpikes). tail_over (kit5) was tried and dropped:
+# pushing the sparse tube vertices out of the tail sphere stretches them into sheets.
+VARIANTS = []

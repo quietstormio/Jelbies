@@ -183,6 +183,7 @@ def pip_gap_report(natural=0.56):
     return [(spans[i][1], spans[i + 1][0], spans[i + 1][0] - spans[i][1]) for i in range(len(spans) - 1)]
 
 _PIP_YB = {}
+PIP_BUMP = False                        # the old gap-threading bump (superseded by tail_over + covered-spike hiding)
 PIP_THREAD = 0.024                      # the cord's half-thickness where it threads a gap (the piece is squashed vertically to this across the crossing)
 
 def pip_back_y(rad=None, natural=0.56):
@@ -223,7 +224,7 @@ PIP_RAD = 0.04
 def pip_rise(phi, natural=0.56):
     """Pip variants only: the loop keeps the SAME height as on the other Jelbies all the way round and takes one small smooth bump where it crosses his back
     centre line, threading the gap between two back spikes (height from the real geometry). No tilt, no halo."""
-    if not PIP_MODE: return 0.0
+    if not PIP_MODE or not PIP_BUMP: return 0.0
     th = (phi - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi
     dy = pip_back_y(None, natural) - natural
     return dy * math.exp(-(th / 0.70) ** 2)
@@ -275,3 +276,32 @@ def gem(name, c, r, color, rot=None, sides=5):
     prof = [(0.0, -r * 0.85), (r, 0.0), (r * 0.55, r * 0.40), (0.0, r * 0.46)]
     return lathe_y(name, prof, sides, color, centre=tuple(c), rotm=(None if rot is None else np.array(rot).tolist()), sharp=88)
 
+
+
+def tail_over(margin=0.03):
+    """Pip variants: let a neck loop ride OVER the root of his tail instead of through it. Every vertex of the current PARTS that lies inside the swept tail
+    (the shipped tail spheres in art/pip_geometry.json that stand outside the egg, plus a margin) is pushed radially out of it; small parts (beads, links)
+    are moved as a whole by their centre's push. The loop keeps its height everywhere else."""
+    g = pip_geo()
+    tl = np.array([s for s in g['tailSpheres'] if float(B.sdf(s[0], s[1], s[2])) > 0.0])
+    def push(p):
+        p = np.array(p, float)
+        for _ in range(4):
+            moved = False
+            d = np.linalg.norm(tl[:, :3] - p, axis=1) - (tl[:, 3] + margin)
+            j = int(np.argmin(d))
+            if d[j] < 0.0:
+                c = tl[j, :3]; v = p - c; n = np.linalg.norm(v)
+                v = v / n if n > 1e-6 else np.array([0, 1.0, 0])
+                p = c + v * (tl[j, 3] + margin); moved = True
+            if not moved: break
+        return p
+    for part in PARTS:
+        P = np.array(part['P'])
+        if len(P) > 70:
+            part['P'] = [tuple(push(q)) if q[2] < -0.3 else tuple(q) for q in P]
+        else:
+            c = P.mean(0)
+            if c[2] < -0.3:
+                d = push(c) - c
+                if np.linalg.norm(d) > 1e-6: part['P'] = [tuple(np.array(q) + d) for q in part['P']]

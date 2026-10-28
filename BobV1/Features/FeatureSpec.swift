@@ -119,7 +119,7 @@ nonisolated struct FeatureFit: Equatable, Sendable {
 
 nonisolated enum FeatureCompat {
     /// Pieces that have a Pip variant mesh (Features/Resources/wear_<id>_pip.bin): his dino tail leaves the lower back at about y 0.47.
-    static let pipVariants: Set<String> = ["backpack_sky", "cape_hero", "vest_puffer", "cardigan_cable", "tutu_pink", "chain_gold", "scarf_silk", "pearls", "whistle_coach", "bowtie_pink", "bowtie_sky", "diamond_j", "scarf_cosy", "scarf_sky", "bandana_coral", "bandana_mint", "lei"]
+    static let pipVariants: Set<String> = ["backpack_sky", "cape_hero", "vest_puffer", "cardigan_cable", "tutu_pink"]
     static let fullFlap: ClosedRange<Float> = -40...75
     /// Where Moss's daisy sits on the hats whose art-lab rule was "hide" (placement as the other rules: crown moved to `anchor`, tilted, sunk).
     static let hatDaisy: [String: FeatureSpec.MossRule] = [
@@ -138,8 +138,11 @@ nonisolated enum FeatureCompat {
             // the hat: FeatureSet.emit seats each base on the fitted crown); with the perch items (bows, headphones, antennae ...) they stay as they are.
             for w in worn { if spec.pairs[w]?.slot == "head" { fit.spineHat = w } }
             // his dino tail leaves the lower back right where a backpack sits: the pack he wears is the smaller one high between the shoulder blades
+            // COVERED SPIKES HIDE (like under a hat): a back spike whose base falls in the vertical band a worn neck or body piece occupies at the back centre
+            // line shrinks away while that piece is worn (FeatureSet eases partScale over 0.15 s). The band comes from the piece's own art, so it is data-driven.
             // (the same for the pieces that cover the lower back: the cape, the tutu, the puffer vest and the cardigan have a slot over the tail root on Pip)
             for w in worn where Self.pipVariants.contains(w) { fit.hatVariant[w] = w + "_pip" }
+            fit.hiddenParts = coveredSpikes(worn: worn, variants: fit.hatVariant, spec: spec)
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {
@@ -172,6 +175,27 @@ nonisolated enum FeatureCompat {
             }
         }
         return fit
+    }
+
+    /// The names of Pip's back spikes covered by what he wears (neck and body pieces; hats have their own crown rule): a spike is covered when the piece's
+    /// vertices at the back centre line (|x| < 0.14, behind the body) span a y band that overlaps the spike's extent (base down the lean, plus a margin).
+    static func coveredSpikes(worn: [String], variants: [String: String], spec: FeatureSpec) -> Set<String> {
+        let body = WearBody.shared
+        var pts: [SIMD3<Float>] = []
+        for w in worn {
+            guard let look = WearLook.pieces.first(where: { $0.art == w }), look.slot != .head, look.slot != .face, look.slot != .hands,
+                  let piece = WearMeshes.prepare(look, body: body, art: variants[w]) else { continue }
+            for r in piece.rest where r.z < -0.3 { pts.append(r) }
+        }
+        guard !pts.isEmpty, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec) else { return [] }
+        var out = Set<String>()
+        for part in prep.parts where part.name.hasPrefix("spike") || part.name.hasPrefix("tail") {
+            // the spike's footprint: its base and a point a spike-height down the lean (the spike leans toward the tail); covered when a vertex of the piece is
+            // within a cord's reach of either
+            let b = part.pivot
+            for q in pts where simd_distance(q, b) < 0.10 || simd_distance(q, b + SIMD3(0, -0.06, -0.04)) < 0.09 { out.insert(part.name); break }
+        }
+        return out
     }
 
     /// The best wing shift and flap range over several worn items (work/wingsolve.py `solve`): the intersection of each item's measured range at that

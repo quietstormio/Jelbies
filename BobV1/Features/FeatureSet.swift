@@ -200,6 +200,7 @@ final class FeatureSet {
             let b = part.pivot
             var covered = false
             if let h = hat, let ch = CrownFit.height(h.crown, b.x, b.z) { covered = b.y >= h.brimY - Self.hatMargin && ch >= b.y - 0.02 }
+            if s.fit.hiddenParts.contains(part.name) { covered = true }
             let want: Float = covered ? 0 : 1
             let cur = s.partScale[part.name] ?? want
             s.partScale[part.name] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
