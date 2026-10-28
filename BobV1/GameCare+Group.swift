@@ -79,6 +79,7 @@ extension GameCare {
                 group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             }
+            group.avoid = jellyFloors
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil

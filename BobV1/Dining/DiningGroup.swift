@@ -32,6 +32,8 @@ final class DiningGroup {
     var pay: ((Int, Int) -> Void)?
     /// Famished / Parched take their pieces faster (tests of the shared bite timing turn this off).
     var eager = true
+    /// Every Jelbie's floor spot when the serving is asked for (GameCare sets it): the tray never appears on one of them.
+    var avoid: [SIMD2<Float>] = []
     private var tiers: [NeedTier] = []
     private var paid: [Int] = []
     private var savedFinished: [((BlobRequest) -> Void)?] = []
@@ -107,7 +109,7 @@ final class DiningGroup {
         guard state == .idle, dining.phase == .absent, !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n))
+        origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
