@@ -11,7 +11,7 @@ import Foundation
 
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
-    static let count = 6
+    static let count = 5
     static let startFraction: Float = 0.90          // of his height, on the back silhouette line
     static let tailEnd: Double = 0.80               // fraction of the tail's length the row reaches
     static let widthOfSpacing: Float = 0.55         // the biggest spike's base width as a fraction of the spacing (the rest are smaller: no overlap)
@@ -31,7 +31,7 @@ nonisolated enum PipSpikes {
         /// taper to a softly rounded tip, smooth normals. `curve` = how far the tip is carried along `bend`, as a fraction of the height; `tipSoft` = tip radius / base radius.
         mutating func cone(base: SIMD3<Float>, axis a: SIMD3<Float>, height H: Float, baseR b: Float, bend: SIMD3<Float>, curve: Float, tipSoft: Float,
                            lateral: SIMD3<Float>, tones t: (base: SIMD3<Float>, tip: SIMD3<Float>)) {
-            let seg = 18, tipR = tipSoft * b
+            let seg = 12, tipR = tipSoft * b
             var bd = bend - a * simd_dot(bend, a); bd = simd_length(bd) > 1e-5 ? simd_normalize(bd) : a
             func centre(_ h: Float) -> SIMD3<Float> { let q = max(h, 0) / H; return base + a * h + bd * (curve * H * q * q) }
             func tangent(_ h: Float) -> SIMD3<Float> { simd_normalize(a + bd * (2 * curve * max(h, 0) / H)) }
@@ -138,7 +138,9 @@ nonisolated enum PipSpikes {
         let L = arc.last ?? 1, sJ = arc[min(max(backCount, 0), arc.count - 1)]
         let nSp = count
         debug = String(format: "top=%.3f crossRestY=%.3f crossT=%.3f backCount=%d pathCount=%d L=%.3f sJ=%.3f", spec.top, crossRest.y, tCross, backCount, path.count, L, sJ)
-        var arcS: Float = 0
+        // pass 1: where each spike stands, its normal / lean and its graded size
+        struct Sp { var sK: Float; var pt: PP; var n: SIMD3<Float>; var tg: SIMD3<Float>; var H: Float; var baseShown: SIMD3<Float> = .zero; var ax: SIMD3<Float> = .zero; var lean: Float = 0.21 }
+        var sps: [Sp] = []
         for k in 0..<nSp {
             let sK = L * (0.05 + 0.87 * Float(k) / Float(nSp - 1))
             var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
@@ -150,9 +152,48 @@ nonisolated enum PipSpikes {
             let f: Float = sK <= sJ ? 1 - 0.40 * (sJ - sK) / max(sJ, 1e-3) : 1 - 0.50 * (sK - sJ) / max(L - sJ, 1e-3)
             var H = 0.15 * f
             if pt.isTail { H = min(H, max(0.08, 0.7 * Float(sh.ridge(pt.t).r))) }
-            let bR = H / 2.0
-            let ax = simd_normalize(n * cosf(0.21) + tgP * sinf(0.21))
+            sps.append(Sp(sK: sK, pt: pt, n: n, tg: tgP, H: H, lean: pt.isTail ? 0.21 : 0.45))
+        }
+        // pass 2: no two neighbours may touch in ANY view: their bases must be at least 1.5 base-diameters apart (a gap of 0.5x the larger diameter) and their whole
+        // cones (axis segments, measured where they actually stand on the shown / swelled surface) at least their summed radii apart; the larger one shrinks until they clear
+        func segDist(_ p1: SIMD3<Float>, _ q1: SIMD3<Float>, _ p2: SIMD3<Float>, _ q2: SIMD3<Float>) -> Float {
+            var best = Float.infinity
+            for a in 0...8 { let u = Float(a) / 8; let c = p1 + (q1 - p1) * u
+                let d = q2 - p2, t = max(0, min(1, simd_dot(c - p2, d) / max(simd_dot(d, d), 1e-9)))
+                best = min(best, simd_distance(c, p2 + d * t)) }
+            return best
+        }
+        func place() { for k in 0..<sps.count { let bR = sps[k].H / 2; sps[k].baseShown = sps[k].pt.shown - sps[k].n * (0.3 * bR)
+            sps[k].ax = simd_normalize(sps[k].n * cosf(sps[k].lean) + sps[k].tg * sinf(sps[k].lean)) } }
+        for _ in 0..<30 {
+            place()
+            var changed = false
+            for k in 1..<sps.count {
+                let a = sps[k - 1], b = sps[k]
+                let diam = max(a.H, b.H)                                           // base diameter = height (bR = H / 2)
+                let chord = simd_distance(a.baseShown, b.baseShown)
+                let sd = segDist(a.baseShown, a.baseShown + a.ax * a.H, b.baseShown, b.baseShown + b.ax * b.H)
+                func flat(_ v: SIMD3<Float>) -> SIMD3<Float> { SIMD3(v.x, 0, v.z) }
+                let sdTop = segDist(flat(a.baseShown), flat(a.baseShown + a.ax * a.H), flat(b.baseShown), flat(b.baseShown + b.ax * b.H))          // seen from above
+                let hard = chord < 1.5 * diam || sd < 0.6 * (a.H + b.H) / 2
+                let topOnly = !hard && sdTop < 0.4 * (a.H + b.H) / 2 && max(a.H, b.H) > 0.095          // (the from-above rule never shrinks a spike below 0.095: they stay readable)
+                if hard || topOnly {
+                    if a.H >= b.H { sps[k - 1].H *= 0.93 } else { sps[k].H *= 0.93 }
+                    changed = true
+                } else if max(a.H, b.H) > 1.35 * min(a.H, b.H) {                // keep the grading smooth: neighbours differ by at most 35 %
+                    if a.H > b.H { sps[k - 1].H *= 0.96 } else { sps[k].H *= 0.96 }
+                    changed = true
+                }
+            }
+            if !changed { break }
+        }
+        var minChord = Float.infinity, minSeg = Float.infinity
+        for k in 0..<sps.count {
+            let sp = sps[k]
+            let H = sp.H, bR = H / 2.0, pt = sp.pt, tgP = sp.tg, n = sp.n, sK = sp.sK
+            let ax = simd_normalize(n * cosf(sp.lean) + tgP * sinf(sp.lean))
             let base = pt.rest - n * (0.3 * bR)
+            if k > 0 { minChord = min(minChord, simd_distance(sps[k].baseShown, sps[k - 1].baseShown) / max(H, sps[k - 1].H)) }
             let start = m.pos.count
             m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgP, curve: 0.06, tipSoft: 0.38, lateral: SIMD3(1, 0, 0), tones: tn)
             widths.append(2 * bR); centres.append(sK)
@@ -167,6 +208,9 @@ nonisolated enum PipSpikes {
                 parts.append(("spike\(k)", start, m.pos.count - start, base))
             }
         }
+        debug += String(format: " heights=%@ minChordOverDiam=%.2f", sps.map { String(format: "%.3f", $0.H) }.joined(separator: ","), minChord)
+        _ = minSeg
+        var arcS: Float = 0
         _ = arcS; arcS = 0
         var gap = Float.infinity
         for k in 1..<centres.count { gap = min(gap, (centres[k] - widths[k] / 2) - (centres[k - 1] + widths[k - 1] / 2)) }
