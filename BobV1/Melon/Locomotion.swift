@@ -84,7 +84,7 @@ struct GaitDriver {
     private var yaw0: Float = 0
     private var yaw1: Float = 0
     private var rollDir = SIMD2<Float>(1, 0)
-    private var groundFrom: Float = 0, groundTo: Float = 0      // ground heights at take-off / landing of the running hop (equal = an ordinary hop)
+    private(set) var groundFrom: Float = 0, groundTo: Float = 0      // ground heights at take-off / landing of the running hop (equal = an ordinary hop)
     private var chained = false
     private var reduce = false
     private var waitTimer: Float = 0.4

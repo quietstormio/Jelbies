@@ -131,6 +131,8 @@ final class BlobBrain {
     var volley = VolleyDrive()
     /// Idle behaviours (BlobBrain+Idle.swift): run, stumble, jumping jacks, sit, look, yawn-stretch. State, mood source and the run blend.
     var idleState = IdleState()
+    /// Pip's tail emotes (BlobBrain+TailPlay.swift).
+    var tailPlay = TailPlayState()
     /// The face (BlobBrain+Expression.swift), the mid-walk flourish roll of the current leg and the pending jump for joy (BlobBrain+Flourish.swift), the reactions (BlobBrain+React.swift).
     var expr = ExpressionState()
     var leg = LegState()
@@ -1672,6 +1674,7 @@ final class BlobBrain {
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
+        tailPlayTick(skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)
         var list: [ParticleTarget] = []
         let beanLive = beanG > 0 || beanHold > 0 || shoesWorn
         let footOn = feetInit && geom.valid && feetDrive && (poseW > 0 || beanLive) && debugFeet

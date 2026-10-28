@@ -155,13 +155,14 @@ final class FurnitureFitTests: XCTestCase {
 
     // MARK: scenes
     /// `n` Jellies sit on `kind` (placed at `c`); calls `each` every 6th settled frame. Returns the rigs.
-    func sitScene(_ kind: DecorKind, n: Int, at c: SIMD2<Float>, seconds: Float = 40, wear: WearLook? = nil, each: (Solid, [MotionRig]) -> Void) -> [MotionRig] {
+    func sitScene(_ kind: DecorKind, n: Int, at c: SIMD2<Float>, seconds: Float = 40, wear: WearLook? = nil, pip: Bool = false, each: (Solid, [MotionRig]) -> Void) -> [MotionRig] {
         DecorField.shared.clear()
         DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: c.x, z: c.y)])
         let starts: [SIMD2<Float>] = [SIMD2(c.x - 1.6, c.y + 2.0), SIMD2(c.x + 1.6, c.y + 2.0)]
         let lab = SocialTests.Lab(n: n, positions: Array(starts.prefix(n)), quiet: true, seed: 7)
         Self.keep.append(lab)
         for r in lab.rigs { r.skinner.autoBlink = false; r.brain.idleForced = true; r.renderSamples = false }
+        if pip { for r in lab.rigs { r.brain.feature = .spines; r.skinner.configureTail(MotionRig.renderMesh); r.skinner.tailOn = true; r.brain.skinnerRef = r.skinner } }
         for r in lab.rigs { XCTAssertTrue(r.brain.idleStart(.decorSit, r.sim), "\(kind): sit starts") }
         func seated(_ r: MotionRig) -> Bool { r.brain.idleState.bagStage == 2 && r.brain.idleState.phase == 2 && r.brain.idleState.phaseT > 1.5 }
         var k = 0, settled = 0
@@ -215,6 +216,35 @@ final class FurnitureFitTests: XCTestCase {
             }
             check("\(kind) x2", s, twoSeat: kind != .diningset)
             if kind == .diningset { XCTAssertGreaterThanOrEqual(s.bodyGap, Self.bodyGap, "stools: apart") }
+        }
+    }
+
+    /// Every piece with no backrest (`standsOn`) is STOOD on: alone and (where it has several seats) with every seat taken, the body does not sink into the drawn piece
+    /// (the ropes, the plank grips, the bunny's ears and the horse's neck included), the soles are on the seat's surface and attached, and two bodies never touch.
+    func testStandersFitEveryBacklessSeat() {
+        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.standsOn }), [.pouf, .diningset, .swing, .cushionpile, .rockinghorse, .toyrocket, .seesaw, .springrider, .sandbox], "the stand-on set")
+        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.hopSit && !$0.standsOn }), [.beanbag, .armchair, .loveseat, .rockingchair], "the sit set: a real backrest")
+        let only = ProcessInfo.processInfo.environment["STAND_FIT_ONLY"]
+        for kind in DecorKind.allCases where kind.standsOn && (only == nil || only == "\(kind)") {
+            for n in Set([1, min(2, kind.sitPoints.count)]) {
+                var s = Stats()
+                s.extraTol = [.rockinghorse, .toyrocket, .seesaw].contains(kind) ? 0.03 : 0          // (soft contact: the horse / rocket's curved top, the seesaw plank's rising end against the lower flank, <= 0.06)
+                _ = sitScene(kind, n: n, at: SIMD2(0, -0.8)) { solid, rigs in observe(&s, rigs, solid: solid) }
+                check("\(kind) stand x\(n)", s, twoSeat: n == 2)
+            }
+        }
+    }
+
+    /// Pip's long tail (the skinned tail verts are body points) does not go through the seat he stands on.
+    func testPipsTailDoesNotGoThroughTheSeat() {
+        let only = ProcessInfo.processInfo.environment["STAND_FIT_ONLY"]
+        for kind in DecorKind.allCases where kind.standsOn && (only == nil || only == "\(kind)") {
+            var s = Stats()
+            s.extraTol = [.rockinghorse, .toyrocket, .seesaw].contains(kind) ? 0.03 : 0
+            _ = sitScene(kind, n: 1, at: SIMD2(0, -0.8), pip: true) { solid, rigs in observe(&s, rigs, solid: solid) }
+            log("\(kind) Pip tail", s)
+            let check = { XCTAssertLessThanOrEqual(s.deepCount, 6, "\(kind): Pip's tail does not go through the seat (worst \(s.worstDepth) at \(s.worstAt))") }
+            check()
         }
     }
 

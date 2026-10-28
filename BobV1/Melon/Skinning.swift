@@ -114,6 +114,14 @@ nonisolated final class Skinner {
     }
     private var tailBumpDir = SIMD3<Float>(0, 0, -1)
     private(set) var tailYaw: Float = 0, tailPitch: Float = 0
+    /// The tail's motion (TailMotion.swift): what the brain asks (`tailDrive`), the filters / clocks, and each ring's world rotation for the spike layer.
+    var tailDrive = TailDrive(), tailMotion = TailMotion()
+    /// The seat he stands on (TailSeat in TailMotion.swift): the floor-lying part of the tail lies on it; `tailSeatW` eases 0...1 so hops on / off never pop.
+    var tailSeat = TailSeat(), tailSeatW: Float = 0, tailSeatOn = false
+    private(set) var tailRingQ: [simd_quatf] = []
+    func setTailTip(yaw: Float, pitch: Float) { tailYaw = yaw; tailPitch = pitch }
+    func setTailRings(_ q: [simd_quatf]) { tailRingQ = q }
+    var tailScaleNow: Float { tailScale }
     private var tailScale: Float = 0, tailInit = false, tailClock: Float = 0, tailLastB = SIMD3<Float>.zero, tailPrimed = false
     var retractVertices: [Int32] = []
     var retractRest: [SIMD3<Float>] = []              // rest-space delta of each retracting vertex onto the footless egg (sunk a little)
@@ -283,7 +291,7 @@ nonisolated final class Skinner {
         var started = false
     }
     private var antennae: [Antenna] = []
-    private var frameDt: Float = 1.0 / 60
+    private(set) var frameDt: Float = 1.0 / 60
 
     init(simTets: [UInt32], embedding: (tetOf: [UInt32], w: [Float]), vertexCount: Int, eyes: EyeRig? = nil,
          antennae rig: AntennaRig? = nil) {
@@ -545,7 +553,7 @@ nonisolated final class Skinner {
         guard tailLM.count == 3, tailOn || tailScale > 0.002 else {
             let B = P(0)
             for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
-            tailPrimed = false; tailYaw = 0; tailPitch = 0; tailScale = 0
+            tailPrimed = false; tailYaw = 0; tailPitch = 0; tailScale = 0; tailRingQ = []
             return
         }
         // carry the tail rigidly on the frame of its three landmark egg vertices (rest -> skinned)
@@ -579,30 +587,15 @@ nonisolated final class Skinner {
         tailScale += max(-dt / 0.15, min(dt / 0.15, (tailOn ? 1 : 0) - tailScale))
         if !tailOn && tailScale <= 0.002 {                       // off: every vertex onto the base pole (inside the body)
             for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
-            tailPrimed = false; tailYaw = 0; tailPitch = 0
+            tailPrimed = false; tailYaw = 0; tailPitch = 0; tailRingQ = []
             return
         }
         let vel = tailPrimed ? (B - tailLastB) / dt : SIMD3<Float>.zero
         tailLastB = B; tailPrimed = true
         tailClock += dt
         let speed = (vel.x * vel.x + vel.z * vel.z).squareRoot()
-        let yawT = 9 * min(1, speed / 0.5) * sinf(2 * .pi * 2.4 * tailClock) + (tailHappy ? 24 * sinf(2 * .pi * 3.6 * tailClock) : 0) + 3 * sinf(2 * .pi * 0.45 * tailClock)
-        let pitchT = max(-14, min(14, -vel.y * 4))
-        tailYaw += (yawT - tailYaw) * min(1, dt * 14); tailPitch += (pitchT - tailPitch) * min(1, dt * 10)
-        if !tailYaw.isFinite { tailYaw = 0 }; if !tailPitch.isFinite { tailPitch = 0 }
-        let D = simd_normalize(T - B)
-        let pivot = Cs + Rot * (TailBean.rootF - Cr)                   // exactly where the tail leaves the back (the spikes' pivot too)
-        let axis = simd_normalize(simd_cross(D, SIMD3<Float>(0, 1, 0)))
-        let q = simd_quatf(angle: tailYaw * .pi / 180, axis: SIMD3(0, 1, 0)) * simd_quatf(angle: tailPitch * .pi / 180, axis: simd_length(axis) > 1e-4 ? axis : SIMD3(1, 0, 0))
-        let sc = tailScale
-        for i in 1..<n {
-            var p = pivot + q.act(P(i) - pivot)
-            if sc < 1 { p = pivot + (p - pivot) * sc }
-            let o = 6 * (f + i)
-            dyn[o] = p.x; dyn[o + 2] = p.z
-            // soft floor instead of a hard clamp: below 0.04 the height eases down onto 0.004, so the underside rounds into the floor with no flat crease
-            dyn[o + 1] = p.y >= 0.04 ? p.y : 0.004 + 0.036 * expf((p.y - 0.04) / 0.036)
-        }
+        let pivot = Cs + Rot * (TailBean.rootF - Cr)                   // exactly where the tail leaves the back
+        bendTail(dyn, first: f, n: n, speed: speed, vy: vel.y, heading: atan2f(fwd.x, fwd.z), pivot: pivot, base: B, tip: T, rot: Rot, cs: Cs, cr: Cr)       // the travelling-wave bend (TailMotion.swift)
     }
 
     // MARK: vertex normals

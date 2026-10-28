@@ -31,6 +31,8 @@ extension BlobBrain {
         case .chirp: return 9
         case .window: return 28
         case .jacks, .tail, .roll, .flop, .peek: return 30
+        case .tailThump: return 28
+        case .tailHug: return 40
         case .sit, .look, .wander: return 8
         case .skipHop: return 12
         case .hopscotch: return 25
@@ -94,6 +96,7 @@ extension BlobBrain {
             script = .spin(t: 0); activity = .playing
         } else {
             jellyKick = max(jellyKick, 2.6)
+            if feature == .spines { tailPlay.dizzy = 1 }          // the tail wobbles dizzily after the chase (BlobBrain+TailPlay)
             AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
             idleFinish(skinner)
         }
