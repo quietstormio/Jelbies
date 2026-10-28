@@ -8,6 +8,9 @@ import simd
 @testable import BobV1
 
 final class ShoeGPUTests: XCTestCase {
+    override func setUp() { ShoeArt.forceProcedural = true }          // the per-pixel paint belongs to the procedural fallback shell
+    override func tearDown() { ShoeArt.forceProcedural = false }
+
     func testTableHasEveryLookWithItsLayers() {
         XCTAssertEqual(ShoeGPU.table.count, WearLook.shoes.count * ShoeGPU.lookStride)
         for (i, look) in WearLook.shoes.enumerated() {

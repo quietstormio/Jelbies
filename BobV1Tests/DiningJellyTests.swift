@@ -55,8 +55,18 @@ final class DiningJellyTests: XCTestCase {
         }
         /// MelonStage only calls tickOthers with more than one Jelbie.
         var stageGate = false
+        /// The no-getting-stuck watchdog (as the stage runs it) and what it saw: the closest two bodies ever, the longest walk stall.
+        let watchdog = StuckWatchdog()
+        var minPair: Float = .infinity, maxStall: Float = 0
         func tick() {
             snapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }
+            if actors.count > 1 {
+                watchdog.tick(pos: snapshot, brains: actors.map(\.brain), dt: actors[0].sim.stepDt)
+                for i in 0..<snapshot.count {
+                    for j in (i + 1)..<snapshot.count where !(actors[i].brain?.isSocial ?? false) { minPair = min(minPair, simd_distance(snapshot[i].pos, snapshot[j].pos)) }
+                    if let b = actors[i].brain, b.tryingToMove { maxStall = max(maxStall, b.steerStall) }
+                }
+            }
             for a in actors {
                 guard let b = a.brain else { continue }
                 b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false)
@@ -152,10 +162,18 @@ final class DiningJellyTests: XCTestCase {
         r.actors[2].brain?.requestNow(.goTo(SIMD2(0.5, 0.2)))          // Moss parks right by Pip's place
         r.run(8)
         r.care.feed(jelly: 1)
-        let stand = (DiningSpot.preferred + DiningLayout.make(n: 1).places[0].rel)
-        r.run(60) { r.t > 10 && !r.care.trayOut }
+        var stand: SIMD2<Float>?, closest: Float = .infinity
+        r.run(60) {
+            if let st = r.care.dining.places.first?.stand, r.care.dining.isPresent {
+                if stand == nil { stand = st }
+                closest = min(closest, simd_distance(r.actors[2].floor, st))
+            }
+            return r.t > 10 && !r.care.trayOut
+        }
         XCTAssertTrue(r.sawEating[1], "Pip got to eat although Moss stood by his place")
-        XCTAssertGreaterThan(simd_distance(r.actors[2].floor, stand), 1.3, "Moss made room")
+        XCTAssertNotNil(stand)
+        // (the random spot is never under a Jelbie, and a Jelbie at the place steps aside: Moss never stood in Pip's way)
+        XCTAssertGreaterThan(closest, 0.9, "Moss stayed out of Pip's place (closest \(closest))")
     }
 
     // MARK: capture

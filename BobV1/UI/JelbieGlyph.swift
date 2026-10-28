@@ -1,45 +1,57 @@
 //
 //  JelbieGlyph.swift
-//  A one-colour Jelbie silhouette: a round dome (a little wider than tall, flattened base), two stubby arm nubs, two bean feet peeking out under
-//  the base, and two tall oval eyes cut out. Used as the roster button's icon (Needs/RosterView.swift).
+//  A one-colour Jelbie silhouette from the real front proportions (BobForm, the same outline the theme icon uses): the soft egg with its wider
+//  lower half, the two short arm nubs at the real arm height, the two bean feet under the base, with the two oval eyes and the two short tilted
+//  brows cut out (the frost shows through). Used as the roster button's icon (Needs/RosterView.swift).
 //
 
 import SwiftUI
 
 struct JelbieGlyph: SwiftUI.Shape {
     func path(in r: CGRect) -> Path {
-        let w = r.width, h = r.height
-        func P(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * w, y: r.minY + y * h) }
-        func oval(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> Path {
-            Path(ellipseIn: CGRect(x: r.minX + (cx - rx) * w, y: r.minY + (cy - ry) * h, width: 2 * rx * w, height: 2 * ry * h))
-        }
-        // body: a wide soft dome with a flat-ish base (like the icon's Peek head)
+        // world box: x -0.70...0.70 (arm tips), y 0 (floor) ... BobForm.top
+        let wx = 1.40, wy = BobForm.top
+        let sc = Double(min(r.width / wx, r.height / wy))
+        let ox = Double(r.midX), oy = Double(r.midY) + (wy / 2) * sc          // screen y of world y = 0
+        func P(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: ox + x * sc, y: oy - y * sc) }
+
         var body = Path()
-        body.move(to: P(0.12, 0.78))
-        body.addCurve(to: P(0.50, 0.06), control1: P(0.12, 0.20), control2: P(0.26, 0.06))
-        body.addCurve(to: P(0.88, 0.78), control1: P(0.74, 0.06), control2: P(0.88, 0.20))
-        body.addQuadCurve(to: P(0.78, 0.88), control: P(0.88, 0.88))
-        body.addLine(to: P(0.22, 0.88))
-        body.addQuadCurve(to: P(0.12, 0.78), control: P(0.12, 0.88))
-        body.closeSubpath()
-        var s = body
-        s = s.union(oval(0.10, 0.60, 0.10, 0.12))          // arms: bold stubs
-        s = s.union(oval(0.90, 0.60, 0.10, 0.12))
-        s = s.union(oval(0.35, 0.92, 0.14, 0.075))          // bean feet
-        s = s.union(oval(0.65, 0.92, 0.14, 0.075))
-        s = s.subtracting(oval(0.36, 0.50, 0.07, 0.115))          // eyes
-        s = s.subtracting(oval(0.64, 0.50, 0.07, 0.115))
-        // small arched brows above the eyes
-        for cx: CGFloat in [0.36, 0.64] {
-            var brow = Path()
-            brow.move(to: P(cx - 0.09, 0.325))
-            brow.addQuadCurve(to: P(cx + 0.09, 0.325), control: P(cx, 0.17))
-            brow.addQuadCurve(to: P(cx - 0.09, 0.325), control: P(cx, 0.29))
-            brow.closeSubpath()
-            s = s.subtracting(brow)
+        let n = 160
+        var left: [CGPoint] = [], right: [CGPoint] = []
+        for i in 0...n {
+            let y = BobForm.lift + (1 - Double(i) / Double(n)) * BobForm.bodyH
+            let hw = BobForm.halfWidth(t: (y - BobForm.lift) / BobForm.bodyH)
+            left.append(P(-hw, y)); right.append(P(hw, y))
         }
-        return s
+        body.addLines(left); for q in right.reversed() { body.addLine(to: q) }; body.closeSubpath()
+
+        func arm(_ s: Double) -> Path {
+            let c = P(s * BobForm.armC.x, BobForm.armC.y)
+            let e = Path(ellipseIn: CGRect(x: -BobForm.armSemi.x * sc, y: -BobForm.armSemi.y * sc, width: 2 * BobForm.armSemi.x * sc, height: 2 * BobForm.armSemi.y * sc))
+            return e.applying(CGAffineTransform(translationX: c.x, y: c.y).rotated(by: CGFloat(s * -BobForm.armTilt)))
+        }
+        func foot(_ s: Double) -> Path {
+            let hw = BobForm.footRadii.x * 0.88, h = 0.18
+            return Path(roundedRect: CGRect(x: P(s * BobForm.footX - hw, h).x, y: P(0, h).y, width: 2 * hw * sc, height: h * sc),
+                        cornerRadii: RectangleCornerRadii(topLeading: 0.09 * sc, bottomLeading: 0.075 * sc, bottomTrailing: 0.075 * sc, topTrailing: 0.09 * sc), style: .continuous)
+        }
+        var sil = body
+        for s in [-1.0, 1.0] { sil = sil.union(arm(s)).union(foot(s)) }
+
+        // face, cut out: eyes and tilted brows at the real positions, a little enlarged so they read at 44 pt
+        let k = 1.2
+        let rx = BobForm.eyeHalfW * k, ry = BobForm.eyeHalfH * k
+        let hl = BobForm.browHalfLen * k, ht = BobForm.browHalfThick * k * 1.35
+        let dy = sin(atan(BobForm.browTilt)) * (hl - ht)
+        for s in [-1.0, 1.0] {
+            let ecx = s * BobForm.eyeX, pe = P(ecx, BobForm.eyeY)
+            sil = sil.subtracting(Path(ellipseIn: CGRect(x: pe.x - rx * sc, y: pe.y - ry * sc, width: 2 * rx * sc, height: 2 * ry * sc)))
+            var brow = Path()
+            brow.move(to: P(ecx - s * (hl - ht), BobForm.browY + dy)); brow.addLine(to: P(ecx + s * (hl - ht), BobForm.browY - dy))
+            sil = sil.subtracting(brow.strokedPath(StrokeStyle(lineWidth: 2 * ht * sc, lineCap: .round)))
+        }
+        return sil
     }
 }
 
-#Preview { JelbieGlyph().fill(Color(red: 0.42, green: 0.34, blue: 0.30)).frame(width: 240, height: 240).padding() }
+#Preview { JelbieGlyph().fill(Color(red: 0.42, green: 0.34, blue: 0.30)).frame(width: 256, height: 256).padding() }

@@ -32,6 +32,8 @@ final class DiningGroup {
     var pay: ((Int, Int) -> Void)?
     /// Famished / Parched take their pieces faster (tests of the shared bite timing turn this off).
     var eager = true
+    /// Every Jelbie's floor spot when the serving is asked for (GameCare sets it): the tray never appears on one of them.
+    var avoid: [SIMD2<Float>] = []
     private var tiers: [NeedTier] = []
     private var paid: [Int] = []
     private var savedFinished: [((BlobRequest) -> Void)?] = []
@@ -50,6 +52,10 @@ final class DiningGroup {
     /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
     private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
+    /// Diner i is done and has been handed back to his own life (released ahead of the others; `releaseFinished`).
+    private var released: [Bool] = []
+    /// Is this roster id a diner who is still held by the sitting (not yet released)?
+    func isHolding(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { !(released.indices.contains($0) && released[$0]) } ?? false }
     /// Blob i has been sent to eat (he arrived at his place).
     private var started: [Bool] = []
     private var requested = false
@@ -103,7 +109,7 @@ final class DiningGroup {
         guard state == .idle, dining.phase == .absent, !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n))
+        origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
@@ -111,7 +117,7 @@ final class DiningGroup {
             return SIMD2(s.x, s.y - GameCare.approachBack)
         }
         placeOf = Self.nearestSpots(floors: brains.indices.map { f($0) }, spots: spots)
-        finished = [Bool](repeating: false, count: n)
+        finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
@@ -145,10 +151,10 @@ final class DiningGroup {
     private func beginApproach() {
         state = .approaching; requested = false; settle = 0
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
-        started = [Bool](repeating: false, count: n)
+        started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         spawnTray()
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
-        for i in brains.indices { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
+        for i in brains.indices where !released[i] { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
         requested = true
     }
 
@@ -172,7 +178,11 @@ final class DiningGroup {
     private func end() {
         settlePay()
         dining.despawn(); state = .idle; requested = false
-        for (i, b) in brains.enumerated() where i < savedFinished.count { b.onFinished = savedFinished[i]; b.peerGap = savedGap[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; if i < savedPeers.count { b.peers = savedPeers[i] } }
+        for (i, b) in brains.enumerated() where i < savedFinished.count {
+            b.peerGap = savedGap[i]
+            if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)
+            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
+        }
         savedFinished = []; savedGap = []; savedPeers = []
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
@@ -202,10 +212,27 @@ final class DiningGroup {
         } else { brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i])) }
     }
 
+    /// Each diner who is done with his own serving is handed back at once (he does not wait for the others): his hooks, reserve, idle block and wait-focus
+    /// are restored so he roams / plays / socialises again. He keeps the diners' small peer gap and gets his real peers back, so he steers round the ones still
+    /// eating (the diners' own empty peers + MelonStage.keepApart stay in force for them). The group wrap-up still happens once, in `end()`.
+    private func releaseFinished() {
+        guard tierOf != nil else { return }          // (the nav tests keep the old all-together behaviour)
+        for i in brains.indices where finished[i] && !released[i] && i < savedFinished.count {
+            let b = brains[i]
+            guard isIdle(b) else { continue }          // (his dine job has returned; wait until he has settled)
+            // `finished` alone is not proof he ate: a retried or preempted dine request also reports .dine / .sip. He is released only once the serving is really
+            // down (his planned pieces eaten, tray still out), never before he has started.
+            guard started[i], trayOut, eaten(i) >= piecesFor[i] else { continue }
+            if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
+            released[i] = true
+            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.peers = savedPeers[i]
+        }
+    }
+
     func tick(dt: Float) {
         defer { if !shared { dining.update(dt: dt) } }
         guard state != .idle else { return }
-        if tierOf != nil { for b in brains { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
+        if tierOf != nil { for (i, b) in brains.enumerated() where !(released.indices.contains(i) && released[i]) { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
         age += dt
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
@@ -226,6 +253,7 @@ final class DiningGroup {
         case .serving:
             settlePay()
             if finished.allSatisfy({ $0 }) { end(); return }
+            releaseFinished()
             for i in brains.indices where !finished[i] {
                 guard isIdle(brains[i]) else { idle[i] = 0; continue }
                 idle[i] += dt
@@ -234,7 +262,7 @@ final class DiningGroup {
                 let st = dining.places[placeOf[i]].stand
                 if floor(i).y > st.y + GameCare.popTolerance + 0.05 {
                     // displaced in front of his place (the tray is between): everybody re-forms behind the tray, bounded
-                    if reserves < GameCare.maxReserves { reserves += 1; settlePay(); dining.despawn(); finished = [Bool](repeating: false, count: n); beginApproach() } else { end(); gaveUp = true }
+                    if reserves < GameCare.maxReserves { reserves += 1; settlePay(); dining.despawn(); finished = finished.indices.map { released[$0] }; beginApproach() } else { end(); gaveUp = true }
                     return
                 } else if mealRetries[i] < GameCare.maxReserves {
                     mealRetries[i] += 1

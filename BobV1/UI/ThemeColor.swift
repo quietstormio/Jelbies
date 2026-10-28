@@ -107,6 +107,8 @@ enum ThemeMath {
     var palette: ThemePalette { ThemeMath.palette(currentPreset) }
     /// The logo's outline tone for this theme: the accent itself, deepened only where needed to reach 3:1 on white.
     var logoOutline: Color { currentPreset.logoRim.map { Color(hex: $0) } ?? palette.rim }
+    /// Contrast-safe accent for sliders and toggles (reading it in a view body makes the view follow the chosen theme live).
+    var controlAccent: Color { logoOutline }
     func choose(_ p: ThemePreset) {
         selection = p.rawValue
         AppIconSwitcher.syncIfEnabled(p)

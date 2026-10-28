@@ -275,7 +275,8 @@ final class FeetAttachTests: XCTestCase {
     /// every row is measured, the rolls and the flip included (2026-10-21: the rolls were skipped as "no beans").
     func testShoesStayAttachedInEveryScriptedMove() {
         defer { DecorField.shared.clear() }
-        for m in Self.movesToCheck {
+        for (mi, m) in Self.movesToCheck.enumerated() {
+            let look = WearLook.shoes[mi % WearLook.shoes.count]          // every shoe gets its share of the moves
             let r = MotionRig(game: m.game)
             Self.keep.append(r)
             r.renderSamples = false
@@ -296,31 +297,37 @@ final class FeetAttachTests: XCTestCase {
                     let bean = r.bean[s].map { id -> SIMD3<Float> in let o = 6 * Int(id); return SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2]) }
                     guard bean.count == FootBean.vertexCount else { continue }
                     let b = RoomMeshBuilder(); b.material = .plain
-                    ShoeModel.build(.rainBoots, bean: bean, floorY: r.sim.floorY, time: 0, side: s, into: b)
+                    ShoeModel.build(look, bean: bean, floorY: r.sim.floorY, time: 0, side: s, into: b)
                     var lo = Float.infinity, cx: Float = 0, cy: Float = 0, cz: Float = 0, deepest = Float.infinity
-                    for i in 0..<FootBean.vertexCount {
-                        let v = b.mesh.vertices[i]
+                    for v in b.mesh.vertices {
                         let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
-                        worstOff = max(worstOff, simd_distance(p, bean[i]))
+                        worstOff = max(worstOff, simd_distance(p, bean[Self.nearestBean(p, bean)]))
                         let q = c0 + pose.rotation.inverse.act(p - pose.centroid)
                         lo = min(lo, q.y); cx += q.x; cy += q.y; cz += q.z
                         deepest = min(deepest, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z)))))
                     }
-                    let n = Float(FootBean.vertexCount)
+                    let n = Float(b.mesh.vertices.count)
                     f.soleRise = max(f.soleRise, lo); f.centreHeight = max(f.centreHeight, cy / n)
                     f.radius = max(f.radius, hypotf(cx / n, cz / n)); f.overlap = max(f.overlap, deepest)
                 }
                 Self.accumulate(&w, f); frames += 1
             }
             XCTAssertGreaterThan(frames, 10, "\(m.name): shoes were built")
-            XCTAssertLessThanOrEqual(worstOff, ShoeModel.maxThickness + 1e-3, "\(m.name) + shoes: the shoe grows from the bean")
+            XCTAssertLessThanOrEqual(worstOff, ShoeArt.maxReach + 1e-3, "\(m.name) + \(look): the shoe stays within reach of the bean")
             // the shoe may sit a hair lower / wider than the bare foot by its own thickness: the limits get that much slack, never more
-            let slack = ShoeModel.maxThickness
+            let slack = ShoeArt.maxReach
             MotionLog.write(String(format: "FEETATTACH shoes %@: %d frames, sole rise %.3f, centre height %.3f, radius %.3f, overlap %.3f", m.name, frames, w.soleRise, w.centreHeight, w.radius, w.overlap))
             XCTAssertLessThanOrEqual(w.soleRise, Self.maxSoleRise + slack, "\(m.name) + shoes: low")
             XCTAssertLessThanOrEqual(w.centreHeight, Self.maxCentreHeight + slack, "\(m.name) + shoes: not up on the belly")
             XCTAssertLessThanOrEqual(w.radius, Self.maxRadius + slack, "\(m.name) + shoes: under him")
         }
+    }
+
+    /// Index of the bean vertex nearest to `p`.
+    static func nearestBean(_ p: SIMD3<Float>, _ bean: [SIMD3<Float>]) -> Int {
+        var best = 0, bd = Float.infinity
+        for i in bean.indices { let d = simd_distance_squared(p, bean[i]); if d < bd { bd = d; best = i } }
+        return best
     }
 
     func testFeetStayAttachedWhileHeldDanglingAndThrown() {

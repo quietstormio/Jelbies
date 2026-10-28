@@ -54,22 +54,22 @@ extension GameCare {
                 let key = a.id * 2 + s
                 sig.append(key * 16 + li)
                 let w = beans[s], floorY = a.sim.floorY
-                if look != .sneakerLightup, let e = shoeCache[key], e.look == look, e.floorY == floorY, e.bean.count == w.count, Self.sameBean(e.bean, w) {
+                if !ShoeArt.isAnimated(look), let e = shoeCache[key], e.look == look, e.floorY == floorY, e.bean.count == w.count, Self.sameBean(e.bean, w) {
                     shoeStats.reused += 1
                     let base = UInt32(b.mesh.vertices.count)
                     b.mesh.vertices += e.mesh.vertices
                     b.mesh.indices += e.mesh.indices.map { $0 + base }
                 } else {
                     let sub = RoomMeshBuilder(); sub.material = .plain
-                    ShoeModel.buildShell(look, bean: w, floorY: floorY, body: bodyCol, time: time, gpuPaint: true, into: sub)
+                    ShoeModel.buildShell(look, bean: w, floorY: floorY, body: bodyCol, time: time, gpuPaint: true, side: s, into: sub)
                     shoeCache[key] = ShoeEntry(look: look, floorY: floorY, bean: w, mesh: sub.mesh)
                     shoeStats.rebuilt += 1; changed = true
                     let base = UInt32(b.mesh.vertices.count)
                     b.mesh.vertices += sub.mesh.vertices
                     b.mesh.indices += sub.mesh.indices.map { $0 + base }
                 }
-                if look == .glitterShoes { ShoeModel.addSparkles(b, bean: w, time: time, side: s); changed = true }
-                if look == .sneakerLightup { changed = true }          // the glow cycles every frame
+                if ShoeArt.isAnimated(look) { changed = true }          // the lamp cycles and the sequins twinkle every frame
+                if !ShoeArt.hasArt(look), look == .glitterShoes { ShoeModel.addSparkles(b, bean: w, time: time, side: s); changed = true }
             }
         }
         if sig != shoeSig { changed = true; shoeSig = sig }

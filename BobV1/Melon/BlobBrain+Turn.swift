@@ -17,7 +17,7 @@ extension BlobBrain {
     /// (rate multiplier on the per-step heading, hop-turn chance, overshoot fraction)
     var turnChar: (rate: Float, hop: Float, over: Float) {
         switch personalityKey {
-        case .spines: return (1.25, 0.8, 0)
+        case .spines: return (1.25, 0.35, 0)
         case .daisy: return (0.9, 0.0, 0)
         case .wings: return (1.05, 0.35, 0.12)
         default: return (1, 0.3, 0)

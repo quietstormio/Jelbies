@@ -467,6 +467,42 @@ final class FeatureCaptureTests: XCTestCase {
         try write(vstack([hstack(Array(frames[0..<3])), hstack(Array(frames[3..<6]))]), d + "/lavender_hop.png")
     }
 
+    /// 2026-10-27 (cartwheel feet): a cartwheel's crouch, take-off, inverted, descent and landing frames for one character.
+    private func cartwheelSheet(id: Int, name: String, shoes: Bool = false) throws {
+        let d = try dir()
+        DayClock.shared.forcedHour = 12
+        W = 700; H = 700
+        let chars = [Char(id: id, outfit: shoes ? [.feet: .rainBoots] : [:])]
+        let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: 3)
+        let (ren, target) = try renderer(lab)
+        let dd = dress(lab, chars)
+        let r = lab.rigs[0]
+        r.brain.shoesWorn = shoes
+        r.brain.idleForced = true
+        XCTAssertTrue(r.brain.idleStart(.cartwheel, r.sim))
+        let cam0 = r.brain.cameraPosXZ, c00 = r.sim.bodyPose(iterations: 3).centroid
+        var dir3 = SIMD3<Float>(cam0.x - c00.x, 0, cam0.y - c00.z); dir3 = simd_normalize(dir3)
+        var frames: [UIImage] = []
+        var want: [(String, (BlobBrain) -> Bool)] = [("crouch", { $0.gait.phase == .crouch }), ("take-off", { $0.gait.phase == .air && $0.gait.flipU > 0.08 }), ("rising", { $0.gait.phase == .air && $0.gait.flipU > 0.28 }), ("inverted", { $0.gait.phase == .air && $0.gait.flipU > 0.5 }), ("coming down", { $0.gait.phase == .air && $0.gait.flipU > 0.78 }), ("landing", { $0.gait.phase == .land })]
+        var t: Float = 0, lastShot: Float = -1
+        while !want.isEmpty && t < 8 {
+            lab.tick(watching: false); t += 1.0 / 60
+            tick(dd, 0, r, chars[0])
+            if want[0].1(r.brain), t - lastShot > 0.04 {
+                let c = r.sim.bodyPose(iterations: 3).centroid
+                let cam = Self.lookCamera(target: SIMD3(c.x, 0.55, c.z), dir: dir3, dist: 4.4, aspect: 1, lift: 0.08)
+                let img = composite(lab, dd, chars, ren, target, cam: cam)
+                frames.append(labelled(img.uiImage()!, String(format: "%@ t=%.2f", want[0].0, t)))
+                want.removeFirst(); lastShot = t
+            }
+        }
+        XCTAssertGreaterThanOrEqual(frames.count, 5, "the cartwheel reached its phases")
+        try write(vstack([hstack(Array(frames.prefix(3))), hstack(Array(frames.dropFirst(3)))]), d + "/cartwheel_\(name).png")
+    }
+    func testCaptureCartwheelPip() throws { try cartwheelSheet(id: 1, name: "pip") }
+    func testCaptureCartwheelLavender() throws { try cartwheelSheet(id: 3, name: "lavender") }
+    func testCaptureCartwheelMossShoes() throws { try cartwheelSheet(id: 2, name: "moss_shoes", shoes: true) }
+
     // MARK: Pip's teardrop tail + back spikes
 
     func testCapturePipTeardrop() throws {

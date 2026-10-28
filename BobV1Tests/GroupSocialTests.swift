@@ -114,4 +114,52 @@ final class GroupSocialTests: XCTestCase {
         XCTAssertLessThanOrEqual(total, 12, "but not constantly")
         XCTAssertGreaterThanOrEqual(starts[.groupHug] ?? 0, 1, "and the hug is among them")
     }
+
+    /// 2026-10-27 (more social): a simulated 5-minute idle session; counts what happens between the Jelbies and checks that every group hug took all the free ones.
+    private func session(n: Int, seed: UInt64) {
+        let lab = SocialTests.Lab(n: n, positions: n == 3 ? SocialTests.starts : Self.five, quiet: false, seed: seed)
+        for (i, r) in lab.rigs.enumerated() { r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i) }
+        var seen = Set<ObjectIdentifier>(), hugs = 0, otherGroup = 0, pairs = 0, solo = 0, toy = 0, plain = 0, total = 0, leftOut = 0, short = 0
+        var groupKinds = [String: Int](), pairKinds = [String: Int](), soloKinds = [String: Int]()
+        var prevKind = [IdleKind?](repeating: nil, count: n)
+        for _ in 0..<(60 * 300) {
+            lab.tick(watching: false)
+            for (i, r) in lab.rigs.enumerated() {
+                let b = r.brain
+                total += 1
+                if let s = b.social {
+                    if seen.insert(ObjectIdentifier(s)).inserted {
+                        if s.kind.isGroup {
+                            groupKinds[s.kind.rawValue, default: 0] += 1
+                            if s.kind == .groupHug {
+                                hugs += 1
+                                let c = s.crewIDs.count
+                                let pos = lab.rigs.map { $0.brain }
+                                let free = pos.filter { $0.social == nil && ($0.socialFree || $0.socialWandering) && $0.idleState.kind != .sleep && simd_distance($0.position, b.position) < GroupTuning.radius }.count
+                                if free > 0 { leftOut += 1 }
+                                if c < n { short += 1 }
+                            } else { otherGroup += 1 }
+                        } else { pairs += 1; pairKinds[s.kind.rawValue, default: 0] += 1 }
+                    }
+                } else if let k = b.idleState.kind {
+                    if k != prevKind[i], k != .wander, k != .sleep {
+                        let toyKinds: Set<IdleKind> = [.decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick]
+                        if toyKinds.contains(k) { toy += 1 } else { solo += 1; soloKinds[k.rawValue, default: 0] += 1 }
+                    }
+                } else { plain += 1 }
+                prevKind[i] = b.social == nil ? b.idleState.kind : nil
+            }
+        }
+        let line = String(format: "MORESOCIAL 300 s x%d: groupHug=%d (all-joined: crew<n in %d, free-left-out in %d) otherGroup=%d %@ pair=%d solo=%d toy=%d plainIdle=%.0f%% pairKinds=%@ soloKinds=%@",
+                          n, hugs, short, leftOut, otherGroup, "\(groupKinds)", pairs, solo, toy, 100 * Float(plain) / Float(total), "\(pairKinds)", "\(soloKinds)")
+        MotionLog.write(line); print(line)
+        XCTAssertGreaterThanOrEqual(hugs + otherGroup, 3, "group moves are frequent")
+        XCTAssertGreaterThanOrEqual(hugs, 1, "and the hug is among them")
+        if n == 3 { XCTAssertEqual(short, 0, "every group hug has all three") }
+        XCTAssertEqual(leftOut, 0, "no free Jelby left out (x\(n))")
+        XCTAssertGreaterThan(Float(plain) / Float(total), 0.25, "still plenty of plain roaming / rest")
+    }
+
+    func testMoreSocialSessionAtHome() { for seed in [101] as [UInt64] { session(n: 3, seed: seed) } }
+    func testMoreSocialSessionAtThePark() { for seed in [303] as [UInt64] { session(n: 5, seed: seed) } }
 }

@@ -119,20 +119,45 @@ nonisolated enum DiningSpot {
     }
 
     /// The same front spot every time; if Bob stands on it, the nearest clear spot beside (or behind) him, always fully on screen.
-    static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect) -> SIMD2<Float> {
+    /// `jellies`: every Jelbie's floor spot; a spot whose tray rectangle comes within `jellyClear` (body radius + margin) of one is rejected, so food never
+    /// appears under a standing Jelbie. The pick stays random among the free spots; with none free, the spot farthest from every Jelbie.
+    static let jellyClear: Float = 0.55
+    static func minJellyDistance(_ o: SIMD2<Float>, layout L: TrayLayout, jellies: [SIMD2<Float>]) -> Float {
+        var d = Float.infinity
+        for j in jellies { d = min(d, distance(from: j, origin: o, layout: L)) }
+        return d
+    }
+    static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6
         while cx <= 1.6001 {
             var cz: Float = 0.6
             while cz <= maxZ + 1e-4 {
                 let o = SIMD2<Float>(cx, cz)
-                if isClear(origin: o, layout: L, of: bob, aspect: aspect), FreeFloor.isFree(o, radius: 0.9),
+                if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
                    L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) }) { open.append(o) }
                 cz += 0.2
             }
             cx += 0.2
         }
         if let pick = open.randomElement() { return pick }
+        if !jellies.isEmpty {          // crowded: the on-screen, decor-free spot farthest from every Jelbie
+            var bestO: SIMD2<Float>?, bestD: Float = -1
+            var fx: Float = -1.6
+            while fx <= 1.6001 {
+                var fz: Float = 0.6
+                while fz <= maxZ + 1e-4 {
+                    let o = SIMD2<Float>(fx, fz)
+                    if isClear(origin: o, layout: L, of: bob, aspect: aspect), FreeFloor.isFree(o, radius: 0.9) {
+                        let d = minJellyDistance(o, layout: L, jellies: jellies)
+                        if d > bestD { bestD = d; bestO = o }
+                    }
+                    fz += 0.2
+                }
+                fx += 0.2
+            }
+            if let b = bestO { return b }
+        }
         if isClear(origin: preferred, layout: L, of: bob, aspect: aspect) { return preferred }
         var best = preferred, bestCost = Float.infinity
         var fallback = preferred, fallbackD: Float = -1

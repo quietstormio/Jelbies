@@ -196,7 +196,7 @@ extension BlobBrain {
     /// Per-character run feel from the personality data (Pip energetic: quicker, bouncier; Moss calm: smoother; Lavender floaty: long hang).
     var runChar: (rate: Float, bounce: Float, hang: Float, flutter: Float) {
         switch personalityKey {
-        case .spines: return (1.06, 1.25, 0.0, 0)
+        case .spines: return (1.06, 1.0, 0.0, 0)          // (bounce was 1.25: Pip's head bobbed visibly more than the others')
         case .daisy: return (0.96, 0.8, 0.0, 0)
         case .wings: return (0.98, 1.1, 0.12, 1)
         default: return (1, 1, 0, 0)
@@ -424,7 +424,7 @@ extension BlobBrain {
             let flourish = Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
-            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 4 : 6) * idleLively, rand(11, 22) * idleLively * vJit() - idleState.t) }
+            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
         if idleState.kind == .rollTrip { gait.rollTravel = 1.1 }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0

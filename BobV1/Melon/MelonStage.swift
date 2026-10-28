@@ -530,6 +530,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
     private var asideCooldown = [Float](repeating: 0, count: JellyRoster.maxCount)
     private var asideClock: Float = 0
+    private let watchdog = StuckWatchdog()
+    private var watchBrains: [BlobBrain?] = []
 
     /// Reused each fixed step (no per-step array).
     private var stepSims: [SoftBody] = []
@@ -560,6 +562,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         if actors.count > 1, !racing {
             asideClock += sim.stepDt
             if asideClock >= 0.25 { Self.makeRoom(snapshot: peerSnapshot, brains: actors.map(\.brain), cooldown: &asideCooldown, dt: asideClock); asideClock = 0 }
+        }
+        if !racing, peerSnapshot.count > 1 {          // the no-getting-stuck guarantee (StuckWatchdog): home, park, guests
+            watchBrains.removeAll(keepingCapacity: true)
+            for a in actors { watchBrains.append(a.brain) }
+            for a in parkActors { watchBrains.append(a.brain) }
+            if watchBrains.count == peerSnapshot.count { watchdog.tick(pos: peerSnapshot, brains: watchBrains, dt: sim.stepDt) }
         }
         bobTick(reduce: reduce)
         audioSituation()
@@ -955,6 +963,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
+            if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
             if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps

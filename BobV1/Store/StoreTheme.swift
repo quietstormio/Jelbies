@@ -123,17 +123,27 @@ enum StoreThumb {
         return nil
     }
 
-    /// A shoe on a foot (the body-coloured bean, the shell round it), foot-local, a pair seen from the front-left.
+    /// A PAIR of shoes seen from the front-left, each on a body-coloured foot stub (the foot bean cut flat at the collar), foot-local: the modelled shoe
+    /// (Wear/ShoeArt.swift) on the same bean the Jelbie walks on, the second one mirrored and a little behind.
     static func shoeMesh(_ look: WearLook) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain
-        let bean = FootBean.localF
-        let n = ShoeModel.normals(bean)
-        let base = UInt32(b.mesh.vertices.count)
         let body = OKLab.srgbToLinear(SIMD3(0.50, 0.68, 0.95))
-        for i in bean.indices { b.vertex(bean[i], n[i], ao: 1, color: body) }
-        var t = 0
-        while t + 2 < ShoeModel.tris.count { b.triangle(base + ShoeModel.tris[t], base + ShoeModel.tris[t + 1], base + ShoeModel.tris[t + 2]); t += 3 }
-        ShoeModel.build(look, bean: bean, floorY: -10, time: 1.3, side: 0, into: b)
+        for s in 0..<2 {
+            let sx: Float = s == 0 ? 1 : -1
+            let place: (SIMD3<Float>) -> SIMD3<Float> = { SIMD3(sx * $0.x + sx * 0.17, $0.y, $0.z - (s == 0 ? 0 : 0.06)) }
+            let bean = FootBean.localF.map(place)
+            let stub = bean.map { SIMD3($0.x, min($0.y, 0.178), $0.z) }
+            let (n, flip) = ShoeModel.normalsAndFlip(stub)
+            let base = UInt32(b.mesh.vertices.count)
+            for i in stub.indices { b.vertex(stub[i], n[i], ao: 1, color: body) }
+            var t = 0
+            while t + 2 < ShoeModel.tris.count {
+                let a = ShoeModel.tris[t], c = ShoeModel.tris[t + 1], d = ShoeModel.tris[t + 2]
+                if flip { b.triangle(base + a, base + d, base + c) } else { b.triangle(base + a, base + c, base + d) }
+                t += 3
+            }
+            ShoeModel.build(look, bean: bean, floorY: -10, time: 1.3, side: s, body: body, into: b)
+        }
         return b.mesh
     }
 
@@ -195,7 +205,7 @@ enum StoreThumb {
     /// The view of an item's thumbnail (yaw about the model, pitch above it). Most use one angle; the taco is seen from its open end so the U of the shell
     /// and the fillings in it read.
     static func angles(for item: StoreItem) -> (yaw: Float, pitch: Float) {
-        if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.45, 0.12) : w.slot == .hands ? (0.35, 0.2) : w.anchor == .back ? (3.5, 0.2) : (0.5, 0.18) }
+        if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.45, 0.12) : w.slot == .hands ? (0.35, 0.2) : w.slot == .feet ? (0.55, 0.36) : w.anchor == .back ? (3.5, 0.2) : (0.5, 0.18) }
         if item.decor != nil { return (0.5, 0.5) }
         if item.id == "taco" { return (0.38, 0.42) }
         return (0.55, 0.42)

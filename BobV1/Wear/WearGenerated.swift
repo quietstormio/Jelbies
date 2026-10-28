@@ -14,8 +14,8 @@ nonisolated enum WearGenerated {
     }
     static let rows: [Row] = [
         Row(look: .sneakerMint, art: "", storeID: "shoe-mint", title: "Mint sneakers", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 30, tags: [.sporty, .cute], batch: 1, paintStyle: "sneaker_mint", vertices: 0, triangles: 0),
-        Row(look: .sneakerSun, art: "", storeID: "shoe-sun", title: "Sunny sneakers", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 30, tags: [.sporty, .sweet], batch: 1, paintStyle: "sneaker_sun", vertices: 0, triangles: 0),
-        Row(look: .sneakerCoral, art: "", storeID: "shoe-coral", title: "Coral sneakers", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 30, tags: [.sporty, .cute], batch: 1, paintStyle: "sneaker_coral", vertices: 0, triangles: 0),
+        Row(look: .sneakerSun, art: "", storeID: "shoe-sun", title: "Sunny sandals", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 30, tags: [.sweet, .cute], batch: 1, paintStyle: "sneaker_sun", vertices: 0, triangles: 0),
+        Row(look: .sneakerCoral, art: "", storeID: "shoe-coral", title: "Coral clogs", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 30, tags: [.cute, .cool], batch: 1, paintStyle: "sneaker_coral", vertices: 0, triangles: 0),
         Row(look: .rainBoots, art: "", storeID: "shoe-rain", title: "Rain boots", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 45, tags: [.cute, .cool], batch: 1, paintStyle: "rainboot", vertices: 0, triangles: 0),
         Row(look: .glitterShoes, art: "", storeID: "shoe-glitter", title: "Glitter shoes", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 60, tags: [.sparkly, .sweet], batch: 1, paintStyle: "glitter", vertices: 0, triangles: 0),
         Row(look: .hightopRed, art: "", storeID: "shoe-hightop", title: "High-tops", slot: .feet, anchor: .feet, anchorRest: SIMD3(0.00000, 0.00000, 0.00000), price: 40, tags: [.sporty, .cool], batch: 2, paintStyle: "hightop_red", vertices: 0, triangles: 0),

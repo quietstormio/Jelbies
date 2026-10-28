@@ -43,21 +43,29 @@ final class ShoeEncloseTests: XCTestCase {
             guard r.skinner.beansActive, let beans = GameCare.footBeans(brain: r.brain, sim: r.sim, skinner: r.skinner) else { return }
             for s in 0..<2 {
                 let b = RoomMeshBuilder(); b.material = .plain
-                ShoeModel.buildShell(look, bean: beans[s], floorY: r.sim.floorY, into: b)
+                ShoeModel.build(look, bean: beans[s], floorY: r.sim.floorY, time: 0, side: s, into: b)
                 let v = b.mesh.vertices.map { SIMD3($0.pos.x, $0.pos.y, $0.pos.z) }
-                // the shell is grown from exactly the bean that is drawn
+                let bn = ShoeModel.normals(beans[s])
+                // the shoe is built from exactly the bean that is drawn
                 for i in stride(from: 0, to: FootBean.vertexCount, by: 7) {
                     let o = 6 * Int(r.bean[s][i])
                     let drawn = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2])
-                    XCTAssertLessThan(simd_distance(drawn, beans[s][i]), 0.002, "the shell grows from the drawn bean, vertex \(i)")
+                    XCTAssertLessThan(simd_distance(drawn, beans[s][i]), 0.002, "the shoe is built on the drawn bean, vertex \(i)")
                 }
-                // every low drawn foot vertex is inside the shell (2 mm up, into the foot: the sole stands 1 mm over the floor)
-                for id in r.sole[s] {
-                    let o = 6 * Int(id)
-                    let p = SIMD3(r.dyn[o], r.dyn[o + 1], r.dyn[o + 2])
-                    guard p.y < r.sim.floorY + 0.08 else { continue }
-                    let q = p + SIMD3(0, 0.002, 0)
-                    if !Self.inside(q, v, b.mesh.indices) { worstOut = max(worstOut, 1); XCTFail("t=\(r.t) foot \(s) vertex \(id) at \(p) is outside the shell") ; return }
+                // every low vertex of the drawn foot is covered by the shoe (no bare foot poking out under it)
+                for i in stride(from: 0, to: FootBean.vertexCount, by: 3) where FootBean.localF[i].y < 0.03 {
+                    if !ShoeTests.covered(beans[s][i] - bn[i] * 0.002, bn[i], v, b.mesh.indices) { worstOut = max(worstOut, 1); var ys: [Float] = []
+                    var tt = 0
+                    let P0 = beans[s][i]
+                    while tt + 2 < b.mesh.indices.count {
+                        let a = v[Int(b.mesh.indices[tt])], bb = v[Int(b.mesh.indices[tt + 1])], c = v[Int(b.mesh.indices[tt + 2])]; tt += 3
+                        let d0 = SIMD2(bb.x - a.x, bb.z - a.z), d1 = SIMD2(c.x - a.x, c.z - a.z), dp = SIMD2(P0.x - a.x, P0.z - a.z)
+                        let den = d0.x * d1.y - d1.x * d0.y
+                        if abs(den) < 1e-12 { continue }
+                        let u = (dp.x * d1.y - d1.x * dp.y) / den, w = (d0.x * dp.y - dp.x * d0.y) / den
+                        if u >= 0 && w >= 0 && u + w <= 1 { ys.append(a.y + (bb.y - a.y) * u + (c.y - a.y) * w) }
+                    }
+                    XCTFail("ys under it \(ys.sorted()) t=\(r.t) foot \(s) bean vertex \(i) at \(beans[s][i]) normal \(bn[i]) is not covered by the shoe (lowest shoe y \(v.map(\.y).min()!), lowest bean y \(beans[s].map(\.y).min()!), floor \(r.sim.floorY))"); return }
                 }
             }
             checked += 1
@@ -78,6 +86,7 @@ final class ShoeEncloseTests: XCTestCase {
     }
 
     func testSoleStandsUnderTheBeanAndTheRimFlaresAtARealFloor() {
+        ShoeArt.forceProcedural = true; defer { ShoeArt.forceProcedural = false }          // the procedural fallback shell
         let lift: Float = 0.004
         let bean = FootBean.localF.map { SIMD3($0.x, $0.y + lift, $0.z) }          // a foot standing 4 mm over the floor plane
         for look in WearLook.shoes {
@@ -99,6 +108,18 @@ final class ShoeEncloseTests: XCTestCase {
                 worst = min(worst, out)
             }
             XCTAssertGreaterThanOrEqual(worst, 0.012, "\(look): the sole rim flares out past the bean (\(worst))")
+        }
+    }
+
+    /// A modelled shoe at a real floor: its sole is the bottom of the foot (a hair under the bean, never above it, never through the floor by more than the rounding).
+    func testModelledSoleSitsAtTheFootsBottomAtARealFloor() {
+        let bean = FootBean.localF
+        for look in WearLook.shoes {
+            let b = RoomMeshBuilder(); b.material = .plain
+            ShoeModel.build(look, bean: bean, floorY: 0, time: 0, side: 0, into: b)
+            let lo = b.mesh.vertices.map(\.pos.y).min()!
+            XCTAssertLessThanOrEqual(lo, bean.map(\.y).min()! + 1e-4, "\(look): a sole under the foot")
+            XCTAssertGreaterThanOrEqual(lo, -0.016, "\(look): not buried in the floor")
         }
     }
 }

@@ -151,9 +151,9 @@ struct SettingsScreen: View {
 
     private func slider(_ title: String, on: Binding<Bool>, volume: Binding<Float>, id: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle(title, isOn: on).font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly)
+            Toggle(title, isOn: on).font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent)
                 .accessibilityIdentifier("settings-\(id)-toggle")
-            Slider(value: volume, in: 0...1).tint(CloudTheme.deepJelly).disabled(!on.wrappedValue)
+            Slider(value: volume, in: 0...1).tint(theme.controlAccent).disabled(!on.wrappedValue)
                 .accessibilityLabel("\(title) volume").accessibilityIdentifier("settings-\(id)-volume")
         }
     }
@@ -180,11 +180,11 @@ struct SettingsScreen: View {
             actionRow("Main menu", "house", id: "settings-main-menu", action: mainMenu)
             actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
             Toggle("Replay intro next launch", isOn: Binding(get: { replayIntro }, set: { replayIntro = $0; UserDefaults.standard.set($0 ? 1 : 0, forKey: "Intro") }))
-                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
+                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-replay-intro")
             actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio)
             Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))
-                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(CloudTheme.deepJelly).frame(minHeight: 44)
+                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-follow-real-clock")
             Text(followReal ? "Day and night follow your phone's clock." : "One game hour is one real minute. Day \(DayClock.shared.day) so far. You can also skip the night with the moon button.")
                 .font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
