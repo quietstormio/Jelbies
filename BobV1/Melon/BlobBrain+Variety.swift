@@ -39,7 +39,7 @@ enum VarietyTuning {
     static let personality: [JellyFeature: Personality] = [
         .none: Personality(),
         .spines: Personality(     // Pip: energetic
-            idle: [([.run, .zoomies, .slide, .scoot, .bounce, .skipHop, .hopscotch, .joy, .jacks, .cartwheel, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6)],
+            idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.cartwheel], 1.2), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6)],
             social: [([.chase, .zoomies, .bump, .keepAway], 1.6)]),
         .daisy: Personality(      // Moss: calm
             idle: [([.look, .window, .flop, .sit, .stretch, .sway, .decorSit, .decorBoop, .decorPeek], 1.6), ([.zoomies], 0.6)],

@@ -196,7 +196,7 @@ extension BlobBrain {
     /// Per-character run feel from the personality data (Pip energetic: quicker, bouncier; Moss calm: smoother; Lavender floaty: long hang).
     var runChar: (rate: Float, bounce: Float, hang: Float, flutter: Float) {
         switch personalityKey {
-        case .spines: return (1.06, 1.25, 0.0, 0)
+        case .spines: return (1.06, 1.0, 0.0, 0)          // (bounce was 1.25: Pip's head bobbed visibly more than the others')
         case .daisy: return (0.96, 0.8, 0.0, 0)
         case .wings: return (0.98, 1.1, 0.12, 1)
         default: return (1, 1, 0, 0)
