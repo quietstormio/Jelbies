@@ -87,15 +87,13 @@ nonisolated final class Skinner {
         tailFirst = cap.tailFirst
         tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
         tailLMRest = tailLM.map { SIMD3(rm.rest[3 * $0], rm.rest[3 * $0 + 1], rm.rest[3 * $0 + 2]) }
-        // the swell: the egg's own lower-back vertices near the tail root are pushed out along the tail's start direction (Gaussian falloff), so the back flows into the
-        // tail root as one surface instead of a tube meeting a wall
+        // the swell: the egg's own lower-back vertices near the tail root are pushed out along the tail's start direction (Gaussian falloff, lower back only:
+        // TailBean.swellWeight), so the back flows into the tail root as one surface instead of a tube meeting a wall
         let limit = cap.firstVertex.min() ?? rm.vertexCount
-        let root = TailBean.rootF, sg = TailBean.swellSigma
         tailBumpDir = TailBean.startDir
         tailBump = []
         for v in 0..<min(limit, rm.rest.count / 3) {
-            let d = SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]) - root
-            let w = expf(-simd_length_squared(d) / (2 * sg * sg))
+            let w = TailBean.swellWeight(SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]))
             if w > 0.01 { tailBump.append((v, w)) }
         }
     }

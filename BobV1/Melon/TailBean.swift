@@ -139,6 +139,15 @@ nonisolated enum TailBean {
     static let restFloor: Float = 0.12
     /// The swell on the egg's lower back (Skinner.configureTail): how far (rest units) its vertices are pushed along the tail's start direction, and how widely.
     static let swellHeight: Float = 0.30, swellSigma: Float = 0.42
+    /// The swell fades out over this rest height band (the root is at 0.47 and the tail tube's top meets the back below 0.9, which the swell must keep covering; the head cap the crown fit reads starts at about 1.19): it shapes the lower back
+    /// where it becomes the tail, never the head. Unfaded, the Gaussian pushed the back of his head out under the hat, and the per-frame crown fit
+    /// (CrownFit) lifted and dropped the hat by up to 0.45 every step: the bouncing head and the broken back of the hat.
+    static let swellTopFade: ClosedRange<Float> = 0.9...1.19
+    /// The swell's weight at rest point `q` (0...1): a Gaussian about the tail root, faded out above `swellTopFade`. The skin (Skinner.configureTail) and
+    /// the spike ridge (PipOptions) share it, so the spikes stay seated on the swelled back.
+    static func swellWeight(_ q: SIMD3<Float>) -> Float {
+        expf(-simd_length_squared(q - rootF) / (2 * swellSigma * swellSigma)) * (1 - simd_smoothstep(swellTopFade.lowerBound, swellTopFade.upperBound, q.y))
+    }
     static let startDir: SIMD3<Float> = { let d = shape.tangent(shape.sink + 0.05); return SIMD3(Float(d.x), Float(d.y), Float(d.z)) }()
     /// Per vertex: the rest height of its ring's centre (so a whole ring blends rigid -> floor-lying by the same weight and is never squashed).
     static let ringY: [Float] = {

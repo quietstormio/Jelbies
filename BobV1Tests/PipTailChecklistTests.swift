@@ -10,6 +10,7 @@
 //    closeups.png  zoomed back/tail junction + floor contact from back 3/4, side and top
 //    walk_bob_vs_pip.png / walk_bob.txt   head bounce while walking: Pip vs Bob (+ numbers for several variants)
 //  TAILCHECK_ONLY=angles,motions,... limits the run. It only uses the public tail / skinner state, so it runs against whatever tail code is present.
+//  One REAL regression test lives here too (always runs): testPipHatStaysOnHisHeadWhileWalking.
 //
 
 import XCTest
@@ -363,6 +364,63 @@ final class PipTailChecklistTests: XCTestCase {
             }
         }
         try write(grid(cells, cols: 4), d + "/wear.png")
+    }
+
+    /// One walk away from the camera in `hat`: how far the hat as drawn (crown fit included) stands above the drawn head top, every frame while walking
+    /// (p2p / sd: how much the hat moves ON his head), plus close-ups from behind and above when `ctx` is given (the room camera's angle on a Jelbie walking away).
+    private func hatWalk(id: Int, hat: WearLook, spikes: Bool = true, ctx: Ctx? = nil, label: String = "") -> (p2p: Float, sd: Float, cells: [UIImage]) {
+        let chars = [Char(id: id, outfit: [.head: hat], featureOn: spikes)]
+        let lab = makeLab(chars, positions: [SIMD2(0, 1.6)]); let dr = dress(lab, chars); settle(lab, dr, chars, frames: 50)
+        let r = lab.rigs[0], s = subj(lab, dr, chars)
+        r.brain.script = .walk(target: SIMD2(0, -2.6), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+        let eggLimit = MotionRig.renderMesh.armCapsule?.firstVertex.min() ?? 0
+        var t: Float = 0, cells: [UIImage] = [], tops: [Float] = []
+        var memo = SIMD3<Float>(0, 0, -1)
+        while t < 2.6 {
+            step(lab, dr, chars); t += 1.0 / 60
+            if t > 1.0 && r.brain.activity == .walking {
+                let sk = skin(r.skinner, r.sim)
+                let f = sk.withUnsafeBufferPointer { p in s.worn.frame(theme: RoomTheme(), time: 0.4) { _ in p.baseAddress } }
+                var headTop: Float = -9
+                for v in 0..<eggLimit { headTop = max(headTop, sk[6 * v + 1]) }
+                tops.append((f.opaque.vertices.map { $0.pos.y }.max() ?? 0) - headTop)
+            }
+            if let c = ctx, t > 1.4, cells.count < 8, Int(((t - 1.4) * 60).rounded()) % 4 == 0 {
+                let v = View(name: "back", yaw: .pi, dist: 2.3, lookY: 0.55, lookBack: 0.0, lift: 0.55)
+                cells.append(ui(render(c, s, cam: cam(v, s.sim, memo: &memo), neutral: false), String(format: "%@ t=%.2f", label, t)))
+            }
+        }
+        let mean = tops.reduce(0, +) / Float(max(tops.count, 1))
+        let sd = (tops.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Float(max(tops.count, 1))).squareRoot()
+        return ((tops.max() ?? 0) - (tops.min() ?? 0), sd, cells)
+    }
+
+    /// Regression (user, many times: "the yellow one's head is still bouncy and the back of the hat is glitching"): the tail's back swell reached the back of
+    /// Pip's head, and the per-frame crown fit lifted and dropped an enclosing hat by up to 0.45 every step. His hat must sit as still on his head as Moss's does.
+    func testPipHatStaysOnHisHeadWhileWalking() throws {
+        for hat: WearLook in [.beanieHoney, .tophat, .cowboyHat, .crownGold] {
+            let pip = hatWalk(id: 1, hat: hat), moss = hatWalk(id: 2, hat: hat)
+            XCTAssertLessThan(pip.p2p, max(0.09, moss.p2p * 1.5), "\(hat): Pip's hat moves on his head (p2p \(pip.p2p)) much more than Moss's (\(moss.p2p))")
+            XCTAssertLessThan(pip.sd, max(0.02, moss.sd * 1.5), "\(hat): Pip's hat bobs on his head (sd \(pip.sd)) much more than Moss's (\(moss.sd))")
+        }
+    }
+
+    /// The back of an enclosing hat while walking, close up from behind and above: Pip, Pip without spikes, Pip with the crown fit off, Moss for reference.
+    func testHatBack() throws {
+        let d = try dir("hatback")
+        let hat: WearLook = ProcessInfo.processInfo.environment["HATBACK_HAT"].flatMap { WearLook(rawValue: $0) } ?? .beanieHoney
+        let base = makeLab([Char(id: 1)])
+        let c = try makeCtx(sim: base.rigs[0].sim, W: 360, H: 300)
+        var rows: [UIImage] = [], report = ""
+        for (name, id, spikes, fit) in [("Pip", 1, true, true), ("Pip, no spikes", 1, false, true), ("Pip, crown fit OFF", 1, true, false), ("Moss", 2, true, true)] {
+            CrownFit.enabled = fit
+            defer { CrownFit.enabled = true }
+            let w = hatWalk(id: id, hat: hat, spikes: spikes, ctx: c, label: name)
+            report += String(format: "%@: hat top above head top: p2p %.4f sd %.4f\n", name, w.p2p, w.sd)
+            rows.append(grid(w.cells, cols: 8))
+        }
+        try report.write(toFile: d + "/hatback.txt", atomically: true, encoding: .utf8)
+        try write(grid(rows, cols: 1), d + "/hatback_\(hat.rawValue).png")
     }
 
     // MARK: 4. the others (no tail / back swell allowed)
