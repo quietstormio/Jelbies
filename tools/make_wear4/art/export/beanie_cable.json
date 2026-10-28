@@ -1,0 +1,48 @@
+{
+ "id": "beanie_cable",
+ "tris": 1480,
+ "verts": 763,
+ "parts": [
+  {
+   "name": "knit",
+   "tris": 1160,
+   "verts": 601
+  },
+  {
+   "name": "pom",
+   "tris": 320,
+   "verts": 162
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.56,
+  -0.3673,
+  -0.5097
+ ],
+ "bounds_local_max": [
+  0.56,
+  0.0969,
+  0.4727
+ ],
+ "size": [
+  1.12,
+  0.4642,
+  0.9823
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 45,
+ "title": "Cable-knit beanie",
+ "desc": "Cream cable-knit beanie: braided ridges up the crown, a ribbed cuff and a fluffy pom on a tail at the back (the crown stays free for the sprout). Cuff edge above the brows.",
+ "colourway": "beanie_cable",
+ "batch": 4
+}

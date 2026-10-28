@@ -72,7 +72,7 @@ nonisolated enum WearRules {
         default: break
         }
         switch l {
-        case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky, .cowboyHat, .beeAntennae: h.insert(.flip)
+        case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky, .cowboyHat, .beeAntennae, .vikingHat: h.insert(.flip)
         default: break
         }
         return h
@@ -92,7 +92,11 @@ nonisolated enum WearRules {
         case .medalGold: return part.hasPrefix("ribbon") ? surface : PartRule(w0: 0, w1: 0, h0: 1, h1: 1)
         case .whistleCoach: return part.hasPrefix("strap") ? surface : PartRule(w0: 0, w1: 0, h0: 1, h1: 1)
         case .pearls: return part == "drop" || part == "cap" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
-        case .tutuPink: return part == "waistband" ? surface : PartRule(w0: 1, w1: 1, h0: 0, h1: 1)
+        case .tutuPink: return part == "waistband" || part.hasPrefix("bow") ? surface : PartRule(w0: 1, w1: 1, h0: 0, h1: 1)
+        case .scarfSilk:
+            if part.hasPrefix("tail") { return PartRule(w0: 1, w1: 0.3, h0: 0, h1: 1) }
+            return part == "knot" ? rigid : surface
+        case .chainGold: return part == "coin" || part == "coinring" || part == "star" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .capeHero: return part == "panel" ? PartRule(w0: 1, w1: 0.35, h0: 0, h1: 1) : surface
         case .monocleGold: return part == "chain" || part.hasPrefix("link") ? PartRule(w0: 1, w1: 0.4, h0: 0, h1: 1) : rigid
         case .backpackSky: return part.hasPrefix("strap") ? surface : rigid
@@ -109,7 +113,8 @@ nonisolated enum WearRules {
     static func isSurface(_ l: WearLook) -> Bool {
         switch l {
         case .bandanaCoral, .bandanaMint, .bibPink, .bibSky, .sashPink, .sashSky, .heroPatch, .sweatband, .scarfCosy, .scarfSky, .medalGold,
-             .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator, .lei, .hoodie, .raincoat: return true
+             .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator, .lei, .hoodie, .raincoat,
+             .vestPuffer, .cardiganCable, .bagCrossbody, .scarfSilk, .chainGold: return true
         default: return false
         }
     }

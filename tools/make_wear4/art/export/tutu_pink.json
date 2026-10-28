@@ -1,0 +1,79 @@
+{
+ "id": "tutu_pink",
+ "tris": 3080,
+ "verts": 2052,
+ "parts": [
+  {
+   "name": "waistband",
+   "tris": 280,
+   "verts": 252
+  },
+  {
+   "name": "layer0",
+   "tris": 640,
+   "verts": 400
+  },
+  {
+   "name": "layer1",
+   "tris": 640,
+   "verts": 406
+  },
+  {
+   "name": "layer2",
+   "tris": 640,
+   "verts": 428
+  },
+  {
+   "name": "layer3",
+   "tris": 640,
+   "verts": 440
+  },
+  {
+   "name": "bow-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "bow+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "bowknot",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.28,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.7907,
+  -0.117,
+  -0.7174
+ ],
+ "bounds_local_max": [
+  0.7907,
+  0.022,
+  0.7174
+ ],
+ "size": [
+  1.5815,
+  0.139,
+  1.4347
+ ],
+ "anchor": "waist",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet",
+  "sparkly"
+ ],
+ "price": 60,
+ "title": "Ballet tutu",
+ "desc": "A fuller four-layer ruffled tulle tutu (thick edged layers with scalloped hems) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet.",
+ "colourway": "tutu_pink",
+ "batch": 2
+}

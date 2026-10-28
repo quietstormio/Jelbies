@@ -1,0 +1,74 @@
+{
+ "id": "bag_crossbody",
+ "tris": 936,
+ "verts": 534,
+ "parts": [
+  {
+   "name": "strap",
+   "tris": 160,
+   "verts": 102
+  },
+  {
+   "name": "stitch-1",
+   "tris": 112,
+   "verts": 58
+  },
+  {
+   "name": "stitch+1",
+   "tris": 112,
+   "verts": 58
+  },
+  {
+   "name": "pouch",
+   "tris": 280,
+   "verts": 142
+  },
+  {
+   "name": "flap",
+   "tris": 156,
+   "verts": 80
+  },
+  {
+   "name": "clasp",
+   "tris": 96,
+   "verts": 82
+  },
+  {
+   "name": "ring",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.4604,
+  -0.2789,
+  -0.284
+ ],
+ "bounds_local_max": [
+  0.4714,
+  0.2926,
+  0.0702
+ ],
+ "size": [
+  0.9318,
+  0.5715,
+  0.3543
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet",
+  "sparkly"
+ ],
+ "price": 75,
+ "title": "Quilted crossbody bag",
+ "desc": "A small quilted cream bag with a gold clasp, hung at the right hip on a brown strap that crosses the belly from the left shoulder (ends tucked behind the arm root). Strap top y 0.60 at the side, 0.45 at the centre line: below the mouth keep-out.",
+ "colourway": "bag_crossbody",
+ "batch": 4
+}

@@ -1,0 +1,74 @@
+{
+ "id": "cape_hero",
+ "tris": 1684,
+ "verts": 1124,
+ "parts": [
+  {
+   "name": "panel",
+   "tris": 608,
+   "verts": 394
+  },
+  {
+   "name": "collar",
+   "tris": 252,
+   "verts": 128
+  },
+  {
+   "name": "edge200",
+   "tris": 100,
+   "verts": 52
+  },
+  {
+   "name": "edge340",
+   "tris": 100,
+   "verts": 52
+  },
+  {
+   "name": "clasp340",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "clasp200",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "emblem",
+   "tris": 464,
+   "verts": 414
+  }
+ ],
+ "anchor_rest": [
+  -0.0,
+  0.55,
+  -0.5172
+ ],
+ "bounds_local_min": [
+  -0.6545,
+  -0.4356,
+  -0.1321
+ ],
+ "bounds_local_max": [
+  0.6545,
+  0.178,
+  0.3556
+ ],
+ "size": [
+  1.309,
+  0.6136,
+  0.4877
+ ],
+ "anchor": "back",
+ "slot": "body",
+ "tags": [
+  "cool",
+  "sparkly",
+  "cute"
+ ],
+ "price": 70,
+ "title": "Hero cape",
+ "desc": "A fuller hero cape (honey lining, cream trim) with pleated folds, a thick rolled collar, trimmed edges, gold clasps and a puffy star emblem; same footprint as before (back arc 200..340, collar y 0.68, hem y~0.16). Nothing on the front.",
+ "colourway": "cape_hero",
+ "batch": 2
+}

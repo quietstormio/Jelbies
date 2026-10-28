@@ -1,0 +1,118 @@
+{
+ "id": "monocle_gold",
+ "tris": 3640,
+ "verts": 2104,
+ "parts": [
+  {
+   "name": "ring",
+   "tris": 1568,
+   "verts": 784
+  },
+  {
+   "name": "inner",
+   "tris": 1792,
+   "verts": 1152
+  },
+  {
+   "name": "hinge",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link0_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link0_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link0_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link1_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link1_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link1_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link2_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link2_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link2_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link3_0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link3_1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link3_2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "clip",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  0.127,
+  -0.2796,
+  -0.1432
+ ],
+ "bounds_local_max": [
+  0.4759,
+  0.1094,
+  0.0641
+ ],
+ "size": [
+  0.3489,
+  0.389,
+  0.2073
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "sweet"
+ ],
+ "price": 45,
+ "title": "Monocle",
+ "desc": "Gold monocle: a thick glossy ring (0.026 wide) with an inner bead line round the +x eye bead, a hinge and a chunky oval-link chain hanging OUTWARD to a clip at (0.425,0.565).",
+ "colourway": "monocle_gold",
+ "batch": 2
+}

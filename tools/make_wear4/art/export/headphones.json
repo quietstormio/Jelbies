@@ -1,0 +1,73 @@
+{
+ "id": "headphones",
+ "tris": 1136,
+ "verts": 610,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 264,
+   "verts": 134
+  },
+  {
+   "name": "cup-1",
+   "tris": 160,
+   "verts": 82
+  },
+  {
+   "name": "pad-1",
+   "tris": 196,
+   "verts": 114
+  },
+  {
+   "name": "hub-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "cup+1",
+   "tris": 160,
+   "verts": 82
+  },
+  {
+   "name": "pad+1",
+   "tris": 196,
+   "verts": 114
+  },
+  {
+   "name": "hub+1",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.7282,
+  -0.5718,
+  -0.1159
+ ],
+ "bounds_local_max": [
+  0.7282,
+  0.0596,
+  0.1159
+ ],
+ "size": [
+  1.4563,
+  0.6314,
+  0.2318
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 55,
+ "title": "Headphones",
+ "desc": "Big over-ear headphones: an ink band arching over the crown and coral ear cups with cream pads, at y 0.90 on the head sides (clear of the eyes, brows, arm tops and mouth).",
+ "colourway": "headphones",
+ "batch": 3
+}

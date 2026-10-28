@@ -1,0 +1,73 @@
+{
+ "id": "vest_puffer",
+ "tris": 2620,
+ "verts": 1678,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 1680,
+   "verts": 880
+  },
+  {
+   "name": "hem",
+   "tris": 320,
+   "verts": 320
+  },
+  {
+   "name": "collar",
+   "tris": 320,
+   "verts": 320
+  },
+  {
+   "name": "zip",
+   "tris": 100,
+   "verts": 52
+  },
+  {
+   "name": "pull",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pocket-1",
+   "tris": 60,
+   "verts": 32
+  },
+  {
+   "name": "pocket+1",
+   "tris": 60,
+   "verts": 32
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6364,
+  -0.1649,
+  -1.0411
+ ],
+ "bounds_local_max": [
+  0.6364,
+  0.163,
+  0.1138
+ ],
+ "size": [
+  1.2727,
+  0.3279,
+  1.1549
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 65,
+ "title": "Puffer vest",
+ "desc": "Teal quilted puffer vest: horizontal baffles with vertical seams, ribbed hem, stand-up collar (top 0.51), gold zip and pull, two zip pockets. Sleeveless: the arms stay free. Nothing on the front above y 0.51.",
+ "colourway": "vest_puffer",
+ "batch": 4
+}

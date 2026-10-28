@@ -1,0 +1,93 @@
+{
+ "id": "sunglasses_star",
+ "tris": 6064,
+ "verts": 3582,
+ "parts": [
+  {
+   "name": "frame-1",
+   "tris": 2240,
+   "verts": 1190
+  },
+  {
+   "name": "lens-1",
+   "tris": 464,
+   "verts": 394
+  },
+  {
+   "name": "shine-1",
+   "tris": 60,
+   "verts": 68
+  },
+  {
+   "name": "glint-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "frame+1",
+   "tris": 2240,
+   "verts": 1190
+  },
+  {
+   "name": "lens+1",
+   "tris": 464,
+   "verts": 394
+  },
+  {
+   "name": "shine+1",
+   "tris": 60,
+   "verts": 68
+  },
+  {
+   "name": "glint+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bridge",
+   "tris": 176,
+   "verts": 90
+  },
+  {
+   "name": "temple-1",
+   "tris": 160,
+   "verts": 82
+  },
+  {
+   "name": "temple+1",
+   "tris": 160,
+   "verts": 82
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.5976,
+  -0.1372,
+  -0.4344
+ ],
+ "bounds_local_max": [
+  0.5976,
+  0.1243,
+  0.079
+ ],
+ "size": [
+  1.1951,
+  0.2615,
+  0.5134
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "sparkly"
+ ],
+ "price": 60,
+ "title": "Star sunglasses",
+ "desc": "Pink star sunglasses: a thick glossy star frame (0.030 wide) round dark plum lenses, a soft highlight, chunky temples.",
+ "colourway": "sunglasses_star",
+ "batch": 1
+}

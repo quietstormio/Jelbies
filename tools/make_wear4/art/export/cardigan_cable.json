@@ -1,0 +1,118 @@
+{
+ "id": "cardigan_cable",
+ "tris": 4548,
+ "verts": 2840,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 2760,
+   "verts": 1440
+  },
+  {
+   "name": "hem",
+   "tris": 480,
+   "verts": 480
+  },
+  {
+   "name": "collar",
+   "tris": 480,
+   "verts": 480
+  },
+  {
+   "name": "placket",
+   "tris": 168,
+   "verts": 86
+  },
+  {
+   "name": "button0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "button1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "button2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "button3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "button4",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pocket-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pocket+1",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6402,
+  -0.2038,
+  -1.0449
+ ],
+ "bounds_local_max": [
+  0.6402,
+  0.164,
+  0.1204
+ ],
+ "size": [
+  1.2805,
+  0.3678,
+  1.1653
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 60,
+ "title": "Cable cardigan",
+ "desc": "Rust cable-knit cardigan: braided ridges, ribbed hem, a shawl collar (top 0.51), a cream button band with five buttons and two patch pockets. Sleeveless over the belly; arms stay free.",
+ "colourway": "cardigan_cable",
+ "batch": 4
+}

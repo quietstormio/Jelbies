@@ -1,0 +1,123 @@
+{
+ "id": "bandana_mint",
+ "tris": 1192,
+ "verts": 819,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 360,
+   "verts": 252
+  },
+  {
+   "name": "cloth",
+   "tris": 248,
+   "verts": 191
+  },
+  {
+   "name": "hem-1",
+   "tris": 108,
+   "verts": 56
+  },
+  {
+   "name": "hem+1",
+   "tris": 108,
+   "verts": 56
+  },
+  {
+   "name": "pd0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd7",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd8",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pd9",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "knot",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "end-1",
+   "tris": 44,
+   "verts": 52
+  },
+  {
+   "name": "end+1",
+   "tris": 44,
+   "verts": 50
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.6152,
+  -0.2343,
+  -1.0575
+ ],
+ "bounds_local_max": [
+  0.6152,
+  0.075,
+  0.0642
+ ],
+ "size": [
+  1.2305,
+  0.3093,
+  1.1216
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 25,
+ "title": "Mint bandana",
+ "desc": "A neckerchief: a plumped rolled band across the belly at y~0.505 (top <=0.54), big side knots, and a thick polka-dot triangle with rolled cream hems hanging to y 0.27. All below the mouth keep-out.",
+ "colourway": "bandana_mint",
+ "batch": 1
+}

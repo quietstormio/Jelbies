@@ -1,0 +1,173 @@
+{
+ "id": "chain_gold",
+ "tris": 1916,
+ "verts": 1208,
+ "parts": [
+  {
+   "name": "link0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link4",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link5",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link6",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link7",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link8",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole8",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link9",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link10",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole10",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link11",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link12",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole12",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "link13",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "link14",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hole14",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "coin",
+   "tris": 192,
+   "verts": 146
+  },
+  {
+   "name": "coinring",
+   "tris": 188,
+   "verts": 144
+  },
+  {
+   "name": "star",
+   "tris": 156,
+   "verts": 180
+  },
+  {
+   "name": "bail",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.3764,
+  -0.1758,
+  -0.0661
+ ],
+ "bounds_local_max": [
+  0.3777,
+  0.0646,
+  0.0758
+ ],
+ "size": [
+  0.7541,
+  0.2403,
+  0.1419
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cool",
+  "sparkly"
+ ],
+ "price": 70,
+ "title": "Gold chain",
+ "desc": "A chunky gold curb chain in a swag from (+-0.34,0.52) down to a coin pendant at y~0.39: nineteen big alternating links. Lowest point on the centre line; nothing near the mouth keep-out.",
+ "colourway": "chain_gold",
+ "batch": 4
+}

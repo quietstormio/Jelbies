@@ -1,0 +1,84 @@
+{
+ "id": "heart_shades",
+ "tris": 5688,
+ "verts": 3260,
+ "parts": [
+  {
+   "name": "frame-1",
+   "tris": 2240,
+   "verts": 1171
+  },
+  {
+   "name": "lens-1",
+   "tris": 296,
+   "verts": 264
+  },
+  {
+   "name": "shine-1",
+   "tris": 60,
+   "verts": 68
+  },
+  {
+   "name": "frame+1",
+   "tris": 2240,
+   "verts": 1171
+  },
+  {
+   "name": "lens+1",
+   "tris": 296,
+   "verts": 264
+  },
+  {
+   "name": "shine+1",
+   "tris": 60,
+   "verts": 68
+  },
+  {
+   "name": "bridge",
+   "tris": 176,
+   "verts": 90
+  },
+  {
+   "name": "temple-1",
+   "tris": 160,
+   "verts": 82
+  },
+  {
+   "name": "temple+1",
+   "tris": 160,
+   "verts": 82
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.5976,
+  -0.1255,
+  -0.4344
+ ],
+ "bounds_local_max": [
+  0.5976,
+  0.1301,
+  0.0707
+ ],
+ "size": [
+  1.1951,
+  0.2556,
+  0.5051
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "sweet",
+  "sparkly",
+  "cute"
+ ],
+ "price": 55,
+ "title": "Heart sunglasses",
+ "desc": "Coral heart sunglasses: thick glossy heart frame (0.029 wide), berry lenses with a highlight, chunky temples.",
+ "colourway": "heart_shades",
+ "batch": 2
+}

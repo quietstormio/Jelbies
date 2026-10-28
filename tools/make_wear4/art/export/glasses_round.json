@@ -1,0 +1,83 @@
+{
+ "id": "glasses_round",
+ "tris": 3712,
+ "verts": 1870,
+ "parts": [
+  {
+   "name": "rim-1",
+   "tris": 1568,
+   "verts": 784
+  },
+  {
+   "name": "hinge-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "glint-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "rim+1",
+   "tris": 1568,
+   "verts": 784
+  },
+  {
+   "name": "hinge+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "glint+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bridge",
+   "tris": 176,
+   "verts": 90
+  },
+  {
+   "name": "temple-1",
+   "tris": 160,
+   "verts": 82
+  },
+  {
+   "name": "temple+1",
+   "tris": 160,
+   "verts": 82
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.82,
+  0.5052
+ ],
+ "bounds_local_min": [
+  -0.6017,
+  -0.1071,
+  -0.4338
+ ],
+ "bounds_local_max": [
+  0.6017,
+  0.1103,
+  0.0652
+ ],
+ "size": [
+  1.2035,
+  0.2174,
+  0.499
+ ],
+ "anchor": "face",
+ "slot": "face",
+ "tags": [
+  "cool",
+  "cute"
+ ],
+ "price": 40,
+ "title": "Round glasses",
+ "desc": "Round honey acetate glasses: thick glossy rims (0.027 wide, 0.031 deep), end-piece hinges and flat chunky temples. Frames only, no lens fill, so the eyes stay readable.",
+ "colourway": "glasses_round",
+ "batch": 1
+}

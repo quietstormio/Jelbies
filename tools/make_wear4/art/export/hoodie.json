@@ -1,0 +1,99 @@
+{
+ "id": "hoodie",
+ "tris": 2136,
+ "verts": 1458,
+ "parts": [
+  {
+   "name": "body",
+   "tris": 560,
+   "verts": 320
+  },
+  {
+   "name": "hem",
+   "tris": 320,
+   "verts": 320
+  },
+  {
+   "name": "neck",
+   "tris": 320,
+   "verts": 320
+  },
+  {
+   "name": "pocket",
+   "tris": 80,
+   "verts": 54
+  },
+  {
+   "name": "pocketseam-1",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "pocketseam+1",
+   "tris": 48,
+   "verts": 26
+  },
+  {
+   "name": "cord-1",
+   "tris": 50,
+   "verts": 27
+  },
+  {
+   "name": "aglet-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "cord+1",
+   "tris": 50,
+   "verts": 27
+  },
+  {
+   "name": "aglet+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "hood",
+   "tris": 320,
+   "verts": 162
+  },
+  {
+   "name": "hoodrim",
+   "tris": 300,
+   "verts": 152
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6724,
+  -0.1948,
+  -1.0846
+ ],
+ "bounds_local_max": [
+  0.6724,
+  0.3466,
+  0.1054
+ ],
+ "size": [
+  1.3447,
+  0.5414,
+  1.19
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cool",
+  "cute",
+  "sweet"
+ ],
+ "price": 65,
+ "title": "Cosy hoodie",
+ "desc": "Red pullover hoodie: ribbed hem, a kangaroo pocket, cream drawstrings and a bunched hood resting behind the shoulders. Everything on the front sits at y<=0.51 (neckline roll top 0.51), clear of the mouth.",
+ "colourway": "hoodie",
+ "batch": 3
+}

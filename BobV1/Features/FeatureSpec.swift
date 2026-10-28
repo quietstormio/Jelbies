@@ -55,7 +55,8 @@ nonisolated struct FeatureSpec: Codable, Sendable {
         lock.lock(); defer { lock.unlock() }
         if let s = _shared { return s }
         let url = Bundle.main.url(forResource: "feature_compat", withExtension: "json") ?? Bundle(for: Token.self).url(forResource: "feature_compat", withExtension: "json")
-        let s = (url.flatMap { try? Data(contentsOf: $0) }).flatMap { try? JSONDecoder().decode(FeatureSpec.self, from: $0) } ?? FeatureSpec.empty
+        var s = (url.flatMap { try? Data(contentsOf: $0) }).flatMap { try? JSONDecoder().decode(FeatureSpec.self, from: $0) } ?? FeatureSpec.empty
+        s.applyAliases()
         _shared = s
         return s
     }
@@ -65,6 +66,24 @@ nonisolated struct FeatureSpec: Codable, Sendable {
                                    wings: Wings(anchor: [0, 0, 0], sides: [:]),
                                    hop: Hop(total: 0, maxLift: 0, drift: 0, keyframes: [], oscFrom: 0, oscTo: 0, lift: Osc(mean: 0, amp: 0, hz: 0), hover: Osc(mean: 0, amp: 0, hz: 0), decay: Osc(mean: 0, amp: 0, hz: 0)),
                                    pairs: [:], wingLimits: [:])
+}
+
+extension FeatureSpec {
+    /// Pieces added after the art lab's compatibility pass (the 2026-10-27 wardrobe sweep) borrow the rules + measured wing tables of the shipped piece
+    /// they are closest to in shape: a helmet or beanie that encloses the head behaves like the pirate hat (the sprout sits on the crown, the spines
+    /// grow through it, the wings tuck down); open and perching pieces like the sweatband; glasses, vests and bags need no change.
+    static let aliases: [String: String] = [
+        "viking_hat": "pirate_hat", "beanie_cable": "pirate_hat", "visor_tennis": "sweatband",
+        "wayfarer_black": "sunglasses_star", "wayfarer_tortoise": "sunglasses_star", "cat_eye_shades": "sunglasses_star",
+        "vest_puffer": "bib_sky", "cardigan_cable": "bib_sky", "bag_crossbody": "bib_sky",
+        "scarf_silk": "scarf_cosy", "chain_gold": "pearls",
+    ]
+    mutating func applyAliases() {
+        for (new, base) in Self.aliases {
+            if pairs[new] == nil, let p = pairs[base] { pairs[new] = p }
+            if wingLimits[new] == nil, let w = wingLimits[base] { wingLimits[new] = w }
+        }
+    }
 }
 
 nonisolated extension Array where Element == Float {

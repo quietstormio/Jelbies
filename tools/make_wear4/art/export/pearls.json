@@ -1,0 +1,164 @@
+{
+ "id": "pearls",
+ "tris": 1820,
+ "verts": 960,
+ "parts": [
+  {
+   "name": "pearl0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl4",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl5",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl6",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl7",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl8",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl9",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pearl10",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner4",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner5",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner6",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner7",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner8",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "inner9",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "spacer-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spacer+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "drop",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "cap",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.3889,
+  -0.168,
+  -0.0807
+ ],
+ "bounds_local_max": [
+  0.3889,
+  0.0892,
+  0.0721
+ ],
+ "size": [
+  0.7777,
+  0.2572,
+  0.1529
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sparkly",
+  "sweet",
+  "cute"
+ ],
+ "price": 65,
+ "title": "Pearl necklace",
+ "desc": "A two-strand pearl necklace: eleven big pearls on the long swag down to a pink drop in a gold cap at y~0.38, and a shorter strand of ten above it, with gold spacer beads at the shoulders. The lowest points are on the centre line, below the mouth keep-out.",
+ "colourway": "pearls",
+ "batch": 2
+}

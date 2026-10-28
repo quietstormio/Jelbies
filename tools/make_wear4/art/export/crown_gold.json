@@ -1,0 +1,158 @@
+{
+ "id": "crown_gold",
+ "tris": 908,
+ "verts": 644,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 384,
+   "verts": 288
+  },
+  {
+   "name": "spike0",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip0",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "jewel",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "spike1",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spike2",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spike3",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip3",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spike4",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spike5",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip5",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "spike6",
+   "tris": 32,
+   "verts": 26
+  },
+  {
+   "name": "tip6",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bead1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bead2",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bead4",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "bead5",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.5273,
+  -0.3108,
+  -0.4819
+ ],
+ "bounds_local_max": [
+  0.5273,
+  0.087,
+  0.4448
+ ],
+ "size": [
+  1.0546,
+  0.3978,
+  0.9267
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "sparkly",
+  "sweet"
+ ],
+ "price": 75,
+ "title": "Royal crown",
+ "desc": "Gold crown band with seven spikes, pearl tips and a big pink jewel at the front. Band bottom edge y>=1.07 at the front, above the brows.",
+ "colourway": "crown_gold",
+ "convention": "anchor_rest=(0,1.3458,0) = crown of the egg (BobForm.top). Mesh vertices are REST-space offsets from the anchor: restPos = anchor_rest + v. Axes = body rest axes (y up, +z face, x = Jelly's right-of-screen when facing camera). Carry: world = bodyPointWorld(restPos) per vertex (same maths as EyeMaskModel).",
+ "deform_class": "rigid",
+ "swap_colours_srgb": {
+  "gold": "#F9CC59",
+  "jewel": "#E98AA4",
+  "beads": "#6EB3D1"
+ },
+ "batch": 2,
+ "fit_check": {
+  "min_sdf": -0.0077,
+  "verts": 644,
+  "inside_pct": 2.8,
+  "contact_pct": 17.5,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "min_dist_to_eye_centre": 0.304,
+  "lowest_front_y": 1.097,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 4.63,
+  "verts_in_mouth_box_any_z": 0
+ }
+}

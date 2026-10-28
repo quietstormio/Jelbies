@@ -1,0 +1,93 @@
+{
+ "id": "sash_sky",
+ "tris": 2492,
+ "verts": 1951,
+ "parts": [
+  {
+   "name": "band",
+   "tris": 256,
+   "verts": 153
+  },
+  {
+   "name": "pipe-1",
+   "tris": 216,
+   "verts": 110
+  },
+  {
+   "name": "pipe+1",
+   "tris": 216,
+   "verts": 110
+  },
+  {
+   "name": "star0",
+   "tris": 464,
+   "verts": 414
+  },
+  {
+   "name": "star1",
+   "tris": 464,
+   "verts": 414
+  },
+  {
+   "name": "star2",
+   "tris": 464,
+   "verts": 414
+  },
+  {
+   "name": "rosette",
+   "tris": 160,
+   "verts": 102
+  },
+  {
+   "name": "rosette2",
+   "tris": 96,
+   "verts": 82
+  },
+  {
+   "name": "rbutton",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "tail+1",
+   "tris": 68,
+   "verts": 68
+  },
+  {
+   "name": "tail-1",
+   "tris": 68,
+   "verts": 72
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.4482,
+  -0.2447,
+  -0.4696
+ ],
+ "bounds_local_max": [
+  0.3971,
+  0.2805,
+  0.0894
+ ],
+ "size": [
+  0.8453,
+  0.5252,
+  0.5591
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "sporty",
+  "sparkly"
+ ],
+ "price": 50,
+ "title": "Sky racing sash",
+ "desc": "A pillowed diagonal racing sash (0.15 wide, 0.04 tall) with cream piping, three puffy stars and a ruffled rosette with two ribbon tails at the low end. Ends stop at |x|=0.42; whole sash below the mouth keep-out.",
+ "colourway": "sash_sky",
+ "batch": 1
+}

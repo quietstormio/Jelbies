@@ -1,0 +1,78 @@
+{
+ "id": "whistle_coach",
+ "tris": 708,
+ "verts": 398,
+ "parts": [
+  {
+   "name": "strap-1",
+   "tris": 176,
+   "verts": 90
+  },
+  {
+   "name": "strap+1",
+   "tris": 176,
+   "verts": 90
+  },
+  {
+   "name": "ring",
+   "tris": 168,
+   "verts": 90
+  },
+  {
+   "name": "chamber",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "cap",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "mouthpiece",
+   "tris": 48,
+   "verts": 50
+  },
+  {
+   "name": "hole",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "shine",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.3301,
+  -0.2316,
+  -0.056
+ ],
+ "bounds_local_max": [
+  0.3301,
+  0.0585,
+  0.107
+ ],
+ "size": [
+  0.6603,
+  0.2902,
+  0.163
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sporty",
+  "cool"
+ ],
+ "price": 30,
+ "title": "Coach whistle",
+ "desc": "A coach whistle on a thick rounded sky lanyard in a V from the shoulders to a ring at (0,0.44); a big silver whistle with a coral mouthpiece hangs to y~0.31. All below the mouth keep-out.",
+ "colourway": "whistle_coach",
+ "batch": 2
+}

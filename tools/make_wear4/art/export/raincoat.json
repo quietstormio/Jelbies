@@ -1,0 +1,103 @@
+{
+ "id": "raincoat",
+ "tris": 2038,
+ "verts": 1241,
+ "parts": [
+  {
+   "name": "coat",
+   "tris": 560,
+   "verts": 320
+  },
+  {
+   "name": "collar",
+   "tris": 320,
+   "verts": 320
+  },
+  {
+   "name": "placket",
+   "tris": 90,
+   "verts": 47
+  },
+  {
+   "name": "button0",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "button1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "button2",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "button3",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pocket-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "flap-1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "pocket+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "flap+1",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "hood",
+   "tris": 128,
+   "verts": 66
+  },
+  {
+   "name": "hoodrim",
+   "tris": 300,
+   "verts": 152
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.6744,
+  -0.1993,
+  -1.2278
+ ],
+ "bounds_local_max": [
+  0.6744,
+  0.3774,
+  0.1098
+ ],
+ "size": [
+  1.3487,
+  0.5767,
+  1.3376
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "cute",
+  "cool"
+ ],
+ "price": 60,
+ "title": "Yellow raincoat",
+ "desc": "Glossy yellow slicker flaring to the hem (y 0.19), a cream reflective stripe, toggle buttons, chest pockets and a peaked hood resting behind the shoulders. Collar top 0.51: clear of the mouth.",
+ "colourway": "raincoat",
+ "batch": 3
+}

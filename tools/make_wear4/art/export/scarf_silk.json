@@ -1,0 +1,59 @@
+{
+ "id": "scarf_silk",
+ "tris": 696,
+ "verts": 460,
+ "parts": [
+  {
+   "name": "wrap",
+   "tris": 336,
+   "verts": 170
+  },
+  {
+   "name": "knot",
+   "tris": 80,
+   "verts": 42
+  },
+  {
+   "name": "tail_a",
+   "tris": 140,
+   "verts": 124
+  },
+  {
+   "name": "tail_b",
+   "tris": 140,
+   "verts": 124
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.4454,
+  -0.3235,
+  -0.2414
+ ],
+ "bounds_local_max": [
+  0.4454,
+  0.0572,
+  0.1009
+ ],
+ "size": [
+  0.8907,
+  0.3807,
+  0.3423
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "cool",
+  "sparkly",
+  "sweet"
+ ],
+ "price": 55,
+ "title": "Silk scarf",
+ "desc": "A silky neck scarf in navy printed with gold medallions (abstract rings and dots): a slim wrap across the belly at y~0.49 (top <=0.54), a side knot and two fluttering tails. Everything below the mouth keep-out.",
+ "colourway": "scarf_silk",
+ "batch": 4
+}

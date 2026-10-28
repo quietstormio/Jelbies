@@ -74,12 +74,21 @@ def main():
     os.makedirs(res, exist_ok=True)
     cat = json.load(open(os.path.join(art, "wear_catalog.json")))
     exp = os.path.join(art, "export")
+    # pieces whose shipped .bin was finished after its export (kept byte for byte; only their counts are read back)
+    keep = {}
+    kp = os.path.join(art, "keep_bins.json")
+    if os.path.exists(kp):
+        for i in json.load(open(kp)):
+            b = open(os.path.join(res, "wear_%s.bin" % i), "rb").read()
+            keep[i] = b
     for f in os.listdir(res):
         if f.startswith("wear_") and f.endswith(".bin"): os.remove(os.path.join(res, f))
     entries = []
     for i, meta in cat["items"].items():
         j = json.load(open(os.path.join(exp, i + ".json")))
         data, nv, nt, names = convert(os.path.join(exp, i + ".obj"))
+        if i in keep:
+            data = keep[i]; nv, ni, npart = struct.unpack("<III", data[:12]); nt = ni // 3; names = [0] * npart
         open(os.path.join(res, "wear_%s.bin" % i), "wb").write(data)
         print(i, nv, "verts", nt, "tris", len(data), "bytes", len(names), "parts")
         a = j["anchor_rest"]

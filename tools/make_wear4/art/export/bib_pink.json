@@ -1,0 +1,102 @@
+{
+ "id": "bib_pink",
+ "tris": 1024,
+ "verts": 551,
+ "parts": [
+  {
+   "name": "plate",
+   "tris": 288,
+   "verts": 161
+  },
+  {
+   "name": "rim",
+   "tris": 576,
+   "verts": 294
+  },
+  {
+   "name": "pin-1+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pinbar-1+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pin+1+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pinbar+1+1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pin-1-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pinbar-1-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pin+1-1",
+   "tris": 20,
+   "verts": 12
+  },
+  {
+   "name": "pinbar+1-1",
+   "tris": 20,
+   "verts": 12
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.355,
+  0.4683
+ ],
+ "bounds_local_min": [
+  -0.2139,
+  -0.1569,
+  -0.0791
+ ],
+ "bounds_local_max": [
+  0.214,
+  0.1229,
+  0.0862
+ ],
+ "size": [
+  0.4279,
+  0.2798,
+  0.1653
+ ],
+ "anchor": "chest",
+ "slot": "body",
+ "tags": [
+  "sporty"
+ ],
+ "price": 20,
+ "title": "Pink jersey bib",
+ "desc": "A raised, rounded number plate with a rolled rim and four silver safety pins, pinned to the belly in the team colour. Digits are separate meshes placed on number_anchor.",
+ "number_anchor_rest": [
+  0.0,
+  0.3394,
+  0.5029
+ ],
+ "number_height": 0.18,
+ "number_normal": [
+  0.0,
+  -0.411,
+  0.9116
+ ],
+ "plate_half_size": [
+  0.2,
+  0.125
+ ],
+ "colourway": "bib_pink",
+ "batch": 1
+}

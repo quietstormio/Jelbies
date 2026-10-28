@@ -1,0 +1,85 @@
+{
+ "id": "medal_gold",
+ "tris": 508,
+ "verts": 458,
+ "parts": [
+  {
+   "name": "ribbon-1_0",
+   "tris": 16,
+   "verts": 18
+  },
+  {
+   "name": "ribbon-1_1",
+   "tris": 16,
+   "verts": 18
+  },
+  {
+   "name": "ribbon+1_0",
+   "tris": 16,
+   "verts": 18
+  },
+  {
+   "name": "ribbon+1_1",
+   "tris": 16,
+   "verts": 18
+  },
+  {
+   "name": "disc",
+   "tris": 224,
+   "verts": 170
+  },
+  {
+   "name": "star",
+   "tris": 156,
+   "verts": 180
+  },
+  {
+   "name": "loop",
+   "tris": 64,
+   "verts": 36
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  0.47,
+  0.5055
+ ],
+ "bounds_local_min": [
+  -0.3215,
+  -0.1379,
+  -0.0466
+ ],
+ "bounds_local_max": [
+  0.3215,
+  0.1808,
+  0.0774
+ ],
+ "size": [
+  0.643,
+  0.3188,
+  0.124
+ ],
+ "anchor": "neck",
+ "slot": "neck",
+ "tags": [
+  "sporty",
+  "sparkly"
+ ],
+ "price": 0,
+ "title": "Winner medal",
+ "desc": "Gold medal on a sky/pink ribbon. Earned only: awarded for a Circuit win (suggested shop price 80 if ever sold).",
+ "suggested_price_if_sold": 80,
+ "colourway": "medal_gold",
+ "convention": "anchor_rest = front surface at (0, 0.47), z=0.5055 ('neck' = the chest just under the mouth: there is no neck on an egg). Rest-space offsets, same carry.",
+ "deform_class": "ribbon surface_bound; disc rigid (hangs, may swing)",
+ "fit_check": {
+  "min_sdf": 0.0213,
+  "verts": 458,
+  "inside_pct": 0.0,
+  "contact_pct": 0.0,
+  "verts_over_eye_beads": 0,
+  "verts_over_brows": 0,
+  "verts_in_mouth_keepout": 0,
+  "min_keepout_ellipse_value": 1.157
+ }
+}
