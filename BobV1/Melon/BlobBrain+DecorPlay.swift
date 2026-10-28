@@ -109,7 +109,10 @@ extension BlobBrain {
                 if phT >= 0.9 && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
             } else {
                 k = 1
-                if phT >= idleState.hold || idleState.yielding { idleState.slideStage = 5; idleState.slideS = 0; idleState.phaseT = 0; postEvent(.slid, piece: .slide); AudioHub.shared.play(.zoomies, jelly: steerID, x: px, volume: 0.45) }
+                // (he pushes off once the floor where he comes off the end is clear: the one who rode before may still be standing there)
+                let landing = c + f.turned(SIMD2(0, Self.slideAt(Self.slideLength).z))
+                let landingClear = phT >= idleState.hold + 8 || !steerPeers().contains { simd_distance($0.pos, landing) < peerGap }
+                if (phT >= idleState.hold && landingClear) || idleState.yielding { idleState.slideStage = 5; idleState.slideS = 0; idleState.phaseT = 0; postEvent(.slid, piece: .slide); AudioHub.shared.play(.zoomies, jelly: steerID, x: px, volume: 0.45) }
             }
             idleState.k = k
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
