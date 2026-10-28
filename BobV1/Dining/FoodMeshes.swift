@@ -28,8 +28,12 @@ nonisolated enum FoodMeshes {
         for id in resourceIDs { if let m = load(id) { out[id] = m } }
         return out
     }()
-    static let resourceIDs = ["nuggets", "nuggets_1", "nuggets_2", "fries", "sushi", "sandwich", "minipizza", "taco", "donut", "popsicle", "onigiri", "cookie",
-                                         "swirl", "pancakes", "sundae", "fizzmac", "cafetable_1", "cafetable_2", "cafetable_3"]
+    static let resourceIDs = ["nuggets", "fries", "sushi", "sandwich", "minipizza", "taco", "donut", "popsicle", "onigiri", "cookie",
+                                         "swirl", "pancakes", "sundae", "fizzmac", "cafetable_1", "cafetable_2", "cafetable_3",
+                                         // store sweep 4: the whole mini pizza (thumbnail), the new foods and the drinks' parts (cup, garnish, ice, riders)
+                                         "minipizza_whole", "cheeseburger", "ramen", "macncheese", "dumplings", "pancakestack", "fruitcup", "cakeslice", "cupcake",
+                                         "drink_boba_shell", "drink_boba_deco", "drink_boba_ice", "drink_smoothie_shell", "drink_smoothie_deco", "drink_smoothie_float",
+                                         "drink_lemonade_shell", "drink_lemonade_deco", "drink_lemonade_ice", "drink_cocoa_deco", "drink_cocoa_float"]
 
     static func load(_ id: String) -> Mesh? {
         let url = Bundle.main.url(forResource: "food_\(id)", withExtension: "bin") ?? Bundle(for: Token.self).url(forResource: "food_\(id)", withExtension: "bin")
@@ -49,10 +53,8 @@ nonisolated enum FoodMeshes {
         }
     }
 
-    /// Resource id for a piece (the nuggets use their three variants across the three slots).
-    static func resource(_ food: String, variant j: Int) -> String {
-        food == "nuggets" ? ["nuggets", "nuggets_1", "nuggets_2"][((j % 3) + 3) % 3] : food
-    }
+    /// Resource id for a piece (the nuggets box is one mesh now; the three on a plate differ only by their yaw on the tray).
+    static func resource(_ food: String, variant j: Int) -> String { food }
     /// How a mesh is placed: a fixed yaw (the taco's long axis runs along x) and a shift of its origin in xz (the ice pop is held by its stick).
     static func placement(_ food: String) -> (yaw: Float, shift: SIMD3<Float>) {
         switch food {

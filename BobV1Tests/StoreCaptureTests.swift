@@ -79,6 +79,66 @@ final class StoreCaptureTests: XCTestCase {
         try img.pngData()?.write(to: URL(fileURLWithPath: dir + "/" + name))
     }
 
+    /// The real dining flow with a bought food or drink, from the game camera: a food is frozen in flight and as it lands in his mouth, a drink while he
+    /// sips it (early and nearly empty). Crops follow his mouth, true proportion.
+    private func mealShots(_ device: MTLDevice, id: String, w: Int, h: Int, size: Int) throws -> [(LockImage, String)] {
+        let m = MealRun()
+        Self.keep.append(m)
+        let (ren, target) = try makeRenderer(device, m.rig, w: w, h: h)
+        let room = ren.room!
+        let cam = GameCamera.camera(aspect: Float(w) / Float(h))
+        let c = try XCTUnwrap(Consumables.with(id: id))
+        m.care.store.grant(id, 2)
+        m.moveAway()
+        if c.kind == .drink { m.care.drink(id) } else { m.care.feed(id) }
+        var out: [(LockImage, String)] = []
+        var flight: LockImage?, landed: LockImage?, early: LockImage?, late: LockImage?
+        var flyTicks = 0, sipTicks = 0
+        for _ in 0..<(60 * 40) {
+            m.tick()
+            if let f = m.tray.frame(theme: room.theme) { room.setDining(f) }
+            let mouth = m.brain.mouthWorld(sim: m.rig.sim)
+            let aim = mouth + SIMD3(c.kind == .drink ? -0.2 : -0.35, -0.3, 0)
+            if c.kind == .drink {
+                if m.brain.activity == .drinking {
+                    sipTicks += 1
+                    if early == nil, sipTicks == 45 { early = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: size) }
+                    if late == nil, m.tray.drinkFill < 0.5 { late = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: size) }
+                }
+                if early != nil, late != nil { break }
+            } else {
+                if flight == nil, m.brain.dineFlying, !m.brain.dineLanded, m.brain.dineHolding {
+                    flyTicks += 1
+                    if flyTicks == 5 { flight = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: size) }
+                }
+                if landed == nil, m.brain.dineLanded { landed = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: size) }
+                if flight != nil, landed != nil { break }
+            }
+        }
+        if c.kind == .drink {
+            XCTAssertNotNil(early, "\(id): a sip frame"); XCTAssertNotNil(late, "\(id): a late sip frame")
+            if let e = early { out.append((e, "\(c.name): sipping")) }
+            if let l = late { out.append((l, "\(c.name): level dropped")) }
+        } else {
+            XCTAssertNotNil(flight, "\(id): a flight frame"); XCTAssertNotNil(landed, "\(id): a landing frame")
+            if let f = flight { out.append((f, "\(c.name): mid-toss")) }
+            if let l = landed { out.append((l, "\(c.name): lands in his mouth")) }
+        }
+        return out
+    }
+
+    /// Eating moments of the foods / drinks named in FOOD_MEAL_IDS (comma separated; default "ramen,boba"), written to meals_<ids>.png in STORE_CAP_DIR:
+    /// a food mid-toss and landing in his mouth, a drink while he sips it. Run a few ids per invocation (each is a full simulated meal).
+    func testCaptureMeals() throws {
+        guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        let ids = (ProcessInfo.processInfo.environment["FOOD_MEAL_IDS"] ?? "ramen,boba").split(separator: ",").map(String.init)
+        var cells: [(LockImage, String)] = []
+        for id in ids { cells += try mealShots(device, id: id, w: 1320, h: 2868, size: 640) }
+        XCTAssertFalse(cells.isEmpty)
+        try save(sheet(cells, cols: 2, title: "Eating moments (game camera, true proportion): tossed foods, sipped drinks"), dir, "meals_\(ids.joined(separator: "_")).png")
+    }
+
     func testCaptureFoods() throws {
         guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
@@ -87,38 +147,19 @@ final class StoreCaptureTests: XCTestCase {
         let (ren, target) = try makeRenderer(device, m.rig, w: W, h: H)
         let room = ren.room!
         var cells: [(LockImage, String)] = []
-        // every food on its tray, from the front and above
-        for f in Consumables.storeFoods {
+        // every food and drink on its tray, from the front and above
+        for f in Consumables.storeFoods + Consumables.storeDrinks {
             let L = DiningLayout.make(n: 1)
             let g = DiningModels.trayGroup(layout: L, serving: f, state: ServingState(n: 1, bitesLeft: [3]), theme: room.theme)
             let b = RoomMeshBuilder(); b.material = .plain
+            let tb = RoomMeshBuilder(); tb.material = .plain
             DiningModels.append(g.opaque, to: b, transform: DiningModels.translation(SIMD3(0, 0, 0.6)))
-            room.setDining(DiningFrame(opaque: b.mesh, translucent: RoomMesh()))
-            let cam = camera(eye: SIMD3(0.0, 0.78, 1.25), at: SIMD3(0, 0.3, 0.46), aspect: Float(W) / Float(H), fov: 30 * .pi / 180)
-            cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: W, h: H), f.name + (StoreCatalog.item(forFood: f.id).map { "  \($0.price) Drops" } ?? "")))
+            DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(0, 0, 0.6)))
+            room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
+            let drink = f.kind == .drink          // a cup is taller than a plate food: the camera stands back
+            let cam = camera(eye: drink ? SIMD3(0.0, 1.0, 1.75) : SIMD3(0.0, 0.78, 1.25), at: SIMD3(0, drink ? 0.38 : 0.3, 0.46), aspect: Float(W) / Float(H), fov: 30 * .pi / 180)
+            cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: W, h: H), f.name + (StoreCatalog.item(forFood: f.id).map { "  \($0.price) JellyCoins" } ?? "")))
         }
-        // one being tossed into a mouth: the real dining flow with a store food, frozen in flight and as it lands
-        m.care.store.grant("sushi", 2)
-        m.moveAway()
-        m.care.feed("sushi")
-        var flight: LockImage?, landed: LockImage?
-        let theme = room.theme
-        for _ in 0..<(60 * 30) {
-            m.tick()
-            if let f = m.tray.frame(theme: theme) { room.setDining(f) }
-            let mouth = m.brain.mouthWorld(sim: m.rig.sim)
-            let cam = camera(eye: mouth + SIMD3(0.9, 0.55, 2.7), at: mouth + SIMD3(0, -0.3, 0), aspect: Float(W) / Float(H), fov: 30 * .pi / 180)
-            if flight == nil, m.brain.dineFlying, !m.brain.dineLanded, m.brain.dineHolding {
-                flight = shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: W, h: H)
-            }
-            if landed == nil, m.brain.dineLanded {
-                landed = shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: W, h: H)
-            }
-            if flight != nil, landed != nil { break }
-        }
-        XCTAssertNotNil(flight, "a flight frame"); XCTAssertNotNil(landed, "a landing frame")
-        if let f = flight { cells.append((f, "sushi: tossed (in flight)")) }
-        if let l = landed { cells.append((l, "sushi: lands in his mouth")) }
         try save(sheet(cells, cols: 4, title: "Store foods: real 3D meshes on the tray, eaten through the toss flow"), dir, "foods_sheet.png")
     }
 
@@ -179,50 +220,25 @@ final class StoreCaptureTests: XCTestCase {
         let cam = GameCamera.camera(aspect: Float(w) / Float(h))
         var cells: [(LockImage, String)] = []
         let o = DiningSpot.preferred
-        for f in Consumables.storeFoods {
+        for f in Consumables.storeFoods + Consumables.storeDrinks {
             let L = DiningLayout.make(n: 1)
             let g = DiningModels.trayGroup(layout: L, serving: f, state: ServingState(n: 1, bitesLeft: [3]), theme: room.theme)
             let b = RoomMeshBuilder(); b.material = .plain
+            let tb = RoomMeshBuilder(); tb.material = .plain
             DiningModels.append(g.opaque, to: b, transform: DiningModels.translation(SIMD3(o.x, 0, o.y)))
-            room.setDining(DiningFrame(opaque: b.mesh, translucent: RoomMesh()))
+            DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(o.x, 0, o.y)))
+            room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
             let full = shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: w, h: h)
-            cells.append((crop(full, cam: cam, around: SIMD3(o.x, 0.12, o.y), w: w, h: h, size: size), f.name))
+            cells.append((crop(full, cam: cam, around: SIMD3(o.x, f.kind == .drink ? 0.30 : 0.12, o.y), w: w, h: h, size: size), f.name))
         }
-        try save(sheet(cells, cols: 5, title: "Store foods on the in-game tray (game camera, true proportion)"), dir, "foods_ingame.png")
-
-        // a toss: the bite in flight and as it lands
-        m.care.store.grant("sushi", 2)
-        m.moveAway()
-        m.care.feed("sushi")
-        var tcells: [(LockImage, String)] = []
-        var flight: LockImage?, landed: LockImage?
-        var flyTicks = 0
-        let big = 640
-        for _ in 0..<(60 * 30) {
-            m.tick()
-            if let f = m.tray.frame(theme: room.theme) { room.setDining(f) }
-            let mouth = m.brain.mouthWorld(sim: m.rig.sim)
-            let aim = mouth + SIMD3(-0.35, -0.3, 0)
-            if flight == nil, m.brain.dineFlying, !m.brain.dineLanded, m.brain.dineHolding {
-                flyTicks += 1
-                if flyTicks == 5 { flight = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: big) }
-            }
-            if landed == nil, m.brain.dineLanded {
-                landed = crop(shot(ren, target, rig: m.rig, showBody: true, cam: cam, w: w, h: h), cam: cam, around: aim, w: w, h: h, size: big)
-            }
-            if flight != nil, landed != nil { break }
-        }
-        XCTAssertNotNil(flight); XCTAssertNotNil(landed)
-        if let f = flight { tcells.append((f, "sushi: mid-toss")) }
-        if let l = landed { tcells.append((l, "sushi: landing in his mouth")) }
-        try save(sheet(tcells, cols: 2, title: "The toss (game camera)"), dir, "toss.png")
+        try save(sheet(cells, cols: 6, title: "Store foods and drinks on the in-game tray (game camera, true proportion)"), dir, "foods_ingame.png")
 
         // the Shop / Bag thumbnails
         var scells: [(LockImage, String)] = []
         _ = scells
         let items = StoreCatalog.items.filter { $0.food != nil }
         let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
-        let tw = 240, th = 270, cols = 5, rows = (items.count + cols - 1) / cols
+        let tw = 240, th = 270, cols = 6, rows = (items.count + cols - 1) / cols
         let img = UIGraphicsImageRenderer(size: CGSize(width: tw * cols, height: 54 + th * rows), format: fmt).image { _ in
             UIColor(red: 1, green: 0.96, blue: 0.9, alpha: 1).setFill(); UIRectFill(CGRect(x: 0, y: 0, width: tw * cols, height: 54 + th * rows))
             ("Shop: snacks (3D thumbnails, as the Shop and Bag draw them)" as NSString).draw(at: CGPoint(x: 12, y: 12), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 24), .foregroundColor: UIColor.black])
@@ -230,7 +246,7 @@ final class StoreCaptureTests: XCTestCase {
                 let x = (i % cols) * tw, y = 54 + (i / cols) * th
                 UIColor.white.setFill(); UIBezierPath(roundedRect: CGRect(x: x + 8, y: y + 4, width: tw - 16, height: th - 12), cornerRadius: 22).fill()
                 StoreThumb.image(for: it)?.draw(in: CGRect(x: x + 20, y: y + 10, width: tw - 40, height: tw - 40))
-                ("\(it.name)  \(it.price) Drops" as NSString).draw(at: CGPoint(x: x + 16, y: y + th - 38), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 17), .foregroundColor: UIColor.black])
+                ("\(it.name)  \(it.price) JellyCoins" as NSString).draw(at: CGPoint(x: x + 16, y: y + th - 38), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 17), .foregroundColor: UIColor.black])
             }
         }
         try save(img, dir, "shop_snacks.png")

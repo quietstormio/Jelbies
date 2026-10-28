@@ -748,7 +748,7 @@ struct CareMenu: View {
                 ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
                     row(item, count: items.count, index: index)
                     if picker == .food, item == .feed { pickerRow(Consumables.foods, kind: .food) }
-                    if picker == .drink, item == .drink { pickerRow(Consumables.drinks, kind: .drink) }
+                    if picker == .drink, item == .drink { pickerRow(care.drinkChoices, kind: .drink) }
                     if snackPicker, item == .snacks { snackRow }
                     if competeRow, item == .compete { competeChips }
                 }
@@ -769,6 +769,12 @@ struct CareMenu: View {
 
     /// A tiny row of the catalogue's items in the same cream style; tapping one starts it and closes the menu.
     private func pickerRow(_ list: [Consumable], kind: ConsumableKind) -> some View {
+        ViewThatFits(in: .horizontal) {
+            pickerChips(list, kind: kind)
+            ScrollView(.horizontal, showsIndicators: false) { pickerChips(list, kind: kind) }          // water, soda and four bought drinks do not fit one line
+        }
+    }
+    private func pickerChips(_ list: [Consumable], kind: ConsumableKind) -> some View {
         HStack(spacing: 10) {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
@@ -777,12 +783,17 @@ struct CareMenu: View {
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
+                        if c.stored, let it = StoreCatalog.item(forFood: c.id) {
+                            ItemArt(item: it, size: tight ? 44 : 46)          // a bought drink shows its own cup
+                                .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
+                        } else {
                         Image(systemName: UIImage(systemName: c.symbol) != nil ? c.symbol : "drop.fill")
                             .font(.system(size: 19, weight: .semibold))
                             .foregroundStyle(Self.brown)
                             .frame(width: tight ? 44 : 46, height: tight ? 44 : 46)
                             .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                        }
                         Text(c.name)
                             .jFont(12, .semibold)
                             .foregroundStyle(Self.brown)
@@ -867,8 +878,8 @@ struct CareMenu: View {
         switch route {
         case .picker(let k):
             if k == .food { withAnimation(Self.spring) { picker = picker == .food ? nil : .food; snackPicker = false; competeRow = false }; return }
-            if Consumables.drinks.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; snackPicker = false; competeRow = false }; return }
-            care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
+            if care.drinkChoices.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; snackPicker = false; competeRow = false }; return }
+            care.drink(care.drinkChoices.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
         case .snacks: withAnimation(Self.spring) { snackPicker.toggle(); picker = nil; competeRow = false }; return
         case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil; snackPicker = false }; return
         case .bag(let tab, let who): openBag(tab, who)

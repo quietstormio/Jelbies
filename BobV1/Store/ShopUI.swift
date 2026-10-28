@@ -8,11 +8,11 @@
 import SwiftUI
 
 enum ShopTab: String, CaseIterable, Identifiable {
-    case snacks = "Snacks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys", rooms = "Rooms"
+    case snacks = "Snacks", drinks = "Drinks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys", rooms = "Rooms"
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .snacks: return [.food, .treat]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
+        case .snacks: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
         }
     }
     var items: [StoreItem] {

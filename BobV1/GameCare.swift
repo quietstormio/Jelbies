@@ -275,7 +275,11 @@ final class GameCare {
 
     // Target Jelly: every care action takes `jelly:` (default 0 = Bob). Phase A drives Jelly 0 only; phase B routes the id to that Jelly's brain / needs / tray place.
     func feed(jelly: Int? = nil) { feed(selectedFoodID, jelly: jelly) }
-    func water(jelly: Int? = nil) { drink(selectedDrinkID, jelly: jelly) }
+    func water(jelly: Int? = nil) { drink(drinkIsAvailable(selectedDrinkID) ? selectedDrinkID : Consumables.water.id, jelly: jelly) }
+    /// Water and soda are free; a bought drink needs one in the bag.
+    func drinkIsAvailable(_ id: String) -> Bool { Consumables.with(id: id).map { $0.kind == .drink && (!$0.stored || store.count(food: $0.id) > 0) } ?? false }
+    /// What the care menu's drink picker offers: water, soda and every drink the player owns.
+    var drinkChoices: [Consumable] { Consumables.drinks + Consumables.storeDrinks.filter { drinkIsAvailable($0.id) } }
     /// Picker entry points: pop the tray in with the chosen consumable (ignored while a tray is out).
     /// `jelly: nil` = nobody singled out: with several Jellies a GROUP serving (like `drink`).
     func feed(_ id: String, jelly: Int? = nil) {
@@ -284,7 +288,10 @@ final class GameCare {
         selectedFoodID = id; servingCharged = false; order(c, jelly: jelly)
     }
     /// `jelly: nil` = nobody singled out: with several Jellies it is a GROUP serving (one drink, a straw each); one Jelly keeps the old flow.
-    func drink(_ id: String, jelly: Int? = nil) { if let c = Consumables.with(id: id), c.kind == .drink { selectedDrinkID = id; order(c, jelly: jelly) } }
+    func drink(_ id: String, jelly: Int? = nil) {
+        guard let c = Consumables.with(id: id), c.kind == .drink, drinkIsAvailable(id) else { return }          // a bought drink needs one in the bag
+        selectedDrinkID = id; servingCharged = false; order(c, jelly: jelly)
+    }
     func water(_ id: String, jelly: Int? = nil) { drink(id, jelly: jelly) }
     /// A tap on the thought bubble: opens the matching care action. Feed / Drink return the action so the screen can open the care menu on that
     /// picker; the attention bubble calls him over right here. The bubble goes away until its next turn.
