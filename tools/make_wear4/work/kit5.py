@@ -161,11 +161,32 @@ def dome_round(name, c, r, color, segs=8):
 
 PIP_MODE = False
 
+def pip_back_height():
+    """Height Pip's neck loops must reach at the back centre to pass just above his topmost back spike. DATA-DRIVEN: read from BobV1/Features/PipOptions.swift
+    (the spike's place `root.y + f * (top - root.y)`, its height H and base radius H / 2), so a respaced spike row moves the loops with it."""
+    import re
+    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
+    f, H = 0.5, 0.20
+    try:
+        src = open(os.path.join(root, 'BobV1', 'Features', 'PipOptions.swift')).read()
+        fs = [float(m) for m in re.findall(r'sh\.root\.y\)\s*\+\s*([0-9.]+)\s*\*\s*\(Double\(spec\.top\)\s*-\s*sh\.root\.y\)', src)]
+        if fs: f = max(fs)
+        hm = re.search(r'let H: Float = ([0-9.]+)', src)
+        if hm: H = float(hm.group(1))
+    except OSError:
+        pass
+    y_s = 0.47 + f * (B.top - 0.47)
+    return y_s + H / 2.0 + 0.075            # the spike's top (base radius H/2) plus room for the loop's own thickness
+
+_PIP_H = None
+
 def pip_rise(phi):
-    """Pip variants only: the loop climbs the back in a smooth arch (up to 0.60 higher at the back centre) to pass over his tail root and his back spike."""
+    """Pip variants only: the WHOLE loop is tilted smoothly (front at its normal height, rising round the sides to pass just above his back spike at the
+    back centre): (1 - sin phi) / 2 of the way from the front height to the back clearance. No peak, no kink."""
+    global _PIP_H
     if not PIP_MODE: return 0.0
-    th = (phi - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi
-    return 0.60 * math.exp(-(th / 0.6) ** 2)
+    if _PIP_H is None: _PIP_H = pip_back_height()
+    return (_PIP_H - 0.50) * (1.0 - math.sin(phi)) / 2.0
 
 def neck_y(phi, front, side=0.50, back=0.56):
     """Height of a neck-line loop round the body at angle phi (pi/2 = front): dips to `front` at the front, `side` round the sides, rises to `back` at

@@ -328,4 +328,23 @@ final class WearSweepTests: XCTestCase {
         }
         try write(stack(rows, header: "Diamond J chain: Bob, Pip, Moss, Lavender (front at three twinkle moments, 3/4, side, back, mid-walk)"), d + "/wear4_diamond_j.png")
     }
+
+    /// The held-back pieces at about the game camera's distance (a whole Jelbie in a small frame), front and 3/4 on all four: wear4_five_game_distance.png.
+    func testHeldBackPiecesAtGameDistance() throws {
+        let d = try dir()
+        let looks: [WearLook] = [.cardiganCable, .vestPuffer, .scarfSilk, .chainGold, .diamondJ]
+        var rows: [[UIImage]] = []
+        for l in looks { rows.append([]) }
+        for id in 0..<4 {
+            DayClock.shared.forcedHour = 12
+            let st = try makeStage(id)
+            for (k, l) in looks.enumerated() {
+                dress(st, l)
+                for yaw in [Float(0), Float(0.65)] {
+                    rows[k].append(caption(shot(st, l, yaw: yaw, full: true, extra: 3.4), "\(Self.names[id]) \(l.title)"))
+                }
+            }
+        }
+        try write(stack(rows, header: "Held-back pieces at game-camera distance: Bob, Pip, Moss, Lavender (front | 3/4)"), d + "/wear4_five_game_distance.png")
+    }
 }

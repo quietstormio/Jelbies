@@ -17,27 +17,29 @@ def loop_beads(prefix, n, front, off, radii, col, side=0.50, back=0.56, segs=6, 
         p, t, h, up = ring_frame(phi, front, off, side, back)
         bead('%s%d' % (prefix, k), p, radii, col, rot=np.stack([t, h, up], 1), segs=segs)
 
-# ============================ GOLD CHAIN (full loop) ===========================
+# ============================ GOLD CHAIN (chunky Cuban links, full loop) =======
 def chain_gold(gold=hx('#E8B84A'), **k):
     reset()
-    gcol = lambda p, n: mix(deep(gold, 0.25), tint(gold, 0.40), 0.35 + 0.65 * max(0, n[1] * 0.7 + 0.3))
+    def gcol(p, n):
+        # high-polish gold: a hot highlight on the upward/outward faces, deep amber in the creases
+        w = max(0.0, n[1] * 0.55 + n[2] * 0.45)
+        return mix(deep(gold, 0.50), mix(tint(gold, 0.78), (1.0, 0.97, 0.80), 0.4), 0.10 + 0.90 * w ** 1.3)
     FR = 0.43
-    n = 20
-    loop_tube('wire', FR, 0.040, 0.014, 4, lambda p, nn: mix(deep(gold, 0.30), tint(gold, 0.2), 0.5), n=30)
+    n = 28
     for k_ in range(n):
         phi = 2 * math.pi * (k_ + 0.5) / n
-        p, t, h, up = ring_frame(phi, FR, 0.040)
-        if k_ % 2 == 0: r = (0.060, 0.022, 0.040)          # flat link: wide along the loop, thin outward
-        else: r = (0.060, 0.040, 0.022)
-        bead('link%d' % k_, p, (r[0], r[1], r[2]), gcol, rot=np.stack([t, h, up], 1), segs=6)
+        p, t, h, up = ring_frame(phi, FR, 0.044)
+        if k_ % 2 == 0: r = (0.078, 0.024, 0.050)          # a flat link facing outward
+        else: r = (0.078, 0.050, 0.022)                    # the next one standing on edge, interlocked through it
+        bead('link%d' % k_, p, r, gcol, rot=np.stack([t, h, up], 1), segs=6)
     p, t, h, up = ring_frame(math.pi / 2, FR, 0.058)
     Rm = np.stack([t, h, -up], 1).tolist()
-    pc = p - up * 0.075
-    lathe_y('coin', [(0.0, -0.014), (0.070, -0.014), (0.080, -0.006), (0.080, 0.010), (0.070, 0.018), (0.0, 0.018)], 12, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.32), 0.5 + 0.5 * nq[1]), centre=tuple(pc), rotm=Rm, sharp=45)
-    sp = star_poly(0.034, 0.016, 5, rad=0.005)
-    slab_part('star', sp, 0.006, lambda q, nq: tint(gold, 0.35), lambda px, py, pz: tuple(pc + t * px + up * py + h * (0.016 + pz)), cuts=0)
+    pc = p - up * 0.085
+    lathe_y('coin', [(0.0, -0.014), (0.072, -0.014), (0.084, -0.006), (0.084, 0.010), (0.072, 0.018), (0.0, 0.018)], 12, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.45), 0.5 + 0.5 * nq[1]), centre=tuple(pc), rotm=Rm, sharp=45)
+    sp = star_poly(0.036, 0.017, 5, rad=0.005)
+    slab_part('star', sp, 0.006, lambda q, nq: tint(gold, 0.55), lambda px, py, pz: tuple(pc + t * px + up * py + h * (0.016 + pz)), cuts=0)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly'], price=70, title='Gold chain',
-                desc='A chunky gold curb chain in one continuous loop round the body at the neck line (twenty big alternating links), dipping to a coin pendant at the front (y~0.40) and rising at the back. Nothing near the mouth keep-out.')
+                desc='A chunky Cuban-link gold chain: twenty-eight big flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a coin pendant at the front (y~0.34).')
 
 # ============================ SILK SCARF (full loop, knot, tails) ==============
 def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
@@ -55,7 +57,7 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
     FR = 0.462
     def lf(phi):
         y = neck_y(phi, FR, 0.47, 0.54)
-        return [eloop(y, phi, h, v) for h, v in ((0.018, 0.046), (0.056, 0.036), (0.072, 0.0), (0.056, -0.036), (0.018, -0.046))]
+        return [eloop(y, phi, h, v) for h, v in ((0.014, 0.040), (0.042, 0.030), (0.050, 0.0), (0.042, -0.030), (0.014, -0.040))]
     torus('wrap', 32, lf, pat, sharp=60)
     kc, kn = body_pt(0.0, FR - 0.004, 0.082)
     xx, yy, nn = axes(kn)
@@ -121,23 +123,34 @@ def bow_tie_band(main=PINK, **k):
     return meta
 
 # ============================ DIAMOND J CHAIN ==================================
+def brilliant(name, c, r, color, rot, sides=7):
+    """A round brilliant-cut stone: pavilion below, girdle, crown and flat table (about 50 triangles)."""
+    prof = [(0.0, -r * 0.62), (r * 0.98, 0.0), (r * 0.80, r * 0.24), (r * 0.46, r * 0.40), (0.0, r * 0.40)]
+    return lathe_y(name, prof, sides, color, centre=tuple(c), rotm=np.array(rot).tolist(), sharp=88)
+
 def diamond_j(**k):
     reset()
-    ICE = hx('#F4FAFF'); ICE2 = hx('#8DBBF0'); PLAT = hx('#CFE0F2'); PLAT2 = hx('#9DB9D8'); S = 1.28
-    pcol = lambda p, n: mix(deep(PLAT, 0.20), tint(PLAT, 0.55), 0.35 + 0.65 * max(0.0, n[1] * 0.5 + 0.5))
+    S = 1.25
+    def stone(p, n):
+        # bright white with icy blue facets: a pseudo-random facet tint per vertex, hot white on the table
+        f = 0.5 + 0.5 * math.sin(p[0] * 211.0 + p[1] * 137.0 + p[2] * 89.0)
+        top = max(0.0, n[1] * 0.5 + n[2] * 0.5)
+        return mix(mix(hx('#9CC6F2'), hx('#E6F2FF'), f), (1.0, 1.0, 1.0), 0.25 + 0.75 * top ** 1.5)
+    def plat(p, n):
+        # mirror-polished platinum: near-white highlights, cool blue-grey reflections
+        w = max(0.0, n[1] * 0.4 + n[2] * 0.6)
+        return mix(hx('#8FA4BC'), (1.0, 1.0, 1.0), 0.12 + 0.88 * w ** 0.8)
     FR = 0.470
-    n = 24
-    loop_tube('wire', FR, 0.038, 0.010, 3, deep(PLAT, 0.3), n=24)
-    for k_ in range(n):                            # a tennis-chain of chunky gems that wraps the whole body
+    n = 36
+    for k_ in range(n):                            # a tennis chain: round brilliants set shoulder to shoulder all the way round, no wire
         phi = 2 * math.pi * (k_ + 0.5) / n
-        p, t, h, up = ring_frame(phi, FR, 0.040, side=0.505, back=0.56)
-        gem('gemC%d' % k_, p, 0.046, (lambda p_, n_, k_=k_: ICE if k_ % 2 == 0 else ICE2), rot=np.stack([t, h, up], 1), sides=5)
-    # the pendant: a bold rounded J (platinum, bevelled rim) set with pave gems, hanging at the front centre
-    c, t, h, up = ring_frame(math.pi / 2, FR, 0.052, side=0.505, back=0.56)
-    top = c - up * 0.045
+        p, t, h, up = ring_frame(phi, FR, 0.040)
+        brilliant('gemC%d' % k_, p, 0.049, stone, np.stack([t, h, up], 1))
+    # the pendant: a big bold rounded J, mirror-polished platinum, densely paved
+    c, t, h, up = ring_frame(math.pi / 2, FR, 0.052)
+    top = c - up * 0.060
     stem_x = 0.026
-    path = [(stem_x, 0.100 - 0.0 * i) for i in range(1)]
-    path = [(stem_x * S, (0.100 - 0.0275 * i) * S) for i in range(6)]                   # the stem, top to bottom (y 0.10 .. -0.0375)
+    path = [(stem_x * S, (0.100 - 0.0275 * i) * S) for i in range(6)]
     cy, r = -0.0375 * S, 0.052 * S
     cx = stem_x * S - r
     for k_ in range(1, 12):
@@ -146,11 +159,9 @@ def diamond_j(**k):
     serif = [((stem_x - 0.050) * S, 0.100 * S), ((stem_x + 0.050) * S, 0.100 * S)]
     def xf(dz):
         return lambda px, py, pz: tuple(top + t * px + up * (py - 0.100 * S) + h * (pz + dz))
-    base_poly = stroke_poly(path, 0.074 * S, 6)
-    slab_part('jbase', base_poly, 0.016, pcol, xf(-0.006), cuts=0, sharp=30)
-    slab_part('jtop', stroke_poly(path, 0.056 * S, 6), 0.007, lambda p, n_: mix(deep(PLAT2, 0.1), tint(PLAT2, 0.4), 0.5 + 0.5 * n_[1]), xf(0.010), cuts=0, sharp=30)
-    slab_part('serifb', stroke_poly(serif, 0.052 * S, 5), 0.016, pcol, xf(-0.006), cuts=0, sharp=30)
-    # pave: a grid of tiny gems over the strokes
+    slab_part('jbase', stroke_poly(path, 0.074 * S, 6), 0.018, plat, xf(-0.006), cuts=0, sharp=30)
+    slab_part('jrim', stroke_poly(path, 0.062 * S, 6), 0.007, lambda p_, n_: mix(hx('#C9D6E6'), (1, 1, 1), 0.3 + 0.7 * max(0.0, n_[2])), xf(0.012), cuts=0, sharp=30)
+    slab_part('serifb', stroke_poly(serif, 0.052 * S, 5), 0.018, plat, xf(-0.006), cuts=0, sharp=30)
     P = [np.array(q) for q in path]
     def dist_path(q, pts):
         best = 9
@@ -161,16 +172,20 @@ def diamond_j(**k):
             best = min(best, np.linalg.norm(q - (a + ab * tt)))
         return best
     gi = 0
-    SER = [np.array(q) for q in serif]
-    for gx in np.arange(-0.094, 0.092, 0.029 * S):
-        for gy in np.arange(-0.128, 0.138, 0.029 * S):
+    pitch = 0.0325 * S
+    for gx in np.arange(-0.100, 0.098, pitch):
+        for gy in np.arange(-0.130, 0.146, pitch):
             q = np.array([gx, gy])
-            if dist_path(q, P) < 0.012 * S or (abs(gy - 0.100 * S) < 0.004 * S and -0.022 * S <= gx <= 0.076 * S):
-                gem('gemJ%d' % gi, top + t * gx + up * (gy - 0.100 * S) + h * 0.026, 0.0125 * S, (lambda p_, n_, gi=gi: ICE if gi % 2 == 0 else ICE2), rot=np.stack([t, h, up], 1), sides=5)
+            if dist_path(q, P) < 0.0125 * S or (abs(gy - 0.100 * S) < 0.004 * S and -0.022 * S <= gx <= 0.076 * S):
+                brilliant('gemJ%d' % gi, top + t * gx + up * (gy - 0.100 * S) + h * 0.027, 0.0175 * S * 0.88, stone, np.stack([t, h, up], 1), sides=6)
                 gi += 1
-    gem('gemBail', c + up * 0.004 + h * 0.004, 0.028, ICE, rot=np.stack([t, h, up], 1), sides=5)
+    # the bail: a platinum loop that carries the J from the front stone of the chain
+    bp = []
+    for a in np.linspace(0, 2 * math.pi, 13):
+        bp.append(top + up * (0.060 + 0.034 * math.sin(a)) + t * (0.026 * S * 0 + 0.026 * math.cos(a)) + h * 0.010)
+    tube_curve('bail', bp, 0.010, 5, plat, cap=False)
     return dict(anchor='neck', slot='neck', tags=['sparkly', 'cool'], price=450, title='Diamond J chain',
-                desc='An icy tennis chain of chunky faceted gems in one continuous loop round the body at the neck line, with a big bold rounded J pendant (platinum, bevelled rim) paved with tiny gems hanging at the front centre (J top y~0.43, bottom y~0.28), below the mouth keep-out. The gems twinkle (Swift adds the glints).')
+                desc='An iced-out tennis chain of round brilliant-cut stones set shoulder to shoulder in one continuous loop round the body at the neck line (no wire), with a big bold rounded J pendant in mirror-polished platinum, densely paved with brilliants, on a platinum bail at the front centre (below the mouth keep-out). The gems twinkle (Swift adds the glints). The hero item: its own budget (2500 vertices / 3800 triangles).')
 
 def pipify(fn):
     """The Pip variant of a neck loop: the same piece built with the loop arching over his tail root and back spike (kit5.pip_rise)."""

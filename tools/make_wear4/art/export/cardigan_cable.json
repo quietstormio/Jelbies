@@ -1,17 +1,22 @@
 {
  "id": "cardigan_cable",
- "tris": 1292,
- "verts": 704,
+ "tris": 1204,
+ "verts": 656,
  "parts": [
   {
    "name": "body",
-   "tris": 720,
-   "verts": 396
+   "tris": 600,
+   "verts": 330
   },
   {
    "name": "edge",
-   "tris": 392,
-   "verts": 198
+   "tris": 360,
+   "verts": 182
+  },
+  {
+   "name": "placket",
+   "tris": 64,
+   "verts": 34
   },
   {
    "name": "button0",
@@ -45,19 +50,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.6211,
-  -0.155,
-  -1.0622
+  -0.6181,
+  -0.1615,
+  -1.0656
  ],
  "bounds_local_max": [
-  0.6268,
-  0.269,
-  0.0714
+  0.6245,
+  0.2932,
+  0.1095
  ],
  "size": [
-  1.2478,
-  0.424,
-  1.1336
+  1.2425,
+  0.4548,
+  1.1751
  ],
  "anchor": "chest",
  "slot": "body",
@@ -67,7 +72,7 @@
  ],
  "price": 60,
  "title": "Cable cardigan",
- "desc": "A rust cable-knit cardigan: an open front falling to a deep V (front never above y 0.51) with a cream button band and five buttons, armholes round the arm nubs, a higher back with a collar edge, cable ridges and a ribbed hem.",
+ "desc": "A rust cable-knit cardigan covering the belly from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, a cream placket down the middle front with five buttons, deep armholes round the arm nubs, a higher back and a collar edge, and braided cable ridges. Pip variant: open over his tail root.",
  "colourway": "cardigan_cable",
  "batch": 4
 }

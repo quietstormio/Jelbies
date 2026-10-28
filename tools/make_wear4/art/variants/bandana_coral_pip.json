@@ -1,12 +1,12 @@
 {
  "id": "bandana_coral_pip",
  "tris": 1192,
- "verts": 822,
+ "verts": 819,
  "parts": [
   {
    "name": "band",
    "tris": 360,
-   "verts": 255
+   "verts": 252
   },
   {
    "name": "cloth",
@@ -95,19 +95,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6153,
+  -0.6188,
   -0.2343,
-  -0.9864
+  -0.9333
  ],
  "bounds_local_max": [
-  0.6153,
-  0.704,
+  0.6188,
+  0.6869,
   0.0642
  ],
  "size": [
-  1.2306,
-  0.9383,
-  1.0506
+  1.2377,
+  0.9212,
+  0.9975
  ],
  "anchor": "neck",
  "slot": "neck",

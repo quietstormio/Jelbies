@@ -94,26 +94,26 @@ def visor(band=hx('#F7F3EA'), brim=hx('#F7F3EA'), under=hx('#3C6E8F'), trim=hx('
     return dict(anchor='head_top', slot='head', tags=['sporty', 'cute'], price=35, title='Tennis visor',
                 desc='White tennis visor: a soft headband with a coral sweat stripe and a curved bill with a blue underside, open on top so the crown (and the sprout) stay free. Perching piece (never moved by CrownFit). Bill edge above the brows.')
 
-# ============================ VEST + CARDIGAN (open front, armholes) ===========
+# ============================ VEST + CARDIGAN (front-opening garments with armholes) =====
 def angd(a, b):
     return abs((a - b + math.pi) % (2 * math.pi) - math.pi)
 
-def top_edge(phi, front=0.50, back=0.60, notch=0.335, vtip=0.292, vhalf=0.50, side_half=0.44):
-    """The garment's top edge round the body (phi 0 = +x, pi/2 = front): a deep V down the front (everything on the front stays below y .51), armhole
-    notches round the arm nubs at the sides, and a higher back with the collar."""
+def top_edge(phi, front=0.505, back=0.625, notch=0.335, vtip=0.445, vhalf=0.34, side_half=0.56):
+    """The garment's top edge round the body (phi 0 = +x, pi/2 = front): the front panels reach y .505 with only a shallow V at the centre (nothing on the
+    front above y .51), deep armhole notches round the arm nubs at the sides, and a higher back (the collar side)."""
     side = min(angd(phi, 0.0), angd(phi, math.pi))
-    base = 0.55 - 0.05 * max(-1.0, min(1.0, math.sin(phi) * 3.0))
+    base = 0.565 - 0.06 * max(-1.0, min(1.0, math.sin(phi) * 3.0))
     y = notch + (base - notch) * smooth01(0.0, side_half, side)
-    if base < 0.53:
-        base_f = front
-        y = min(y, vtip + (base_f - vtip) * smooth01(0.0, vhalf, angd(phi, math.pi / 2))) if angd(phi, math.pi / 2) < vhalf else y
+    df = angd(phi, math.pi / 2)
+    if base < 0.54 and df < vhalf:
+        y = min(y, vtip + (front - vtip) * smooth01(0.0, vhalf, df))
     return y
 
-def garment(main, trim, pat, ybot, off_fn, name, segs=36, rows=9, collar=0.020, pip=False):
-    """pip=True: Pip's tail leaves the lower back (y~0.47), so his garment is open at the back (a tail slot +-40 deg round the back centre, trimmed edges)."""
+def garment(main, trim, pat, ybot, off_fn, name, segs=30, rows=11, collar=0.022, pip=False, hem_rows=2):
+    """Rows 0..hem_rows-1 are the ribbed hem band. pip=True: Pip's tail leaves the lower back (y~0.47), so his garment is open at the back (a tail slot)."""
     if pip:
-        p0, p1 = math.radians(310.0), math.radians(310.0 + 280.0)
-        segs = 30
+        p0, p1 = math.radians(312.0), math.radians(312.0 + 276.0)
+        segs = 28
     else:
         p0, p1 = 0.0, 2 * math.pi
     def phi_i(i): return p0 + (p1 - p0) * (i / (segs - 1 if pip else segs))
@@ -124,14 +124,21 @@ def garment(main, trim, pat, ybot, off_fn, name, segs=36, rows=9, collar=0.020, 
         y = ybot + (yt - ybot) * f
         e = B.egg_point(y, phi)
         return e + hdir(e) * off_fn(phi, f, j)
-    grid_surface(name, pt, segs, rows, None, closed_u=not pip, hint=lambda p: IH.egg_hint(p), gcol=lambda i, j: pat(i, j, segs, rows))
+    grid_surface(name, pt, segs, rows, None, closed_u=not pip, hint=lambda p: IH.egg_hint(p), gcol=lambda i, j: (mix(deep(trim, 0.2), trim, 0.5 + 0.5 * math.cos(26 * phi_i(i))) if j < hem_rows else pat(i, j, segs, rows)))
+    n_t = 36 if pip else 44
     pts = []
-    n_t = 40 if pip else 48
     for q in range(n_t + 1):
         phi = p0 + (p1 - p0) * q / n_t
         e = B.egg_point(top_edge(phi), phi)
         pts.append(e + hdir(e) * (off_fn(phi, 1.0, rows - 1) + 0.006))
     tube_curve('edge', pts, collar, 4, lambda p, n: mix(deep(trim, 0.15), tint(trim, 0.22), 0.5 + 0.5 * n[1]), cap=True)
+    # the vertical front opening: a placket band down the middle from the hem to the V
+    cp = []
+    for t in np.linspace(0.0, 1.0, 8):
+        y = ybot + 0.012 + (top_edge(math.pi / 2) - ybot - 0.012) * t
+        e = B.egg_point(y, math.pi / 2)
+        cp.append(e + hdir(e) * (off_fn(math.pi / 2, t, min(rows - 1, int(t * (rows - 1)))) + 0.010))
+    tube_curve('placket', cp, 0.020, 4, lambda p, n: mix(deep(trim, 0.2), tint(trim, 0.25), 0.5 + 0.5 * n[1]), cap=True)
     if pip:
         for k_, phi in enumerate((p0, p1)):
             col_pts = []
@@ -140,46 +147,44 @@ def garment(main, trim, pat, ybot, off_fn, name, segs=36, rows=9, collar=0.020, 
                 e = B.egg_point(y, phi)
                 col_pts.append(e + hdir(e) * (off_fn(phi, f, int(f * (rows - 1))) + 0.004))
             tube_curve('slot%d' % k_, col_pts, collar * 0.8, 4, lambda p, n: mix(deep(trim, 0.15), tint(trim, 0.22), 0.5 + 0.5 * n[1]), cap=True)
+    return cp
 
 def vest_puffer(main=hx('#2E7C85'), trim=hx('#1F5760'), zip_=GOLD, pip=False, **k):
     reset()
-    ybot = 0.215
-    def off(phi, f, j): return 0.040 + 0.012 * math.cos(2 * math.pi * 3.0 * f) * (0.70 + 0.30 * math.cos(12 * phi))
+    ybot = 0.205
+    BAFF = 3.5
+    def off(phi, f, j):
+        if j < 2: return 0.040 + 0.010 * math.cos(26 * phi) * 0.5 + 0.006
+        ff = (f - 0.2) / 0.8
+        return 0.040 + 0.017 * (0.5 - 0.5 * math.cos(2 * math.pi * BAFF * ff)) * (0.8 + 0.2 * math.cos(10 * phi))
     def pat(i, j, segs, rows):
-        f = j / (rows - 1)
-        w = math.cos(2 * math.pi * 3.0 * f)
-        return mix(deep(main, 0.34), tint(main, 0.22), 0.5 + 0.5 * w * (0.7 + 0.3 * math.cos(12 * 2 * math.pi * i / segs)))
-    garment(main, trim, pat, ybot, off, 'body', segs=36, rows=11, collar=0.022, pip=pip)
-    # the zip runs down the right edge of the V with a gold pull at the bottom
-    pts = []
-    for t in np.linspace(0.0, 1.0, 8):
-        phi = math.pi / 2 - 0.50 * (1 - t)
-        e = B.egg_point(top_edge(phi) - 0.006, phi)
-        pts.append(e + hdir(e) * 0.062)
-    tube_curve('zip', pts, 0.0075, 4, zip_, cap=True)
-    e = B.egg_point(0.300, math.pi / 2)
-    bead('pull', e + hdir(e) * 0.074, (0.016, 0.030, 0.010), zip_, segs=6)
+        f = (j / (rows - 1) - 0.2) / 0.8
+        w = 0.5 - 0.5 * math.cos(2 * math.pi * BAFF * f)
+        return mix(deep(main, 0.45), tint(main, 0.22), 0.15 + 0.85 * w)
+    cp = garment(main, trim, pat, ybot, off, 'body', segs=30, rows=11, collar=0.022, pip=pip)
+    zp = [c + np.array([0.0, 0.0, 0.012]) for c in cp]
+    tube_curve('zip', zp, 0.0085, 4, zip_, cap=True)
+    bead('pull', zp[-2] + np.array([0.0, -0.030, 0.012]), (0.018, 0.034, 0.012), zip_, segs=6)
     return dict(anchor='chest', slot='body', tags=['cool', 'sporty'], price=65, title='Puffer vest',
-                desc='A teal quilted puffer vest: a deep V open front (nothing on the front above y 0.51), armholes cut round the arm nubs, a higher back with a piped collar edge, quilted baffles, hem and a gold zip. Open sleeveless: the arms stay free.')
+                desc='A teal quilted puffer vest: puffy horizontal baffles from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V at the top, deep armholes round the arm nubs, a higher back with a piped collar edge and a gold zip down the middle front. Pip variant: open over his tail root.')
 
 def cardigan(main=hx('#C97B4E'), trim=hx('#E8C8A0'), button=hx('#F4EBDD'), pip=False, **k):
     reset()
-    ybot = 0.200
-    def off(phi, f, j): return 0.040 + 0.0075 * math.cos(10 * phi + 5.0 * math.sin(f * 9.0)) + 0.003 * math.cos(5 * phi)
+    ybot = 0.195
+    def off(phi, f, j):
+        if j < 2: return 0.040 + 0.010 * math.cos(26 * phi) * 0.5 + 0.006
+        return 0.040 + 0.0125 * math.cos(10 * phi + 5.0 * math.sin(f * 9.0)) + 0.004 * math.cos(5 * phi)
     def pat(i, j, segs, rows):
         phi = 2 * math.pi * i / segs; f = j / (rows - 1)
         v = 0.5 + 0.5 * math.cos(10 * phi + 5.0 * math.sin(f * 9.0))
-        c = mix(deep(main, 0.28), tint(main, 0.14), 0.25 + 0.75 * v)
-        return mix(deep(trim, 0.2), trim, 0.5) if f < 0.07 else c
-    garment(main, trim, pat, ybot, off, 'body', segs=36, rows=11, collar=0.024, pip=pip)
-    # button band down the right edge of the open front with five buttons
+        return mix(deep(main, 0.38), tint(main, 0.22), 0.10 + 0.90 * v)
+    cp = garment(main, trim, pat, ybot, off, 'body', segs=30, rows=11, collar=0.024, pip=pip)
     for i_ in range(5):
         t = (i_ + 0.5) / 5
-        phi = math.pi / 2 - 0.50 * (1 - t) - 0.04
-        e = B.egg_point(top_edge(phi) - 0.026, phi)
-        bead('button%d' % i_, e + hdir(e) * 0.062, (0.024, 0.024, 0.012), button, segs=6)
+        c = cp[min(len(cp) - 1, int(t * (len(cp) - 1) + 0.5))]
+        bead('button%d' % i_, c + np.array([0.0, 0.0, 0.020]), (0.026, 0.026, 0.013), button, segs=6)
     return dict(anchor='chest', slot='body', tags=['cute', 'sweet'], price=60, title='Cable cardigan',
-                desc='A rust cable-knit cardigan: an open front falling to a deep V (front never above y 0.51) with a cream button band and five buttons, armholes round the arm nubs, a higher back with a collar edge, cable ridges and a ribbed hem.')
+                desc='A rust cable-knit cardigan covering the belly from a ribbed hem band (y 0.2) up to the front panels at y 0.505 with a shallow V, a cream placket down the middle front with five buttons, deep armholes round the arm nubs, a higher back and a collar edge, and braided cable ridges. Pip variant: open over his tail root.')
 
 # ============================ SILK NECK SCARF ==================================
 def silk_pattern(base, ring, dot):

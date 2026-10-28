@@ -1,13 +1,8 @@
 {
  "id": "chain_gold",
- "tris": 1212,
- "verts": 798,
+ "tris": 1260,
+ "verts": 842,
  "parts": [
-  {
-   "name": "wire",
-   "tris": 240,
-   "verts": 124
-  },
   {
    "name": "link0",
    "tris": 36,
@@ -109,6 +104,46 @@
    "verts": 22
   },
   {
+   "name": "link20",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link21",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link22",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link23",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link24",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link25",
+   "tris": 36,
+   "verts": 22
+  },
+  {
+   "name": "link26",
+   "tris": 36,
+   "verts": 20
+  },
+  {
+   "name": "link27",
+   "tris": 36,
+   "verts": 22
+  },
+  {
    "name": "coin",
    "tris": 96,
    "verts": 74
@@ -125,19 +160,19 @@
   0.5055
  ],
  "bounds_local_min": [
-  -0.6461,
-  -0.195,
-  -1.096
+  -0.6641,
+  -0.209,
+  -1.1136
  ],
  "bounds_local_max": [
-  0.6463,
-  0.1221,
-  0.0701
+  0.6643,
+  0.1334,
+  0.0808
  ],
  "size": [
-  1.2924,
-  0.3171,
-  1.1661
+  1.3284,
+  0.3424,
+  1.1944
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -147,7 +182,7 @@
  ],
  "price": 70,
  "title": "Gold chain",
- "desc": "A chunky gold curb chain in one continuous loop round the body at the neck line (twenty big alternating links), dipping to a coin pendant at the front (y~0.40) and rising at the back. Nothing near the mouth keep-out.",
+ "desc": "A chunky Cuban-link gold chain: twenty-eight big flattened oval links, alternately flat and on edge so they interlock and touch, high-polish gold, in one continuous loop round the body at the neck line, with a coin pendant at the front (y~0.34).",
  "colourway": "chain_gold",
  "batch": 4
 }
