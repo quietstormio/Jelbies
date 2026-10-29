@@ -134,8 +134,39 @@ nonisolated enum WearMeshes {
                 if let b = body.bind(p.rest[i]) { p.bind[i] = b; p.anyBound = true } else { p.w[i] = 0 }
             }
         } else { for i in p.w.indices { p.w[i] = 0 } }
-        if let body, !isArm { CrownFit.prepare(p, body: body) }
+        if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l) { raise(p, body: body, by: lift) } }
         return p
+    }
+
+    /// A chain-type neck piece raised clear of the arms (the arm roots sit at the sides, top ~0.66): every bound vertex slides up the egg wall by `lift` times
+    /// a weight that is 0 over the mouth (front) and full from the arms round the back, then is re-seated on the wall there keeping its own offset (the
+    /// tangent part turned with the wall's normal, the normal part unchanged), so the links stay on the skin and the pendant keeps hanging at the front.
+    static func raise(_ p: WearPrepared, body: WearBody, by lift: WearRules.NeckLift) {
+        for i in p.rest.indices where p.w[i] > 0.001 {
+            let r = p.rest[i]
+            let az = abs(atan2(r.x, r.z))                                  // 0 at the front, pi at the back
+            let u = min(max((az - lift.from) / (lift.full - lift.from), 0), 1)
+            let k = u * u * (3 - 2 * u)
+            guard k > 0.001 else { continue }
+            let b0 = p.bind[i]
+            let a0 = body.pos[Int(b0.tri.x)], c0 = body.pos[Int(b0.tri.y)], d0 = body.pos[Int(b0.tri.z)]
+            let f0 = WearBody.frame(a0, c0, body.nrm[Int(b0.tri.x)], body.nrm[Int(b0.tri.y)], body.nrm[Int(b0.tri.z)], b0.bary)
+            let q0 = a0 * b0.bary.x + c0 * b0.bary.y + d0 * b0.bary.z
+            let tang = f0.t * b0.off.x + f0.b * b0.off.y                     // the offset's part along the wall
+            guard let b1 = body.bind(q0 + SIMD3(0, lift.up * k, 0)) else { continue }
+            let a1 = body.pos[Int(b1.tri.x)], c1 = body.pos[Int(b1.tri.y)], d1 = body.pos[Int(b1.tri.z)]
+            let f1 = WearBody.frame(a1, c1, body.nrm[Int(b1.tri.x)], body.nrm[Int(b1.tri.y)], body.nrm[Int(b1.tri.z)], b1.bary)
+            // turn the wall-tangent offset from the old normal to the new one (smallest rotation)
+            let ax = simd_cross(f0.n, f1.n), s = simd_length(ax), c = simd_dot(f0.n, f1.n)
+            var t1 = tang, n1 = p.nrm[i]
+            if s > 1e-6 {
+                let kk = ax / s
+                func turn(_ v: SIMD3<Float>) -> SIMD3<Float> { v * c + simd_cross(kk, v) * s + kk * simd_dot(kk, v) * (1 - c) }
+                t1 = turn(tang); n1 = turn(n1)
+            }
+            p.bind[i] = SurfaceBind(tri: b1.tri, bary: b1.bary, off: SIMD3(simd_dot(t1, f1.t), simd_dot(t1, f1.b), b0.off.z))
+            p.rest[i] = body.restPoint(p.bind[i]); p.nrm[i] = n1          // (the rest point is where the bind lands)
+        }
     }
 
     /// The piece alone, at rest, for the shop's 3D thumbnails (no body needed).
