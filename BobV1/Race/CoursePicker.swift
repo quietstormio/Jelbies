@@ -1,7 +1,7 @@
 //
 //  CoursePicker.swift
-//  The Track panel's course picker: one card per course (Puddle, Ripple, Splash, Wave) with a mini map of its shape, its class, a lock on the
-//  ones not yet open (and what opens them), and the prizes of the picked one. Picking writes RaceFlow.courseTier through GameCare.chooseCourse.
+//  The Track lobby's course picker: one card per course (Puddle ... Tsunami) with its shape, its class, a lock on the ones not yet open (and what opens them), and the prizes of the picked one.
+//  Picking writes RaceFlow.courseTier through GameCare.chooseCourse.
 //
 
 import SwiftUI
@@ -51,63 +51,53 @@ struct CourseMiniMap: View {
     }
 }
 
+/// The Track lobby's course carousel (to the lobby mockups): "Course  N of 5 open", a card per course (its shape on a green field, its class and this runner's wins),
+/// and the info line with the blurb and the prizes. A tap on a locked card shows what opens it for a few seconds. Picking writes RaceFlow.courseTier through GameCare.chooseCourse.
 struct CoursePicker: View {
     let care: GameCare
-    @Environment(\.verticalSizeClass) private var vsc
+    /// The runner whose wins are counted on the cards (his character).
+    var runner: Int
+    var bleed = true
+    var hint: LobbyHint
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var progress: CourseProgress { care.race.progress }
     private var chosen: CourseTier { care.race.courseTier }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Course").font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
-                Spacer()
-                Text("\(chosen.title) · \(chosen.className) class").font(SK.font(12, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("course-chosen")
+        VStack(alignment: .leading, spacing: 0) {
+            LobbyLabelRow(title: "Course", trailing: "\(progress.unlockedTiers.count) of \(CourseTier.allCases.count) open")
+            LobbyCarousel(bleed: bleed, scrollTo: chosen.index >= 2 ? "course-card-\(chosen.rawValue)" : nil) {
+                ForEach(CourseTier.allCases, id: \.rawValue) { t in card(t).id("course-card-\(t.rawValue)") }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(CourseTier.allCases, id: \.rawValue) { t in card(t) }
-                }
-                .padding(.vertical, 2)
+            LobbyInfoLine(text: hint.text ?? chosen.blurb, textID: "course-blurb", pillsBelow: true) {
+                LobbyPill(label: "1st", amount: RaceTuning.drops(place: 1, tier: chosen), gold: true)
+                LobbyPill(label: "2nd", amount: RaceTuning.drops(place: 2, tier: chosen))
+                LobbyPill(label: "3rd", amount: RaceTuning.drops(place: 3, tier: chosen))
             }
-            .scrollBounceBehavior(.basedOnSize)
-            Text(progress.requirement(chosen) ?? chosen.blurb).font(SK.font(11, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("course-blurb")
+            .accessibilityIdentifier("track-prizes")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("course-picker")
     }
 
+    private func wins(_ t: CourseTier) -> Int { care.race.trophies.shelf(character: runner).raceRibbons(t).first ?? 0 }
+
     private func card(_ t: CourseTier) -> some View {
         let open = progress.unlocked(t), picked = t == chosen
-        let rec = progress.record(t)
-        return Button { if care.chooseCourse(t) { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap() } } label: {
-            VStack(spacing: 4) {
-                ZStack {
-                    CourseMiniMap(course: RaceCourse.course(t), lineWidth: 6, tint: open ? Color(hex: 0xE5A88E) : Color(hex: 0xC9BDB0))
-                        .frame(width: 92, height: 64)
-                    if !open {
-                        Image(systemName: "lock.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink.opacity(0.85))
-                            .padding(6).background(Circle().fill(Color.white.opacity(0.85)))
-                    }
-                }
-                Text(t.title).font(SK.font(14, .black)).foregroundStyle(open ? SK.ink : SK.muted)
-                Text(open ? (rec.wins > 0 ? "\(rec.wins) win\(rec.wins == 1 ? "" : "s")" : t.className) : "Locked").font(SK.font(10, .bold)).foregroundStyle(SK.muted)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 8)
-            .frame(width: 112)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(picked ? SK.honey : Color.white.opacity(open ? 0.9 : 0.55)))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? SK.honeyDeep : .clear, lineWidth: 2))
-            .opacity(open ? 1 : 0.8)
-            .overlay(alignment: .topTrailing) {
-                if picked { Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .black)).foregroundStyle(SK.ink).padding(5) }          // not colour alone
-            }
+        let w = wins(t)
+        let sub = open ? (w > 0 ? "\(t.className) \u{00B7} \(w) win\(w == 1 ? "" : "s")" : t.className) : "Win at \(t.below?.title ?? "")"
+        return Button {
+            if open { if care.chooseCourse(t) { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap() } }
+            else { hint.show(progress.requirement(t) ?? "Win at \(t.below?.title ?? "")") }
+        } label: {
+            LobbyCarouselCard(name: t.title, sub: sub, selected: picked && open, locked: !open) { CourseArt(tier: t) }
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(open ? "\(t.title), \(sub.replacingOccurrences(of: " \u{00B7} ", with: ", "))" : "\(t.title), locked. Win at \(t.below?.title ?? "")")
+        .accessibilityHint(open ? t.blurb : (progress.requirement(t) ?? ""))
         .accessibilityValue(picked ? "picked" : "")
-        .accessibilityIdentifier("course-\(t.rawValue)")
-        .accessibilityLabel("\(t.title), \(t.className) class\(open ? "" : ", locked")")
         .accessibilityAddTraits(picked ? .isSelected : [])
-        .accessibilityHint(progress.requirement(t) ?? t.blurb)
+        .accessibilityIdentifier("course-\(t.rawValue)")
     }
 }

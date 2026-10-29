@@ -58,6 +58,22 @@ extension GameCare {
 
     // MARK: asking
 
+    /// The teammate of `id` in a match: the one chosen in the lobby (`VolleyBook.partner`, a character) while he is still in the room and is not `id`, else the first other Jelbie; nil when alone.
+    func volleyPartner(for id: Int) -> JellyProfile? {
+        if let c = volley.book.partner, let p = jellies.first(where: { $0.character == c && $0.id != id }) { return p }
+        return jellies.first { $0.id != id }
+    }
+
+    /// The Jelbie sitting out of the team of `id` and his partner: only with three Jelbies. A lobby swap button trades a tile's Jelbie with him; with one or two there is none (no button).
+    func volleyBench(for id: Int) -> JellyProfile? {
+        guard jellies.count >= 3 else { return nil }
+        let p = volleyPartner(for: id)
+        return jellies.first { $0.id != id && $0.id != p?.id }
+    }
+
+    /// Who plays beside a lone Jelbie today (the same Park visitor all day).
+    func volleyParkFriend() -> ParkVisitor { ParkPool.dailyFriend(dayKey: DayClock.shared.dayKey) }
+
     func volleyBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
@@ -98,12 +114,12 @@ extension GameCare {
     private func beginVolley(jelly id: Int, mode: VolleyMode, seed: UInt64) {
         guard let prof = jelly(id) else { return }
         var going = [id]
-        if case .match = mode, let p = jellies.first(where: { $0.id != id }) { going.append(p.id) }
+        if case .match = mode, let p = volleyPartner(for: id) { going.append(p.id) }
         if outingGate(going, again: { [weak self] in self?.beginVolley(jelly: id, mode: mode, seed: seed) }) { return }          // they run out of the room first
         let w = volleyWork
         w.pendingSeed = seed
         var partner: JellyProfile?
-        if case .match = mode { partner = jellies.first { $0.id != id } }
+        if case .match = mode { partner = volleyPartner(for: id) }
         w.partnerID = partner?.id
         var mine = [volley.book.stats(character: prof.character)]
         if let p = partner { mine.append(volley.book.stats(character: p.character)) }
@@ -170,11 +186,11 @@ extension GameCare {
             var bodies: [JellyActor] = [w.roster[pid]]
             var names: [String] = []
             if case .match = volley.mode {
-                let needed = w.partnerID == nil ? 3 : 2
                 var rng = ParkRandom(w.pendingSeed &+ 77)
-                var pool = ParkPool.generate()
+                let friend = volleyParkFriend()
+                var pool = ParkPool.generate().filter { $0.id != friend.id }
                 for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
-                let specs = Array(pool.prefix(needed))
+                let specs = (w.partnerID == nil ? [friend] : []) + Array(pool.prefix(2))
                 let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []
                 if let p = w.partnerID { bodies.append(w.roster[p]) } else if let v = vis.first { bodies.append(v) }
                 let opp = w.partnerID == nil ? Array(vis.dropFirst()) : vis

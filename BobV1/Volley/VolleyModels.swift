@@ -161,6 +161,11 @@ nonisolated enum VolleyTraining {
     static func matchGain(win: Bool) -> Float { win ? 0.02 : 0.01 }
 }
 
+nonisolated enum VolleyStatKind: String, CaseIterable, Sendable {
+    case speed, power, hops, timing
+    var title: String { rawValue.capitalized }
+}
+
 nonisolated enum VolleyDrillKind: String, CaseIterable, Sendable {
     case bonk, spike, block, sprint
     var title: String { switch self { case .bonk: return "Bump & Set"; case .spike: return "Spike targets"; case .block: return "Block wall"; case .sprint: return "Sand sprints" } }
@@ -172,6 +177,8 @@ nonisolated enum VolleyDrillKind: String, CaseIterable, Sendable {
         case .sprint: return "Dash to the flags with the stick. Raises Speed."
         }
     }
+    /// The stats a drill raises (see `VolleyBook.finishDrill`), for the tags on the Training sheet.
+    var raises: [VolleyStatKind] { switch self { case .bonk: return [.timing, .hops]; case .spike: return [.power]; case .block: return [.hops]; case .sprint: return [.speed] } }
     var symbol: String { switch self { case .bonk: return "circle.dotted"; case .spike: return "arrow.down.right.circle.fill"; case .block: return "rectangle.portrait.arrowtriangle.2.outward"; case .sprint: return "figure.run" } }
 }
 
@@ -187,6 +194,8 @@ final class VolleyBook {
     var slowBall = false { didSet { if persists { defaults.set(slowBall, forKey: "volley.slowBall") } } }
     /// When the ball crosses to your side, control jumps to the teammate nearer the landing spot (a double-tap always wins for 2 s). On by default.
     var autoSwitch = true { didSet { if persists { defaults.set(autoSwitch, forKey: "volley.autoSwitch") } } }
+    /// The teammate chosen in the lobby, by CHARACTER (nil = the first other Jelbie). Used only while it still names a Jelbie in the room other than the player.
+    var partner: Int? { didSet { if persists { if let p = partner { defaults.set(p, forKey: "volley.partner") } else { defaults.removeObject(forKey: "volley.partner") } } } }
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let dayKey: () -> Int
@@ -200,6 +209,7 @@ final class VolleyBook {
         guard persists else { return }
         slowBall = defaults.bool(forKey: "volley.slowBall")
         autoSwitch = defaults.object(forKey: "volley.autoSwitch") == nil ? true : defaults.bool(forKey: "volley.autoSwitch")
+        partner = defaults.object(forKey: "volley.partner") as? Int
         if let d = defaults.data(forKey: Self.key), let s = try? JSONDecoder().decode(Saved.self, from: d) { stats = s.stats; records = s.records; chosen = s.chosen }
     }
 

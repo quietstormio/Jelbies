@@ -629,6 +629,12 @@ struct GameScreen: View {
     }
     /// Capture aid: `-StoreOpen town|shop|item|bag|studio|condition|show` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
     static func launchTown() -> TownScreen? {
+        // capture aid: `-LobbyAuto volley|volleyTrain|volleyHow|track|trackHow` opens the Volleyball / Track lobby (and the sheet) at launch (the lobbies read the same argument)
+        switch UserDefaults.standard.string(forKey: "LobbyAuto") {
+        case "volley", "volleyTrain", "volleyHow": return .volley
+        case "track", "trackHow": return .track
+        default: break
+        }
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop

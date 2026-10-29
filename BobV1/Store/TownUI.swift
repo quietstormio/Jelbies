@@ -112,7 +112,7 @@ struct TownFlow: View {
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
-            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k in goHome(); care.startVolley(jelly: who, mode: .drill(k)) })
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k, id in goHome(); care.startVolley(jelly: id, mode: .drill(k)) })
             case .show: ShowLobby(care: care, who: $who, back: { up(.studio) }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
@@ -327,6 +327,8 @@ struct MapStrip: View {
 
 // MARK: - Track
 
+/// The Track lobby, to the lobby mockups: the five courses in a carousel, the Runner card (pick the runner, Waddle and Focus), and a pinned Train / Go race bar.
+/// The pieces are in Lobby/LobbyKit.swift; the course cards in Race/CoursePicker.swift.
 struct TrackPanel: View {
     let care: GameCare
     @Binding var who: Int
@@ -339,161 +341,66 @@ struct TrackPanel: View {
     /// The course picked for the next race (Race/CoursePicker.swift sets it through GameCare.chooseCourse).
     var courseTier: CourseTier { care.race.courseTier }
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var howOpen = false
+    @State private var hint = LobbyHint()
+
+    private var compact: Bool { vsc == .compact }
+    private var blocker: String? { care.raceBlocker(jelly: who) }
 
     var body: some View {
         let prof = care.jelly(who)
-        let compact = vsc == .compact
-        VStack(spacing: compact ? 8 : 14) {
-            HStack(spacing: 10) {
-                Button { AudioHub.shared.uiTap(); back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
-                }.buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("track-back")
-                Text("Track").font(SK.font(30, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                DropsPill(wallet: care.bath.wallet)
+        ZStack {
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Track", wallet: care.bath.wallet, backID: "track-back", helpID: "track-help", back: back, help: { setHow(true) })),
+                        why: blocker, whyID: "track-why") {
+                CoursePicker(care: care, runner: prof?.character ?? who, bleed: !compact, hint: hint)
+            } right: {
+                runnerCard(prof).padding(.top, compact ? 0 : 18)
+            } bar: {
+                LobbyBottomBar(pepLeft: prof?.stats.pepLeft ?? 0, pepTotal: TrainingTuning.fullSessions, pepID: "track-pep", trainID: "track-train", playID: "track-race",
+                               playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, train: train, play: race)
             }
-            ScrollView {
-                if compact {
-                    HStack(alignment: .top, spacing: 14) {
-                        VStack(spacing: 10) {
-                            raceCard
-                            courseCard
-                            prizes
-                        }
-                        statCard(prof)
-                    }
-                } else {
-                    VStack(spacing: 14) {
-                        raceCard
-                        courseCard
-                        statCard(prof)
-                        prizes
-                    }
-                }
+            .accessibilityHidden(howOpen)
+            if howOpen {
+                LobbyHowSheet(rows: [
+                    (.feet, "Left, right, left", "Tap the two foot buttons in turn. The same foot twice is a stumble."),
+                    (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
+                    (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
+                    (.run, "Waddle and Focus", "Waddle: longer steps, quicker feet. Focus: fewer look-arounds. Train raises both."),
+                    (.trophy, "Win to open the next course", "Or finish in the top two \(CourseProgress.topTwoToUnlock) times."),
+                ], close: { setHow(false) })
+                .zIndex(1)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            HStack(spacing: 12) {
-                if Self.trainingExists {
-                    Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); train() } label: {
-                        HStack(spacing: 8) { Image(systemName: "figure.walk").font(.system(size: 18, weight: .heavy)); Text("Train").font(SK.font(19, .black)).lineLimit(1) }
-                            .foregroundStyle(blocker == nil ? SK.ink : SK.muted).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
-                            .background(Capsule().fill(Color.white.opacity(0.9)))
-                            .overlay(Capsule().strokeBorder(blocker == nil ? SK.ink : SK.muted.opacity(0.4), lineWidth: 3))
-                    }
-                    .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-train")
-                }
-                Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); race() } label: {
-                    HStack(spacing: 8) { Image(systemName: "flag.checkered").font(.system(size: 18, weight: .heavy)); Text("Go race").font(SK.font(20, .black)) }
-                        .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: compact ? 48 : 58)
-                        .background(Capsule().fill(blocker == nil ? SK.pinkStrong : SK.muted.opacity(0.5)))
-                }
-                .buttonStyle(.plain).disabled(blocker != nil).accessibilityIdentifier("track-race")
-            }
-            if let why = blocker { Text(why).font(SK.font(12, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("track-why") }
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-        .background(SK.cream.ignoresSafeArea())
         .accessibilityElement(children: .contain).accessibilityIdentifier("track-screen")
+        .onAppear { if UserDefaults.standard.string(forKey: "LobbyAuto") == "trackHow" { howOpen = true } }          // capture aid: -LobbyAuto trackHow
     }
 
-    private func statCard(_ prof: JellyProfile?) -> some View {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("\(prof?.name ?? "Bob") races").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                        Text("Class: \(courseTier.className) (\(courseTier.title))").font(SK.font(13, .bold)).foregroundStyle(SK.muted).accessibilityIdentifier("track-class")
-                    }
-                    Spacer()
-                    if care.jellies.count > 1 { Text("Switch").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase) }
-                }
-                if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
-                bar("Waddle", prof?.stats.waddle ?? 0, "Longer steps, quicker feet", SK.pink)
-                bar("Focus", prof?.stats.focus ?? 0, "Fewer look-arounds", SK.sky)
-                if Self.trainingExists, let st = prof?.stats { pep(st) }
-                if let p = prof, !p.perks.raceBoost.isNone {
-                    HStack(spacing: 6) {
-                        ForEach(p.perks.active.filter(\.raceOnly), id: \.rawValue) { PerkChip(kind: $0, left: p.perks.remaining($0)) }
-                        Text("for the next race").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
-                    }
-                }
+    private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
+
+    private func runnerCard(_ prof: JellyProfile?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Runner").font(SK.font(19, .black)).foregroundStyle(SK.ink).padding(.bottom, 12).accessibilityAddTraits(.isHeader)
+            if care.jellies.count > 1 { LobbyChips(care: care, selected: who) { who = $0 } }
+            else if let p = prof { LobbyChip(care: care, jelly: p, selected: true) {} .allowsHitTesting(false) }
+            let waddle = LobbyBigStat(name: "Waddle", value: prof?.stats.waddle ?? 0, color: SK.pink)
+            let focus = LobbyBigStat(name: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 18) { waddle.frame(maxWidth: .infinity); focus.frame(maxWidth: .infinity) }
+                VStack(spacing: 12) { waddle; focus }
             }
-            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
-    }
-
-    private var blocker: String? { care.raceBlocker(jelly: who) }
-
-    /// Pep: three pips (full value practice sessions left today) and the note.
-    private func pep(_ st: JellyStats) -> some View {
-        let left = st.pepLeft
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                Text("Pep").font(SK.font(15, .heavy)).foregroundStyle(SK.ink).frame(width: 52, alignment: .leading)
-                HStack(spacing: 6) {
-                    ForEach(0..<TrainingTuning.fullSessions, id: \.self) { i in
-                        Capsule().fill(i < left ? SK.mint : Color(hex: 0xE6D8C6)).frame(height: 14)
-                    }
+            .padding(.top, 14)
+            if let p = prof, !p.perks.raceBoost.isNone {
+                FlowLayout(spacing: 6) {
+                    ForEach(p.perks.active.filter(\.raceOnly), id: \.rawValue) { PerkChip(kind: $0, left: p.perks.remaining($0)) }
+                    Text("for the next race").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
                 }
-                Text("\(left)/\(TrainingTuning.fullSessions)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(width: 34, alignment: .trailing)
+                .padding(.top, 12)
             }
-            Text("Pep refills overnight. Practice after that still helps, just less.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
         }
-        .accessibilityElement(children: .combine).accessibilityIdentifier("track-pep")
-    }
-
-    /// The race itself: its name, the field and how it is played.
-    private var raceCard: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "flag.checkered").font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.ink)
-                .frame(width: 62, height: 62).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.sky))
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Waddle Sprint").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                Text("You and two rivals on the \(courseTier.title). Tap the two foot buttons to waddle faster.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
-        .accessibilityElement(children: .combine)
-    }
-
-    /// The course picker (Race/CoursePicker.swift): the four courses, their shapes, locks and classes.
-    private var courseCard: some View {
-        CoursePicker(care: care)
-            .padding(12).frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
-    }
-
-    /// The prizes of the picked course.
-    private var prizes: some View {
-        HStack(spacing: 10) {
-            prize("1st", RaceTuning.drops(place: 1, tier: courseTier)); prize("2nd", RaceTuning.drops(place: 2, tier: courseTier)); prize("3rd", RaceTuning.drops(place: 3, tier: courseTier))
-        }
-        .accessibilityIdentifier("track-prizes")
-    }
-
-    private func bar(_ name: String, _ v: Float, _ sub: String, _ c: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack { Text(name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((v * 100).rounded()))").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit() }
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(SK.ink.opacity(0.1))
-                    Capsule().fill(c).frame(width: max(14, g.size.width * CGFloat(min(max(v, 0), 1))))
-                }
-            }.frame(height: 14)
-            Text(sub).font(SK.font(11, .bold)).foregroundStyle(SK.muted)
-        }
-        .accessibilityElement(children: .combine)
-    }
-    private func prize(_ place: String, _ n: Int) -> some View {
-        VStack(spacing: 4) {
-            Text(place).font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-            HStack(spacing: 4) { JellyCoinIcon(size: 18); Text("\(n)").font(SK.font(20, .black)).foregroundStyle(SK.ink) }
-        }
-        .frame(maxWidth: .infinity, minHeight: 68)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(place == "1st" ? SK.honey : SK.card))
-        .accessibilityElement(children: .combine)
+        .lobbyCard()
+        .accessibilityIdentifier("track-runner")
     }
 }
 

@@ -23,6 +23,12 @@ enum SK {
     static let honeyDeep = Color(hex: 0xF9CC59)
     static let mint = Color(hex: 0x9FD9B0)
     static let card = Color.white.opacity(0.78)
+    // the lobby mockups' extra colours (Volleyball, Track)
+    static let tile = Color(hex: 0xFBF6EC)
+    static let pepEmpty = Color(hex: 0xE6D8C6)
+    static let toggleOff = Color(hex: 0xE6DCCB)
+    static let sheet = Color(hex: 0xFBF7EE)
+    static let coinPill = Color(hex: 0xFCF8EF)
     /// Follows Dynamic Type (capped at 2x, see A11yFont.swift); a mid-session size change applies on the next re-render.
     static func font(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font { JFont.scaled(size, weight) }
     static let shadow = Color(red: 0.3, green: 0.2, blue: 0.12)
@@ -44,13 +50,14 @@ struct DropsPill: View {
     let wallet: DropsWallet
     var dark = false
     var glass = false          // Liquid Glass capsule (home HUD)
+    var lobby = false          // the lobby mockups' pill (Volleyball, Track): #FCF8EF, hairline and soft shadow
     var body: some View {
-        HStack(spacing: 6) {
-            JellyCoinIcon(size: 21)
+        HStack(spacing: lobby ? 7 : 6) {
+            JellyCoinIcon(size: lobby ? 22 : 21)
             Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
-        .padding(.horizontal, 14).frame(minHeight: 44)
-        .modifier(DropsPillBack(dark: dark, glass: glass))
+        .padding(.leading, lobby ? 10 : 14).padding(.trailing, 14).frame(minHeight: 44)
+        .modifier(DropsPillBack(dark: dark, glass: glass, lobby: lobby))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(wallet.count) JellyCoins")
         .accessibilityIdentifier("drops-pill")
@@ -59,8 +66,13 @@ struct DropsPill: View {
 
 private struct DropsPillBack: ViewModifier {
     let dark: Bool, glass: Bool
+    var lobby = false
     func body(content: Content) -> some View {
-        if glass {
+        if lobby {
+            content
+                .background(Capsule().fill(SK.coinPill).shadow(color: SK.ink.opacity(0.08), radius: 5, y: 3))
+                .overlay(Capsule().strokeBorder(SK.ink.opacity(0.06), lineWidth: 1))
+        } else if glass {
             content.hudFrost(in: .capsule)
         } else {
             content
