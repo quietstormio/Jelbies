@@ -98,12 +98,11 @@ enum BeachScenery {
         b.flatQuad(V3(seaNear0, 0.002, -160), V3(seaNear0, 0.002, 160), V3(-60, 0.002, 160), V3(-60, 0.002, -160), normal: V3(0, 1, 0), colors: [sandFar, sandFar, sandNear, sandNear])
         let wet = c(0.74, 0.62, 0.42)
         b.flatQuad(V3(seaNear0 - 0.3, 0.003, -160), V3(seaNear0 - 0.3, 0.003, 160), V3(seaNear0 - 1.0, 0.003, 160), V3(seaNear0 - 1.0, 0.003, -160), normal: V3(0, 1, 0), colors: [wet, wet, wet, wet])
-        // soft ripples in the sand (behind your baseline and beyond theirs)
-        for k in 0..<39 {
-            let row = k / 13
-            let x: Float = row < 2 ? -(3.2 + Float(row) * 3.4 + rng.unit() * 2) : 4.4 + rng.unit() * 2.2
+        // soft ripples in the sand: dunes behind your baseline only (a disc past the foam would hang over the sea, and from this high up it reads as a stray blob)
+        for k in 0..<26 {
+            let x = -(3.6 + Float(k / 13) * 3.4 + rng.unit() * 2)
             let z = -14 + Float(k % 13) * 2.3 + rng.unit()
-            ParkScenery.disc(b, cx: x, cz: z, radius: 0.5 + rng.unit() * 0.6, y: 0.006, color: c(0.90, 0.79, 0.57))
+            ParkScenery.disc(b, cx: x, cz: z, radius: 0.9 + rng.unit() * 0.9, y: 0.006, color: c(0.90, 0.79, 0.57))
         }
         // the court: a firmer, lighter sand with white lines
         let court = c(0.97, 0.88, 0.66)
@@ -131,15 +130,14 @@ enum BeachScenery {
         var z = -nd + 0.1
         while z < nd { b.roundedBox(centre: V3(0, 1.29, z), half: V3(0.008, 0.43, 0.007), radius: 0.006, segments: 1, aoFloor: false, color: mesh); z += 0.14 }
 
-        // props, kept inside what the camera shows: a palm either side of the far baseline, an umbrella and towel, a sandcastle, a bucket, shells
-        for (x, zz, h, lean) in [(4.0 as Float, -4.6 as Float, 4.6 as Float, 0.3 as Float), (4.2, 4.8, 5.4, -0.25)] { palm(b, x: x, z: zz, height: h, lean: lean, rng: &rng) }
-        umbrella(b, x: 3.6, z: -3.4)
-        b.flatQuad(V3(1.4, 0.014, -3.6), V3(2.7, 0.014, -3.6), V3(3.9, 0.014, -2.6), V3(2.6, 0.014, -2.6), normal: V3(0, 1, 0), colors: [c(0.96, 0.52, 0.55), c(0.96, 0.52, 0.55), c(0.99, 0.93, 0.80), c(0.99, 0.93, 0.80)])
-        sandcastle(b, x: 4.3, z: 3.0)
+        // props: a palm at either side of the far baseline (their crowns reach into the frame, the trunks stand just outside it in a portrait phone), a sandcastle and a
+        // bucket on the sand behind the opponents, shells (all of it either fully in frame or plainly past its edge: nothing is cut off mid-prop)
+        for (x, zz, h, lean) in [(3.9 as Float, -3.7 as Float, 4.6 as Float, 0.3 as Float), (4.1, 3.8, 5.2, -0.25)] { palm(b, x: x, z: zz, height: h, lean: lean, rng: &rng) }
+        sandcastle(b, x: 4.3, z: 1.7)
         // a bucket
-        b.lathe(cx: 3.3, cz: 2.8, profile: [PP(r: 0.0, y: 0.0, nr: 0, ny: -1), PP(r: 0.17, y: 0.0, nr: 1, ny: 0), PP(r: 0.23, y: 0.30, nr: 1, ny: 0), PP(r: 0.20, y: 0.30, nr: -1, ny: 0.3), PP(r: 0.0, y: 0.26, nr: 0, ny: 1)], segments: 16, color: c(0.35, 0.66, 0.90))
+        b.lathe(cx: 4.1, cz: -1.5, profile: [PP(r: 0.0, y: 0.0, nr: 0, ny: -1), PP(r: 0.17, y: 0.0, nr: 1, ny: 0), PP(r: 0.23, y: 0.30, nr: 1, ny: 0), PP(r: 0.20, y: 0.30, nr: -1, ny: 0.3), PP(r: 0.0, y: 0.26, nr: 0, ny: 1)], segments: 16, color: c(0.35, 0.66, 0.90))
         for k in 0..<7 {
-            ParkScenery.blob(b, V3(-3.0 + rng.unit() * 7.5, 0.03, -3.6 + Float(k) * 1.2 + rng.unit() * 0.5), rx: 0.11, ry: 0.06, rz: 0.1, color: c(0.99, 0.82 - 0.2 * rng.unit(), 0.78), segments: 8, rings: 4)
+            ParkScenery.blob(b, V3(-3.0 + rng.unit() * 6.0, 0.03, -2.4 + Float(k) * 0.8 + rng.unit() * 0.4), rx: 0.11, ry: 0.06, rz: 0.1, color: c(0.99, 0.82 - 0.2 * rng.unit(), 0.78), segments: 8, rings: 4)
         }
         // clouds (low over the horizon: the camera looks down, so the sky is a band of the wall, and the top of it is under the score pill)
         for (z, y, s) in [(-3.4 as Float, 0.9 as Float, 0.45 as Float), (3.2, 1.2, 0.5)] {
