@@ -52,9 +52,10 @@ final class HUDMenuTests: XCTestCase {
         tickSelect(care, 2.5)
         XCTAssertEqual(care.select.highlighted, 1); XCTAssertFalse(care.select.isSelecting)
         XCTAssertEqual(HUDMenu.mode(care), .individual(1))
-        XCTAssertEqual(HUDMenu.items(.individual(1)), [.come, .feed, .drink, .dress, .clean, .train, .compete])
+        XCTAssertEqual(HUDMenu.items(.individual(1)), [.dress, .clean, .train, .compete, .come])
         XCTAssertEqual(care.targetJelly, 1); XCTAssertEqual(care.singledOutJelly, 1)
-        XCTAssertEqual(HUDMenu.title(.feed, .individual(1), care: care), "Feed Moss".replacingOccurrences(of: "Moss", with: care.jelly(1)!.name))
+        XCTAssertEqual(HUDMenu.title(.train, .individual(1), care: care), "Train")
+        XCTAssertEqual(HUDMenu.spokenLabel(.train, .individual(1), care: care), "Train \(care.jelly(1)!.name)")
     }
 
     func testComeHereRowCallsHimAndDisablesInTheCloseUp() {

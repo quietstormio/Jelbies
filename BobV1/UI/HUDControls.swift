@@ -1,7 +1,7 @@
 //
 //  HUDControls.swift
 //  The one main HUD control (the paw, side of the screen) as a pure model: with nobody highlighted it serves the GROUP
-//  (Feed, Snacks, Drink, Play, Decor, Bedtime); with a Jelbie highlighted it serves HIM (Come here, Feed, Drink, Dress, Clean, Train tricks, Compete).
+//  (Feed, Snacks, Drink, Play, Decor, Bedtime); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
 //  CareMenu draws it; the tests drive it headless.
 //
 
@@ -26,11 +26,11 @@ enum HUDMenu {
         return .group
     }
 
-    /// Top to bottom. Six rows in the group menu, seven in his (Come here on top; CareMenu's `tight` rows and the scroller keep it inside landscape).
+    /// Top to bottom. Six rows in the group menu, five in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
         case .group: return [.feed, .snacks, .drink, .play, .decor, .bedtime]
-        case .individual: return [.come, .feed, .drink, .dress, .clean, .train, .compete]
+        case .individual: return [.dress, .clean, .train, .compete, .come]
         }
     }
 
@@ -47,14 +47,17 @@ enum HUDMenu {
         case .bedtime: return "Bedtime"
         case .dress: return "Dress"
         case .clean: return "Clean"
-        case .train: return "Train tricks"
+        case .train: return "Train"
         case .compete: return "Compete"
         }
     }
 
-    /// What VoiceOver reads: the visible title, except Come here names who is being called.
+    /// What VoiceOver reads: the visible title, except Come here and Train name who they are for.
     static func spokenLabel(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> String {
-        if i == .come, case .individual(let id) = mode, let name = care.jelly(id)?.name { return "Call \(name) over" }
+        if case .individual(let id) = mode, let name = care.jelly(id)?.name {
+            if i == .come { return "Call \(name) over" }
+            if i == .train { return "Train \(name)" }
+        }
         return title(i, mode, care: care)
     }
 

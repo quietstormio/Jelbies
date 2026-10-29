@@ -46,6 +46,7 @@ final class HUDUITests: XCTestCase {
                 XCTAssertTrue(app.buttons["hud-dress"].waitForExistence(timeout: 5), "individual controls (\(name))")
                 XCTAssertTrue(app.buttons["hud-come"].exists && app.buttons["care-clean"].exists && app.buttons["hud-train"].exists && app.buttons["hud-compete"].exists)
                 XCTAssertFalse(app.buttons["hud-bedtime"].exists)
+                XCTAssertFalse(app.buttons["care-feed"].exists || app.buttons["care-water"].exists, "Feed and Water are the group menu's (\(name))")
                 save("\(name)_3_individual")
                 app.buttons["hud-compete"].tap()
                 XCTAssertTrue(app.buttons["hud-compete-track"].waitForExistence(timeout: 5), "Compete unfolds Track / Show (\(name))")
