@@ -43,6 +43,11 @@ extension GameCare {
         volley.onSwap = { [weak self] dest in self?.volleySwap(dest) }
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.bool(forKey: "VolleyToys"), store.placedDecor.isEmpty {          // capture aid: `-VolleyToys 1` puts a few toys in the room (to see they stay home)
+            for k in [DecorKind.soccerball, .duck, .beachball, .plushbear] { store.grant(k.storeID); _ = store.place(k.storeID) }
+        }
+        #endif
     }
 
     func volleyHides(_ id: Int) -> Bool { volley.inScene && id < jellies.count && !volleyWork.participants.contains(id) }
