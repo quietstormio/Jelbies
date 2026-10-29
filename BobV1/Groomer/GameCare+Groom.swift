@@ -70,7 +70,17 @@ extension GameCare {
     /// Not drawn: everybody while the Jelbies are "inside" the shop, and whoever has not stepped out of the door yet.
     func groomHides(_ id: Int) -> Bool { groom.inScene && !groomBook.out.contains(id) }
 
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var startGroomFrames = UserDefaults.standard.integer(forKey: "StartGroom") != 0 ? 1 : 0
+    #endif
+
     func tickGroom(_ actors: [JellyActor], dt simDt: Float) {
+        #if targetEnvironment(simulator)
+        if Self.startGroomFrames > 0, !groom.active {          // capture aid: `-StartGroom 1` takes Jelbie 0 to the Jelly Spa (Quick Splash, coins topped up) once the room is up
+            Self.startGroomFrames += 1
+            if Self.startGroomFrames > 120 { Self.startGroomFrames = 0; if bath.wallet.count < 20 { bath.wallet.add(40, silent: true) }; groom.openPicker(all: [0]); startGroom(.quick) }
+        }
+        #endif
         groomBook.actors = actors
         tickOutExit(actors, dt: simDt)
         // the cut-scene runs on the wall clock (a slow sim must not stretch the 8-9 s visit)
