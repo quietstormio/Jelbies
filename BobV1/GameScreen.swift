@@ -22,7 +22,6 @@ struct GameScreen: View {
     @State private var bagWho: Int?
     @State private var settingsOpen = UserDefaults.standard.integer(forKey: "SettingsOpen") != 0                   // the gear's Settings popover (Accessibility / Studio)
     @State private var a11yOpen = UserDefaults.standard.integer(forKey: "A11yPanelOpen") != 0      // the Accessibility sheet (-A11yPanelOpen 1: captures)
-    @State private var careNatural: CGSize?                   // the open paw menu's natural size (it scrolls when the screen is too short)
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     @State private var extrasOpen = false                     // Siri & Lock Screen panel (Live Activity toggles, Siri tip)
     /// Every way into the game (widget links, Siri, the App Group queue) lands here; `apply` runs the routes on the care flows.
@@ -372,11 +371,9 @@ struct GameScreen: View {
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.
     private var careSlot: some View {
-        CareScroller(natural: $careNatural) {
-            CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
-                     openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
-                     openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
-        }
+        CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
+                 openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
+                 openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
         .padding(.trailing, 4)
 
     }
@@ -493,6 +490,24 @@ struct GameScreen: View {
         if d.string(forKey: "HUDMenu") == "open" {
             await sleep(5)
             withAnimation(CareMenu.spring) { open.wrappedValue = true }
+        }
+        // capture aid: -MenuQuickGo <file> waits for that file, then opens the care menu, closes it and re-opens it 0.12 s / 0.25 s into the fold (the
+        // host clock of each step goes to <file>.quick)
+        if let go = d.string(forKey: "MenuQuickGo") {
+            for _ in 0..<1200 where !FileManager.default.fileExists(atPath: go) { await sleep(0.1) }
+            await sleep(6)
+            func mark(_ what: String) {
+                let line = "\(what) \(Date().timeIntervalSince1970)\n"
+                if let h = FileHandle(forWritingAtPath: go + ".quick") ?? { FileManager.default.createFile(atPath: go + ".quick", contents: nil); return FileHandle(forWritingAtPath: go + ".quick") }() {
+                    h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+                }
+            }
+            for gap in [0.12, 0.25] {
+                mark("open"); withAnimation(CareMenu.spring) { open.wrappedValue = true }; await sleep(2)
+                mark("close"); withAnimation(CareMenu.spring) { open.wrappedValue = false }; await sleep(gap)
+                mark("reopen_\(gap)"); withAnimation(CareMenu.spring) { open.wrappedValue = true }; await sleep(2)
+                mark("final_close"); withAnimation(CareMenu.spring) { open.wrappedValue = false }; await sleep(2.5)
+            }
         }
         if d.string(forKey: "HUDGoOut") == "open" {
             await sleep(5)
@@ -728,6 +743,8 @@ struct CareMenu: View {
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
 
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
+    /// Closing is a quick calm fade in place: easeOut so it starts on the first frame, no overshoot (the spring above bounces, which threw the leaving rows sideways).
+    static let fadeOut = Animation.easeOut(duration: 0.17)
     static let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
     static let brown = Color(red: 0.42, green: 0.34, blue: 0.30)
 
@@ -740,6 +757,8 @@ struct CareMenu: View {
     /// The mode a tapped row ran in, held while the menu closes: Come here / Clean clear the highlight, and the rows must not flip to the group labels mid-fade.
     @State private var frozenMode: HUDMode?
 
+    /// The rows' natural size (they scroll when the screen is too short).
+    @State private var careNatural: CGSize?
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
     /// The Snacks picker (store foods in the bag, with counts) is unfolded.
@@ -757,16 +776,20 @@ struct CareMenu: View {
 
     var body: some View {
         let items = HUDMenu.items(mode)
-        VStack(alignment: .trailing, spacing: rowGap) {
-            if open {
-                ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
-                    row(item, count: items.count, index: index)
-                    if picker == .food, item == .feed { pickerRow(Consumables.foods, kind: .food) }
-                    if picker == .drink, item == .drink { pickerRow(care.drinkChoices, kind: .drink) }
-                    if snackPicker, item == .snacks { snackRow }
-                    if competeRow, item == .compete { competeChips }
+        CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
+            VStack(alignment: .trailing, spacing: rowGap) {
+                if open {
+                    ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
+                        row(item, count: items.count, index: index)
+                        if picker == .food, item == .feed { pickerRow(Consumables.foods, kind: .food) }
+                        if picker == .drink, item == .drink { pickerRow(care.drinkChoices, kind: .drink) }
+                        if snackPicker, item == .snacks { snackRow }
+                        if competeRow, item == .compete { competeChips }
+                    }
                 }
             }
+            .padding(.bottom, open ? rowGap : 0)          // the gap between the rows and the paw (the paw is outside the scroll)
+        } footer: {
             mainButton
         }
         .onChange(of: open) { _, isOpen in
@@ -784,6 +807,13 @@ struct CareMenu: View {
             }
             withAnimation(Self.spring) { open = true; picker = k }
         }
+    }
+
+    /// A chip of an unfolded row: springs out in order, fades out in place quickly with no bounce. Reduce Motion: fade only.
+    private func chipTransition(_ i: Int) -> AnyTransition {
+        if calm { return .opacity }
+        return .asymmetric(insertion: .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)),
+                           removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity).animation(Self.fadeOut))
     }
 
     /// A tiny row of the catalogue's items in the same cream style; tapping one starts it and closes the menu.
@@ -823,8 +853,7 @@ struct CareMenu: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("care-\(kind == .food ? "food" : "drink")-\(c.id)")
                 .accessibilityLabel(c.name)
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity)
-                    .animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -855,7 +884,7 @@ struct CareMenu: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("care-snack-\(s.item.id)").accessibilityLabel("\(s.item.name), \(s.count) left")
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -886,7 +915,7 @@ struct CareMenu: View {
                 }
                 .buttonStyle(.plain).disabled(!o.3)
                 .accessibilityIdentifier(o.4).accessibilityLabel(o.0)
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -940,9 +969,14 @@ struct CareMenu: View {
         .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
-        .transition(calm ? .opacity : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
-            .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
-            .animation(Self.spring.delay(Double(fromBottom) * 0.05)))
+        .transition(calm ? .asymmetric(insertion: .opacity, removal: .opacity.animation(Self.fadeOut)) : .asymmetric(
+            insertion: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+                .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
+                .animation(Self.spring.delay(Double(fromBottom) * 0.05)),
+            // closing is calm: each row fades out where it is (a slight shrink toward its icon edge and a few points of drift), no travel, no overlap
+            removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity)
+                .combined(with: .offset(y: 4))
+                .animation(Self.fadeOut)))
     }
 
     /// The Jelbie's name capsule (individual mode), left of the paw. The cross lets go of the highlight.
