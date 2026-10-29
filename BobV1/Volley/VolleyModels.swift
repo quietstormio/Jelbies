@@ -9,6 +9,7 @@
 
 import Foundation
 import simd
+import CoreGraphics
 import Observation
 
 nonisolated enum VolleyTier: String, CaseIterable, Codable, Sendable {
@@ -112,6 +113,24 @@ nonisolated enum VolleyTuning {
 nonisolated enum VolleyView {
     static func stick(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
     static func aim(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
+
+    /// How much of the smaller of two Jelbies' screen boxes the other one covers (0...1), through the beach camera of a view of `size`; nil when one is off the screen.
+    /// A box wraps the body's footprint (a disc of radius 0.55 on the sand) and its crown (the height `p.y`): from this high up the body's depth shows as screen height.
+    static func overlap(_ a: SIMD3<Float>, _ b: SIMD3<Float>, size: CGSize) -> Float? {
+        func box(_ p: SIMD3<Float>) -> CGRect? {
+            var pts: [CGPoint] = []
+            for (dx, dz, y) in [(-0.55 as Float, 0 as Float, 0 as Float), (0.55, 0, 0), (0, -0.55, 0), (0, 0.55, 0), (0, 0, max(p.y, 0.5))] {
+                guard let q = GameCamera.screenPoint(floor: SIMD2(p.x + dx, p.z + dz), y: y, size: size) else { return nil }
+                pts.append(q)
+            }
+            let xs = pts.map(\.x), ys = pts.map(\.y)
+            return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        }
+        guard let ra = box(a), let rb = box(b) else { return nil }
+        let i = ra.intersection(rb)
+        guard !i.isNull else { return 0 }
+        return Float(i.width * i.height / max(1, min(ra.width * ra.height, rb.width * rb.height)))
+    }
 }
 
 /// One Jelbie's volleyball stats, 0...1.

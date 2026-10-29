@@ -24,6 +24,18 @@ final class VolleySeparationTests: XCTestCase {
         XCTAssertEqual(VolleyTuning.clearOfMate(m, from: m, mate: m, lane: -1).y, -0.15, accuracy: 1e-4)
     }
 
+    func testScreenOverlapOfTwoBodies() {
+        GameCamera.configureBeach()
+        defer { GameCamera.endBeach(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+        let size = CGSize(width: 440, height: 956)
+        _ = GameCamera.camera(aspect: Float(size.width / size.height))
+        let a = SIMD3<Float>(-2, VolleyTuning.bodyTop, 0)
+        XCTAssertEqual(VolleyView.overlap(a, a, size: size) ?? 0, 1, accuracy: 0.01)          // merged: all of it
+        XCTAssertEqual(VolleyView.overlap(a, SIMD3(-2, VolleyTuning.bodyTop, 1.9), size: size) ?? 1, 0, accuracy: 0.01)          // a lane apart: none
+        let mid = VolleyView.overlap(a, SIMD3(-2, VolleyTuning.bodyTop, 0.9), size: size) ?? 0
+        XCTAssertGreaterThan(mid, 0.05); XCTAssertLessThan(mid, 0.9)
+    }
+
     struct Gap { var minBody = Float.infinity, minWish = Float.infinity, ticks = 0, matches = 0, closest: [(seed: UInt64, t: Float, team: Int, d: Float)] = [], wishNote = "", points = 0, hits = 0, score = [0, 0], rallies: [Int] = [] }
 
     private func match(seed: UInt64, into g: inout Gap) {

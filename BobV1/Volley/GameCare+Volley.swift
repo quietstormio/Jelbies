@@ -37,6 +37,8 @@ final class VolleyWork {
     var captureDone = false
     var gapMin = [Float](repeating: .infinity, count: 2), gapWindow = [Float](repeating: .infinity, count: 2), gapTick = 0
     var gapNote = ["", ""]
+    var overlapFrames = [0, 0, 0, 0]
+    var overlapTick = 0
     nonisolated deinit {}
 }
 
@@ -280,6 +282,9 @@ extension GameCare {
             (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: UserDefaults.standard.bool(forKey: "VolleyLandscape") ? .landscapeRight : .portrait))
         }
         #endif
+        #if targetEnvironment(simulator)
+        volleyOverlapAid(s)
+        #endif
         s.tick(dt: dt)
         let events = s.takeEvents()
         for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].wantX, z: s.players[i].wantZ, speed: s.players[i].stats.speed) }
@@ -449,6 +454,18 @@ extension GameCare {
             w.gapWindow = [.infinity, .infinity]
         }
         if w.gapTick % 120 == 0 { volleyAidLog("VOLLEYGAP min ours=\(w.gapMin[0]) theirs=\(w.gapMin[1]) (body width 1.1)\n") }
+    }
+
+    /// Capture aid: `-VolleyOverlap 1` counts, while a rally is on, the frames where two teammates' screen boxes overlap by more than 30% (per team) and prints the totals every 2 s.
+    func volleyOverlapAid(_ s: VolleySim) {
+        guard UserDefaults.standard.bool(forKey: "VolleyOverlap"), s.phase == .rally, volley.bodyPos.count >= 4 else { return }
+        let w = volleyWork, size = CGSize(width: 1206, height: 2622)
+        for team in 0..<2 {
+            let a = volley.bodyPos[team * 2], b = volley.bodyPos[team * 2 + 1]
+            if let o = VolleyView.overlap(a, b, size: size) { w.overlapFrames[team * 2] += 1; if o > 0.3 { w.overlapFrames[team * 2 + 1] += 1 } }
+        }
+        w.overlapTick += 1
+        if w.overlapTick % 120 == 0 { volleyAidLog("VOLLEYOVERLAP frames=\(w.overlapFrames[0]) over30=\(w.overlapFrames[1]) (our team)  frames=\(w.overlapFrames[2]) over30=\(w.overlapFrames[3]) (theirs)\n") }
     }
 
     func volleyDemo(_ s: inout VolleySim) {
