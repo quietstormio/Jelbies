@@ -87,7 +87,7 @@ nonisolated enum JellyWho: Equatable, Sendable, Hashable {
     case jellies([Int])
     case everyone
     var asVoiceTarget: VoiceTarget {
-        switch self { case .selected: return .selected; case .everyone: return .everyone; case .jellies(let ids): return ids.count == 1 ? .jelly(ids[0]) : .everyone }
+        switch self { case .selected: return .selected; case .everyone: return .everyone; case .jellies(let ids): return .named(ids) }
     }
 }
 

@@ -113,6 +113,39 @@ final class VoiceIntentTests: XCTestCase {
         XCTAssertEqual(decide(v, "everyone").target, .everyone)
     }
 
+    /// Two or more named in one breath: exactly those, in the order said, whatever the filler ("and", commas, "come" before or after).
+    func testSeveralNamedAreTheTarget() {
+        let v = training()
+        v.names.roster = [0, 1, 2, 3]          // slot == character, whatever roster the host app launched with
+        for (said, want) in [("come here Pip and Moss", [1, 2]), ("Pip and Lavender come here", [1, 3]), ("Moss, Pip, come here", [2, 1]),
+                             ("come Pip and Moss", [1, 2]), ("Pip and Moss, come here", [1, 2]), ("hey Moss and Pip come", [2, 1]),
+                             ("come here Pip, Moss and Lavender", [1, 2, 3])] {
+            let d = decide(v, said)
+            XCTAssertEqual(d.target, .jellies(want), said)
+            XCTAssertEqual(d.reaction, .perform(.come), said)
+        }
+        XCTAssertEqual(decide(v, "Pip and Pip come here").target, .jelly(1), "one name said twice is one Jelbie")
+        XCTAssertEqual(decide(v, "everyone, Pip and Moss come here").target, .everyone)
+        XCTAssertEqual(decide(v, "Pip and Moss").reaction, .nameHeard)
+        XCTAssertEqual(decide(v, "Pip and Moss").target, .jellies([1, 2]))
+        XCTAssertEqual(decide(v, "good night Pip and Moss").target, .jellies([1, 2]))
+        XCTAssertEqual(decide(v, "good night Pip and Moss").reaction, .social(.goodnight))
+    }
+
+    func testSeveralNamedRulesParserAndTargetMapping() {
+        let n = names()
+        n.roster = [0, 1, 2, 3]
+        let cat = AICatalogRegistry.catalog(jellies: [(0, "Bob"), (1, "Pip"), (2, "Moss"), (3, "Lavender")])
+        for (said, want) in [("come here Pip and Moss", [1, 2]), ("Pip and Lavender come here", [1, 3]), ("Moss, Pip, come here", [2, 1]), ("come Pip and Moss", [1, 2])] {
+            let r = RuleParser.parse(said, names: n, catalog: cat)
+            XCTAssertEqual(r.command.who, .jellies(want), said)
+            XCTAssertEqual(r.command.action, .come, said)
+            XCTAssertEqual(r.command.who.asVoiceTarget, .jellies(want), said)
+        }
+        XCTAssertEqual(JellyWho.jellies([2]).asVoiceTarget, .jelly(2))
+        XCTAssertEqual(VoiceTarget.named([]), .selected)
+    }
+
     func testWakeUpPhrasesBeatPraiseAndKeepTheirTargets() {
         let v = training()
         for said in ["wake up", "rise and shine", "good morning", "time to get up", "wakey wakey"] {

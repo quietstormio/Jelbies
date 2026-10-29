@@ -369,6 +369,7 @@ final class VoiceCoordinator {
         switch t {
         case .selected: return [selectedJellyID]
         case .jelly(let id): return [id]
+        case .jellies(let ids): return ids.filter(presentIDs.contains)
         case .everyone: return presentIDs
         }
     }
@@ -451,7 +452,7 @@ final class VoiceCoordinator {
                     case .selected: break
                     }
                 }
-                self.lastBook = self.book(for: { if case .jelly(let id) = target { return id }; return self.subjectID }()); decision = self.lastBook!.decide(model: i.action, target: target, mood: { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }())
+                self.lastBook = self.book(for: { target.firstNamed ?? self.subjectID }()); decision = self.lastBook!.decide(model: i.action, target: target, mood: { if let id = target.firstNamed { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }())
             }
             self.finish(decision, transcript: transcript)
         }
@@ -484,10 +485,9 @@ final class VoiceCoordinator {
     }
 
     func apply(_ c: JellyCommand, deterministic d: VoiceDecision, transcript: String, care: GameCare) {
-        var target: VoiceTarget = c.who.asVoiceTarget
-        if case .jellies(let ids) = c.who, ids.count > 1 { target = .jelly(ids[0]) }
-        func mood() -> BlobMood { if case .jelly(let id) = target { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }
-        func legacy(_ a: VoiceAction) { let bk = book(for: { if case .jelly(let id) = target { return id }; return subjectID }()); lastBook = bk; finish(bk.decide(model: a, target: target, mood: mood()), transcript: transcript) }
+        let target: VoiceTarget = c.who.asVoiceTarget
+        func mood() -> BlobMood { if let id = target.firstNamed { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }
+        func legacy(_ a: VoiceAction) { let bk = book(for: target.firstNamed ?? subjectID); lastBook = bk; finish(bk.decide(model: a, target: target, mood: mood()), transcript: transcript) }
         switch c.action {
         case .none: finish(d, transcript: transcript)
         case .come: legacy(.come)
@@ -522,6 +522,7 @@ final class VoiceCoordinator {
         if r == .perform(.come) { comeCommands += 1 }
         var ids = ids(for: d.target)
         if case .jelly(let id) = d.target, !presentIDs.contains(id) { r = .puzzled; ids = [] }        // a name for a Jelly that is not here
+        if case .jellies(let named) = d.target, !named.allSatisfy(presentIDs.contains) { r = .puzzled; ids = [] }
         var kind: VoiceFeedback.Kind?
         switch r {
         case .ignore:
@@ -533,6 +534,7 @@ final class VoiceCoordinator {
         }
         // a name wakes ONLY that Jelbie (sleepy wake); selecting him wakes nobody. Any word counts as an interaction (the night-idle clock).
         if case .jelly(let id) = d.target, presentIDs.contains(id), r != .social(.goodnight), r != .social(.wakeUp) { care.wakeSleeper(id) }
+        if case .jellies = d.target, r != .social(.goodnight), r != .social(.wakeUp) { for id in ids { care.wakeSleeper(id) } }
         if ids.isEmpty { care.noteInteraction() } else { for id in ids { care.noteInteraction(jelly: id) } }
         // naming a Jelly selects it (the outline a tap gives); come already zooms onto him, and the close-up needs no highlight
         if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come) {
@@ -833,6 +835,7 @@ final class VoiceCoordinator {
             switch target {
             case .everyone: meant = presentIDs
             case .jelly(let id): meant = [id]
+            case .jellies(let named): meant = named
             case .selected: meant = focused ? [care.targetJelly] : presentIDs          // (a plain "goodnight" is everyone; a highlight is not a target)
             }
             goodnightLog.append(meant); if goodnightLog.count > 20 { goodnightLog.removeFirst() }
@@ -846,6 +849,7 @@ final class VoiceCoordinator {
             switch target {
             case .everyone: meant = presentIDs
             case .jelly(let id): meant = [id]
+            case .jellies(let named): meant = named
             case .selected: meant = focused ? [care.targetJelly] : presentIDs
             }
             if Set(meant) == Set(presentIDs) { care.wakeAll() } else { for id in meant { care.wakeSleeper(id) } }
@@ -856,9 +860,11 @@ final class VoiceCoordinator {
             comeUntil = clock() + Self.comeWindow
             switch target {
             case .jelly(let id): care.comeHere(jelly: id)
+            case .jellies(let named): care.comeHere(jellies: named)          // exactly the ones named; the rest keep roaming
             case .selected: care.comeHere(jelly: nil)                 // = care.targetJelly
             case .everyone: care.comeHereEveryone()
             }
+            if Self.logging { NSLog("VOICELOG come target=%@ closeUpOn=%@", String(describing: target), care.focusGroup.ids.description) }          // capture aid
             return
         }
         if ids.count == 1, ids[0] != 0, runSubject(r, id: ids[0], kind: kind, care: care) { return }          // (W2: a trick, a lesson step or a shrug for a Jelly other than slot 0)

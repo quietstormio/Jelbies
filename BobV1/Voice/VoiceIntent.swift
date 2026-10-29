@@ -19,7 +19,21 @@ nonisolated enum VoiceTarget: Equatable, Sendable {
     case selected
     /// A Jelly by id (0 Bob, 1 Pip, 2 Moss).
     case jelly(Int)
+    /// Two or more named in one breath ("come here Pip and Moss"), in the order said, each once: just those, nobody else.
+    case jellies([Int])
     case everyone
+}
+
+extension VoiceTarget {
+    /// The target for the Jellies a transcript names: none = `.selected`, one = `.jelly`, several = `.jellies`.
+    static func named(_ ids: [Int]) -> VoiceTarget {
+        switch ids.count { case 0: return .selected; case 1: return .jelly(ids[0]); default: return .jellies(ids) }
+    }
+    var isSeveral: Bool { if case .jellies = self { return true }; return false }
+    /// The first Jelly named (the one whose book and mood answer for a several-named command).
+    var firstNamed: Int? {
+        switch self { case .jelly(let id): return id; case .jellies(let ids): return ids.first; default: return nil }
+    }
 }
 
 /// The built-in social commands: known from the start, no training.

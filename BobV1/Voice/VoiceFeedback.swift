@@ -116,7 +116,7 @@ struct VoiceFeedbackView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 16).padding(.bottom, 74)
+                .padding(.leading, 16 + HUDTuning.railWidth + 10).padding(.trailing, 16 + 68).padding(.bottom, 74)          // beside the left rail (never under it), clear of the paw; long lines wrap inside
             }
         }
         .allowsHitTesting(false)
@@ -156,7 +156,7 @@ struct VoiceFeedbackView: View {
         return Text(text)
             .font(.system(size: 15, weight: .semibold, design: .rounded))
             .foregroundStyle(accent ? Color.white : FocusStyle.brown)
-            .lineLimit(2).multilineTextAlignment(.leading)
+            .lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(Capsule().fill(accent ? FocusStyle.pink : FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))

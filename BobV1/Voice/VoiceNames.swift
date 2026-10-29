@@ -221,6 +221,13 @@ final class JellyNames {
         return nil
     }
 
+    /// The Jellies an utterance names, each once, in the order said ("Moss, Pip, come here" = [Moss, Pip]).
+    func resolveIDs(tokens: [String]) -> [Int] {
+        var ids: [Int] = []
+        for h in resolve(tokens: tokens).all where !ids.contains(h.id) { ids.append(h.id) }
+        return ids
+    }
+
     /// Scans an utterance: the first name found (earliest) and every token that is not part of any name, in order.
     func resolve(tokens: [String]) -> (first: NameHit?, all: [NameHit], rest: [String]) {
         var rest: [String] = [], hits: [NameHit] = []
