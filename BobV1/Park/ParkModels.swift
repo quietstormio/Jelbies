@@ -213,10 +213,13 @@ nonisolated enum ParkPool {
         return out
     }
 
-    /// The Park friend who plays beside a lone Jelbie at the beach: ONE visitor per calendar day (`dayKey`), so the lobby and the match agree.
+    /// The Park friend who plays beside a lone Jelbie at the beach: ONE visitor per calendar day (`dayKey`), so the lobby and the match agree. Only a visitor with no signature feature
+    /// (no wings, daisy or spikes) is picked: the lobby draws him on the Jelbie's body in his colour and item, and that is then exactly what plays.
     static func dailyFriend(dayKey: Int, pool: [ParkVisitor] = generate()) -> ParkVisitor {
         var r = ParkRandom(UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ 0x51ED)
-        return pool[Int(r.next() % UInt64(max(pool.count, 1)))]
+        let plain = pool.filter { $0.signature == .none }
+        let from = plain.isEmpty ? pool : plain
+        return from[Int(r.next() % UInt64(max(from.count, 1)))]
     }
 
     /// Who comes this time: `count` visitors drawn without repeats, weighted towards friends of the Jelbies that are coming and towards ones not seen for a while.

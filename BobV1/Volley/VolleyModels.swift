@@ -177,6 +177,8 @@ nonisolated enum VolleyDrillKind: String, CaseIterable, Sendable {
         case .sprint: return "Dash to the flags with the stick. Raises Speed."
         }
     }
+    /// How the drill is played, one sentence or two (the blurb without its "Raises ..." sentence): the caption shown when the drill starts.
+    var instruction: String { blurb.components(separatedBy: " Raises ").first ?? blurb }
     /// The stats a drill raises (see `VolleyBook.finishDrill`), for the tags on the Training sheet.
     var raises: [VolleyStatKind] { switch self { case .bonk: return [.timing, .hops]; case .spike: return [.power]; case .block: return [.hops]; case .sprint: return [.speed] } }
     var symbol: String { switch self { case .bonk: return "circle.dotted"; case .spike: return "arrow.down.right.circle.fill"; case .block: return "rectangle.portrait.arrowtriangle.2.outward"; case .sprint: return "figure.run" } }
@@ -209,7 +211,7 @@ final class VolleyBook {
         guard persists else { return }
         slowBall = defaults.bool(forKey: "volley.slowBall")
         autoSwitch = defaults.object(forKey: "volley.autoSwitch") == nil ? true : defaults.bool(forKey: "volley.autoSwitch")
-        partner = defaults.object(forKey: "volley.partner") as? Int
+        partner = defaults.object(forKey: "volley.partner") == nil ? nil : defaults.integer(forKey: "volley.partner")
         if let d = defaults.data(forKey: Self.key), let s = try? JSONDecoder().decode(Saved.self, from: d) { stats = s.stats; records = s.records; chosen = s.chosen }
     }
 

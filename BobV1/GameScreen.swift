@@ -530,6 +530,23 @@ struct GameScreen: View {
                 }
             }
         }
+        // capture aid: -LobbyTier sandcastle|shore|reef|tidal and -LobbyCourse puddle|ripple|splash|wave|tsunami pick that court / course (locked or not) to see its blurb
+        if let t = d.string(forKey: "LobbyTier").flatMap(VolleyTier.init(rawValue:)) { care.volley.book.chosen = t }
+        if let t = d.string(forKey: "LobbyCourse").flatMap(CourseTier.init(rawValue:)) { care.race.courseTier = t }
+        // capture aid: -LobbySeed reset|wins|blocked (any of them, e.g. "reset wins"): wins on Puddle and Ripple for the first Jelbie (Ripple picked), and a meal out so the lobbies show their blocker line
+        if let m = d.string(forKey: "LobbySeed") {
+            await sleep(2)
+            let c = care.jellies.first?.character ?? 0
+            if m.contains("reset") {          // a fresh Circuit record (a capture build keeps its saves between launches)
+                care.race.progress.records = [:]; care.race.courseTier = .puddle
+                for k in 0..<JellyRoster.names.count { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
+            }
+            if m.contains("wins") {
+                for t in [CourseTier.puddle, .ripple] { care.race.progress.record(tier: t, place: 1); care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                _ = care.chooseCourse(.ripple)
+            }
+            if m.contains("blocked") { care.feed("berries") }
+        }
         // capture aid: -GroomAuto picker|visit (the Jelly Spa picker after 4 s; visit also picks the Royal Pamper for everybody and goes, with 300 Drops)
         if let m = d.string(forKey: "GroomAuto") {
             await sleep(4)

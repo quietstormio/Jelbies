@@ -82,6 +82,8 @@ final class GameCare {
     @ObservationIgnored var fittingProvider: ((WearLook, Int) -> UIImage?)?
     /// A plain portrait of Jelly `id` as he is now (the Studio, the Condition card, the show lobby).
     @ObservationIgnored var portraitProvider: ((Int) -> UIImage?)?
+    /// A lobby avatar: the body alone on a transparent backdrop, framed on the head (Lobby/LobbyKit.swift). See `HeadPortraitKey`.
+    @ObservationIgnored var headProvider: ((HeadPortraitKey) -> UIImage?)?
     @ObservationIgnored var wearOutfitRev = -1
     @ObservationIgnored var wearOutfits: [Int: [WearSlot: WearLook]] = [:]
     @ObservationIgnored var shoesDrawn = false

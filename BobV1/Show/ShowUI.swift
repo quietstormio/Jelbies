@@ -64,28 +64,30 @@ struct JelbiePortrait: View {
     var border: Color = ShowUI.light
     /// A thin ring OUTSIDE the portrait and a soft shadow (the lobby mockups' avatars); nil = the Show's 4 pt inner ring.
     var outerRing: CGFloat? = nil
-    /// Zooms the render toward its centre (the lobbies crop tighter than the Show's).
-    var zoom: CGFloat = 1
+    /// The lobby avatar: the body alone (no room) framed on the head, over a light backdrop; `friend` draws that Park visitor on this body instead.
+    var head = false
+    var friend: ParkVisitor? = nil
     @State private var image: UIImage?
     @State private var tried = false
+    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear) }
     var body: some View {
         ZStack {
-            Circle().fill(ShowUI.platform)
-            if let image { Image(uiImage: image).resizable().scaledToFill().scaleEffect(zoom).frame(width: size, height: size).clipShape(Circle()) }
+            Circle().fill(head ? SK.tile : ShowUI.platform)
+            if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle()) }
             else if tried { Circle().fill(Color(red: Double(JellyRoster.tint(care.jelly(who)?.character ?? who).x), green: Double(JellyRoster.tint(care.jelly(who)?.character ?? who).y), blue: Double(JellyRoster.tint(care.jelly(who)?.character ?? who).z))).padding(size * 0.2) }
-            else { ProgressView().tint(.white) }
+            else { ProgressView().tint(head ? SK.muted : .white) }
         }
         .frame(width: size, height: size)
         .overlay { if let r = outerRing { Circle().stroke(border, lineWidth: r).padding(-r / 2) } else { Circle().strokeBorder(border, lineWidth: 4) } }
         .shadow(color: outerRing == nil ? .black.opacity(0.25) : SK.ink.opacity(0.18), radius: outerRing == nil ? 8 : 3, y: outerRing == nil ? 4 : 2)
-        .accessibilityLabel("\(care.jelly(who)?.name ?? "Jelbie")")
+        .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
         .accessibilityIdentifier("jelbie-portrait")
-        .task(id: "\(who)-\(care.store.revision)") {
+        .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") {
             image = nil; tried = false
             try? await Task.sleep(nanoseconds: 350_000_000)
             for _ in 0..<40 {
                 await Task.yield()
-                if let img = care.portraitProvider?(who) { image = img; return }
+                if let img = head ? care.headProvider?(key) : care.portraitProvider?(who) { image = img; return }
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 if Task.isCancelled { return }
             }

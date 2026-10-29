@@ -174,11 +174,11 @@ struct VolleyLobby: View {
                     LobbyBigStat(name: "Hops", value: st.hops, color: SK.mint, sub: "Higher jumps")
                     LobbyBigStat(name: "Timing", value: st.timing, color: SK.honeyDeep, sub: "A bigger hit window, a truer aim")
                 }
-                .lobbyCard().accessibilityIdentifier("volley-stats")
+                .lobbyCard().accessibilityElement(children: .contain).accessibilityIdentifier("volley-stats")
                 sectionHead("Drills")
                 VStack(spacing: 8) { ForEach(VolleyDrillKind.allCases, id: \.rawValue) { k in drillRow(k) } }
             }
-            .accessibilityIdentifier("volley-training")
+            .accessibilityElement(children: .contain).accessibilityIdentifier("volley-training")
         }
     }
 
@@ -266,9 +266,8 @@ struct VolleyTeamCard: View {
         let friend = care.volleyParkFriend()
         return VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                // (a real render of a visitor needs the visitor's body in the room, which exists only at the beach: his colour on a blob stands in)
-                ZStack { Circle().fill(Color.white); RivalBlob(tint: friend.colour.swatch, size: 40) }
-                    .frame(width: 46, height: 46).overlay(Circle().stroke(Color.white, lineWidth: 3).padding(-1.5)).shadow(color: SK.ink.opacity(0.18), radius: 3, y: 2)
+                // the friend as he will play: the lone Jelbie's body in the friend's colour and item, rendered by the stage (a friend with a signature feature is never picked)
+                JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: 46, border: .white, outerRing: 3, head: true, friend: friend)
                 Text("Park\nfriend").font(SK.font(15.5, .black)).foregroundStyle(SK.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
             Text("Plays with you until you adopt a second Jelbie. Steady, and sets you up.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true).padding(2)
@@ -307,7 +306,7 @@ struct VolleyTeamTile: View {
     }
 
     private var avatar: some View {
-        JelbiePortrait(care: care, who: jelly.id, size: 46, border: .white, outerRing: 3, zoom: 2.0).accessibilityHidden(true)
+        JelbiePortrait(care: care, who: jelly.id, size: 46, border: .white, outerRing: 3, head: true).accessibilityHidden(true)
     }
     private var name: some View { Text(jelly.name).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineLimit(1) }
 

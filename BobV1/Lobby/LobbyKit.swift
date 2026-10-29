@@ -37,8 +37,7 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(spacing: 0) {
                             ScrollView { VStack(alignment: .leading, spacing: 0) { left }.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
-                            whyLine.padding(.top, 6)
-                            bar
+                            VStack(spacing: 0) { whyLine; bar }.padding(.top, 6).modifier(BarBand())
                         }
                         ScrollView { VStack(spacing: 10) { right }.frame(maxWidth: .infinity) }.scrollBounceBehavior(.basedOnSize)
                     }
@@ -56,11 +55,22 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                    VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.bottom, 10)
+                    VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10).modifier(BarBand())
                 }
             }
         }
         .background(SK.cream.ignoresSafeArea())
+    }
+}
+
+/// The pinned bar's own cream band (it reaches the bottom edge) with a soft fade above it, so scrolled content never pokes out over the buttons.
+private struct BarBand: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(alignment: .bottom) { SK.cream.ignoresSafeArea(edges: .bottom) }
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [SK.cream.opacity(0), SK.cream], startPoint: .top, endPoint: .bottom).frame(height: 18).offset(y: -18).allowsHitTesting(false)
+            }
     }
 }
 
@@ -203,9 +213,20 @@ struct LobbyInfoLine<Pills: View>: View {
     var pillsBelow = false
     let pills: Pills
     init(text: String, textID: String? = nil, pillsBelow: Bool = false, @ViewBuilder pills: () -> Pills) { self.text = text; self.textID = textID; self.pillsBelow = pillsBelow; self.pills = pills() }
+    @State private var availW: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// One line when the text fits at 90% size or better (never scaled at accessibility sizes); otherwise it wraps at full size.
+    private var oneLine: Bool {
+        guard !typeSize.isAccessibilitySize, availW > 0 else { return false }
+        let d = UIFont.systemFont(ofSize: JFont.scaledSize(13), weight: .bold).fontDescriptor.withDesign(.rounded)
+        let font = d.map { UIFont(descriptor: $0, size: JFont.scaledSize(13)) } ?? UIFont.systemFont(ofSize: JFont.scaledSize(13), weight: .bold)
+        return (text as NSString).size(withAttributes: [.font: font]).width * 0.9 <= availW
+    }
     private var blurb: some View {
-        Text(text).font(SK.font(13, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(SK.font(13, .bold)).foregroundStyle(SK.muted).lineSpacing(2)
+            .lineLimit(oneLine ? 1 : nil).minimumScaleFactor(oneLine ? 0.9 : 1).fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier(textID ?? "lobby-info")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availW = $0 }
     }
     var body: some View {
         Group {
@@ -262,7 +283,7 @@ struct LobbyChip: View {
     var body: some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             HStack(spacing: 8) {
-                JelbiePortrait(care: care, who: jelly.id, size: 36, border: .white, outerRing: 2, zoom: 2.0).accessibilityHidden(true)
+                JelbiePortrait(care: care, who: jelly.id, size: 36, border: .white, outerRing: 2, head: true).accessibilityHidden(true)
                 Text(jelly.name).font(SK.font(15.5, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
             }
             .padding(.leading, 6).padding(.trailing, 14).frame(minHeight: 48)

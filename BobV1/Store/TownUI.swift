@@ -368,13 +368,19 @@ struct TrackPanel: View {
                     (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
                     (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
                     (.run, "Waddle and Focus", "Waddle: longer steps, quicker feet. Focus: fewer look-arounds. Train raises both."),
-                    (.trophy, "Win to open the next course", "Or finish in the top two \(CourseProgress.topTwoToUnlock) times."),
+                    (.trophy, "Win to open the next course", "Or finish in the top two \(Self.words(CourseProgress.topTwoToUnlock)) times."),
                 ], close: { setHow(false) })
                 .zIndex(1)
             }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("track-screen")
         .onAppear { if UserDefaults.standard.string(forKey: "LobbyAuto") == "trackHow" { howOpen = true } }          // capture aid: -LobbyAuto trackHow
+    }
+
+    /// 3 -> "three" (the How to play copy).
+    static func words(_ n: Int) -> String {
+        let f = NumberFormatter(); f.numberStyle = .spellOut; f.locale = Locale(identifier: "en_US")
+        return f.string(from: NSNumber(value: n)) ?? "\(n)"
     }
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }

@@ -20,6 +20,8 @@ struct VolleyChrome: View {
     @State private var fxTone = 0
     @State private var fxY: CGFloat = 0
     @State private var fxOpacity: Double = 0
+    @State private var captionOn = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -50,6 +52,13 @@ struct VolleyChrome: View {
         }
         .allowsHitTesting(volley.active)
         .accessibilityElement(children: .contain)
+        .task(id: volley.live && volley.isDrill) {          // a drill's instruction under the scoreboard for the first few seconds, then it fades
+            guard volley.live, case .drill(let k) = volley.mode else { captionOn = false; return }
+            captionOn = true
+            UIAccessibility.post(notification: .announcement, argument: k.instruction)
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if !Task.isCancelled { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { captionOn = false } }
+        }
     }
 
     // MARK: top
@@ -67,7 +76,11 @@ struct VolleyChrome: View {
                 Color.clear.frame(width: 44, height: 44)
             }
             if volley.live, !volley.isDrill, !volley.ui.touchDots.isEmpty { touchDots }
-            if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
+            if captionOn, case .drill(let k) = volley.mode {
+                Text(k.instruction).playFont(14, .semibold).foregroundStyle(CareMenu.brown).multilineTextAlignment(.center).padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(CareMenu.cream.opacity(0.95)))
+                    .transition(reduceMotion ? .identity : .opacity).accessibilityIdentifier("volley-drill-caption")
+            } else if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
             if let t = volley.toast { Text(t).playFont(14, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream)) }
         }
         .padding(.top, 8)

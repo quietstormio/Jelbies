@@ -78,6 +78,20 @@ final class LobbyTests: XCTestCase {
         XCTAssertEqual(VolleyDrillKind.sprint.raises, [.speed])
     }
 
+    func testDrillInstructionsDropTheRaisesSentence() {
+        for k in VolleyDrillKind.allCases {
+            XCTAssertFalse(k.instruction.isEmpty)
+            XCTAssertFalse(k.instruction.contains("Raises"), "\(k): the caption is how to play, not what it trains")
+            XCTAssertTrue(k.blurb.hasPrefix(k.instruction))
+        }
+        XCTAssertEqual(VolleyDrillKind.spike.instruction, "Swipe the Hit button to aim the spike at the pink cushion.")
+    }
+
+    func testTheDailyFriendHasNoSignatureFeature() {
+        let pool = ParkPool.generate()
+        for day in 20_000..<20_120 { XCTAssertEqual(ParkPool.dailyFriend(dayKey: day, pool: pool).signature, .none, "day \(day): what the lobby renders is exactly what plays") }
+    }
+
     func testTheSVGReaderHandlesTheMockupPaths() {
         let tight = SVG.path("M1.5 .5h3v2.2h-3z").boundingRect
         XCTAssertEqual(tight.width, 3, accuracy: 0.01); XCTAssertEqual(tight.height, 2.2, accuracy: 0.01)

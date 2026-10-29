@@ -784,6 +784,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if model.gameMode {
             model.care.fittingProvider = { [weak self] look, id in self?.fittingSnapshot(look: look, jelly: id) }
             model.care.portraitProvider = { [weak self] id in self?.fittingSnapshot(look: nil, jelly: id) }
+            model.care.headProvider = { [weak self] key in self?.headSnapshot(key) }
             model.care.parkBook.spawn = { [weak self] specs, spots in self?.parkSpawn(specs, spots: spots) ?? [] }          // the park's visitor bodies (Park/MelonController+Park.swift)
             model.care.parkBook.clear = { [weak self] in self?.parkClear() }
         }
@@ -1145,14 +1146,25 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Jelly `id` wearing `look`, drawn by the game renderer itself (the room, the real body shader, the real wardrobe / shoe meshes, the jersey) into an
     /// offscreen target between two frames, from a close 3/4 camera in front of him. nil when there is no game renderer to ask.
     /// `look` nil: a plain portrait of him as he is (what he wears now), for the Studio and the Condition card.
-    func fittingSnapshot(look: WearLook?, jelly id: Int) -> UIImage? {
+    func fittingSnapshot(look: WearLook?, jelly id: Int) -> UIImage? { renderSnapshot(look: look, jelly: id, headPortrait: nil) }
+
+    /// A lobby avatar (Volleyball, Track, Training): the Jelbie's body (and what he wears) alone on a transparent backdrop, framed on the head with a little body, drawn by the
+    /// same game renderer. `colour` / `wear` draw a Park visitor instead on this body (his palette and his one worn item): what plays at the beach.
+    func headSnapshot(_ key: HeadPortraitKey) -> UIImage? { renderSnapshot(look: nil, jelly: key.jelly, headPortrait: key) }
+
+    private func renderSnapshot(look: WearLook?, jelly id: Int, headPortrait hp: HeadPortraitKey?) -> UIImage? {
         guard game, let renderer, let room = renderer.room, actors.indices.contains(id) else { return nil }
         // the size of the last frame (nil until the stage has drawn one: the caller asks again)
         let W = lastRW, H = lastRH
         guard W > 8, H > 8, firstFrameDone else { return nil }
         let care = model.care, a = actors[id]
         care.store.fitting = look.map { (id, $0) }
+        let visitorPalette = hp?.colour.map { JellyPalettes.park($0) }
+        if let p = visitorPalette { renderer.setPalette(p, body: id) }
+        if hp != nil { renderer.cutout = true }
         defer {
+            if hp != nil { renderer.cutout = model.cutout }
+            if visitorPalette != nil { renderer.setRacePalette(care.racePalette(for: id), own: a.appearance, body: id) }
             care.store.fitting = nil
             room.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); room.setShoes(RoomMesh())
             care.wearDrawn = true; care.shoesDrawn = false; care.shoeSig = []
@@ -1167,7 +1179,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id))
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
-            w.tick(id: id, brain: b, sim: a.sim, outfit: care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
+            w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.colour != nil ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
             if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a)) }
         }
         renderer.setJersey(w.jersey(id), body: id)
@@ -1179,11 +1191,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         let c = pose.centroid
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
-        let yaw: Float = look == nil ? 0.3 : 0.5
+        let yaw: Float = hp != nil ? 0.25 : (look == nil ? 0.3 : 0.5)
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
-        let focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
-        let span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
+        var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
+        var span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
+        if hp != nil { focusY = c.y + HeadPortraitKey.focusUp; span = HeadPortraitKey.span }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
         let th = tanf(GameCamera.fovY / 2)
         let dist = (span / 2) / min(th, th * aspect)
@@ -1216,10 +1229,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         px.withUnsafeMutableBytes { tex.getBytes($0.baseAddress!, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0) }
         let side = min(W, H)
         let cs = CGColorSpaceCreateDeviceRGB()
+        let alpha = hp != nil ? CGImageAlphaInfo.premultipliedFirst.rawValue : CGImageAlphaInfo.noneSkipFirst.rawValue
         // (the CGContext must not outlive the buffer: make the image inside the closure)
         guard let full = px.withUnsafeMutableBytes({ p -> CGImage? in
                   CGContext(data: p.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: W * 4, space: cs,
-                            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)?.makeImage() }),
+                            bitmapInfo: alpha | CGBitmapInfo.byteOrder32Little.rawValue)?.makeImage() }),
               let part = full.cropping(to: CGRect(x: (W - side) / 2, y: (H - side) / 2, width: side, height: side)) else { return nil }
         return UIImage(cgImage: part)
     }

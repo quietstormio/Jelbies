@@ -72,7 +72,12 @@ extension GameCare {
     }
 
     /// Who plays beside a lone Jelbie today (the same Park visitor all day).
-    func volleyParkFriend() -> ParkVisitor { ParkPool.dailyFriend(dayKey: DayClock.shared.dayKey) }
+    func volleyParkFriend() -> ParkVisitor {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "LobbyFriendDay") != nil { return ParkPool.dailyFriend(dayKey: UserDefaults.standard.integer(forKey: "LobbyFriendDay")) }          // capture aid: `-LobbyFriendDay N` shows another day's friend
+        #endif
+        return ParkPool.dailyFriend(dayKey: DayClock.shared.dayKey)
+    }
 
     func volleyBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
