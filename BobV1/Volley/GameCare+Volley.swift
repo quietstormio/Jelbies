@@ -35,6 +35,10 @@ final class VolleyWork {
     var puffs: [(x: Float, z: Float, age: Float, size: Float)] = []
     var nudge: Float = 0
     var captureDone = false
+    var gapMin = [Float](repeating: .infinity, count: 2), gapWindow = [Float](repeating: .infinity, count: 2), gapTick = 0
+    var gapNote = ["", ""]
+    var overlapFrames = [0, 0, 0, 0]
+    var overlapTick = 0
     nonisolated deinit {}
 }
 
@@ -121,7 +125,7 @@ extension GameCare {
 
     // MARK: input
 
-    /// The floating joystick: x toward the screen's right (+x on the court), y toward the camera (+z), magnitude 0...1.
+    /// The floating joystick in court terms (`VolleyView.stick`): x toward the net (screen up), y across the court (+z, screen right), magnitude 0...1.
     func volleyStick(_ v: SIMD2<Float>) { guard volley.live else { return }; volley.sim?.setStick(v) }
     /// The Hit button went down (serves / tosses on his serve; otherwise bump, set, spike, dig or block by the situation).
     /// `touched`: when the finger landed (the event's own time), so the grade is taken at the touch and not at the next sim step.
@@ -265,12 +269,21 @@ extension GameCare {
             if b.volley.finished { s.bodyDone(i) }
             else if b.volley.phase == .ground, s.players[i].act != .stand, s.players[i].actT > 0.3 { s.bodyDone(i) }
         }
+        for team in 0..<2 where w.players.count >= 4 && s.players.count >= 4 && VolleyTuning.keepApart {          // each Jelbie knows where his partner's body is (his steps, jumps and dives keep clear of it)
+            let a = team * 2, b = a + 1
+            w.players[a].brain?.volley.mate = SIMD2(s.players[b].x, s.players[b].z)
+            w.players[b].brain?.volley.mate = SIMD2(s.players[a].x, s.players[a].z)
+        }
         #if targetEnvironment(simulator)
         volleyDemo(&s)
-        if UserDefaults.standard.bool(forKey: "VolleyLandscape"), !w.rotated {          // capture aid: the court on its side
+        volleyGapAid(s)
+        if UserDefaults.standard.object(forKey: "VolleyLandscape") != nil, !w.rotated {          // capture aid: `-VolleyLandscape 1` the court on its side, `0` upright again
             w.rotated = true
-            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: UserDefaults.standard.bool(forKey: "VolleyLandscape") ? .landscapeRight : .portrait))
         }
+        #endif
+        #if targetEnvironment(simulator)
+        volleyOverlapAid(s)
         #endif
         s.tick(dt: dt)
         let events = s.takeEvents()
@@ -287,7 +300,7 @@ extension GameCare {
         else if !w.trail.isEmpty { w.trail.removeFirst() }
         for k in w.puffs.indices { w.puffs[k].age += dt }
         w.puffs.removeAll { $0.age > 0.6 }
-        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.pos.x * 0.05))
+        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.z * 0.12))          // (the screen's right is +z now)
         w.nudge += (want - w.nudge) * min(1, dt * 1.5)
         GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
@@ -412,6 +425,49 @@ extension GameCare {
     nonisolated(unsafe) static var volleySlowScale: Float = 1
 
     #if targetEnvironment(simulator)
+    /// Where the capture aids print: the file named by `-VolleyAidLog <path>` (appended to), else stderr.
+    func volleyAidLog(_ line: String) {
+        if let path = UserDefaults.standard.string(forKey: "VolleyAidLog") {
+            if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
+            if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        } else { FileHandle.standardError.write(Data(line.utf8)) }
+    }
+
+    /// Capture aid: `-VolleyGap 1` tracks the least centre-to-centre distance of each team's two real soft bodies (a body is ~1.1 wide) and prints it every 2 s, with the
+    /// wall-clock time of each second's closest moment when it is under 1.8 (to find the frames in a screen recording).
+    func volleyGapAid(_ sim: VolleySim) {
+        guard UserDefaults.standard.bool(forKey: "VolleyGap"), volley.bodyPos.count >= 4 else { return }
+        let w = volleyWork
+        for team in 0..<2 {
+            let a = volley.bodyPos[team * 2], b = volley.bodyPos[team * 2 + 1]
+            let d = hypotf(a.x - b.x, a.z - b.z)
+            w.gapMin[team] = min(w.gapMin[team], d)
+            if d < w.gapWindow[team], sim.players.count >= 4 {
+                let p = sim.players[team * 2], q = sim.players[team * 2 + 1]
+                w.gapNote[team] = "acts \(p.act)/\(q.act) bodies (\(a.x), \(a.z)) (\(b.x), \(b.z)) wants (\(p.wantX), \(p.wantZ)) (\(q.wantX), \(q.wantZ)) phase \(sim.phase)"
+            }
+            w.gapWindow[team] = min(w.gapWindow[team], d)
+        }
+        w.gapTick += 1
+        if w.gapTick % 60 == 0 {
+            for team in 0..<2 where w.gapWindow[team] < 1.8 { volleyAidLog("VOLLEYCLOSE t=\(Date().timeIntervalSince1970) team=\(team) d=\(w.gapWindow[team]) \(w.gapNote[team])\n") }
+            w.gapWindow = [.infinity, .infinity]
+        }
+        if w.gapTick % 120 == 0 { volleyAidLog("VOLLEYGAP min ours=\(w.gapMin[0]) theirs=\(w.gapMin[1]) (body width 1.1)\n") }
+    }
+
+    /// Capture aid: `-VolleyOverlap 1` counts, while a rally is on, the frames where two teammates' screen boxes overlap by more than 30% (per team) and prints the totals every 2 s.
+    func volleyOverlapAid(_ s: VolleySim) {
+        guard UserDefaults.standard.bool(forKey: "VolleyOverlap"), s.phase == .rally, volley.bodyPos.count >= 4 else { return }
+        let w = volleyWork, size = CGSize(width: 1206, height: 2622)
+        for team in 0..<2 {
+            let a = volley.bodyPos[team * 2], b = volley.bodyPos[team * 2 + 1]
+            if let o = VolleyView.overlap(a, b, size: size) { w.overlapFrames[team * 2] += 1; if o > 0.3 { w.overlapFrames[team * 2 + 1] += 1 } }
+        }
+        w.overlapTick += 1
+        if w.overlapTick % 120 == 0 { volleyAidLog("VOLLEYOVERLAP frames=\(w.overlapFrames[0]) over30=\(w.overlapFrames[1]) (our team)  frames=\(w.overlapFrames[2]) over30=\(w.overlapFrames[3]) (theirs)\n") }
+    }
+
     func volleyDemo(_ s: inout VolleySim) {
         guard let k = UserDefaults.standard.string(forKey: "VolleyDemo"), s.players.indices.contains(s.controlled) else { return }
         let w = volleyWork
@@ -419,6 +475,8 @@ extension GameCare {
         switch k {
         case "rally":          // both teams play themselves (the assists), for the review frames
             s.autoMove = true; s.autoJump = true
+            if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }          // (his own serve: toss, then the serve at the top)
+            if s.phase == .rally, p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03, s.hitLabel == "Serve!" { s.tap() }
         case "bonk", "spike":
             guard s.phase == .rally else { return }
             let b = s.ball

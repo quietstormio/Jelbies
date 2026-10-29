@@ -3,10 +3,13 @@
 //  Jelly Volleyball (the third earning game): the data. Tiers (ranks), the court's numbers, per-Jelbie volleyball stats (Speed, Power, Hops, Timing)
 //  with their training gain rules, the tier unlocks, and the Drops. Pure values: no bodies, no screen.
 //
-//  The court is a side view along x: the net at x = 0, the player's team on the left (x < 0), two Jelbies a side, everybody on the plane z = 0.
+//  The court runs along x: the net at x = 0, the player's team at x < 0, two Jelbies a side. The camera stands behind the player's baseline looking down the court,
+//  so on the screen up = +x (toward the net and the opponents) and right = +z.
 //
 
 import Foundation
+import simd
+import CoreGraphics
 import Observation
 
 nonisolated enum VolleyTier: String, CaseIterable, Codable, Sendable {
@@ -49,10 +52,29 @@ nonisolated enum VolleyTuning {
     static let serveWaitAI: Float = 1.1
     static let introSeconds: Float = 1.6
     // players
-    static let restYaw: Float = 0.95             // 3/4 toward the camera, facing the net
-    static let minGap: Float = 1.3              // teammates keep this far apart
+    static let restYaw: Float = .pi / 2          // facing the net (your team: backs to the camera; the opponents: facing it)
+    /// Two bodies on one side never come closer than this (centre to centre): a body is ~1.1 wide, plus a margin. `partnerGap` is how far apart two teammates' wishes are
+    /// kept (the one nearer the ball keeps his spot, the other steps aside); `brainGap` is the least a step, jump or dive may end from the partner's body.
+    static let bodyDiameter: Float = 1.1
+    static let minCentreGap: Float = bodyDiameter + 0.5          // (the margin: a body's centre sways a little as it walks, and two steps can be taken at once)
+    static let partnerGap: Float = bodyDiameter + 0.5, brainGap: Float = bodyDiameter + 0.5
+    static let minGap: Float = 1.3              // teammates keep this far apart (the old wish-to-wish gap)
+    /// A hook for the before / after measurements and captures: `-VolleyKeepApart 0` plays with the old rules (only the wishes of two computer teammates are pushed apart,
+    /// and the bodies walk, jump and dive straight through each other).
+    nonisolated(unsafe) static var keepApart: Bool = UserDefaults.standard.object(forKey: "VolleyKeepApart") == nil ? true : UserDefaults.standard.bool(forKey: "VolleyKeepApart")
+    /// `q` (where a body is heading, from `p`) moved out to the circle of radius `brainGap` round the partner `m` when it is inside it (or a little more than his distance now, when
+    /// he is closer already): the partner's body is a wall to walk, jump and dive round. `lane` picks the side when everything is dead centre.
+    static func clearOfMate(_ q: SIMD2<Float>, from p: SIMD2<Float>, mate m: SIMD2<Float>, lane: Float = 1) -> SIMD2<Float> {
+        let d0 = simd_distance(p, m)
+        let dmin = d0 < brainGap ? min(brainGap, d0 + 0.15) : brainGap          // (already too close: the move must open the gap, not keep it)
+        guard simd_distance(q, m) < dmin else { return q }
+        var out = q - m
+        if simd_length(out) < 1e-3 { out = p - m }
+        if simd_length(out) < 1e-3 { out = SIMD2(0, lane) }
+        return m + simd_normalize(out) * dmin
+    }
     static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
-    static let startZ: [Float] = [0.35, -0.35, -0.35, 0.35]
+    static let startZ: [Float] = [0.9, -0.9, -0.9, 0.9]          // (staggered across the court so the partner does not hide behind him from behind)
     /// Depth: the players roam this far either side of the centre line; a ball landing past `outZ` is out; a body must be within `zReach` of the ball's depth to touch it.
     static let zLimit: Float = 1.15, outZ: Float = 1.75, zReach: Float = 0.78
     /// Timing: the Perfect and Good half windows (seconds, around the ideal tap) from the Timing stat; the wide ones are for assists.
@@ -83,6 +105,31 @@ nonisolated enum VolleyTuning {
     static func drops(win: Bool, tier: VolleyTier) -> Int {
         let w = [16, 20, 25, 31], l = [4, 5, 6, 8]          // (v2: about 30% more for the longer match)
         return win ? w[tier.index] : l[tier.index]
+    }
+}
+
+/// The screen <-> court mapping of the behind-the-team camera: up is +x (toward the net), right is +z. A thumb's offset (right, down; points or unit values) becomes the
+/// sim's stick (x along the court, z across it) and the Hit-button swipe becomes the sim's aim (x: -1 short ... +1 deep, z across).
+nonisolated enum VolleyView {
+    static func stick(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
+    static func aim(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
+
+    /// How much of the smaller of two Jelbies' screen boxes the other one covers (0...1), through the beach camera of a view of `size`; nil when one is off the screen.
+    /// A box wraps the body's footprint (a disc of radius 0.55 on the sand) and its crown (the height `p.y`): from this high up the body's depth shows as screen height.
+    static func overlap(_ a: SIMD3<Float>, _ b: SIMD3<Float>, size: CGSize) -> Float? {
+        func box(_ p: SIMD3<Float>) -> CGRect? {
+            var pts: [CGPoint] = []
+            for (dx, dz, y) in [(-0.55 as Float, 0 as Float, 0 as Float), (0.55, 0, 0), (0, -0.55, 0), (0, 0.55, 0), (0, 0, max(p.y, 0.5))] {
+                guard let q = GameCamera.screenPoint(floor: SIMD2(p.x + dx, p.z + dz), y: y, size: size) else { return nil }
+                pts.append(q)
+            }
+            let xs = pts.map(\.x), ys = pts.map(\.y)
+            return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        }
+        guard let ra = box(a), let rb = box(b) else { return nil }
+        let i = ra.intersection(rb)
+        guard !i.isNull else { return 0 }
+        return Float(i.width * i.height / max(1, min(ra.width * ra.height, rb.width * rb.height)))
     }
 }
 

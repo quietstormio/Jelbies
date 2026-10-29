@@ -258,7 +258,7 @@ nonisolated struct VolleySim: Sendable {
 
     // MARK: control
 
-    /// The floating stick: x is toward the screen's right (+x on the court), y toward the camera (+z). Magnitude 0...1.
+    /// The floating stick in court terms: x toward the net (screen up), y across the court (+z, screen right); `VolleyView.stick` maps a thumb to it. Magnitude 0...1.
     mutating func setStick(_ s: SIMD2<Float>) {
         let m = simd_length(s)
         stick = m > 1 ? s / m : s
@@ -274,7 +274,7 @@ nonisolated struct VolleySim: Sendable {
         events.append(.switched(to: i, auto: !manual))
     }
 
-    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: -1 far ... +1 near the camera). nil clears it.
+    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: across the court, +1 = the screen's right; `VolleyView.aim` maps a swipe to it). nil clears it.
     mutating func setAim(_ a: SIMD2<Float>?) {
         guard players.indices.contains(controlled) else { return }
         players[controlled].aim = a
@@ -954,28 +954,67 @@ nonisolated struct VolleySim: Sendable {
             ai(i, dt: dt, moveToo: !human || autoMove, hitToo: !human || autoJump)
             if human, autoMove, !autoJump, simd_length(stick) > 0.12 { players[i].wantX = p.x + stick.x * 0.9; players[i].wantZ = p.z + stick.y * 0.9 }
         }
-        // keep teammates apart (the computer's wishes, not the human's)
-        for team in 0..<2 where players.count >= 4 {
+        // the wishes stay on the court, then teammates are kept apart: the human on the stick (else the one whose wish is nearer the ball) keeps his spot and the other steps aside,
+        // clear of both his wish and his body (a body is ~1.1 wide: they never merge)
+        for i in players.indices { players[i].wantX = clampX(players[i].wantX, team: players[i].team); players[i].wantZ = min(max(players[i].wantZ, -T.zLimit), T.zLimit) }
+        for team in 0..<2 where players.count >= 4 && !T.keepApart {          // (the old rule, for the A/B: the wishes alone, and the court's walls could undo it)
             let a = team * 2, b = a + 1
             let wa = SIMD2(players[a].wantX, players[a].wantZ), wb = SIMD2(players[b].wantX, players[b].wantZ)
             let d = simd_distance(wa, wb)
             if d < T.minGap {
                 let dir: SIMD2<Float> = d > 1e-3 ? (wb - wa) / d : SIMD2(0, 1)
                 let push = (T.minGap - d) / 2
-                if isHuman(a) || (isHuman(b) && false) { players[b].wantX += dir.x * push * 2; players[b].wantZ += dir.y * push * 2 }
+                if isHuman(a) { players[b].wantX += dir.x * push * 2; players[b].wantZ += dir.y * push * 2 }
                 else if isHuman(b) { players[a].wantX -= dir.x * push * 2; players[a].wantZ -= dir.y * push * 2 }
                 else {
                     players[a].wantX -= dir.x * push; players[a].wantZ -= dir.y * push
                     players[b].wantX += dir.x * push; players[b].wantZ += dir.y * push
                 }
             }
+            players[a].wantX = clampX(players[a].wantX, team: team); players[b].wantX = clampX(players[b].wantX, team: team)
+            players[a].wantZ = min(max(players[a].wantZ, -T.zLimit), T.zLimit); players[b].wantZ = min(max(players[b].wantZ, -T.zLimit), T.zLimit)
         }
-        for i in players.indices {
-            let s = Self.side(players[i].team)
-            let lo: Float = s < 0 ? -T.halfCourt - 0.2 : T.netMargin, hi: Float = s < 0 ? -T.netMargin : T.halfCourt + 0.2
-            players[i].wantX = min(max(players[i].wantX, lo), hi)
-            players[i].wantZ = min(max(players[i].wantZ, -T.zLimit), T.zLimit)
+        for team in 0..<2 where players.count >= 4 && T.keepApart {
+            let a = team * 2, b = a + 1
+            var ballP = SIMD2(ball.pos.x, ball.z)
+            if phase == .rally, let tH = timeToHeight(1.55) ?? timeToHeight(T.ballR) { ballP = SIMD2(xAfter(tH), zAfter(tH)) }          // (where it will be at head height: whoever is going for it keeps his spot)
+            let da = simd_distance(SIMD2(players[a].wantX, players[a].wantZ), ballP), db = simd_distance(SIMD2(players[b].wantX, players[b].wantZ), ballP)
+            let assisted = autoMove || autoJump          // (a thumb on the stick keeps his spot; with the move assist he is a computer player)
+            let keeper = isHuman(a) && !assisted ? a : isHuman(b) && !assisted ? b : (da <= db ? a : b), mover = keeper == a ? b : a
+            var w = SIMD2(players[mover].wantX, players[mover].wantZ)
+            let lane: Float = players[mover].z >= players[keeper].z ? 1 : -1          // (dead on the same spot: step to the side he is already on)
+            w = clear(w, of: SIMD2(players[keeper].wantX, players[keeper].wantZ), gap: T.partnerGap, team: team, lane: lane)
+            w = clear(w, of: SIMD2(players[keeper].x, players[keeper].z), gap: T.minCentreGap, team: team, lane: lane)
+            players[mover].wantX = w.x; players[mover].wantZ = w.y
         }
+    }
+
+    private func clampX(_ x: Float, team: Int) -> Float {
+        let s = Self.side(team)
+        return min(max(x, s < 0 ? -T.halfCourt - 0.2 : T.netMargin), s < 0 ? -T.netMargin : T.halfCourt + 0.2)
+    }
+
+    /// `w` moved to the nearest point at least `gap` from `centre` that is still on the team's half of the court (it keeps `w` when it is clear already).
+    private func clear(_ w: SIMD2<Float>, of centre: SIMD2<Float>, gap: Float, team: Int, lane: Float) -> SIMD2<Float> {
+        if simd_distance(w, centre) >= gap - 1e-4 { return w }
+        func onCourt(_ p: SIMD2<Float>) -> SIMD2<Float> { SIMD2(clampX(p.x, team: team), min(max(p.y, -T.zLimit), T.zLimit)) }
+        var out = w - centre
+        if simd_length(out) < 1e-3 { out = SIMD2(0, lane) }
+        let direct = onCourt(centre + simd_normalize(out) * gap)
+        if simd_distance(direct, centre) >= gap - 1e-3 { return direct }
+        var best: SIMD2<Float>?
+        for k in 0..<24 {          // (against a wall: the nearest clear point round the circle)
+            let a = Float(k) / 24 * 2 * .pi
+            let p = centre + SIMD2(cosf(a), sinf(a)) * gap
+            guard simd_distance(onCourt(p), p) < 1e-3 else { continue }
+            if best == nil || simd_distance(p, w) < simd_distance(best!, w) { best = p }
+        }
+        if let best { return best }
+        // the keeper stands where no clear point is left (mid-court, the court being ~2 wide): the farthest corner
+        let xs = [clampX(-100, team: team), clampX(100, team: team)], zs = [-T.zLimit, T.zLimit]
+        var far = w
+        for x in xs { for z in zs where simd_distance(SIMD2(x, z), centre) > simd_distance(far, centre) { far = SIMD2(x, z) } }
+        return far
     }
 
     /// The teammate who should take the ball: after a touch, the other one; otherwise the nearer in time (the human a little favoured).

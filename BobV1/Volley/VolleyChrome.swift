@@ -170,7 +170,7 @@ struct VolleyChrome: View {
                                     let m = hypot(d.width, d.height), R: CGFloat = 54
                                     if m > R { d = CGSize(width: d.width / m * R, height: d.height / m * R) }
                                     stickKnob = d
-                                    care.volleyStick(SIMD2(Float(d.width / R), Float(d.height / R)))
+                                    care.volleyStick(VolleyView.stick(right: Float(d.width / R), down: Float(d.height / R)))
                                 }
                                 .onEnded { _ in stickOrigin = nil; stickKnob = .zero; care.volleyStick(.zero) })
                             .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
@@ -266,14 +266,14 @@ struct VolleyChrome: View {
                     if !hitDown { hitDown = true; aimShown = nil; care.volleyTap(touched: v.time) }
                     let dx = v.translation.width, dy = v.translation.height
                     if hypot(dx, dy) > 20 {
-                        let a = SIMD2<Float>(Float(max(-1, min(1, dx / 52))), Float(max(-1, min(1, dy / 52))))
-                        aimShown = a; care.volleyAim(a)
+                        let a = SIMD2<Float>(Float(max(-1, min(1, dx / 52))), Float(max(-1, min(1, dy / 52))))          // (on the screen: right, down)
+                        aimShown = a; care.volleyAim(VolleyView.aim(right: a.x, down: a.y))
                     }
                 }
                 .onEnded { _ in hitDown = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if !hitDown { aimShown = nil } } })
             .background { Button("") { care.volleyTap() }.keyboardShortcut(.space, modifiers: []).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
             .accessibilityElement().accessibilityLabel(volley.ui.hitLabel).accessibilityIdentifier("volley-jump").accessibilityAddTraits(.isButton)
-            .accessibilityHint("Tap to hit. The move depends on the touch: bump, set, spike, dig or block. Swipe the button to aim: left short, right deep, up far, down near.")
+            .accessibilityHint("Tap to hit. The move depends on the touch: bump, set, spike, dig or block. Swipe the button to aim: up deep, down short, left or right to the sides.")
             .accessibilityAction { care.volleyTap() }
         }
     }
