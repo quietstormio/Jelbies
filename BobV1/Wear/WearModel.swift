@@ -66,6 +66,23 @@ nonisolated struct WearHide: OptionSet, Sendable {
 }
 
 nonisolated enum WearRules {
+    /// How a neck piece is raised off the arms: `up` the rise at full weight, `from` the azimuth from the front (rad) where the rise starts (just past the
+    /// mouth's keep-out), `full` where it is complete (the arm roots, round the back). nil = the piece stays where it was drawn (the medal's ribbon is already
+    /// authored above the arm roots and pinned there by a test). `up` puts each piece's centre line at the sides near y 0.64-0.65, just over the arm roots
+    /// (top ~0.605), by its own drawn height there (the art's centre is 0.46-0.51): a soft U, nothing near the eyes.
+    struct NeckLift { var up: Float, from: Float, full: Float }
+    static func neckLift(_ l: WearLook) -> NeckLift? {
+        let up: Float
+        switch l {
+        case .pearls, .chainGold, .diamondJ: up = 0.15
+        case .scarfCosy, .scarfSky, .whistleCoach, .bandanaCoral, .bandanaMint: up = 0.14
+        case .scarfSilk, .bowtiePink, .bowtieSky: up = 0.17
+        case .lei: up = 0.18
+        default: return nil
+        }
+        return NeckLift(up: up, from: 0.44, full: 1.48)
+    }
+
     static func hide(_ l: WearLook) -> WearHide {
         var h: WearHide = [.wash]
         switch l.slot {
