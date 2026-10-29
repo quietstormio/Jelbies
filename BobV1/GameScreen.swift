@@ -728,6 +728,8 @@ struct CareMenu: View {
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
 
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
+    /// Closing folds the rows back into the heart: quick, no overshoot (the spring above bounces, which threw the leaving rows sideways).
+    static let foldOut = Animation.easeIn(duration: 0.2)
     static let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
     static let brown = Color(red: 0.42, green: 0.34, blue: 0.30)
 
@@ -786,6 +788,13 @@ struct CareMenu: View {
         }
     }
 
+    /// A chip of an unfolded row: springs out in order, folds back (scale + fade toward the row) quickly with no bounce. Reduce Motion: fade only.
+    private func chipTransition(_ i: Int) -> AnyTransition {
+        if calm { return .opacity }
+        return .asymmetric(insertion: .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)),
+                           removal: .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.foldOut))
+    }
+
     /// A tiny row of the catalogue's items in the same cream style; tapping one starts it and closes the menu.
     private func pickerRow(_ list: [Consumable], kind: ConsumableKind) -> some View {
         ViewThatFits(in: .horizontal) {
@@ -823,8 +832,7 @@ struct CareMenu: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("care-\(kind == .food ? "food" : "drink")-\(c.id)")
                 .accessibilityLabel(c.name)
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity)
-                    .animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -855,7 +863,7 @@ struct CareMenu: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("care-snack-\(s.item.id)").accessibilityLabel("\(s.item.name), \(s.count) left")
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -886,7 +894,7 @@ struct CareMenu: View {
                 }
                 .buttonStyle(.plain).disabled(!o.3)
                 .accessibilityIdentifier(o.4).accessibilityLabel(o.0)
-                .transition(.scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)))
+                .transition(chipTransition(i))
             }
         }
         .padding(.trailing, 8)
@@ -940,9 +948,14 @@ struct CareMenu: View {
         .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
-        .transition(calm ? .opacity : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
-            .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
-            .animation(Self.spring.delay(Double(fromBottom) * 0.05)))
+        .transition(calm ? .opacity : .asymmetric(
+            insertion: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+                .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
+                .animation(Self.spring.delay(Double(fromBottom) * 0.05)),
+            // mirrors opening: the top row goes first and every row folds down into the heart (a row's distance to it = the rows below it + the gap)
+            removal: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+                .combined(with: .offset(y: CGFloat(fromBottom + 1) * (iconSize + rowGap)))
+                .animation(Self.foldOut.delay(Double(index) * 0.02))))
     }
 
     /// The Jelbie's name capsule (individual mode), left of the paw. The cross lets go of the highlight.

@@ -73,20 +73,34 @@ struct CareScroller<Content: View>: View {
     @Binding var natural: CGSize?
     @ViewBuilder var content: () -> Content
     @Environment(\.a11yAvailableHeight) private var avail
+    /// The frame the scroll keeps while the menu folds shut: the rows that are leaving no longer count toward the content's size, and a frame that
+    /// shrank with it clipped them to a sliver at the heart (and let the content slide) for the whole close.
+    @State private var held: CGSize?
+    @State private var releaseTicket = 0
 
     var body: some View {
         // The scroll clips, so a menu taller than the space left really scrolls (it used to draw over the top bar). The shadows get a
         // margin inside the clip, taken back outside it so the layout is the same as before.
         let m: CGFloat = 12
+        let size = held ?? natural
         return ScrollView(.vertical, showsIndicators: false) {
             content()
                 .fixedSize(horizontal: true, vertical: false)          // rows take their own width (never wrapped a letter a line by a narrow first proposal)
                 .padding(m)
                 .onGeometryChange(for: CGSize.self) { $0.size } action: { natural = $0 }
+                .frame(maxWidth: .infinity, alignment: .trailing)          // stays at the trailing edge while the frame is held wider than the content
         }
         .scrollBounceBehavior(.basedOnSize)
         .defaultScrollAnchor(.bottom)
-        .frame(width: natural?.width, height: natural.map { min($0.height, max(120, avail) + 2 * m) })
+        .frame(width: size?.width, height: size.map { min($0.height, max(120, avail) + 2 * m) })
         .padding(-m)
+        .onChange(of: natural) { old, new in
+            guard let old, let new else { held = nil; return }
+            if new.width >= old.width && new.height >= old.height { held = nil; return }          // growing (opening): follow at once
+            held = CGSize(width: max(old.width, held?.width ?? 0), height: max(old.height, held?.height ?? 0))
+            releaseTicket += 1
+            let ticket = releaseTicket
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if ticket == releaseTicket { held = nil } }          // the fold takes ~0.3 s
+        }
     }
 }
