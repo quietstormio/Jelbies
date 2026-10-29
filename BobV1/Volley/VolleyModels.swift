@@ -53,7 +53,7 @@ nonisolated enum VolleyTuning {
     static let restYaw: Float = .pi / 2          // facing the net (your team: backs to the camera; the opponents: facing it)
     static let minGap: Float = 1.3              // teammates keep this far apart
     static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
-    static let startZ: [Float] = [0.65, -0.65, -0.65, 0.65]          // (staggered across the court so the partner does not hide behind him from behind)
+    static let startZ: [Float] = [0.9, -0.9, -0.9, 0.9]          // (staggered across the court so the partner does not hide behind him from behind)
     /// Depth: the players roam this far either side of the centre line; a ball landing past `outZ` is out; a body must be within `zReach` of the ball's depth to touch it.
     static let zLimit: Float = 1.15, outZ: Float = 1.75, zReach: Float = 0.78
     /// Timing: the Perfect and Good half windows (seconds, around the ideal tap) from the Timing stat; the wide ones are for assists.

@@ -25,12 +25,12 @@ extension GameCamera {
     /// A gentle sideways drift of the view toward the action (world z, which is the screen's right; a few centimetres; zero with Reduce Motion).
     nonisolated(unsafe) static var beachNudge: Float = 0
     /// The view looks down the court (+x) from behind the human baseline, this far above the sand.
-    static let beachElevation: Float = 42 * .pi / 180
+    static let beachElevation: Float = 50 * .pi / 180
     /// Where your Jelbies' feet sit on the screen (NDC y: 0 centre, -1 bottom) in a portrait phone and on its side.
     static let beachFeetNDC: (portrait: Float, landscape: Float) = (-0.50, -0.62)
     /// What the frame must hold: half the width at your baseline (two Jelbies, their reach and a ball going out, with a TV-broadcast margin), the nearest the eye may come in a portrait phone
     /// (the size of the Jelbies on the screen), and the ball's highest point over the far baseline.
-    static let beachHalfWidth: Float = 3.3, beachMinDist: Float = 28, beachFarX: Float = 3.4, beachBallTop: Float = 3.8, beachTopNDC: Float = 0.80
+    static let beachHalfWidth: Float = 1.9, beachMinDist: Float = 0, beachFarX: Float = 3.4, beachBallTop: Float = 3.8, beachTopNDC: Float = 0.80
 
     /// Eye / target for the court: the whole court (and the sky the ball climbs into) fits the width of a portrait phone and the height of a landscape one, with your
     /// Jelbies' feet at `beachFeetNDC` (the target is slid along x until they are; it stays on the sand).
@@ -42,7 +42,7 @@ extension GameCamera {
         let px = VolleyTuning.startX[0]          // (the near Jelbie's resting spot)
         // the target is `s` ahead of the feet along x; the feet land at yN when s = k * dist
         let k = yN * th / (se - yN * th * ce)
-        let distW = beachHalfWidth / (th * max(aspect, 0.2) * 0.94 * (1 + k * ce))
+        let distW = beachHalfWidth / (th * max(aspect, 0.2) * 0.78 * (1 + k * ce))
         // the ball's top over the far baseline stays under beachTopNDC
         let qx = beachFarX - px
         let A = qx * se + beachBallTop * ce, B = qx * ce - beachBallTop * se
@@ -72,9 +72,9 @@ enum BeachScenery {
     typealias V3 = SIMD3<Float>
     static func c(_ r: Float, _ g: Float, _ b: Float) -> V3 { ParkShapes.srgb(r, g, b) }
 
-    /// Where the sea's near edge (the foam) and far edge (the sky wall) stand along x. The sky stands close behind the foam: from a camera 42 degrees up the horizon
+    /// Where the sea's near edge (the foam) and far edge (the sky wall) stand along x. The sky stands close behind the foam: from a camera 50 degrees up the horizon
     /// has to fall inside the frame for the sea and the sky to show at all.
-    static let seaNear0: Float = 6.2, seaEnd: Float = 10
+    static let seaNear0: Float = 5.0, seaEnd: Float = 8.4
 
     static func build(theme: RoomTheme) -> RoomMesh {
         let b = RoomMeshBuilder()
@@ -97,7 +97,7 @@ enum BeachScenery {
         let sandFar = c(0.86, 0.74, 0.52), sandNear = c(0.93, 0.82, 0.60)
         b.flatQuad(V3(seaNear0, 0.002, -160), V3(seaNear0, 0.002, 160), V3(-60, 0.002, 160), V3(-60, 0.002, -160), normal: V3(0, 1, 0), colors: [sandFar, sandFar, sandNear, sandNear])
         let wet = c(0.74, 0.62, 0.42)
-        b.flatQuad(V3(seaNear0 - 0.3, 0.003, -160), V3(seaNear0 - 0.3, 0.003, 160), V3(seaNear0 - 1.8, 0.003, 160), V3(seaNear0 - 1.8, 0.003, -160), normal: V3(0, 1, 0), colors: [wet, wet, wet, wet])
+        b.flatQuad(V3(seaNear0 - 0.3, 0.003, -160), V3(seaNear0 - 0.3, 0.003, 160), V3(seaNear0 - 1.0, 0.003, 160), V3(seaNear0 - 1.0, 0.003, -160), normal: V3(0, 1, 0), colors: [wet, wet, wet, wet])
         // soft ripples in the sand (behind your baseline and beyond theirs)
         for k in 0..<39 {
             let row = k / 13
@@ -132,7 +132,7 @@ enum BeachScenery {
         while z < nd { b.roundedBox(centre: V3(0, 1.29, z), half: V3(0.008, 0.43, 0.007), radius: 0.006, segments: 1, aoFloor: false, color: mesh); z += 0.14 }
 
         // props, kept inside what the camera shows: a palm either side of the far baseline, an umbrella and towel, a sandcastle, a bucket, shells
-        for (x, zz, h, lean) in [(4.6 as Float, -4.8 as Float, 4.6 as Float, 0.3 as Float), (5.0, 5.2, 5.4, -0.25)] { palm(b, x: x, z: zz, height: h, lean: lean, rng: &rng) }
+        for (x, zz, h, lean) in [(4.0 as Float, -4.6 as Float, 4.6 as Float, 0.3 as Float), (4.2, 4.8, 5.4, -0.25)] { palm(b, x: x, z: zz, height: h, lean: lean, rng: &rng) }
         umbrella(b, x: 3.6, z: -3.4)
         b.flatQuad(V3(1.4, 0.014, -3.6), V3(2.7, 0.014, -3.6), V3(3.9, 0.014, -2.6), V3(2.6, 0.014, -2.6), normal: V3(0, 1, 0), colors: [c(0.96, 0.52, 0.55), c(0.96, 0.52, 0.55), c(0.99, 0.93, 0.80), c(0.99, 0.93, 0.80)])
         sandcastle(b, x: 4.3, z: 3.0)
@@ -142,7 +142,7 @@ enum BeachScenery {
             ParkScenery.blob(b, V3(-3.0 + rng.unit() * 7.5, 0.03, -3.6 + Float(k) * 1.2 + rng.unit() * 0.5), rx: 0.11, ry: 0.06, rz: 0.1, color: c(0.99, 0.82 - 0.2 * rng.unit(), 0.78), segments: 8, rings: 4)
         }
         // clouds (low over the horizon: the camera looks down, so the sky is a band of the wall, and the top of it is under the score pill)
-        for (z, y, s) in [(-3.4 as Float, 1.0 as Float, 0.7 as Float), (3.2, 1.5, 0.8)] {
+        for (z, y, s) in [(-3.4 as Float, 0.9 as Float, 0.45 as Float), (3.2, 1.2, 0.5)] {
             for k in 0..<3 { ParkScenery.blob(b, V3(seaEnd - 0.4, y + (k == 1 ? 0.2 : 0), z + Float(k - 1) * 0.9 * s), rx: 0.3, ry: 0.32 * s, rz: 0.9 * s, color: c(0.99, 0.99, 1.0), segments: 10, rings: 5) }
         }
         return b.mesh
