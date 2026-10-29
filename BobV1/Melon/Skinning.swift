@@ -365,6 +365,18 @@ nonisolated final class Skinner {
     var browCounterOn = false
     static let browFloor: Float = 0.08          // a little friendly: the measured slant is only matched to ~0.13 rad on a heavily turned head
     private var browCW: Float = 0
+    /// Lobby portraits: the plain rest face for one `update` (no brow tilt / raise, no rigid or counter-rotated brows, eyes fully open, no blink), whatever the mood is right now;
+    /// the live face comes back after. The skinner's own blend state is saved and restored, so the next real frame is not disturbed.
+    func withNeutralFace<T>(_ body: () -> T) -> T {
+        let live = (browRaise, browTilt, openness, eyeHeight, blinking, blinkOpen, browW, browCW, browsRigid, browCounterOn)
+        browRaise = [0, 0]; browTilt = [0, 0]; openness = (1, 1); eyeHeight = (1, 1); blinking = false; blinkOpen = 1
+        browW = 0; browCW = 0; browsRigid = false; browCounterOn = false
+        defer {
+            browRaise = live.0; browTilt = live.1; openness = live.2; eyeHeight = live.3; blinking = live.4; blinkOpen = live.5
+            browW = live.6; browCW = live.7; browsRigid = live.8; browCounterOn = live.9
+        }
+        return body()
+    }
     /// The game camera as it is NOW (the screen-space brow measure multiplies by the live aspect, so the matrix must use it too: a frozen portrait one skews the slant in landscape).
     private static var gameViewProj: simd_float4x4 { M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: GameCamera.aspect, near: 0.3, far: 60),
                                                            M4.lookAt(eye: GameCamera.eye, at: GameCamera.target, up: SIMD3(0, 1, 0))) }

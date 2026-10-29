@@ -1161,9 +1161,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         care.store.fitting = look.map { (id, $0) }
         let visitorPalette = hp?.colour.map { JellyPalettes.park($0) }
         if let p = visitorPalette { renderer.setPalette(p, body: id) }
-        if hp != nil { renderer.cutout = true }
+        // a lobby avatar is the same picture at any hour, in any mood and after any romp: noon light, no sleep tuck, a clean body (no dirt / lint / shine, mouth shut) and the plain rest face
+        let liveHour = renderer.dayHourOverride, liveTuck = renderer.tuckAmount
+        var restoreBody: () -> Void = {}
+        if hp != nil { renderer.cutout = true; renderer.dayHourOverride = 12; renderer.tuckAmount = 0; restoreBody = renderer.neutralBody(id) }
         defer {
-            if hp != nil { renderer.cutout = model.cutout }
+            if hp != nil { renderer.cutout = model.cutout; renderer.dayHourOverride = liveHour; renderer.tuckAmount = liveTuck; restoreBody() }
             if visitorPalette != nil { renderer.setRacePalette(care.racePalette(for: id), own: a.appearance, body: id) }
             care.store.fitting = nil
             room.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); room.setShoes(RoomMesh())
@@ -1176,7 +1179,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         room.raceVisible = false
         renderer.showVisible = false
         room.showVisible = false
-        a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id))
+        if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
+        else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
             w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.colour != nil ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
@@ -1209,17 +1213,22 @@ final class MelonController: NSObject, MTKViewDelegate {
         let c = pose.centroid
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
-        let yaw: Float = hp != nil ? 0.25 : (look == nil ? 0.3 : 0.5)
+        let yaw: Float = hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5)
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
         var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
         var span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
-        if hp != nil { focusY = c.y + HeadPortraitKey.focusUp; span = HeadPortraitKey.span }          // the head, hats and a little body fill the circle
+        if hp != nil { focusY = a.sim.restCentroid.y + HeadPortraitKey.focusUp; span = HeadPortraitKey.span }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
         let th = tanf(GameCamera.fovY / 2)
         let dist = (span / 2) / min(th, th * aspect)
         let target = SIMD3<Float>(c.x, focusY, c.z)
-        let eye = target + dir * dist + SIMD3(0, dist * 0.12, 0)
+        var eye = target + dir * dist + SIMD3(0, dist * 0.12, 0)
+        if hp != nil {          // looking down like the room camera (where the face was approved), so the latitude-curved brows read flat, not slanted
+            let down = GameCamera.eye - GameCamera.target
+            let pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
+            eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
+        }
         var cam = CameraState()
         cam.view = M4.lookAt(eye: eye, at: target, up: SIMD3(0, 1, 0))
         cam.viewProj = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), cam.view)

@@ -482,6 +482,16 @@ final class MelonRenderer {
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
+    /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
+    func neutralBody(_ i: Int) -> () -> Void {
+        guard i >= 0, i < slots.count else { return {} }
+        let live = (slots[i].bathLook, slots[i].mouthOpen, slots[i].blush)
+        slots[i].bathLook = .dry; slots[i].mouthOpen = 0; slots[i].blush = 0
+        return { [weak self] in
+            guard let self, i < self.slots.count else { return }
+            self.slots[i].bathLook = live.0; self.slots[i].mouthOpen = live.1; self.slots[i].blush = live.2
+        }
+    }
     func setMouth(_ m: Float, body i: Int) { if i < slots.count { slots[i].mouthOpen = m } }
     func setBlush(_ b: Float, body i: Int) { if i < slots.count { slots[i].blush = b } }
     /// Test / capture access: the blush a body is drawn with this frame.
