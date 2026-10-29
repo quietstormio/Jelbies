@@ -26,7 +26,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     var gain: Float {
         switch self {
         case .footstep: return 0.45
-        case .snore: return 0.175           // was 0.5: "the snoring is too loud" (0.35x)
+        case .snore: return 0.12            // was 0.5, then 0.175: "the snoring is too loud", then "ensure it's quieter" (the soft per-character snores, -32 LUFS)
         case .slurp: return 0.51            // was 0.85 (default): 0.6x, "a little more quiet"
         case .countdownBeep: return 0.55
         case .raceGo: return 0.65
@@ -79,6 +79,15 @@ nonisolated enum JellyVoiceSet {
     static func index(character c: Int) -> Int { min(max(c, 0), count - 1) + 1 }
     static func file(character c: Int, _ v: JellyVoice) -> String {
         v == .babble ? "babble_jelly\(index(character: c))" : "chirp_jelly\(index(character: c))_\(v.rawValue)"
+    }
+}
+
+extension JellyVoiceSet {
+    /// A chance of the bubble-pop variant (snore_jelly{c}_2) over the plain snore (_1).
+    static let snorePopChance: Double = 0.3
+    /// The snore file of a CHARACTER: snore_jelly{c+1}_{1|2}. `roll` in 0..<1 picks the variant (2 = ends in a tiny bubble pop).
+    static func snoreFile(character c: Int, roll: Double) -> String {
+        "snore_jelly\(index(character: c))_\(roll < snorePopChance ? 2 : 1)"
     }
 }
 
@@ -144,12 +153,12 @@ nonisolated struct Fader: Equatable, Sendable {
     }
 }
 
-/// When the sleeping Jellies snore: one snore per Jelly every 6...10 s at most, and never two Jellies within `hubGap` of each other
+/// When the sleeping Jellies snore: one snore per Jelly every 20...40 s, and never two Jellies within `hubGap` of each other
 /// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
 nonisolated struct SnoreScheduler: Sendable {
-    static let interval: ClosedRange<Double> = 6...10
-    static let firstDelay: ClosedRange<Double> = 2...5
-    static let hubGap: Double = 2.5
+    static let interval: ClosedRange<Double> = 20...40        // was 6...10: rarer, softer snores
+    static let firstDelay: ClosedRange<Double> = 5...12
+    static let hubGap: Double = 6
     private(set) var next: [Double] = [0, 0, 0]
     private(set) var lastAny: Double = -100
 

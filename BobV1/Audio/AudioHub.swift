@@ -249,7 +249,7 @@ final class AudioHub {
         input.scene = scene != .none ? scene : townScene
         let now = CACurrentMediaTime()
         for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
-            play(.snore, jelly: i, x: i < xs.count ? xs[i] : 0)
+            snore(jelly: i, x: i < xs.count ? xs[i] : 0)
             onSnore?(i)
         }
         for i in moods.indices {
@@ -408,7 +408,12 @@ final class AudioHub {
     }
 
     private func preloadEffects() {
-        for s in SFX.allCases {
+        for c in 0..<JellyVoiceSet.count { for r in [0.0, 0.99] {
+            let name = JellyVoiceSet.snoreFile(character: c, roll: r)
+            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
+            p.prepareToPlay(); pool[name] = [p]
+        } }
+        for s in SFX.allCases where s != .snore {
             for v in 1...max(variants(s), 1) {
                 let name = "\(s.rawValue)_\(v)"
                 guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
@@ -449,6 +454,20 @@ final class AudioHub {
         guard n > 0 else { return }
         let v = picker.pick(sfx.rawValue, count: n) + 1
         fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
+    }
+
+    /// A sleeping Jelly's snore, in its own CHARACTER's voice (snore_jelly{c}_{1|2}, like the chirps; ~30% end in a bubble pop).
+    func snore(jelly: Int, x: Float? = nil) {
+        if let t = SoundCaptions.text(.snore, jelly: JellyRoster.name(slot: jelly)) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
+        guard !muted, started, active else { return }
+        let level = settings.sfxLevel * duck.gain
+        guard level > 0.01 else { return }
+        let now = CACurrentMediaTime()
+        let key = "snore#\(jelly)"
+        if let l = lastPlay[key], now - l < SFX.snore.minGap { return }
+        lastPlay[key] = now
+        let name = JellyVoiceSet.snoreFile(character: JellyRoster.character(jelly), roll: Double.random(in: 0..<1))
+        fire(name, volume: min(1, SFX.snore.gain * level * AudioMix.sfxMaster), pan: panFor(x: x))
     }
 
     // Jelly Circuit cues. Named hooks: dedicated sounds are added later under these names; for now they use existing effects.

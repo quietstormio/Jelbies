@@ -405,11 +405,12 @@ final class DayNightSoundTests: XCTestCase {
         let app = Bundle.main
         func has(_ n: String) -> Bool { app.url(forResource: n, withExtension: "m4a") != nil || b.url(forResource: n, withExtension: "m4a") != nil }
         for t in MusicTrack.allCases { XCTAssertTrue(has(t.rawValue), t.rawValue) }
-        for s in SFX.allCases { XCTAssertTrue(has("\(s.rawValue)_1"), "\(s.rawValue)_1") }
+        for s in SFX.allCases where s != .snore { XCTAssertTrue(has("\(s.rawValue)_1"), "\(s.rawValue)_1") }      // (snores are per character, below)
         XCTAssertTrue(has("day_room")); XCTAssertTrue(has("evening_room"))
         for j in 1...JellyVoiceSet.count {
             XCTAssertTrue(has("babble_jelly\(j)"))
             for m in ["happy", "sad"] { XCTAssertTrue(has("chirp_jelly\(j)_\(m)")) }
+            for v in 1...2 { XCTAssertTrue(has("snore_jelly\(j)_\(v)"), "snore_jelly\(j)_\(v)") }
         }
     }
 
