@@ -11,6 +11,6 @@ struct HeadPortraitKey: Hashable, Sendable {
     var colour: ParkColour?
     var wear: WearLook?
     /// How far above the body's centre the camera looks, and how tall the picture is (world units): the head, a hat and a little body.
-    static let focusUp: Float = 0.22
-    static let span: Float = 1.5
+    static var focusUp: Float { UserDefaults.standard.object(forKey: "HeadFocus") != nil ? UserDefaults.standard.float(forKey: "HeadFocus") : 0.26 }          // (-HeadFocus / -HeadSpan: capture aids)
+    static var span: Float { UserDefaults.standard.object(forKey: "HeadSpan") != nil ? UserDefaults.standard.float(forKey: "HeadSpan") : 1.22 }
 }

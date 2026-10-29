@@ -533,13 +533,20 @@ struct GameScreen: View {
         // capture aid: -LobbyTier sandcastle|shore|reef|tidal and -LobbyCourse puddle|ripple|splash|wave|tsunami pick that court / course (locked or not) to see its blurb
         if let t = d.string(forKey: "LobbyTier").flatMap(VolleyTier.init(rawValue:)) { care.volley.book.chosen = t }
         if let t = d.string(forKey: "LobbyCourse").flatMap(CourseTier.init(rawValue:)) { care.race.courseTier = t }
-        // capture aid: -LobbySeed reset|wins|blocked (any of them, e.g. "reset wins"): wins on Puddle and Ripple for the first Jelbie (Ripple picked), and a meal out so the lobbies show their blocker line
+        // capture aid: -LobbySeed reset|wins|blocked|dress (any of them, e.g. "reset wins"): wins on Puddle and Ripple for the first Jelbie (Ripple picked), and a meal out so the lobbies show their blocker line
         if let m = d.string(forKey: "LobbySeed") {
             await sleep(2)
             let c = care.jellies.first?.character ?? 0
             if m.contains("reset") {          // a fresh Circuit record (a capture build keeps its saves between launches)
                 care.race.progress.records = [:]; care.race.courseTier = .puddle
                 for k in 0..<JellyRoster.names.count { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
+            }
+            if m.contains("dress") {          // the user's phone: Pip in a pink beanie and heart sunglasses, Moss bare (his daisy), Lavender in pearls (her wings)
+                let outfits: [String: [WearLook]] = ["pip": [.beaniePink, .heartShades], "moss": [], "lavender": [.pearls]]
+                for j in care.jellies {
+                    for sl in WearSlot.allCases { care.store.takeOff(sl, from: j.id) }
+                    for l in outfits[j.name.lowercased()] ?? [] { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? ""); _ = care.store.wear(l, on: j.id) }
+                }
             }
             if m.contains("wins") {
                 for t in [CourseTier.puddle, .ripple] { care.race.progress.record(tier: t, place: 1); care.race.trophies.recordRace(character: c, tier: t, place: 1) }

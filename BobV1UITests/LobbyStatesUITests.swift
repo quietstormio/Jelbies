@@ -16,7 +16,7 @@ final class LobbyStatesUITests: XCTestCase {
     private func launch(_ lobby: String, seed: String? = nil, roster: String = "pip,moss,lavender") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-SetRoster", roster, "-MainMenu", "0", "-Intro", "0", "-BlobDrops.v1", "1024", "-LobbyAuto", lobby, "-BlobNoWander", "1", "-volley.partner", "99"]
-        app.launchArguments += ["-LobbySeed", "reset" + (seed.map { " " + $0 } ?? "")]
+        app.launchArguments += ["-LobbySeed", "reset dress" + (seed.map { " " + $0 } ?? "")]
         app.launch()
         return app
     }

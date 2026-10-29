@@ -1183,7 +1183,25 @@ final class MelonController: NSObject, MTKViewDelegate {
             if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a)) }
         }
         renderer.setJersey(w.jersey(id), body: id)
-        let f = w.frame(theme: room.theme, time: 0.4) { renderer.skinPointer(body: $0) }
+        // a lobby avatar also grows its species feature (Moss's daisy, on the hat band when he wears a hat; Lavender's wings; Pip's tail): a throwaway FeatureSet, ticked once on this
+        // body, so the live one (the room's) is never touched. A Park friend has none (a visitor with a signature is never picked for the lobby).
+        var featureMesh = RoomMesh()
+        if hp != nil, let b = a.brain {
+            let fs = FeatureSet(); fs.body = WearBody.shared; fs.ignoreHide = true
+            let feature: JellyFeature = hp?.colour != nil ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
+            var worn: [String] = []
+            for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
+            fs.tick(id: id, brain: b, sim: a.sim, feature: feature, worn: worn, hideAll: false, dt: 1.0 / 60)
+            if let fl = fs.slot(id) { w.setArtOverride(id, fl.fit.hatVariant) }
+            fs.syncCarry(id, sim: a.sim)
+            featureMesh = fs.frame { renderer.skinPointer(body: $0) }
+        }
+        var f = w.frame(theme: room.theme, time: 0.4) { renderer.skinPointer(body: $0) }
+        if !featureMesh.vertices.isEmpty {
+            let base = UInt32(f.opaque.vertices.count)
+            f.opaque.vertices += featureMesh.vertices
+            f.opaque.indices += featureMesh.indices.map { $0 + base }
+        }
         room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: [])
         room.setShoes(care.shoeFrame([a], time: 0.4).mesh)
         // a close camera in front of him (his own facing, turned a quarter toward the side)

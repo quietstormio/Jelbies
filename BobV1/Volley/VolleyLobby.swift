@@ -252,14 +252,16 @@ struct VolleyTeamCard: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardW = $0 }
     }
 
-    /// Both tiles use the same head: portrait, name and swap button in a row, or (when a name will not fit beside them) the name under the portrait.
+    /// Both tiles use the mockup's row (portrait, name, swap button) when the longest name of ANY Jelbie in the room still fits at 0.8 scale, else both stack the name under
+    /// the portrait. Deciding over the whole roster keeps the card the same height whoever is swapped in.
     private func needsStack(mine: JellyProfile?, partner: JellyProfile?, swap: Bool) -> Bool {
         let tileInner = (cardW - 2 * (compact ? 12 : 14) - 10) / 2 - 24
         guard tileInner > 0 else { return false }
-        let font = UIFont.systemFont(ofSize: JFont.scaledSize(18), weight: .black)
-        let names = [mine?.name, partner?.name].compactMap { $0 }
-        let w = names.map { ($0 as NSString).size(withAttributes: [.font: font]).width * 1.08 }.max() ?? 0
-        return 46 + 10 + w + 10 + (swap ? 26 : 0) > tileInner
+        let size = JFont.scaledSize(18)
+        let base = UIFont.systemFont(ofSize: size, weight: .black)
+        let font = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
+        let w = care.jellies.map { ($0.name as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        return 46 + 8 + w * 1.06 * 0.8 + 6 + (swap ? 26 : 0) > tileInner
     }
 
     private var parkFriendTile: some View {
@@ -316,7 +318,7 @@ struct VolleyTeamTile: View {
             if stacked {
                 HStack(alignment: .top, spacing: 6) { VStack(alignment: .leading, spacing: 6) { avatar; name.minimumScaleFactor(0.6) }.frame(maxWidth: .infinity, alignment: .leading); swapButton }
             } else {
-                HStack(spacing: 10) { avatar; name.frame(maxWidth: .infinity, alignment: .leading); swapButton }
+                HStack(spacing: 0) { avatar; name.minimumScaleFactor(0.8).padding(.leading, 8).padding(.trailing, 6).frame(maxWidth: .infinity, alignment: .leading); swapButton }
             }
             Grid(horizontalSpacing: 7, verticalSpacing: 0) {
                 miniRow("Speed", st.speed, SK.sky)
