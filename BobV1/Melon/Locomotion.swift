@@ -84,7 +84,7 @@ struct GaitDriver {
     private var yaw0: Float = 0
     private var yaw1: Float = 0
     private var rollDir = SIMD2<Float>(1, 0)
-    private var groundFrom: Float = 0, groundTo: Float = 0      // ground heights at take-off / landing of the running hop (equal = an ordinary hop)
+    private(set) var groundFrom: Float = 0, groundTo: Float = 0      // ground heights at take-off / landing of the running hop (equal = an ordinary hop)
     private var chained = false
     private var reduce = false
     private var waitTimer: Float = 0.4
@@ -121,6 +121,8 @@ struct GaitDriver {
     /// Flip only: seconds spent holding the crouch / since the give-up stand began.
     /// Flip only: true while he waits in the held crouch.
     var isFlipFaceplant: Bool { move == .flip && flipFail }
+    /// A flip or cartwheel owns the body (the beans stay in their leg shape in its air / landing phases: BlobBrain.driveBeansRigid).
+    var isSpinMove: Bool { move == .flip }
     /// Cartwheel only (W2, 2026-10-22): +1 / -1 = a flip taken sideways about his forward axis, travelling toward his right / left (0 = a normal backflip).
     private(set) var cartSide: Float = 0
     private func yawQ(_ y: Float) -> simd_quatf {

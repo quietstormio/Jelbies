@@ -16,8 +16,13 @@ final class PipWatchUITests: XCTestCase {
         if let extra = env["PIPWATCH_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: extra.contains("|") ? "|" : " ").map(String.init) }
         app.launch()
         let cont = app.buttons["Continue"]
+        // (the title can still be fading in / the intro running, and a tap during the forced rotation can miss: tap until Continue is really gone, the room is behind it)
         if cont.waitForExistence(timeout: 60) {
-            for _ in 0..<6 where cont.exists { Thread.sleep(forTimeInterval: 2); cont.tap(); Thread.sleep(forTimeInterval: 1.5) }          // a tap during the forced rotation can miss: retry while the menu is up
+            for _ in 0..<12 {
+                if cont.exists, cont.isHittable { cont.tap() }
+                let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: cont)
+                if XCTWaiter().wait(for: [gone], timeout: 5) == .completed { break }
+            }
         }
         let up = app.buttons["care-menu"].waitForExistence(timeout: 90)
         if !up, let mark = env["PIPWATCH_MARK"] { try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: mark + "_fail.png")) }

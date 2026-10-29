@@ -26,7 +26,7 @@ extension DecorKind {
         }
     }
     /// The saddle of the ride-on rocket (rocket frame: the cushion's top, a little behind the middle).
-    var batch4SitPoints: [SIMD3<Float>] { self == .toyrocket ? [SIMD3(-0.25, 1.12, 0)] : parkSitPoints }
+    var batch4SitPoints: [SIMD3<Float>] { self == .toyrocket ? [SIMD3(-0.1, 1.2, 0)] : parkSitPoints }
     /// Pieces he sits on and rocks with on their runners (the rocking horse, the toy rocket): the seat follows the arc, he faces the nose.
     var rockRide: Bool { self == .rockinghorse || self == .toyrocket }
     /// How many Jelbies use it at once (the tunnel: one follows another through; the plush toys: two hug together).

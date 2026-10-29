@@ -35,9 +35,9 @@ extension DecorKind {
     }
     var parkSitPoints: [SIMD3<Float>] {
         switch self {
-        case .seesaw: return [SIMD3(-0.70, 0.42, 0), SIMD3(0.70, 0.42, 0)]
-        case .springrider: return [SIMD3(0, 0.66, -0.02)]
-        case .sandbox: return [SIMD3(-0.66, 0.16, -0.22), SIMD3(0.66, 0.16, -0.22), SIMD3(0, 0.16, 0.42)]
+        case .seesaw: return [SIMD3(-0.66, 0.475, 0), SIMD3(0.66, 0.475, 0)]          // (the pad's top: 0.34 pivot + 0.09 + 0.045; a sitter's rear sank into the pad, a stander's soles must not)
+        case .springrider: return [SIMD3(0, 0.81, -0.22)]          // (stood on: the bunny's back, behind the ears; the old 0.66 saddle is inside the body)
+        case .sandbox: return [SIMD3(-0.72, 0.16, -0.25), SIMD3(0.72, 0.16, -0.25), SIMD3(0, 0.16, 0.45)]          // (three bodies of ~1.0 stand in a triangle with >1.1 between centres)
         default: return []
         }
     }
@@ -46,9 +46,9 @@ extension DecorKind {
     }
     var parkUse: String {
         switch self {
-        case .seesaw: return "A Park seesaw. Two Jelbies ride it up and down."
+        case .seesaw: return "A Park seesaw. Two Jelbies stand on it and ride up and down."
         case .springrider: return "A Park spring bunny. One rides, the others take turns."
-        case .sandbox: return "A Park sandbox. Up to three sit and dig."
+        case .sandbox: return "A Park sandbox. Up to three stand in it and dig."
         default: return ""
         }
     }
@@ -109,13 +109,13 @@ extension DecorModels {
                 }
             }
             _ = on; _ = v0
-            addRot(SIMD3(0, pv.y + 0.02, 0), SIMD3(0.98, 0.055, 0.19), 0.05, plank)
+            addRot(SIMD3(0, pv.y + 0.02, 0), SIMD3(1.05, 0.055, 0.19), 0.05, plank)
             for sx: Float in [-1, 1] {
                 let squash = 1 - 0.18 * max(0, -sx * sinf(th) * 3.2)          // the low end's pad squishes
                 addRot(SIMD3(sx * 0.70, pv.y + 0.09, 0), SIMD3(0.24, 0.045 * squash, 0.17), 0.045, sx < 0 ? padA : padB)
-                addRot(SIMD3(sx * 0.46, pv.y + 0.22, 0.12), SIMD3(0.025, 0.07, 0.025), 0.02, post)
+                addRot(SIMD3(sx * 0.22, pv.y + 0.22, 0.12), SIMD3(0.025, 0.07, 0.025), 0.02, post)
                 // bumper on the ground under the end
-                S.blob(b, o + SIMD3(sx * 0.98, 0.07, 0), rx: 0.11, ry: 0.07, rz: 0.11, color: padA * 0.9, segments: 10, rings: 5, ao: 0.9)
+                S.blob(b, o + SIMD3(sx * 1.05, 0.07, 0), rx: 0.11, ry: 0.07, rz: 0.11, color: padA * 0.9, segments: 10, rings: 5, ao: 0.9)
             }
         case .springrider:
             // flat round base, a stack of chunky spring rings, and a puffy bunny that rocks on top
