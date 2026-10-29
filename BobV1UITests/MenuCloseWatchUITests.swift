@@ -25,6 +25,12 @@ final class MenuCloseWatchUITests: XCTestCase {
         XCTAssertTrue(menu.waitForExistence(timeout: 90), "the HUD is up")
         Thread.sleep(forTimeInterval: 8)
         if let mark = env["MENUCLOSE_MARK"] { try? "up".write(toFile: mark, atomically: true, encoding: .utf8) }
+        if let quick = env["MENUCLOSE_QUICK"], !quick.isEmpty {          // the app runs its own -MenuQuickGo script (exact timings); just stay up while it does
+            Thread.sleep(forTimeInterval: 26)
+            if let mark = env["MENUCLOSE_MARK"] { try? "done".write(toFile: mark + ".done", atomically: true, encoding: .utf8) }
+            Thread.sleep(forTimeInterval: 3)
+            return
+        }
         func wait(_ s: Double = 3) { Thread.sleep(forTimeInterval: s) }
         func mark(_ what: String) {          // host clock of each tap, to line the recording up with (MARK.events)
             guard let m = env["MENUCLOSE_MARK"], let h = FileHandle(forWritingAtPath: m + ".events") ?? { FileManager.default.createFile(atPath: m + ".events", contents: nil); return FileHandle(forWritingAtPath: m + ".events") }() else { return }
@@ -34,7 +40,9 @@ final class MenuCloseWatchUITests: XCTestCase {
         mark("open1"); menu.tap(); wait(); mark("close_heart"); menu.tap(); wait()
         // 2: open, close by tapping outside (the scrim)
         mark("open2"); menu.tap(); wait(); mark("close_scrim"); app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.2)).tap(); wait()
-        // 3: open, close by tapping a row
+        // 3: open, close and open again at once (a re-open in the middle of the fold), close
+        mark("qopen"); menu.tap(); wait(2); mark("qclose"); menu.tap(); mark("qreopen"); menu.tap(); wait(3); mark("qfinal"); menu.tap(); wait()
+        // 4: open, close by tapping a row
         mark("open3"); menu.tap(); wait()
         let row = app.buttons[env["MENUCLOSE_ROW"] ?? "hud-decor"]
         if row.waitForExistence(timeout: 3) { mark("close_row"); row.tap() }
