@@ -102,7 +102,7 @@ struct ShopScreen: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .padding(.bottom, 14)
+            .padding(.bottom, 26)          // the wave's crests reach 14 pt above the header's bottom edge (WavyBottom): 12 pt of clear pink stays under the tabs
         }
         .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
         .padding(.bottom, 4)
