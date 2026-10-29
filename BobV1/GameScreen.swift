@@ -917,7 +917,7 @@ struct CareMenu: View {
         .buttonStyle(.plain)
         .disabled(!on)
         .accessibilityIdentifier(item.rawValue)
-        .accessibilityLabel(title)
+        .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
         .transition(calm ? .opacity : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)

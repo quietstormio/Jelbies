@@ -52,9 +52,22 @@ final class HUDMenuTests: XCTestCase {
         tickSelect(care, 2.5)
         XCTAssertEqual(care.select.highlighted, 1); XCTAssertFalse(care.select.isSelecting)
         XCTAssertEqual(HUDMenu.mode(care), .individual(1))
-        XCTAssertEqual(HUDMenu.items(.individual(1)), [.feed, .drink, .dress, .clean, .train, .compete])
+        XCTAssertEqual(HUDMenu.items(.individual(1)), [.come, .feed, .drink, .dress, .clean, .train, .compete])
         XCTAssertEqual(care.targetJelly, 1); XCTAssertEqual(care.singledOutJelly, 1)
         XCTAssertEqual(HUDMenu.title(.feed, .individual(1), care: care), "Feed Moss".replacingOccurrences(of: "Moss", with: care.jelly(1)!.name))
+    }
+
+    func testComeHereRowCallsHimAndDisablesInTheCloseUp() {
+        let care = care3()
+        care.tapJelly(1)
+        tickSelect(care, 2.5)
+        let m = HUDMode.individual(1)
+        XCTAssertTrue(HUDMenu.enabled(.come, m, care: care)); XCTAssertNil(HUDMenu.disabledReason(.come, m, care: care))
+        XCTAssertEqual(HUDMenu.spokenLabel(.come, m, care: care), "Call \(care.jelly(1)!.name) over")
+        XCTAssertFalse(HUDMenu.items(.group).contains(.come))
+        XCTAssertEqual(HUDMenu.perform(.come, m, care: care), .none)
+        XCTAssertTrue(care.focus.isActive)
+        XCTAssertFalse(HUDMenu.enabled(.come, m, care: care)); XCTAssertEqual(HUDMenu.disabledReason(.come, m, care: care), "Already in the close-up")
     }
 
     func testClearHighlightBringsGroupBack() {
