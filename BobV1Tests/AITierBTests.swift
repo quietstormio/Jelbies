@@ -12,7 +12,9 @@ final class AITierBTests: XCTestCase {
     private var suites: [String] = []
     private func names() -> JellyNames {
         let n = "AITierBTests.\(UUID().uuidString)"; suites.append(n)
-        return JellyNames(defaults: UserDefaults(suiteName: n)!, key: "nick", persists: true)
+        let names = JellyNames(defaults: UserDefaults(suiteName: n)!, key: "nick", persists: true)
+        names.roster = [0, 1, 2, 3]          // slot == character, whatever roster the host app launched with
+        return names
     }
     override func tearDown() { for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }; suites = [] }
 

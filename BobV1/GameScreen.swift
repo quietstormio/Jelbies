@@ -560,6 +560,15 @@ struct GameScreen: View {
             if parts.count == 2, let t = VoiceTrick(rawValue: String(parts[0])), let n = Int(parts[1]) { care.voice.training.debugReps(t, word: t.suggestion, reps: n) }
         }
         if d.integer(forKey: "VoiceBook") != 0 { await sleep(2); book.wrappedValue = true }
+        // capture aid: -SpreadStart 1 sends Jellies 0, 1, 2 to the back-left, back-right and front-right corners and waits -SpreadWait s (default 9) before the rest of the script
+        if d.integer(forKey: "SpreadStart") != 0 {
+            await sleep(2)
+            if let rf = GameCamera.roamFloor {
+                let c = rf.extremeCorners
+                for (i, k) in [2, 3, 1].enumerated() where c.indices.contains(k) { care.selectBrain(i)?.requestNow(.goTo(c[k])) }
+            }
+            await sleep(d.double(forKey: "SpreadWait") > 0 ? d.double(forKey: "SpreadWait") : 9)
+        }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
             await care.voice.simulate(words, teach: d.string(forKey: "VoiceTeach").flatMap(VoiceTrick.init(rawValue:)))

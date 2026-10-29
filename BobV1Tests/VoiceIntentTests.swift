@@ -19,7 +19,11 @@ final class VoiceIntentTests: XCTestCase {
         for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }
         suites = []
     }
-    private func names(_ d: UserDefaults? = nil) -> JellyNames { JellyNames(defaults: d ?? suite(), key: "nick", persists: true) }
+    private func names(_ d: UserDefaults? = nil) -> JellyNames {
+        let n = JellyNames(defaults: d ?? suite(), key: "nick", persists: true)
+        n.roster = [0, 1, 2, 3]          // slot == character, whatever roster the host app launched with (-SetRoster saves one in the sim)
+        return n
+    }
     private func id(_ n: JellyNames, _ said: String) -> Int? { n.resolve(tokens: VoiceMatcher.tokens(said)).first?.id }
 
     // MARK: names
@@ -93,7 +97,11 @@ final class VoiceIntentTests: XCTestCase {
 
     // MARK: parsing / targets / social phrases
 
-    private func training() -> VoiceTraining { VoiceTraining(defaults: suite(), persists: false, random: { 0 }) }
+    private func training() -> VoiceTraining {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        v.names.roster = [0, 1, 2, 3]
+        return v
+    }
     private func decide(_ v: VoiceTraining, _ said: String, mood: BlobMood = .happy, running: VoiceTrick? = nil) -> VoiceDecision {
         v.decideFull(transcript: said, runningMove: running, mood: mood, session: 1)
     }
@@ -116,7 +124,6 @@ final class VoiceIntentTests: XCTestCase {
     /// Two or more named in one breath: exactly those, in the order said, whatever the filler ("and", commas, "come" before or after).
     func testSeveralNamedAreTheTarget() {
         let v = training()
-        v.names.roster = [0, 1, 2, 3]          // slot == character, whatever roster the host app launched with
         for (said, want) in [("come here Pip and Moss", [1, 2]), ("Pip and Lavender come here", [1, 3]), ("Moss, Pip, come here", [2, 1]),
                              ("come Pip and Moss", [1, 2]), ("Pip and Moss, come here", [1, 2]), ("hey Moss and Pip come", [2, 1]),
                              ("come here Pip, Moss and Lavender", [1, 2, 3])] {
@@ -134,7 +141,6 @@ final class VoiceIntentTests: XCTestCase {
 
     func testSeveralNamedRulesParserAndTargetMapping() {
         let n = names()
-        n.roster = [0, 1, 2, 3]
         let cat = AICatalogRegistry.catalog(jellies: [(0, "Bob"), (1, "Pip"), (2, "Moss"), (3, "Lavender")])
         for (said, want) in [("come here Pip and Moss", [1, 2]), ("Pip and Lavender come here", [1, 3]), ("Moss, Pip, come here", [2, 1]), ("come Pip and Moss", [1, 2])] {
             let r = RuleParser.parse(said, names: n, catalog: cat)
