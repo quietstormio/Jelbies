@@ -19,6 +19,8 @@ final class FocusAnyRun {
     let peersWired: Bool
     var snapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
     var aside: [Float] = [], asideClock: Float = 0
+    /// The stage's no-getting-stuck guarantee (it runs it every step; a wanderer standing beside the call spot can pin a walker until it acts).
+    let watchdog = StuckWatchdog()
     init(count: Int = 3, voice: VoiceCoordinator? = nil, peers: Bool = false) {
         peersWired = peers
         let rm = buildRenderMesh(); self.rm = rm
@@ -72,6 +74,7 @@ final class FocusAnyRun {
             snapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }
             asideClock += dt
             if asideClock >= 0.25 { MelonController.makeRoom(snapshot: snapshot, brains: actors.map(\.brain), cooldown: &aside, dt: asideClock); asideClock = 0 }
+            if actors.count > 1 { watchdog.tick(pos: snapshot, brains: actors.map(\.brain), dt: dt) }
         }
         for a in actors {
             guard let b = a.brain else { continue }
