@@ -32,10 +32,10 @@ extension GameCamera {
     static func groomPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let th = tanf(fovY / 2)
         let portrait = portraitAmount(aspect)
-        let needW: Float = 9.2, needH: Float = 8.6 - 0.8 * portrait + 2.6 * (1 - portrait)          // landscape reaches past the curb to the road
+        let needW: Float = 9.2, needH: Float = 8.6 - 0.8 * portrait + 3.8 * (1 - portrait)          // landscape reaches past the curb to the road
         let dist = max(needW / (2 * th * max(aspect, 0.2)), needH / (2 * th))
         let ty: Float = 1.6 + 0.9 * portrait
-        let t = SIMD3<Float>(0, ty, -3.2 + 0.6 * (1 - portrait))
+        let t = SIMD3<Float>(0, ty, -3.2 + 0.9 * (1 - portrait))
         let dir = SIMD3<Float>(0, sinf(groomElevation), cosf(groomElevation))
         return (t + dir * dist, t)
     }
@@ -242,7 +242,7 @@ enum GroomScenery {
         bench(b, x: -4.55, z: Z + 0.4)
         sandwichBoard(b, x: 0.3, z: Z + 0.65)
         flowerBox(b, x: windowC.x, z: Z + 0.5)
-        bicycle(b, x: -4.7, z: 1.9)
+        bicycle(b, x: -2.4, z: 1.95)
         return b.mesh
     }
 
@@ -250,7 +250,9 @@ enum GroomScenery {
     // MARK: the street
 
     static let flag = c(0.85, 0.82, 0.76), flagJoint = c(0.72, 0.70, 0.65), flagBorder = c(0.77, 0.74, 0.68)
-    static let granite = c(0.85, 0.84, 0.80), roadC = c(0.56, 0.55, 0.53), paint = c(0.95, 0.93, 0.87)
+    static let granite = c(0.85, 0.84, 0.80), roadC = c(0.64, 0.62, 0.58), paint = c(0.93, 0.91, 0.85)
+    static let farCurbZ: Float = 7.9
+    static let lampC = c(0.30, 0.35, 0.34)
     static let bloomWhite = c(0.97, 0.96, 0.93), bloomLav = c(0.78, 0.72, 0.88), bloomButter = c(0.95, 0.88, 0.64), bloomBlush = c(0.93, 0.80, 0.80)
     static let foliage = c(0.50, 0.62, 0.50)
 
@@ -259,13 +261,14 @@ enum GroomScenery {
         b.flatQuad(V3(x0, y, z0), V3(x1, y, z0), V3(x1, y, z1), V3(x0, y, z1), normal: V3(0, 1, 0), colors: Array(repeating: color, count: 4))
     }
 
-    /// Sidewalk (running-bond flags, a darker border course, a sage doormat), curb, road with gutter, centre line and zebra crossing.
+    /// Sidewalk (running-bond flags, a darker border course, a sage doormat), curb, a road band with gutter, centre line and zebra crossing, and the far curb and sidewalk.
     static func street(_ b: RoomMeshBuilder, rng: inout ParkRandom) {
-        let X: Float = 13.2, top: Float = 0.1
-        // ground behind the pavement and the asphalt in front of the curb
+        let X: Float = 13.2, top: Float = 0.1, far = farCurbZ
+        // ground behind the pavement, the asphalt band, and the stone beyond the far sidewalk
         floorQuad(b, -80, 80, -14, curbZ, y: 0, color: c(0.78, 0.76, 0.71))
-        floorQuad(b, -80, 80, curbZ, 45, y: 0, color: roadC)
-        // the sidewalk slab: joint colour showing through the gaps, plain stone beyond the flags
+        floorQuad(b, -80, 80, curbZ, far, y: 0, color: roadC)
+        floorQuad(b, -80, 80, far, 45, y: 0, color: c(0.78, 0.76, 0.71))
+        // the near sidewalk slab: joint colour showing through the gaps, plain stone beyond the flags
         box(b, V3(0, top / 2, (frontZ + curbZ) / 2), V3(X, top / 2, (curbZ - frontZ) / 2), r: 0.03, color: flagJoint, seg: 1)
         for sx in [Float(-1), 1] { box(b, V3(sx * (X + 13), top / 2, (frontZ + curbZ) / 2), V3(13, top / 2, (curbZ - frontZ) / 2), r: 0.03, color: flag, seg: 1) }
         let y = top + 0.002
@@ -273,19 +276,22 @@ enum GroomScenery {
         floorQuad(b, -X, X, frontZ, frontZ + 0.35, y: y, color: flagBorder)
         floorQuad(b, -X, X, frontZ + 0.35 - 0.02, frontZ + 0.35, y: y, color: flagJoint)
         // flags in a running bond: rows ~0.56 deep, slabs 1.1 long, every other row offset by half a slab
-        let rows = 12, z0 = frontZ + 0.35, rowH = (curbZ - z0) / Float(rows), g: Float = 0.014
-        for r in 0..<rows {
-            let za = z0 + Float(r) * rowH + g, zb = z0 + Float(r + 1) * rowH - g
-            var xa = -X - (r % 2 == 1 ? 0.55 : 0)
-            while xa < X {
-                let x0 = max(xa + g, -X), x1 = min(xa + 1.1 - g, X)
-                if x1 > x0 {
-                    let t = 1 + (rng.unit() - 0.5) * 0.08, w = (rng.unit() - 0.5) * 0.02
-                    floorQuad(b, x0, x1, za, zb, y: y, color: V3(flag.x * t * (1 + w), flag.y * t, flag.z * t * (1 - w)))
+        func flags(_ zStart: Float, _ zEnd: Float, rows: Int) {
+            let rowH = (zEnd - zStart) / Float(rows), g: Float = 0.014
+            for r in 0..<rows {
+                let za = zStart + Float(r) * rowH + g, zb = zStart + Float(r + 1) * rowH - g
+                var xa = -X - (r % 2 == 1 ? 0.55 : 0)
+                while xa < X {
+                    let x0 = max(xa + g, -X), x1 = min(xa + 1.1 - g, X)
+                    if x1 > x0 {
+                        let t = 1 + (rng.unit() - 0.5) * 0.08, w = (rng.unit() - 0.5) * 0.02
+                        floorQuad(b, x0, x1, za, zb, y: y, color: V3(flag.x * t * (1 + w), flag.y * t, flag.z * t * (1 - w)))
+                    }
+                    xa += 1.1
                 }
-                xa += 1.1
             }
         }
+        flags(frontZ + 0.35, curbZ, rows: 12)
         // a rounded sage doormat in front of the door
         let mat = V3(doorX, y + 0.004, frontZ + 1.7)
         ParkShapes.disc(b, cx: mat.x - 0.25, cz: mat.z, radius: 0.4, y: mat.y, color: sageDeep, segments: 14)
@@ -295,20 +301,43 @@ enum GroomScenery {
         ParkShapes.disc(b, cx: mat.x + 0.25, cz: mat.z, radius: 0.31, y: mat.y + 0.002, color: sage, segments: 14)
         floorQuad(b, mat.x - 0.25, mat.x + 0.25, mat.z - 0.31, mat.z + 0.31, y: mat.y + 0.002, color: sage)
 
-        // curb: a light granite strip, 0.12 above the road, with a thin darker shadow line on the road side
-        box(b, V3(0, 0.05, curbZ + 0.11), V3(40, 0.07, 0.11), r: 0.03, color: granite, seg: 1)
-        floorQuad(b, -40, 40, curbZ + 0.22, curbZ + 0.87, y: 0.002, color: roadC * 0.93)             // the gutter, 0.25 past the shadow line
-        floorQuad(b, -40, 40, curbZ + 0.22, curbZ + 0.3, y: 0.004, color: roadC * 0.78)              // shadow line
+        // the road's large-scale tone: a coarse grid of nodes (+-3%, mostly lengthwise wear bands), Gouraud-blended
+        let gz0 = curbZ + 0.3, gz1 = far - 0.0, rowsN = 6, colsN = 9
+        let dz = (gz1 - gz0) / Float(rowsN), dx = 2 * X / Float(colsN)
+        var node: [[Float]] = []
+        for r in 0...rowsN {
+            let band = (rng.unit() - 0.5) * 0.05
+            node.append((0...colsN).map { _ in 1 + band + (rng.unit() - 0.5) * 0.016 })
+        }
+        for r in 0..<rowsN {
+            for k in 0..<colsN {
+                let xa = -X + Float(k) * dx, xb = xa + dx, za = gz0 + Float(r) * dz, zb = za + dz
+                let cs = [node[r][k], node[r][k + 1], node[r + 1][k + 1], node[r + 1][k]].map { roadC * $0 }
+                b.flatQuad(V3(xa, 0.001, za), V3(xb, 0.001, za), V3(xb, 0.001, zb), V3(xa, 0.001, zb), normal: V3(0, 1, 0), colors: cs)
+            }
+        }
 
-        // paint (lifted 0.004 off the asphalt)
-        let py: Float = 0.006
+        // near curb: a light granite strip, 0.12 above the road; a visible darker gutter and a thin shadow line on the road side
+        box(b, V3(0, 0.05, curbZ + 0.11), V3(40, 0.07, 0.11), r: 0.03, color: granite, seg: 1)
+        floorQuad(b, -40, 40, curbZ + 0.22, curbZ + 0.55, y: 0.002, color: roadC * 0.82)
+        floorQuad(b, -40, 40, curbZ + 0.22, curbZ + 0.3, y: 0.003, color: roadC * 0.68)
+
+        // far curb and the start of the far sidewalk (the same flags)
+        box(b, V3(0, 0.05, far + 0.11), V3(40, 0.07, 0.11), r: 0.03, color: granite, seg: 1)
+        box(b, V3(0, top / 2, far + 3.1), V3(X, top / 2, 3.0), r: 0.03, color: flagJoint, seg: 1)
+        for sx in [Float(-1), 1] { box(b, V3(sx * (X + 13), top / 2, far + 3.1), V3(13, top / 2, 3.0), r: 0.03, color: flag, seg: 1) }
+        flags(far + 0.22, far + 6.1, rows: 10)
+
+        // paint (lifted off the asphalt): warm cream, centre dashes 1.0 long with 0.6 gaps, a seven-stripe crossing that spans the road
+        let py: Float = 0.006, mid = (curbZ + 0.22 + far) / 2
         var x: Float = -13
         while x < 13 {
-            if !(x + 1.0 > -2.7 && x < -0.9) { floorQuad(b, x, x + 1.0, 6.45, 6.55, y: py, color: paint) }          // dashes 1.0 long, 0.6 gaps, skipping the crossing
+            if !(x + 1.0 > -2.7 && x < -0.9) { floorQuad(b, x, x + 1.0, mid - 0.05, mid + 0.05, y: py, color: paint) }
             x += 1.6
         }
-        for i in 0..<6 {
-            let za = curbZ + 0.55 + Float(i) * 0.72
+        let z0 = (curbZ + 0.22 + far) / 2 - (7 * 0.72 - 0.36) / 2
+        for i in 0..<7 {
+            let za = z0 + Float(i) * 0.72
             floorQuad(b, -2.6, -1.0, za, za + 0.36, y: py, color: paint)
         }
     }
@@ -363,15 +392,22 @@ enum GroomScenery {
     }
 
     static func lampPost(_ b: RoomMeshBuilder, x: Float, z: Float) {
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.12, y0: 0.1, y1: 0.4, color: charcoal, segments: 10)
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.045, y0: 0.4, y1: 2.5, color: charcoal, segments: 8)
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.08, y0: 1.95, y1: 2.05, color: brass, segments: 10)
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.15, y0: 2.5, y1: 2.55, color: charcoal, segments: 10)
+        // a rounded plinth, a sturdier dark-sage post with a brass collar, a framed lantern with a small cap
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.17, y0: 0.1, y1: 0.26, color: lampC, segments: 12)
+        ParkScenery.blob(b, V3(x, 0.26, z), rx: 0.15, ry: 0.12, rz: 0.15, color: lampC, segments: 12, rings: 3)
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.065, y0: 0.3, y1: 2.55, color: lampC, segments: 10)
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.095, y0: 1.9, y1: 2.0, color: brass, segments: 10)
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.17, y0: 2.55, y1: 2.61, color: lampC, segments: 10)
         b.material = .glow
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.12, y0: 2.55, y1: 2.9, color: warm, segments: 10)
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.13, y0: 2.61, y1: 2.98, color: warm, segments: 10)
         b.material = .plain
-        ParkShapes.cylinder(b, x: x, z: z, r: 0.17, y0: 2.9, y1: 2.95, color: charcoal, segments: 10)
-        ParkShapes.ball(b, V3(x, 3.0, z), 0.05, brass, segments: 6, rings: 3)
+        for k in 0..<4 {
+            let a = Float(k) / 4 * 2 * .pi + .pi / 4
+            ParkShapes.cylinder(b, x: x + 0.14 * cosf(a), z: z + 0.14 * sinf(a), r: 0.02, y0: 2.6, y1: 3.0, color: lampC, segments: 5)
+        }
+        ParkShapes.cylinder(b, x: x, z: z, r: 0.17, y0: 2.98, y1: 3.04, color: lampC, segments: 10)
+        ParkScenery.blob(b, V3(x, 3.04, z), rx: 0.22, ry: 0.13, rz: 0.22, color: lampC, segments: 10, rings: 3)
+        ParkShapes.ball(b, V3(x, 3.2, z), 0.045, brass, segments: 6, rings: 3)
     }
 
     static func bench(_ b: RoomMeshBuilder, x: Float, z: Float) {
@@ -403,23 +439,30 @@ enum GroomScenery {
         for k in 0..<10 { ParkShapes.ball(b, V3(x - 0.72 + Float(k) * 0.16, 0.55 + 0.03 * Float(k % 2), z + 0.03 * Float(k % 3 - 1)), 0.05, cols[k % 2], segments: 6, rings: 3) }
     }
 
-    /// A tube between two points in the xy plane at depth `z`.
-    private static func tube(_ b: RoomMeshBuilder, _ a: SIMD2<Float>, _ c2: SIMD2<Float>, z: Float, color: V3) {
+    /// A chunky rounded tube between two points in the xy plane at depth `z`.
+    private static func tube(_ b: RoomMeshBuilder, _ a: SIMD2<Float>, _ c2: SIMD2<Float>, z: Float, color: V3, t: Float = 0.04) {
         let mid = (a + c2) / 2, d = c2 - a, len = simd_length(d)
         let from = b.mesh.vertices.count
-        box(b, V3(mid.x, mid.y, z), V3(len / 2, 0.016, 0.016), r: 0.012, color: color, seg: 1)
+        box(b, V3(mid.x, mid.y, z), V3(len / 2 + t * 0.6, t, t), r: t * 0.95, color: color, seg: 1)
         rotate(b, from: from, pivot: V3(mid.x, mid.y, z), axis: V3(0, 0, 1), angle: atan2f(d.y, d.x))
     }
 
+    /// A toy bicycle in the scene's soft style: sage frame, thick charcoal tyres on cream wheels, a wicker basket. Side view, wheels in the xy plane.
     static func bicycle(_ b: RoomMeshBuilder, x: Float, z: Float) {
-        let hubY: Float = 0.45
-        let R = SIMD2<Float>(x - 0.47, hubY), F = SIMD2<Float>(x + 0.47, hubY)
-        let B = SIMD2<Float>(x - 0.05, 0.42), S = SIMD2<Float>(x - 0.2, 0.95), H = SIMD2<Float>(x + 0.36, 0.92)
-        for hub in [R, F] { ringZ(b, V3(hub.x, hub.y, z - 0.02), rm: 0.32, s: 0.02, color: charcoal, segments: 20) }
-        for (p, q) in [(R, B), (B, S), (R, S), (S, H), (B, H), (H, F)] { tube(b, p, q, z: z, color: charcoal) }
-        box(b, V3(H.x - 0.02, H.y + 0.05, z), V3(0.03, 0.02, 0.12), r: 0.01, color: charcoal, seg: 1)
-        box(b, V3(S.x - 0.03, S.y + 0.04, z), V3(0.1, 0.025, 0.05), r: 0.015, color: charcoal, seg: 1)
-        box(b, V3(F.x + 0.1, 0.78, z), V3(0.13, 0.1, 0.15), r: 0.03, color: c(0.76, 0.62, 0.42), seg: 1)
+        let rad: Float = 0.3, hubY = 0.1 + rad + 0.06
+        let R = SIMD2<Float>(x - 0.5, hubY), F = SIMD2<Float>(x + 0.5, hubY)
+        let B = SIMD2<Float>(x - 0.04, hubY - 0.02), S = SIMD2<Float>(x - 0.2, hubY + 0.5), H = SIMD2<Float>(x + 0.36, hubY + 0.5)
+        let cream = c(0.92, 0.90, 0.84), wicker = c(0.78, 0.62, 0.40)
+        for hub in [R, F] {
+            ringZ(b, V3(hub.x, hub.y, z - 0.03), rm: rad, s: 0.06, color: charcoal, segments: 18)
+            discZ(b, V3(hub.x, hub.y, z + 0.03), rad - 0.02, color: cream, segments: 18)
+            ParkShapes.ball(b, V3(hub.x, hub.y, z + 0.05), 0.045, brass, segments: 6, rings: 3)
+        }
+        for (p, q) in [(R, B), (B, S), (R, S), (S, H), (B, H), (H, F)] { tube(b, p, q, z: z, color: sageDeep) }
+        box(b, V3(S.x - 0.04, S.y + 0.07, z), V3(0.13, 0.035, 0.07), r: 0.03, color: charcoal, seg: 1)
+        box(b, V3(H.x - 0.02, H.y + 0.1, z), V3(0.04, 0.04, 0.17), r: 0.035, color: charcoal, seg: 1)
+        box(b, V3(F.x + 0.12, H.y - 0.12, z), V3(0.17, 0.12, 0.2), r: 0.05, color: wicker, seg: 2)
+        box(b, V3(F.x + 0.12, H.y - 0.02, z), V3(0.18, 0.025, 0.21), r: 0.02, color: c(0.68, 0.53, 0.33), seg: 1)
     }
 
     /// A small droplet (a ball with a pointed top) facing the camera.
