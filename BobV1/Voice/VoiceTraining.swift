@@ -285,8 +285,10 @@ final class VoiceTraining {
         defer { save() }
 
         let resolved = names.resolve(tokens: toks)
-        let (all, rest) = VoicePhrases.everyone(resolved.rest)
-        let target: VoiceTarget = all ? .everyone : (resolved.first.map { .jelly($0.id) } ?? .selected)
+        let named = VoiceTarget.named(names.resolveIDs(tokens: toks))
+        let (all, afterAll) = VoicePhrases.everyone(resolved.rest)
+        let rest = named.isSeveral ? afterAll.filter { $0 != "and" } : afterAll          // "Pip and Moss": the joining "and" is not part of the command
+        let target: VoiceTarget = all ? .everyone : (resolved.first.map { _ in named } ?? .selected)
         func out(_ r: VoiceReaction) -> VoiceDecision { VoiceDecision(reaction: r, target: target) }
         // a name (or "everyone") alone: attention
         if rest.isEmpty { return target == .selected ? VoiceDecision(reaction: .puzzled, noMatch: true) : out(mood == .grumpy ? .grumpyIgnore : .nameHeard) }

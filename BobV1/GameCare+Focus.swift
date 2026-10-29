@@ -2,7 +2,7 @@
 //  GameCare+Focus.swift
 //  "Come here" for ANY Jelly, and for everyone at once.
 //  `comeHere(jelly:)`: that Jelly runs to the front spot and the close-up frames him; the others keep roaming, out of the camera's way (GameCare+FocusKeepOut.swift).
-//  `comeHereEveryone()`: all of them run to a row on the front line and the close-up widens to frame the row.
+//  `comeHere(jellies:)`: the several named run to a row, the others keep roaming. `comeHereEveryone()`: all of them run to a row on the front line and the close-up widens to frame the row.
 //  Jelly 0 keeps his own path in GameCare (the `queued` come, `tickFocus`); the others are driven here, once per fixed step (`driveFocus`).
 //
 
@@ -91,6 +91,9 @@ extension GameCare {
 
     /// "Everyone, come here": all of them run up side by side and the close-up frames the row.
     func comeHereEveryone() { beginFocus(ids: Array(0..<max(jellies.count, 1)), front: targetJelly) }
+
+    /// "Pip and Moss, come here": just those run to the front row (the first named stands in front); the others keep roaming.
+    func comeHere(jellies ids: [Int]) { beginFocus(ids: ids, front: ids.first) }
 
     func beginFocus(ids requested: [Int], front: Int? = nil) {
         guard focus.phase == .roaming, !bath.active, !tripActive else { return }
