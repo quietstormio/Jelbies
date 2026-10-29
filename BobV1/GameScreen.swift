@@ -381,7 +381,7 @@ struct GameScreen: View {
 
     }
 
-    /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
+    /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|callall|callids:1,2|wave (after 4 s), -GameScript 1 (timed demo of everything).
     @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<TownScreen?> = .constant(nil)) async {
         let d = UserDefaults.standard
         let care = model.care
@@ -541,6 +541,8 @@ struct GameScreen: View {
             case "feed:berries": care.feed("berries")
             case "drink:water": care.drink("water")
             case "call": care.call()
+            case "callall": care.comeHereEveryone()
+            case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
             default: care.wave()
             }

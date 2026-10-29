@@ -556,7 +556,7 @@ final class GameCare {
     }
 
     private func enterFocus(brain: BlobBrain) {
-        savedAutonomy = brain.autonomy
+        if !focusGroup.arrived.contains(0) { savedAutonomy = brain.autonomy }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
         brain.autonomy = false                       // he stays on the front spot until released
         if focusGroup.markArrived(0) { focus.arrive() }
         AudioHub.shared.chirp(jelly: 0, .happy)
