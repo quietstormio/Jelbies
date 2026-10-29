@@ -773,10 +773,11 @@ struct CareMenu: View {
     private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
     private var iconSize: CGFloat { tight ? 44 : 54 }
     private var rowGap: CGFloat { tight ? 5 : 14 }
+    private var pawSize: CGFloat { tight ? 58 : 72 }          // the heart / X button
 
     var body: some View {
         let items = HUDMenu.items(mode)
-        CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
+        CareScroller(natural: $careNatural, reserved: pawSize) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
                     ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
@@ -973,9 +974,10 @@ struct CareMenu: View {
             insertion: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
                 .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
                 .animation(Self.spring.delay(Double(fromBottom) * 0.05)),
-            // mirrors opening: the top row goes first and every row folds down into the heart (a row's distance to it = the rows below it + the gap)
+            // mirrors opening: the top row goes first and every row folds down into the heart (its bottom edge ends a little under the heart's centre:
+            // the rows below it + the gap + half the heart), and the scroll's clip ends there too, so nothing passes below or outside the heart
             removal: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
-                .combined(with: .offset(y: CGFloat(fromBottom + 1) * (iconSize + rowGap)))
+                .combined(with: .offset(y: CGFloat(fromBottom) * (iconSize + rowGap) + rowGap + pawSize / 2 + iconSize * 0.15))
                 .animation(Self.foldOut.delay(Double(index) * 0.02))))
     }
 
