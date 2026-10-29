@@ -23,7 +23,7 @@ struct VolleyDrive {
     enum Phase { case ground, crouch, air, land, diveCrouch, dive, slide, peel }
     var active = false
     var side: Float = 1
-    var restYaw: Float = 0.95
+    var restYaw: Float = VolleyTuning.restYaw
     var wantX: Float = 0
     var wantZ: Float = 0
     var block = false
@@ -203,7 +203,7 @@ extension BlobBrain {
         driveLimbs(sim, skinner, dt)
     }
 
-    /// One step of the locked gait along the net line (the strafing step: the root goes `dir` along x, the heading stays 3/4 toward the camera).
+    /// One step of the locked gait along the net line (the strafing step: the root goes `dir` on the sand, the heading stays square to the net).
     private func volleyStep(dir: SIMD2<Float>, L: Float, rate: Float) {
         let root = SIMD2(px, pz)
         let u = dir

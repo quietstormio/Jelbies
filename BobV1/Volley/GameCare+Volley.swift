@@ -121,7 +121,7 @@ extension GameCare {
 
     // MARK: input
 
-    /// The floating joystick: x toward the screen's right (+x on the court), y toward the camera (+z), magnitude 0...1.
+    /// The floating joystick in court terms (`VolleyView.stick`): x toward the net (screen up), y across the court (+z, screen right), magnitude 0...1.
     func volleyStick(_ v: SIMD2<Float>) { guard volley.live else { return }; volley.sim?.setStick(v) }
     /// The Hit button went down (serves / tosses on his serve; otherwise bump, set, spike, dig or block by the situation).
     /// `touched`: when the finger landed (the event's own time), so the grade is taken at the touch and not at the next sim step.
@@ -287,7 +287,7 @@ extension GameCare {
         else if !w.trail.isEmpty { w.trail.removeFirst() }
         for k in w.puffs.indices { w.puffs[k].age += dt }
         w.puffs.removeAll { $0.age > 0.6 }
-        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.pos.x * 0.05))
+        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.z * 0.12))          // (the screen's right is +z now)
         w.nudge += (want - w.nudge) * min(1, dt * 1.5)
         GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
@@ -419,6 +419,8 @@ extension GameCare {
         switch k {
         case "rally":          // both teams play themselves (the assists), for the review frames
             s.autoMove = true; s.autoJump = true
+            if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }          // (his own serve: toss, then the serve at the top)
+            if s.phase == .rally, p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03, s.hitLabel == "Serve!" { s.tap() }
         case "bonk", "spike":
             guard s.phase == .rally else { return }
             let b = s.ball

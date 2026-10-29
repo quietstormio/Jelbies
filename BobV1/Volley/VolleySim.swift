@@ -258,7 +258,7 @@ nonisolated struct VolleySim: Sendable {
 
     // MARK: control
 
-    /// The floating stick: x is toward the screen's right (+x on the court), y toward the camera (+z). Magnitude 0...1.
+    /// The floating stick in court terms: x toward the net (screen up), y across the court (+z, screen right); `VolleyView.stick` maps a thumb to it. Magnitude 0...1.
     mutating func setStick(_ s: SIMD2<Float>) {
         let m = simd_length(s)
         stick = m > 1 ? s / m : s
@@ -274,7 +274,7 @@ nonisolated struct VolleySim: Sendable {
         events.append(.switched(to: i, auto: !manual))
     }
 
-    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: -1 far ... +1 near the camera). nil clears it.
+    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: across the court, +1 = the screen's right; `VolleyView.aim` maps a swipe to it). nil clears it.
     mutating func setAim(_ a: SIMD2<Float>?) {
         guard players.indices.contains(controlled) else { return }
         players[controlled].aim = a

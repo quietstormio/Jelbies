@@ -3,7 +3,8 @@
 //  Jelly Volleyball (the third earning game): the data. Tiers (ranks), the court's numbers, per-Jelbie volleyball stats (Speed, Power, Hops, Timing)
 //  with their training gain rules, the tier unlocks, and the Drops. Pure values: no bodies, no screen.
 //
-//  The court is a side view along x: the net at x = 0, the player's team on the left (x < 0), two Jelbies a side, everybody on the plane z = 0.
+//  The court runs along x: the net at x = 0, the player's team at x < 0, two Jelbies a side. The camera stands behind the player's baseline looking down the court,
+//  so on the screen up = +x (toward the net and the opponents) and right = +z.
 //
 
 import Foundation
@@ -49,7 +50,7 @@ nonisolated enum VolleyTuning {
     static let serveWaitAI: Float = 1.1
     static let introSeconds: Float = 1.6
     // players
-    static let restYaw: Float = 0.95             // 3/4 toward the camera, facing the net
+    static let restYaw: Float = .pi / 2          // facing the net (your team: backs to the camera; the opponents: facing it)
     static let minGap: Float = 1.3              // teammates keep this far apart
     static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
     static let startZ: [Float] = [0.35, -0.35, -0.35, 0.35]
@@ -84,6 +85,13 @@ nonisolated enum VolleyTuning {
         let w = [16, 20, 25, 31], l = [4, 5, 6, 8]          // (v2: about 30% more for the longer match)
         return win ? w[tier.index] : l[tier.index]
     }
+}
+
+/// The screen <-> court mapping of the behind-the-team camera: up is +x (toward the net), right is +z. A thumb's offset (right, down; points or unit values) becomes the
+/// sim's stick (x along the court, z across it) and the Hit-button swipe becomes the sim's aim (x: -1 short ... +1 deep, z across).
+nonisolated enum VolleyView {
+    static func stick(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
+    static func aim(right: Float, down: Float) -> SIMD2<Float> { SIMD2(-down, right) }
 }
 
 /// One Jelbie's volleyball stats, 0...1.
