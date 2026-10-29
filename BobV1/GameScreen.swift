@@ -743,8 +743,8 @@ struct CareMenu: View {
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
 
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
-    /// Closing folds the rows back into the heart: quick, no overshoot (the spring above bounces, which threw the leaving rows sideways).
-    static let foldOut = Animation.easeIn(duration: 0.2)
+    /// Closing is a quick calm fade in place: easeOut so it starts on the first frame, no overshoot (the spring above bounces, which threw the leaving rows sideways).
+    static let fadeOut = Animation.easeOut(duration: 0.17)
     static let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
     static let brown = Color(red: 0.42, green: 0.34, blue: 0.30)
 
@@ -773,11 +773,10 @@ struct CareMenu: View {
     private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
     private var iconSize: CGFloat { tight ? 44 : 54 }
     private var rowGap: CGFloat { tight ? 5 : 14 }
-    private var pawSize: CGFloat { tight ? 58 : 72 }          // the heart / X button
 
     var body: some View {
         let items = HUDMenu.items(mode)
-        CareScroller(natural: $careNatural, reserved: pawSize) {
+        CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
                     ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
@@ -810,11 +809,11 @@ struct CareMenu: View {
         }
     }
 
-    /// A chip of an unfolded row: springs out in order, folds back (scale + fade toward the row) quickly with no bounce. Reduce Motion: fade only.
+    /// A chip of an unfolded row: springs out in order, fades out in place quickly with no bounce. Reduce Motion: fade only.
     private func chipTransition(_ i: Int) -> AnyTransition {
         if calm { return .opacity }
         return .asymmetric(insertion: .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.spring.delay(Double(i) * 0.05)),
-                           removal: .scale(scale: 0.3, anchor: .trailing).combined(with: .opacity).animation(Self.foldOut))
+                           removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity).animation(Self.fadeOut))
     }
 
     /// A tiny row of the catalogue's items in the same cream style; tapping one starts it and closes the menu.
@@ -970,15 +969,14 @@ struct CareMenu: View {
         .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
-        .transition(calm ? .opacity : .asymmetric(
+        .transition(calm ? .asymmetric(insertion: .opacity, removal: .opacity.animation(Self.fadeOut)) : .asymmetric(
             insertion: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
                 .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
                 .animation(Self.spring.delay(Double(fromBottom) * 0.05)),
-            // mirrors opening: the top row goes first and every row folds down into the heart (its bottom edge ends a little under the heart's centre:
-            // the rows below it + the gap + half the heart), and the scroll's clip ends there too, so nothing passes below or outside the heart
-            removal: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
-                .combined(with: .offset(y: CGFloat(fromBottom) * (iconSize + rowGap) + rowGap + pawSize / 2 + iconSize * 0.15))
-                .animation(Self.foldOut.delay(Double(index) * 0.02))))
+            // closing is calm: each row fades out where it is (a slight shrink toward its icon edge and a few points of drift), no travel, no overlap
+            removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity)
+                .combined(with: .offset(y: 4))
+                .animation(Self.fadeOut)))
     }
 
     /// The Jelbie's name capsule (individual mode), left of the paw. The cross lets go of the highlight.

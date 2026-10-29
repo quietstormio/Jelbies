@@ -87,12 +87,10 @@ struct CareScroller<Content: View, Footer: View>: View {
         // margin inside the clip, taken back outside it so the layout is the same as before.
         let m: CGFloat = 12
         let size = kept ?? natural
-        let under = reserved / 2          // the clip reaches down to the middle of the paw (taken back from the layout below), so the folding rows can end inside it
         return VStack(alignment: .trailing, spacing: 0) {
             ScrollView(.vertical, showsIndicators: false) {
                 content()
                     .fixedSize(horizontal: true, vertical: false)          // rows take their own width (never wrapped a letter a line by a narrow first proposal)
-                    .padding(.bottom, under)
                     .padding(m)
                     .onGeometryChange(for: CGSize.self) { $0.size } action: { natural = $0 }
                     // the leaving rows stay where they were drawn (the content keeps its size, empty, from the top) and at the trailing edge
@@ -101,15 +99,14 @@ struct CareScroller<Content: View, Footer: View>: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .defaultScrollAnchor(.bottom)
-            .frame(width: size?.width, height: size.map { min($0.height, max(120, avail - reserved) + 2 * m + under) })
+            .frame(width: size?.width, height: size.map { min($0.height, max(120, avail - reserved) + 2 * m) })
             .padding(-m)
-            .padding(.bottom, -under)
             footer()
         }
         .onChange(of: natural) { _, new in
             guard let new else { return }
             releaseTicket += 1
-            if new.height > 2 * m + reserved / 2 + 0.5 { kept = new; return }          // rows showing (or opening, or re-opening in the middle of a fold): follow at once
+            if new.height > 2 * m + 0.5 { kept = new; return }          // rows showing (or opening, or re-opening in the middle of a fold): follow at once
             let ticket = releaseTicket
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if ticket == releaseTicket { kept = nil } }          // empty: the fold takes ~0.3 s
         }
