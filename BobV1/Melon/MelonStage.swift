@@ -1230,7 +1230,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
         }
         var cam = CameraState()
-        cam.view = M4.lookAt(eye: eye, at: target, up: SIMD3(0, 1, 0))
+        // a lobby avatar: the camera's up is the BODY's up (a head rolled by a lean, a walk shear or an idle tilt still shows level eyes)
+        var camUp = SIMD3<Float>(0, 1, 0)
+        if hp != nil { let u = pose.rotation.act(SIMD3<Float>(0, 1, 0)); if simd_length(u) > 1e-3, u.y > 0.5 { camUp = simd_normalize(u) } }
+        cam.view = M4.lookAt(eye: eye, at: target, up: camUp)
         cam.viewProj = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), cam.view)
         cam.invViewProj = M4.invert(cam.viewProj)
         cam.pos = eye; cam.fwd = simd_normalize(target - eye)
