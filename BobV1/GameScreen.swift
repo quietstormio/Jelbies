@@ -727,7 +727,9 @@ struct CareMenu: View {
     static let cleanSymbol = UIImage(systemName: "bubbles.and.sparkles") != nil ? "bubbles.and.sparkles" : "sparkles"
     static let raceSymbol = UIImage(systemName: "flag.checkered") != nil ? "flag.checkered" : "flag.fill"
 
-    private var mode: HUDMode { HUDMenu.mode(care) }
+    private var mode: HUDMode { frozenMode ?? HUDMenu.mode(care) }
+    /// The mode a tapped row ran in, held while the menu closes: Come here / Clean clear the highlight, and the rows must not flip to the group labels mid-fade.
+    @State private var frozenMode: HUDMode?
 
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
@@ -766,6 +768,11 @@ struct CareMenu: View {
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
+            if case .individual = mode {          // Feed / Drink live in the group menu: drop the highlight, then unfold the picker there (after the highlight's own reset)
+                care.clearHighlight()
+                DispatchQueue.main.async { withAnimation(Self.spring) { open = true; picker = k } }
+                return
+            }
             withAnimation(Self.spring) { open = true; picker = k }
         }
     }
@@ -877,6 +884,8 @@ struct CareMenu: View {
     }
 
     private func tap(_ item: HUDItem) {
+        frozenMode = mode
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { frozenMode = nil }
         let route = HUDMenu.perform(item, mode, care: care)
         switch route {
         case .picker(let k):
@@ -919,7 +928,7 @@ struct CareMenu: View {
         .buttonStyle(.plain)
         .disabled(!on)
         .accessibilityIdentifier(item.rawValue)
-        .accessibilityLabel(title)
+        .accessibilityLabel(HUDMenu.spokenLabel(item, mode, care: care))
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
         .transition(calm ? .opacity : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
