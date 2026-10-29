@@ -46,6 +46,8 @@ struct VolleyDrive {
     var finished = false          // set when a jump / dive has ended (the glue tells the sim and clears it)
     var lastAir = false
     var steps = 0
+    /// Where his partner's body is (the glue sets it every step; nil in a drill): steps, jumps and dives never end closer to it than `VolleyTuning.brainGap`.
+    var mate: SIMD2<Float>?
 }
 
 extension BlobBrain {
@@ -96,6 +98,7 @@ extension BlobBrain {
         releaseFeetForAir(sim)
         volley.phase = .crouch; volley.t = 0
         volley.from = SIMD2(px, pz); volley.to = volley.from + SIMD2(dx, dz); volley.to.x = ownSide(volley.to.x); volley.to.y = ownZ(volley.to.y); volley.block = block
+        volley.to = clearOfMate(volley.to, from: volley.from)
         volley.apex = apex; volley.airT = VolleyTuning.airTime(apex: apex)
         volley.yaw0 = yaw; volley.spikeT = -1; volley.pitchNow = 0
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: cheer ? 0.5 : 0.8)
@@ -188,8 +191,8 @@ extension BlobBrain {
             let dv = SIMD2(volley.wantX - px, volley.wantZ - pz)
             let dl = simd_length(dv)
             if dl > 0.06 {
-                let L = min(volley.stride, max(0.14, dl * 1.1))
-                volleyStep(dir: dv / dl, L: L, rate: volley.rate)
+                let (dir, L) = clearOfMate(from: SIMD2(px, pz), dir: dv / dl, length: min(volley.stride, max(0.14, dl * 1.1)))
+                if L > 0.04 { volleyStep(dir: dir, L: L, rate: volley.rate) }
             } else if abs(wrapAngle(volley.restYaw - yaw)) > 0.05 {
                 _ = turnSteps(goal: volley.restYaw, tol: 0.05)
             }
@@ -222,6 +225,18 @@ extension BlobBrain {
     private func yawQ(_ y: Float, pitch p: Float) -> simd_quatf {
         let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
         return p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
+    }
+    /// The partner's body is a wall: a step that would end closer to it than `brainGap` (or than he is now, when that is nearer already) slides round it instead,
+    /// so two teammates never walk into each other. Returns the direction and length of the step to take (length 0: stay).
+    private func clearOfMate(from p: SIMD2<Float>, dir: SIMD2<Float>, length L: Float) -> (SIMD2<Float>, Float) {
+        guard volley.mate != nil else { return (dir, L) }
+        let to = clearOfMate(p + dir * L, from: p)
+        let d = to - p, l = simd_length(d)
+        return l < 1e-4 ? (dir, 0) : (d / l, l)
+    }
+    private func clearOfMate(_ q: SIMD2<Float>, from p: SIMD2<Float>) -> SIMD2<Float> {
+        guard let m = volley.mate else { return q }
+        return VolleyTuning.clearOfMate(q, from: p, mate: m, lane: volley.side)
     }
     /// Keeps a body's centre on its own side of the net with a margin (the body is ~1.1 wide).
     private func ownSide(_ x: Float) -> Float { volley.side > 0 ? min(x, -VolleyTuning.netMargin) : max(x, VolleyTuning.netMargin) }
@@ -330,7 +345,7 @@ extension BlobBrain {
         case .diveCrouch:
             let u = ease(t / 0.10)
             place(sim, xz: volley.from, yaw: volley.yaw0, pitch: -0.10 * u, squash: 1 - 0.16 * amp * u, lift: 0, strength: k * min(1, t / 0.05))
-            if t >= 0.10 { volley.phase = .dive; volley.t = 0; jellyKick = max(jellyKick, 1.0); volley.to = volley.from + SIMD2(volley.diveDir * 1.0, 0) }
+            if t >= 0.10 { volley.phase = .dive; volley.t = 0; jellyKick = max(jellyKick, 1.0); volley.to = clearOfMate(volley.from + SIMD2(volley.diveDir * 1.0, 0), from: volley.from) }
         case .dive:
             let T: Float = 0.32
             let u = min(1, t / T)
@@ -342,7 +357,7 @@ extension BlobBrain {
             volley.pitchNow = pitch
             place(sim, xz: xz, yaw: yawNow, pitch: pitch, squash: 1.04 - 0.14 * ease(u), lift: h, strength: k * 1.1)
             footRamp = Self.volleyFlipGrip
-            if t >= T { volley.phase = .slide; volley.t = 0; volley.from = xz; volley.to = xz + SIMD2(volley.diveDir * 0.3, 0); volley.yaw0 = yawNow; jellyKick = max(jellyKick, 2.4); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7) }
+            if t >= T { volley.phase = .slide; volley.t = 0; volley.from = xz; volley.to = clearOfMate(xz + SIMD2(volley.diveDir * 0.3, 0), from: xz); volley.yaw0 = yawNow; jellyKick = max(jellyKick, 2.4); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7) }
         case .slide:
             let T: Float = 0.26
             let u = min(1, t / T)

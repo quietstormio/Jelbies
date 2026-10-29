@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import simd
 import Observation
 
 nonisolated enum VolleyTier: String, CaseIterable, Codable, Sendable {
@@ -51,7 +52,26 @@ nonisolated enum VolleyTuning {
     static let introSeconds: Float = 1.6
     // players
     static let restYaw: Float = .pi / 2          // facing the net (your team: backs to the camera; the opponents: facing it)
-    static let minGap: Float = 1.3              // teammates keep this far apart
+    /// Two bodies on one side never come closer than this (centre to centre): a body is ~1.1 wide, plus a margin. `partnerGap` is how far apart two teammates' wishes are
+    /// kept (the one nearer the ball keeps his spot, the other steps aside); `brainGap` is the least a step, jump or dive may end from the partner's body.
+    static let bodyDiameter: Float = 1.1
+    static let minCentreGap: Float = bodyDiameter + 0.5          // (the margin: a body's centre sways a little as it walks, and two steps can be taken at once)
+    static let partnerGap: Float = bodyDiameter + 0.5, brainGap: Float = bodyDiameter + 0.5
+    static let minGap: Float = 1.3              // teammates keep this far apart (the old wish-to-wish gap)
+    /// A hook for the before / after measurements and captures: `-VolleyKeepApart 0` plays with the old rules (only the wishes of two computer teammates are pushed apart,
+    /// and the bodies walk, jump and dive straight through each other).
+    nonisolated(unsafe) static var keepApart: Bool = UserDefaults.standard.object(forKey: "VolleyKeepApart") == nil ? true : UserDefaults.standard.bool(forKey: "VolleyKeepApart")
+    /// `q` (where a body is heading, from `p`) moved out to the circle of radius `brainGap` round the partner `m` when it is inside it (or a little more than his distance now, when
+    /// he is closer already): the partner's body is a wall to walk, jump and dive round. `lane` picks the side when everything is dead centre.
+    static func clearOfMate(_ q: SIMD2<Float>, from p: SIMD2<Float>, mate m: SIMD2<Float>, lane: Float = 1) -> SIMD2<Float> {
+        let d0 = simd_distance(p, m)
+        let dmin = d0 < brainGap ? min(brainGap, d0 + 0.15) : brainGap          // (already too close: the move must open the gap, not keep it)
+        guard simd_distance(q, m) < dmin else { return q }
+        var out = q - m
+        if simd_length(out) < 1e-3 { out = p - m }
+        if simd_length(out) < 1e-3 { out = SIMD2(0, lane) }
+        return m + simd_normalize(out) * dmin
+    }
     static let startX: [Float] = [-2.5, -1.1, 2.5, 1.1]
     static let startZ: [Float] = [0.9, -0.9, -0.9, 0.9]          // (staggered across the court so the partner does not hide behind him from behind)
     /// Depth: the players roam this far either side of the centre line; a ball landing past `outZ` is out; a body must be within `zReach` of the ball's depth to touch it.

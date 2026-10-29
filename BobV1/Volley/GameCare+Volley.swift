@@ -35,6 +35,8 @@ final class VolleyWork {
     var puffs: [(x: Float, z: Float, age: Float, size: Float)] = []
     var nudge: Float = 0
     var captureDone = false
+    var gapMin = [Float](repeating: .infinity, count: 2), gapWindow = [Float](repeating: .infinity, count: 2), gapTick = 0
+    var gapNote = ["", ""]
     nonisolated deinit {}
 }
 
@@ -265,8 +267,14 @@ extension GameCare {
             if b.volley.finished { s.bodyDone(i) }
             else if b.volley.phase == .ground, s.players[i].act != .stand, s.players[i].actT > 0.3 { s.bodyDone(i) }
         }
+        for team in 0..<2 where w.players.count >= 4 && s.players.count >= 4 && VolleyTuning.keepApart {          // each Jelbie knows where his partner's body is (his steps, jumps and dives keep clear of it)
+            let a = team * 2, b = a + 1
+            w.players[a].brain?.volley.mate = SIMD2(s.players[b].x, s.players[b].z)
+            w.players[b].brain?.volley.mate = SIMD2(s.players[a].x, s.players[a].z)
+        }
         #if targetEnvironment(simulator)
         volleyDemo(&s)
+        volleyGapAid(s)
         if UserDefaults.standard.object(forKey: "VolleyLandscape") != nil, !w.rotated {          // capture aid: `-VolleyLandscape 1` the court on its side, `0` upright again
             w.rotated = true
             (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: UserDefaults.standard.bool(forKey: "VolleyLandscape") ? .landscapeRight : .portrait))
@@ -412,6 +420,37 @@ extension GameCare {
     nonisolated(unsafe) static var volleySlowScale: Float = 1
 
     #if targetEnvironment(simulator)
+    /// Where the capture aids print: the file named by `-VolleyAidLog <path>` (appended to), else stderr.
+    func volleyAidLog(_ line: String) {
+        if let path = UserDefaults.standard.string(forKey: "VolleyAidLog") {
+            if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
+            if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        } else { FileHandle.standardError.write(Data(line.utf8)) }
+    }
+
+    /// Capture aid: `-VolleyGap 1` tracks the least centre-to-centre distance of each team's two real soft bodies (a body is ~1.1 wide) and prints it every 2 s, with the
+    /// wall-clock time of each second's closest moment when it is under 1.8 (to find the frames in a screen recording).
+    func volleyGapAid(_ sim: VolleySim) {
+        guard UserDefaults.standard.bool(forKey: "VolleyGap"), volley.bodyPos.count >= 4 else { return }
+        let w = volleyWork
+        for team in 0..<2 {
+            let a = volley.bodyPos[team * 2], b = volley.bodyPos[team * 2 + 1]
+            let d = hypotf(a.x - b.x, a.z - b.z)
+            w.gapMin[team] = min(w.gapMin[team], d)
+            if d < w.gapWindow[team], sim.players.count >= 4 {
+                let p = sim.players[team * 2], q = sim.players[team * 2 + 1]
+                w.gapNote[team] = "acts \(p.act)/\(q.act) bodies (\(a.x), \(a.z)) (\(b.x), \(b.z)) wants (\(p.wantX), \(p.wantZ)) (\(q.wantX), \(q.wantZ)) phase \(sim.phase)"
+            }
+            w.gapWindow[team] = min(w.gapWindow[team], d)
+        }
+        w.gapTick += 1
+        if w.gapTick % 60 == 0 {
+            for team in 0..<2 where w.gapWindow[team] < 1.8 { volleyAidLog("VOLLEYCLOSE t=\(Date().timeIntervalSince1970) team=\(team) d=\(w.gapWindow[team]) \(w.gapNote[team])\n") }
+            w.gapWindow = [.infinity, .infinity]
+        }
+        if w.gapTick % 120 == 0 { volleyAidLog("VOLLEYGAP min ours=\(w.gapMin[0]) theirs=\(w.gapMin[1]) (body width 1.1)\n") }
+    }
+
     func volleyDemo(_ s: inout VolleySim) {
         guard let k = UserDefaults.standard.string(forKey: "VolleyDemo"), s.players.indices.contains(s.controlled) else { return }
         let w = volleyWork
