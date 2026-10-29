@@ -59,7 +59,8 @@ final class VolleyViewTests: XCTestCase {
             XCTAssertGreaterThan(near.y, net.y, name); XCTAssertGreaterThan(net.y, far.y, name)          // your side at the bottom, theirs above the net
             XCTAssertGreaterThan(pt(0, 1, 0, size).x, pt(0, -1, 0, size).x, name)                         // +z is the screen's right
             XCTAssertGreaterThan(near.y, size.height * 0.6, name)                                         // your Jelbies sit low
-            XCTAssertLessThan(far.y, size.height * 0.5, name)
+            XCTAssertLessThan(far.y, size.height * 0.65, name)                                            // theirs is above the middle band
+            XCTAssertGreaterThan(near.y - far.y, size.height * 0.1, name)                                  // and the court is not squashed into a thin band
             XCTAssertEqual(near.x, size.width / 2, accuracy: 2, name)                                     // the court is centred
         }
     }

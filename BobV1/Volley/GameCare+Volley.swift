@@ -267,9 +267,9 @@ extension GameCare {
         }
         #if targetEnvironment(simulator)
         volleyDemo(&s)
-        if UserDefaults.standard.bool(forKey: "VolleyLandscape"), !w.rotated {          // capture aid: the court on its side
+        if UserDefaults.standard.object(forKey: "VolleyLandscape") != nil, !w.rotated {          // capture aid: `-VolleyLandscape 1` the court on its side, `0` upright again
             w.rotated = true
-            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight))
+            (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: UserDefaults.standard.bool(forKey: "VolleyLandscape") ? .landscapeRight : .portrait))
         }
         #endif
         s.tick(dt: dt)
