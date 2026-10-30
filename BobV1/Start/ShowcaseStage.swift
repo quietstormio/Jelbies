@@ -17,6 +17,8 @@ struct ShowcaseStage: View {
     var cutout = false
     /// Wears nothing (the opening story, the replayed picker, the first-day scene): the plain species look, whatever the save has on.
     var bare = false
+    /// Only scripted moves play (the opening story): once the Jelbie has walked to the front its brain's own autonomy is off, so it never picks idles, turns or wanders.
+    var scripted = false
     /// Called once the focused Jelbie has walked to the front (`focusFirst`), with the model (so the picker can ask for moves).
     var onReady: ((MelonModel) -> Void)?
     @State private var model: MelonModel?
@@ -50,6 +52,7 @@ struct ShowcaseStage: View {
             if !m.paused { m.care.comeHere(jelly: 0) }
             for _ in 0..<50 where !m.paused && !m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 100_000_000) }
             try? await Task.sleep(nanoseconds: 500_000_000)
+            if scripted { m.care.brainFor(0)?.autonomy = false }
             if !m.paused { onReady?(m) }
         }
     }

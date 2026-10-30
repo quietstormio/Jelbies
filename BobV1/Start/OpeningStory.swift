@@ -39,8 +39,25 @@ enum OpeningScript {
     /// The Jelbies, in the picker's order (blue, yellow, purple, green): character ids.
     static let characters = [0, 1, 3, 2]
     static let names = ["Blueberry", "Lemon Drop", "Taro", "Matcha"]
+    /// Where each stands on the grass (island units, the Spring is at 200, 100): a gentle U (a smile on screen) along the front rim of the oval, the two
+    /// middle ones a little nearer the camera, the ends further back and out to the sides. Neighbours touch at most.
+    static let restX: [Double] = [122, 171, 229, 278]
+    static let restY: [Double] = [132, 146, 146, 132]
+    /// Each one's resting angle off the camera (radians, + = towards screen right): all turned in a little towards a point in front of the middle of the
+    /// group, the ends about 25 degrees, the middle two about 8.
+    static let stance: [Float] = {
+        let base: [Float] = [0.436, 0.14, -0.14, -0.436]
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "OpeningStanceScale") != nil { let k = Float(UserDefaults.standard.double(forKey: "OpeningStanceScale")); return base.map { $0 * k } }          // capture aid: exaggerate (or zero) the stance to check its direction
+        #endif
+        return base
+    }()
     static func full(_ beat: Int) -> String { captions[beat].joined(separator: " ") }
 }
+
+/// One scripted move for the Jelbie in picker slot `k`, due at reveal-clock time `at` (retried a few times while the Jelbie is busy).
+enum OpeningStep { case blink, face(FaceKind, Float), idle(IdleKind), hop, turn(Float), wave, wings }
+struct OpeningCue { var at: Double; var k: Int; var step: OpeningStep; var tries = 0 }
 
 @MainActor @Observable final class OpeningState {
     var beat = 0
@@ -57,6 +74,11 @@ enum OpeningScript {
     var helloDone = [false, false, false, false]
     var reveal = RevealSequencer()
     var revealTask: Task<Void, Never>?
+    var cues: [OpeningCue] = []
+    var gesturesStarted = false
+    var lookAsked = [false, false, false, false]
+    var holding = [false, false, false, false]          // the Jelbie is in its held stance (a LOOK idle whose hold never ends: the body only stays turned while a move owns it)
+    var seenKind = [String](repeating: "", count: 4)
     var mounted = [false, false, false, false]
     var models: [MelonModel?] = [nil, nil, nil, nil]
     var mountStarted = false
@@ -253,7 +275,7 @@ struct OpeningStoryView: View {
     // MARK: 3D Jelbies
 
     private func restPoint(_ k: Int, _ pr: OpeningProjector, bob: Double) -> CGPoint {
-        pr.island(200 + (Double(k) - 1.5) * 58, 140 + (k == 1 || k == 2 ? -4 : 4), bob: bob)
+        pr.island(OpeningScript.restX[k], OpeningScript.restY[k], bob: bob)
     }
     private func orbPoint(_ k: Int, _ pr: OpeningProjector, bob: Double) -> CGPoint {
         pr.island(OArt.orbX[k], OArt.orbY[k] - 10, bob: bob)
@@ -265,7 +287,7 @@ struct OpeningStoryView: View {
             ForEach(0..<4, id: \.self) { k in
                 if st.mounted[k] {
                     let st = pose(k, now: now, pr: pr, bob: bob, f: f)
-                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, bare: true, onReady: { m in ready(k, m) })
+                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, bare: true, scripted: true, onReady: { m in ready(k, m) })
                         .frame(width: f, height: f)
                         .scaleEffect(x: st.scale * st.sx, y: st.scale * st.sy, anchor: .init(x: 0.5, y: 0.73))
                         .position(x: st.feet.x, y: st.feet.y - 0.23 * f)
@@ -305,37 +327,140 @@ struct OpeningStoryView: View {
         st.models[k] = m
         LaunchTiming.mark("opening: Jelbie \(k) standing (beat \(st.beat + 1))")
         if st.popAt[k] != nil, st.appearAt[k] == nil { appear(k) }
+        if heldWithoutReveal, !st.gesturesStarted, !st.models.contains(where: { $0 == nil }) { st.gesturesStarted = true; gestureCues(st.beat) }
     }
 
     private func appear(_ k: Int) {
         LaunchTiming.mark("opening: Jelbie \(k) revealed (beat \(st.beat + 1), reveal clock \(String(format: "%.2f", clock.t)) s)")
         st.appearAt[k] = clock.t
-        guard motion else { st.helloDone[k] = true; perform(k, [.blink]); return }          // the hello move of the others is cued by pollReveal, on the reveal clock
+        guard motion else { st.helloDone[k] = true; perform(k, .blink, clock.t); return }          // the hello move of the others is cued by pollReveal, on the reveal clock
     }
 
+    /// Each species says hello in its own way, keyed by CHARACTER (not slot): all face the front; at most yellow turns, once, a little.
     private func hello(_ k: Int) {
-        switch k {
-        case 0: perform(k, [.idle(.look)])
-        case 1: perform(k, [.idle(.tail)])
-        case 2: perform(k, [.hop, .idle(.stretch)])
-        default: perform(k, [.idle(.flapHop)])
+        switch OpeningScript.characters[k] {
+        case 0:          // Blueberry: the side-eye. Eyes narrow, then a head tilt and a slow blink; the body stays square to the camera
+            cue(k, 0, .face(.focused, 1.0)); cue(k, 0.9, .face(.curious, 1.8)); cue(k, 2.4, .blink)
+        case 1:          // Lemon Drop: a happy tail wag in place, one slight hip turn (~29 degrees) and back to front
+            cue(k, 0, .face(.happy, 3.2)); cue(k, 0.3, .turn(-0.45)); cue(k, 1.6, .turn(0))
+        case 3:          // Taro: a wing flutter (three flap bursts) with one small hop, facing front (the full flap-hop drifts forward off the stage's floor)
+            cue(k, 0, .face(.happy, 3.0)); cue(k, 0, .wings); cue(k, 0.5, .hop); cue(k, 1.0, .wings); cue(k, 2.0, .wings)
+        default:         // Matcha: the daisy sun-stretch, reaching up
+            cue(k, 0, .face(.happy, 3.2)); cue(k, 0.2, .idle(.stretch))
         }
     }
 
-    /// Asks the Jelbie for the first of these moves it is free to take (the same rules as the picker's).
-    private func perform(_ k: Int, _ moves: [StageMove]) {
-        guard let m = st.models[k], !m.paused, let b = m.care.brainFor(0) else { return }
-        for move in moves {
-            switch move {
-            case .blink: b.blinkRequested = true
-            case .face(let f): b.face(f, hold: 2.2)
-            case .hop: b.wantJoy()
-            case .idle(let kind):
-                guard b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script else { continue }
-                if kind == .flapHop, b.feature != .wings || b.wingsFolded { b.wantJoy(); return }
-                b.commandedIdle = kind
-                return
+    /// A capture aid starts after the reveal (-OpeningBeat 5...7): its gestures wait for the Jelbies to be standing (see `ready`).
+    private var heldWithoutReveal: Bool { holdBeat.map { $0 >= 4 } ?? false }
+
+    /// The small scripted life of beats 5-7 (slots: blue, yellow, purple, green): each Jelbie its own gesture at its own moment, all facing their stance.
+    private func gestureCues(_ b: Int) {
+        switch b {
+        case 4:
+            cue(0, 0.5, .blink); cue(0, 1.1, .hop)                          // Blueberry: a slow blink and a tiny unbothered shrug-hop
+            cue(1, 1.5, .idle(.bounce))                                      // Lemon Drop: a bounce
+            cue(2, 2.5, .face(.joyArc, 1.2)); cue(2, 2.6, .idle(.giggle))    // Taro: a happy sway
+            cue(3, 3.4, .wave)                                               // Matcha: a wave
+        case 5:                                                              // calm: blinks at different moments, a smile or two
+            for (k, d) in [(0, 0.8), (1, 1.9), (2, 3.1), (3, 4.3)] { cue(k, d, .blink) }
+            cue(1, 2.6, .face(.happy, 2.0)); cue(3, 5.2, .face(.happy, 1.8))
+        default:
+            for (k, d) in [(2, 0.7), (0, 1.6), (3, 2.7), (1, 3.5)] { cue(k, d, .blink) }
+        }
+    }
+
+    /// Queues a scripted move `after` seconds from now on the reveal clock.
+    private func cue(_ k: Int, _ after: Double, _ step: OpeningStep) {
+        st.cues.append(OpeningCue(at: clock.t + after, k: k, step: step))
+    }
+
+    /// Runs the due cues; a Jelbie that is busy (still landing, mid-move) gets the move a moment later.
+    private func runCues(_ rc: Double) {
+        guard !st.cues.isEmpty else { return }
+        var later: [OpeningCue] = []
+        let due = st.cues.filter { $0.at <= rc }
+        st.cues.removeAll { $0.at <= rc }
+        for var c in due {
+            let ok = perform(c.k, c.step, rc)
+            if ok || c.tries == 0 || c.tries >= 16 { LaunchTiming.mark("opening: move \(c.k) \(c.step) \(ok ? "played" : (c.tries >= 16 ? "dropped" : "busy")) (reveal clock \(String(format: "%.2f", rc)) s)") }
+            if !ok && c.tries < 16 { c.tries += 1; c.at = rc + 0.25; later.append(c) }
+        }
+        st.cues.append(contentsOf: later)
+    }
+
+    /// Asks the Jelbie for one move when it is free to take it (false = busy, try again).
+    @discardableResult
+    private func perform(_ k: Int, _ step: OpeningStep, _ rc: Double) -> Bool {
+        guard let m = st.models[k], !m.paused, let b = m.care.brainFor(0) else { return true }
+        let holdingStance = st.holding[k] && b.idleState.kind == .look
+        let free = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
+        switch step {
+        case .blink: b.blinkRequested = true
+        case .face(let f, let hold): b.face(f, hold: hold)
+        case .hop:
+            guard motion else { return true }
+            if holdingStance { releaseStance(k, b); return false }
+            guard free, let sim = m.care.lastSim else { return false }
+            b.startHopPlay(sim: sim, distance: 0.0001)
+        case .idle(let kind):
+            guard motion else { return true }
+            if holdingStance { releaseStance(k, b); return false }
+            guard free else { return false }
+            if kind == .flapHop, b.feature != .wings || b.wingsFolded { if let sim = m.care.lastSim { b.startHopPlay(sim: sim, distance: 0.0001) }; return true }
+            b.commandedIdle = kind
+        case .turn(let off):          // swing the held stance a little (and back): the look idle turns to its goal again
+            guard motion else { return true }
+            guard holdingStance else { return false }
+            b.idleState.goalYaw = b.faceCameraYaw() + OpeningScript.stance[k] + off
+            b.idleState.phase = 0; b.idleState.phaseT = 0
+        case .wave:
+            guard motion else { return true }
+            if holdingStance { releaseStance(k, b); return false }
+            guard free else { return false }
+            b.requestNow(.wave)
+        case .wings:
+            guard motion else { return true }
+            m.care.features.primeBurst(0)          // the next wing flap burst starts on the next tick (2-4 quick flaps)
+        }
+        return true
+    }
+
+    /// Ends a held stance so a move can play (the body turns back to the camera first; `keepFacing` takes the stance up again afterwards).
+    private func releaseStance(_ k: Int, _ b: BlobBrain) {
+        st.holding[k] = false
+        b.idleState.hold = 0
+    }
+
+    /// After landing, every Jelbie takes up its stance and keeps it: angled in towards the middle of the group. The body only stays turned while a move
+    /// owns it, so the stance is a LOOK idle (turn to the goal, hold) whose hold never runs out; a scripted move releases it and the stance returns after.
+    private func keepFacing(_ rc: Double) {
+        guard motion, st.beat >= 3 else { return }
+        for k in 0..<4 {          // (log what each brain is really doing, so the captures show whether a scripted move took)
+            guard let m = st.models[k], let b = m.care.brainFor(0) else { continue }
+            let now = "\(b.idleState.kind.map { "\($0)" } ?? "-")/\(b.script)"
+            let short = String(now.prefix(18))
+            if short != st.seenKind[k] { st.seenKind[k] = short; LaunchTiming.mark("opening: brain \(k) now \(short) autonomy \(b.autonomy) (reveal clock \(String(format: "%.2f", rc)) s)") }
+        }
+        for k in 0..<4 {
+            guard let a = st.appearAt[k], rc - a > 1.2 else { continue }
+            guard let m = st.models[k], !m.paused, let b = m.care.brainFor(0) else { continue }
+            if st.holding[k] {
+                if b.idleState.kind != .look { st.holding[k] = false }          // something ended it
+                continue
             }
+            if b.idleState.kind == .look, b.commanded, b.commandedIdle == nil, !st.holding[k], st.lookAsked[k] {          // our look has just started: make it a stance hold
+                st.lookAsked[k] = false
+                b.idleState.goalYaw = b.faceCameraYaw() + OpeningScript.stance[k]
+                b.idleState.hold = 1e9
+                b.idleState.sign = 0
+                st.holding[k] = true
+                LaunchTiming.mark("opening: stance \(k) held, goal \(String(format: "%.3f", OpeningScript.stance[k])) rad")
+                continue
+            }
+            guard b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script, b.pending == nil else { continue }
+            if st.cues.contains(where: { $0.k == k && $0.at <= rc + 1.5 }) { continue }          // a scripted move is waiting for this Jelbie to be free: let it go first
+            st.lookAsked[k] = true
+            b.commandedIdle = .look
         }
     }
 
@@ -636,16 +761,13 @@ struct OpeningStoryView: View {
         case 3:
             break          // the reveal is event-driven (pollReveal), not cued by time
         case 4:
-            for k in 0..<4 {
-                cue(0.4 + Double(k) * 0.3, t) {
-                    perform(k, [.blink])
-                    cue(0.3, t) { perform(k, [.hop]); perform(k, [.face(.happy)]) }
-                }
-            }
+            if !heldWithoutReveal { gestureCues(4) }
             cue(0.3, t) { sfx("sparkle_1", "A sparkle", 0.6) }
         case 5:
             for i in 0..<3 { cue(3.4 + Double(i) * 0.55, t) { sfx("opening_pop", "A tiny pop", 0.45) } }
+            if !heldWithoutReveal { gestureCues(5) }
         default:
+            if !heldWithoutReveal { gestureCues(6) }
             cue(0.5, t) { sfx("perk_sparkle_1", "A sparkle", 0.55) }
         }
     }
@@ -655,8 +777,10 @@ struct OpeningStoryView: View {
         guard !st.leaving else { return }
         let rc = clock.t
         for k in 0..<4 where !st.helloDone[k] {
-            if let a = st.appearAt[k], rc - a >= 0.76 { st.helloDone[k] = true; hello(k) }
+            if let a = st.appearAt[k], rc - a >= 0.9 { st.helloDone[k] = true; hello(k) }
         }
+        runCues(rc)
+        keepFacing(rc)
         guard st.beat >= 3, !st.reveal.done else { return }
         // the drops must be sitting on the water before the first one swells (a tap can bring beat 4 early)
         let landed = !motion || (st.dropStart.map { Date().timeIntervalSince($0) >= OArt.orbLand[3] + 0.4 } ?? false)
