@@ -19,6 +19,8 @@ import Foundation
 
 nonisolated enum BlueBelly: Int, CaseIterable {
     case off = 0, front, bellySubtle, bellyClear, tallOval, egg, eggWide, eggWider, eggW3, eggW4
+    /// Darker, still-blue tones of the two widest eggs (raw value = shape mode + 10 x tone: 1 = D1, 2 = D2).
+    case eggW3D1 = 18, eggW3D2 = 28, eggW4D1 = 19, eggW4D2 = 29
 
     /// The variant in force. Off until the user picks; tests / captures set it directly.
     nonisolated(unsafe) static var current: BlueBelly = launchValue
@@ -42,6 +44,10 @@ nonisolated enum BlueBelly: Int, CaseIterable {
         case "c2ww": return .eggWider
         case "c2w3": return .eggW3
         case "c2w4": return .eggW4
+        case "c2w3d1": return .eggW3D1
+        case "c2w3d2": return .eggW3D2
+        case "c2w4d1": return .eggW4D1
+        case "c2w4d2": return .eggW4D2
         default: return nil
         }
     }
