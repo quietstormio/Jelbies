@@ -317,7 +317,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let floorRules = b.resolve
         b.resolve = { [weak self] p, r in
             guard let self, !self.peerSnapshot.isEmpty else { return floorRules(p, r) }
-            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot), r)
+            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap), r)
         }
     }
 
@@ -347,9 +347,9 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// The hard rule under the steering: a root position is pushed out of the circle (the gap) around every other Jelly, so two bodies never
     /// sit inside each other even when the planner finds no way around (the soft bodies themselves do not collide).
-    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)]) -> SIMD3<Float> {
+    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil) -> SIMD3<Float> {
         var q = p
-        let g = GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap        // the cosy group close-up stands closer
+        let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
             if L < g {

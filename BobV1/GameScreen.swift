@@ -349,7 +349,7 @@ struct CareMenu: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                    if kind == .food { care.feed(c.id, jelly: care.targetJelly) } else { care.drink(c.id, jelly: care.targetJelly) }
+                    if kind == .food { care.feed(c.id, jelly: care.singledOutJelly) } else { care.drink(c.id, jelly: care.singledOutJelly) }
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
@@ -398,7 +398,7 @@ struct CareMenu: View {
                     withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink }
                     return
                 }
-                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.targetJelly)   // one drink: starts directly
+                care.drink(Consumables.drinks.first?.id ?? "water", jelly: care.singledOutJelly)   // one drink: starts directly (nobody singled out = the group serving)
             case "care-clean": care.clean(jelly: care.targetJelly)
             default: care.comeHere(jelly: care.targetJelly)
             }

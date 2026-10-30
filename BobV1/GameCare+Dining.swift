@@ -12,7 +12,7 @@ import simd
 
 extension GameCare {
     /// Serves the last picked drink to Jelly `jelly` (same as `water(jelly:)`).
-    func drink(jelly: Int = 0) { drink(selectedDrinkID, jelly: jelly) }
+    func drink(jelly: Int? = nil) { drink(selectedDrinkID, jelly: jelly) }
     /// The Jelly the tray / meal is for (0 when none).
     var diningJelly: Int { mealJelly }
     /// Where the refusal label anchors: over the head of the Jelly that is refusing.
@@ -105,6 +105,11 @@ extension GameCare {
 
     /// After the frame's last sim step: what the eater holds goes back onto his nub (Jelly 0 or another).
     func refreshHeld(actors: [JellyActor], renderer: MelonRenderer?) {
+        if group.isActive {
+            for a in actors { if let b = a.brain, b.enabled { b.refreshHeld(sim: a.sim) } }
+            if let room = renderer?.room, let f = dining.frame(theme: room.theme) { room.setDining(f) }
+            return
+        }
         guard actors.indices.contains(mealJelly), let b = actors[mealJelly].brain, b.enabled else { return }
         refreshHeld(brain: b, sim: actors[mealJelly].sim, renderer: renderer)
     }
