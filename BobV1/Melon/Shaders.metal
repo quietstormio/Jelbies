@@ -480,6 +480,15 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
         if (bb < 1.5) {
             float cz = Q.z / max(length(Q.xz), 0.05);              // 1 = straight ahead, 0 = side, -1 = back
             bk = smoothstep(0.0, 0.62, cz) * (1.0 - smoothstep(0.98, 1.22, Q.y)) * smoothstep(0.02, 0.14, Q.y);
+        } else if (bb > 3.5) {
+            // C1 tall oval / C2 egg: one continuous marking from the belly up to the forehead (above the brows, well under the crown), B2's tone and crisp edge
+            float py = (Q.y - 0.665) / 0.535;
+            float hw = 0.345;
+            if (bb > 4.5) { hw = mix(0.335, 0.285, smoothstep(0.35, 1.05, Q.y)); }          // egg: B2's width at the belly, narrower toward the forehead
+            float px = Q.x / hw;
+            float dd = pow(pow(abs(px), 2.4) + pow(abs(py), 2.4), 1.0 / 2.4);
+            bk = (1.0 - smoothstep(0.70, 1.0, dd)) * smoothstep(0.08, 0.30, Q.z);
+            lk = 0.44;
         } else {
             bool crisp = bb > 2.5;
             float2 bp2 = (float2(Q.x, Q.y - (crisp ? 0.335 : 0.325))) / (crisp ? float2(0.335, 0.205) : float2(0.285, 0.170));

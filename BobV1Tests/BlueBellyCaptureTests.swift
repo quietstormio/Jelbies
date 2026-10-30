@@ -14,7 +14,7 @@ import UIKit
 final class BlueBellyCaptureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias V = BlueBelly
-    static let variants: [(V, String)] = [(.off, "off"), (.front, "A"), (.bellySubtle, "B1"), (.bellyClear, "B2")]
+    static let variants: [(V, String)] = [(.off, "off"), (.bellyClear, "B2"), (.tallOval, "C1"), (.egg, "C2")]
 
     override func setUp() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { BlueBelly.current = .off; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
@@ -226,6 +226,9 @@ final class BlueBellyCaptureTests: XCTestCase {
         let mouthPrep: (MelonRenderer) -> Void = { $0.setMouth(1.0, body: 0); $0.setBlush(0.85, body: 0) }
         boards["mouth"] = try fourUp(dir, "mouthopen_front", "mouth wide open + blush, front", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: 0, dist: 2.4, lookY: 0.05), prep: mouthPrep)
         boards["mouth34"] = try fourUp(dir, "mouthopen_34", "mouth wide open + blush, 3/4", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: 0.7, dist: 2.6, lookY: 0.05), prep: mouthPrep)
+        for (n, yaw, ly) in [("front", Float(0), Float(0.35)), ("34", 0.7, 0.35), ("side", .pi / 2, 0.35)] {
+            boards["face_" + n] = try fourUp(dir, "face_" + n, "forehead close-up \(n)", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: yaw, dist: 2.3, lookY: ly), prep: { $0.setBlush(0.6, body: 0) })
+        }
         // jersey
         let jerseyPrep: (MelonRenderer) -> Void = { $0.setJersey(.sky, body: 0) }
         boards["jersey"] = try fourUp(dir, "jersey_front", "wearing the sky jersey, front", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: 0), prep: jerseyPrep)
@@ -368,7 +371,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             for (label, tier, bath) in [("tier 0 (locked matte)", 0, false), ("fast tier 1", 1, false), ("fast tier 2", 2, false), ("fast tier 3", 3, false), ("bath shader", 0, true)] {
                 c.ren.gfxOpt.fastMatteTier = tier
                 c.ren.forceBathShader = bath
-                for (v, tag) in [(V.front, "A"), (V.bellyClear, "B2")] {
+                for (v, tag) in [(V.bellyClear, "B2"), (V.tallOval, "C1"), (V.egg, "C2")] {
                     BlueBelly.current = v
                     let img = render(c, s2, cam: cam, neutral: true)
                     try save(img.uiImage()!, dir + "/tier_\(tier)\(bath ? "bath" : "")_\(tag).png")
@@ -393,7 +396,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             var noise = 0
             for _ in 0..<3 { let a2 = render(c3, s3, cam: cam, neutral: false); for i in 0..<a.bgra.count { noise = max(noise, abs(Int(a.bgra[i]) - Int(a2.bgra[i]))) } }          // render-to-render noise of the same state (room dither / ripple)
             var worst = 0
-            for v in [V.front, .bellySubtle, .bellyClear] {
+            for v in BlueBelly.allCases.dropFirst() {
                 BlueBelly.current = v
                 let b = render(c3, s3, cam: cam, neutral: false)
                 for i in 0..<a.bgra.count { worst = max(worst, abs(Int(a.bgra[i]) - Int(b.bgra[i]))) }
@@ -405,7 +408,7 @@ final class BlueBellyCaptureTests: XCTestCase {
 
         // boards
         func row(_ keys: [String]) -> [UIImage] { keys.flatMap { boards[$0] ?? [] } }
-        try save(grid(row(["angle_front", "angle_34", "squish_front"]), cols: 4), dir + "/OVERVIEW.png")
+        try save(grid(row(["angle_front", "angle_34", "angle_side", "squish_front"]), cols: 4), dir + "/OVERVIEW.png")
         try save(grid(row(["angle_front", "angle_34", "angle_side", "angle_back"]), cols: 4), dir + "/BOARD_angles.png")
         try save(grid(row(["walkfront", "walk", "walkside", "squish_front", "squish_34", "squish_side", "drag", "drag34"]), cols: 4), dir + "/BOARD_motion.png")
         try save(grid(row(["sleep_front", "sleep_34", "sleep_side", "sleep_top"]), cols: 4), dir + "/BOARD_sleep.png")
@@ -413,7 +416,8 @@ final class BlueBellyCaptureTests: XCTestCase {
         try save(grid(row(["roomfull", "landscape"]), cols: 4), dir + "/BOARD_room_landscape_full.png")
         try save(grid(row(["picker_rest", "picker_orbit_front", "picker_orbit_side", "picker_orbit_back"]), cols: 4), dir + "/BOARD_picker.png")
         try save(grid(row(["jersey", "jersey34", "mouth", "mouth34"]), cols: 4), dir + "/BOARD_clothes_mouth.png")
-        try save(grid(boards["tiers"] ?? [], cols: 2), dir + "/BOARD_tiers.png")
+        try save(grid(boards["tiers"] ?? [], cols: 3), dir + "/BOARD_tiers.png")
+        try save(grid(row(["face_front", "face_34", "face_side"]), cols: 4), dir + "/BOARD_face.png")
     }
 
     /// Always runs: the default is off, and only the baby blue palette ever gets a mode.
