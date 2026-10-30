@@ -21,7 +21,18 @@ extension GameCare {
     static let forcedWear: [WearSlot: WearLook] = {
         guard let s = UserDefaults.standard.string(forKey: "WearForce") else { return [:] }
         var o: [WearSlot: WearLook] = [:]
-        for id in s.split(separator: ",") { if let l = WearLook.pieces.first(where: { $0.art == String(id) }) { o[l.slot] = l } }
+        for id in s.split(separator: ",") where !id.contains("=") { if let l = WearLook.pieces.first(where: { $0.art == String(id) }) { o[l.slot] = l } }
+        return o
+    }()
+    /// ... and `-WearForce 0=beanie_pink,0=heart_shades,2=pearls` dresses one room slot (0 = the first Jelbie) in those pieces.
+    static let forcedWearBy: [Int: [WearSlot: WearLook]] = {
+        guard let s = UserDefaults.standard.string(forKey: "WearForce") else { return [:] }
+        var o: [Int: [WearSlot: WearLook]] = [:]
+        for part in s.split(separator: ",") {
+            let kv = part.split(separator: "=")
+            guard kv.count == 2, let slot = Int(kv[0]), let l = WearLook.pieces.first(where: { $0.art == String(kv[1]) }) else { continue }
+            o[slot, default: [:]][l.slot] = l
+        }
         return o
     }()
 
@@ -30,6 +41,7 @@ extension GameCare {
         if let o = wearOutfits[id] { return o }
         var o = store.outfit(id)
         for (s, l) in Self.forcedWear { o[s] = l }
+        for (s, l) in Self.forcedWearBy[id] ?? [:] { o[s] = l }
         wearOutfits[id] = o
         return o
     }

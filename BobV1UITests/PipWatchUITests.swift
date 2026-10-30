@@ -12,12 +12,13 @@ final class PipWatchUITests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard let secs = env["PIPWATCH_SECS"].flatMap(Double.init) else { throw XCTSkip("PIPWATCH_SECS not set") }
         let app = XCUIApplication()
-        app.launchArguments += ["-SetRoster", "pip,moss,lavender"]
+        if !(env["PIPWATCH_ARGS"] ?? "").contains("-SetRoster") { app.launchArguments += ["-SetRoster", "pip,moss,lavender"] }
         if let extra = env["PIPWATCH_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: extra.contains("|") ? "|" : " ").map(String.init) }
         app.launch()
+        if let o = env["PIPWATCH_ORIENT"] { XCUIDevice.shared.orientation = o == "landscape" ? .landscapeLeft : .portrait }
         let cont = app.buttons["Continue"]
         // (the title can still be fading in / the intro running, and a tap during the forced rotation can miss: tap until Continue is really gone, the room is behind it)
-        if cont.waitForExistence(timeout: 60) {
+        if cont.waitForExistence(timeout: env["PIPWATCH_CONT_WAIT"].flatMap(Double.init) ?? 60) {
             for _ in 0..<12 {
                 if cont.exists, cont.isHittable { cont.tap() }
                 let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: cont)
@@ -27,6 +28,7 @@ final class PipWatchUITests: XCTestCase {
         let up = app.buttons["care-menu"].waitForExistence(timeout: 90)
         if !up, let mark = env["PIPWATCH_MARK"] { try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: mark + "_fail.png")) }
         XCTAssertTrue(up, "the HUD is up")
+        if let o = env["PIPWATCH_ORIENT"] { XCUIDevice.shared.orientation = o == "landscape" ? .landscapeLeft : .portrait; Thread.sleep(forTimeInterval: 2) }
         if let mark = env["PIPWATCH_MARK"] { try? "up".write(toFile: mark, atomically: true, encoding: .utf8) }
         Thread.sleep(forTimeInterval: secs)
     }

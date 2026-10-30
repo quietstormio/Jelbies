@@ -22,7 +22,10 @@ enum IntroGate {
     static let seenKey = "IntroSeen.v1"
     static let background = Color.white
     static func shouldShow(_ d: UserDefaults = .standard) -> Bool {
-        true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
+        #if DEBUG
+        if d.bool(forKey: "SkipIntro") { return false }          // capture aid: straight to the menu / room (a simulator with no audio device never ends the clip)
+        #endif
+        return true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
     }
     static func markSeen(_ d: UserDefaults = .standard) { d.set(true, forKey: seenKey) }
 }

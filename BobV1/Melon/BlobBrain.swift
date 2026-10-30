@@ -297,6 +297,11 @@ final class BlobBrain {
     var beanCorr: [SIMD3<Float>] = [.zero, .zero]      // the eased post-step correction applied to each world-placed bean (refitBeans)
     var beanFitUsed: BodyPose? = nil     // the fitted body pose the beans were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
     var beanSplay: Float = 0              // 0...1: how far the legs are splayed in a V (flip / cartwheel flight)
+    #if DEBUG
+    var cwWallSaved: (SIMD2<Float>, Float)? = nil          // capture aid -CWForceWall: the arena before the cartwheel shrank it
+    #endif
+    var armFitUsed: BodyPose? = nil       // the fitted body pose the arm capsules were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
+    nonisolated(unsafe) static var armsOnFit = true          // (false = the behaviour before 2026-10-30: tests / before-after captures) arms follow the REAL body in a flip / cartwheel, not the attractor
     var beanFitHold = 0                  // steps left of the post-spin hold: feet stay on the fitted pose, keep their shape
     var beanForceLast = false            // the last driveBeansRigid call was a flip / cartwheel's (the post-step refit keeps the foot's shape then)
     var beanForce = false                // a spin move (flip / cartwheel) owns the beans: out for the whole flight, placed on the FITTED pose
@@ -423,6 +428,10 @@ final class BlobBrain {
         // capture aid: -BlobGameDemo gwalk|gturn|ghop|gcome|gwave|gstep runs a scripted loop in the game without the care menu
         if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot, .cartwheel].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
+        #if DEBUG
+        if d.object(forKey: "CWArenaMargin") != nil { Self.cartwheelArenaMargin = Float(d.double(forKey: "CWArenaMargin")) }          // capture aid: -9 = the planner ignores the arena wall (reproduces the old stop-at-the-wall cartwheel)
+        if d.object(forKey: "CWArmsOnAttractor") != nil { Self.armsOnFit = false }          // capture aid: the arms placed on the attractor as before the fix
+        #endif
         return b
     }
 
@@ -1489,10 +1498,24 @@ final class BlobBrain {
     /// steps: the beans placed on the fitted pose are carried rigidly onto the pose the body has NOW, then the always-attached clamp runs again.
     nonisolated(unsafe) static var refitWorldPlaced = true          // (false = the cartwheel-only behaviour: the gait stress test's "before")
     static let refitEase: Float = 1.0 / 3, refitFloorDepth: Float = -0.025
+    /// The arm capsules placed on the fitted pose (driveArms) are carried rigidly onto the pose the body has after the step, like the beans.
+    func refitArms(_ sim: SoftBody, _ skinner: Skinner, _ now: BodyPose) {
+        guard let old = armFitUsed, skinner.armPos[0].count == ArmCapsule.vertexCount, skinner.armPos[1].count == ArmCapsule.vertexCount else { return }
+        let dq = now.rotation * old.rotation.inverse
+        for s in 0..<2 {
+            for i in 0..<ArmCapsule.vertexCount { skinner.armPos[s][i] = now.centroid + dq.act(skinner.armPos[s][i] - old.centroid) }
+            if skinner.armStart[s].count == ArmCapsule.vertexCount { for i in 0..<ArmCapsule.vertexCount { skinner.armStart[s][i] = now.centroid + dq.act(skinner.armStart[s][i] - old.centroid) } }
+        }
+        let sya = sim.attractor.squash, sxza = 1 / sya.squareRoot()
+        skinner.armRetractMatrix = simd_float3x3(now.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
+        armFitUsed = now
+    }
+
     func refitBeans(_ sim: SoftBody, _ skinner: Skinner) {
         guard skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { beanCorr = [.zero, .zero]; return }
         if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
+        refitArms(sim, skinner, now)
         // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
         // not moved with the body, but the always-attached clamp runs again against the pose the body has NOW (it ran before the step against the pose before it).
         let dq: simd_quatf? = beanFitUsed.map { now.rotation * $0.rotation.inverse }
@@ -1880,6 +1903,7 @@ final class BlobBrain {
     }
 
     func driveArms(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        armFitUsed = nil
         guard beanFirstIdx.count == 2, armFirstIdx.count == 2 else { return }
         // lift axis spring: a smooth lift over ~0.5 s with the sweep at full amplitude from the first step, an under-damped release (2.3 Hz, zeta 0.30)
         let tgt: Float = armWalkWant > 0 ? 1 : 0
@@ -1909,8 +1933,14 @@ final class BlobBrain {
             armStartScratch = armScratch
         }
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot(), c0 = sim.restCentroid
-        let RS = simd_float3x3(att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
-        let org = att.anchor - RS * c0
+        // 2026-10-30 (the cartwheel's "legs come off"): the capsules are placed on the ATTRACTOR's pose, which only equals the body's while the brain drives it freely. A flip / cartwheel
+        // that the room's round wall (or a piece of furniture, a peer) stops mid-flight leaves the attractor going on while the body stays: the arm then floated 0.4 u off the body for
+        // the rest of the move (landscape: the room's corners reach further than the arena wall). Like the foot beans, the arms follow the FITTED pose of the real body in a spin move
+        // (and while it keeps shaking after it: `beanFitHold`), and the post-step refit (`refitArms`) carries them onto the pose the body reaches after the step.
+        let fitP: BodyPose? = Self.armsOnFit && (gait.isSpinMove || beanFitHold > 0) ? sim.bodyPose(iterations: 3) : nil
+        armFitUsed = fitP
+        let RS = simd_float3x3(fitP?.rotation ?? att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
+        let org = (fitP?.centroid ?? att.anchor) - RS * c0
         for si in 0..<2 {
             let sg: Float = si == 0 ? -1 : 1
             if armWalkWant > 0 {

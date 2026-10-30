@@ -164,6 +164,8 @@ extension BlobBrain {
     // MARK: cartwheel
 
     static let cartwheelApex: Float = 0.34
+    /// How far inside the arena wall a cartwheel must land (the body's half width plus the squash / splay).
+    nonisolated(unsafe) static var cartwheelArenaMargin: Float = 0.5
 
     /// Start attempts and refusals by reason (diagnostics: a minute of the 3-Jelly room logs them, LivelinessMinuteTests).
     static var cartwheelStats = (tried: 0, floor: 0, leg: 0, peer: 0, started: 0)
@@ -171,13 +173,15 @@ extension BlobBrain {
     static var cartwheelTravels: [Float] = [0.8, 0.6, 0.45]
 
     /// Where a cartwheel toward `side` (+1 right / -1 left of `yawNow`) would land and how far it travels, or nil when it has no room even for the shortest.
-    func cartwheelLanding(side: Float, yawNow: Float, from here: SIMD2<Float>, count: Bool = false) -> (to: SIMD2<Float>, travel: Float)? {
+    func cartwheelLanding(_ sim: SoftBody, side: Float, yawNow: Float, from here: SIMD2<Float>, count: Bool = false) -> (to: SIMD2<Float>, travel: Float)? {
         let right = SIMD2<Float>(cosf(yawNow), -sinf(yawNow))
         var why = 0
         for travel in Self.cartwheelTravels {
             let raw = here + right * side * travel
             let to = fixed(raw)
             if simd_distance(to, raw) >= 0.1 { why = max(why, 1); continue }
+            // the room's round arena wall (SoftBody.arenaRadius) is wider than the walkable floor's corners are: a landing outside it stops the body mid-flight (2026-10-30)
+            if sim.arenaRadius.isFinite, !sim.arenaSuspended, simd_distance(to, sim.arenaCenter) > sim.arenaRadius - Self.cartwheelArenaMargin { why = max(why, 1); continue }
             if !legClear(here, to, margin: steerMargin) { why = max(why, 2); continue }
             if !peerFree(to) { why = max(why, 3); continue }
             return (to, travel)
@@ -192,9 +196,9 @@ extension BlobBrain {
         let yawFor = resume == nil ? faceCameraYaw() : yaw
         var side: Float = idleState.kind == nil ? (rand() < 0.5 ? -1 : 1) : 1
         Self.cartwheelStats.tried += 1
-        if cartwheelLanding(side: side, yawNow: yawFor, from: here) == nil {
+        if cartwheelLanding(sim, side: side, yawNow: yawFor, from: here) == nil {
             side = -side
-            if cartwheelLanding(side: side, yawNow: yawFor, from: here, count: true) == nil { return false }
+            if cartwheelLanding(sim, side: side, yawNow: yawFor, from: here, count: true) == nil { return false }
         }
         Self.cartwheelStats.started += 1
         idleBegin(.cartwheel)
@@ -212,9 +216,9 @@ extension BlobBrain {
         let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
         gaitPose(sway: 0.04, bob: 0, rock: 0.2)
         if turning || feet.active { return }
-        if cartwheelLanding(side: idleState.sign, yawNow: yaw, from: position) == nil {
+        if cartwheelLanding(sim, side: idleState.sign, yawNow: yaw, from: position) == nil {
             let other = -idleState.sign
-            if cartwheelLanding(side: other, yawNow: yaw, from: position) != nil { idleState.sign = other } else { idleFinish(skinner); return }
+            if cartwheelLanding(sim, side: other, yawNow: yaw, from: position) != nil { idleState.sign = other } else { idleFinish(skinner); return }
         }
         cartwheelLaunch(sim)
     }
@@ -228,8 +232,12 @@ extension BlobBrain {
         gait.home = position
         poseW = 0; poseOn = false
         flipArmA = 0
-        let travel = cartwheelLanding(side: idleState.sign, yawNow: yaw, from: position)?.travel ?? Self.cartwheelTravels.last!
+        let travel = cartwheelLanding(sim, side: idleState.sign, yawNow: yaw, from: position)?.travel ?? Self.cartwheelTravels.last!
         gait.cartwheel(sim, apex: Self.cartwheelApex, side: idleState.sign, travel: travel, reduceMotion: amplitude < 0.7)
+        #if DEBUG
+        // capture aid (-CWForceWall 1): a round wall 0.8 u around the take-off spot stops the body mid-flight, as the room's arena wall did in the corners (before / after recordings of the floating arm)
+        if UserDefaults.standard.bool(forKey: "CWForceWall"), cwWallSaved == nil { cwWallSaved = (sim.arenaCenter, sim.arenaRadius); sim.arenaCenter = position; sim.arenaRadius = 0.8 }
+        #endif
         idleState.phase = 1; idleState.phaseT = 0; idleState.landT = 0
         idleState.hop = 0
         script = .idle; activity = .playing
@@ -257,6 +265,9 @@ extension BlobBrain {
         driveBeansRigid(sim, skinner, dt, tuck: gait.tuck, force: gait.phase == .air || gait.phase == .land)
         driveArms(sim, skinner, dt)
         if !gait.isBusy {
+            #if DEBUG
+            if let w = cwWallSaved { sim.arenaCenter = w.0; sim.arenaRadius = w.1; cwWallSaved = nil }
+            #endif
             gait.basePitch = 0
             currentPose(sim)
             armDirW = 0; armDirOut = 0; flipArmA = 0
