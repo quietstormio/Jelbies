@@ -18,6 +18,7 @@ import Foundation
 nonisolated enum SleepMaskTuning {
     static let popTime: Float = 0.25
     static let poofTime: Float = DiningCurve.poofDuration
+    static let wakePoofTime: Float = 0.16
     static let puffRadius: Float = 0.24
     /// Quiet pop (the bath's bubble pop is 0.6).
     static let soundVolume: Float = 0.3
@@ -240,7 +241,7 @@ final class SleepMaskSet {
     static func wanted(_ brain: BlobBrain) -> Bool { brain.isNapping && !brain.race.active }
     /// While waking, a mask that is on stays until the roll back is about half done (not in a race; not for a pick up / abort, which end the sleep at once).
     static func lingers(_ brain: BlobBrain) -> Bool {
-        brain.idleState.kind == .sleep && brain.sleep.stage == 4 && brain.sleep.kStart > 0.99 && brain.sleep.k > brain.sleep.maskK && !brain.race.active
+        brain.idleState.kind == .sleep && brain.sleep.stage == 4 && brain.sleep.kStart > 0.99 && !brain.sleep.maskOff && !brain.race.active
     }
 
     func reset() { slots = slots.map { _ in Slot() }; puffs.reset() }
@@ -264,10 +265,11 @@ final class SleepMaskSet {
             if !want { startOut(&s, id, brain, sim) } else { s.scale = 1 }
         case .poofOut:
             s.t += dt
-            if s.t >= SleepMaskTuning.poofTime { s.phase = .hidden; s.scale = 0 }
-            else { s.scale = s.from * DiningCurve.poof(s.t / SleepMaskTuning.poofTime) }
+            let pt = brain.idleState.kind == .sleep && brain.sleep.stage >= 4 ? SleepMaskTuning.wakePoofTime : SleepMaskTuning.poofTime          // (quick while he rises: it must not ride up his face)
+            if s.t >= pt { s.phase = .hidden; s.scale = 0 }
+            else { s.scale = s.from * DiningCurve.poof(s.t / pt) }
         }
-        if s.phase != .hidden { carry(&s, sim) }
+        if s.phase != .hidden { carry(&s, sim); s.carry.centroid.y += brain.isLying ? brain.sleep.breathDisp : 0 }          // (the mask rides the breath: the skin rises under it, it must not sink in)
         if raceBusy || brain.race.active { s.zs = [] }          // never a z in a race
         tickZ(&s, id: id, want: strict, dt: dt, wasShown: slots[id].phase == .shown)
         slots[id] = s

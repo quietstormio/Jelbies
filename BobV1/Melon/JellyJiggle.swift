@@ -51,6 +51,8 @@ nonisolated final class JellyJiggle {
     private(set) var sway = SIMD2<Float>(0, 0), swayV = SIMD2<Float>(0, 0)   // world xz, units
     private(set) var tw: Float = 0, twV: Float = 0                  // crown heading lag (rad)
     private(set) var active = false
+    /// The slow breathing of a sleeper (BlobBrain+Sleep.swift): a render-only rise and fall of the drawn body, fraction of H (- = risen). Never the sim, so a sleeper's sim still settles and skips.
+    var breath: Float = 0
     private(set) var center = SIMD2<Float>(0, 0)
     private var boost: Float = 0                                    // 0 = walking caps ... 1 = run / landing caps
     private var havePrev = false
@@ -67,7 +69,7 @@ nonisolated final class JellyJiggle {
     var intensity: Float { active ? min(1, max(abs(sq) / capSqV, simd_length(sway) / (capSqV * H), abs(tw) / capTwV)) : 0 }
 
     func reset() {
-        sq = 0; sqV = 0; sway = .zero; swayV = .zero; tw = 0; twV = 0; active = false
+        sq = 0; sqV = 0; sway = .zero; swayV = .zero; tw = 0; twV = 0; active = false; breath = 0
         boost = 0; peakSpeed = 0; havePrev = false; vel = .zero; yawRate = 0; stillT = 0; wasSwinging = false; haveVY = false
     }
 
@@ -115,7 +117,7 @@ nonisolated final class JellyJiggle {
             swayV += (-wy * wy * sway - dy * swayV) * h; sway += swayV * h
             twV += (-wy * wy * tw - dy * twV) * h; tw += twV * h
         }
-        if stillT > 0.15, abs(sq) < 2e-4, abs(sqV) < 2e-3, simd_length(sway) < 3e-4, simd_length(swayV) < 3e-3, abs(tw) < 2e-4, abs(twV) < 2e-3 {
+        if stillT > 0.15, abs(sq) < 2e-4, abs(sqV) < 2e-3, simd_length(sway) < 3e-4, simd_length(swayV) < 3e-3, abs(tw) < 2e-4, abs(twV) < 2e-3, breath == 0 {
             sq = 0; sqV = 0; sway = .zero; swayV = .zero; tw = 0; twV = 0; active = false
         } else {
             active = true
@@ -140,7 +142,7 @@ nonisolated final class JellyJiggle {
         guard enabled, active else { return }
         let sc = capScale(boost)
         let capSq = capSqV * sc, capSway = capSqV * H * sc, capTw = capTwV * sc
-        let sqE = capSq * tanhf(sq / capSq)
+        let sqE = capSq * tanhf(sq / capSq) + breath
         let swL = simd_length(sway)
         let swE = swL > 1e-7 ? sway * (capSway * tanhf(swL / capSway) / swL) : SIMD2<Float>(0, 0)
         let twE = capTw * tanhf(tw / capTw)
@@ -181,6 +183,7 @@ extension JellyJiggle {
         } else { haveVY = true; prevVY = 0 }
         prevCY = cy
         if brain.jellyKick > 0 { landing += brain.jellyKick; brain.jellyKick = 0 }
+        breath = brain.isLying ? brain.sleep.breathSq : 0
         let impact = landing > Self.footImpulse * 1.2 ? 1 : 0
         advance(dt: dt, root: SIMD2(brain.px, brain.pz), yaw: brain.yaw, landing: landing, run: max(brain.runW, Float(impact)))
     }

@@ -27,12 +27,14 @@ struct WakePlan {
     var floLen: Float = 0
     var side: Float = 1
     var chosen = false
+    var plain = false          // the old pop + stretch (a fast wake / a mid-flop wake): the stretch keeps today's size
 }
 
 /// What the get-up adds to the lying pose this tick (`applyLie`): all neutral = today's roll-up.
 struct WakeLie {
     var k: Float = 1                 // fraction of the lie he is still in (times kStart)
     var yRoll: Float = 0             // roll onto his side (rad, about his own long axis; + = toward his right)
+    var zRoll: Float = 0             // a sway about his forward axis (rad): the sleepy side-to-side of the sit-up
     var lift: Float = 0              // the anchor's lift (the spring up / the happy hops)
     var sq: Float = 1
     var pitch: Float = 0             // extra nod (+ = forward)
@@ -40,15 +42,17 @@ struct WakeLie {
 }
 
 enum WakeTuning {
-    static let popLen: Float = SleepTuning.rollBackTime, rockLen: Float = 1.3, sideLen: Float = 1.2, sitLen: Float = 2.0, springLen: Float = 0.9
-    static let shakeLen: Float = 1.3, lookLen: Float = 2.4, bounceLen: Float = 1.3, wingsLen: Float = 1.9, thumpLen: Float = 1.9, sunLen: Float = 1.9
-    /// A get-up stretches at most this far before it waits with a stir; a flourish warps within this range.
-    static let upStretch: Float = 1.25
-    static let floRange: ClosedRange<Float> = 0.62...1.3
-    /// A group's shared length: the geometric middle of its styles, but never below the longest over this (nobody crawls and nobody is rushed past ~0.6x).
-    static let groupSpan: Float = 1.6
-    static let sideRoll: Float = 0.85
-    static let springApex: Float = 0.22, hopApex: Float = 0.12
+    /// Natural lengths. (2026-10-30 review: the styles must read from the room camera, so the rock rocks side to side three times, the spring crouches and hops a body-height,
+    /// the sit-up sways and nods at its half-way pause.)
+    static let popLen: Float = SleepTuning.rollBackTime, rockLen: Float = 2.0, sideLen: Float = 1.4, sitLen: Float = 2.4, springLen: Float = 1.35
+    static let shakeLen: Float = 1.4, lookLen: Float = 2.4, bounceLen: Float = 1.5, wingsLen: Float = 1.9, thumpLen: Float = 1.9, sunLen: Float = 1.9
+    /// A get-up slows at most this far; what is left of a group's shared length is the style's own lead-in (a sway on his back).
+    static let upStretch: Float = 1.45
+    static let floRange: ClosedRange<Float> = 0.7...1.35
+    /// A group's shared length is this much of its longest style (the others slow down to it, the shortest sways first).
+    static let groupFill: Float = 0.9
+    static let sideRoll: Float = 0.95
+    static let springApex: Float = 0.5, hopApex: Float = 0.3
     /// Forced styles for the captures / tests (DEBUG launch arguments -WakeGetUp n, -WakeFlourish n; nil = the draw).
     nonisolated(unsafe) static var forceUp: GetUp?
     nonisolated(unsafe) static var forceFlo: WakeFlourish?
@@ -79,12 +83,12 @@ enum WakeTuning {
         case .signature: return feature == .wings ? wingsLen : (feature == .spines ? thumpLen : sunLen)
         }
     }
-    /// The shared length of a group: from the styles' own lengths.
+    /// The shared length of a group: most of its longest style.
     static func sharedLen(_ lens: [Float]) -> Float {
-        guard let lo = lens.min(), let hi = lens.max() else { return 0 }
-        return max((lo * hi).squareRoot(), hi / groupSpan)
+        guard let hi = lens.max() else { return 0 }
+        return hi * groupFill
     }
-    /// A get-up's timing: when it lands, its time-warp, and the seconds of stir on his back before it starts.
+    /// A get-up's timing: when it lands, its time-warp, and the seconds of its own lead-in sway before it starts.
     static func upTiming(_ plan: WakePlan) -> (end: Float, scale: Float, lead: Float) {
         let nat = upLen(plan.up)
         guard plan.upLen > 0 else { return (nat, 1, 0) }
@@ -97,10 +101,15 @@ enum WakeTuning {
         return (plan.floLen, max(floRange.lowerBound, min(floRange.upperBound, plan.floLen / nat)))
     }
 
-    /// The get-up curve at natural time `lt` (seconds of the style's own length; negative = still stirring).
+    /// The get-up curve at natural time `lt` (seconds of the style's own length; negative = still in the lead-in sway).
     static func getUp(_ up: GetUp, lt: Float, side: Float) -> WakeLie {
         var w = WakeLie()
-        let lt = max(lt, 0)
+        if lt < 0 {
+            // the lead-in: a slow sway away from the neighbour and back, eyes beginning to open (every style fills a group's extra time with this)
+            let u = -lt
+            w.yRoll = side * 0.32 * (0.5 - 0.5 * cosf(2 * .pi * 0.9 * u))
+            return w
+        }
         switch up {
         case .pop:
             // ease-out: the roll-up pops up fast, then settles onto his feet; a taller body for a beat as he comes up
@@ -108,52 +117,61 @@ enum WakeTuning {
             w.k = (1 - x) * (1 - x)
             if x > 0.5 { w.sq = 1 + 0.07 * sinf(.pi * min((x - 0.5) / 0.5, 1)) }
         case .rock:
-            // two rocks back and forth (k dips to 0.85, then 0.7, back to 1 each time, a small side tilt with them), the third swing carries him all the way up
-            if lt < 0.4 {
-                let d = sinf(.pi * lt / 0.4)
-                w.k = 1 - 0.15 * d; w.yRoll = side * 0.10 * d
-            } else if lt < 0.85 {
-                let d = sinf(.pi * (lt - 0.4) / 0.45)
-                w.k = 1 - 0.30 * d; w.yRoll = side * 0.16 * d
+            // three clear rocks from side to side on his back (away from the neighbour the most, the toward-side only a little), each one bigger, then the last swing carries him up
+            let rocks: [(a: Float, b: Float, away: Float, toward: Float, dip: Float)] = [(0, 0.45, 0.75, 0, 0.15), (0.45, 0.9, 0, 0.5, 0.22), (0.9, 1.35, 1.0, 0, 0.30)]
+            if lt < 1.35 {
+                for r in rocks where lt >= r.a && lt < r.b {
+                    let d = sinf(.pi * (lt - r.a) / (r.b - r.a))
+                    w.yRoll = side * (r.away - r.toward) * d; w.k = 1 - r.dip * d
+                    w.zRoll = 0.10 * d * (r.away > 0 ? 1 : -1)
+                }
             } else {
-                let x = min((lt - 0.85) / (rockLen - 0.85), 1)
-                w.k = 1 - (0.65 * smooth01(x) + 0.35 * (1 - (1 - x) * (1 - x)))
-                w.yRoll = side * 0.08 * sinf(.pi * x)
-                if x > 0.45 { w.sq = 1 + 0.06 * sinf(.pi * min((x - 0.45) / 0.55, 1)) }
+                let x = min((lt - 1.35) / (rockLen - 1.35), 1)
+                w.k = 1 - (0.6 * smooth01(x) + 0.4 * (1 - (1 - x) * (1 - x)))
+                w.yRoll = side * 0.15 * sinf(.pi * x)
+                if x > 0.45 { w.sq = 1 + 0.08 * sinf(.pi * min((x - 0.45) / 0.55, 1)) }
             }
         case .side:
             // onto his side (away from a neighbour), a beat, then pushes up
-            let e = smooth01(lt / 0.5)
-            if lt < 0.62 {
+            let e = smooth01(lt / 0.6)
+            if lt < 0.75 {
                 w.k = 1 - 0.4 * e; w.yRoll = side * sideRoll * e
             } else {
-                let u = min((lt - 0.62) / (sideLen - 0.62), 1)
+                let u = min((lt - 0.75) / (sideLen - 0.75), 1)
                 w.k = 0.6 * (1 - u) * (1 - u)
                 w.yRoll = side * sideRoll * (1 - smooth01(u))
-                if u > 0.5 { w.sq = 1 + 0.04 * sinf(.pi * min((u - 0.5) / 0.5, 1)) }
+                if u > 0.5 { w.sq = 1 + 0.05 * sinf(.pi * min((u - 0.5) / 0.5, 1)) }
             }
         case .sit:
-            // up to a sleepy sit-up: a slow nod and one slow blink there, then the rest of the way up
-            if lt < 0.7 {
-                w.k = 1 - 0.55 * smooth01(lt / 0.7)
-            } else if lt < 1.5 {
-                w.k = 0.45
-                let h = lt - 0.7
-                w.pitch = 0.07 * sinf(.pi * h / 0.8) - 0.03 * sinf(.pi * h / 0.4)
-                if lt > 1.0 && lt < 1.4 { w.eyeMul = 1 - 0.8 * sinf(.pi * (lt - 1.0) / 0.4) }
+            // up to a slumped sit-up: a deep sleepy nod, a slow sway side to side and one slow blink there, then the rest of the way up
+            let kp: Float = 0.5
+            if lt < 0.6 {
+                w.k = 1 - (1 - kp) * smooth01(lt / 0.6)
+                w.sq = 1 - 0.12 * smooth01(lt / 0.6)
+            } else if lt < 1.75 {
+                w.k = kp
+                let h = lt - 0.6, env = sinf(.pi * h / 1.15)
+                w.pitch = 0.42 * env                                 // chin down
+                w.zRoll = 0.40 * sinf(2 * .pi * h / 0.95) * env      // nodding off to one side and the other
+                w.sq = 0.88
+                if lt > 1.0 && lt < 1.5 { w.eyeMul = 1 - 0.85 * sinf(.pi * (lt - 1.0) / 0.5) }
             } else {
-                w.k = 0.45 * (1 - smooth01((lt - 1.5) / (sitLen - 1.5)))
+                let u = (lt - 1.75) / (sitLen - 1.75)
+                w.k = kp * (1 - smooth01(u))
+                w.sq = 0.88 + 0.12 * smooth01(u)
             }
         case .spring:
-            // a quick squash on his back, then he launches: upright in about 0.3 s, a small hop (apex ~0.22), down onto his feet at the end
-            if lt < 0.45 {
-                w.sq = 1 - 0.15 * smooth01(lt / 0.35)
+            // a visible crouch on his back (squashed to 0.78, trembling), then he launches: upright in about 0.3 s, a hop of half a body, down onto his feet at the end
+            if lt < 0.6 {
+                let c = smooth01(lt / 0.45)
+                w.sq = 1 - 0.22 * c
+                w.yRoll = 0.07 * side * c * sinf(2 * .pi * 6 * lt) * (1 - smooth01((lt - 0.45) / 0.15))       // (the tremble before the launch)
             } else {
-                let u = min((lt - 0.45) / (springLen - 0.45), 1)
-                let v = min(u / 0.67, 1)
+                let u = min((lt - 0.6) / (springLen - 0.6), 1)
+                let v = min(u / 0.45, 1)
                 w.k = (1 - v) * (1 - v)
                 w.lift = springApex * 4 * u * (1 - u)
-                w.sq = (1 - 0.15 * (1 - smooth01(u / 0.3))) + 0.05 * sinf(.pi * u) * smooth01(u / 0.3)
+                w.sq = (0.78 + 0.22 * smooth01(u / 0.2)) + 0.07 * sinf(.pi * u) * smooth01(u / 0.3)
             }
         }
         return w
@@ -163,10 +181,10 @@ enum WakeTuning {
     static func landing(_ up: GetUp) -> (dip: Float, kick: Float) {
         switch up {
         case .pop: return (0, SleepTuning.wakeKick)
-        case .rock: return (0.10, 2.0)
-        case .side: return (0.08, 1.4)
+        case .rock: return (0.12, 2.2)
+        case .side: return (0.10, 1.6)
         case .sit: return (0, 1.0)
-        case .spring: return (0.14, 2.4)
+        case .spring: return (0.2, 3.0)
         }
     }
 }
@@ -264,10 +282,10 @@ extension BlobBrain {
     /// or a draw of his own.
     func wakePlanBegin(plain: Bool) {
         if !sleep.plan.chosen {
-            if plain { sleep.plan = WakePlan(); sleep.plan.chosen = true } else { sleep.plan = chooseWakePlan(groggy: sleep.groggy) }
+            if plain { sleep.plan = WakePlan(); sleep.plan.chosen = true; sleep.plan.plain = true } else { sleep.plan = chooseWakePlan(groggy: sleep.groggy) }
         }
         wakeLast = WakePair(up: sleep.plan.up, flo: sleep.plan.flo)
-        sleep.x = WakeLie()
+        sleep.x = WakeLie(); sleep.maskOff = false
         #if DEBUG
         NSLog("[wake] brain %d: %@ / %@ (group length %.2f / %.2f)", steerID, "\(sleep.plan.up)", "\(sleep.plan.flo)", sleep.plan.upLen, sleep.plan.floLen)
         #endif
@@ -283,24 +301,24 @@ extension BlobBrain {
     /// True while the happy hops own the body (sleepBodyTick drives them, like the get-up).
     var wakeBodyOn: Bool { idleState.kind == .sleep && sleep.stage == 5 && sleep.plan.flo == .bounce && !sleep.bounceDone }
 
-    /// The wet-dog shake (the same numbers as `runShake`) at natural time `t`.
+    /// The wet-dog shake, bigger than the idle one so it reads from the room camera: a deep crouch, then a wiggle of the whole body (a wide twist, a side tilt, a pulsing squash), a big shiver out.
     private func wakeShakePose(_ t: Float) {
         if idleState.phase == 0 {
             idleState.phase = 1
             AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
-            face(.joyArc, hold: 1.3)
+            face(.joyArc, hold: 1.4)
         }
-        let crouch = smooth01(t / 0.15) * (1 - smooth01((t - 1.1) / 0.2))
-        squash *= 1 - 0.06 * crouch
-        if t > 0.15 {
-            let s = t - 0.15
-            let env = max(0, sinf(.pi * min(1.0, s)))
-            twist = 0.26 * env * sinf(2 * .pi * 7.5 * s)
-            roll += 0.05 * env * sinf(2 * .pi * 7.5 * s + 0.6)
-            squash *= 1 - 0.05 * env * (0.5 - 0.5 * cosf(2 * .pi * 15 * s))
+        let crouch = smooth01(t / 0.18) * (1 - smooth01((t - 1.2) / 0.2))
+        squash *= 1 - 0.10 * crouch
+        if t > 0.18 {
+            let s = t - 0.18
+            let env = max(0, sinf(.pi * min(1.0, s / 1.0)))
+            twist = 0.58 * env * sinf(2 * .pi * 5.5 * s)
+            roll += 0.15 * env * sinf(2 * .pi * 5.5 * s + 0.9)
+            squash *= 1 - 0.09 * env * (0.5 - 0.5 * cosf(2 * .pi * 11 * s))
         }
         armWalkWant = 1
-        if idleState.phase == 1, t > 1.15 { idleState.phase = 2; jellyKick = max(jellyKick, 2.4) }
+        if idleState.phase == 1, t > 1.2 { idleState.phase = 2; jellyKick = max(jellyKick, 3.0) }
     }
 
     /// Two slow blinks, left then right, then a small smile.
@@ -310,8 +328,9 @@ extension BlobBrain {
         let eyes = (1 - droop) * (1 - 0.93 * max(blink(0.2, 0.65), blink(0.8, 1.2)))
         let left = smooth01((t - 1.05) / 0.3) * (1 - smooth01((t - 1.45) / 0.3))
         let right = smooth01((t - 1.6) / 0.3) * (1 - smooth01((t - 2.05) / 0.3))
-        twist = 0.5 * (right - left)
-        pitch += 0.02 * (left + right)
+        twist = 0.85 * (right - left)
+        pitch += 0.10 * (left + right)
+        roll += 0.07 * (right - left)
         armWalkWant = 1
         if t > 1.95 {
             if idleState.phase == 0 { idleState.phase = 1; sleep.faceFree = true; face(.happy, hold: 1.2) }
@@ -366,8 +385,8 @@ extension BlobBrain {
             // the sun stretch: tips back with the face up, arms up, eyes closed and smiling (the daisy rides the body)
             if idleState.phase == 0 { idleState.phase = 1; face(.joyArc, hold: 1.9) }
             let env = smooth01(t / 0.5) * (1 - smooth01((t - 1.3) / 0.5))
-            pitch -= 0.30 * env
-            squash *= 1 + 0.10 * env
+            pitch -= 0.45 * env
+            squash *= 1 + 0.20 * env
             armWalkWant = 1
             armDirW = env
             armDirEl = [0.95, 0.95]; armDirSa = [0.12, 0.12]; armDirOut = 0.07
@@ -378,12 +397,12 @@ extension BlobBrain {
     func wakeBounceX(_ t: Float) -> WakeLie {
         var w = WakeLie()
         func hop(_ a: Float, _ b: Float) -> Float { t > a && t < b ? sinf(.pi * (t - a) / (b - a)) : 0 }
-        w.lift = WakeTuning.hopApex * (hop(0.2, 0.6) + hop(0.7, 1.1))
-        let crouch = smooth01(t / 0.15) * (1 - smooth01((t - 0.2) / 0.06)) + smooth01((t - 0.6) / 0.05) * (1 - smooth01((t - 0.7) / 0.06))
-        let air = hop(0.2, 0.6) + hop(0.7, 1.1)
+        w.lift = WakeTuning.hopApex * (hop(0.25, 0.7) + hop(0.8, 1.25))
+        let crouch = smooth01(t / 0.2) * (1 - smooth01((t - 0.25) / 0.06)) + smooth01((t - 0.7) / 0.05) * (1 - smooth01((t - 0.8) / 0.06))
+        let air = hop(0.25, 0.7) + hop(0.8, 1.25)
         var dip: Float = 0
-        for land in [Float(0.6), 1.1] where t >= land { dip = max(dip, expf(-(t - land) / 0.08)) }
-        w.sq = 1 - 0.07 * crouch + 0.04 * air - 0.08 * dip
+        for land in [Float(0.7), 1.25] where t >= land { dip = max(dip, expf(-(t - land) / 0.1)) }
+        w.sq = 1 - 0.14 * crouch + 0.07 * air - 0.14 * dip
         return w
     }
 
@@ -399,9 +418,9 @@ extension BlobBrain {
         }
         let prev = sleep.wakeHopT
         func crossed(_ x: Float) -> Bool { prev < x && t >= x }
-        if crossed(0.2) || crossed(0.7) { AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.4) }
-        if crossed(0.6) { jellyKick = max(jellyKick, 1.2); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.4) }
-        if crossed(1.1) { jellyKick = max(jellyKick, 1.4); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.5) }
+        if crossed(0.25) || crossed(0.8) { AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.4) }
+        if crossed(0.7) { jellyKick = max(jellyKick, 1.2); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.4) }
+        if crossed(1.25) { jellyKick = max(jellyKick, 1.4); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.5) }
         sleep.wakeHopT = t
         sleep.x = wakeBounceX(t)
         return true

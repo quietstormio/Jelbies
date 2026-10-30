@@ -2,7 +2,7 @@
 //  SleepSnuggleTests.swift
 //  Snuggling (BlobBrain+Sleep.swift): an awake Jelly sometimes comes to lie beside one who is already asleep (any time of day, with a cooldown),
 //  never inside him, sometimes with a sleepy hand-hold (the nearest arm nubs reach out a little and touch, capped and attached, released when either
-//  wakes) or turned toward him (cuddle), breathing together; never in a race.
+//  wakes) or turned toward him (cuddle), breathing at their own pace (not in unison); never in a race.
 //
 
 import XCTest
@@ -135,24 +135,24 @@ final class SleepSnuggleTests: XCTestCase {
         w.check("joiner snuggling"); w2.check("first sleeper holding hands")
     }
 
-    func testCuddleTurnsTowardTheOtherAndTheyBreatheTogether() {
+    func testCuddleTurnsTowardTheOtherAndTheyBreatheOutOfStep() {
         SleepTuning.holdChance = 0; SleepTuning.cuddleChance = 1
         let l = sleeperLab()
         let s = l.rigs[0], j = l.rigs[1]
         j.brain.idleForced = true
         XCTAssertTrue(j.brain.idleStart(.sleep, j.sim))
         XCTAssertEqual(j.brain.sleep.mode, .cuddle)
-        var maxLean: Float = 0, syncDiff: Float = 0, n = 0
+        var maxLean: Float = 0, apart: Float = 0, n = 0
         for _ in 0..<(60 * 40) {
             tick(l)
             maxLean = max(maxLean, j.brain.sleep.leanW)
             if j.brain.isNapping && s.brain.isNapping && j.brain.sleep.t > 3 {
-                syncDiff = max(syncDiff, abs(j.brain.sleep.breath - s.brain.sleep.breath)); n += 1
+                apart = max(apart, abs(j.brain.sleep.breathSq - s.brain.sleep.breathSq)); n += 1
             }
             if n > 300 { break }
         }
         XCTAssertGreaterThan(maxLean, 0.99, "leans in")
-        XCTAssertLessThan(syncDiff, 0.05, "they breathe together")
+        XCTAssertGreaterThan(apart, 0.004, "they do not breathe in unison (2026-10-30)")
         XCTAssertEqual(j.brain.sleep.holdW, 0, accuracy: 0.001, "a cuddle is not a hold")
         XCTAssertGreaterThan(simd_distance(j.brain.position, s.brain.position), SleepTuning.minGap - 0.02)
     }

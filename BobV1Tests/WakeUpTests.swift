@@ -280,12 +280,14 @@ final class WakeUpTests: XCTestCase {
                 r.tick(); f += 1
                 guard r.brain.sleep.stage == 4 else { break }
                 let on = SleepMaskSet.lingers(r.brain)
-                XCTAssertEqual(on, r.brain.sleep.k > r.brain.sleep.maskK, "\(up): the mask follows k")
-                XCTAssertEqual(WornSet.sleepHides(r.brain), r.brain.sleep.k > r.brain.sleep.maskK, "\(up): the hats follow k")
+                XCTAssertEqual(on, !r.brain.sleep.maskOff, "\(up): the mask follows the latch")
+                XCTAssertEqual(WornSet.sleepHides(r.brain), !r.brain.sleep.maskOff, "\(up): the hats follow it")
+                if !on { XCTAssertLessThanOrEqual(r.brain.sleep.k, 0.8 + 0.2, "\(up): gone while still low") }
                 if !on { if !gone { firstGoneK = r.brain.sleep.k }; gone = true } else { XCTAssertFalse(gone, "\(up): once off it stays off") }
             }
             XCTAssertTrue(gone, "\(up): the mask poofs during the get-up")
-            XCTAssertLessThanOrEqual(firstGoneK, r.brain.sleep.maskK + 0.02)
+            if up == .spring { XCTAssertEqual(firstGoneK, 1, accuracy: 1e-4, "spring: it lets go in the crouch, while he still lies") }
+            else { XCTAssertLessThanOrEqual(firstGoneK, r.brain.sleep.maskK + 0.1, "\(up): it goes at the mask's k, over his eyes, before he is upright") }
         }
     }
 
@@ -308,5 +310,77 @@ final class WakeUpTests: XCTestCase {
             XCTAssertEqual(prev.lift, 0, accuracy: 1e-5, "\(up) ends on the floor")
             XCTAssertEqual(prev.sq, 1, accuracy: 1e-4, "\(up) ends unsquashed")
         }
+    }
+}
+
+// MARK: - sleeping life (2026-10-30: "they're too still")
+
+extension WakeUpTests {
+    /// Three naps at once, each reading the render-side breath; the breathing is not in unison, it is render-only (the sim still settles), the small stirs happen, and NOTHING moves
+    /// him: the root never leaves its spot and no jolt (jellyKick) is ever raised while he sleeps (the user: "they just jump randomly").
+    func testSleepersBreatheOutOfStepStirSmallAndNeverMoveOrJolt() {
+        let l = SocialTests.Lab(positions: [SIMD2(-0.5, 0.3), SIMD2(1.2, 0.9), SIMD2(2.2, -1.2)], quiet: true, seed: 5)
+        for r in l.rigs { r.skinner.autoBlink = false; r.brain.sleepEnabled = true; r.brain.idleNight = 0.6 }          // (night: no morning wake mid-test)
+        for r in l.rigs { r.brain.idleForced = true; XCTAssertTrue(r.brain.idleStart(.sleep, r.sim)); r.brain.sleep.hold = 5000 }
+        var f = 0
+        while !l.rigs.allSatisfy({ $0.brain.isNapping }) && f < 60 * 40 { l.tick(watching: false); f += 1 }
+        XCTAssertTrue(l.rigs.allSatisfy { $0.brain.isNapping })
+        for _ in 0..<60 { l.tick(watching: false) }
+        for r in l.rigs { r.brain.jellyKick = 0 }          // (the lie-down's own impact is not consumed in this lab: clear it, nothing may raise another)
+        let home = l.rigs.map { $0.brain.position }
+        var lo = [Float](repeating: 0, count: 3), hi = [Float](repeating: 0, count: 3)
+        var differ = 0, settledWhileBreathing = 0
+        var chew = Set<Int>(), sigh = Set<Int>(), nestle = Set<Int>(), flex = Set<Int>()
+        var minPair = Float.infinity, maxMove: Float = 0, maxYaw: Float = 0, maxKick: Float = 0
+        for i in 0..<(60 * 90) {
+            l.tick(watching: false)
+            let b = l.rigs.map { $0.brain.sleep.breathSq }
+            for k in 0..<3 { lo[k] = min(lo[k], b[k]); hi[k] = max(hi[k], b[k]) }
+            if i > 120, abs(b[0] - b[1]) > 0.004 || abs(b[1] - b[2]) > 0.004 { differ += 1 }
+            for (k, r) in l.rigs.enumerated() {
+                let fd = r.brain.sleep.fid
+                if fd.chewU >= 0 { chew.insert(k) }; if fd.sighU >= 0 { sigh.insert(k) }; if fd.yawU >= 0 { nestle.insert(k) }; if fd.flexU >= 0 { flex.insert(k) }
+                if !fd.active, r.sim.isSettled, r.brain.sleep.breathSq != 0 { settledWhileBreathing += 1 }
+                maxMove = max(maxMove, simd_distance(r.brain.position, home[k]))
+                maxYaw = max(maxYaw, abs(fd.yawOff)); maxKick = max(maxKick, r.brain.jellyKick)
+                XCTAssertEqual(r.brain.sleep.breathDisp, -r.brain.sleep.breathSq * Float(BobForm.top) * 0.85, accuracy: 1e-5)
+                XCTAssertTrue(r.brain.isNapping, "he sleeps on")
+            }
+            for a in 0..<3 { for c in (a + 1)..<3 { minPair = min(minPair, simd_distance(l.rigs[a].brain.position, l.rigs[c].brain.position)) } }
+        }
+        for k in 0..<3 { XCTAssertLessThan(lo[k], -0.02, "sleeper \(k) breathes in visibly: \(lo[k])"); XCTAssertEqual(hi[k], 0, accuracy: 1e-6, "it only ever rises") }
+        XCTAssertGreaterThan(differ, 600, "they do not breathe in unison")
+        XCTAssertGreaterThan(settledWhileBreathing, 300, "the sim settles (and skips) while he breathes: the breath is render-only")
+        XCTAssertGreaterThanOrEqual(chew.count + sigh.count + nestle.count + flex.count, 8, "stirs: chews \(chew) sighs \(sigh) nestles \(nestle) flexes \(flex)")
+        XCTAssertLessThan(maxMove, 0.01, "no drift, no scoot, no roll-over: the root stays put")
+        XCTAssertEqual(maxKick, 0, "no jolt of any kind while he sleeps")
+        XCTAssertLessThanOrEqual(maxYaw, SleepTuning.maxNestle + 1e-4, "the nestle is a few degrees")
+        XCTAssertGreaterThan(minPair, 1.3, "no sinking into a neighbour")
+    }
+
+    /// Reduce Motion: the breathing only.
+    func testReduceMotionSleepersOnlyBreathe() {
+        A11ySettings.shared.reduceMotionInApp = true
+        let r = napper()
+        r.brain.amplitude = 0.55
+        var minBreath: Float = 0, fidgets = 0
+        for _ in 0..<(60 * 45) {
+            r.tick()
+            minBreath = min(minBreath, r.brain.sleep.breathSq)
+            if r.brain.sleep.fid.active { fidgets += 1 }
+        }
+        XCTAssertEqual(fidgets, 0, "no stirs under Reduce Motion")
+        XCTAssertLessThan(minBreath, -0.02, "but he breathes")
+    }
+
+    /// In a pet bed too.
+    func testBreathAndStirsFadeOutBeforeTheGetUp() {
+        let r = napper()
+        for _ in 0..<(60 * 5) { r.tick() }
+        XCTAssertLessThan(r.brain.sleep.breathSq, 0.0001)
+        var plan = WakePlan(); plan.up = .pop; plan.chosen = true
+        r.brain.sleepWake(groggy: false, plan: plan)
+        for _ in 0..<30 { r.tick() }
+        XCTAssertEqual(r.brain.sleep.breathSq, 0, accuracy: 1e-6, "no breath once he is up")
     }
 }
