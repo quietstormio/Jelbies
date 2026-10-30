@@ -236,7 +236,7 @@ extension BlobBrain {
     }
     private func clearOfMate(_ q: SIMD2<Float>, from p: SIMD2<Float>) -> SIMD2<Float> {
         guard let m = volley.mate else { return q }
-        return VolleyTuning.clearOfMate(q, from: p, mate: m, lane: volley.side)
+        return VolleyTuning.clearOfMate(q, from: p, mate: m, lane: -volley.side)
     }
     /// Keeps a body's centre on its own side of the net with a margin (the body is ~1.1 wide).
     private func ownSide(_ x: Float) -> Float { volley.side > 0 ? min(x, -VolleyTuning.netMargin) : max(x, VolleyTuning.netMargin) }
