@@ -197,7 +197,7 @@ final class MelonRenderer {
     var lastGPUMs: Double { gpuTimes.lastMs }
     private var frameOwned = false
 
-    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int, game: Bool = false, bodyCount: Int = 1) {
+    init?(device: MTLDevice, colorPixelFormat: MTLPixelFormat, mesh: RenderMesh, simEdges: [UInt32], particleCount: Int, game: Bool = false, bodyCount: Int = 1, shadowSizeOverride: Int? = nil) {
         guard MemoryLayout<MelonUniforms>.size == 544, MemoryLayout<MelonUniforms>.stride == 544 else {
             print("MelonRenderer: MelonUniforms layout is \(MemoryLayout<MelonUniforms>.size) bytes, expected 544")
             return nil
@@ -218,7 +218,7 @@ final class MelonRenderer {
         self.vertexCount = nV
 
         // ── buffers ──
-        shadowSize = bodyCount > 1 ? 2048 : 1024          // the shadow box covers the whole arena with several Jellies: keep the texel size near the single-body one
+        shadowSize = shadowSizeOverride ?? (bodyCount > 1 ? 2048 : 1024)          // the shadow box covers the whole arena with several Jellies: keep the texel size near the single-body one
 
         var st = [Float](repeating: 0, count: nV * 4)
         for i in 0..<nV {

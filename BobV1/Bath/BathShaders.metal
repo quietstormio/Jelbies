@@ -116,6 +116,15 @@ static float bSootAt(constant BathParams& bp, float3 d) {
 /// One sooty wipe: an elongated, rotated, feathered streak in the face plane (p = rest x,y), its outline domain-warped by smooth noise,
 /// streaky texture stretched ALONG the wipe, a darker core that breaks into grainy speckle at the edges. 0...~1.3.
 static float bSmear(float2 p, float2 c, float ang, float len, float wid, float3 Q, float seed) {
+    // Cheap reject BEFORE the noise: the streak is exactly 0 beyond |a| = len (feathered end) and <= ~1e-11 beyond 5 widths across (~1e-11)
+    // (wid * 1.35 is the widest wobble); the domain warp moves the outline by at most 0.5 * 0.045 + 0.5 * 0.014 = 0.0295. Most pixels
+    // are outside most of the 23 streaks, so they skip the ~10 noise evaluations each (this was the whole cost of the soot).
+    {
+        float2 q0 = p - c;
+        float ca0 = cos(ang), sa0 = sin(ang);
+        float a0 = q0.x * ca0 + q0.y * sa0, b0 = -q0.x * sa0 + q0.y * ca0;
+        if (abs(a0) > len + 0.032 || abs(b0) > wid * 6.75 + 0.032) { return 0.0; }
+    }
     float2 w1 = float2(bvnoise(float3(p * 9.0, seed)), bvnoise(float3(p * 9.0 + 7.3, seed + 3.0))) - 0.5;
     float2 w2 = float2(bvnoise(float3(p * 21.0 + 2.0, seed + 5.0)), bvnoise(float3(p * 21.0 + 9.1, seed + 8.0))) - 0.5;
     float2 q = p - c + w1 * 0.045 + w2 * 0.014;
