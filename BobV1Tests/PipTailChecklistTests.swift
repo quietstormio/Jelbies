@@ -477,6 +477,46 @@ final class PipTailChecklistTests: XCTestCase {
         try write(grid(cells, cols: 5), d + "/picker.png")
     }
 
+    // MARK: 7. restyle stills (g-piptail3): one process per PIPTAIL variant, individual PNGs per view
+
+    func testTail3Stills() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let root = env["PIPTAIL3_DIR"], !root.isEmpty else { throw XCTSkip("PIPTAIL3_DIR not set") }
+        let name = PipTailVariant.active.rawValue
+        for dressed in [false, true] {
+            let outfit: Outfit = dressed ? [.head: .beaniePink, .face: .heartShades] : [:]
+            let tag = dressed ? "dressed" : "bare"
+            defer { try? PipSpikes.debug.write(toFile: "\(root)/\(name)/spikes_\(tag).txt", atomically: true, encoding: .utf8) }
+            let d = "\(root)/\(name)/\(tag)"
+            try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+            let chars = [Char(id: 1, outfit: outfit)]
+            let lab = makeLab(chars); let dr = dress(lab, chars); settle(lab, dr, chars)
+            let c = try makeCtx(sim: lab.rigs[0].sim, W: 560, H: 560)
+            let s = subj(lab, dr, chars)
+            let views: [(String, View)] = [("side", View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35)), ("back34", View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35)),
+                                           ("back", View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)), ("top", View(name: "top", yaw: 0, dist: 4.2, lookBack: 0.15, top: true)),
+                                           ("front", View(name: "front", yaw: 0, dist: 3.6, lookBack: 0.35))]
+            var memo = SIMD3<Float>(0, 0, 1)
+            for (n, v) in views { try write(render(c, s, cam: cam(v, s.sim, memo: &memo), neutral: true).uiImage()!, "\(d)/\(n).png") }
+            // the picker framing
+            let (_, fwd) = pose(s.sim, memo: &memo)
+            let fp = GameCamera.focusPose(aspect: 1, spot: GameCare.floorPos(s.brain, s.sim))
+            var v0 = fp.eye - fp.target
+            let hl = simd_length(SIMD2<Float>(v0.x, v0.z)); v0.x = fwd.x * hl; v0.z = fwd.z * hl
+            let (sy, sp, sz, spn) = (PhotoCam.yaw, PhotoCam.pitch, PhotoCam.zoom, PhotoCam.pan)
+            PhotoCam.yaw = PickerCamera.startYaw(1); PhotoCam.pitch = 0; PhotoCam.zoom = PickerCamera.startZoom; PhotoCam.pan = .zero
+            let e = PhotoCam.apply(eye: fp.target + v0, target: fp.target)
+            try write(render(c, s, cam: camera(eye: e.eye, target: e.target), neutral: true).uiImage()!, "\(d)/picker.png")
+            PhotoCam.yaw = sy; PhotoCam.pitch = sp; PhotoCam.zoom = sz; PhotoCam.pan = spn
+            // the room camera at native pixels (portrait, then landscape)
+            for (n, W, H) in [("room_portrait", 603, 1311), ("room_landscape", 1311, 603)] {
+                let rc = try makeCtx(sim: lab.rigs[0].sim, W: W, H: H)
+                try write(render(rc, s, cam: GameCamera.camera(aspect: Float(W) / Float(H)), neutral: false).uiImage()!, "\(d)/\(n).png")
+            }
+        }
+        _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+    }
+
     // MARK: 6. closeups
 
     func testCloseups() throws {

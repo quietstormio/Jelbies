@@ -10,7 +10,28 @@
 import Foundation
 import simd
 
+/// The restyle options for Pip's tail (mockup stage). `current` is what shipped; T1 / T2 are thinner with taller, pointier spikes. Picked once per process by the DEBUG launch aid
+/// `-PipTail current|T1|T2` (or the PIPTAIL environment variable in tests); the shipped default stays `current` until the user picks.
+nonisolated enum PipTailVariant: String {
+    case current, T1, T2
+    static let active: PipTailVariant = {
+        if let s = ProcessInfo.processInfo.environment["PIPTAIL"] ?? UserDefaults.standard.string(forKey: "PipTail"), let v = PipTailVariant(rawValue: s == "T1" || s == "T2" ? s : s.lowercased()) { return v }
+        return .current
+    }()
+    /// Tail radius multiplier along the whole length (the body-width knots in TailBean.Shape.radius are scaled by it; tip radius too).
+    var radiusScale: Double { switch self { case .current: return 1; case .T1: return 0.80; case .T2: return 0.72 } }
+    /// Spike height multiplier (PipSpikes), the base width multiplier, and the tip radius as a fraction of the base radius (smaller = pointier, still rounded).
+    var spikeHeightScale: Float { switch self { case .current: return 1; case .T1: return 1.5; case .T2: return 1.8 } }
+    var spikeBaseScale: Float { switch self { case .current: return 1; case .T1: return 1.1; case .T2: return 1.2 } }
+    var spikeTipSoft: Float { switch self { case .current: return 0.38; case .T1: return 0.34; case .T2: return 0.30 } }
+}
+
 nonisolated enum TailBean {
+    /// Named tail size constants (rest units / fractions of the body width) so contact spheres can follow the tail: radius knots at 0 / 40% / 75% / 100% of the visible
+    /// length (half-widths as fractions of the body width) BEFORE `radiusScale`, the scale itself, and the tip cap radius.
+    static let radiusKnots: [(Double, Double)] = [(0, 0.21), (0.4, 0.13), (0.75, 0.08), (1, 0.03)]
+    static var radiusScale: Double { PipTailVariant.active.radiusScale }
+    static var tipRadius: Double { 0.04 * radiusScale }
     static let around = 24, bodyRings = 30, capRings = 5
     static var rings: Int { bodyRings + capRings }
     static var vertexCount: Int { 2 + around * rings }
@@ -50,7 +71,7 @@ nonisolated enum TailBean {
             let u = min(t / length, 1)
             let uu = min(max((t - sink) / (length - sink), 0), 1)
             // chunky plush profile (half-widths as fractions of the body width at 0 / 40% / 75% / 100% of the visible length), smooth between the knots
-            let knots: [(Double, Double)] = [(0, 0.21), (0.4, 0.13), (0.75, 0.08), (1, 0.03)]
+            let knots = TailBean.radiusKnots
             var taper = knots[3].1 * width
             for k in 1..<knots.count where uu <= knots[k].0 {
                 let a = knots[k - 1], b = knots[k], f = (uu - a.0) / (b.0 - a.0), sm = f * f * (3 - 2 * f)
@@ -58,7 +79,7 @@ nonisolated enum TailBean {
                 break
             }
             let flare = 1 + 0.55 * exp(-(t - sink) / 0.30) * (1 - u)
-            return taper * flare
+            return taper * flare * TailBean.radiusScale
         }
         /// Cross-section frame at `t`: sideways (+x side) and the way up, both perpendicular to the centre line.
         func frame(_ t: Double) -> (side: SIMD3<Double>, up: SIMD3<Double>) {
@@ -81,8 +102,8 @@ nonisolated enum TailBean {
         var xlo = 0.0, xhi = 1.2
         for _ in 0..<50 { let m = (xlo + xhi) / 2; if BobForm.sdf(SIMD3(m, 0.55, 0)) > 0 { xhi = m } else { xlo = m } }
         let width = 2 * xlo
-        let tipR = 0.04, sink = 0.30, ys = 1.0
-        let baseR = width * 0.21                                             // about a third of the body width across
+        let tipR = TailBean.tipRadius, sink = 0.30, ys = 1.0
+        let baseR = width * radiusKnots[0].1 * radiusScale                                             // about a third of the body width across
         let vis = 0.74 * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004

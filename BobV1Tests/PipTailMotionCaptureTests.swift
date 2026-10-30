@@ -254,6 +254,9 @@ final class PipTailMotionCaptureTests: XCTestCase {
             Scenario(name: "chase", seconds: 5.5, start: idle("tail"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 12),
             Scenario(name: "thump", cams: [.game, .close, .side], seconds: 6.0, start: idle("tailThump"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 12),
             Scenario(name: "hug", cams: [.game, .close, .top, .side], seconds: 7.0, start: idle("tailHug"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 12),
+            Scenario(name: "sit", warm: 0.2, seconds: 3.0, start: idle("sit")),
+            Scenario(name: "asleep", warm: 0.2, seconds: 3.5, start: { s in let b = s.rig.brain; b.idleForced = true; XCTAssertTrue(b.idleStart(.sleep, s.rig.sim)); b.sleep.hold = 500 }),
+            Scenario(name: "cartwheel", warm: 0.0, seconds: 3.0, start: idle("cartwheel")),
             Scenario(name: "hugwear", cams: [.close], seconds: 7.0, outfit: [.neck: .scarfCosy, .body: .backpackSky], start: idle("tailHug"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 8),
         ]
     }
@@ -266,7 +269,7 @@ final class PipTailMotionCaptureTests: XCTestCase {
         let ctxGame = try makeCtx(sim: first.rig.sim, W: GW, H: GH)
         var summary = ""
         for sc in scenarios() where wanted(sc.name) {
-            let s = makeSetup(outfit: sc.outfit, id: sc.id)
+            let s = makeSetup(outfit: ProcessInfo.processInfo.environment["TAILMOTION_USER_OUTFIT"] != nil ? [.head: .beaniePink, .face: .heartShades] : sc.outfit, id: sc.id)
             sc.start(s)
             var st = Stats()
             var memo = SIMD3<Float>(0, 0, 1)
