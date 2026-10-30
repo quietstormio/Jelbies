@@ -4,7 +4,7 @@
 //    StudioScreen      the stage card with the Jelbie and his slot chips, the Show-ready bars, Dress up / Practise dance / Enter Jelly Show.
 //    ConditionScreen   the "Jelly Jars": five jars of stat-coloured jelly with numbers, a gold next-rank line, a +1 droplet on jars that just
 //                      grew, the Glow pill with a Bath button, Food diary and Trophies as row buttons, "See today's Jelly Show".
-//    ShowLobby         today's theme poster and tomorrow's teaser, the rank picker with locks, the three rivals, the prizes, the Ready check, Start show.
+//    ShowLobby         (ShowLobby.swift) today's theme poster, the rank carousel, the Entrant card, Dress up / Start show.
 //  Plus the shared pieces: the Jelbie portrait, the stat chip, the wardrobe sheet (owned wearables, tap to wear), the dance picker.
 //  Everything lays out both ways: portrait stacks, a phone on its side puts the stage / poster beside the cards.
 //
@@ -67,9 +67,11 @@ struct JelbiePortrait: View {
     /// The lobby avatar: the body alone (no room) framed on the head, over a light backdrop; `friend` draws that Park visitor on this body instead.
     var head = false
     var friend: ParkVisitor? = nil
+    /// A Show rival drawn as the stage draws her: this body in her pastel colour, no wear, no feature.
+    var rival: ShowRival? = nil
     @State private var image: UIImage?
     @State private var tried = false
-    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear) }
+    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name) }
     var body: some View {
         ZStack {
             Circle().fill(head ? SK.tile : ShowUI.platform)
@@ -80,9 +82,9 @@ struct JelbiePortrait: View {
         .frame(width: size, height: size)
         .overlay { if let r = outerRing { Circle().stroke(border, lineWidth: r).padding(-r / 2) } else { Circle().strokeBorder(border, lineWidth: 4) } }
         .shadow(color: outerRing == nil ? .black.opacity(0.25) : SK.ink.opacity(0.18), radius: outerRing == nil ? 8 : 3, y: outerRing == nil ? 4 : 2)
-        .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
+        .accessibilityLabel(rival.map { "\($0.name), \($0.persona.title)" } ?? friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
         .accessibilityIdentifier("jelbie-portrait")
-        .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") {
+        .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)-\(rival?.name ?? "")") {
             image = nil; tried = false
             try? await Task.sleep(nanoseconds: 350_000_000)
             for _ in 0..<40 {
@@ -795,178 +797,4 @@ struct TrophiesSheet: View {
     }
 }
 
-// MARK: - the Show lobby
-
-struct ShowLobby: View {
-    let care: GameCare
-    @Binding var who: Int
-    var back: () -> Void
-    var card: () -> Void
-    var start: (ShowRank) -> Void
-    @Environment(\.verticalSizeClass) private var vsc
-    private var compact: Bool { vsc == .compact }
-    private var day: Int { GameCare.showDay }
-    private var theme: ShowTheme { ShowSchedule.theme(dayKey: day) }
-    private var tomorrow: ShowTheme { ShowSchedule.tomorrow(dayKey: day) }
-    private var rank: ShowRank { care.show.progress.chosen }
-    private var rivals: [ShowRival] { ShowRivalSource.rivals(dayKey: day, rank: rank, theme: theme, firstShow: care.show.progress.firstShowEver) }
-
-    var body: some View {
-        VStack(spacing: compact ? 8 : 12) {
-            ShowHeader(title: "Jelly Show", backID: "show-back", back: back) {
-                Button { AudioHub.shared.uiTap(); card() } label: {
-                    Text("\(care.jelly(who)?.name ?? "Bob")'s card").font(SK.font(15, .black)).foregroundStyle(SK.ink).padding(.horizontal, 16).frame(height: 44).background(Capsule().fill(SK.cream))
-                }.buttonStyle(.plain).accessibilityIdentifier("show-card")
-            }
-            if compact {
-                HStack(alignment: .top, spacing: 12) {
-                    ScrollView { VStack(spacing: 10) { poster; ranks }.padding(.bottom, 8) }.scrollBounceBehavior(.basedOnSize)
-                    ScrollView { VStack(spacing: 10) { today; ready; startButton }.padding(.bottom, 8) }.scrollBounceBehavior(.basedOnSize)
-                }
-            } else {
-                ScrollView {
-                    VStack(spacing: 12) { poster; ranks; today; ready }
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                startButton
-            }
-        }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-        .background(ShowUI.hall.ignoresSafeArea())
-        .accessibilityIdentifier("show-lobby")
-    }
-
-    /// Today's theme poster and tomorrow's teaser.
-    private var poster: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                StageBackdrop().opacity(0.9)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TODAY'S THEME").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
-                    Text(theme.title).font(SK.font(24, .black)).foregroundStyle(ShowUI.light).jLine(2, scale: 0.7)
-                    HStack(spacing: 6) { TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ") }
-                    Text("\(theme.main.title) counts most").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(minHeight: 150).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .accessibilityElement(children: .combine).accessibilityIdentifier("show-theme")
-            VStack(alignment: .leading, spacing: 4) {
-                Text("TOMORROW").font(SK.font(11, .black)).foregroundStyle(ShowUI.lilacPale).tracking(0.5)
-                Text(tomorrow.title).font(SK.font(17, .black)).foregroundStyle(SK.cream).jLine(2, scale: 0.7)
-                Text("\(tomorrow.main.title) + \(tomorrow.friend.title)").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB58BDB))
-                Text("Get ready: feed and dress").font(SK.font(11, .bold)).foregroundStyle(ShowUI.lilacPale)
-            }
-            .padding(12).frame(width: 118).frame(minHeight: 150, alignment: .leading)
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(ShowUI.lilac, style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
-            .accessibilityElement(children: .combine).accessibilityIdentifier("show-tomorrow")
-        }
-    }
-
-    /// The rank picker: four tiles, the cleared ones with their cup, the picked one gold, the locked ones with a padlock.
-    private var ranks: some View {
-        let prog = care.show.progress
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Pick a rank").font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Text(prog.requirement(rank.above ?? .ocean) ?? "Every rank is open").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).jLine(1, scale: 0.7)
-            }
-            HStack(spacing: 6) {
-                ForEach(ShowRank.allCases, id: \.rawValue) { r in
-                    let open = prog.unlocked(r), picked = r == rank, cup = prog.trophies(character: care.jelly(who)?.character ?? who).cup(r)
-                    Button { if open { AudioHub.shared.uiTap(); care.chooseShowRank(r) } else { AudioHub.shared.play(.notEnough) } } label: {
-                        VStack(spacing: 1) {
-                            Image(systemName: open ? (cup != nil ? "trophy.fill" : "drop.fill") : "lock.fill").font(.system(size: 18, weight: .black))
-                                .foregroundStyle(open ? (cup == 1 ? ShowUI.goldDeep : cup == 2 ? Color(hex: 0x9AA3B2) : cup == 3 ? Color(hex: 0xC98B55) : SK.sky) : Color(hex: 0x7C6A93))
-                            Text(r.title).font(SK.font(14, .black))
-                            Text(picked ? "Selected" : open ? (cup.map { "\($0 == 1 ? "Gold" : $0 == 2 ? "Silver" : "Bronze") cup" } ?? "Open") : "Locked").font(SK.font(11, .heavy)).opacity(0.8)
-                        }
-                        .foregroundStyle(open ? (picked ? SK.ink : Color(hex: 0x2E6B26)) : Color(hex: 0x7C6A93))
-                        .frame(maxWidth: .infinity, minHeight: 76)
-                        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(picked ? ShowUI.gold : open ? Color(hex: 0xE3F4DD) : Color(hex: 0xE9E1F0)))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(picked ? ShowUI.goldDeep : open ? SK.mint : Color(hex: 0xC9BBD9), lineWidth: 3))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(r.title) rank, \(picked ? "selected" : open ? "open" : "locked")").accessibilityIdentifier("rank-\(r.rawValue)").accessibilityAddTraits(picked ? .isSelected : [])
-                }
-            }
-        }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
-        .accessibilityElement(children: .contain).accessibilityIdentifier("show-ranks")
-    }
-
-    /// Today's rivals at the picked rank and the prizes.
-    private var today: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Today at \(rank.title)").font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Text("3 rivals \u{00B7} 4 Jelbies").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
-            }
-            HStack(spacing: 8) {
-                ForEach(Array(rivals.enumerated()), id: \.offset) { _, r in
-                    VStack(spacing: 1) {
-                        RivalBlob(tint: r.tint, size: 44)
-                        Text(r.name).font(SK.font(r.headliner ? 11 : 14, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.6)
-                        Text(r.persona.title).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 6).padding(.horizontal, 4)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(red: Double(r.tint.x), green: Double(r.tint.y), blue: Double(r.tint.z)).opacity(0.28)))
-                    .accessibilityElement(children: .combine).accessibilityLabel("\(r.name), \(r.persona.title)")
-                }
-            }
-            HStack(spacing: 6) {
-                ForEach(1...4, id: \.self) { p in
-                    VStack(spacing: 1) {
-                        Text(ShowUI.ordinal(p)).font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
-                        HStack(spacing: 3) { JellyCoinIcon(size: 15); Text("\(rank.drops(place: p))").font(SK.font(15, .black)).foregroundStyle(SK.ink) }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(p == 1 ? Color(hex: 0xFFE7A8) : p == 2 ? Color(hex: 0xECE8EE) : p == 3 ? Color(hex: 0xF3E1D0) : Color(hex: 0xF2ECE6)))
-                    .accessibilityElement(children: .combine).accessibilityLabel("\(ShowUI.ordinal(p)) pays \(rank.drops(place: p)) JellyCoins")
-                }
-            }
-            .accessibilityIdentifier("show-prizes")
-        }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
-        .accessibilityElement(children: .contain).accessibilityIdentifier("show-today")
-    }
-
-    /// The Ready check: an estimate of each round.
-    private var ready: some View {
-        let est = care.showEstimate(jelly: who, rank: rank, theme: theme)
-        let p = care.showPlayerInput(jelly: who)
-        let outfit = care.showOutfitTags(jelly: who)
-        let worn = rank.slotOrder.compactMap { outfit[$0] }
-        let sum = worn.reduce(0) { $0 + theme.match($1) }
-        let known = ShowTrickInfo.stageTricks.filter { p.tricks[$0] != nil }
-        let best = known.max { (p.tricks[$0] ?? 0) < (p.tricks[$1] ?? 0) }
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Ready check").font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Text("\(p.name) \u{00B7} out of 100 each").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
-            }
-            ShowBar(name: "Look", value: est.look / 100, color: SK.pink, note: "\(rank.slots) slots, \(String(format: "%g", (sum * 2).rounded() / 2)) theme match", score: est.lookPts, nameWidth: 50)
-            ShowBar(name: "Dance", value: est.dance / 100, color: Color(hex: 0xB58BDB), note: p.dance.map { "\($0.title) skill \(ShowUI.pts(p.danceSkill))%" } ?? "No dance learned", score: est.dancePts, nameWidth: 50)
-            ShowBar(name: "Trick", value: est.trick / 100, color: SK.honeyDeep, note: known.isEmpty ? "No tricks learned" : "\(known.count) known, \(best?.title.lowercased() ?? "") is \(ShowUI.pts(best.map { p.tricks[$0] ?? 0 } ?? 0))%", score: est.trickPts, nameWidth: 50)
-            HStack {
-                (Text("Estimate ").font(SK.font(14, .heavy)) + Text("about \(Int((est.total / 10).rounded()) * 10)").font(SK.font(17, .black)) + Text(" / 300").font(SK.font(14, .heavy))).foregroundStyle(SK.ink)
-                Spacer()
-                Text("\(rank.title) rivals about \(rank.rivalEstimate)").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
-            }
-            .padding(.top, 6).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xD9C9AE)).frame(height: 2) }
-            .accessibilityIdentifier("show-estimate")
-        }
-        .padding(12).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
-        .accessibilityElement(children: .contain).accessibilityIdentifier("show-ready")
-    }
-
-    private var startButton: some View {
-        VStack(spacing: 6) {
-            ShowCTA(title: "Start show", symbol: "star.fill", enabled: care.showBlocker(jelly: who) == nil, id: "show-start") { start(rank) }
-            if let why = care.showBlocker(jelly: who) { Text(why).font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale).accessibilityIdentifier("show-why") }
-        }
-    }
-}
+// (the Show lobby is in ShowLobby.swift)

@@ -537,6 +537,7 @@ struct GameScreen: View {
         if let m = d.string(forKey: "LobbySeed") {
             await sleep(2)
             let c = care.jellies.first?.character ?? 0
+            if m.contains("reset") { care.show.progress.resetAll() }
             if m.contains("reset") {          // a fresh Circuit record (a capture build keeps its saves between launches)
                 care.race.progress.records = [:]; care.race.courseTier = .puddle
                 for k in 0..<JellyRoster.names.count { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
@@ -547,6 +548,13 @@ struct GameScreen: View {
                     for sl in WearSlot.allCases { care.store.takeOff(sl, from: j.id) }
                     for l in outfits[j.name.lowercased()] ?? [] { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? ""); _ = care.store.wear(l, on: j.id) }
                 }
+            }
+            
+            if m.contains("showcup") || m.contains("showocean") {          // Show lobby: a gold cup at Puddle and a silver at Pond (Pond picked); "showocean" clears up to Lagoon and picks Ocean
+                let ranks: [ShowRank] = m.contains("showocean") ? [.puddle, .pond, .lagoon] : [.puddle, .pond]
+                let th = ShowSchedule.theme(dayKey: GameCare.showDay)
+                for (i, r) in ranks.enumerated() { care.show.progress.record(rank: r, place: i == 1 && !m.contains("showocean") ? 2 : 1, theme: th, character: c, burst: false, perfectDance: false, hatTrick: false) }
+                care.show.progress.chosen = m.contains("showocean") ? .ocean : .pond
             }
             if m.contains("wins") {
                 for t in [CourseTier.puddle, .ripple] { care.race.progress.record(tier: t, place: 1); care.race.trophies.recordRace(character: c, tier: t, place: 1) }
@@ -657,6 +665,7 @@ struct GameScreen: View {
         switch UserDefaults.standard.string(forKey: "LobbyAuto") {
         case "volley", "volleyTrain", "volleyHow": return .volley
         case "track", "trackHow": return .track
+        case "show", "showHow": return .show
         default: break
         }
         switch UserDefaults.standard.string(forKey: "StoreOpen") {

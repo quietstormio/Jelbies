@@ -113,6 +113,9 @@ final class ShowProgress {
         return a
     }
 
+    /// Capture aid (`-LobbySeed reset`): forget every show.
+    func resetAll() { saved = Saved(); save() }
+
     private func save() {
         guard persists, let d = try? JSONEncoder().encode(saved) else { return }
         defaults.set(d, forKey: storeKey)

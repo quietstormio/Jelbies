@@ -141,10 +141,11 @@ extension View {
 struct LobbyCarouselCard<Art: View>: View {
     let name: String, sub: String
     var selected = false, locked = false
+    var artH: CGFloat = 94
     let art: Art
     @ScaledMetric(relativeTo: .body) private var scaledW: CGFloat = 150
-    init(name: String, sub: String, selected: Bool = false, locked: Bool = false, @ViewBuilder art: () -> Art) {
-        self.name = name; self.sub = sub; self.selected = selected; self.locked = locked; self.art = art()
+    init(name: String, sub: String, selected: Bool = false, locked: Bool = false, artH: CGFloat = 94, @ViewBuilder art: () -> Art) {
+        self.name = name; self.sub = sub; self.selected = selected; self.locked = locked; self.artH = artH; self.art = art()
     }
     var body: some View {
         let w = min(scaledW, 230)
@@ -156,7 +157,7 @@ struct LobbyCarouselCard<Art: View>: View {
                 }
                 if locked { LobbyIcon(kind: .lock, color: SK.ink.opacity(0.5), size: 32).frame(width: 32, height: 32).background(Circle().fill(Color.white.opacity(0.92))) }
             }
-            .frame(height: (w - 16) * 94 / 134)
+            .frame(height: (w - 16) * artH / 134)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text(name).font(SK.font(15.5, .black)).foregroundStyle(locked ? SK.muted : SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.top, 7).padding(.horizontal, 2)
             Text(sub).font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 1).padding(.horizontal, 2)

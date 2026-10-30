@@ -126,10 +126,12 @@ struct SVGEl {
 /// The lobby mockups' icon set (viewBox 24).
 struct LobbyIcon: View {
     enum Kind {
-        case back, check, lock, swap, autosw, turtle, ball, run, flag, x, dotted, spike, block, ring, three, tap, trophy, feet, bend
+        case star, hanger, drop, bulb, back, check, lock, swap, autosw, turtle, ball, run, flag, x, dotted, spike, block, ring, three, tap, trophy, feet, bend
         var size: CGFloat {
             switch self {
             case .check: return 13
+            case .bulb: return 14
+            case .hanger: return 24
             case .lock: return 16
             case .swap: return 13
             case .autosw: return 19
@@ -143,6 +145,10 @@ struct LobbyIcon: View {
             func p(_ d: String, fill: SVGEl.Paint? = nil, stroke: SVGEl.Paint? = nil, w: CGFloat = 0, round: Bool = false) -> SVGEl { SVGEl(shape: .path(d), fill: fill, stroke: stroke, width: w, round: round) }
             let cur = SVGEl.Paint.current(1)
             switch self {
+            case .star: return [SVGEl(shape: .path("M12 2.8 L14.7 8.6 L21 9.3 L16.3 13.6 L17.6 19.9 L12 16.7 L6.4 19.9 L7.7 13.6 L3 9.3 L9.3 8.6 Z"), fill: cur, stroke: cur, width: 1.2, round: true)]
+            case .hanger: return [p("M12 8.2 V7.4 a2.4 2.4 0 1 1 2.4-2.4", stroke: cur, w: 2.3, round: true), p("M12 8.2 L3 15.2 a1.4 1.4 0 0 0 .9 2.5 H20.1 a1.4 1.4 0 0 0 .9-2.5 Z", stroke: cur, w: 2.3, round: true)]
+            case .drop: return [p("M12 3 C15.5 8 18 11 18 14.5 a6 6 0 0 1 -12 0 C6 11 8.5 8 12 3 Z", fill: cur), p("M9.3 14.6 a2.8 2.8 0 0 0 2.4 2.7", stroke: .white(0.7), w: 1.6, round: true)]
+            case .bulb: return [p("M12 2.5 a7 7 0 0 0 -4.2 12.6 V18 H16.2 V15.1 A7 7 0 0 0 12 2.5 Z", fill: cur), SVGEl(shape: .rect(8.6, 19.4, 6.8, 2.6, 1.3), fill: cur)]
             case .back: return [p("M15 4.5 L7.5 12 L15 19.5", stroke: cur, w: 3.4, round: true)]
             case .check: return [p("M5 12.5 L10 17.5 L19 7", stroke: .white(1), w: 4, round: true)]
             case .lock: return [SVGEl(shape: .rect(4.5, 10.5, 15, 11, 3), fill: cur), p("M8 10.8V8a4 4 0 0 1 8 0v2.8", stroke: cur, w: 2.8)]

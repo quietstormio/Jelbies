@@ -1159,7 +1159,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard W > 8, H > 8, firstFrameDone else { return nil }
         let care = model.care, a = actors[id]
         care.store.fitting = look.map { (id, $0) }
-        let visitorPalette = hp?.colour.map { JellyPalettes.park($0) }
+        let visitorPalette: Palette? = hp?.colour.map { JellyPalettes.park($0) } ?? hp?.rivalTint.map { LocalRivalSource.palette(for: $0, name: hp?.rivalName ?? "Rival") }
         if let p = visitorPalette { renderer.setPalette(p, body: id) }
         // a lobby avatar is the same picture at any hour, in any mood and after any romp: noon light, no sleep tuck, a clean body (no dirt / lint / shine, mouth shut) and the plain rest face
         let liveHour = renderer.dayHourOverride, liveTuck = renderer.tuckAmount
@@ -1183,7 +1183,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
-            w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.colour != nil ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
+            w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
             if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a)) }
         }
         renderer.setJersey(w.jersey(id), body: id)
@@ -1192,7 +1192,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         var featureMesh = RoomMesh()
         if hp != nil, let b = a.brain {
             let fs = FeatureSet(); fs.body = WearBody.shared; fs.ignoreHide = true
-            let feature: JellyFeature = hp?.colour != nil ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
+            let feature: JellyFeature = hp?.borrowed == true ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
             var worn: [String] = []
             for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
             fs.tick(id: id, brain: b, sim: a.sim, feature: feature, worn: worn, hideAll: false, dt: 1.0 / 60)
