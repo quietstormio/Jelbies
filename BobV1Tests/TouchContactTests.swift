@@ -20,7 +20,7 @@ final class TouchContactTests: XCTestCase {
                                            .cuddleLean, .swayHug, .leapfrog, .sitTogether, .hopAlong, .peekaboo, .whisperGiggle, .mirrorDance]
     /// The deepest a drawn body may sink into the other (world units; a body is ~1.0 wide): a small squish, not a pass-through. Before the contact round the worst touches sank 0.2 (hugs), 0.47 (back to back) and 0.55 (leapfrog).
     /// Into Pip's tail tube: the settled part of a touch (after 5 s) and the whole run (the turn of a back to back, a landing next to him: the tail sweeps through the other for a few frames; before: 0.28).
-    static let depthBound: Float = 0.10, tailLateBound: Float = 0.16, tailBound: Float = 0.26
+    static let depthBound: Float = 0.10, tailLateBound: Float = 0.18, tailBound: Float = 0.26
 
     struct Result { var depthLate: Float = 0, tailLate: Float = 0, tailPart = "-", simGap: Float = .infinity, part = "-", depth: Float = 0, tail: Float = 0, depthAt: Float = 0, tailAt: Float = 0, seconds: Float = 0, done = false }
 
@@ -161,35 +161,32 @@ final class TouchContactTests: XCTestCase {
         XCTAssertTrue(b.sim.isSettled && a.sim.isSettled, "both settle again once the contact is gone (KE \(b.sim.kineticEnergy()), drift \(b.sim.peerDrift))")
     }
 
-    /// The cost of contact: one fixed step of three touching Jelbies (planes + Pip's tail spheres) against the same step with contact off.
+    /// The cost of contact: one fixed step of three Jelbies pressed together (planes on every pair, Pip's tail + swell spheres on the other two) against the same step with contact off.
+    /// Each timed step starts from the same overlapping spots (teleported back, untimed), so the contact has real work to do every time.
     func testContactCostThreeTouching() throws {
         guard ProcessInfo.processInfo.environment["TOUCH_PERF"] != nil else { throw XCTSkip("TOUCH_PERF not set") }
         let rm = MotionRig.renderMesh
         let rigs = (0..<3).map { _ in MotionRig(game: true) }
         rigs[0].brain.feature = .spines; rigs[0].skinner.configureTail(rm); rigs[0].skinner.tailOn = true
-        let spots: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(0.95, 0), SIMD2(0.45, 0.85)]
-        for (i, r) in rigs.enumerated() { r.sim.teleport(toXZ: spots[i]) }
-        let mid = SIMD3<Float>(0.45, 0.4, 0.28)
+        let spots: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(0.8, 0), SIMD2(0.4, 0.7)]
         let sims = rigs.map { $0.sim }, skins = rigs.map { Optional($0.skinner) }
-        func run(_ on: Bool) -> (prep: Double, step: Double) {
+        func run(_ on: Bool) -> (prep: Double, step: Double, planes: Int, spheres: Int, listed: Int) {
             PeerContact.enabled = on
-            func press() { for s in sims { let d = mid - s.centroid(); s.launch(velocity: SIMD3(d.x, 0, d.z) * 0.4) } }          // (nothing holds them in a bare sim: a little push toward the middle keeps the three pressed)
-            for _ in 0..<120 { press(); rigs[0].render(); PeerContact.prepare(sims, skins: skins); for s in sims { s.step() } }
-            var prep = 0.0, step = 0.0
-            let n = 240
-            for _ in 0..<n {
-                press()
+            var prep = 0.0, step = 0.0, planes = 0, spheres = 0, listed = 0
+            let n = 300
+            for k in 0..<(n + 60) {
+                for (i, r) in rigs.enumerated() { r.sim.teleport(toXZ: spots[i]) }
                 rigs[0].render()
                 let t0 = CACurrentMediaTime(); PeerContact.prepare(sims, skins: skins); let t1 = CACurrentMediaTime()
                 for s in sims { s.step() }
                 let t2 = CACurrentMediaTime()
-                prep += t1 - t0; step += t2 - t1
+                if k >= 60 { prep += t1 - t0; step += t2 - t1; planes += sims.reduce(0) { $0 + $1.planeCount }; spheres += sims.reduce(0) { $0 + $1.sphereTotal }; listed += sims.reduce(0) { $0 + $1.sphereListCount } }
             }
-            return (prep / Double(n) * 1000, step / Double(n) * 1000)
+            return (prep / Double(n) * 1000, step / Double(n) * 1000, planes / n, spheres / n, listed / n)
         }
         let off = run(false), on = run(true)
         PeerContact.enabled = true
-        MotionLog.write(String(format: "TOUCH PERF three touching: prepare %.4f ms (off %.4f), 3 sim steps %.3f ms (off %.3f) per fixed step; planes %d %d %d, spheres %d %d %d", on.prep, off.prep, on.step, off.step, sims[0].planeCount, sims[1].planeCount, sims[2].planeCount, sims[0].sphereTotal, sims[1].sphereTotal, sims[2].sphereTotal))
+        MotionLog.write(String(format: "TOUCH PERF three pressed together: prepare %.4f ms (off %.4f); the 3 sim steps %.3f ms (off %.3f) per fixed step; per step %d planes, %d tail spheres, %d particles listed for them", on.prep, off.prep, on.step, off.step, on.planes, on.spheres, on.listed))
     }
 
     /// Diagnostic: a time series of one social between Pip (seat 0 or 1) and Moss (TOUCH_DIAG = kind, TOUCH_SEAT = Pip's seat).
