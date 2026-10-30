@@ -93,8 +93,6 @@ final class GameCare {
     var arranging = false
     var arrangingUID: Int? { didSet { DecorField.shared.held = arrangingUID } }
     /// Double tap on a piece a Jelly is using: he is asked to hop off, and arrange mode starts on it once he has (seconds left to wait).
-    /// The decor piece in the hand while dragging (drawn here; saved only on drop).
-    var dragPreview: (uid: Int, at: SIMD2<Float>)?
     @ObservationIgnored var arrangeWait: (uid: Int, left: Float)?
     /// The GROUP serving (GameCare+Group.swift): one drink with a straw per Jelly, driven over the same `dining` set.
     @ObservationIgnored let group: DiningGroup
@@ -129,12 +127,7 @@ final class GameCare {
     let cafe = CafeTrip()
     @ObservationIgnored let cafeBook = CafeBook()
     /// A trip is on: the race track, the show stage or the café (the room's care, close-up and roaming wait).
-    /// The park outing (Park/ParkTrip.swift, GameCare+Park.swift): the picker, the trip to the park and back, the visitors.
-    let park = ParkTrip()
-    @ObservationIgnored let parkBook = ParkBook()
-    /// The Garden's plots, growth and the Jelbies' visits there (Garden/GardenModels.swift, GameCare+Garden.swift).
-    let garden = GardenBook()
-    var tripActive: Bool { race.active || show.active || cafe.active || park.active }
+    var tripActive: Bool { race.active || show.active || cafe.active }
     /// Clean-up of the other Jellies (GameCare+Bath.swift): who is washable, their after-bath wetness.
     @ObservationIgnored let bathPlug = BathPlug()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
@@ -249,7 +242,6 @@ final class GameCare {
         wireRace()
         wireShow()
         wireCafe()
-        wirePark()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
     }
@@ -361,7 +353,6 @@ final class GameCare {
     /// Bedtime / wake / idle clocks (GameCare+NightRest.swift).
     @ObservationIgnored var nightRest = NightRestBook()
     @ObservationIgnored var greetPending: Set<Int> = []
-    @ObservationIgnored var newcomer: NewcomerWalk?          // the bring-home walk (GameCare+Newcomer.swift)
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
     static func greetSpot(_ id: Int) -> SIMD2<Float> {
@@ -612,8 +603,6 @@ final class GameCare {
     static let approachBack: Float = 0.25
     /// After a walk to the stand he stands still this long before the tray pops in.
     static let popSettle: Float = 0.45
-    /// The tray pops in as soon as a meal is asked for, wherever he stands (he then walks over and eats).
-    static let trayFirst = true
 
     /// The tray never pops in where he would have to cross it. The visible floor beside the 1.56-wide tray is only ~0.2 u wide, so there is NO
     /// on-screen way around it for a body 1.4 wide: instead the tray waits until he is at (or behind) his stand line. If he is in front of
@@ -626,7 +615,7 @@ final class GameCare {
         stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
         wantedAge += dt
         if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
-        if Self.trayFirst || here.y <= stand.y + Self.popTolerance {
+        if here.y <= stand.y + Self.popTolerance {
             // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
             if standRequested {
                 if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }

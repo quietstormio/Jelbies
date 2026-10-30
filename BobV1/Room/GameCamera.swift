@@ -5,7 +5,6 @@
 //
 
 import simd
-import QuartzCore
 import Foundation
 
 enum GameCamera {
@@ -89,11 +88,7 @@ enum GameCamera {
         }
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
-            var p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusSpots)
-            if let f = trainFrame, focusSpots.count <= 1 {          // the Train card is up: frame the whole Jelbie in the free area beside / above it
-                let k = trainBlend(), tp = focusTrainPose(aspect: aspect, frame: f, spot: focusSpots.first ?? callSpot)
-                p = (p.eye + (tp.eye - p.eye) * k, p.target + (tp.target - p.target) * k)
-            }
+            let p = focusSpots.count > 1 ? focusPose(aspect: aspect, spots: focusSpots) : focusPose(aspect: aspect)
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
         }
@@ -117,7 +112,6 @@ enum GameCamera {
             e += (p.eye - e) * show
             t += (p.target - t) * show
         }
-        if PhotoCam.active { (e, t) = PhotoCam.apply(eye: e, target: t) }          // Photo mode: orbit / zoom / pan over the game pose
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: up)
         c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: race != 0 ? 260 : 60), c.view)      // the track's far hills and sky wall are ~100 u away
@@ -207,36 +201,6 @@ enum GameCamera {
         return (e, t)
     }
 
-    // MARK: Focus close-up while the Train card is up (r1023-polish)
-
-    /// The free area (fractions of the whole screen, 0...1) the trained Jelbie must sit inside, face and feet: set by GameScreen from the card's frame, nil = the normal close-up.
-    struct TrainFrame: Equatable { var minX: Float, maxX: Float, minY: Float, maxY: Float }
-    nonisolated(unsafe) static var trainFrame: TrainFrame? = nil { didSet { if (oldValue == nil) != (trainFrame == nil) { trainSince = CACurrentMediaTime() } } }
-    nonisolated(unsafe) static var trainSince: Double = 0
-    /// Reduce Motion: the camera does not glide (GameScreen sets it with the frame).
-    nonisolated(unsafe) static var trainInstant = false
-    /// 0 -> 1 over 0.45 s after the card appears (instant with Reduce Motion), 1 -> 0 is instant (the close-up is ending anyway).
-    static func trainBlend(now: Double = CACurrentMediaTime()) -> Float {
-        guard trainFrame != nil else { return 0 }
-        if trainInstant { return 1 }
-        let t = min(max(Float((now - trainSince) / 0.45), 0), 1)
-        return t * t * (3 - 2 * t)
-    }
-    /// Never bigger than the normal close-up; the whole body (H) must fit the frame's height with a margin for a head ornament, and 2R its width.
-    static func focusTrainPose(aspect: Float, frame f: TrainFrame, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        let normal = focusPose(aspect: aspect, spot: spot)
-        let normalVisH = 2 * simd_length(normal.eye - normal.target) * tanf(fovY / 2)
-        let margin: Float = 1.12
-        let freeH = max(f.maxY - f.minY, 0.12), freeW = max(f.maxX - f.minX, 0.2)
-        let visH = max(normalVisH, BobShape.H * margin / freeH, 2 * BobShape.R * 1.08 / (freeW * aspect))
-        let dist = visH / (2 * tanf(fovY / 2))
-        let cx = (f.minX + f.maxX) / 2, cy = (f.minY + f.maxY) / 2
-        let ty = 0.5 * BobShape.H - (0.5 - cy) * visH
-        let t = SIMD3<Float>(spot.x + (0.5 - cx) * visH * aspect, ty, spot.y)
-        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
-        return (e, t)
-    }
-
     // MARK: Focus close-up of several Jellies ("Everyone, come here")
 
     /// The spots (x, z) of every focused Jelly while the close-up frames more than one; empty = the one-Jelly close-up on `callSpot`.
@@ -253,11 +217,11 @@ enum GameCamera {
 
     /// Where each of `ids` stands in the "everyone" row: abreast on the front line, in id order, centred on the call spot.
     /// Index 0 is the front Jelly (centre, on the call spot); the rest alternate left, right, a little behind.
-    static func focusRowSpots(count n: Int, anchor: SIMD2<Float> = callSpot) -> [SIMD2<Float>] {
+    static func focusRowSpots(count n: Int) -> [SIMD2<Float>] {
         (0..<max(n, 0)).map { k in
-            if k == 0 { return anchor }
+            if k == 0 { return callSpot }
             let side: Float = k % 2 == 1 ? -1 : 1, rank = Float((k + 1) / 2)
-            return SIMD2(anchor.x + side * rank * focusRowSpacing, anchor.y - focusRowBack)
+            return SIMD2(callSpot.x + side * rank * focusRowSpacing, callSpot.y - focusRowBack)
         }
     }
 
@@ -271,7 +235,7 @@ enum GameCamera {
         let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
-        let t = SIMD3<Float>(mid.x, ty, hi.y)
+        let t = SIMD3<Float>(mid.x, ty, callSpot.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
     }

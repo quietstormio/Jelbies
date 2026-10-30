@@ -159,7 +159,7 @@ final class AudioHub {
     func ensureMusic(delay: Bool) {
         guard started, active else { return }
         perform(director.resumed(deckPlaying: deckPlaying, fade: 1.5))
-        if let t = director.sceneTrack, !(scene?.isPlaying(t) ?? false) {
+        if let t = director.scene.track, !(scene?.isPlaying(t) ?? false) {
             if scene?.current != t { perform([.sceneOn(t, fade: 1.5)]) }          // lost (or never started)
             else if delay { scene?.recoverIfStalled() }                             // decoded but its node stopped
         }
@@ -280,7 +280,7 @@ final class AudioHub {
         return scene?.songTime(of: t)
     }
     /// The track of this scene is decoded and playing.
-    func scenePlaying(_ s: MusicScene) -> Bool { (director.scene == s ? director.sceneTrack : s.track).map { scene?.isPlaying($0) ?? false } ?? false }
+    func scenePlaying(_ s: MusicScene) -> Bool { s.track.map { scene?.isPlaying($0) ?? false } ?? false }
 
     /// The Jelly Show's sounds (Show/ShowFlow.swift): existing effects under the show's names.
     func showCue(_ c: ShowCue) {
@@ -310,38 +310,6 @@ final class AudioHub {
         jingle = p
         DispatchQueue.main.asyncAfter(deadline: .now() + max(j.trim - 0.4, 0.1)) { [weak p] in p?.setVolume(0, fadeDuration: 0.4) }
         DispatchQueue.main.asyncAfter(deadline: .now() + j.trim) { [weak p] in p?.stop() }
-    }
-
-    // MARK: intro sting
-
-    @ObservationIgnored private var sting: AVAudioPlayer?
-
-    /// The intro's one-shot sting (plays before `start()`, so it sets the session up itself). Follows -Mute and the sound-effects level.
-    func playIntroSting(_ name: String) {
-        guard !muted else { return }
-        let level = settings.sfxLevel
-        guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
-        if !started { setUpSession() }
-        sting?.stop()
-        p.volume = min(1, level * AudioMix.sfxMaster * 1.5)
-        p.prepareToPlay(); p.play()
-        sting = p
-    }
-
-    /// For the intro video's own audio: sets the session up (as the sting does) and returns the volume to play it at (0 = muted / sound effects off).
-    func introVideoVolume() -> Float {
-        if !started { setUpSession() }
-        guard !muted else { return 0 }
-        let level = settings.sfxLevel
-        return level > 0.01 ? Float(min(1, level * AudioMix.sfxMaster * 1.5)) : 0
-    }
-
-    /// Fades the intro sting out (a tap to skip).
-    func stopIntroSting() {
-        guard let p = sting else { return }
-        sting = nil
-        p.setVolume(0, fadeDuration: 0.3)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { p.stop() }
     }
 
     // MARK: effects

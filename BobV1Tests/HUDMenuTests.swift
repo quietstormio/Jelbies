@@ -6,7 +6,6 @@
 
 import XCTest
 import simd
-import SwiftUI
 @testable import BobV1
 
 @MainActor
@@ -26,7 +25,8 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(BagSheet.BagTab.rooms.rawValue, "Rooms")
         let care = care3()
         XCTAssertTrue(care.store.ownsRoom(.home), "the home room is always in the Bag's Rooms")
-        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
+        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button with the Track / Store / Show menu)
+        XCTAssertFalse(GoOutDestination.visible.isEmpty)
     }
 
     func testGroupModeWhenNothingHighlighted() {
@@ -100,17 +100,10 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(r.care.focusGroup.ids, [2])
     }
 
-    @MainActor func testGoOutOpensTheTownAndTheTownOffersTheCafe() {
-        // The button's action is the whole behaviour: one tap, one callback (the game sets town = .town).
-        var taps = 0
-        _ = GoOutButton { taps += 1 }
-        XCTAssertEqual(taps, 0)
-        // The Town's Café destination closes the Town (goHome) and then starts the trip (cafe).
-        var log: [String] = []
-        let flow = TownFlow(care: care3(), screen: .constant(.town), who: 0, cafe: { log.append("cafe") }, goHome: { log.append("home") })
-        XCTAssertEqual(flow.currentScreen, .town)
-        flow.chooseCafe()
-        XCTAssertEqual(log, ["home", "cafe"])
+    func testGoOutMenuListsTheCafe() {
+        XCTAssertEqual(GoOutDestination.visible, [.track, .store, .show, .cafe])
+        XCTAssertNil(GoOutDestination.cafe.screen)
+        XCTAssertEqual(GoOutDestination.track.screen, .track); XCTAssertEqual(GoOutDestination.store.screen, .shop)
     }
 
     // MARK: highlight and sleep

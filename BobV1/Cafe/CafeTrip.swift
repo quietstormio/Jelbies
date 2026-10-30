@@ -24,8 +24,6 @@ final class CafeTrip {
     private(set) var serial = 0
     @ObservationIgnored var holdFrames = 0
     @ObservationIgnored var cheerT: Float = 0
-    /// Set by GameCare while a baby-latte café zoomies burst is still running: the cheer waits for it.
-    @ObservationIgnored var holdCheer = false
     @ObservationIgnored var toastT: Float = 0
     /// Called once with the white opaque: the world swap.
     @ObservationIgnored var onSwap: (Dest) -> Void = { _ in }
@@ -55,7 +53,7 @@ final class CafeTrip {
     }
     func servingEnded() {
         guard phase == .eating else { return }
-        phase = .cheer; cheerT = 0; holdCheer = false
+        phase = .cheer; cheerT = 0
     }
     func set(_ p: Phase) { phase = p }
     func finish() { phase = .off; wipe = 0; holdFrames = 0; order = nil; cheerT = 0 }
@@ -77,7 +75,7 @@ final class CafeTrip {
             if wipe <= 0 { phase = .menu }
         case .cheer:
             cheerT += dt
-            if cheerT >= CafeTuning.cheerSeconds, !holdCheer { phase = .done }
+            if cheerT >= CafeTuning.cheerSeconds { phase = .done }
         case .leaveOut:
             wipe = min(wipe + dt / CafeTuning.fadeOut, 1)
             if wipe >= 1 { phase = .leaveHold; holdFrames = 0; onSwap(.home) }

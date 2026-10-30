@@ -34,48 +34,15 @@ extension BlobBrain {
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
         if uid >= 0, idleState.kind == .decorSit || idleState.kind == .sleep, let f = DecorField.shared.foot(uid), f.distance(position) < footprint * f.spec.reach { decorIgnore = uid } else if decorIgnore == uid { decorIgnore = nil }
     }
-    /// Every step with no behaviour running: the piece he sat in is a wall again once he is out of it. A Jelly whose spot ends up inside any solid piece's
-    /// footprint (a piece put down, dragged or turned onto him, or a push) is soft to that piece and, after a moment, walks out to the nearest free floor
-    /// (before, he stayed standing inside it: "stuck behind the table").
-    func decorExitCheck(dt: Float = 0) {
-        var inside: DecorFoot?
-        for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.05 { inside = f; break }
-        if let f = inside {
-            if decorIgnore == nil { decorIgnore = f.uid }
-            insideDecorT += dt
-            if insideDecorT > 1.2, !held, !sleepLocked, pending == nil, let out = decorFreeSpot(near: position) {
-                insideDecorT = -1.5
-                decorIgnore = f.uid
-                requestNow(.goTo(out))
-            }
+    /// Every step with no behaviour running: the piece he sat in is a wall again once he is out of it.
+    func decorExitCheck() {
+        guard let uid = decorIgnore else {
+            // a piece put down under him (or a push): he is let out of it the same way
+            for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.1 { decorIgnore = f.uid; return }
             return
         }
-        insideDecorT = 0
-        guard let uid = decorIgnore else { return }
         if let f = DecorField.shared.foot(uid), f.distance(position) < footprint * f.spec.reach + 0.05 { return }
         decorIgnore = nil
-    }
-
-    /// The nearest floor spot to `p` that no solid piece (and no wall) pushes him off: rings outward, then the one with the least move.
-    func decorFreeSpot(near p: SIMD2<Float>) -> SIMD2<Float>? {
-        func free(_ q: SIMD2<Float>) -> Bool {
-            let r = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
-            guard simd_distance(SIMD2(r.x, r.z), q) < 0.03 else { return false }
-            for f in DecorField.shared.feet where f.spec.solid && f.distance(q) < footprint * f.spec.reach + 0.12 { return false }
-            return true
-        }
-        for k in 1...40 {
-            let r = Float(k) * 0.1
-            let n = max(12, Int(2 * Float.pi * r / 0.12))
-            var best: SIMD2<Float>?
-            for j in 0..<n {
-                let a = Float(j) / Float(n) * 2 * .pi
-                let q = p + SIMD2(sinf(a), cosf(a)) * r
-                if free(q), peerFree(q), best == nil || simd_distance(q, p) < simd_distance(best!, p) { best = q }
-            }
-            if let b = best { return b }
-        }
-        return nil
     }
 
     /// Pieces with a front only: he stands in front of them (a bookshelf is not walked round to look at its back).
@@ -84,8 +51,8 @@ extension BlobBrain {
     func hopStandSpots(_ f: DecorFoot, seat: Int) -> [SIMD2<Float>] {
         let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
         let c = f.centre
-        let dz = f.kind.spec.half.y - sp.z + Self.bagHopGap          // (piece-local, then turned)
-        return [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
+        let dz = f.spec.half.y - sp.z + Self.bagHopGap
+        return [Float(0), 0.35, -0.35, 0.7, -0.7].map { c + SIMD2(sp.x + $0, sp.z + dz) }
     }
     /// The first spot in front of the seat he can stand on, nil when there is none.
     func hopStand(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
@@ -99,7 +66,7 @@ extension BlobBrain {
     private func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         var angles: [Float]
-        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6].map { $0 + f.yaw } }
+        if Self.frontOnly.contains(f.kind) { angles = [0, 0.3, -0.3, 0.6, -0.6] }
         else {
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
             let a0 = atan2f(base.x, base.y)
@@ -124,25 +91,14 @@ extension BlobBrain {
     }
 
     /// The spot to stand at for a piece, or nil when there is none he can reach.
-    /// The stand spot clamped onto walkable floor (depth walkMinZ...walkMaxZ, on-screen x); nil when the piece sits so far out that the clamp moves it far (the piece is skipped in decor play).
     func decorStand(_ kind: IdleKind, _ f: DecorFoot, from here: SIMD2<Float>, seat: Int = 0) -> SIMD2<Float>? {
-        guard let p = decorStandRaw(kind, f, from: here, seat: seat) else { return nil }
-        let z = min(max(p.y, GameCamera.walkMinZ + 0.1), GameCamera.walkMaxZ - 0.1)
-        let hw = max(0, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.2)
-        let q = SIMD2(min(max(p.x, -hw), hw), z)
-        if q == p { return p }
-        guard simd_distance(p, q) < 1.2 else { return nil }
-        let r = fixed(q)
-        return simd_distance(q, r) < 0.1 && peerFree(r) ? r : nil
-    }
-    private func decorStandRaw(_ kind: IdleKind, _ f: DecorFoot, from here: SIMD2<Float>, seat: Int = 0) -> SIMD2<Float>? {
         let c = DecorField.shared.position(f)
         switch kind {
         case .decorSit where f.kind.hopSit && f.kind != .beanbag:
             return hopStand(f, seat: seat)
         case .decorSlide:
             // behind the slide, where the steps start (the JSON's approach point)
-            let p = c + f.turned(SIMD2(0, -DecorKind.slideApproach))
+            let p = c + SIMD2(0, -DecorKind.slideApproach)
             let q = fixed(p)
             return simd_distance(p, q) < 0.08 && peerFree(q) ? q : nil
         case .soccerKick: return soccerStand(f, from: here)
@@ -253,11 +209,11 @@ extension BlobBrain {
         case .decorSlide: slideArrived(sim, skinner, f)
         case .soccerKick: soccerArrived(sim, skinner, f)
         case .decorBoop:
-            idleState.hold = vDur(2.6)
+            idleState.hold = 2.6
             let d = c - position
             idleState.goalYaw = atan2f(d.x, d.y)
         case .decorPeek:
-            idleState.hold = vDur(3.4)
+            idleState.hold = 3.4
             let d = c - position
             idleState.goalYaw = atan2f(d.x, d.y)
         case .decorHop:
@@ -412,18 +368,17 @@ extension BlobBrain {
         let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) ?? SIMD3(f.centre.x, f.spec.height, f.centre.y)
         // (a rocking seat is hopped onto where it rests: the neutral spot)
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
-        return (f.centre + f.turned(SIMD2(sp.x, sp.z)), sw.y)
+        return (f.centre + SIMD2(sp.x, sp.z), sw.y)
     }
 
     /// While he sits on a rocking chair / swing the seat carries him: his root and planted feet move by the seat's change.
     func seatFollow(_ f: DecorFoot) {
         guard f.kind == .rockingchair || f.kind == .swing, let sw = DecorField.shared.seatWorld(f.uid, seat: idleState.seat) else { return }
         let sp = f.kind.sitPoints[min(idleState.seat, f.kind.sitPoints.count - 1)]
-        let rs = f.turned(SIMD2(sp.x, sp.z))
-        let want = SIMD2<Float>(sw.x - (f.centre.x + rs.x), sw.z - (f.centre.y + rs.y))
+        let want = SIMD2<Float>(0, sw.z - (f.centre.y + sp.z))
         let d = want - idleState.seatShift
         guard simd_length(d) > 1e-6 else { return }
-        px += d.x; pz += d.y
+        pz += d.y
         feet.pos[0] += d; feet.pos[1] += d
         idleState.seatShift = want
     }
@@ -454,7 +409,7 @@ extension BlobBrain {
                 }
                 if crowded { if idleState.phaseT > 3 { idleFinish(skinner) }; return }
                 idleState.bagStage = 1; idleState.phaseT = 0; idleState.decorBooped = false
-                bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.quarter == 0 ? f.kind.seatFacing(idleState.seat) : f.yaw + (f.kind.seatFacing(idleState.seat) ?? 0))
+                bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: f.kind.seatFacing(idleState.seat))
             }
         case 2:
             // in the seat: sits down (two feet slide forward over the lip, the body lowers and leans back), rests, gets up, hops off
@@ -506,12 +461,9 @@ extension BlobBrain {
             if idleState.phase == 2, let o = cuddlePartner(f) { want = o.sign }
             idleState.cuddle += (abs(want) - idleState.cuddle) * 0.06
             if idleState.cuddle > 0.001 {
-                // toward the middle: the piece's side turned by its quarter, read against the way he faces (the lean is about his own axis)
-                let localSide: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1
-                let mid = f.turned(SIMD2<Float>(localSide, 0))
-                let sgn: Float = (mid.x * cosf(yaw) - mid.y * sinf(yaw)) >= 0 ? 1 : -1
+                let sgn: Float = f.kind.sitPoints[idleState.seat].x < 0 ? 1 : -1       // toward the middle
                 roll += -sgn * 0.12 * idleState.cuddle
-                let want = f.turned(SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0))
+                let want = SIMD2<Float>(sgn * 0.03 * idleState.cuddle, 0)
                 let d = want - idleState.seatShift
                 px += d.x; feet.pos[0] += d; feet.pos[1] += d
                 idleState.seatShift = want

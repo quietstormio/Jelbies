@@ -328,12 +328,11 @@ extension BlobBrain {
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
         }
         if cands.isEmpty { return false }
-        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul else { return false }
+        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         var w: [(SocialKind, Float)] = [(.boop, 3), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
-        varietyScaleSocial(&w, partner: o)
         let total = w.reduce(0) { $0 + $1.1 }
         var x = rand() * total
         var kind = w[0].0
@@ -342,12 +341,9 @@ extension BlobBrain {
         if !o.socialFree {          // he is out on a wander leg: ask him to stop; the social starts when he has (socialInviteTick)
             guard o.socialBeckonStop() else { socialBook.cooldown = max(socialBook.cooldown, 3); return false }
             socialBook.invite = (kind, o.steerID, 0)
-            varietyNoteSocial(kind, with: o)
             return true
         }
-        let started = socialStart(kind, with: o, sim)
-        if started { varietyNoteSocial(kind, with: o) }
-        return started
+        return socialStart(kind, with: o, sim)
     }
 
     /// idleMaybeStart picked LOOK: sometimes at a nearby Jelly (who glances back).

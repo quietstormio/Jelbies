@@ -69,25 +69,9 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         single.delegate = self
         single.require(toFail: dbl)
         addGestureRecognizer(single)
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(photoPanned(_:)))          // Photo mode only: one finger orbits, two pan
-        pan.minimumNumberOfTouches = 1; pan.maximumNumberOfTouches = 2
-        pan.cancelsTouchesInView = false; pan.delaysTouchesBegan = false; pan.delaysTouchesEnded = false
-        pan.delegate = self
-        addGestureRecognizer(pan)
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    /// The room's stage (Photo mode captures this view; the SwiftUI HUD is not part of it).
-    nonisolated(unsafe) static weak var gameStage: MelonStageView?
-
-    @objc private func photoPanned(_ g: UIPanGestureRecognizer) {
-        guard PhotoCam.active, g.state == .changed else { return }
-        let d = g.translation(in: self); g.setTranslation(.zero, in: self)
-        if g.numberOfTouches >= 2 { PhotoCam.drag(dx: Float(d.x), dy: Float(d.y)) } else { PhotoCam.orbit(dx: Float(d.x), dy: Float(d.y)) }
-    }
-
-    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { g is UIPanGestureRecognizer ? PhotoCam.active : super.gestureRecognizerShouldBegin(g) }
 
     // a11y (round-1023): in the game the stage is a CONTAINER of the room + one element per Jelbie (Accessibility/JelbieAccessibility.swift); the studio keeps one element.
     override var isAccessibilityElement: Bool { get { controller?.game != true } set {} }
@@ -144,14 +128,12 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         controller?.noteUserTouch()          // any finger restarts the night-idle bedtime clock
         claim()
         activeTouches += touches.count
-        if PhotoCam.active { return }          // Photo mode: fingers move the camera, they never touch a Jelbie
         for t in touches {
             controller?.pointerDown(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size, time: sane(t.timestamp))
         }
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if PhotoCam.active { return }
         for t in touches {
             controller?.pointerMove(id: ObjectIdentifier(t), point: t.location(in: self), size: bounds.size)
         }
@@ -174,7 +156,6 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
         guard g.state == .changed, g.scale > 0 else { return }
-        if PhotoCam.active { PhotoCam.zoom(by: Float(g.scale)); g.scale = 1; return }
         controller?.pinch(scale: Float(g.scale))
         g.scale = 1
     }
@@ -207,13 +188,10 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Game screen: living room backdrop, fixed camera, no orbit / zoom.
     let game: Bool
 
-    let simMesh: SimMesh
-    let renderMesh: RenderMesh
-    let embedding: (tetOf: [UInt32], w: [Float])
+    private let simMesh: SimMesh
+    private let renderMesh: RenderMesh
     /// Every Jelly in the room (1 in the studio; 1...3 in the game). `actors[0]` is Bob: the touch play, meals, Clean, voice and the close-up are his.
     private(set) var actors: [JellyActor] = []
-    /// The park's visitor bodies (Park/MelonController+Park.swift): ids continue after the roster's; empty outside the park. Stepped, skinned and drawn with the rest.
-    var parkActors: [JellyActor] = []
     /// The per-Jelly bundle by id (same array as `actors`): brain, sim, skinner, profile / needs / grime / look / words, appearance, selected.
     var jellies: [JellyActor] { actors }
     private var sim: SoftBody { actors[0].sim }
@@ -244,7 +222,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     let a11y = JelbieA11yContainer()
     private var scriptedRun: ScriptedTouchRun?
     private let scriptPointers = [NSObject(), NSObject()]
-    var renderer: MelonRenderer?
+    private var renderer: MelonRenderer?
     private var rig = CameraRig()
     private weak var stageView: MelonStageView?
 
@@ -257,20 +235,19 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The aspect the roaming polygon was built for (GameCamera.refreshRoam); rebuilt when it changes, and every sim's safety arena follows it.
     private var roamAspect: Float = 0
     private func syncRoam(aspect: Float) {
-        guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005 else { return }
+        guard actors.count > 1, abs(aspect - roamAspect) > 0.005 else { return }
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         for a in actors where a.sim.arenaRadius.isFinite && !(a.brain?.race.active ?? false) && !model.care.bath.fenceLifted {
             a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
         }
-        for a in parkActors { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
     }
     private var lastNudge: Int
     private var lastReset: Int
     private var lastPaused = false
-    var lastCam = CameraState()
+    private var lastCam = CameraState()
     private var drillFollow: SIMD3<Float>?
-    var haveCam = false
+    private var haveCam = false
     private var aspectChecked = false                 // the drawable-vs-bounds aspect log, once
     private let massG: Float
 
@@ -345,7 +322,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The room's event bus (BlobBrain+React.swift): the brains post what they do, the others may react.
     lazy var eventBus: ReactionBus = {
         let bus = ReactionBus()
-        bus.brains = { [weak self] in self?.socialBrains() ?? [] }
+        bus.brains = { [weak self] in self?.actors.compactMap(\.brain) ?? [] }
         DecorField.shared.onTopple = { [weak bus] pos in bus?.post(BusEvent(kind: .towerToppled, source: -1, pos: pos, piece: .blocks)) }
         SoccerEvents.sink = { [weak bus] e in bus?.handleSoccer(e) }          // soccer: goals cheered, fumbles giggled at, a ball rolling past startles (BlobBrain+React.swift)
         return bus
@@ -354,19 +331,19 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Centre distance the Jellies keep from each other in the room (a body is ~1.4 wide; they may touch a little, never sit inside each other).
     static let jellyGap: Float = 1.4
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
-    var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
+    private var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
 
     /// Wires one brain into the room: it steers around the other Jellies (a standing Jelly is an obstacle to everybody; between two walkers the
     /// lower id gives way) and walks by the room's floor rules.
-    func wireRoster(_ b: BlobBrain, id: Int) {
+    private func wireRoster(_ b: BlobBrain, id: Int) {
         b.feature = JellyRoster.feature(slot: id)
-        guard actors.count > 1 || !parkActors.isEmpty else { return }
+        guard actors.count > 1 else { return }
         b.steerID = id
         b.bus = eventBus
         b.peerGap = Self.jellyGap
-        if id < actors.count { model.care.voice.ai.register(b, id: id) }            // AI hub: his naps / socials for the diary, and "go to sleep" for him
+        model.care.voice.ai.register(b, id: id)            // AI hub: his naps / socials for the diary, and "go to sleep" for him
         // Jellies interacting (BlobSocial.swift): the other brains, and what a social does outside the brain (a heart, a light haptic for the one the player has)
-        b.socialOthers = { [weak self, weak b] in self?.socialBrains().filter { $0 !== b } ?? [] }
+        b.socialOthers = { [weak self, weak b] in self?.actors.compactMap(\.brain).filter { $0 !== b } ?? [] }
         b.onSocial = { [weak self] e in
             guard let self, id < self.actors.count, self.actors[id].selected else { return }
             let now = CACurrentMediaTime()
@@ -530,14 +507,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         if (stageView?.activeTouches ?? 0) > 0 || touchHolds(a.id) || mode != .none { return true }
         if game {
             let c = model.care
-            if c.focus.isActive || c.trayOut || c.bath.active || (c.tripActive && !c.parkHides(a.id)) || c.select.isSelecting || c.select.confirmed == a.id { return true }
+            if c.focus.isActive || c.trayOut || c.bath.active || c.tripActive || c.select.isSelecting || c.select.confirmed == a.id { return true }
         }
         return false
     }
 
     private func publishPeers() {
-        guard actors.count > 1 || !parkActors.isEmpty else { return }
-        if !parkActors.isEmpty || peerSnapshot.count > actors.count { publishParkPeers(); return }          // the park: the visitors are peers too, the Jelbies who stayed home are far away
+        guard actors.count > 1 else { return }
         if peerSnapshot.count != actors.count { peerSnapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }; return }
         for i in 0..<actors.count { peerSnapshot[i] = (pos: actors[i].floor, walking: actors[i].isWalking) }          // in place: no array per step
     }
@@ -557,10 +533,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             for a in actors.dropFirst() { otherTick(a, reduce: reduce) }
             if game { model.care.tickOthers(actors, dt: sim.stepDt) }
         }
-        for a in parkActors { otherTick(a, reduce: reduce) }          // the park's visitors (their looks and friendships: tickPark)
         if game { model.care.tickRace(actors, dt: sim.stepDt) }          // Jelly Circuit: the trip to the track and the race (every Jelly is ticked by now)
         if game { model.care.tickCafe(actors, dt: sim.stepDt) }          // the café outing: the fade, the swaps, the serving, the cheer
-        if game { model.care.tickPark(actors, dt: sim.stepDt) }          // the park outing: the picker, the fade, the swaps, the visitors, friendships and love
         if game { model.care.tickShow(actors, dt: sim.stepDt) }          // Jelly Show: the trip to the stage, the rounds, the Studio's dance drill
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball
@@ -620,7 +594,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
         brain.amplitude = reduce ? 0.55 : 1
         brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
-        let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
+        let roomLife = game && !model.care.raceBusy && !brain.race.active          // room life is OFF for every Jelly while a race trip is on (racer or rival body)
         brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
@@ -636,7 +610,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
             brain.amplitude = reduce ? 0.55 : 1
             brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
-            let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
+            let roomLife = game && !model.care.raceBusy && !brain.race.active          // room life is OFF for every Jelly while a race trip is on (racer or rival body)
             brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
@@ -698,7 +672,6 @@ final class MelonController: NSObject, MTKViewDelegate {
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
-        embedding = emb
         WearBody.install(rm)
         actors = (0..<count).map {
             JellyActor(id: $0, name: model.care.jelly($0)?.name ?? JellyRoster.name(slot: $0), simMesh: sm, renderMesh: rm, embedding: emb, appearance: ap,
@@ -750,7 +723,6 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func attach(to view: MelonStageView) {
         stageView = view
-        if game { MelonStageView.gameStage = view }
         view.controller = self
         a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
@@ -763,8 +735,6 @@ final class MelonController: NSObject, MTKViewDelegate {
         if model.gameMode {
             model.care.fittingProvider = { [weak self] look, id in self?.fittingSnapshot(look: look, jelly: id) }
             model.care.portraitProvider = { [weak self] id in self?.fittingSnapshot(look: nil, jelly: id) }
-            model.care.parkBook.spawn = { [weak self] specs, spots in self?.parkSpawn(specs, spots: spots) ?? [] }          // the park's visitor bodies (Park/MelonController+Park.swift)
-            model.care.parkBook.clear = { [weak self] in self?.parkClear() }
         }
         for a in actors { if let p = a.appearance { r.setPalette(p, body: a.id) } }          // slot 0 too: a non-Bob character there wears his own colours
         view.delegate = self
@@ -937,12 +907,11 @@ final class MelonController: NSObject, MTKViewDelegate {
                 let st0 = CACurrentMediaTime()
                 stepSims.removeAll(keepingCapacity: true)
                 for a in actors where a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }
-                for a in parkActors where a.updateSleep(forceAwake: true) { stepSims.append(a.sim) }
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
-            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))); model.care.refreshGarden(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
+            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps
         }
@@ -951,17 +920,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         updateIdleRest(stage, dt: Double(dt))
         let sk0 = CACurrentMediaTime()
         for a in actors { a.skinner.tickBlink(dt: dt) }
-        for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
         for a in actors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
         for a in actors.dropFirst() {
-            if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
-        }
-        for a in parkActors {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
         }
         if let w = skinner.takeMatWrites() {
@@ -1016,7 +980,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             model.care.select.publishRing(id: h, floor: actors[h].floor, viewProj: cam.viewProj, size: pts)          // the persistent pick's floor ring
         }
         let camIn = game && model.care.focus.blend > 0.25
-        var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).filter { !model.care.parkHides($0.id) }.map { $0.sim.centroid() } + parkActors.map { $0.sim.centroid() }) : rig.light(centroid: c)
+        var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).map { $0.sim.centroid() }) : rig.light(centroid: c)
         if game { light.intensity *= DayLight.at(hour: DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
         if game { updateTuck(renderer, dt: 1.0 / 60) }
 
@@ -1039,10 +1003,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.raceCourse = model.care.race.course.tier
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
-            renderer.parkVisible = model.care.park.inScene
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
-                renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id) || model.care.parkHides(a.id), body: a.id)
+                renderer.setHidden((bathRoom && a.id != washed) || model.care.showHides(a.id), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
         }
@@ -1216,7 +1179,6 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Double tap in the game: select the Blob under the finger (roaming only; with one Blob there is no select step).
     func gameDoubleTap(_ p: CGPoint) {
-        guard !PhotoCam.active else { return }
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
@@ -1244,10 +1206,6 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// A tap on the floor (not on a Blob) cancels a pending selection.
     func gameSingleTap(_ p: CGPoint) {
-        if PhotoCam.active {          // Photo mode: a tap on a Jelbie makes him look at the camera
-            if let size = stageView?.bounds.size, size.width > 1, let id = pickJelly(p, size)?.id { PhotoCam.onTapJelly?(id) }
-            return
-        }
         let sel = model.care.select
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1 {
             if let id = pickJelly(p, touchSize)?.id ?? { refreshOutlines(); return sel.hit(p) }() { model.care.tapJelly(id); return }          // a Jelbie: highlight him
@@ -1613,8 +1571,6 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize, time: Double? = nil) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
-        if game, model.care.roomID == .garden, !model.paused, pickBody(p, size) == nil, gardenTap(p, size) { return }          // the garden: a tap on a plot waters / harvests / plants (Garden/MelonController+Garden.swift)
-        if game, model.care.park.inScene { parkTap(p, size); return }          // the park: a tap on a visitor opens his card (Park/MelonController+Park.swift)
         if game, model.care.tripActive { return }          // on the track (or the show's stage) the screen is the buttons: no touch play, no selection, no voice
         if game, model.care.bath.acceptsTouch {
             // the clean-up: every touch is a scrub (no gesture classifier: no pick up, throw or cheeks), starting anywhere

@@ -9,23 +9,139 @@ import SwiftUI
 
 // MARK: - HUD pieces of the living room
 
-/// The round "Go out" button (left rail, a cream 48 pt circle like the book, bag and mic): it opens the Town ("Where to?").
+/// Where "Go out" can lead. The player goes alone; only Compete (Track / Show) takes a Jelbie out.
+enum GoOutDestination: String, CaseIterable {
+    case track = "goout-track", store = "goout-store", rooms = "goout-rooms", show = "goout-show", cafe = "goout-cafe"
+    /// HOOK (W5): the room shop. The integrator flips it and routes it to the Shop's rooms tab.
+    static let roomsEnabled = false
+    /// The café outing (the user chose it 2026-10-23: go out to eat, treats cost Drops). The easy kill switch.
+    static let cafeEnabled = true
+
+    static var visible: [GoOutDestination] {
+        var l: [GoOutDestination] = [.track, .store, .show]
+        if roomsEnabled { l.append(.rooms) }
+        if cafeEnabled { l.append(.cafe) }
+        return l
+    }
+    var title: String {
+        switch self { case .track: return "Track"; case .store: return "Store"; case .rooms: return "Rooms"; case .show: return "Jelly Show"; case .cafe: return "Café" }
+    }
+    var symbol: String {
+        switch self {
+        case .track: return CareMenu.raceSymbol
+        case .store: return "bag.fill"
+        case .rooms: return UIImage(systemName: "house.fill") != nil ? "house.fill" : "square.grid.2x2"
+        case .show: return "sparkles"
+        case .cafe: return UIImage(systemName: "cup.and.saucer.fill") != nil ? "cup.and.saucer.fill" : "fork.knife"
+        }
+    }
+    /// The screen it opens (nil: a hook with no screen yet).
+    var screen: TownScreen? {
+        switch self { case .track: return .track; case .store, .rooms: return .shop; case .show: return .studio; case .cafe: return nil }
+    }
+}
+
+/// The round "Go out" button (right side, next to the main control); it opens the GoOutMenu above it.
 struct GoOutButton: View {
-    var action: () -> Void
+    @Binding var open: Bool
+    /// In the left rail: a cream 48 pt circle like the book, bag and mic (no caption).
+    var rail = false
+    @Environment(\.verticalSizeClass) private var vsc
     var body: some View {
+        if rail { railButton } else { classic }
+    }
+    private var railButton: some View {
         Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); action()
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            withAnimation(CareMenu.spring) { open.toggle() }
         } label: {
-            Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(SK.ink).frame(width: 48, height: 48)
-                .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+            ZStack {
+                Image(systemName: "door.left.hand.open").font(.system(size: 19, weight: .heavy)).opacity(open ? 0 : 1).scaleEffect(open ? 0.4 : 1)
+                Image(systemName: "xmark").font(.system(size: 18, weight: .heavy)).opacity(open ? 1 : 0).scaleEffect(open ? 1 : 0.4)
+            }
+            .foregroundStyle(SK.ink).frame(width: 48, height: 48)
+            .background(Circle().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
-        .accessibilityHint("Opens the Town: Track, Store, Jelly Show")
+        .accessibilityValue(open ? "expanded" : "collapsed").accessibilityHint("Shows the places to go: Track, Store, Jelly Show")
+        .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
         .accessibilityShowsLargeContentViewer { Label("Go out", systemImage: "door.left.hand.open") }
         .keyboardShortcut("o", modifiers: .command)
+    }
+    @ViewBuilder private var classic: some View {
+        let size = vsc == .compact ? HUDTuning.goOutSizeTight : HUDTuning.goOutSize
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            withAnimation(CareMenu.spring) { open.toggle() }
+        } label: {
+            ZStack {
+                Image(systemName: "door.left.hand.open").font(.system(size: 20, weight: .heavy)).opacity(open ? 0 : 1).scaleEffect(open ? 0.4 : 1)
+                Image(systemName: "xmark").font(.system(size: 19, weight: .heavy)).opacity(open ? 1 : 0).scaleEffect(open ? 1 : 0.4)
+            }
+            .foregroundStyle(SK.cream).frame(width: size, height: size)
+            .background(Circle().fill(SK.ink).shadow(color: SK.shadow.opacity(0.35), radius: 7, y: 3))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            if vsc != .compact && !open { Text("Go out").font(SK.font(10, .heavy)).foregroundStyle(SK.ink.opacity(0.75)).fixedSize().offset(y: 13) }
+        }
+        .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
+        .accessibilityValue(open ? "expanded" : "collapsed")
+        .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
+    }
+}
+
+/// The Go out menu: rows expand upward above the button in the care menu's row style.
+struct GoOutMenu: View {
+    @Binding var open: Bool
+    /// In the left rail: the button is the cream rail style and the rows pop up over the rail above it, icon first, leading edge aligned.
+    var rail = false
+    var go: (TownScreen) -> Void
+    /// The Café row (it opens no Town screen: the trip starts in the game itself).
+    var cafe: (() -> Void)? = nil
+    @Environment(\.verticalSizeClass) private var vsc
+    var body: some View {
+        let tight = vsc == .compact
+        let list = GoOutDestination.visible
+        let rows = VStack(alignment: rail ? .leading : .trailing, spacing: tight ? 5 : 14) {
+            if open {
+                ForEach(Array(list.enumerated()), id: \.element.rawValue) { index, d in
+                    let fromBottom = list.count - 1 - index
+                    Button {
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                        withAnimation(CareMenu.spring) { open = false }
+                        if d == .cafe { cafe?() } else if let s = d.screen { go(s) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            if rail { icon(d, tight: tight) }
+                            Text(d.title).font(.system(size: 16, weight: .semibold, design: .rounded)).foregroundStyle(CareMenu.brown)
+                                .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
+                                .background(Capsule().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.18), radius: 6, y: 2))
+                            if !rail { icon(d, tight: tight) }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(d.rawValue).accessibilityLabel(d.title)
+                    .transition(.scale(scale: 0.3, anchor: rail ? .bottomLeading : .bottomTrailing).combined(with: .opacity)
+                        .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
+                        .animation(CareMenu.spring.delay(Double(fromBottom) * 0.05)))
+                }
+            }
+            if !rail { GoOutButton(open: $open) }
+        }
+        if rail {
+            GoOutButton(open: $open, rail: true)
+                .overlay(alignment: .bottomLeading) { rows.fixedSize().offset(y: -(48 + HUDTuning.railGap)) }
+        } else { rows }
+    }
+    private func icon(_ d: GoOutDestination, tight: Bool) -> some View {
+        Image(systemName: d.symbol).font(.system(size: tight ? 17 : 21, weight: .semibold)).foregroundStyle(CareMenu.brown)
+            .frame(width: tight ? 40 : 54, height: tight ? 40 : 54)
+            .background(Circle().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.22), radius: 7, y: 3))
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
     }
 }
 
@@ -84,30 +200,20 @@ struct TownFlow: View {
     @Binding var screen: TownScreen?
     @State var who: Int
     var goHome: () -> Void
-    /// The Café: closes the Town and starts the café trip (the trip itself starts in the game, not on a Town screen).
-    var cafe: () -> Void = {}
-    /// The Park: closes the Town and opens the picker of who comes along (Park/ParkChrome.swift).
-    var park: () -> Void = {}
-    /// The Adoption Center: leaves the room for the adoption screen (StartFlow).
-    var adopt: () -> Void = { StartFlow.shared.openAdoption() }
-    /// The screen the flow opened on: its back button leaves the flow (the Go out button opens the Town, so Track / Store go back to it).
+    /// The screen the flow opened on: its back button leaves the flow (the Go out menu skips the Town).
     @State private var root: TownScreen
 
-    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
-        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park
+    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, goHome: @escaping () -> Void) {
+        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome
         self._root = State(initialValue: screen.wrappedValue ?? .town)
     }
     /// Back from the current screen: out of the flow when it is the root, else to `target`.
     private func up(_ target: TownScreen) { if (screen ?? .town) == root { goHome() } else { screen = target } }
 
-    var currentScreen: TownScreen { screen ?? .town }
-    func chooseCafe() { goHome(); cafe() }
-    func choosePark() { goHome(); park() }
-
     var body: some View {
         ZStack {
             switch screen ?? .town {
-            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, adopt: adopt, home: goHome)
+            case .town: TownView(care: care, go: { screen = $0 }, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
@@ -148,9 +254,6 @@ struct WhoRow: View {
 struct TownView: View {
     let care: GameCare
     var go: (TownScreen) -> Void
-    var cafe: () -> Void = {}
-    var park: () -> Void = {}
-    var adopt: () -> Void = {}
     var home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
 
@@ -188,7 +291,7 @@ struct TownView: View {
         }
         .padding(.horizontal, 16).padding(.top, 8)
         .background(SK.cream.ignoresSafeArea())
-        .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
+        .accessibilityIdentifier("town-screen")
     }
 
     private var destinations: some View {
@@ -196,9 +299,6 @@ struct TownView: View {
             destination("Shop", "Snacks, shoes, tricks and more", "bag.fill", SK.pink, id: "town-shop") { go(.shop) }
             destination("Track", "Race for Drops", "flag.checkered", SK.sky, id: "town-track") { go(.track) }
             destination("Studio", "Dress up, dance, the Jelly Show", "sparkles", SK.honey, id: "town-studio") { go(.studio) }
-            destination("Café", "Treats out with the gang", "cup.and.saucer.fill", SK.mint, id: "town-cafe") { cafe() }
-            destination("Park", "Play and make friends with visitors", "tree.fill", SK.sky, id: "town-park") { park() }
-            destination("Adoption Center", JellyRoster.savedIDs().count >= JellyRoster.maxCount ? "Your room is full: 3 Jelbies" : "Welcome another Jelbie home", "heart.fill", SK.pink, id: "town-adopt") { adopt() }
         }
     }
 
@@ -325,7 +425,7 @@ struct TrackPanel: View {
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .background(SK.cream.ignoresSafeArea())
-        .accessibilityElement(children: .contain).accessibilityIdentifier("track-screen")
+        .accessibilityIdentifier("track-screen")
     }
 
     private func statCard(_ prof: JellyProfile?) -> some View {
@@ -443,7 +543,7 @@ struct BagSheet: View {
         self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .snacks)          // (-StoreTab decor: capture aid)
     }
 
-    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", seeds = "Seeds", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
+    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
     private var tabs: [BagTab] { BagTab.allCases }
@@ -454,7 +554,6 @@ struct BagSheet: View {
         case .furniture: return StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }
         case .toys: return StoreCatalog.decorItems(.toys).filter { book.count($0.id) > 0 }
         case .care: return StoreCatalog.items(.supply).filter { book.count($0.id) > 0 }
-        case .seeds: return StoreCatalog.items(.seed).filter { book.count($0.id) > 0 }
         case .rooms: return []
         }
     }
@@ -569,7 +668,7 @@ struct BagSheet: View {
             ItemArt(item: item, size: 64)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : book.wearer(w, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }.map { "Worn by \($0)" } ?? "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+                if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
                 else if item.kind == .decor {
                     let placed = book.placedCount(item.id)
                     Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
@@ -602,8 +701,6 @@ struct BagSheet: View {
             }
         case .supply:
             pink("Use", item, enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
-        case .seed:
-            pink("Plant", item, enabled: care.roomID == .garden && care.garden.firstEmpty() != nil) { close(); care.plantFromBag(item.id) }
         case .decor:
             VStack(spacing: 6) {
                 pink("Place", item, enabled: book.canPlace(item)) { close(); care.placeDecor(item.id) }

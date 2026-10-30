@@ -46,7 +46,7 @@ struct DropsPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "drop.fill").font(.system(size: 15, weight: .black)).foregroundStyle(dark ? SK.honey : SK.sky)
-            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit()
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
         .background(Capsule().fill(dark ? SK.ink : SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
@@ -214,7 +214,7 @@ struct ItemArt: View {
     private var tint: Color {
         switch item.kind {
         case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .supply: return SK.sky.opacity(0.35)
-        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3); case .seed: return SK.mint.opacity(0.5)
+        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3)
         }
     }
 }

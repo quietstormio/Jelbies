@@ -68,8 +68,6 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
-    /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
-    var insideDecorT: Float = 0
     /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
@@ -152,8 +150,6 @@ final class BlobBrain {
     var musicPlaying = false
     /// Per-behaviour cooldowns (seconds left): the same antic does not come round again at once.
     var kindCool: [IdleKind: Float] = [:]
-    /// The variety layer's memory (BlobBrain+Variety.swift).
-    var variety = VarietyBook()
     var flopKicks = 0
     var sleep = SleepState()
     /// Seconds until he may again decide to go and snuggle beside a sleeper (BlobBrain+Sleep.swift).
@@ -207,9 +203,6 @@ final class BlobBrain {
     /// Character features (Features/, BlobBrain+FlapHop.swift): what grows on him, whether his wings are folded under a back item (then the flap-hop is
     /// a plain hop), the largest flap the worn items allow (deg), and the running flap-hop. The stage / GameCare set the first three.
     var feature: JellyFeature = .none
-    /// A park visitor behaves like a starter (energetic = Pip, calm = Moss, playful = Lavender) whatever he grows; nil = by `feature`.
-    var personalityOverride: JellyFeature?
-    var personalityKey: JellyFeature { personalityOverride ?? feature }
     var wingsFolded = false
     var wingFlapLimit: Float = 75
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
@@ -322,17 +315,6 @@ final class BlobBrain {
     // (FeetAttach worst overlap walk -0.021 / zoomies -0.021 / call -0.020 at the -0.020 bound) and both variants left the LANDING foot's hidden crown 0.002...0.006
     // short of fused (half-way through its ball-to-boot morph, 0.11 u ahead of a body 0.07 u behind its attractor). Needs a deeper hidden crown or a tighter follow first.
     var stepRate: Float = 3.75     // 3.5 -> 3.75 (Build B, user: a little faster: walk 1.016 -> 1.144 u/s, run 1.350 -> 1.435; the ground speed steps in whole frames of step time); was 3.2 before the 20 % speed-up
-    /// 2026-10-24: free locomotion (roam / go-to walk, run, zoomies, trot, hurry) is 10 % faster in cadence (so speed); scripted interaction moves (swing, kicks, decor play,
-    /// dining, bath ...) keep `stepRate`: the global 4.0 / 4.125 loosened the feet in the swing / kick moves. The gait shape (stride, pose, arms, feet) is unchanged.
-    static let locoRate: Float = 1.10
-    var locoRateMul: Float {
-        if let k = idleState.kind {
-            switch k { case .run, .zoomies, .trot: return Self.locoRate; default: return 1 }
-        }
-        if hurry { return Self.locoRate }
-        if case .walk = script { return Self.locoRate }
-        return 1
-    }
     var stride: Float = 0.305      // was 0.27 (measured ground speed 0.853 -> 1.021 u/s)
     var stepLift: Float = 0.035          // was 0.115: a shuffle, the foot stays in the bottom band under the belly (feet-lab 2026-10-17)
     var turnLift: Float = 0.06           // was 0.20
@@ -843,7 +825,7 @@ final class BlobBrain {
 
     func finishScript(_ sim: SoftBody, after served: Bool) {
         script = .none
-        restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
+        restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
@@ -899,7 +881,7 @@ final class BlobBrain {
         let landYaw = yaw + dyaw
         let target = inPlace ? feet.pos[s] : stepRoot0 + rootD + rotXZ(geom.off[s], landYaw) + reach
         feet.begin(side: s, to: target, toYaw: inPlace ? feet.yaw[s] : landYaw, peak: peak ?? stepLift * amplitude,
-                   rate: rate ?? stepRate * runRateMul * locoRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
+                   rate: rate ?? stepRate * runRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
         nextSwing = 1 - s
         stepLive = true
         AudioHub.shared.footstep(jelly: steerID, x: px, running: runW > 0.5)
@@ -1147,8 +1129,6 @@ final class BlobBrain {
                 step(after: .none, sim, giveUp: true); restTimer = 0.25
                 return
             }
-            // a requested walk (come, the meal, a stand at a piece) that has made no progress for 3 s plans its route afresh (round whatever blocks it)
-            if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; steerWait = 0; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
                 if flourishMaybe(sim, skinner, target: target) { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)

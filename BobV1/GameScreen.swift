@@ -18,6 +18,7 @@ struct GameScreen: View {
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
+    @State private var goOutOpen = false                      // the Go out menu (Track / Store / Jelly Show) is unfolded
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
     @State private var bagWho: Int?
     @State private var settingsOpen = false                   // the gear's Settings popover (Accessibility / Studio)
@@ -33,22 +34,7 @@ struct GameScreen: View {
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudPerkH: CGFloat = 0          // measured: the perk badge row under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
-    @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
-    @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
     private var focus: BlobFocus { model.care.focus }
-    /// Tells the close-up camera which part of the screen the Train card leaves free (GameCamera.trainFrame), as fractions of the whole screen.
-    private func frameTrainCamera(card: CGRect, g: GeometryProxy) {
-        guard card.height > 1 else { return }
-        trainCardTop = min(trainCardTop ?? .infinity, card.minY); trainCardLeft = min(trainCardLeft ?? .infinity, card.minX)
-        let W = g.size.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, H = g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom
-        let top = Float((g.safeAreaInsets.top + 8 + hudTopH + 6) / H)
-        let landscape = vsc == .compact
-        let f: GameCamera.TrainFrame = landscape
-            ? .init(minX: Float((g.safeAreaInsets.leading + 72) / W), maxX: Float(((trainCardLeft ?? card.minX) - 8) / W), minY: top, maxY: 0.95)
-            : .init(minX: 0.04, maxX: 0.96, minY: top, maxY: Float((trainCardTop ?? card.minY) / H) - 0.012)
-        GameCamera.trainInstant = a11yMotionReduced
-        if GameCamera.trainFrame != f { GameCamera.trainFrame = f }
-    }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive }
@@ -73,21 +59,21 @@ struct GameScreen: View {
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
-                .opacity(menuOpen || settingsOpen ? 0.22 : 0)
+                .opacity(menuOpen || goOutOpen || settingsOpen ? 0.22 : 0)
                 .ignoresSafeArea()
-                .allowsHitTesting(menuOpen || settingsOpen)
-                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; settingsOpen = false } }
-                .animation(.easeInOut(duration: 0.25), value: menuOpen || settingsOpen)
+                .allowsHitTesting(menuOpen || goOutOpen || settingsOpen)
+                .onTapGesture { withAnimation(CareMenu.spring) { menuOpen = false; goOutOpen = false; settingsOpen = false } }
+                .animation(.easeInOut(duration: 0.25), value: menuOpen || goOutOpen || settingsOpen)
                 .accessibilityHidden(true)          // the menus carry an Escape action instead
 
-            TouchHeartsView(play: model.touch, care: model.care).photoHidden()
+            TouchHeartsView(play: model.touch, care: model.care)
 
-            SelectionOverlay(select: model.care.select).photoHidden()
+            SelectionOverlay(select: model.care.select)
 
-            VoiceGlow(voice: model.care.voice, care: model.care).photoHidden()
-            VoiceFeedbackView(voice: model.care.voice, care: model.care).photoHidden()
+            VoiceGlow(voice: model.care.voice, care: model.care)
+            VoiceFeedbackView(voice: model.care.voice, care: model.care)
 
-            GreetHeartsView(care: model.care).photoHidden()          // Pip's and Moss's greeting hearts
+            GreetHeartsView(care: model.care)          // Pip's and Moss's greeting hearts
 
             ThoughtBubbleView(care: model.care) { action in
                 switch action {
@@ -95,11 +81,11 @@ struct GameScreen: View {
                 case .drink: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink }
                 case .comeHere, .clean: break            // GameCare.tapBubble already called him / started the clean-up
                 }
-            }.photoHidden()
+            }
 
-            CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
+            CaptionsView(center: .shared)          // sound captions (Accessibility settings; off by default)
 
-            RefusalLabel(care: model.care).photoHidden()
+            RefusalLabel(care: model.care)
 
             // HUD
             GeometryReader { g in
@@ -117,7 +103,7 @@ struct GameScreen: View {
                         } else if !focus.isActive, !cleaning, !racing {
                             GameCircleButton(systemName: "gearshape", label: "Settings") {
                                 AudioHub.shared.uiTap()
-                                withAnimation(CareMenu.spring) { settingsOpen.toggle(); if settingsOpen { soundOpen = false; extrasOpen = false; menuOpen = false } }
+                                withAnimation(CareMenu.spring) { settingsOpen.toggle(); if settingsOpen { soundOpen = false; extrasOpen = false; menuOpen = false; goOutOpen = false } }
                             }
                             .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
                             .accessibilityIdentifier("studio-button")
@@ -135,13 +121,6 @@ struct GameScreen: View {
                                 withAnimation(CareMenu.spring) { extrasOpen.toggle(); if extrasOpen { soundOpen = false; settingsOpen = false } }
                             }
                             .accessibilityIdentifier("extras-button")
-                            .transition(.opacity)
-                            GameCircleButton(systemName: "camera", label: "Photo mode") {
-                                AudioHub.shared.uiTap()
-                                menuOpen = false; settingsOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
-                                PhotoMode.shared.open(care: model.care)
-                            }
-                            .accessibilityIdentifier("photo-button")
                             .transition(.opacity)
                         }
                         Spacer()
@@ -173,7 +152,7 @@ struct GameScreen: View {
                                 VoiceBookButton { bookOpen = true }
                                 if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
                                 if !focus.isActive {
-                                    GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
+                                    GoOutMenu(open: $goOutOpen, rail: true, go: { s in withAnimation(.easeInOut(duration: 0.25)) { town = s } }, cafe: { model.care.requestCafe() })
                                 }
                                 VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                                     .overlay(alignment: .topLeading) {
@@ -197,9 +176,7 @@ struct GameScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 if model.care.voice.train != nil {          // the close-up's Train card (Voice/TrainCard.swift): bottom, right of the rail; landscape: the right side
-                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.40)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frameTrainCamera(card: $0, g: g) }          // the close-up keeps the whole Jelbie in the free area
-                        .onDisappear { trainCardTop = nil; trainCardLeft = nil; GameCamera.trainFrame = nil }
+                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.55)
                         .padding(.leading, vsc == .compact ? 0 : 62).padding(.trailing, 12).padding(.bottom, 10)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .transition(.opacity)
@@ -208,7 +185,7 @@ struct GameScreen: View {
             .jHUDCap()
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudPerkH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
-            }.photoHidden()
+            }
 
             BathChrome(care: model.care)
 
@@ -218,14 +195,10 @@ struct GameScreen: View {
 
             CafeChrome(care: model.care)          // the café outing: the menu card, Head home, the white fade
 
-            ParkChrome(care: model.care)          // the park outing: the picker, the visitors' cards, Go home, the white fade
-
             if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
 
-            if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
-
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -237,11 +210,6 @@ struct GameScreen: View {
             if settingsOpen {
                 SettingsMenu(openAccessibility: { withAnimation(CareMenu.spring) { settingsOpen = false }; a11yOpen = true },
                              openStudio: { withAnimation(CareMenu.spring) { settingsOpen = false }; model.paused = true; showStudio = true },
-                             mainMenu: {
-                                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving the app
-                                 settingsOpen = false
-                                 withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() }
-                             },
                              close: { withAnimation(CareMenu.spring) { settingsOpen = false } })
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, 16).padding(.top, 52)
@@ -268,7 +236,7 @@ struct GameScreen: View {
             model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
-            AudioHub.shared.setTownScene(GameScreen.townMusic(town, garden: model.care.roomID == .garden))
+            AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
@@ -314,12 +282,9 @@ struct GameScreen: View {
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
                 .presentationBackground(FocusStyle.cream)
         }
-        .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town, garden: model.care.roomID == .garden)) }
-        .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town, garden: model.care.roomID == .garden)) }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t, garden: model.care.roomID == .garden)) }
+        .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
+        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
-        .onChange(of: model.care.roomID) { _, id in if !model.care.tripActive, town == nil { AudioHub.shared.setTownScene(GameScreen.townMusic(nil, garden: id == .garden)) } }
-        .overlay { GardenOverlay(care: model.care) }
         .overlay { RoomSwitchVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
@@ -334,7 +299,7 @@ struct GameScreen: View {
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
-        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $town) }   // on the root: the HUD's pieces come and go with focus mode
+        .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $goOutOpen) }   // on the root: the HUD's pieces come and go with focus mode
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
             ZStack(alignment: .topTrailing) {
                 MelonScreen(model: studioModel) {
@@ -360,7 +325,7 @@ struct GameScreen: View {
     }
 
     /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|wave (after 4 s), -GameScript 1 (timed demo of everything).
-    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<TownScreen?> = .constant(nil)) async {
+    @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<Bool> = .constant(false)) async {
         let d = UserDefaults.standard
         let care = model.care
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
@@ -474,7 +439,7 @@ struct GameScreen: View {
         }
         if d.string(forKey: "HUDGoOut") == "open" {
             await sleep(5)
-            withAnimation(.easeInOut(duration: 0.25)) { goOut.wrappedValue = .town }
+            withAnimation(CareMenu.spring) { goOut.wrappedValue = true }
         }
         // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
         if let m = d.string(forKey: "CafeAuto") {
@@ -563,9 +528,9 @@ struct GameScreen: View {
     }
 
     /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
-    static func townMusic(_ t: TownScreen?, garden: Bool = false) -> MusicScene {
+    static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
-        case nil: return garden ? .park : .none          // the Garden plays the Park's tracks for now
+        case nil: return .none
         case .shop?: return .shop
         case .studio?, .condition?, .show?: return .studio
         default: return .town
@@ -744,7 +709,7 @@ struct CareMenu: View {
             ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    if kind == .food { care.feed(c.id, jelly: care.singledOutForFood) } else { care.drink(c.id, jelly: care.singledOutForFood) }
+                    if kind == .food { care.feed(c.id, jelly: care.singledOutJelly) } else { care.drink(c.id, jelly: care.singledOutJelly) }
                     withAnimation(Self.spring) { picker = nil; open = false }
                 } label: {
                     VStack(spacing: 3) {
@@ -782,7 +747,7 @@ struct CareMenu: View {
             ForEach(Array(list.prefix(4).enumerated()), id: \.element.item.id) { i, s in
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    care.feedSnack(s.item.id, jelly: care.singledOutForFood)
+                    care.feedSnack(s.item.id, jelly: care.singledOutJelly)
                     withAnimation(Self.spring) { snackPicker = false; open = false }
                 } label: {
                     VStack(spacing: 3) {
