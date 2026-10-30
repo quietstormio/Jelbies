@@ -85,6 +85,10 @@ final class ArmCapTests: XCTestCase {
         note("stumble"); rows.append(("stumble", capsuleStat(10, start: idle(.stumble), until: { $0.brain.idleState.kind == nil })))
         note("sit"); rows.append(("sit", capsuleStat(20, start: idle(.sit), until: { $0.brain.idleState.kind == nil })))
         note("look"); rows.append(("look", capsuleStat(20, start: idle(.look), until: { $0.brain.idleState.kind == nil })))
+        note("sleep roll"); rows.append(("sleep (yawn, roll onto the back and up)", capsuleStat(20, start: { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 2 }, until: { $0.brain.idleState.kind == nil && $0.t > 3 })))
+        for (n, k) in [("tail spin", IdleKind.tail), ("flop", .flop), ("bounce", .bounce), ("roll", .roll), ("window", .window), ("stretch", .stretch), ("peek", .peek), ("sway", .sway)] {
+            note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
+        }
         note("hop"); rows.append(("hop", capsuleStat(2, start: { $0.brain.startHopPlay(sim: $0.sim) })))
         note("name hop"); rows.append(("name hop", capsuleStat(2, start: { $0.brain.startNameHop($0.sim, $0.skinner) })))
         note("flip clean"); rows.append(("flip clean", capsuleStat(4, start: { $0.brain.startFlip(sim: $0.sim) })))

@@ -53,6 +53,8 @@ final class JellyActor {
     /// Brain says nothing is going on: no action, command, request, script, idle behaviour or exertion.
     private var brainIsStill: Bool {
         guard let b = brain, b.enabled else { return false }
+        // asleep on his back (the hold stage): the attractor is constant and nothing else is going on, so his sim may sleep too
+        if b.isNapping { return b.social == nil && b.pending == nil && !b.commanded && b.commandedIdle == nil && !b.interruptScript && !b.commandedFlip && !b.commandedNameHop }
         if case .none = b.script {} else { return false }
         return b.social == nil && b.activity == .idle && !b.commanded && b.pending == nil && b.idleState.kind == nil && b.commandedIdle == nil && !b.isExerting
     }

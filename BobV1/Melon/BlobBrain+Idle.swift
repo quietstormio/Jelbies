@@ -25,7 +25,16 @@ import simd
 typealias IdleMood = BlobMood
 
 enum IdleKind: String, CaseIterable, Sendable {
-    case wander, run, stumble, jacks, sit, slump, look, yawn, zoomies, slide, scoot
+    case wander, run, stumble, jacks, sit, slump, look, yawn, zoomies, slide, scoot, sleep
+    // solo antics (2026-10-19), all built from the existing moves: BlobBrain+Antics.swift
+    case tail          // spin in place 1...3 turns after his own tail, then a dizzy wobble
+    case flop          // plops down flat (squash, a lean over) and wobbles back up
+    case window        // walks nowhere: turns to the back wall and looks out of the nearest window
+    case peek          // goes to the end of the sofa, ducks and peeks out
+    case stretch       // the yawn's stretch without the yawn
+    case bounce        // 3...5 happy hops on the spot
+    case roll          // the existing roll, a short way sideways
+    case sway          // sits and sways to the music
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -39,23 +48,43 @@ enum IdleTable {
     }
     /// Time of day on top of the mood table: at night the lively moves fade and sit (nap) / yawn grow; in the morning yawn (stretch and wake) grows.
     /// With night = morning = 0 this is exactly `weights(m)`.
-    static func weights(_ m: IdleMood, night: Float, morning: Float) -> [(kind: IdleKind, weight: Float)] {
+    static func weights(_ m: IdleMood, night: Float, morning: Float, sleep: Bool = false, antics: Bool = false, music: Bool = false) -> [(kind: IdleKind, weight: Float)] {
         var w = weights(m)
+        if antics { w = anticWeights(m, base: w, music: music) }
         guard night > 0.001 || morning > 0.001 else { return w }
         func add(_ k: IdleKind, _ x: Float) {
             if let i = w.firstIndex(where: { $0.kind == k }) { w[i].weight += x } else { w.insert((k, x), at: 0) }
         }
-        for i in w.indices where w[i].kind != .wander && w[i].kind != .sit && w[i].kind != .yawn && w[i].kind != .slump { w[i].weight *= 1 - 0.75 * night }
-        add(.sit, 4 * night)
+        for i in w.indices where w[i].kind != .wander && w[i].kind != .sit && w[i].kind != .yawn && w[i].kind != .slump && w[i].kind != .sleep
+            && w[i].kind != .stretch && w[i].kind != .window && w[i].kind != .sway { w[i].weight *= 1 - 0.75 * night }
+        add(.sit, (sleep ? 1.5 : 4) * night)
+        if sleep { add(.sleep, 12 * night) }          // bedtime: asleep on his back (BlobBrain+Sleep.swift)
         add(.yawn, 2.5 * night + 3 * morning)
+        if antics { add(.stretch, 1.5 * morning) }
+        return w
+    }
+    /// The extra solo antics on top of a mood's table (the room life; the headless suites that predate them do not ask for them). The wander share shrinks
+    /// so something visible happens more often.
+    static func anticWeights(_ m: IdleMood, base: [(kind: IdleKind, weight: Float)], music: Bool) -> [(kind: IdleKind, weight: Float)] {
+        var w = base
+        let extra: [(IdleKind, Float)]
+        switch m {
+        case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.roll, 1.2), (.stretch, 1.0), (.window, 1.0), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0)]
+        case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0)]
+        case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6)]
+        }
+        for (k, x) in extra where x > 0 { w.append((k, x)) }
+        if let i = w.firstIndex(where: { $0.kind == .wander }) { w[i].weight = 1 }
         return w
     }
     /// The special (non-wander) behaviours of a mood.
     static func set(_ m: IdleMood) -> Set<IdleKind> { Set(weights(m).map { $0.kind }.filter { $0 != .wander }) }
     /// Weighted pick, never `last`. `r` in 0..<1.
-    static func pick(_ m: IdleMood, last: IdleKind?, r: Float, night: Float = 0, morning: Float = 0) -> IdleKind {
-        // never the same special twice in a row (unless the mood has only one)
-        let w = weights(m, night: night, morning: morning).filter { $0.kind != last || $0.kind == .wander || set(m).count < 2 }
+    static func pick(_ m: IdleMood, last: IdleKind?, r: Float, night: Float = 0, morning: Float = 0, sleep: Bool = false, antics: Bool = false, music: Bool = false,
+                     cooling: Set<IdleKind> = []) -> IdleKind {
+        // never the same special twice in a row (unless the mood has only one), and none that is still on its own cooldown
+        var w = weights(m, night: night, morning: morning, sleep: sleep, antics: antics, music: music).filter { $0.kind != last || $0.kind == .wander || set(m).count < 2 }
+        if !cooling.isEmpty { let f = w.filter { !cooling.contains($0.kind) }; if !f.isEmpty { w = f } }
         let total = w.reduce(0) { $0 + $1.weight }
         var x = r * total
         for e in w { if x < e.weight { return e.kind }; x -= e.weight }
@@ -93,13 +122,15 @@ extension BlobBrain {
     /// blend-out) is on, so the run / zoomies / slide keep their tuned, feet-attached gait exactly (`runW` = 1 gives the old numbers).
     static let walkBoost: Float = 1.1427
     var walkBoostNow: Float { walkBoostK }
+    /// Waits between behaviours: half while the player is watching (the stage turns `watching` on in the room; the headless suites leave it off).
+    var idleLively: Float { watching ? 0.5 : 1 }
     var runStrideMul: Float { (1 + 0.2 * runW + 0.0 * zoomW) * walkBoostNow }
     var runRateMul: Float { 1 + 0.125 * runW + 0.20 * zoomW }
 
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies: return .walking
-        case .jacks, .slide, .scoot: return .playing
+        case .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop: return .playing
         default: return .lookingAround
         }
     }
@@ -108,11 +139,16 @@ extension BlobBrain {
 
     /// Called from `pickAutonomous` (a pick is due, script .none): starts a special when the cooldown is over. True = a behaviour started.
     func idleMaybeStart(_ sim: SoftBody) -> Bool {
+        if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !idleBlocked, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         guard idleState.kind == nil, !idleBlocked, idleState.cooldown <= 0, attached else { return false }
-        let kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning)
-        if kind == .wander { idleState.cooldown = rand(5, 9); return false }
+        var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
+                                                 cooling: anticsEnabled ? kindCooling : [])
+        if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
+        if kind == .wander { idleState.cooldown = rand(5, 9) * idleLively; return false }
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
+        if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once
         let started = idleStart(kind, sim)
+        if started, anticsEnabled { kindCooldownStart(kind) }
         if started && kind == .zoomies { socialOfferZoomies(sim) }
         return started
     }
@@ -125,6 +161,7 @@ extension BlobBrain {
 
     /// Every tick before the gait: counts the cooldown, yields to anything else, notices the end of a run.
     func idleGate(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if !kindCool.isEmpty { for k in Array(kindCool.keys) { let v = kindCool[k]! - dt; if v <= 0 { kindCool[k] = nil } else { kindCool[k] = v } } }
         let boostWant: Float = (runW == 0 && zoomW == 0 && idleState.kind == nil) ? Self.walkBoost : 1
         // a run / zoomies / slide drops the boost at once (their gait is tuned without it); it comes back eased (~0.5 s) so the stride never jumps mid-step
         if boostWant < walkBoostK { walkBoostK = boostWant } else { walkBoostK = min(boostWant, walkBoostK + dt * 0.3) }
@@ -138,7 +175,9 @@ extension BlobBrain {
         var mine = false
         switch script {
         case .idle: mine = true
-        case .walk: mine = kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0)
+        case .spin: mine = kind == .tail
+        case .hopPlay, .rollPlay: mine = kind == .roll
+        case .walk: mine = kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0)
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
             if kind == .zoomies && idleState.phase == 0 {
@@ -147,12 +186,17 @@ extension BlobBrain {
                 script = .idle; activity = .walking
                 jellyKick = 3.2
             }
+            else if kind == .sleep && sleep.stage == 0 { mine = true; sleepArrived(sim, skinner) }
+            else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
+            else if kind == .tail { mine = true; tailNext(skinner) ; return }
+            else if kind == .roll && idleState.t > 0.15 { idleFinish(skinner); return }
         default: mine = false
         }
         if !mine { idleReset(skinner); return }
         if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (idleBlocked && !commanded)) && !idleState.yielding {
             switch kind {
-            case .sit, .slump, .look, .yawn: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
+            case .sit, .slump, .look, .yawn, .stretch, .window, .sway: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
+            case .sleep where sleep.stage >= 2 && sleep.stage <= 4: idleState.yielding = true; sleepWake(groggy: false, fast: true)
             default: abortAll(sim, skinner); return
             }
         }
@@ -193,7 +237,7 @@ extension BlobBrain {
         if let k = idleState.kind {
             idleState.last = k == .stumble ? .run : k
             idleState.counts[k, default: 0] += 1
-            if cooldown { idleState.cooldown = runMoveDemo != nil ? 2.5 : max(6, rand(11, 22) - idleState.t) }
+            if cooldown { idleState.cooldown = runMoveDemo != nil ? 2.5 : max(6 * idleLively, rand(11, 22) * idleLively - idleState.t) }
         }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
         napping = false
@@ -229,10 +273,10 @@ extension BlobBrain {
 
     // MARK: starting
 
-    private func idleBegin(_ kind: IdleKind) {
+    func idleBegin(_ kind: IdleKind) {
         idleState.kind = kind; walkBoostK = 1
         idleState.t = 0; idleState.phase = 0; idleState.phaseT = 0; idleState.k = 0; idleState.yielding = false; idleState.yieldT = 0
-        idleState.steps = 0; idleState.stumbleAt = 0
+        idleState.steps = 0; idleState.stumbleAt = 0; flopKicks = 0
         idleState.sign = rand() < 0.5 ? -1 : 1
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
     }
@@ -255,7 +299,7 @@ extension BlobBrain {
             script = .walk(target: g, then: .none); activity = .walking
         case .scoot:
             // 3...5 quick bunny hops toward a spot ~1.2...1.9 u away (the hops themselves run in `idleBodyMoveTick`)
-            guard let g = pickRunGoal(from: here, minD: 1.3, maxD: 2.0) else { return false }
+            guard let g = goal ?? pickRunGoal(from: here, minD: 1.3, maxD: 2.0) else { return false }
             idleBegin(.scoot)
             idleState.target = g
             idleState.reps = 3 + Int(rand() * 3)
@@ -276,10 +320,9 @@ extension BlobBrain {
             idleState.hop = 0; idleState.landT = 0; idleState.jackA = 0
             idleState.baseYaw = yaw
             script = .idle; activity = .playing
-        case .sit, .slump:
+        case .sit, .slump, .sway:
             idleBegin(kind)
             idleState.hold = rand(6, 12)
-            if kind == .sit, idleNight > 0.5 { napping = true; idleState.hold = 40 + idleState.hold * 4 }       // a night nap: 64...88 s, eyes closed
             // face the camera, or a little away from it (a content sit is turned a touch, the slump faces away)
             let off: Float = kind == .slump ? 0.6 : 0.3
             idleState.goalYaw = faceCameraYaw() + idleState.sign * off * (kind == .slump ? 1 : rand(0.4, 1))
@@ -291,9 +334,44 @@ extension BlobBrain {
             idleState.goalYaw = faceCameraYaw() + idleState.sign * rand(0.8, 1.3)
             if let aim = socialLookAim() { idleState.goalYaw = aim.yaw; idleState.hold = aim.hold }
             script = .idle; activity = .lookingAround
-        case .yawn:
-            idleBegin(.yawn)
+        case .window:
+            // turn to the back wall and look out of the nearest window (the LOOK posture, held longer)
+            idleBegin(.window)
+            idleState.baseYaw = yaw
+            idleState.hold = rand(3.0, 4.6)
+            let wx = RoomGeometry.windowXs.min { abs($0 - px) < abs($1 - px) } ?? 0
+            idleState.goalYaw = atan2f(wx - px, RoomLayout.minZ - pz)
             script = .idle; activity = .lookingAround
+        case .yawn, .stretch:
+            idleBegin(kind)
+            script = .idle; activity = .lookingAround
+        case .tail:
+            idleBegin(.tail)
+            idleState.reps = Int(rand() * 3)          // 0...2 more turns after the first
+            startSpin(sim: sim)
+            AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5)
+        case .roll:
+            idleBegin(.roll)
+            startRoll(sim)
+            AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
+        case .bounce:
+            idleBegin(.bounce)
+            idleState.target = here
+            idleState.reps = 3 + Int(rand() * 3)
+            idleState.hop = 0; idleState.landT = 0
+            script = .idle; activity = .playing
+            idleState.phase = 1; idleState.phaseT = 0
+            idleScootHop(sim)
+        case .flop:
+            idleBegin(.flop)
+            script = .idle; activity = .playing
+        case .peek:
+            guard let spot = peekSpot(from: here) else { return false }
+            idleBegin(.peek)
+            idleState.target = spot
+            script = .walk(target: spot, then: .none); activity = .walking
+        case .sleep:
+            return sleepBegin(sim, night: idleNight > 0.4 || idleDeepNight > 0.5)
         }
         return true
     }
@@ -331,9 +409,11 @@ extension BlobBrain {
         switch kind {
         case .stumble: runStumble(sim, skinner, dt)
         case .zoomies: runZoomStop(sim, skinner, dt)
-        case .sit, .slump: runSit(sim, skinner, dt, slump: kind == .slump)
-        case .look: runLook(sim, skinner, dt)
-        case .yawn: runYawn(sim, skinner, dt)
+        case .sit, .slump, .sway: runSit(sim, skinner, dt, slump: kind == .slump)
+        case .look, .window: runLook(sim, skinner, dt)
+        case .yawn, .stretch: runYawn(sim, skinner, dt)
+        case .flop, .peek: runPosePlay(sim, skinner, dt)
+        case .sleep: runSleep(sim, skinner, dt)
         case .jacks:
             // phase 0 only: stand square toward the camera and lift the arms; the hops themselves run in `idleJacksTick`
             _ = turnSteps(goal: idleState.baseYaw, tol: 0.05)
@@ -468,7 +548,8 @@ extension BlobBrain {
         let breath = sinf(2 * .pi * t * 0.30)
         squash *= 1 - (slump ? 0.27 : 0.32) * k + (slump ? 0.008 : 0.016) * breath * k
         pitch += (slump ? 0.34 : -0.06) * k
-        if !slump {
+        if idleState.kind == .sway { roll += 0.10 * k * sinf(2 * .pi * t / 1.7) }          // sways to the music
+        else if !slump {
             let win = max(0, sinf(2 * .pi * t / 8.0)); roll += 0.055 * k * win * win * sinf(2 * .pi * t / 3.2)
         }
         skinner.setEyeOpenness(1 - (slump ? 0.62 : (napping ? 0.93 : 0.5)) * k)
@@ -503,7 +584,7 @@ extension BlobBrain {
         gaitPose(sway: 0.05, bob: 0.0, rock: 0.2)
         let t = idleState.t
         roll += idleState.sign * 0.10 * k + 0.012 * k * sinf(2 * .pi * t * 0.9)
-        pitch += 0.05 * k + 0.02 * k * sinf(2 * .pi * t * 1.3)
+        pitch += (idleState.kind == .window ? -0.06 : 0.05) * k + 0.02 * k * sinf(2 * .pi * t * 1.3)
     }
 
     // MARK: yawn / stretch
@@ -546,7 +627,7 @@ extension BlobBrain {
         armDirW = smooth01(k)
         armDirEl = [0.95, 0.95]; armDirSa = [0.12, 0.12]; armDirOut = 0.07
         skinner.setEyeOpenness(1 - 0.85 * smooth01(k))
-        mouthOpen = mouth
+        mouthOpen = idleState.kind == .stretch ? 0 : mouth
     }
 
     // MARK: finishing
@@ -557,7 +638,7 @@ extension BlobBrain {
         mouthOpen = 0
         armWalkWant = 0
         script = .none
-        restTimer = rand(1.0, 2.5)
+        restTimer = rand(1.0, 2.5) * idleLively
     }
 
     // MARK: belly slide + scoot (the hop machinery owns the body, like the jacks)
@@ -588,26 +669,27 @@ extension BlobBrain {
         let here = SIMD2(pose.centroid.x, pose.centroid.z)
         let d = idleState.target - here
         let dl = simd_length(d)
-        let step = min(Self.scootHop, dl)
+        let step = idleState.kind == .bounce ? 0 : min(Self.scootHop, dl)
         let u = dl > 1e-3 ? d / dl : SIMD2(sinf(yaw), cosf(yaw))
         let rv = resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)
         gait.facingYaw = atan2f(u.x, u.y)
         gait.home = here
         poseW = 0; poseOn = false
-        gait.hopApex = Self.scootApex
-        gait.hopDuration = 0.26 * sqrtf(Self.scootApex / 0.10)
+        let apex: Float = idleState.kind == .bounce ? Self.bounceApex : Self.scootApex
+        gait.hopApex = apex
+        gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
         gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
         idleState.landT = 0
     }
-    static let scootHop: Float = 0.34, scootApex: Float = 0.07
+    static let scootHop: Float = 0.34, scootApex: Float = 0.07, bounceApex: Float = 0.12
 
     /// Belly slide and scoot, ticked each step while they run (true = this tick is fully handled).
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
-        guard let kind = idleState.kind, kind == .slide || kind == .scoot, idleState.phase >= 1, case .idle = script else { return false }
+        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce, idleState.phase >= 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt
-        let hopGoal: Float = kind == .scoot ? -hopTipBack * attentionPitch * amplitude : 0
+        let hopGoal: Float = kind != .slide ? -hopTipBack * attentionPitch * amplitude : 0
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
@@ -723,11 +805,4 @@ extension BlobBrain {
         }
         commitBeans(sim, skinner, dt, want: tuck > 0.002 || spread > 0.002)
     }
-}
-
-extension BlobBrain {
-    /// Settled into a night nap (the sit's hold phase): music, snores and the slower drain read this.
-    var isNapping: Bool { napping && idleState.kind == .sit && idleState.phase == 2 && !idleState.yielding }
-    /// Hunger / thirst drain scale: half while he naps at night.
-    var napDrainScale: Float { isNapping ? NeedsTuning.napDrain : 1 }
 }

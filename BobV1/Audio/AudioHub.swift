@@ -48,7 +48,7 @@ final class AudioHub {
     @ObservationIgnored private var variantCount: [String: Int] = [:]
     @ObservationIgnored private var lastPlay: [String: Double] = [:]
     @ObservationIgnored private var lastFoot: [Double] = [0, 0, 0]
-    @ObservationIgnored private var nextSnore: [Double] = [0, 0, 0]
+    @ObservationIgnored private var snores = SnoreScheduler()
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
     @ObservationIgnored private var lastMood: [Int: BlobMood] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -135,6 +135,9 @@ final class AudioHub {
     }
     var isDucked: Bool { duck.isDucked || duck.listening }
 
+    /// Music is on and audible (the Jellies sway to it).
+    var musicAudible: Bool { started && !muted && settings.musicLevel > 0.05 }
+
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
@@ -143,14 +146,8 @@ final class AudioHub {
         input.allNapping = !napping.isEmpty && !napping.contains(false)
         input.playing = playing
         let now = CACurrentMediaTime()
-        for i in napping.indices where i < 3 {
-            if napping[i] {
-                if nextSnore[i] == 0 { nextSnore[i] = now + Double.random(in: 2...5) }
-                if now >= nextSnore[i] {
-                    nextSnore[i] = now + Double.random(in: 6...11)
-                    play(.snore, jelly: i, x: i < xs.count ? xs[i] : 0)
-                }
-            } else { nextSnore[i] = 0 }
+        for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
+            play(.snore, jelly: i, x: i < xs.count ? xs[i] : 0)
         }
         for i in moods.indices {
             if let old = lastMood[i], old != moods[i] {

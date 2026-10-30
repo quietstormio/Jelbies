@@ -341,6 +341,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                     self.model.touch.spawnHeart(now: CACurrentMediaTime())
                     b.commandedNameHop = true
                 case .scold: b.commandedIdle = .slump
+                case .goodnight: b.commandedGoodnight = true
                 }
             }
         }
@@ -436,6 +437,31 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game { model.care.tickOthers(actors, dt: sim.stepDt) }
     }
 
+    /// Tucked in: everybody is asleep and at least one was put to bed by voice ("goodnight"): the lamp dims and a quilt lies over the pile.
+    private var tuckAmount: Float = 0
+    private func updateTuck(_ renderer: MelonRenderer, dt: Float) {
+        let brains = actors.compactMap(\.brain)
+        let down = !brains.isEmpty && brains.allSatisfy { $0.isNapping } && brains.contains { $0.sleep.tucked }
+        tuckAmount += max(-dt / 1.5, min(dt / 2.5, (down ? 1 : 0) - tuckAmount))
+        if !down, tuckAmount < 0.01 { tuckAmount = 0 }
+        renderer.tuckAmount = tuckAmount
+        if down, let q = Self.quiltSpot(for: brains.map(\.position)) { renderer.quiltSpot = q }
+    }
+    /// The quilt over the sleepers' feet: their bounding box, a little bigger.
+    static func quiltSpot(for ps: [SIMD2<Float>]) -> (centre: SIMD2<Float>, half: SIMD2<Float>)? {
+        guard !ps.isEmpty else { return nil }
+        var lo = ps[0], hi = ps[0]
+        for p in ps { lo = simd_min(lo, p); hi = simd_max(hi, p) }
+        return ((lo + hi) * 0.5 + SIMD2(0, 0.62), SIMD2((hi.x - lo.x) * 0.5 + 1.0, (hi.y - lo.y) * 0.5 + 0.34))
+    }
+
+    /// The player is looking at the room: the app is in front and no close-up / menu is open (the room life then keeps something happening).
+    private var roomWatched: Bool {
+        guard game else { return false }
+        let c = model.care
+        return !model.paused && !c.focus.isActive && !c.trayOut && !c.bath.active && !c.select.isSelecting
+    }
+
     /// Feeds the audio hub (music mood, snores, mood chirps) from the Jellies, about 10 times a second. A no-op while muted (tests).
     private var audioClock = 0
     private func audioSituation() {
@@ -448,7 +474,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             guard let b else { continue }
             switch b.idleState.kind { case .zoomies?, .jacks?, .slide?, .scoot?: playing = true; default: break }
             if b.activity == .playing { playing = true }
-            if let s = b.social, s.kind != .squabble, s.kind != .look { playing = true }
+            if let s = b.social, ![.squabble, .look, .nuzzle, .sitTogether, .sneak].contains(s.kind) { playing = true }          // (chase / tag, dances, bumps ... start the play music)
         }
         if model.touch.thrown { playing = true }          // a toy thrown / bounced in the close-up
         let napping = brains.map { $0?.isNapping ?? false }
@@ -461,7 +487,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard let brain = a.brain, brain.enabled else { return }
         if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
         brain.amplitude = reduce ? 0.55 : 1
-        brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor
+        brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
+        brain.sleepEnabled = game; brain.anticsEnabled = game; brain.watching = game && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
         a.skinner.jelly.tick(brain: brain, sim: a.sim, dt: a.sim.stepDt)
@@ -474,7 +501,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             wasHopping = false
             if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
             brain.amplitude = reduce ? 0.55 : 1
-            brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor
+            brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
+            brain.sleepEnabled = game; brain.anticsEnabled = game; brain.watching = game && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut || model.care.bath.active) && !brain.commanded
@@ -562,6 +590,11 @@ final class MelonController: NSObject, MTKViewDelegate {
                 b.currentPose(a.sim)
             }
             wireVoiceSocial()
+            model.care.voice.onGoodnight = { [weak self] ids in
+                guard let self else { return }
+                // the first in the list goes to bed first (the others gather beside him)
+                for id in ids.sorted() where id < self.actors.count { self.actors[id].brain?.commandedGoodnight = true }
+            }
         }
         for a in actors { a.reset(drop: model.reduceMotion ? 0 : 0.35, shift: count > 1) }
         model.particles = body.n
@@ -803,6 +836,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let camIn = game && model.care.focus.blend > 0.25
         var light = game ? GameCamera.light(centroids: actors.filter { !(camIn && model.care.focusHides($0.id)) }.map { $0.sim.centroid() }) : rig.light(centroid: c)
         if game { light.intensity *= DayLight.at(hour: DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
+        if game { updateTuck(renderer, dt: 1.0 / 60) }
 
         // MetalFX: the drawable stays native; the scene renders smaller and is upscaled. Otherwise render size == drawable size.
         var rw = Int(view.drawableSize.width), rh = Int(view.drawableSize.height)

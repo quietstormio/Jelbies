@@ -25,7 +25,18 @@
 import Foundation
 import simd
 
-enum SocialKind: String, CaseIterable, Sendable { case look, boop, follow, zoomies, greet, squabble }
+enum SocialKind: String, CaseIterable, Sendable {
+    case look, boop, follow, zoomies, greet, squabble
+    // more play (2026-10-19), BlobSocial+Play.swift: all sequenced from the existing moves
+    case chase          // tag: one runs, the other chases, a tag (a soft bump), the roles swap
+    case bump           // belly bump: both lean in and bounce off each other (a jelly kick each), then a hop
+    case nuzzle         // side by side, heads leaning together, eyes half shut
+    case sitTogether    // side by side on the rug: both sit
+    case dance          // synchronised: both do the jumping jacks (or happy bounces)
+    case sneak          // one sneaks up behind the other and boops him: a startle hop
+    case keepAway       // one keeps dodging (scoot hops) away from the other near the sofa
+    case line           // follow the leader, a line of three
+}
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
 
@@ -43,6 +54,10 @@ enum SocialTuning {
     nonisolated(unsafe) static var pickChance: Float = 0.24
     static let brainCooldown: (Float, Float) = (6, 12.5)
     static let pairCooldown: (Float, Float) = (12.5, 22.5)
+    /// While the player is watching the room (`BlobBrain.watching`): roughly twice the chance and half the waits.
+    /// Rounds of tag / keep-away.
+    static let chaseRounds = 2, keepAwayRounds = 2
+    static let livelyChance: Float = 4.0, livelyWait: Float = 0.25
     static let lookCooldown: Float = 20
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
     static let greetApart: Float = 20
@@ -70,12 +85,16 @@ struct SocialBook {
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false
     var started: [SocialKind: Int] = [:]
+    var lastKind: SocialKind?
+    var roundSeen = -1
 }
 
 final class SocialSession {
     let kind: SocialKind
     weak var a: BlobBrain?                       // the initiator (follow: the follower)
     weak var b: BlobBrain?                       // follow: the leader
+    weak var c: BlobBrain?                       // line: the second follower (follows `a`)
+    var idC = -1
     let idA: Int, idB: Int
     var phase = 0
     var t: Float = 0, phaseT: Float = 0
@@ -85,10 +104,12 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether }
+    var round = 0, roles = 0, fastMoves = 0
+    var goal = SIMD2<Float>.zero
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }
     nonisolated deinit {}
-    func involves(_ id: Int) -> Bool { id == idA || id == idB }
+    func involves(_ id: Int) -> Bool { id == idA || id == idB || id == idC }
     func setPhase(_ p: Int) { phase = p; phaseT = 0 }
     func finish(_ how: SocialEnd) { if end == nil { end = how } }
 }
@@ -174,11 +195,13 @@ extension BlobBrain {
 
     // MARK: starting
 
-    private func newSession(_ kind: SocialKind, with o: BlobBrain, duration: Float) -> SocialSession {
+    func newSession(_ kind: SocialKind, with o: BlobBrain, duration: Float, third: BlobBrain? = nil) -> SocialSession {
         let s = SocialSession(kind: kind, a: self, b: o)
         s.duration = duration
         social = s; o.social = s
+        if let c = third { s.c = c; s.idC = c.steerID; c.social = s; c.socialBook.glanceDone = false }
         socialBook.started[kind, default: 0] += 1
+        s.fastMoves = 0
         socialBook.glanceDone = false; o.socialBook.glanceDone = false
         socialBook.apartStarted = false; o.socialBook.apartStarted = false
         socialBook.sheepishStarted = false; o.socialBook.sheepishStarted = false
@@ -192,7 +215,7 @@ extension BlobBrain {
     @discardableResult
     func socialStart(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
         guard socialFree, o.socialFree, o !== self else { return false }
-        currentPose(sim); o.currentPose(sim)
+        currentPose(sim)          // (his own body only: the partner has a sim of his own, and re-seeding HIS root from THIS sim teleported him onto the initiator)
         let me = position, you = o.position
         let d = simd_distance(me, you)
         switch kind {
@@ -207,7 +230,7 @@ extension BlobBrain {
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .follow:
             guard d > peerGap * 0.8, d < 5.5 else { return false }
-            let s = newSession(.follow, with: o, duration: rand(6, 9))
+            let s = newSession(.follow, with: o, duration: anticsEnabled ? rand(4.5, 7) : rand(6, 9))
             s.leaderWait = 0.2
         case .greet:
             guard d < 2.6 else { return false }
@@ -222,6 +245,8 @@ extension BlobBrain {
             socialBook.lookHold = rand(1.4, 2.2)
             o.socialBook.glanceDelay = rand(0.5, 1.1)
             if !idleStart(.look, sim) { social = nil; o.social = nil; return false }
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line:
+            return socialStartPlay(kind, with: o, sim)
         case .zoomies:
             guard d < 6 else { return false }
             guard idleState.kind == nil else { return false }
@@ -235,7 +260,7 @@ extension BlobBrain {
 
     /// The scheduler's roll (top of pickAutonomous). True = a social started.
     func socialMaybeStart(_ sim: SoftBody) -> Bool {
-        guard socialBook.enabled, social == nil, socialBook.cooldown <= 0, socialFree else { return false }
+        guard socialBook.enabled, social == nil, socialBook.cooldown <= 0, socialFree, idleDeepNight < 0.5 else { return false }
         let ps = socialOthers().map { (id: $0.steerID, pos: $0.position, b: $0) }
         if ps.isEmpty { return false }
         var cands: [(BlobBrain, Float)] = []
@@ -246,14 +271,16 @@ extension BlobBrain {
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
         }
         if cands.isEmpty { return false }
-        guard rand() < SocialTuning.pickChance else { return false }
+        guard rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
-        let w: [(SocialKind, Float)] = [(.boop, 3), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
+        var w: [(SocialKind, Float)] = [(.boop, 3), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
+        if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
         let total = w.reduce(0) { $0 + $1.1 }
         var x = rand() * total
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
+        if anticsEnabled { socialBook.lastKind = kind }
         return socialStart(kind, with: o, sim)
     }
 
@@ -404,8 +431,10 @@ extension BlobBrain {
         let pid = s.idA == steerID ? s.idB : s.idA
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
-            socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1)
-            socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1)
+            let wait = watching ? SocialTuning.livelyWait : 1
+            socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
+            socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
+            if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
         onSocial?(.ended(s.kind, partner: pid, s.end ?? .aborted))
@@ -445,7 +474,7 @@ extension BlobBrain {
             return
         }
         guard let o else { s.finish(.aborted); socialRelease(skinner, hard: true); return }
-        if socialTaken || o.socialTaken || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
+        if socialTaken || o.socialTaken || (s.c?.socialTaken ?? false) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
         if isA { s.t += dt; s.phaseT += dt }          // the initiator keeps the session clock (one tick per frame)
         switch s.kind {
         case .boop: driveBoop(s, o, isA, sim, skinner, dt)
@@ -454,18 +483,19 @@ extension BlobBrain {
         case .zoomies: driveZoomies(s, o, isA)
         case .greet: driveGreet(s, o, isA, sim, dt)
         case .look: driveLook(s, o, isA, sim, dt)
+        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line: drivePlay(s, o, isA, sim, skinner, dt)
         }
         if let e = s.end, isA { _ = e }
     }
 
     /// 0...1...0 pulse: rises over `up`, falls over `down`.
-    private func pulse(_ t: Float, up: Float, down: Float) -> Float {
+    func pulse(_ t: Float, up: Float, down: Float) -> Float {
         if t <= 0 { return 0 }
         if t < up { return smooth01(t / up) }
         return 1 - smooth01((t - up) / down)
     }
 
-    private func faceEach(_ o: BlobBrain) { socialBook.hold = true; socialBook.faceYaw = yawTo(o.position) }
+    func faceEach(_ o: BlobBrain) { socialBook.hold = true; socialBook.faceYaw = yawTo(o.position) }
 
     // MARK: boop
 

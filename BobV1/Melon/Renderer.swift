@@ -680,6 +680,14 @@ final class MelonRenderer {
     var roomCacheEnabled = false
     /// Capture / test aid: draw the room at this hour instead of the DayClock's.
     var dayHourOverride: Double?
+    /// 0...1: the sleepers are tucked in (the stage sets it): the lamp dims and the quilt over the cuddle pile fades in.
+    var tuckAmount: Float = 0
+    /// Where the quilt lies (centre x, z; half size x, z): the sleepers' pile. Set by the stage.
+    var quiltSpot: (centre: SIMD2<Float>, half: SIMD2<Float>)?
+    private func quiltProps(_ t: Float) -> [RoomProp] {
+        guard let q = quiltSpot else { return [] }
+        return [RoomProp(kind: .quilt, pos: q.centre, scale: t, half: q.half)]
+    }
     private var roomCacheState = RoomCacheState()
     private var roomCacheTex: MTLTexture?
     private(set) var lastCacheAction = RoomCacheAction.bypass(.disabled)
@@ -876,7 +884,9 @@ final class MelonRenderer {
         // Game: the room and Bob share one MSAA pass that resolves straight to hdrTex (matte Bob needs no scene copy / back faces).
         if let room {
             room.fog = SIMD3(14, 32, 0.3)
-            room.daylight = dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)
+            let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
+            room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)
+            room.props = tuckQ > 0.05 ? quiltProps(tuckQ) : []
             // ---- bath: bathroom on/off, props over Bob, body shader parameters ----
             room.bathVisible = bathLook.visible
             room.bathTime = uniforms.camPos.w

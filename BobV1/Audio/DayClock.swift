@@ -191,6 +191,8 @@ final class DayClock {
 
     /// 0...1: how night-like (naps, yawns).
     var nightFactor: Float { Float(DayBlend(hour: hour).night) }
+    /// 1 from 23:00 to 6:00 (everybody asleep unless the player is busy with them), else 0.
+    var deepNightFactor: Float { let h = hour; return (h >= 23 || h < 6) ? 1 : 0 }
     /// 0...1: the stretch-and-wake hour.
     var morningFactor: Float { Float(DayBlend(hour: hour).morning) }
 }
