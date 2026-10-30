@@ -14,7 +14,9 @@ import UIKit
 final class BlueBellyCaptureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias V = BlueBelly
-    static let variants: [(V, String)] = [(.off, "off"), (.eggWider, "C2ww"), (.eggW3, "C2w3"), (.eggW4, "C2w4")]
+    static let width = ProcessInfo.processInfo.environment["BLUEBELLY_WIDTH"] == "w3" ? "w3" : "w4"
+    static let variants: [(V, String)] = width == "w3" ? [(.off, "off"), (.eggW3, "C2w3"), (.eggW3D1, "C2w3-D1"), (.eggW3D2, "C2w3-D2")]
+                                                       : [(.off, "off"), (.eggW4, "C2w4"), (.eggW4D1, "C2w4-D1"), (.eggW4D2, "C2w4-D2")]
 
     override func setUp() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { BlueBelly.current = .off; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
@@ -354,7 +356,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             for (label, tier, bath) in [("tier 0 (locked matte)", 0, false), ("fast tier 1", 1, false), ("fast tier 2", 2, false), ("fast tier 3", 3, false), ("bath shader", 0, true)] {
                 c.ren.gfxOpt.fastMatteTier = tier
                 c.ren.forceBathShader = bath
-                for (v, tag) in [(V.eggWider, "C2ww"), (V.eggW3, "C2w3"), (V.eggW4, "C2w4")] {
+                for (v, tag) in [(V.eggW4, "C2w4"), (V.eggW4D1, "C2w4-D1"), (V.eggW4D2, "C2w4-D2")] {
                     BlueBelly.current = v
                     let img = render(c, s2, cam: cam, neutral: true)
                     try save(img.uiImage()!, dir + "/tier_\(tier)\(bath ? "bath" : "")_\(tag).png")
@@ -391,16 +393,16 @@ final class BlueBellyCaptureTests: XCTestCase {
 
         // boards
         func row(_ keys: [String]) -> [UIImage] { keys.flatMap { boards[$0] ?? [] } }
-        try save(grid(row(["angle_front", "angle_34", "angle_side", "face_front"]), cols: 4), dir + "/OVERVIEW.png")
-        try save(grid(row(["angle_front", "angle_34", "angle_side", "angle_back"]), cols: 4), dir + "/BOARD_angles.png")
-        try save(grid(row(["walkfront", "walk", "walkside", "drag", "drag34"]), cols: 4), dir + "/BOARD_motion.png")
-        try save(grid(row(["sleep_front", "sleep_34", "sleep_side", "sleep_top"]), cols: 4), dir + "/BOARD_sleep.png")
-        try save(grid(row(["room", "landscape_crop", "picker_rest", "picker_orbit_front"]), cols: 4), dir + "/BOARD_context.png")
-        try save(grid(row(["roomfull", "landscape"]), cols: 4), dir + "/BOARD_room_landscape_full.png")
-        try save(grid(row(["picker_rest", "picker_orbit_front", "picker_orbit_side", "picker_orbit_back"]), cols: 4), dir + "/BOARD_picker.png")
-        try save(grid(row(["jersey", "jersey34", "mouth", "mouth34"]), cols: 4), dir + "/BOARD_clothes_mouth.png")
-        try save(grid(boards["tiers"] ?? [], cols: 3), dir + "/BOARD_tiers.png")
-        try save(grid(row(["face_front", "face_34", "face_side"]), cols: 4), dir + "/BOARD_face.png")
+        try save(grid(row(["angle_front", "angle_34", "angle_side", "face_front"]), cols: 4), dir + "/OVERVIEW_\(Self.width).png")
+        try save(grid(row(["angle_front", "angle_34", "angle_side", "angle_back"]), cols: 4), dir + "/BOARD_angles_\(Self.width).png")
+        try save(grid(row(["walkfront", "walk", "walkside", "drag", "drag34"]), cols: 4), dir + "/BOARD_motion_\(Self.width).png")
+        try save(grid(row(["sleep_front", "sleep_34", "sleep_side", "sleep_top"]), cols: 4), dir + "/BOARD_sleep_\(Self.width).png")
+        try save(grid(row(["room", "landscape_crop", "picker_rest", "picker_orbit_front"]), cols: 4), dir + "/BOARD_context_\(Self.width).png")
+        try save(grid(row(["roomfull", "landscape"]), cols: 4), dir + "/BOARD_room_landscape_full_\(Self.width).png")
+        try save(grid(row(["picker_rest", "picker_orbit_front", "picker_orbit_side", "picker_orbit_back"]), cols: 4), dir + "/BOARD_picker_\(Self.width).png")
+        try save(grid(row(["jersey", "jersey34", "mouth", "mouth34"]), cols: 4), dir + "/BOARD_clothes_mouth_\(Self.width).png")
+        try save(grid(boards["tiers"] ?? [], cols: 3), dir + "/BOARD_tiers_\(Self.width).png")
+        try save(grid(row(["face_front", "face_34", "face_side"]), cols: 4), dir + "/BOARD_face_\(Self.width).png")
     }
 
     // MARK: the poke "mustache": the real touch path vs the rig's direct press
@@ -540,8 +542,8 @@ final class BlueBellyCaptureTests: XCTestCase {
         // boards: one row per case; tiles are front / 3-4 pairs per moment
         var all: [UIImage] = []
         for (_, tiles) in rows { all += tiles }
-        try save(grid(all, cols: 4), dir + "/BOARD_poke_real_vs_rig.png")
-        try save(grid(squishBoard, cols: 4), dir + "/BOARD_squish.png")
+        try save(grid(all, cols: 4), dir + "/BOARD_poke_real_vs_rig_\(Self.width).png")
+        try save(grid(squishBoard, cols: 4), dir + "/BOARD_squish_\(Self.width).png")
     }
 
     /// Always runs: the default is off, and only the baby blue palette ever gets a mode.
