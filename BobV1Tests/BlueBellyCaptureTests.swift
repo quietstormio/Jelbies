@@ -14,7 +14,7 @@ import UIKit
 final class BlueBellyCaptureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias V = BlueBelly
-    static let variants: [(V, String)] = [(.off, "off"), (.egg, "C2"), (.eggWide, "C2w"), (.eggWider, "C2ww")]
+    static let variants: [(V, String)] = [(.off, "off"), (.eggWider, "C2ww"), (.eggW3, "C2w3"), (.eggW4, "C2w4")]
 
     override func setUp() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { BlueBelly.current = .off; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
@@ -354,7 +354,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             for (label, tier, bath) in [("tier 0 (locked matte)", 0, false), ("fast tier 1", 1, false), ("fast tier 2", 2, false), ("fast tier 3", 3, false), ("bath shader", 0, true)] {
                 c.ren.gfxOpt.fastMatteTier = tier
                 c.ren.forceBathShader = bath
-                for (v, tag) in [(V.egg, "C2"), (V.eggWide, "C2w"), (V.eggWider, "C2ww")] {
+                for (v, tag) in [(V.eggWider, "C2ww"), (V.eggW3, "C2w3"), (V.eggW4, "C2w4")] {
                     BlueBelly.current = v
                     let img = render(c, s2, cam: cam, neutral: true)
                     try save(img.uiImage()!, dir + "/tier_\(tier)\(bath ? "bath" : "")_\(tag).png")

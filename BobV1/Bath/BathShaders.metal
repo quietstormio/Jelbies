@@ -223,7 +223,7 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
             // C1 tall oval / C2 egg: one continuous marking from the belly up to the forehead (above the brows, well under the crown), B2's tone and crisp edge
             float py = (Q.y - 0.665) / 0.535;
             float hw = 0.345;
-            if (bb > 4.5) { float2 ew = bb > 6.5 ? float2(0.41, 0.35) : (bb > 5.5 ? float2(0.375, 0.32) : float2(0.335, 0.285)); hw = mix(ew.x, ew.y, smoothstep(0.35, 1.05, Q.y)); }          // C2 / C2w (+12 %) / C2ww (+22 %)          // egg: B2's width at the belly, narrower toward the forehead
+            if (bb > 4.5) { float2 ew = bb > 8.5 ? float2(0.475, 0.41) : bb > 7.5 ? float2(0.44, 0.38) : bb > 6.5 ? float2(0.41, 0.35) : (bb > 5.5 ? float2(0.375, 0.32) : float2(0.335, 0.285)); hw = mix(ew.x, ew.y, smoothstep(0.35, 1.05, Q.y)); }          // C2 / C2w (+12 %) / C2ww (+22 %) / C2w3 (+32 %) / C2w4 (+42 %)          // egg: B2's width at the belly, narrower toward the forehead
             float px = Q.x / hw;
             float dd = pow(pow(abs(px), 2.4) + pow(abs(py), 2.4), 1.0 / 2.4);
             bk = (1.0 - smoothstep(0.70, 1.0, dd)) * smoothstep(0.08, 0.30, Q.z);
@@ -470,7 +470,7 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
             // C1 tall oval / C2 egg: one continuous marking from the belly up to the forehead (above the brows, well under the crown), B2's tone and crisp edge
             float py = (Q.y - 0.665) / 0.535;
             float hw = 0.345;
-            if (bb > 4.5) { float2 ew = bb > 6.5 ? float2(0.41, 0.35) : (bb > 5.5 ? float2(0.375, 0.32) : float2(0.335, 0.285)); hw = mix(ew.x, ew.y, smoothstep(0.35, 1.05, Q.y)); }          // C2 / C2w (+12 %) / C2ww (+22 %)          // egg: B2's width at the belly, narrower toward the forehead
+            if (bb > 4.5) { float2 ew = bb > 8.5 ? float2(0.475, 0.41) : bb > 7.5 ? float2(0.44, 0.38) : bb > 6.5 ? float2(0.41, 0.35) : (bb > 5.5 ? float2(0.375, 0.32) : float2(0.335, 0.285)); hw = mix(ew.x, ew.y, smoothstep(0.35, 1.05, Q.y)); }          // C2 / C2w (+12 %) / C2ww (+22 %) / C2w3 (+32 %) / C2w4 (+42 %)          // egg: B2's width at the belly, narrower toward the forehead
             float px = Q.x / hw;
             float dd = pow(pow(abs(px), 2.4) + pow(abs(py), 2.4), 1.0 / 2.4);
             bk = (1.0 - smoothstep(0.70, 1.0, dd)) * smoothstep(0.08, 0.30, Q.z);
