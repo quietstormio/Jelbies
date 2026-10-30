@@ -642,4 +642,59 @@ final class FeatureTests: XCTestCase {
         }
         MotionLog.write("REFLOW combos=\(combos.count) worst clearance \(worstClear) at \(worstName)")
     }
+
+    /// The jumbled-junction fix (g-piptail3): under every hat / neck piece the back-to-tail junction looks exactly like the bare row. No spike stands inside the bare row's junction
+    /// keep-out, no two spike silhouettes overlap in any view from the side through the back to the other side (at the capture rig's and the room camera's elevations), the row flows
+    /// (neighbour axes turn no more than the bare row's largest turn + 5 deg), all five spikes stand, and none touches the cloth.
+    func testJunctionStaysCleanUnderEveryHatAndNeckPiece() throws {
+        guard PipTailVariant.active.reflowsUnderHat else { throw XCTSkip("restyled tail variants only (PIPTAIL=T2 / T3)") }
+        WearBody.install(MotionRig.renderMesh)
+        var hats: [WearLook] = [], necks: [WearLook] = []
+        for look in WearLook.pieces {
+            if look.slot == .neck { necks.append(look) }
+            if look.slot == .head, let p = WearMeshes.prepare(look, body: WearBody.shared), p.crownEnclosing { hats.append(look) }
+        }
+        var combos: [[WearLook]] = [[]]
+        for h in hats { combos.append([h]) }
+        for n in necks { combos.append([n]); for h in hats { combos.append([h, n]) } }
+        _ = PipSpikes.build(body: WearBody.shared, spec: .shared, layout: .bare)
+        let bare = PipSpikes.lastCones
+        XCTAssertEqual(bare.count, 5)
+        func axisTurns(_ c: [PipSpikes.ConeInfo]) -> [Float] { (1..<c.count).map { acosf(max(-1, min(1, simd_dot(c[$0 - 1].axis, c[$0].axis)))) * 180 / .pi } }
+        let bareTurn = axisTurns(bare).max() ?? 0
+        let junction = PipSpikes.bareJunction(body: WearBody.shared, spec: .shared)
+        let elevations: [Float] = [7, 14, 26.7].map { $0 * .pi / 180 }
+        var views: [(Float, Float)] = []
+        for e in elevations { for a in stride(from: 90, through: 270, by: 15) { views.append((Float(a) * .pi / 180, e)) } }
+        var worstDeep: Float = 0, bareDeep: Float = 0, skipped = 0, tested = 0, worstScale: Float = 1, worstName = "", below75: [String] = []
+        for combo in combos {
+            let names = combo.map { $0.art }
+            let fit = FeatureCompat.solve(.spines, worn: names)
+            _ = PipSpikes.build(body: WearBody.shared, spec: .shared, layout: fit.spineLayout)
+            let c = PipSpikes.lastCones, label = names.isEmpty ? "bare" : names.joined(separator: "+")
+            XCTAssertEqual(c.count, 5, "\(label): five spikes")
+            for k in c { // keep-out
+                if k.isTail { XCTAssertGreaterThanOrEqual(k.t, junction.firstTailT - 0.0021, "\(label): a tail spike stands inside the junction keep-out (t=\(k.t))") }
+                else { XCTAssertGreaterThanOrEqual(k.restY, junction.minBackY - PipSpikes.junctionEps - 1e-4, "\(label): a back spike stands inside the junction keep-out (y=\(k.restY))") }
+            }
+            XCTAssertLessThanOrEqual(axisTurns(c).max() ?? 0, bareTurn + 5, "\(label): the row turns too sharply between neighbours")
+            XCTAssertGreaterThanOrEqual(PipSpikes.lastClearance, 0, "\(label): a spike touches the worn piece")
+            for i in 0..<c.count { for j in (i + 1)..<c.count {
+                let vf = PipSpikes.viewsFor(c[i], c[j]); skipped += vf.skipped
+                for d in vf.views {
+                    tested += 1
+                    let (az, el) = (atan2f(d.x, d.z) * 180 / .pi, asinf(d.y) * 180 / .pi)
+                    let deep = PipSpikes.silhouetteDepth(c[i], c[j], d)
+                    worstDeep = max(worstDeep, deep)
+                    if label == "bare" { bareDeep = max(bareDeep, deep) }
+                    else { XCTAssertLessThanOrEqual(deep, bareDeep + 0.001, "\(label): spikes \(i) and \(j) overlap by \(deep) at azimuth \(Int(az)) elevation \(Int(el))") }
+                } }
+            }
+            let sc = zip(c, bare).map { $0.height / $1.height }.min() ?? 1
+            if sc < worstScale { worstScale = sc; worstName = label }
+            if sc < 0.75 { below75.append(String(format: "%@ %.2f", label, sc)) }
+            if label == "bare" || label == "beanie_pink" || label == "cap_team_pink+scarf_silk" || label == "cap_team_pink" { MotionLog.write(String(format: "JUNCTION %@ smallest scale vs bare %.2f heights=%@ at=%@", label, sc, c.map { String(format: "%.3f", $0.height) }.joined(separator: ","), c.map { $0.isTail ? String(format: "t%.2f", $0.t) : String(format: "y%.2f", $0.restY) }.joined(separator: ","))) }
+        }
+        MotionLog.write(String(format: "JUNCTION combos=%d silhouettePairsTested=%d skipped(view within 15deg of base line)=%d bareMaxTurn=%.1f bareSilhouetteOverlap=%.4f worstSilhouetteOverlap=%.4f worstScale=%.2f at %@ below0.75=%@", combos.count, tested, skipped, bareTurn, bareDeep, worstDeep, worstScale, worstName, below75.joined(separator: "; ")))
+    }
 }

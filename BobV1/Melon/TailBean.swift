@@ -10,13 +10,17 @@
 import Foundation
 import simd
 
-/// The restyle options for Pip's tail (mockup stage). `current` is what shipped; T1 / T2 are thinner with taller, pointier spikes. Picked once per process by the DEBUG launch aid
-/// `-PipTail current|T1|T2` (or the PIPTAIL environment variable in tests); the shipped default stays `current` until the user picks.
+/// The restyle options for Pip's tail. T3 (0.86 radius, T2's tall pointed spikes) is the SHIPPED default. `current`, T1 and T2 are kept as comparison variants for tests and DEBUG builds.
+/// Overridden once per process by the PIPTAIL environment variable (tests) or, in DEBUG builds only, the `-PipTail current|T1|T2|T3` launch argument.
 nonisolated enum PipTailVariant: String {
     case current, T1, T2, T3
     static let active: PipTailVariant = {
-        if let s = ProcessInfo.processInfo.environment["PIPTAIL"] ?? UserDefaults.standard.string(forKey: "PipTail"), let v = PipTailVariant(rawValue: ["T1", "T2", "T3"].contains(s) ? s : s.lowercased()) { return v }
-        return .current
+        func parse(_ s: String) -> PipTailVariant? { PipTailVariant(rawValue: ["T1", "T2", "T3"].contains(s) ? s : s.lowercased()) }
+        if let s = ProcessInfo.processInfo.environment["PIPTAIL"], let v = parse(s) { return v }
+        #if DEBUG
+        if let s = UserDefaults.standard.string(forKey: "PipTail"), let v = parse(s) { return v }
+        #endif
+        return .T3
     }()
     /// Tail radius multiplier along the whole length (the body-width knots in TailBean.Shape.radius are scaled by it; tip radius too).
     var radiusScale: Double { switch self { case .current: return 1; case .T1: return 0.80; case .T2: return 0.72; case .T3: return 0.86 } }
@@ -24,7 +28,7 @@ nonisolated enum PipTailVariant: String {
     var spikeHeightScale: Float { switch self { case .current: return 1; case .T1: return 1.5; case .T2: return 1.8; case .T3: return 1.8 } }
     var spikeBaseScale: Float { switch self { case .current: return 1; case .T1: return 1.1; case .T2: return 1.2; case .T3: return 1.2 } }
     var spikeTipSoft: Float { switch self { case .current: return 0.38; case .T1: return 0.34; case .T2: return 0.30; case .T3: return 0.30 } }
-    /// Variants that re-flow the back spikes under a crown-enclosing hat (instead of hiding them): everything but the shipped look.
+    /// Variants that re-flow the back spikes under a crown-enclosing hat (instead of hiding them): every variant but the old `current` look.
     var reflowsUnderHat: Bool { self != .current }
 }
 

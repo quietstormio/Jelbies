@@ -31,7 +31,7 @@ nonisolated enum PipSpikes {
     /// and heights are explicit (mean of today's row x the variant's scale x a per-spike grade) so the scales read as true multiples of today's spikes.
     static let rowStartY: Double = 1.203
     static let restyledBareSpacing: Float = 0.32               // the bare row's arc spacing between spikes (about)
-    static let reflowTailEnd: Double = 0.97                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
+    static let reflowTailEnd: Double = 1.0                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
     static let rowStartOffset: Double = 0.063                 // the first spike's base stands this far below the path's start (rowStartY 1.203 -> first base at about 1.14)
     static let restyledMinChord: Float = 0.30                 // minimum straight-line spacing of the ridge spikes
     static let restyledBaseHeight: Float = 0.095              // the shipped row's mean height
@@ -43,6 +43,71 @@ nonisolated enum PipSpikes {
     /// The smallest gap (spike surface to a worn neck piece / hat vertex) of the last layout built; negative = a spike touches the piece (diagnostic, the tests read it).
     nonisolated(unsafe) static var lastClearance: Float = .infinity
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
+    /// The last layout's cones in rest space (diagnostics for the tests): base, unit axis, height, base radius, tip softness, on the tail?, tail t.
+    struct ConeInfo { var base: SIMD3<Float>; var axis: SIMD3<Float>; var height: Float; var baseR: Float; var tipSoft: Float; var isTail: Bool; var t: Double; var restY: Float = 0; var shownBase: SIMD3<Float> = .zero }
+    nonisolated(unsafe) static var lastCones: [ConeInfo] = []
+    /// Silhouette check shared by the build and the tests: how deep two spike cones (as DRAWN: on the swelled back / the tail) overlap when seen along `d` (unit, toward the camera),
+    /// orthographic; 0 = clear. The visible part only (from 15% of the height up: the base is sunk in the skin).
+    static func silhouetteDepth(_ a: ConeInfo, _ b: ConeInfo, _ d: SIMD3<Float>) -> Float {
+        let r = simd_normalize(simd_cross(SIMD3(0, 1, 0), d)), u = simd_cross(d, r)
+        func samp(_ c: ConeInfo) -> [(SIMD2<Float>, Float)] {
+            (0...10).map { k in let q = 0.15 + 0.85 * Float(k) / 10, p = c.shownBase + c.axis * (c.height * q)
+                return (SIMD2(simd_dot(p, r), simd_dot(p, u)), c.baseR * (1 - q * (1 - c.tipSoft))) }
+        }
+        let sa = samp(a), sb = samp(b)
+        var deep: Float = 0
+        for x in sa { for y in sb { deep = max(deep, x.1 + y.1 - simd_distance(x.0, y.0)) } }
+        return deep
+    }
+    /// The views the silhouette rule covers: azimuth 90 (side) through 180 (back) to 270 (other side) every 15 deg, at the capture rig's elevations (7, 14 deg) and the room camera's (26.7).
+    static let silhouetteViews: [SIMD3<Float>] = {
+        var v: [SIMD3<Float>] = []
+        for e in [7, 14, 26.7] as [Float] { for a in stride(from: 90, through: 270, by: 15) {
+            let az = Float(a) * .pi / 180, el = e * .pi / 180
+            v.append(SIMD3(sinf(az) * cosf(el), sinf(el), cosf(az) * cosf(el)))
+        } }
+        return v
+    }()
+    /// Pairs whose base-to-base line lies within 15 deg of the view direction hide one behind the other: skipped (counted).
+    static func viewsFor(_ a: ConeInfo, _ b: ConeInfo) -> (views: [SIMD3<Float>], skipped: Int) {
+        let line = simd_normalize(b.shownBase - a.shownBase)
+        var out: [SIMD3<Float>] = [], skipped = 0
+        for d in silhouetteViews { if acosf(min(1, abs(simd_dot(line, d)))) * 180 / .pi < 15 { skipped += 1 } else { out.append(d) } }
+        return (out, skipped)
+    }
+    static func worstSilhouette(_ a: ConeInfo, _ b: ConeInfo) -> Float {
+        var w: Float = 0
+        for d in viewsFor(a, b).views { w = max(w, silhouetteDepth(a, b, d)) }
+        return w
+    }
+    nonisolated(unsafe) private static var bareSilCache: Float?
+    /// The approved bare row's own worst silhouette contact: the restyled rows may touch no more than that.
+    static func bareSilhouetteTolerance(body: WearBody, spec: FeatureSpec) -> Float {
+        if let t = bareSilCache { return t }
+        _ = bareJunction(body: body, spec: spec)
+        return bareSilCache ?? 0
+    }
+    /// The junction keep-out of the restyled variants, derived from the BARE row of the active variant (cached): back path samples below the bare row's lowest back spike and tail
+    /// samples before its first tail spike are blocked under every hat / neck piece, so the back-to-tail junction always looks exactly like the bare row.
+    nonisolated(unsafe) private static var junctionCache: (minBackY: Float, firstTailT: Double)?
+    nonisolated(unsafe) private static var bareTurnCache: Float = 0
+    static let junctionEps: Float = 0.004
+    static func bareJunction(body: WearBody, spec: FeatureSpec) -> (minBackY: Float, firstTailT: Double) {
+        if let j = junctionCache { return j }
+        let saved = (debug, lastClearance, lastLayout, lastCones)
+        _ = build(body: body, spec: spec, layout: .bare)
+        let cones = lastCones
+        (debug, lastClearance, lastLayout, lastCones) = saved
+        let backY = cones.filter { !$0.isTail }.map { $0.restY }.min()
+        let tailT = cones.filter { $0.isTail }.map { $0.t }.min()
+        let j = (backY ?? -.infinity, tailT ?? 0)
+        var w: Float = 0
+        for i in 0..<cones.count { for k in (i + 1)..<max(cones.count, i + 1) { w = max(w, worstSilhouette(cones[i], cones[k])) } }
+        bareSilCache = w
+        bareTurnCache = (1..<max(cones.count, 1)).map { acosf(max(-1, min(1, simd_dot(cones[$0 - 1].axis, cones[$0].axis)))) }.max() ?? 0
+        junctionCache = j
+        return j
+    }
 
     /// The shipped spikes' orange (the mean vertex colour of the art, measured from feature_pip_c_final.bin: about (0.92, 0.52, 0.15) linear).
     static func tones(spec: FeatureSpec) -> (base: SIMD3<Float>, tip: SIMD3<Float>) { (SIMD3(0.92, 0.48, 0.13), SIMD3(0.95, 0.56, 0.17)) }
@@ -188,6 +253,10 @@ nonisolated enum PipSpikes {
             return simd_normalize(raw - n * simd_dot(raw, n))
         }
         var blocked = [Bool](repeating: false, count: path.count)
+        if !bareLayout && vr.reflowsUnderHat {          // the junction keep-out (see bareJunction)
+            let j = bareJunction(body: body, spec: spec)
+            for i in path.indices where path[i].isTail ? path[i].t < j.firstTailT - 0.002 : path[i].rest.y < j.minBackY - PipSpikes.junctionEps { blocked[i] = true }
+        }
         if !obstacles.isEmpty {
             let H0 = restyledBaseHeight * heightScale, bR0 = H0 / aspect / 2
             for i in path.indices {
@@ -240,9 +309,17 @@ nonisolated enum PipSpikes {
         }
         func place() { for k in 0..<sps.count { let bR = sps[k].bw / 2; sps[k].baseShown = sps[k].pt.shown - sps[k].n * (0.3 * bR)
             sps[k].ax = simd_normalize(sps[k].n * cosf(sps[k].lean) + sps[k].tg * sinf(sps[k].lean)) } }
-        for _ in 0..<30 {
+        let silTol: Float = bareLayout ? .infinity : bareSilhouetteTolerance(body: body, spec: spec) + 0.0005          // restyled rows may touch no more than the approved bare row does
+        for _ in 0..<80 {
             place()
             var changed = false
+            if silTol.isFinite {          // no two spikes (neighbours or not) overlap in any covered view: the larger of an overlapping pair shrinks
+                for i in 0..<sps.count { for j in (i + 1)..<sps.count {
+                    func info(_ q: Sp) -> ConeInfo { ConeInfo(base: .zero, axis: q.ax, height: q.H, baseR: q.bw / 2, tipSoft: vr.spikeTipSoft, isTail: q.pt.isTail, t: q.pt.t, restY: 0, shownBase: q.baseShown) }
+                    if worstSilhouette(info(sps[i]), info(sps[j])) > silTol { if sps[i].H >= sps[j].H { sps[i].H *= 0.96 } else { sps[j].H *= 0.96 }; changed = true }
+                } }
+                if changed { continue }
+            }
             for k in 1..<sps.count {
                 let a = sps[k - 1], b = sps[k]
                 let diam = max(a.bw, b.bw)                                         // base diameter (= height for the current spikes)
@@ -262,13 +339,37 @@ nonisolated enum PipSpikes {
             }
             if !changed { break }
         }
+        place()
+        if !bareLayout && vr.reflowsUnderHat {          // the row must flow: neighbouring axes turn no more than the bare row's largest turn (+3 deg); nudge the leans of an offending pair toward each other
+            _ = bareJunction(body: body, spec: spec)
+            let limit = bareTurnCache + 3 * .pi / 180
+            func turn(_ k: Int) -> Float { acosf(max(-1, min(1, simd_dot(sps[k - 1].ax, sps[k].ax)))) }
+            for _ in 0..<40 {
+                var any = false
+                for k in 1..<sps.count where turn(k) > limit {
+                    any = true
+                    var best: (Float, Float, Float) = (turn(k), sps[k - 1].lean, sps[k].lean)
+                    for (da, db) in [(-0.04, 0), (0.04, 0), (0, -0.04), (0, 0.04)] as [(Float, Float)] {
+                        let la = sps[k - 1].lean, lb = sps[k].lean
+                        sps[k - 1].lean = max(0, min(0.8, la + da)); sps[k].lean = max(0, min(0.8, lb + db)); place()
+                        let t = turn(k)
+                        if t < best.0 { best = (t, sps[k - 1].lean, sps[k].lean) }
+                        sps[k - 1].lean = la; sps[k].lean = lb
+                    }
+                    sps[k - 1].lean = best.1; sps[k].lean = best.2; place()
+                }
+                if !any { break }
+            }
+        }
         var minChord = Float.infinity, minSeg = Float.infinity
         lastClearance = .infinity
+        lastCones = []
         for k in 0..<sps.count {
             let sp = sps[k]
             let H = sp.H, bR = sp.bw / 2.0, pt = sp.pt, tgP = sp.tg, n = sp.n, sK = sp.sK
             let ax = simd_normalize(n * cosf(sp.lean) + tgP * sinf(sp.lean))
             let base = pt.rest - n * (0.3 * bR)
+            lastCones.append(ConeInfo(base: base, axis: ax, height: H, baseR: bR, tipSoft: vr.spikeTipSoft, isTail: pt.isTail, t: pt.t, restY: pt.rest.y, shownBase: sp.baseShown))
             if !obstacles.isEmpty { lastClearance = min(lastClearance, coneHits(base: base, ax: ax, H: H, bR: bR, tipSoft: vr.spikeTipSoft)) }
             if k > 0 { minChord = min(minChord, simd_distance(sps[k].baseShown, sps[k - 1].baseShown) / max(sps[k].bw, sps[k - 1].bw)) }
             let start = m.pos.count
