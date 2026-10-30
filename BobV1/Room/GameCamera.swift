@@ -11,19 +11,38 @@ enum GameCamera {
     static let eye = SIMD3<Float>(0, 7.2, 14)
     static let target = SIMD3<Float>(0, 0.0, -0.3)
     static let fovY: Float = 34 * .pi / 180
+    // MARK: Bath close-up
+
+    /// Close-up of Bob in the washtub, matching the render worker's `BathSet.closeUpCamera(aspect:)` (target (0, 0.8, 1.0), elevation 0.36 rad,
+    /// ~2.6 units across). STUB: render worker owns the exact values; at merge wrap `BathSet.closeUpCamera` here.
+    static let bathVisibleWidth: Float = 2.6
+    static let bathElevation: Float = 0.36
+    static let bathTarget = SIMD3<Float>(0, 0.8, 1.0)
+    static func bathPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let visH = bathVisibleWidth / max(aspect, 0.2)
+        let dist = visH / (2 * tanf(fovY / 2))
+        let e = bathTarget + SIMD3<Float>(0, sinf(bathElevation), cosf(bathElevation)) * dist
+        return (e, bathTarget)
+    }
+
     /// Key light for the room (toward the light): front, upper left. Fixed, since the camera is.
     static let keyDir = simd_normalize(SIMD3<Float>(-0.5, 0.8, 0.55))
     /// Default portrait aspect (iPhone 17 Pro Max); the stage updates this from its real size.
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
-    static func camera(aspect: Float, focus: Float = 0) -> CameraState {
+    static func camera(aspect: Float, focus: Float = 0, bath: Float = 0) -> CameraState {
         self.aspect = aspect
         var e = eye, t = target
         if focus != 0 {
             let p = focusPose(aspect: aspect)
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
+        }
+        if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
+            let p = bathPose(aspect: aspect)
+            e += (p.eye - e) * bath
+            t += (p.target - t) * bath
         }
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0))

@@ -291,6 +291,8 @@ final class TouchPlay {
     private(set) var ramp: Float = 0             // dent engagement 0...1
     private(set) var love: Float = 0             // happiness 0...1 (eyes closed, lean, jiggle)
     private(set) var hitLocal: SIMD3<Float>?
+    /// The same fingertip hit in the world (the clean-up draws its tool there).
+    private(set) var hitWorld: SIMD3<Float>?
     private(set) var movingT: Float = 0
     private var gapT: Float = 0
     private var happyOn = false
@@ -418,6 +420,7 @@ final class TouchPlay {
         let wasContact = contact
         contact = hit != nil
         hitLocal = hit?.local
+        hitWorld = hit?.point
 
         // zone (stable for 0.1 s before it changes; a fresh touch is classified at once)
         if let h = hit {

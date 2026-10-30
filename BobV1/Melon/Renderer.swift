@@ -82,6 +82,7 @@ final class MelonRenderer {
     private(set) var room: RoomRenderer?
     /// 0...1: Bob's mouth (matte body shader). 0 = no mouth at all. The brain sets this each frame.
     var mouthOpen: Float = 0
+    var bathLook: BathLook = .dry   // STUB: render worker owns
     /// DEBUG/screenshot override: launch argument -MelonMouth <0...1>.
     private let forcedMouth: Float? = UserDefaults.standard.object(forKey: "MelonMouth") != nil ? Float(UserDefaults.standard.double(forKey: "MelonMouth")) : nil
     private let pLines: MTLRenderPipelineState

@@ -16,6 +16,7 @@ struct GameScreen: View {
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
     private var focus: BlobFocus { model.care.focus }
+    private var cleaning: Bool { model.care.bath.active }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -65,7 +66,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                        } else if !focus.isActive {
+                        } else if !focus.isActive, !cleaning {
                             GameCircleButton(systemName: "gearshape", label: "Studio") {
                                 model.paused = true
                                 showStudio = true
@@ -74,7 +75,7 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                         Spacer()
-                        if !focus.isActive {
+                        if !focus.isActive, !cleaning {
                             RosterButton(care: model.care, open: $rosterOpen)
                                 .transition(.opacity)
                         }
@@ -85,7 +86,7 @@ struct GameScreen: View {
                             .padding(.bottom, 18)
                             .transition(.opacity)
                     }
-                    HStack(alignment: .bottom, spacing: 10) {
+                    if !cleaning { HStack(alignment: .bottom, spacing: 10) {
                         VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
                             .overlay(alignment: .topLeading) {
                                 VoiceTip(voice: model.care.voice).fixedSize().offset(y: -42)
@@ -94,12 +95,14 @@ struct GameScreen: View {
                             .padding(.bottom, 4)
                         Spacer()
                         if !focus.isActive, model.care.select.actionVisible { careSlot.transition(.scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity)) }
-                    }
+                    } }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
+
+            BathChrome(care: model.care)
 
             // (the come-here tutorial card is retired: he knows "come here" from the start)
 
@@ -191,6 +194,13 @@ struct GameScreen: View {
                 await sleep(3)
             }
         }
+        // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (a few lint bits first so the roller has work)
+        if d.string(forKey: "BlobGameDemo") == "gclean" {
+            await sleep(4)
+            for _ in 0..<4 { care.bath.grime.addBit() }
+            care.bath.demo = true
+            care.clean()
+        }
         if let a = d.string(forKey: "GameAction") {
             await sleep(d.double(forKey: "GameActionDelay") > 0 ? d.double(forKey: "GameActionDelay") : 4)
             switch a {
@@ -201,6 +211,7 @@ struct GameScreen: View {
             case "feed:berries": care.feed("berries")
             case "drink:water": care.drink("water")
             case "call": care.call()
+            case "clean": care.clean()
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action
@@ -297,10 +308,12 @@ struct CareMenu: View {
     }
     /// "waterbottle.fill" exists on the deployment target (iOS 26); keep the drop as a fallback.
     static let waterSymbol = UIImage(systemName: "waterbottle.fill") != nil ? "waterbottle.fill" : "drop.fill"
+    static let cleanSymbol = UIImage(systemName: "bubbles.and.sparkles") != nil ? "bubbles.and.sparkles" : "sparkles"
     // top to bottom
     private let items = [Item(id: "care-feed", title: "Feed", symbol: "fork.knife"),
                          Item(id: "care-water", title: "Drink", symbol: CareMenu.waterSymbol),
-                         Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill")]
+                         Item(id: "care-call", title: "Come here", symbol: "hand.wave.fill"),
+                         Item(id: "care-clean", title: "Clean", symbol: CareMenu.cleanSymbol)]
 
     /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
     @State private var picker: ConsumableKind?
@@ -358,7 +371,11 @@ struct CareMenu: View {
     }
 
     private func enabled(_ item: Item) -> Bool {
-        switch item.id { case "care-feed", "care-water": return !care.trayOut; default: return true }
+        switch item.id {
+        case "care-feed", "care-water": return !care.trayOut && !care.bath.active
+        case "care-clean": return care.canClean
+        default: return !care.bath.active
+        }
     }
 
     private func row(_ item: Item, index: Int) -> some View {
@@ -376,6 +393,7 @@ struct CareMenu: View {
                     return
                 }
                 care.drink(Consumables.drinks.first?.id ?? "water")   // one drink: starts directly
+            case "care-clean": care.clean()
             default: care.comeHere()
             }
             withAnimation(Self.spring) { open = false }

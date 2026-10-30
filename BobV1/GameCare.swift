@@ -8,6 +8,8 @@
 //
 
 import Foundation
+import QuartzCore
+import UIKit
 import Observation
 import simd
 
@@ -46,6 +48,8 @@ final class GameCare {
     let dining = DiningSet()
     /// Focus mode (Come here): phase, dock selection and the camera spring. See TouchMode.swift.
     let focus = BlobFocus()
+    /// Clean: de-lint, soap, rinse, shine (Bath/BathFlow.swift). Also owns the lint that builds up in the room.
+    let bath = BathFlow()
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
     let select = BlobSelect()
     @ObservationIgnored private var approachIdle: Float = 0
@@ -94,6 +98,9 @@ final class GameCare {
         let v = voice ?? VoiceCoordinator()
         self.voice = v
         v.care = self
+        bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
+        bath.success = { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        if let ps = bath.sound as? PeelSound { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
     }
 
     // Not isolated: Swift 6.2's implicit isolated deinit (swift_task_deinitOnExecutor) aborts on the iOS 26.2 runtime; see MelonModel.
@@ -150,15 +157,30 @@ final class GameCare {
         // a bubble is held back in focus mode and while a highlight is up; it stays while his meal for that need is on
         var pinned = false
         if let n = needs.wantedNeed, trayOut, let k = servingKind { pinned = (k == .food && n == .hunger) || (k == .drink && n == .thirst) }
-        let suppressed = (focus.isActive || select.isSelecting) && !pinned
+        let suppressed = (focus.isActive || select.isSelecting || bath.active) && !pinned
         applyBubble(schedule.update(wanted: needs.wantedNeed, dt: dt, suppressed: suppressed, pinned: pinned))
     }
 
-    func wave() { if meal == nil, wanted == nil, !focus.isActive { queued = [.wave] } }
+    func wave() { if meal == nil, wanted == nil, !focus.isActive, !bath.active { queued = [.wave] } }
+    /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
+    var canClean: Bool { !trayOut && !bath.active && !focus.isActive }
+    /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
+    func clean() {
+        guard canClean, let brain = lastBrain else { return }
+        select.cancel()
+        queued.removeAll(); callRunning = false
+        voice.cancel()
+        bath.start(brain: brain)
+    }
+    @ObservationIgnored private weak var lastBrain: BlobBrain?
+    @ObservationIgnored private weak var lastSim: SoftBody?
+    /// The ✕ button.
+    func cancelClean() { if let b = lastBrain { bath.cancel(brain: b, sim: lastSim) } }
+    func finishClean() { if let b = lastBrain { bath.done(brain: b, sim: lastSim) } }
     /// "Come here": calls him to the front spot, then focus mode starts (camera close-up, actions dock, release button).
     /// A meal in progress is dropped first: the tray poofs, the piece he held goes with it.
     func comeHere() {
-        guard focus.phase == .roaming else { return }
+        guard focus.phase == .roaming, !bath.active else { return }
         select.cancel()
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0
@@ -181,7 +203,7 @@ final class GameCare {
             release()
             if focus.isActive { afterRelease = c; return }
         }
-        guard wanted == nil, meal == nil, dining.phase == .absent else { return }
+        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active else { return }
         wanted = c; servingKind = c.kind; trayOut = true
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
         resetStandWalk()
@@ -351,13 +373,15 @@ final class GameCare {
             brain.onFinished = { [weak self] r in self?.finished.append(r) }
             let base = brain.resolve
             brain.resolve = { [weak self] p, r in
+                if self?.bath.fenceLifted == true { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase
                 let rr = self?.footprint(r) ?? r
                 let q = base(p, rr)
                 return self?.obstacle(q, radius: rr) ?? q
             }
         }
+        lastBrain = brain; lastSim = sim
         let act = brain.activity
-        busy = act != .idle && act != .lookingAround && act != .steppingInPlace
+        busy = (act != .idle && act != .lookingAround && act != .steppingInPlace) || bath.active
 
         // finished jobs
         for r in finished {
@@ -424,6 +448,7 @@ final class GameCare {
         let out = wanted != nil || meal != nil || dining.isPresent
         if out != trayOut { trayOut = out }
         if !out, servingKind != nil { servingKind = nil }
-        voice.tick(care: self, brain: brain, sim: sim, dt: dt)
+        bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt)
+        if !bath.active { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
     }
 }

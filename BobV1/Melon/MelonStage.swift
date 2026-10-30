@@ -266,7 +266,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.amplitude = reduce ? 0.55 : 1
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
-                brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut) && !brain.commanded
+                brain.idleBlocked = (model.care.focus.isActive || model.care.trayOut || model.care.bath.active) && !brain.commanded
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
             let b0 = CACurrentMediaTime()
@@ -540,7 +540,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         } else {
             safe = CameraRig.fullSafeRect(pts)
         }
-        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend) : rig.camera(viewSize: pts, safeRect: safe)
+        let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend, bath: model.care.bath.cameraBlend) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
         if game, model.care.select.count > 1 || model.care.select.isSelecting { model.care.select.publish(viewProj: cam.viewProj, size: pts) { bobScreenPoints(pts, cam.viewProj) } }   // also with 1 Blob while a highlight is up: his real outline
@@ -556,6 +556,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             rw = max(2, Int((Double(rw) * k).rounded())); rh = max(2, Int((Double(rh) * k).rounded()))
         }
         renderer.roomCacheEnabled = Self.roomCacheFlag
+        if game { renderer.bathLook = model.care.bath.look }
         renderer.resize(width: rw, height: rh)
         var fp = FrameParams()
         fp.time = simTime
@@ -812,12 +813,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard game, let brain, brain.enabled else { return }
         let f = model.care.focus
         let play = model.touch
-        play.haptics.setWarm(f.phase == .approaching || f.phase == .focused)
+        let bathLive = model.care.bath.acceptsTouch
+        play.haptics.setWarm(f.phase == .approaching || f.phase == .focused || bathLive)
         play.mood = model.care.mood; play.attentionWanted = model.care.wantedNeed == .attention      // a grumpy Blob is touched with an annoyed reaction
         // getting back up: after a throw (or if he is left lying) he rights himself and walks back to the spot
         let held = mode == .grab || sim.grabbing || mode == .pet || mode == .pending || mode == .cheeks
-        play.holdsBrain = play.getUpFrame(dt: dt, now: now, held: held, focusSpot: f.isFocused ? GameCamera.callSpot : nil, sim: sim, brain: brain)
-        if !f.isFocused || model.paused {
+        play.holdsBrain = play.getUpFrame(dt: dt, now: now, held: held, focusSpot: f.isFocused ? GameCamera.callSpot : (bathLive ? BathFlow.standXZ : nil), sim: sim, brain: brain)
+        if !(f.isFocused || bathLive) || model.paused {
             if mode == .pet || mode == .pending || mode == .cheeks { mode = .none }
             cheekFingers = []; gesture.cancel(); pickArm.reset()
             DeviceMotionFeed.shared.setRunning(false)
@@ -864,6 +866,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         } else if mode != .grab, !sim.grabbing {
             play.petFrame(dt: dt, now: now, ray: ray, screen: scr, sim: sim, brain: brain, skinner: skinner, surface: restSurface)
         }
+        if bathLive { model.care.bath.touch(contact: play.contact, hitLocal: play.hitLocal, world: play.hitWorld, speed: play.speed, dt: dt) }
         // pick up / throw: the stretch he is under, the excitement while he is held up, the landing thump
         play.trackImpacts(now: now, sim: sim)
         if play.thrown, haveCam {
@@ -925,6 +928,11 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
+        if game, model.care.bath.acceptsTouch {
+            // the clean-up: every touch is a scrub (no gesture classifier: no pick up, throw or cheeks), starting anywhere
+            if mode == .none, !model.paused { mode = .pet; dragID = id; last = p; petPoint = p; touchSize = size }
+            return
+        }
         if game {
             // Voice: the second down of a double-tap on EMPTY space (no Blob under it) opens listen mode, in roaming and in focus
             if voiceTouch == nil, !model.paused {
@@ -981,6 +989,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if id == voiceTouch { return }
         if let e = emptyDown, e.id == id, hypot(p.x - e.p.x, p.y - e.p.y) > 20 { emptyDown = nil }       // a drag is not a tap
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
+        if game, id == dragID, model.care.bath.acceptsTouch, mode == .pet { petPoint = p; touchSize = size; last = p; return }
         if game, id == dragID {
             let now = CACurrentMediaTime()
             touchSize = size; last = p
@@ -1025,6 +1034,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
             return
         }
+        if game, id == dragID, mode == .pet, model.care.bath.active { mode = .none; dragID = nil; return }
         if game, id == dragID {
             let now = CACurrentMediaTime()
             let r = gesture.up(t: now)

@@ -241,6 +241,20 @@ final class SoftBody {
         endGrab(); endPress()
     }
 
+    /// Clean-up flow: puts the whole body, at rest on the floor, over floor spot `p` (centroid x, z). No velocity, no foot / arm targets, so the
+    /// first step after the move has nothing to catch up on.
+    func teleport(toXZ p: SIMD2<Float>) {
+        reset(drop: 0)
+        targets = []
+        restoreStiffness()
+        let c = centroid()
+        let dx = p.x - c.x, dz = p.y - c.z
+        for i in 0..<n {
+            x[3 * i] += dx; x[3 * i + 2] += dz
+            prev[3 * i] += dx; prev[3 * i + 2] += dz
+        }
+    }
+
     // stiffness mapping: firmness 0..1 -> edge compliance (log scale)
     private func shapeCompliance() -> Float { expf(logf(3.0) + (logf(0.05) - logf(3.0)) * firmness) }
     private func volCompliance() -> Float { 1e-4 * (1 - 0.7 * firmness) }

@@ -295,6 +295,28 @@ final class BobV1UITests: XCTestCase {
         chooseWater()
     }
 
+    /// Clean: the row runs him out of the room, the fade lands in the bath with the tool bar; the cancel button returns to the room.
+    @MainActor
+    func testCareMenuClean() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let menu = app.buttons["care-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
+        menu.tap()
+        let clean = app.buttons["care-clean"]
+        XCTAssertTrue(clean.waitForExistence(timeout: 10), "the menu has a Clean row")
+        XCTAssertTrue(clean.isEnabled)
+        XCTAssertFalse(app.buttons["care-bath"].exists, "there is no separate Bath row")
+        clean.tap()
+        let cancel = app.buttons["bath-cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 60), "the clean-up scene comes up with a cancel button")
+        XCTAssertTrue(app.staticTexts["Jelly Soap"].exists, "the tool bar is up")
+        XCTAssertFalse(menu.exists, "the care menu hides during the clean-up")
+        cancel.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 60), "cancel returns to the room")
+        XCTAssertFalse(cancel.exists)
+    }
+
     // MARK: Voice v1
 
     private func voiceApp(_ extra: [String] = []) -> XCUIApplication {
