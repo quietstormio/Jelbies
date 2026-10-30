@@ -8,7 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var flow = StartFlow.shared
     @State private var studioModel = ContentView.makeStudioModel()
-    @State private var introOn = IntroGate.shouldShow()
+    @State private var introOn = IntroGate.shouldShow() && !ContentView.skipIntro
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
     var body: some View {
@@ -36,7 +36,7 @@ struct ContentView: View {
         case .opening:
             OpeningStoryView(replay: flow.replaying) { withAnimation(.easeInOut(duration: 1.0)) { flow.finishOpening() } }.transition(.opacity)
         case .adopt(let mode):
-            AdoptionCenter(mode: mode, done: { flow.bringHome(character: $0, name: $1) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
+            AdoptionCenter(mode: mode, preview: flow.replaying, done: { flow.bringHome(character: $0, name: $1) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
                 .transition(.opacity)
         case .firstDay(let c, let n, let replay):
             FirstDayHomeView(character: c, name: n, replay: replay) { withAnimation(.easeInOut(duration: 0.8)) { flow.finishFirstDay() } }.transition(.opacity)
@@ -60,4 +60,15 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+}
+
+extension ContentView {
+    /// Simulator-only capture flag: -SkipIntro 1 goes straight past the intro clip (it does not advance in the simulator).
+    static var skipIntro: Bool {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.integer(forKey: "SkipIntro") != 0
+        #else
+        return false
+        #endif
+    }
 }

@@ -18,6 +18,7 @@ import SwiftUI
     var stepAt = Date()
     var leaving = false
     var snapshot: [String: Any] = [:]
+    var owns = false                // this view took the snapshot (the capture flag); a real replay's is StartFlow's
     var task: Task<Void, Never>?
 }
 
@@ -58,7 +59,7 @@ struct FirstDayHomeView: View {
         .opacity(st.leaving ? 0 : 1)
         .animation(.easeOut(duration: 0.5), value: st.leaving)
         .task { begin() }
-        .onDisappear { st.task?.cancel(); if replay { Self.restore(st.snapshot); st.snapshot = [:] } }
+        .onDisappear { st.task?.cancel(); if st.owns { Self.restore(st.snapshot); st.snapshot = [:]; st.owns = false } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("first-day-home")
     }
@@ -73,7 +74,7 @@ struct FirstDayHomeView: View {
         let age = st.readyAt.map { now.timeIntervalSince($0) } ?? -1
         return ZStack {
             Canvas { ctx, sz in FirstDayArt.room(ctx, sz, t: motion ? t : 0, feet: feet, unit: portrait ? Double(sz.width) / 400 : Double(sz.height) / 460) }
-            ShowcaseStage(roster: [character], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(m) })
+            ShowcaseStage(roster: [character], focusFirst: true, fullScreen: false, cutout: true, bare: true, onReady: { m in ready(m) })
                 .frame(width: f, height: f)
                 .scaleEffect(jelbieScale(age), anchor: .init(x: 0.5, y: 0.73))
                 .position(x: feet.x, y: feet.y - 0.23 * f + jelbieDrop(age, f: f))
@@ -155,7 +156,7 @@ struct FirstDayHomeView: View {
     // MARK: flow
 
     private func begin() {
-        if replay { st.snapshot = OpeningStoryView.saveSnapshot() }
+        if replay, !StartFlow.shared.replaying { st.snapshot = OpeningStoryView.saveSnapshot(); st.owns = true }          // a real replay is restored by StartFlow.endReplay (the picker wrote too)
         camera.engage()
         st.startedAt = Date(); st.stepAt = Date()
         Task { @MainActor in for _ in 0..<6 { LaunchGate.shared.stageTicked(); try? await Task.sleep(nanoseconds: 800_000_000) } }
@@ -215,7 +216,7 @@ struct FirstDayHomeView: View {
         st.leaving = true
         st.task?.cancel()
         camera.release()          // before the room (or the picker) engages its own
-        if replay { Self.restore(st.snapshot); st.snapshot = [:] }
+        if st.owns { Self.restore(st.snapshot); st.snapshot = [:]; st.owns = false }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
             finished()

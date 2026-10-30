@@ -195,12 +195,15 @@ final class StoreBook {
     /// The fitting room: a piece tried on one Jelly before it is bought (never saved, never owned). Every reader of `worn` sees it, so the real
     /// renderers draw the try-on with no extra render code.
     @ObservationIgnored var fitting: (jelly: Int, look: WearLook)?
+    /// The opening story / replayed picker / first-day scene: every Jelbie shows his plain species look. Nothing is changed in the save, only not drawn.
+    @ObservationIgnored var bare = false
     /// Slot in the room -> CHARACTER (JellyRoster): what a Jelbie wears is saved by character, so it follows him when the roster changes.
     /// GameCare sets it from its profiles; identity (the default roster) otherwise.
     @ObservationIgnored var characterOf: (Int) -> Int = { $0 }
     private func wornKey(_ jelly: Int) -> String { "\(characterOf(jelly))" }
 
     func worn(_ jelly: Int, _ slot: WearSlot) -> WearLook? {
+        if bare { return nil }
         if let f = fitting, f.jelly == jelly, f.look.slot == slot { return f.look }
         return saved.worn[wornKey(jelly)]?[slot.rawValue].flatMap(WearLook.init(rawValue:))
     }

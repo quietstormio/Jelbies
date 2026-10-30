@@ -15,6 +15,8 @@ struct ShowcaseStage: View {
     var fullScreen = true
     /// Transparent, no room: only the Jelbie (the species picker draws its own stage and backdrop).
     var cutout = false
+    /// Wears nothing (the opening story, the replayed picker, the first-day scene): the plain species look, whatever the save has on.
+    var bare = false
     /// Called once the focused Jelbie has walked to the front (`focusFirst`), with the model (so the picker can ask for moves).
     var onReady: ((MelonModel) -> Void)?
     @State private var model: MelonModel?
@@ -39,6 +41,7 @@ struct ShowcaseStage: View {
         m.care.touchPlay = m.touch
         m.hideJellies = empty
         m.cutout = cutout
+        m.care.store.bare = bare
         model = m
         guard focusFirst else { return }
         Task { @MainActor in

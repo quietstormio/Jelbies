@@ -6,7 +6,7 @@
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
-//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more.
+//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more, -PickerAutoChoose <seconds> (reads, then names and chooses by itself).
 //
 
 import SwiftUI
@@ -18,6 +18,8 @@ enum PickerTab: Int, CaseIterable {
 
 struct AdoptionCenter: View {
     let mode: StartFlow.AdoptMode
+    /// Settings > Watch the opening: the same first-Jelbie picker as a preview. Every Jelbie is bare, nothing is saved (StartFlow.previewPick).
+    var preview = false
     var done: (Int, String) -> Void
     var cancel: () -> Void
 
@@ -37,11 +39,12 @@ struct AdoptionCenter: View {
     @State private var lastDrag: CGSize = .zero
     @State private var pinching = false
     @State private var emoteTask: Task<Void, Never>?
+    @State private var autoChose = false
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
 
-    init(mode: StartFlow.AdoptMode, done: @escaping (Int, String) -> Void, cancel: @escaping () -> Void) {
-        self.mode = mode; self.done = done; self.cancel = cancel
+    init(mode: StartFlow.AdoptMode, preview: Bool = false, done: @escaping (Int, String) -> Void, cancel: @escaping () -> Void) {
+        self.mode = mode; self.preview = preview; self.done = done; self.cancel = cancel
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
         var start = mode == .first ? 0 : (SpeciesInfo.order.firstIndex { !h.contains($0) } ?? 0)
@@ -130,7 +133,7 @@ struct AdoptionCenter: View {
     /// Back / close at the top left; the Drops pill at the top right when adopting more.
     private func topBar(pill: Bool = true) -> some View {
         ZStack(alignment: .topLeading) {
-            roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back") {
+            roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (preview ? "Back to the room" : mode == .first ? "Back to the menu" : "Close"), id: "adopt-back") {
                 if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
             }
             .offset(x: 20, y: 66)
@@ -206,7 +209,7 @@ struct AdoptionCenter: View {
     private var stageBlock: some View {
         ZStack(alignment: .topLeading) {
             PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
-            ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: stageReady)
+            ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, bare: preview, onReady: stageReady)
                 .id(pick).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
@@ -465,6 +468,18 @@ struct AdoptionCenter: View {
             perform(pick == 3 ? .idle(.flapHop) : .hop)
         }
         startEmotes(for: pick)
+        #if targetEnvironment(simulator)
+        let d = UserDefaults.standard
+        if d.object(forKey: "PickerAutoChoose") != nil, !autoChose {          // capture aid: the flow end to end without taps
+            autoChose = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(max(d.double(forKey: "PickerAutoChoose"), 1) * 1e9))
+                withAnimation(.easeOut(duration: 0.2)) { name = ""; naming = true }
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                bringHome()
+            }
+        }
+        #endif
     }
 
     /// While the player reads, the Jelbie does one gentle, in-place move or expression every few seconds that suits its personality.

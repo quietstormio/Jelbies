@@ -22,8 +22,11 @@ final class StartFlow {
     var phase: Phase
     /// Bumped to rebuild the room (GameHost).
     private(set) var session = 0
-    /// Settings > Watch the opening: the story plays over the room and ends back in it (no picker, no save changes).
+    /// Settings > Watch the opening: the story, the species picker (a preview) and the first-day scene play over the room and end back in it,
+    /// with the save exactly as it was (no roster, coins, names or outfits change; every Jelbie shown is bare).
     var replaying = false
+    /// The previews write their Jelbies' needs / stats while they stand on a stage: the keys as they were when the replay began.
+    private(set) var replaySnapshot: [String: Any]?
     /// The name of the Jelbie just brought home: the room shows a welcome banner for it.
     var welcome: String?
     /// Photo mode registers the album screen here; the menu's Photos button shows only when it is set.
@@ -45,6 +48,8 @@ final class StartFlow {
         if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
         if d.object(forKey: "FirstDayChar") != nil { let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3); phase = .firstDay(c, JellyRoster.baseNames[c], true) }          // capture aid: the first-day-home beat
         if d.object(forKey: "OpeningBeat") != nil { phase = .opening }                  // capture aid: the opening story at a given beat
+        if d.integer(forKey: "OpeningNew") != 0 { phase = .opening }                    // capture aid: a new game's opening, not held (use with -ResetForAdoption 1)
+        if d.integer(forKey: "OpeningReplay") != 0, save { replaying = true; replaySnapshot = OpeningStoryView.saveSnapshot(); phase = .opening }          // capture aid: Settings > Watch the opening, straight away
         #endif
     }
     nonisolated deinit {}
@@ -66,6 +71,7 @@ final class StartFlow {
 
     /// Menu: New game / Start. Clears the screen first (so the room stops writing), wipes, then the opening story, then the Adoption Center.
     func startOver() {
+        replaying = false; replaySnapshot = nil
         phase = .wiping
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -74,22 +80,33 @@ final class StartFlow {
         }
     }
 
-    /// The opening story is over (or skipped) on a new game: on to the species picker (the cross-fade is the caller's animation).
-    /// A replay (Settings > Watch the opening) goes back to the room as it was saved instead.
+    /// The opening story is over (or skipped): on to the species picker (the cross-fade is the caller's animation). A replay (Settings > Watch the
+    /// opening) gets the same picker as a preview: `previewPick` takes its choice on, nothing is saved.
     func finishOpening() {
         guard phase == .opening else { return }
-        if replaying {
-            replaying = false
-            if let c = JellyRoster.savedIDs().first { phase = .firstDay(c, JellyRoster.names[c], true) } else { enterGame() }          // the replay shows the first-day beat with the player's own Jelbie
-        } else { phase = .adopt(.first) }
+        phase = .adopt(.first)
     }
 
     /// Settings: play the opening again. The room is dropped like the main menu does (the caller saved first); nothing is wiped or changed,
-    /// and `finishOpening` rebuilds the room from the save. No picker.
-    func replayOpening() { replaying = true; phase = .opening }
+    /// and the replay ends in `endReplay`, which rebuilds the room from the save.
+    func replayOpening() { replaying = true; replaySnapshot = OpeningStoryView.saveSnapshot(); phase = .opening }
+
+    /// A replay's picker: the species chosen and named (nothing paid, nothing saved, nobody renamed) goes on to the first-day scene with THAT species.
+    func previewPick(character c: Int, name: String) {
+        guard replaying else { return }
+        phase = .firstDay(c, name, true)
+    }
+
+    /// The replay is over (Skip, Back or the end of the first-day scene): the previews' writes are undone and the room comes back as it was saved.
+    func endReplay() {
+        if let s = replaySnapshot { OpeningStoryView.restoreSnapshot(s) }
+        replaySnapshot = nil
+        replaying = false
+        enterGame()
+    }
 
     /// The first-adoption picker's back button: to the title menu.
-    func backToMenu() { if case .adopt = phase { phase = .menu } }
+    func backToMenu() { if case .adopt = phase { if replaying { endReplay() } else { phase = .menu } } }
 
     /// Town: Adoption Center row.
     func openAdoption() { phase = .adopt(.more) }
@@ -99,6 +116,7 @@ final class StartFlow {
 
     /// A Jelbie is chosen and named (and paid for): the roster, his name and a fresh start for his state, then the room.
     func bringHome(character c: Int, name: String) {
+        if replaying { previewPick(character: c, name: name); return }          // a replay saves nothing
         let first = phase == .adopt(.first)
         var ids = first ? [] : JellyRoster.savedIDs()
         if !ids.contains(c) { Self.resetCharacterState(c) }
@@ -115,7 +133,8 @@ final class StartFlow {
     /// The first-day-home beat is over (or skipped): into the room. A new game's Jelbie starts fresh again (the preview wrote to his keys).
     func finishFirstDay() {
         guard case .firstDay(let c, _, let replay) = phase else { return }
-        if !replay { Self.resetCharacterState(c) }
+        if replay { endReplay(); return }
+        Self.resetCharacterState(c)
         enterGame()
     }
 

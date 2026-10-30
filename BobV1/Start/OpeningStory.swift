@@ -1,13 +1,17 @@
 //
 //  OpeningStory.swift
 //  The game opening: a ~30 s animated story that plays on a NEW game (title screen -> this -> the species picker) and from Settings > "Watch the
-//  opening" (which replays it and returns to the room; no picker, no save changes). Seven beats on one camera (OpeningArt.swift):
+//  opening" (which replays it, then the picker as a preview and the first-day scene, and returns to the room with the save untouched: StartFlow.replaying).
+//  Every Jelbie in the story is drawn bare (ShowcaseStage `bare`): the plain species look, never the player's saved wear. Seven beats on one camera (OpeningArt.swift):
 //    1 night sky, drifting down through clouds   2 the clouds part on Wobble Isle, dawn   3 push in to the Jelly Spring, dewdrops fall
 //    (the four coloured drops shimmer at the end of beat 3)   4 each drop pops into its real 3D Jelbie (ShowcaseStage cutout)
 //    6 they turn to the player, blink and hop   7 "Which one will you take home?" and a cross-fade into the picker's blue page.
 //  A tap anywhere moves on; "Skip" (top right) always leaves. Reduce Motion: no camera travel, no drifting, plain fades. VoiceOver reads each
 //  caption. Audio: Resources/opening_underscore (piano + strings) and opening_twinkle / dew_chime / pop plus the app's sparkles.
-//  Simulator-only capture flag: -OpeningBeat 1...7 starts at that beat (and holds it: no auto-advance) for screenshots.
+//  The four stages are built hidden from the first seconds (beats 1-3 have time), so each Jelbie is standing when its drop pops; a slow device
+//  holds the drop until its Jelbie is ready rather than popping it empty.
+//  Simulator-only capture flags: -OpeningBeat 1...7 starts at that beat (and holds it: no auto-advance) for screenshots; -OpeningReplay 1 plays
+//  Settings > Watch the opening straight away (needs a save); -OpeningNew 1 plays a new game's opening, not held.
 //
 
 import SwiftUI
@@ -47,6 +51,7 @@ enum OpeningScript {
     var mounted = [false, false, false, false]
     var models: [MelonModel?] = [nil, nil, nil, nil]
     var mountStarted = false
+    var popWaiting = [false, false, false, false]
     var leaving = false
     var sceneOpacity = 1.0
     var token = 0
@@ -171,9 +176,9 @@ struct OpeningStoryView: View {
             ForEach(0..<4, id: \.self) { k in
                 if st.mounted[k] {
                     let st = pose(k, now: now, pr: pr, bob: bob, f: f)
-                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(k, m) })
+                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, bare: true, onReady: { m in ready(k, m) })
                         .frame(width: f, height: f)
-                        .scaleEffect(st.scale, anchor: .init(x: 0.5, y: 0.73))
+                        .scaleEffect(x: st.scale * st.sx, y: st.scale * st.sy, anchor: .init(x: 0.5, y: 0.73))
                         .position(x: st.feet.x, y: st.feet.y - 0.23 * f)
                         .opacity(st.opacity)
                 }
@@ -184,11 +189,11 @@ struct OpeningStoryView: View {
     }
 
     /// Where the k-th Jelbie is: hidden in its drop, then leaping out of it to its spot on the grass.
-    private func pose(_ k: Int, now: Date, pr: OpeningProjector, bob: Double, f: Double) -> (feet: CGPoint, scale: Double, opacity: Double) {
-        guard let a = st.appearAt[k] else { return (restPoint(k, pr, bob: bob), 0.01, 0) }
+    private func pose(_ k: Int, now: Date, pr: OpeningProjector, bob: Double, f: Double) -> (feet: CGPoint, scale: Double, sx: Double, sy: Double, opacity: Double) {
+        guard let a = st.appearAt[k] else { return (restPoint(k, pr, bob: bob), 0.01, 1, 1, 0) }
         let rest = restPoint(k, pr, bob: bob)
         let age = now.timeIntervalSince(a)
-        guard motion else { return (rest, 1, OArt.smooth(age / 0.5)) }
+        guard motion else { return (rest, 1, 1, 1, OArt.smooth(age / 0.5)) }
         let dur = 0.62
         let p = min(max(age / dur, 0), 1)
         let from = orbPoint(k, pr, bob: bob)
@@ -200,16 +205,21 @@ struct OpeningStoryView: View {
         let c1 = 1.70158, c3 = c1 + 1
         let back = 1 + c3 * pow(u - 1, 3) + c1 * pow(u - 1, 2)
         let land = age > dur ? max(0, 1 - (age - dur) / 0.5) : 0
-        let squash = 1 - 0.07 * sin(land * .pi * 3) * land
-        return (feet, max(0.05, 0.12 + 0.88 * back) * squash, min(1, age / 0.1))
+        // jelly: stretched tall while it shoots out of the drop, squashed flat on landing, then a couple of damped wobbles
+        let fly = p < 1 ? sin(p * .pi) : 0
+        let squash = 0.16 * sin(land * .pi * 3) * land
+        let sy = 1 + 0.18 * fly - squash, sx = 1 - 0.10 * fly + squash * 0.8
+        return (feet, max(0.05, 0.12 + 0.88 * back), sx, sy, min(1, age / 0.1))
     }
 
     private func ready(_ k: Int, _ m: MelonModel) {
         st.models[k] = m
+        LaunchTiming.mark("opening: Jelbie \(k) standing (beat \(st.beat + 1))")
         if st.popAt[k] != nil, st.appearAt[k] == nil { appear(k) }
     }
 
     private func appear(_ k: Int) {
+        LaunchTiming.mark("opening: Jelbie \(k) revealed (beat \(st.beat + 1))")
         st.appearAt[k] = Date()
         guard motion else { perform(k, [.blink]); return }
         Task { @MainActor in
@@ -403,6 +413,12 @@ struct OpeningStoryView: View {
         st.camFrom = first == 0 ? OpeningCam() : target(first - 1, size: size)
         AudioHub.shared.playOpening("opening_underscore", volume: 0.85, music: true, fadeIn: 1.5)
         enter(first, tapped: false, initial: true)
+        if first == 0 {
+            Task { @MainActor in          // pre-warm: after the first stars have drawn, before the first push-in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if !st.leaving { mountStages(fast: false) }
+            }
+        }
     }
 
     private func enter(_ b: Int, tapped: Bool, initial: Bool = false) {
@@ -422,8 +438,8 @@ struct OpeningStoryView: View {
         st.beatEnd = now.addingTimeInterval(dur)
         if !motion && !initial { st.sceneOpacity = 0; withAnimation(.easeInOut(duration: 0.6)) { st.sceneOpacity = 1 } }
         if b >= 2 && st.dropStart == nil { st.dropStart = now.addingTimeInterval(initial && holdBeat != nil && b >= 3 ? -5 : 0) }
-        if b >= 2 { mountStages(fast: b >= 3) }
-        if b >= 4 { for k in 0..<4 where st.popAt[k] == nil { popOrb(k, loud: false) } }
+        if b >= 1 { mountStages(fast: b >= 3) }          // beats 1-3 build the four stages hidden, so every Jelbie is standing by when its drop pops
+        if b >= 4 { for k in 0..<4 where st.popAt[k] == nil { popNow(k, loud: false) } }
         A11yAnnounce.say(OpeningScript.full(b), priority: .high)
         schedule(b, token: st.token)
         if holdBeat == nil { startTimer(after: dur) }
@@ -436,8 +452,22 @@ struct OpeningStoryView: View {
         st.beatTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000))
             guard !Task.isCancelled, st.beat == b else { return }
+            if b == 2 {
+                // the drops stay shimmering until all four Jelbies are standing behind them (slow devices): the pops that follow are never empty
+                var waited = 0.0
+                while st.models.contains(where: { $0 == nil }), waited < Self.standingCap, !Task.isCancelled, st.beat == b { try? await Task.sleep(nanoseconds: 100_000_000); waited += 0.1 }
+                guard !Task.isCancelled, st.beat == b else { return }
+            }
             advance(tapped: false)
         }
+    }
+    /// The longest beat 3 waits for the stages to stand (the simulator's software renderer needs minutes).
+    private static var standingCap: Double {
+        #if targetEnvironment(simulator)
+        return 400
+        #else
+        return 12
+        #endif
     }
 
     private func advance(tapped: Bool) {
@@ -522,6 +552,22 @@ struct OpeningStoryView: View {
     }
 
     private func popOrb(_ k: Int, loud: Bool) {
+        guard st.popAt[k] == nil, !st.popWaiting[k] else { return }
+        if loud, st.models[k] == nil {
+            // not standing yet (a slow device is still building its stage): the drop holds, shimmering, until the Jelbie can come out of it, so a pop is never empty
+            st.popWaiting[k] = true
+            let t = st.token
+            Task { @MainActor in
+                for _ in 0..<60 where st.models[k] == nil && st.token == t && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
+                st.popWaiting[k] = false
+                if st.token == t { popNow(k, loud: true) }          // a later beat has popped everything already otherwise
+            }
+            return
+        }
+        popNow(k, loud: loud)
+    }
+
+    private func popNow(_ k: Int, loud: Bool) {
         guard st.popAt[k] == nil else { return }
         st.popAt[k] = Date()
         if loud {
@@ -543,6 +589,7 @@ struct OpeningStoryView: View {
             for k in 0..<count {                      // one at a time: each builds a real 3D room, so wait for the last one to be standing before the next
                 guard !Task.isCancelled else { return }
                 st.mounted[k] = true
+                LaunchTiming.mark("opening: stage \(k) building (beat \(st.beat + 1))")
                 for _ in 0..<(fast ? 20 : 60) where st.models[k] == nil && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
