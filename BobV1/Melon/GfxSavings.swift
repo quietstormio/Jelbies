@@ -40,10 +40,12 @@ nonisolated struct RoomCacheKey: Equatable {
     var keyDir = SIMD3<Float>(repeating: 0)
     var keyIntensity: Float = 0
     var fog = SIMD3<Float>(repeating: 0)
+    /// The bathroom is shown instead of the living room (it also bumps `propsVersion`; this is the explicit, test-visible reason).
+    var bath = false
 }
 
 nonisolated enum RoomCacheMiss: String, CaseIterable {
-    case disabled, camera, size, theme, props, light, settling, footprint
+    case disabled, camera, size, theme, props, light, settling, footprint, bath
 }
 
 nonisolated enum RoomCacheAction: Equatable {
@@ -99,6 +101,7 @@ nonisolated struct RoomCacheState {
     private mutating func miss(_ m: RoomCacheMiss) -> RoomCacheAction { misses[m, default: 0] += 1; return .bypass(m) }
 
     static func reason(_ a: RoomCacheKey, _ b: RoomCacheKey) -> RoomCacheMiss {
+        if a.bath != b.bath { return .bath }
         if a.width != b.width || a.height != b.height { return .size }
         if a.themeTint != b.themeTint { return .theme }
         if a.propsVersion != b.propsVersion { return .props }
