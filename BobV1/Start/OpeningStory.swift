@@ -10,6 +10,10 @@
 //  caption. Audio: Resources/opening_underscore (piano + strings) and opening_twinkle / dew_chime / pop plus the app's sparkles.
 //  The four stages are built hidden from the first seconds (beats 1-3 have time), so each Jelbie is standing when its drop pops; a slow device
 //  holds the drop until its Jelbie is ready rather than popping it empty.
+//  The reveal (beat 4) is strictly one Jelbie at a time, in the picker's order, driven by RevealSequencer (below): a drop swells and wobbles,
+//  pops, its Jelbie leaps out and lands, settles, and only then does the next drop start to swell. A tap in the reveal only hurries it; the
+//  next beat starts when the last Jelbie has settled. Its animations run on a reveal clock (OpeningClock) that advances only by what a drawn
+//  frame shows, at most a few frames' worth at a time, so a render stall delays a pop and never skips it.
 //  Simulator-only capture flags: -OpeningBeat 1...7 starts at that beat (and holds it: no auto-advance) for screenshots; -OpeningReplay 1 plays
 //  Settings > Watch the opening straight away (needs a save); -OpeningNew 1 plays a new game's opening, not held.
 //
@@ -28,11 +32,13 @@ enum OpeningScript {
         ["The Spring has a welcome gift", "for its newest neighbour.", "Which one will you take home?"],
     ]
     /// Seconds each beat lasts on its own.
-    static let durations: [Double] = [5.2, 6.6, 8.2, 4.6, 4.8, 7.4, 6.0]
+    /// (Beat index 3, the reveal, is nominal: it lasts until the last Jelbie has settled, then `revealTail`.)
+    static let durations: [Double] = [5.2, 6.6, 8.2, 11.0, 4.8, 7.4, 6.0]
+    /// After the last Jelbie settles, the "…as Jelbies!" beat holds this long (their hello moves play out) before the next caption.
+    static let revealTail = 1.6
     /// The Jelbies, in the picker's order (blue, yellow, purple, green): character ids.
     static let characters = [0, 1, 3, 2]
     static let names = ["Blueberry", "Lemon Drop", "Taro", "Matcha"]
-    static let popTimes: [Double] = [0.4, 1.1, 1.8, 2.5]
     static func full(_ beat: Int) -> String { captions[beat].joined(separator: " ") }
 }
 
@@ -46,12 +52,14 @@ enum OpeningScript {
     var camT0 = Date()
     var camDur = 1.0
     var dropStart: Date?
-    var popAt: [Date?] = [nil, nil, nil, nil]
-    var appearAt: [Date?] = [nil, nil, nil, nil]
+    var popAt: [Double?] = [nil, nil, nil, nil]          // reveal-clock seconds (OpeningClock)
+    var appearAt: [Double?] = [nil, nil, nil, nil]
+    var helloDone = [false, false, false, false]
+    var reveal = RevealSequencer()
+    var revealTask: Task<Void, Never>?
     var mounted = [false, false, false, false]
     var models: [MelonModel?] = [nil, nil, nil, nil]
     var mountStarted = false
-    var popWaiting = [false, false, false, false]
     var leaving = false
     var sceneOpacity = 1.0
     var token = 0
@@ -61,8 +69,87 @@ enum OpeningScript {
     var snapshot: [String: Any] = [:]
 }
 
+/// The reveal's own clock: it advances by the time between drawn frames, but never by more than `maxStep` at once, so when the renderer
+/// stalls (a busy simulator, a hitch) the pop that was in progress is delayed rather than skipped. Not observable: only frames and the
+/// sequencer's poll read it.
+final class OpeningClock {
+    static let maxStep = 0.066
+    private(set) var t = 0.0
+    private var last: Date?
+    nonisolated deinit {}
+    /// Simulator capture aid (-OpeningFixedStep 1): every drawn frame advances the clock by exactly 1/30 s, so a slow simulator records the reveal frame by frame.
+    private static let fixedStep: Bool = {
+        #if targetEnvironment(simulator)
+        return UserDefaults.standard.integer(forKey: "OpeningFixedStep") != 0
+        #else
+        return false
+        #endif
+    }()
+    @discardableResult func advance(_ now: Date) -> Double {
+        if Self.fixedStep {
+            if let l = last, now > l { t += 1.0 / 30 }
+            if last == nil || now > last! { last = now }
+            return t
+        }
+        if let l = last { t += min(max(now.timeIntervalSince(l), 0), Self.maxStep) }
+        if last == nil || now > last! { last = now }
+        return t
+    }
+}
+
+/// Who pops when, with no rendering in it: strictly one drop at a time, in order. Drop k swells; once its Jelbie is ready (and the swell has
+/// run) it pops; the next drop starts to swell only when that Jelbie has landed and settled. Times are reveal-clock seconds.
+struct RevealSequencer {
+    struct Timing: Equatable {
+        var swell = 1.1          // a drop swells and wobbles this long before it bursts
+        var settle = 1.12        // from the burst: 0.62 s leap + 0.5 s landing wobble
+        var giveUp = 40.0        // a Jelbie that never stands (it should) does not hold the story for ever
+        var hurried: Timing { Timing(swell: 0.45, settle: 0.7, giveUp: giveUp) }
+    }
+    enum Event: Equatable { case swell(Int), pop(Int), done }
+    static let count = 4
+
+    var timing = Timing()
+    var hurry = false
+    private(set) var next = 0
+    private(set) var swellAt = [Double?](repeating: nil, count: count)
+    private(set) var popAt = [Double?](repeating: nil, count: count)
+    var done: Bool { next >= Self.count }
+    private var current: Timing { hurry ? timing.hurried : timing }
+
+    /// 0...1 while drop k swells (it holds at 1 while its Jelbie is still being built); 0 before and after.
+    func swell(_ k: Int, now: Double) -> Double {
+        guard popAt[k] == nil, let a = swellAt[k] else { return 0 }
+        return min(max((now - a) / max(current.swell, 0.01), 0), 1)
+    }
+
+    /// Call as often as you like with the current reveal-clock time and which Jelbies are standing. At most one thing happens per call.
+    mutating func update(now: Double, ready: [Bool]) -> [Event] {
+        guard !done else { return [] }
+        let k = next, tm = current
+        guard let s = swellAt[k] else { swellAt[k] = now; return [.swell(k)] }
+        guard let p = popAt[k] else {
+            let waited = now - s
+            if waited >= tm.swell, ready[k] || waited >= tm.giveUp { popAt[k] = now; return [.pop(k)] }
+            return []
+        }
+        guard now - p >= tm.settle else { return [] }
+        next += 1
+        if done { return [.done] }
+        swellAt[next] = now
+        return [.swell(next)]
+    }
+
+    /// Capture aid (-OpeningBeat 5...7): everything has already happened.
+    mutating func finishAll(at t: Double) {
+        for k in 0..<Self.count { swellAt[k] = t; popAt[k] = t }
+        next = Self.count
+    }
+}
+
 struct OpeningStoryView: View {
     @State private var st = OpeningState()
+    @State private var clock = OpeningClock()
     let replay: Bool
     var finished: () -> Void
 
@@ -105,6 +192,7 @@ struct OpeningStoryView: View {
 
     private func frame(now: Date, size: CGSize) -> some View {
         let cam = camera(at: now)
+        let rc = clock.advance(now)
         let pr = OpeningProjector(size: size, cam: cam)
         let local = now.timeIntervalSince(st.beatStart)
         var d = OpeningDraw()
@@ -112,10 +200,11 @@ struct OpeningStoryView: View {
         d.t = motion ? now.timeIntervalSince(st.storyStart) : 0
         d.dropT = st.dropStart.map { motion ? now.timeIntervalSince($0) : 9 }
         d.home = st.beat == 1 ? OArt.smooth(local / 1.6) : (st.beat == 2 ? OArt.smooth(1 - local / 1.0) : 0)
-        d.shiver = st.beat == 2 ? OArt.smooth((local - 4.6) / 1.2) : (st.beat == 3 ? max(0, 1 - local / 0.5) : 0)          // the four drops shimmer just before they wake
+        d.shiver = st.beat == 2 ? OArt.smooth((local - 4.6) / 1.2) : 0          // the four drops shimmer just before they wake; then the one about to pop wobbles on its own
         for k in 0..<4 {
             d.gone[k] = st.popAt[k] != nil
-            if st.beat == 3, st.popAt[k] == nil { d.swell[k] = OArt.smooth(1 - (OpeningScript.popTimes[k] - local) / 0.45) }
+            let s = OArt.smooth(st.reveal.swell(k, now: rc))
+            d.swell[k] = s; d.wobble[k] = s
         }
         let bob = d.bob
         return ZStack {
@@ -126,9 +215,9 @@ struct OpeningStoryView: View {
                     .opacity(cam.hand)
             }
             scrim(size)
-            Canvas { ctx, _ in shadows(ctx, pr, now: now, bob: bob) }
-            jelbies(now: now, pr: pr, bob: bob)
-            Canvas { ctx, _ in bursts(ctx, pr, now: now, local: local, bob: bob) }
+            Canvas { ctx, _ in shadows(ctx, pr, now: rc, bob: bob) }
+            jelbies(now: rc, pr: pr, bob: bob)
+            Canvas { ctx, _ in bursts(ctx, pr, now: now, rc: rc, local: local, bob: bob) }
             overlayTexts(now: now, local: local, size: size, pr: pr)
         }
         .frame(width: size.width, height: size.height)
@@ -170,7 +259,7 @@ struct OpeningStoryView: View {
         pr.island(OArt.orbX[k], OArt.orbY[k] - 10, bob: bob)
     }
 
-    private func jelbies(now: Date, pr: OpeningProjector, bob: Double) -> some View {
+    private func jelbies(now: Double, pr: OpeningProjector, bob: Double) -> some View {
         let f = 58 * pr.zs * 1.5                  // the frame is ~1.5 x the spacing between them (the picker's close-up framing fills it)
         return ZStack {
             ForEach(0..<4, id: \.self) { k in
@@ -189,10 +278,10 @@ struct OpeningStoryView: View {
     }
 
     /// Where the k-th Jelbie is: hidden in its drop, then leaping out of it to its spot on the grass.
-    private func pose(_ k: Int, now: Date, pr: OpeningProjector, bob: Double, f: Double) -> (feet: CGPoint, scale: Double, sx: Double, sy: Double, opacity: Double) {
+    private func pose(_ k: Int, now: Double, pr: OpeningProjector, bob: Double, f: Double) -> (feet: CGPoint, scale: Double, sx: Double, sy: Double, opacity: Double) {
         guard let a = st.appearAt[k] else { return (restPoint(k, pr, bob: bob), 0.01, 1, 1, 0) }
         let rest = restPoint(k, pr, bob: bob)
-        let age = now.timeIntervalSince(a)
+        let age = now - a
         guard motion else { return (rest, 1, 1, 1, OArt.smooth(age / 0.5)) }
         let dur = 0.62
         let p = min(max(age / dur, 0), 1)
@@ -219,18 +308,17 @@ struct OpeningStoryView: View {
     }
 
     private func appear(_ k: Int) {
-        LaunchTiming.mark("opening: Jelbie \(k) revealed (beat \(st.beat + 1))")
-        st.appearAt[k] = Date()
-        guard motion else { perform(k, [.blink]); return }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 760_000_000)
-            guard !Task.isCancelled else { return }
-            switch k {
-            case 0: perform(k, [.idle(.look)])
-            case 1: perform(k, [.idle(.tail)])
-            case 2: perform(k, [.hop, .idle(.stretch)])
-            default: perform(k, [.idle(.flapHop)])
-            }
+        LaunchTiming.mark("opening: Jelbie \(k) revealed (beat \(st.beat + 1), reveal clock \(String(format: "%.2f", clock.t)) s)")
+        st.appearAt[k] = clock.t
+        guard motion else { st.helloDone[k] = true; perform(k, [.blink]); return }          // the hello move of the others is cued by pollReveal, on the reveal clock
+    }
+
+    private func hello(_ k: Int) {
+        switch k {
+        case 0: perform(k, [.idle(.look)])
+        case 1: perform(k, [.idle(.tail)])
+        case 2: perform(k, [.hop, .idle(.stretch)])
+        default: perform(k, [.idle(.flapHop)])
         }
     }
 
@@ -253,10 +341,10 @@ struct OpeningStoryView: View {
 
     // MARK: shadows, sparkles
 
-    private func shadows(_ ctx: GraphicsContext, _ pr: OpeningProjector, now: Date, bob: Double) {
+    private func shadows(_ ctx: GraphicsContext, _ pr: OpeningProjector, now: Double, bob: Double) {
         for k in 0..<4 {
             guard let a = st.appearAt[k] else { continue }
-            let age = now.timeIntervalSince(a)
+            let age = now - a
             let u = motion ? OArt.smooth((age - 0.35) / 0.35) : OArt.smooth(age / 0.5)
             let p = restPoint(k, pr, bob: bob)
             let r = 17 * pr.zs
@@ -265,12 +353,12 @@ struct OpeningStoryView: View {
         }
     }
 
-    private func bursts(_ ctx: GraphicsContext, _ pr: OpeningProjector, now: Date, local: Double, bob: Double) {
+    private func bursts(_ ctx: GraphicsContext, _ pr: OpeningProjector, now: Date, rc: Double, local: Double, bob: Double) {
         let u = pr.zs
         for k in 0..<4 {
             guard let pa = st.popAt[k] else { continue }
             let col = OArt.orbColors[k]
-            let age = now.timeIntervalSince(pa)
+            let age = rc - pa
             if age >= 0, age < 1.1 {
                 let c = orbPoint(k, pr, bob: bob)
                 let g = age / 1.1
@@ -287,7 +375,7 @@ struct OpeningStoryView: View {
             }
             // a second small sparkle where it lands
             if let a = st.appearAt[k], motion {
-                let la = now.timeIntervalSince(a) - 0.6
+                let la = rc - a - 0.6
                 if la > 0, la < 0.8 {
                     let c = restPoint(k, pr, bob: bob)
                     let g = la / 0.8
@@ -411,8 +499,12 @@ struct OpeningStoryView: View {
         let first = holdBeat ?? 0
         Task { @MainActor in for _ in 0..<6 { LaunchGate.shared.stageTicked(); try? await Task.sleep(nanoseconds: 800_000_000) } }          // a cold launch straight into the story: let the curtain go
         st.camFrom = first == 0 ? OpeningCam() : target(first - 1, size: size)
-        AudioHub.shared.playOpening("opening_underscore", volume: 0.85, music: true, fadeIn: 1.5)
+        AudioHub.shared.playOpening("opening_underscore", volume: 0.85, music: true, fadeIn: 1.5, loop: true)          // the story outlasts the 36 s clip: it comes round again
+        st.reveal.timing = motion ? RevealSequencer.Timing() : RevealSequencer.Timing(swell: 0.5, settle: 0.8)
         enter(first, tapped: false, initial: true)
+        st.revealTask = Task { @MainActor in
+            while !Task.isCancelled { try? await Task.sleep(nanoseconds: 33_000_000); pollReveal() }
+        }
         if first == 0 {
             Task { @MainActor in          // pre-warm: after the first stars have drawn, before the first push-in
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
@@ -435,14 +527,19 @@ struct OpeningStoryView: View {
         st.beatStart = now
         let vo = UIAccessibility.isVoiceOverRunning ? 1.7 : 1
         let dur = OpeningScript.durations[b] * vo
-        st.beatEnd = now.addingTimeInterval(dur)
+        st.beatEnd = b == 3 ? .distantFuture : now.addingTimeInterval(dur)          // the reveal beat ends when its last Jelbie has settled (revealFinished)
         if !motion && !initial { st.sceneOpacity = 0; withAnimation(.easeInOut(duration: 0.6)) { st.sceneOpacity = 1 } }
         if b >= 2 && st.dropStart == nil { st.dropStart = now.addingTimeInterval(initial && holdBeat != nil && b >= 3 ? -5 : 0) }
         if b >= 1 { mountStages(fast: b >= 3) }          // beats 1-3 build the four stages hidden, so every Jelbie is standing by when its drop pops
-        if b >= 4 { for k in 0..<4 where st.popAt[k] == nil { popNow(k, loud: false) } }
+        if b >= 4, !st.reveal.done {
+            // only a capture aid (-OpeningBeat 5...7) starts after the reveal: everything has already happened. The story never jumps over the reveal.
+            let t = clock.t - 10
+            st.reveal.finishAll(at: t)
+            for k in 0..<4 { st.popAt[k] = t; st.appearAt[k] = t; st.helloDone[k] = true }
+        }
         A11yAnnounce.say(OpeningScript.full(b), priority: .high)
         schedule(b, token: st.token)
-        if holdBeat == nil { startTimer(after: dur) }
+        if holdBeat == nil, b != 3 { startTimer(after: dur) }
     }
 
     private func startTimer(after s: Double) {
@@ -471,6 +568,7 @@ struct OpeningStoryView: View {
     }
 
     private func advance(tapped: Bool) {
+        if st.beat == 3, !st.reveal.done { return }          // the next beat waits until the last Jelbie has settled
         if st.beat >= 6 { finish(); return }
         enter(st.beat + 1, tapped: tapped)
     }
@@ -478,6 +576,7 @@ struct OpeningStoryView: View {
     private func tapped() {
         guard !st.leaving else { return }
         if holdBeat != nil { return }
+        if st.beat == 3, !st.reveal.done { st.reveal.hurry = true; return }          // a tap in the reveal only hurries the rest: still one at a time
         advance(tapped: true)
     }
 
@@ -489,7 +588,7 @@ struct OpeningStoryView: View {
     private func finish() {
         guard !st.leaving else { return }
         st.leaving = true
-        st.beatTask?.cancel(); st.stageTask?.cancel()
+        st.beatTask?.cancel(); st.stageTask?.cancel(); st.revealTask?.cancel()
         st.token += 1
         AudioHub.shared.stopOpening(fade: 0.8)
         let r = replay
@@ -502,7 +601,7 @@ struct OpeningStoryView: View {
     }
 
     private func teardown() {
-        st.beatTask?.cancel(); st.stageTask?.cancel()
+        st.beatTask?.cancel(); st.stageTask?.cancel(); st.revealTask?.cancel()
         st.token += 1
         AudioHub.shared.stopOpening(fade: 0.4)
         if replay { AudioHub.shared.earsDancing(false); Self.restoreSnapshot(st.snapshot); st.snapshot = [:] }
@@ -535,7 +634,7 @@ struct OpeningStoryView: View {
             for (i, tm) in OArt.orbLand.enumerated() { cue(tm + 0.05, t) { sfx("opening_dew_chime", "A dew chime", 0.5 + 0.1 * Float(i)) } }
             cue(4.8, t) { sfx("opening_twinkle", "A tingly shimmer", 0.55) }
         case 3:
-            for k in 0..<4 { cue(OpeningScript.popTimes[k], t) { popOrb(k, loud: true) } }
+            break          // the reveal is event-driven (pollReveal), not cued by time
         case 4:
             for k in 0..<4 {
                 cue(0.4 + Double(k) * 0.3, t) {
@@ -551,25 +650,35 @@ struct OpeningStoryView: View {
         }
     }
 
-    private func popOrb(_ k: Int, loud: Bool) {
-        guard st.popAt[k] == nil, !st.popWaiting[k] else { return }
-        if loud, st.models[k] == nil {
-            // not standing yet (a slow device is still building its stage): the drop holds, shimmering, until the Jelbie can come out of it, so a pop is never empty
-            st.popWaiting[k] = true
-            let t = st.token
-            Task { @MainActor in
-                for _ in 0..<60 where st.models[k] == nil && st.token == t && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
-                st.popWaiting[k] = false
-                if st.token == t { popNow(k, loud: true) }          // a later beat has popped everything already otherwise
-            }
-            return
+    /// Steps the reveal: the hello moves (on the reveal clock) and the sequencer, one event at a time.
+    private func pollReveal() {
+        guard !st.leaving else { return }
+        let rc = clock.t
+        for k in 0..<4 where !st.helloDone[k] {
+            if let a = st.appearAt[k], rc - a >= 0.76 { st.helloDone[k] = true; hello(k) }
         }
-        popNow(k, loud: loud)
+        guard st.beat >= 3, !st.reveal.done else { return }
+        // the drops must be sitting on the water before the first one swells (a tap can bring beat 4 early)
+        let landed = !motion || (st.dropStart.map { Date().timeIntervalSince($0) >= OArt.orbLand[3] + 0.4 } ?? false)
+        guard landed else { return }
+        for e in st.reveal.update(now: rc, ready: st.models.map { $0 != nil }) {
+            switch e {
+            case .swell(let k): LaunchTiming.mark("opening: drop \(k) swelling (reveal clock \(String(format: "%.2f", rc)) s)")
+            case .pop(let k): popNow(k, loud: true)
+            case .done: revealFinished()
+            }
+        }
+    }
+
+    private func revealFinished() {
+        guard st.beat == 3, holdBeat == nil else { return }
+        let vo = UIAccessibility.isVoiceOverRunning ? 1.7 : 1
+        startTimer(after: OpeningScript.revealTail * vo)
     }
 
     private func popNow(_ k: Int, loud: Bool) {
         guard st.popAt[k] == nil else { return }
-        st.popAt[k] = Date()
+        st.popAt[k] = clock.t
         if loud {
             sfx("opening_pop", "Pop!", 1)
             sfx("sparkle_\(k % 2 + 1)", "A sparkle", 0.6, after: 0.05)

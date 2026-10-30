@@ -56,6 +56,7 @@ struct OpeningDraw {
     var home: Double = 0             // 0...1, the player's new house is picked out (beat 2)
     var gone: [Bool] = [false, false, false, false]       // the orb has popped
     var swell: [Double] = [0, 0, 0, 0]                    // 0...1, just before the pop
+    var wobble: [Double] = [0, 0, 0, 0]                   // 0...1, this one drop shakes (the one about to pop)
     var bob: Double { motion ? sin(t * 1.25) * 4 : 0 }
 }
 
@@ -499,7 +500,8 @@ enum OArt {
             }
             var sq = 1.0
             if dt >= land, f.motion {
-                if f.shiver > 0 { x += sin(t * 52 + Double(k) * 2) * 1.4 * f.shiver; y += cos(t * 61 + Double(k)) * 0.6 * f.shiver }
+                let sh = max(f.shiver, f.wobble[k] * (0.5 + 0.9 * f.wobble[k]))
+                if sh > 0 { x += sin(t * 52 + Double(k) * 2) * 1.4 * sh; y += cos(t * 61 + Double(k)) * 0.6 * sh }
                 if let g0 = f.giggleT {
                     let g = g0 - Double(k) * 0.06
                     if g > 0 { y -= abs(sin(g * 8.5)) * 16 * exp(-g * 1.7); sq = 1 + 0.16 * sin(g * 17) * exp(-g * 2.2) }

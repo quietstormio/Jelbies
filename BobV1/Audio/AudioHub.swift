@@ -350,13 +350,14 @@ final class AudioHub {
 
     /// A clip of the game opening. `music` follows the Music setting (the underscore), otherwise the sound-effects level. Sets the session up itself
     /// (the opening plays before the room exists). Muted / the setting off = silent.
-    func playOpening(_ name: String, volume: Float = 1, music: Bool = false, fadeIn: TimeInterval = 0) {
+    func playOpening(_ name: String, volume: Float = 1, music: Bool = false, fadeIn: TimeInterval = 0, loop: Bool = false) {
         guard !muted else { return }
         let level = music ? settings.musicLevel : settings.sfxLevel
         guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
         if !started { setUpSession() }
         let target = min(1, volume * level * (music ? 1 : AudioMix.sfxMaster * 1.2))
         p.volume = fadeIn > 0 ? 0 : target
+        if loop { p.numberOfLoops = -1 }          // the story can outlast the clip; stopOpening ends it
         p.prepareToPlay(); p.play()
         if fadeIn > 0 { p.setVolume(target, fadeDuration: fadeIn) }
         if music { openingPlayers[name]?.stop(); openingPlayers[name] = p }
