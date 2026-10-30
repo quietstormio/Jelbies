@@ -69,6 +69,27 @@ nonisolated final class SoftBody {
     private(set) var grabbing = false
     private(set) var time: Float = 0
     private var restSteps = 0
+    /// Bumped by every outside edit of the body (reset, shift, nudge, launch, grab, press): a sleeping Jelly (JellyActor.updateSleep) wakes when it changes.
+    private(set) var epoch = 0
+
+    /// The body is at a fixed point: not held or pressed, perfectly still for the rest-snap time, and whatever pulls on it (pose attractor, foot / hand
+    /// targets) is exactly what pulled on it in its last step. Stepping it again would change nothing, so a sleeping Jelly may skip the step.
+    var isSettled: Bool {
+        guard !grabbing, !pressing, restSteps > 15, kineticEnergy() < 1e-9 else { return false }
+        let a = attractor, p = attPrev
+        guard a.strength == p.strength else { return false }
+        if a.strength > 0 {
+            guard simd_length_squared(a.anchor - p.anchor) < 1e-10, abs(a.squash - p.squash) < 1e-5, a.damping == p.damping,
+                  simd_length_squared(a.rotation.vector - p.rotation.vector) < 1e-10 else { return false }
+        }
+        guard targets.count == targetsPrev.count else { return false }
+        for i in 0..<targets.count {
+            let t = targets[i], q = targetsPrev[i]
+            if t.index != q.index || t.stiffness != q.stiffness || simd_length_squared(t.pos - q.pos) > 1e-10 { return false }
+        }
+        return true
+    }
+    private var targetsPrev: [ParticleTarget] = []
 
     // static data (raw storage, freed in deinit)
     private let rest: UnsafeMutablePointer<Float>
@@ -229,6 +250,7 @@ nonisolated final class SoftBody {
     }
 
     func reset(drop: Float = 0.35) {
+        epoch &+= 1
         for i in 0..<n {
             x[3 * i] = rest[3 * i]
             x[3 * i + 1] = rest[3 * i + 1] + drop
@@ -243,6 +265,7 @@ nonisolated final class SoftBody {
 
     /// Slides the whole body (and its previous positions, so there is no velocity) by (dx, dz) on the floor.
     func shift(byXZ d: SIMD2<Float>) {
+        epoch &+= 1
         for i in 0..<n {
             x[3 * i] += d.x; x[3 * i + 2] += d.y
             prev[3 * i] += d.x; prev[3 * i + 2] += d.y
@@ -274,6 +297,7 @@ nonisolated final class SoftBody {
 
     /// Small hop with a twist: every particle gets v += v_lin + w x (x - c).
     func nudge(strength: Float = 1) {
+        epoch &+= 1
         let c = centroid()
         let vy = 2.2 * strength, wx = 2.4 * strength, wz = -1.5 * strength, wy = 1.2 * strength
         for i in 0..<n {
@@ -333,6 +357,7 @@ nonisolated final class SoftBody {
     // MARK: grabbing
 
     func beginGrab(hit: SIMD3<Float>, radius: Float = 0.4) {
+        epoch &+= 1
         grabN = 0
         var nearest = -1
         var nd = Float.infinity
@@ -392,7 +417,7 @@ nonisolated final class SoftBody {
     /// Fingertip sphere (slot 0 = the pet finger, slots 0 and 1 = the two cheek fingers) at `center` with `radius`:
     /// every particle inside is moved out to its surface (collision only, no attachment).
     func setPress(center: SIMD3<Float>, radius: Float, slot: Int = 0) {
-        pressC[slot] = center; pressR[slot] = radius; pressOn[slot] = true; pressing = true
+        pressC[slot] = center; pressR[slot] = radius; pressOn[slot] = true; pressing = true; epoch &+= 1
     }
 
     func endPress(slot: Int) {
@@ -497,6 +522,7 @@ nonisolated final class SoftBody {
             }
         }
         attPrev = a1
+        targetsPrev = targets
         if pressing { pressDepth = pressDeepest }
         if bad { reset(drop: 0.2) }
     }
@@ -647,6 +673,7 @@ nonisolated final class SoftBody {
 
     /// Throw: replace the body's mean velocity with `velocity` and add a rigid spin `omega` (rad/s) about the centroid.
     func launch(velocity: SIMD3<Float>, spin omega: SIMD3<Float> = .zero) {
+        epoch &+= 1
         let c = centroid(), dv = velocity - meanVelocity()
         for i in 0..<n {
             let r = SIMD3(x[3 * i] - c.x, x[3 * i + 1] - c.y, x[3 * i + 2] - c.z)

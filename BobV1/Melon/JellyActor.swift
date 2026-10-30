@@ -40,6 +40,42 @@ final class JellyActor {
                           antennae: buildAntennaRig(render: rm, sim: sm))
     }
 
+    // MARK: sleep (a settled Jelly skips his sim step)
+
+    /// Consecutive fixed steps of calm before he sleeps (0.5 s at 60 Hz; the body's own rest snap needs ~0.25 s of stillness first).
+    static let sleepAfterSteps = 30
+    private(set) var asleep = false
+    private var calmSteps = 0
+    private var seenEpoch = -1
+    /// Counters for the perf line: fixed steps skipped, and wake-ups.
+    private(set) var sleptSteps = 0, wakeCount = 0
+
+    /// Brain says nothing is going on: no action, command, request, script, idle behaviour or exertion.
+    private var brainIsStill: Bool {
+        guard let b = brain, b.enabled else { return false }
+        if case .none = b.script {} else { return false }
+        return b.social == nil && b.activity == .idle && !b.commanded && b.pending == nil && b.idleState.kind == nil && b.commandedIdle == nil && !b.isExerting
+    }
+
+    /// Call once per fixed step, after the brain / care ticks and before the sim step. Returns true if his sim should step.
+    /// He falls asleep after `sleepAfterSteps` calm steps (settled body, still brain, nothing holding him: `forceAwake` = touched, in a close-up,
+    /// bath, meal ...). Any brain action, touch or outside edit of the body (epoch) wakes him on the very step it happens; his body is at rest with
+    /// zero velocity, so neither falling asleep nor waking changes a vertex.
+    func updateSleep(forceAwake: Bool) -> Bool {
+        let epoch = sim.epoch
+        let calm = !forceAwake && epoch == seenEpoch && brainIsStill && sim.isSettled
+        seenEpoch = epoch
+        if !calm {
+            calmSteps = 0
+            if asleep { asleep = false; wakeCount += 1 }
+            return true
+        }
+        calmSteps += 1
+        if asleep { sleptSteps += 1; return false }
+        if calmSteps >= Self.sleepAfterSteps { asleep = true; sleptSteps += 1; return false }
+        return true
+    }
+
     /// Drops him onto the floor at his spawn spot (the origin when `shift` is off: the single-Jelly game and the studio).
     func reset(drop: Float, shift: Bool) {
         sim.reset(drop: drop)

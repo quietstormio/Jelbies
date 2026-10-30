@@ -366,20 +366,16 @@ final class BlobBrain {
         let rest = rm.rest, mat = rm.mat, scale = Self.waveArmScale
         let index = rm.index
         if synchronous {
-            for p in Self.armPaths { armKeyframes[p.name] = ArmKeyframeBuilder.build(path: p, rest: rest, mat: mat, capsule: cap, index: rm.index, scale: scale) }
+            for kf in ArmKeyframeStore.shared.keyframes(paths: Self.armPaths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale) { armKeyframes[kf.name] = kf }
             return
         }
         armBuilding = true
         let paths = Self.armPaths
-        Task.detached(priority: .utility) { [weak self] in
-            var built: [ArmKeyframes] = []
-            for p in paths {
-                let kf = ArmKeyframeBuilder.build(path: p, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
-                NSLog("%@", String(format: "[melon] arm path '%@' precompute: %.0f ms (%d keyframes)", p.name, kf.seconds * 1000, kf.intervals + 1))
-                built.append(kf)
-            }
-            let result = built
-            await MainActor.run {
+        // The store computes each set once per process (the second and third Jelly wait for the first, on a plain queue thread) and
+        // loads it from the Caches folder on later launches.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let result = ArmKeyframeStore.shared.keyframes(paths: paths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
+            Task { @MainActor in
                 guard let self else { return }
                 for kf in result { self.armKeyframes[kf.name] = kf }
                 self.armBuilding = false

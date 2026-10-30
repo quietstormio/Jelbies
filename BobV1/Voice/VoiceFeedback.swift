@@ -73,7 +73,9 @@ struct VoiceFeedbackView: View {
     static let heardLife = 2.2
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.05)) { _ in
+        // 20 Hz only while something is on screen; otherwise a slow poll (nothing to animate, so the full-screen overlay stays cheap)
+        let busy = voice.feedback != nil || voice.toast != nil || voice.teachPrompt != nil || voice.nickLesson != nil || voice.heard != nil
+        return TimelineView(.periodic(from: .now, by: busy ? 0.05 : 0.25)) { _ in
             let now = voice.now()
             ZStack {
                 GeometryReader { geo in

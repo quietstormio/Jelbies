@@ -400,9 +400,25 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var asideCooldown = [Float](repeating: 0, count: JellyRoster.maxCount)
     private var asideClock: Float = 0
 
+    /// Reused each fixed step (no per-step array).
+    private var stepSims: [SoftBody] = []
+    private var skinJobs: [JellyParallel.SkinJob] = []
+    private var lastSlept = 0, lastWakes = 0
+
+    /// Things that keep a Jelly awake besides his own brain and body: a finger on the screen, a hold, and the close-ups (focus, meal, Clean, selection).
+    private func sleepForced(_ a: JellyActor) -> Bool {
+        if (stageView?.activeTouches ?? 0) > 0 || touchHolds(a.id) || mode != .none { return true }
+        if game {
+            let c = model.care
+            if c.focus.isActive || c.trayOut || c.bath.active || c.select.isSelecting || c.select.confirmed == a.id { return true }
+        }
+        return false
+    }
+
     private func publishPeers() {
         guard actors.count > 1 else { return }
-        peerSnapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }
+        if peerSnapshot.count != actors.count { peerSnapshot = actors.map { (pos: $0.floor, walking: $0.isWalking) }; return }
+        for i in 0..<actors.count { peerSnapshot[i] = (pos: actors[i].floor, walking: actors[i].isWalking) }          // in place: no array per step
     }
 
     /// Called once before each fixed sim step.
@@ -646,7 +662,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             let b = model.care.focus.blend
             active = active || (b > 0.001 && b < 0.999) || model.care.trayOut || model.care.select.isSelecting
         }
-        let e: Float? = sim.totalMass > 0 ? actors.map { $0.sim.kineticEnergy() / $0.sim.totalMass }.max() : nil
+        var e: Float? = nil
+        if sim.totalMass > 0 { var m: Float = 0; for a in actors { m = max(m, a.sim.kineticEnergy() / a.sim.totalMass) }; e = m }
         lastEnergy = e ?? -1
         let flipped = idleRest.update(dt: dt, active: active, energy: e)
         if idleRest.resting { restFrames += 1 } else { activeFrames += 1 }
@@ -704,7 +721,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             while acc >= sim.stepDt && steps < maxSteps {
                 hopTick(reduce: reduce)
                 let st0 = CACurrentMediaTime()
-                JellyParallel.step(actors.map(\.sim))          // every body's XPBD step, one per core
+                stepSims.removeAll(keepingCapacity: true)
+                for a in actors where a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }
+                JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
@@ -717,7 +736,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         updateIdleRest(stage, dt: Double(dt))
         let sk0 = CACurrentMediaTime()
         for a in actors { a.skinner.tickBlink(dt: dt) }
-        JellyParallel.skin(actors.map { JellyParallel.SkinJob(skinner: $0.skinner, sim: $0.sim, dst: renderer.dynPointer(body: $0.id)) }, index: renderMesh.index)
+        skinJobs.removeAll(keepingCapacity: true)
+        for a in actors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
+        JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0
         for a in actors.dropFirst() {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
@@ -744,7 +765,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         let cam = game ? GameCamera.camera(aspect: Float(pts.width / max(pts.height, 1)), focus: model.care.focus.blend, bath: model.care.bath.cameraBlend) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
-        if game, model.care.select.count > 1 || model.care.select.isSelecting {       // also with 1 Blob while a highlight is up: his real outline
+        // Outlines (a projection of every skinned vertex + a hull, per Jelly) are only needed while a highlight is up; a double tap / touch-down
+        // refreshes them on demand (`refreshOutlines`), so a roster of three no longer pays for them every frame.
+        if game, model.care.select.isSelecting {
             // every Jelly's outline comes from his own skinned vertices
             model.care.select.publish(viewProj: cam.viewProj, size: pts, points: { screenPoints(of: $0, pts, cam.viewProj) })
         }
@@ -812,6 +835,9 @@ final class MelonController: NSObject, MTKViewDelegate {
                                model.care.focus.isActive ? "ON" : "off", Self.adaptiveEnabled ? "on" : "off", scaleChanges,
                                Double(renderer.device.currentAllocatedSize) / 1_048_576, renderer.targetRebuilds, gfxSummary(renderer, frames: f, rw: rw, rh: rh),
                                renderer.perfPasses ? " | passes ms: " + renderer.takePassStats() : ""))
+            let slept = actors.reduce(0) { $0 + $1.sleptSteps }, wakes = actors.reduce(0) { $0 + $1.wakeCount }
+            NSLog("[melon] sleep: %d of %d Jelly-steps skipped, %d wakes, asleep now: %@", slept - lastSlept, dbgSteps * actors.count, wakes - lastWakes, actors.map { $0.asleep ? "z" : "-" }.joined())
+            lastSlept = slept; lastWakes = wakes
             if actors.count > 1 {
                 NSLog("[melon] jellies: %@", actors.map { let c = $0.sim.centroid(); return String(format: "%d(%.2f,%.2f)%@", $0.id, c.x, c.z, $0.isWalking ? "w" : "") }.joined(separator: " "))
             }
@@ -851,8 +877,17 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Double tap in the game: select the Blob under the finger (roaming only; with one Blob there is no select step).
     func gameDoubleTap(_ p: CGPoint) {
-        guard game, !model.care.focus.isActive, let id = model.care.select.hit(p) else { return }
+        guard game, !model.care.focus.isActive else { return }
+        refreshOutlines()
+        guard let id = model.care.select.hit(p) else { return }
         model.care.select.doubleTap(id)
+    }
+
+    /// Fresh silhouettes for a hit test (several Jellies, nothing highlighted: they are not published every frame). One Jelly has no select step.
+    private func refreshOutlines() {
+        guard game, haveCam, actors.count > 1, let stage = stageView else { return }
+        let pts = stage.bounds.size, vp = lastCam.viewProj
+        model.care.select.publish(viewProj: vp, size: pts, points: { screenPoints(of: $0, pts, vp) })
     }
 
     /// A tap on the floor (not on a Blob) cancels a pending selection.
@@ -1167,7 +1202,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             // Voice: the second down of a double-tap on EMPTY space (no Blob under it) opens listen mode, in roaming and in focus
             if voiceTouch == nil, !model.paused {
                 let vnow = CACurrentMediaTime()
-                let onBlob = pickBody(p, size) != nil || model.care.select.hit(p) != nil
+                let onBlob = pickBody(p, size) != nil || { refreshOutlines(); return model.care.select.hit(p) != nil }()
                 if voiceGesture.touchDown(time: vnow, point: p, hitBlob: onBlob) == .beginVoice, mode == .none {
                     voiceTouch = id; emptyDown = nil
                     model.care.voice.begin()
