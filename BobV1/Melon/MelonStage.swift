@@ -987,6 +987,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0
+        socialDemoTick(now: now)          // (capture aid: -SocialDemo)
         if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
         for a in actors.dropFirst() {
