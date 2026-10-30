@@ -62,7 +62,7 @@ final class FeatureSet {
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
         var partScale: [String: Float] = [:]
         /// Pip (restyled variants): the ridge layout being left (`layoutFrom`, a hat's brim y, nil = bare), the one being glided to (`layoutTo`) and the glide progress 0...1.
-        var layoutFrom: Float?, layoutTo: Float?, layoutW: Float = 1
+        var layoutFrom = RidgeLayout.bare, layoutTo = RidgeLayout.bare, layoutW: Float = 1
         /// Daisy: sway (deg about x = nod, z = side) and rate; the lagged head sway; the close blend 0...1; the idle clock.
         var sway = SIMD2<Float>.zero, swayV = SIMD2<Float>.zero, headSway = SIMD2<Float>.zero, close: Float = 0, clock: Float = 0
         /// Wings: the current flap / spread (deg) as drawn; `flapBase` / `spreadBase` = the chased flutter / flap-hop under the burst.
@@ -194,11 +194,11 @@ final class FeatureSet {
     private func stepSpines(_ s: inout Slot, spec: FeatureSpec, dt: Float) {
         if PipTailVariant.active.reflowsUnderHat {
             // the row re-flows under a crown-enclosing hat (PipSpikes.build brimY) and glides there; nothing is ever hidden by a hat (neck / body pieces still tuck what they cover)
-            let target = s.fit.spineBrimY.map { ($0 * 100).rounded() / 100 }
+            let target = s.fit.spineLayout
             if !s.primed { s.layoutFrom = target; s.layoutTo = target; s.layoutW = 1 }
             else if s.layoutTo != target { s.layoutFrom = s.layoutTo; s.layoutTo = target; s.layoutW = 0 }
             s.layoutW = min(1, s.layoutW + dt / Self.reflowTime)
-            guard let body, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridgeBrim: s.layoutTo) else { return }
+            guard let body, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutTo) else { return }
             for part in prep.parts where part.name != "tail" {
                 let want: Float = s.fit.hiddenParts.contains(part.name) ? 0 : 1
                 let cur = s.partScale[part.name] ?? want
@@ -336,15 +336,15 @@ final class FeatureSet {
             var pl = FeatureMeshes.Placement()
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }
-            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridgeBrim: s.feature == .spines ? s.layoutTo : nil) else { continue }
+            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil) else { continue }
             let first = m.vertices.count
-            if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridgeBrim: s.layoutFrom) {
+            if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutFrom) {
                 // gliding between two ridge layouts: both are emitted (same topology), the vertices blended by the eased progress
                 var a = RoomMesh(), b = RoomMesh()
                 Self.emit(pf, into: &a, slot: s, skin: skin(id), spec: spec)
                 Self.emit(p, into: &b, slot: s, skin: skin(id), spec: spec)
                 // going under a hat the spikes leave the hat's footprint fast (ease-out, so no tip is left poking through the arriving hat); coming out they ease in and out
-                let u = s.layoutW, w = s.layoutTo != nil ? 1 - (1 - u) * (1 - u) * (1 - u) : u * u * (3 - 2 * u)
+                let u = s.layoutW, w = !s.layoutTo.isBare ? 1 - powf(1 - u, 5) : u * u * (3 - 2 * u)
                 if a.vertices.count == b.vertices.count {
                     let base = UInt32(m.vertices.count)
                     for i in 0..<b.vertices.count {

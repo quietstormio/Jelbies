@@ -563,13 +563,17 @@ final class PipTailChecklistTests: XCTestCase {
         picks.append(("neck_scarf_beanie", [.neck: .scarfCosy, .head: .beaniePink]))
         picks.append(("neck_chain", [.neck: .chainGold]))
         picks.append(("neck_chain_beanie", [.neck: .chainGold, .head: .beaniePink]))
-        picks.append(("medal", [WearLook.medalGold.slot: .medalGold]))
+        picks.append(("neck_medal", [.neck: .medalGold]))
+        picks.append(("neck_medal_beanie", [.neck: .medalGold, .head: .beaniePink]))
+        picks.append(("neck_pearls", [.neck: .pearls]))
+        picks.append(("neck_pearls_beanie", [.neck: .pearls, .head: .beaniePink]))
+        picks.append(("lowcap_scarf", [.neck: .scarfCosy, .head: .capTeamPink]))
         let views: [View] = [View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35), View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35), View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)]
         for (n, outfit) in picks {
             let imgs = try cellImage(outfit, views: views)
             for (v, im) in zip(views, imgs) { try write(im.uiImage()!, "\(od)/\(n)__\(v.name).png") }
             let fit = FeatureCompat.solve(.spines, worn: outfit.values.map { $0.art })
-            _ = PipSpikes.build(body: WearBody.shared, spec: .shared, brimY: fit.spineBrimY)
+            _ = PipSpikes.build(body: WearBody.shared, spec: .shared, layout: fit.spineLayout)
             report += "\(n): brimY=\(fit.spineBrimY.map { String(format: "%.3f", $0) } ?? "nil") hidden=\(fit.hiddenParts.sorted())  \(PipSpikes.debug)\n"
             if n.hasPrefix("perch") { XCTAssertNil(fit.spineBrimY, "a perch item moves nothing"); XCTAssertTrue(fit.hiddenParts.isEmpty) }
             if n == "beanie" || n.hasPrefix("hat_") { XCTAssertTrue(fit.hiddenParts.isEmpty, "\(n): a hat hides no spike") }
@@ -581,7 +585,9 @@ final class PipTailChecklistTests: XCTestCase {
     func testTail4OnOff() throws {
         let d = try dir4()
         let name = PipTailVariant.active.rawValue
-        let od = "\(d)/\(name)/onoff"
+        let item = ProcessInfo.processInfo.environment["PIPTAIL4_ITEM"] ?? "beanie"
+        let outfitOn: Outfit = item == "scarf" ? [.neck: .scarfCosy] : [.head: .beaniePink]
+        let od = "\(d)/\(name)/onoff" + (item == "beanie" ? "" : "_" + item)
         try FileManager.default.createDirectory(atPath: od, withIntermediateDirectories: true)
         var chars = [Char(id: 1)]
         let lab = makeLab(chars); let dr = dress(lab, chars); settle(lab, dr, chars, frames: 40)
@@ -598,10 +604,10 @@ final class PipTailChecklistTests: XCTestCase {
             n += 1
         }
         try shoot("bare t=0")
-        chars[0].outfit = [.head: .beaniePink]
+        chars[0].outfit = outfitOn
         var log = ""
-        for phase in ["hat on", "hat off"] {
-            if phase == "hat off" { chars[0].outfit = [:] }
+        for phase in ["\(item) on", "\(item) off"] {
+            if phase.hasSuffix(" off") { chars[0].outfit = [:] }
             for f in 0..<120 {
                 step(lab, dr, chars); _ = skin(s.skinner, s.sim)
                 if f % 6 == 5, f < 100 { try shoot("\(phase) t=\(String(format: "%.1f", Float(f + 1) / 60))") }

@@ -9,6 +9,17 @@
 import simd
 import Foundation
 
+/// Which layout Pip's spike row stands in (restyled variants): bare, or re-flowed under a crown-enclosing hat (`brim` = the hat's lowest y, 1 cm steps) and around the neck pieces
+/// he wears (`avoid` = their art ids, sorted): the row threads around the cords and cloth instead of hiding under them (PipSpikes.build).
+nonisolated struct RidgeLayout: Hashable, Sendable {
+    var brim: Float?
+    var avoid: [String]
+    init(brim: Float? = nil, avoid: [String] = []) { self.brim = brim.map { ($0 * 100).rounded() / 100 }; self.avoid = Array(Set(avoid)).sorted() }
+    static let bare = RidgeLayout()
+    var isBare: Bool { brim == nil && avoid.isEmpty }
+    var key: String { isBare ? "pip_ridge" : String(format: "pip_ridge|b%@|a:%@", brim.map { String(format: "%.2f", $0) } ?? "-", avoid.joined(separator: ",")) }
+}
+
 nonisolated enum PipSpikes {
     /// The ridge layout (see build): spike count, where the row starts on the back, how far down the tail it runs, and the size / tilt rules.
     static let count = 5
@@ -20,7 +31,7 @@ nonisolated enum PipSpikes {
     /// and heights are explicit (mean of today's row x the variant's scale x a per-spike grade) so the scales read as true multiples of today's spikes.
     static let rowStartY: Double = 1.203
     static let restyledBareSpacing: Float = 0.32               // the bare row's arc spacing between spikes (about)
-    static let reflowTailEnd: Double = 0.90                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
+    static let reflowTailEnd: Double = 0.97                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
     static let rowStartOffset: Double = 0.063                 // the first spike's base stands this far below the path's start (rowStartY 1.203 -> first base at about 1.14)
     static let restyledMinChord: Float = 0.30                 // minimum straight-line spacing of the ridge spikes
     static let restyledBaseHeight: Float = 0.095              // the shipped row's mean height
@@ -29,6 +40,8 @@ nonisolated enum PipSpikes {
     static let backFractions: [Float] = [0]          // (marker: the back spikes are rigid on the skin, see FeatureSet.partRotation)
     /// Diagnostics of the last layout: spacing, per-spike base widths and the smallest gap between neighbours (all along the curve).
     nonisolated(unsafe) static var debug = ""
+    /// The smallest gap (spike surface to a worn neck piece / hat vertex) of the last layout built; negative = a spike touches the piece (diagnostic, the tests read it).
+    nonisolated(unsafe) static var lastClearance: Float = .infinity
     nonisolated(unsafe) static var lastLayout: (spacing: Float, widths: [Float], minGap: Float) = (0, [], 0)
 
     /// The shipped spikes' orange (the mean vertex colour of the art, measured from feature_pip_c_final.bin: about (0.92, 0.52, 0.15) linear).
@@ -102,8 +115,10 @@ nonisolated enum PipSpikes {
     /// `brimY` (restyled variants only): the lowest point of the crown-enclosing hat he wears. The row then RE-FLOWS: it starts just below the brim line (a base `hatMargin`
     /// under it, so no spike tucks under the brim) and runs down the back and onto the tail with the same even spacing and size grading, instead of vanishing under the hat.
     /// A hat that sits higher than the bare row's first spike changes nothing.
-    static func build(body: WearBody, spec: FeatureSpec, brimY: Float? = nil) -> FeaturePrepared {
-        let r = FeaturePrepared(art: "pip_spikes", key: brimY.map { String(format: "ridge|b%.2f", $0) } ?? "ridge")
+    static func build(body: WearBody, spec: FeatureSpec, layout: RidgeLayout = .bare) -> FeaturePrepared {
+        let brimY = layout.brim
+        let bareLayout = layout.isBare
+        let r = FeaturePrepared(art: "pip_spikes", key: layout.key)
         var m = Mesh()
         func f3(_ v: SIMD3<Double>) -> SIMD3<Float> { SIMD3(Float(v.x), Float(v.y), Float(v.z)) }
         // ---- a short row of small rounded cones along the TOP ridge of the tail only (none on the head or the back), evenly spaced from the root to near the tip
@@ -141,31 +156,67 @@ nonisolated enum PipSpikes {
         }
         let backCount = path.count
         var tt = tCross
-        while tt <= sh.sink + (brimY == nil ? 0.86 : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
+        while tt <= sh.sink + (bareLayout ? 0.86 : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
             let rg = sh.ridge(tt), rp = f3(rg.p + rg.up * rg.r)
             path.append(PP(shown: rp, rest: rp, n: f3(rg.up), t: tt, isTail: true)); tt += 0.01
         }
         var arc: [Float] = [0]
         for i in 1..<path.count { arc.append(arc[i - 1] + simd_distance(path[i].shown, path[i - 1].shown)) }
-        let L = arc.last ?? 1, sJ = arc[min(max(backCount, 0), arc.count - 1)]
+        let sJ = arc[min(max(backCount, 0), arc.count - 1)]
         let nSp = count
+        let vr = PipTailVariant.active, heightScale = vr.spikeHeightScale, aspect = heightScale / vr.spikeBaseScale
+        // ---- the neck pieces / hat the row threads around: every path sample where a spike (at its largest size) would touch one of their back vertices is BLOCKED; the row is spaced
+        // evenly over the unblocked length only, so the spikes nearest a cord slide to just above or below it and the rest re-space (restyled variants only)
+        var obstacles: [SIMD3<Float>] = []
+        if vr.reflowsUnderHat {
+            for art in layout.avoid {
+                guard let look = WearLook.pieces.first(where: { $0.art == art }), let piece = WearMeshes.prepare(look, body: body) else { continue }
+                for q in piece.rest where q.z < -0.2 && abs(q.x) < 0.3 && q.y > 0.25 { obstacles.append(q) }
+            }
+        }
+        let clearGap: Float = 0.022                                                           // spike surface to cloth / cord, at least
+        func coneHits(base: SIMD3<Float>, ax: SIMD3<Float>, H: Float, bR: Float, tipSoft: Float) -> Float {          // smallest (distance - spike radius) of the cone's axis samples to the obstacles
+            var worst = Float.infinity
+            for s in 0...8 {
+                let h = H * Float(s) / 8, c = base + ax * h, rad = bR * (1 - (h / H) * (1 - tipSoft))
+                for q in obstacles { worst = min(worst, simd_distance(c, q) - rad) }
+            }
+            return worst
+        }
+        func tangentAt(_ i: Int, _ n: SIMD3<Float>) -> SIMD3<Float> {
+            let raw = simd_normalize(path[min(i + 1, path.count - 1)].shown - path[max(i - 1, 0)].shown)
+            return simd_normalize(raw - n * simd_dot(raw, n))
+        }
+        var blocked = [Bool](repeating: false, count: path.count)
+        if !obstacles.isEmpty {
+            let H0 = restyledBaseHeight * heightScale, bR0 = H0 / aspect / 2
+            for i in path.indices {
+                let pt = path[i], lean: Float = pt.isTail ? 0.21 : 0.45
+                let ax = simd_normalize(pt.n * cosf(lean) + tangentAt(i, pt.n) * sinf(lean))
+                if coneHits(base: pt.rest - pt.n * (0.3 * bR0), ax: ax, H: H0, bR: bR0, tipSoft: vr.spikeTipSoft) < clearGap { blocked[i] = true }
+            }
+        }
+        var aArc: [Float] = [0]
+        for i in 1..<path.count { aArc.append(aArc[i - 1] + ((blocked[i] || blocked[i - 1]) ? 0 : simd_distance(path[i].shown, path[i - 1].shown))) }
+        let L = aArc.last ?? 1
+        var Lreal: Float = 0
+        for i in 1..<path.count where !(blocked[i] || blocked[i - 1]) { Lreal += simd_distance(path[i].shown, path[i - 1].shown) }          // the unblocked length in real units (the spike size follows it)
         debug = String(format: "top=%.3f crossRestY=%.3f crossT=%.3f backCount=%d pathCount=%d L=%.3f sJ=%.3f", spec.top, crossRest.y, tCross, backCount, path.count, L, sJ)
         // pass 1: where each spike stands, its normal / lean and its graded size
         struct Sp { var sK: Float; var pt: PP; var n: SIMD3<Float>; var tg: SIMD3<Float>; var H: Float; var asp: Float = 1; var bw: Float { H / asp }; var baseShown: SIMD3<Float> = .zero; var ax: SIMD3<Float> = .zero; var lean: Float = 0.21 }
         var sps: [Sp] = []
         // a hat re-flow packs the same five spikes into a shorter row: the straight-line spacing floor eases to 75% of the even arc spacing (bare: unchanged)
         // a re-flowed row is shorter, so its five spikes are a little smaller (half-way between their bare size and the size that keeps the bare spacing ratio), never bigger
-        let reflowSize: Float = brimY == nil ? 1 : 0.5 + 0.5 * min(1, (L * 0.87 / Float(nSp - 1)) / PipSpikes.restyledBareSpacing)
-        let rowMinChord: Float = brimY == nil ? PipSpikes.restyledMinChord : min(PipSpikes.restyledMinChord, 0.75 * L * 0.87 / Float(nSp - 1))
+        let reflowSize: Float = bareLayout ? 1 : 0.5 + 0.5 * min(1, (Lreal * 0.87 / Float(nSp - 1)) / PipSpikes.restyledBareSpacing)
+        let rowMinChord: Float = bareLayout ? PipSpikes.restyledMinChord : min(PipSpikes.restyledMinChord, 0.75 * Lreal * 0.87 / Float(nSp - 1))
         // restyle (PipTailVariant): spikes get taller by heightScale while the base only widens by baseScale, so they read taller and pointier; `aspect` = height / base diameter
-        let vr = PipTailVariant.active, heightScale = vr.spikeHeightScale, aspect = heightScale / vr.spikeBaseScale
         for k in 0..<nSp {
             let sK = L * (0.05 + 0.87 * Float(k) / Float(nSp - 1))
-            var i = 1; while i < arc.count - 1 && arc[i] < sK { i += 1 }
+            var i = 1; while i < arc.count - 1 && (aArc[i] < sK || blocked[i]) { i += 1 }
             // restyle: the ridge path doubles back where the swelled back meets the tail, so equal ARC spacing can bunch two spikes together in 3D; step on along the path until
             // each spike stands at least `restyledMinChord` (straight-line) from the one before it, so the row reads evenly spaced in every view
             if PipTailVariant.active != .current, let prev = sps.last {
-                while i < arc.count - 1 && simd_distance(path[i].shown, prev.pt.shown) < rowMinChord { i += 1 }
+                while i < arc.count - 1 && (simd_distance(path[i].shown, prev.pt.shown) < rowMinChord || blocked[i]) { i += 1 }
             }
             let pt = path[i]
             let tgRaw = simd_normalize(path[min(i + 1, path.count - 1)].shown - path[max(i - 1, 0)].shown)
@@ -212,11 +263,13 @@ nonisolated enum PipSpikes {
             if !changed { break }
         }
         var minChord = Float.infinity, minSeg = Float.infinity
+        lastClearance = .infinity
         for k in 0..<sps.count {
             let sp = sps[k]
             let H = sp.H, bR = sp.bw / 2.0, pt = sp.pt, tgP = sp.tg, n = sp.n, sK = sp.sK
             let ax = simd_normalize(n * cosf(sp.lean) + tgP * sinf(sp.lean))
             let base = pt.rest - n * (0.3 * bR)
+            if !obstacles.isEmpty { lastClearance = min(lastClearance, coneHits(base: base, ax: ax, H: H, bR: bR, tipSoft: vr.spikeTipSoft)) }
             if k > 0 { minChord = min(minChord, simd_distance(sps[k].baseShown, sps[k - 1].baseShown) / max(sps[k].bw, sps[k - 1].bw)) }
             let start = m.pos.count
             m.cone(base: base, axis: ax, height: H, baseR: bR, bend: tgP, curve: 0.06, tipSoft: vr.spikeTipSoft, lateral: SIMD3(1, 0, 0), tones: tn)

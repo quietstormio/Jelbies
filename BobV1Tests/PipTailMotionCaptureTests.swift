@@ -269,7 +269,7 @@ final class PipTailMotionCaptureTests: XCTestCase {
         let ctxGame = try makeCtx(sim: first.rig.sim, W: GW, H: GH)
         var summary = ""
         for sc in scenarios() where wanted(sc.name) {
-            let s = makeSetup(outfit: ProcessInfo.processInfo.environment["TAILMOTION_USER_OUTFIT"] != nil ? [.head: .beaniePink, .face: .heartShades] : sc.outfit, id: sc.id)
+            let s = makeSetup(outfit: ProcessInfo.processInfo.environment["TAILMOTION_USER_OUTFIT"] == "scarf" ? [.head: .beaniePink, .neck: .scarfCosy] : ProcessInfo.processInfo.environment["TAILMOTION_USER_OUTFIT"] != nil ? [.head: .beaniePink, .face: .heartShades] : sc.outfit, id: sc.id)
             sc.start(s)
             var st = Stats()
             var memo = SIMD3<Float>(0, 0, 1)

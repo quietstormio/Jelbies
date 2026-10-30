@@ -380,7 +380,7 @@ final class WearSweepTests: XCTestCase {
         if PipTailVariant.active.reflowsUnderHat {
             for look in WearLook.pieces where look.slot == .head {
                 guard let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing, let lo = piece.rest.map({ $0.y }).min(),
-                      let hp = FeatureMeshes.prepare(.spines, placement: FeatureMeshes.Placement(), body: WearBody.shared, ridgeBrim: lo) else { continue }
+                      let hp = FeatureMeshes.prepare(.spines, placement: FeatureMeshes.Placement(), body: WearBody.shared, ridge: RidgeLayout(brim: lo)) else { continue }
                 let key = String(format: "%.2f", (lo * 100).rounded() / 100)
                 if hatLayouts[key] != nil { continue }
                 var verts: [[Float]] = []

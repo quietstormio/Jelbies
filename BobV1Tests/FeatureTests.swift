@@ -37,7 +37,7 @@ final class FeatureTests: XCTestCase {
     }
     /// The feature mesh of a rest slot (world = rest space), rigidly carried.
     static func mesh(_ s: FeatureSet.Slot) -> (RoomMesh, FeaturePrepared)? {
-        guard let p = FeatureMeshes.prepare(s.feature, placement: placement(s.feature, s.fit), body: WearBody.shared) else { return nil }
+        guard let p = FeatureMeshes.prepare(s.feature, placement: placement(s.feature, s.fit), body: WearBody.shared, ridge: s.feature == .spines ? s.fit.spineLayout : nil) else { return nil }
         var m = RoomMesh()
         FeatureSet.emit(p, into: &m, slot: s, skin: nil, spec: .shared)
         return (m, p)
@@ -615,5 +615,31 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(f.slot(1)?.fit.hiddenParts.isEmpty ?? false); XCTAssertEqual(f.slot(1)?.fit.spineHat, "party_hat")
         f.tick(id: 1, brain: r.brain, sim: r.sim, feature: .spines, worn: [], hideAll: false, dt: 1.0 / 60)
         XCTAssertTrue(f.slot(1)?.fit.hiddenParts.isEmpty ?? false)
+    }
+    /// Restyled variants: no worn hat or neck piece hides ANY of Pip's five spikes, for every crown-enclosing hat x every neck piece (and each alone): the row threads around them,
+    /// and no spike touches the cloth / cord (PipSpikes.lastClearance >= 0). Run with PIPTAIL=T2 / T3.
+    func testReflowNeverHidesASpikeUnderAnyHatOrNeckPiece() throws {
+        guard PipTailVariant.active.reflowsUnderHat else { throw XCTSkip("restyled tail variants only (PIPTAIL=T2 / T3)") }
+        WearBody.install(MotionRig.renderMesh)
+        var hats: [WearLook] = [], necks: [WearLook] = []
+        for look in WearLook.pieces {
+            if look.slot == .neck { necks.append(look) }
+            if look.slot == .head, let p = WearMeshes.prepare(look, body: WearBody.shared), p.crownEnclosing { hats.append(look) }
+        }
+        XCTAssertGreaterThan(hats.count, 5); XCTAssertGreaterThan(necks.count, 5)
+        var combos: [[WearLook]] = [[]]
+        for h in hats { combos.append([h]) }
+        for n in necks { combos.append([n]); for h in hats { combos.append([h, n]) } }
+        var worstClear = Float.infinity, worstName = ""
+        for combo in combos {
+            let names = combo.map { $0.art }
+            let fit = FeatureCompat.solve(.spines, worn: names)
+            XCTAssertTrue(fit.hiddenParts.isEmpty, "\(names): hides \(fit.hiddenParts)")
+            let r = PipSpikes.build(body: WearBody.shared, spec: .shared, layout: fit.spineLayout)
+            XCTAssertEqual(r.parts.count, 5, "\(names): all five spikes are built")
+            if PipSpikes.lastClearance < worstClear { worstClear = PipSpikes.lastClearance; worstName = names.joined(separator: "+") }
+            XCTAssertGreaterThanOrEqual(PipSpikes.lastClearance, 0.0, "\(names): a spike touches the worn piece")
+        }
+        MotionLog.write("REFLOW combos=\(combos.count) worst clearance \(worstClear) at \(worstName)")
     }
 }
