@@ -212,8 +212,10 @@ struct LobbyInfoLine<Pills: View>: View {
     let text: String
     var textID: String?
     var pillsBelow = false
+    /// One line, shrinking down to 0.7 (landscape's short blurb beside the pills).
+    var squeeze = false
     let pills: Pills
-    init(text: String, textID: String? = nil, pillsBelow: Bool = false, @ViewBuilder pills: () -> Pills) { self.text = text; self.textID = textID; self.pillsBelow = pillsBelow; self.pills = pills() }
+    init(text: String, textID: String? = nil, pillsBelow: Bool = false, squeeze: Bool = false, @ViewBuilder pills: () -> Pills) { self.text = text; self.textID = textID; self.pillsBelow = pillsBelow; self.squeeze = squeeze; self.pills = pills() }
     @State private var availW: CGFloat = 0
     @Environment(\.dynamicTypeSize) private var typeSize
     /// One line when the text fits at 90% size or better (never scaled at accessibility sizes); otherwise it wraps at full size.
@@ -225,7 +227,7 @@ struct LobbyInfoLine<Pills: View>: View {
     }
     private var blurb: some View {
         Text(text).font(SK.font(13, .bold)).foregroundStyle(SK.muted).lineSpacing(2)
-            .lineLimit(oneLine ? 1 : nil).minimumScaleFactor(oneLine ? 0.9 : 1).fixedSize(horizontal: false, vertical: true)
+            .lineLimit(oneLine || squeeze ? 1 : nil).minimumScaleFactor(squeeze ? 0.7 : (oneLine ? 0.9 : 1)).fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier(textID ?? "lobby-info")
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availW = $0 }
     }

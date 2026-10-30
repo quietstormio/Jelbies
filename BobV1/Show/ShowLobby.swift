@@ -121,7 +121,7 @@ struct ShowLobby: View {
                     if !compact { info }
                 }
             } right: {
-                if compact { info.padding(.horizontal, -2).padding(.bottom, 10) }
+                if compact { info.padding(.top, -6).padding(.bottom, 4) }
                 entrant.padding(.top, compact ? 0 : 16)
             } bar: {
                 bar
@@ -213,13 +213,17 @@ struct ShowLobby: View {
         .accessibilityIdentifier("rank-\(r.rawValue)")
     }
 
+    /// Landscape shows only the first sentence on one line (the full blurb stays in VoiceOver).
+    private var shortBlurb: String { rank.lobbyBlurb.components(separatedBy: ". ").first.map { $0.hasSuffix(".") ? $0 : $0 + "." } ?? rank.lobbyBlurb }
+
     private var info: some View {
-        LobbyInfoLine(text: hint.text ?? rank.lobbyBlurb, textID: "show-blurb", pillsBelow: !compact || typeSize.isAccessibilitySize) {
+        LobbyInfoLine(text: hint.text ?? (compact && !typeSize.isAccessibilitySize ? shortBlurb : rank.lobbyBlurb), textID: "show-blurb", pillsBelow: !compact || typeSize.isAccessibilitySize, squeeze: compact && hint.text == nil && !typeSize.isAccessibilitySize) {
             LobbyPill(label: "1st", amount: rank.drops(place: 1), gold: true)
             LobbyPill(label: "2nd", amount: rank.drops(place: 2))
             LobbyPill(label: "3rd", amount: rank.drops(place: 3))
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("show-prizes")
+        .accessibilityLabel(rank.lobbyBlurb)
     }
 
     // MARK: entrant
@@ -249,7 +253,7 @@ struct ShowLobby: View {
                     Text("\(name)'s card \u{203A}").font(SK.font(13.5, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.plain).padding(.vertical, -10).accessibilityLabel("\(name)'s card").accessibilityIdentifier("show-card")
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, compact ? 8 : 12)
             if care.jellies.count > 1 { LobbyChips(care: care, selected: who) { who = $0 } }
             else if let pr = prof { LobbyChip(care: care, jelly: pr, selected: true) {}.allowsHitTesting(false) }
             VStack(spacing: 8) {
@@ -257,15 +261,15 @@ struct ShowLobby: View {
                 roundRow("Dance", est.dancePts, Color(hex: 0xB58BDB))
                 roundRow("Trick", est.trickPts, SK.honeyDeep)
             }
-            .padding(.top, 14)
+            .padding(.top, compact ? 9 : 14)
             HStack(spacing: 7) {
                 LobbyIcon(kind: .bulb, color: SK.ink).frame(width: 22, height: 22).background(Circle().fill(SK.honeyDeep.opacity(0.45)))
                 Text(tip).font(SK.font(13, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 10).accessibilityElement(children: .combine).accessibilityIdentifier("show-tip")
+            .padding(.top, compact ? 7 : 10).accessibilityElement(children: .combine).accessibilityIdentifier("show-tip")
             versus(name: name, total: total)
         }
-        .lobbyCard()
+        .lobbyCard(padding: compact ? EdgeInsets(top: 10, leading: 14, bottom: 11, trailing: 14) : EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14))
         .accessibilityElement(children: .contain).accessibilityIdentifier("show-entrant")
     }
 
@@ -309,8 +313,8 @@ struct ShowLobby: View {
                 }
             }.frame(height: 12)
         }
-        .padding(.top, 11).padding(.top, 1).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xE8DCC6)).frame(height: 2) }
-        .padding(.top, 12)
+        .padding(.top, compact ? 8 : 12).overlay(alignment: .top) { Rectangle().fill(Color(hex: 0xE8DCC6)).frame(height: 2) }
+        .padding(.top, compact ? 8 : 12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(name) about \(total) out of 300. Rivals about \(r).")
         .accessibilityIdentifier("show-estimate")

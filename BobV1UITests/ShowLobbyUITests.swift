@@ -57,3 +57,19 @@ final class ShowLobbyUITests: XCTestCase {
         }
     }
 }
+
+extension ShowLobbyUITests {
+    @MainActor
+    func testLockedHintInLandscape() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments += ["-SetRoster", "pip,moss,lavender", "-MainMenu", "0", "-Intro", "0", "-BlobDrops.v1", "1024", "-BlobNoWander", "1", "-ClockHour", "12", "-LobbySeed", "reset dress", "-LobbyAuto", "show", "-ForceOrientation", "left"]
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["rank-pond"].firstMatch.waitForExistence(timeout: 40))
+        sleep(8)
+        app.descendants(matching: .any)["rank-pond"].firstMatch.tap(); sleep(1)
+        try? FileManager.default.createDirectory(atPath: Self.out, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(Self.out)/s3_hint_landscape.png"))
+        XCUIDevice.shared.orientation = .portrait
+    }
+}
