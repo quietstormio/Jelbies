@@ -263,8 +263,11 @@ extension BlobBrain {
         case 2:
             stepKey(500 + s.round)
             if crouch {
+                // he crouches SIDEWAYS to the leaper (the back toward away from the camera): the hop goes over his flank, never along the line of his tail, and lands clear of it
+                let base = yawTo(o.position), cam = faceCameraYaw()
+                let flank = abs(wrapAngle(base + .pi / 2 - cam)) < abs(wrapAngle(base - .pi / 2 - cam)) ? base + .pi / 2 : base - .pi / 2
                 if !socialBook.hopStarted {
-                    if fxFree, t > 0.2 { letGo(); if idleStart(.flop, sim) { socialBook.hopStarted = true } else { s.finish(.aborted) } } else { holdFacing(yawTo(o.position)) }
+                    if fxFree, t > 0.2, turnedTo(flank, tol: 0.25) || t > 2.5 { letGo(); if idleStart(.flop, sim) { socialBook.hopStarted = true } else { s.finish(.aborted) } } else { holdFacing(flank) }
                 }
             } else {
                 if !socialBook.hopStarted {

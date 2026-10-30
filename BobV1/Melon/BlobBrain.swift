@@ -621,6 +621,7 @@ final class BlobBrain {
             gait.basePitch = pitchBase
             gait.tick(sim, held: false, reduce: amplitude < 0.7)
             driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
+            tailHopTick(sim, skinner, dt)          // (BlobBrain+TailPlay.swift)
             if !gait.isBusy { currentPose(sim); gait.basePitch = 0; finishScript(sim, after: false) }
             return
         default: break
@@ -1674,7 +1675,7 @@ final class BlobBrain {
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
-        tailPlayTick(skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)
+        tailPlayTick(sim, skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)
         var list: [ParticleTarget] = []
         let beanLive = beanG > 0 || beanHold > 0 || shoesWorn
         let footOn = feetInit && geom.valid && feetDrive && (poseW > 0 || beanLive) && debugFeet

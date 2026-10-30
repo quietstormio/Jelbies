@@ -57,6 +57,8 @@ final class WornSet {
     struct Slot {
         var items: [WearSlot: Item] = [:]
         var carry = EyeMaskModel.Carry()
+        /// Contact planes this step (PeerContact; n.xyz, offset w): a hat or a back item is pressed flat onto a plane it would cross, never through the partner.
+        var planes: [SIMD4<Float>] = []
         var primed = false
         /// Hanging parts' world-space lag and its velocity.
         var swing = SIMD3<Float>.zero, swingV = SIMD3<Float>.zero
@@ -219,6 +221,8 @@ final class WornSet {
         guard slots.indices.contains(id) else { return }
         let pose = sim.bodyPose(iterations: 3)
         slots[id].carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
+        slots[id].planes.removeAll(keepingCapacity: true)
+        for k in 0..<sim.planeCount { let pl = sim.plane(k); slots[id].planes.append(SIMD4(pl.n, pl.s)) }
     }
 
     /// Stores the posed arm frames of Jelly `id` (world), from the brain (GameCare+Wear).
@@ -291,6 +295,7 @@ final class WornSet {
             }
             if p.h[i] > 0 { q += swing * p.h[i] }
             if scale != 1 { q = wp + (q - wp) * scale }
+            for pl in s.planes { let pen = simd_dot(q, SIMD3(pl.x, pl.y, pl.z)) - pl.w; if pen > 0 { q -= SIMD3(pl.x, pl.y, pl.z) * pen } }
             m.vertices.append(RoomVertex(pos: SIMD4(q, mats.isEmpty ? 0 : mats[i]), normal: SIMD4(R * n, p.ao[i]), color: SIMD4(p.col[i], 1)))
         }
         m.indices.reserveCapacity(m.indices.count + p.idx.count)

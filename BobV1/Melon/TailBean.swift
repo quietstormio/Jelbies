@@ -13,6 +13,12 @@ import simd
 nonisolated enum TailBean {
     static let around = 24, bodyRings = 30, capRings = 5
     static var rings: Int { bodyRings + capRings }
+    /// The solid tail (Skinner.tailSpheres): a sphere on every `sphereEvery`th ring from ring `firstSolidRing` (the first one clear of the body: the buried root is his own back).
+    static let firstSolidRing = 10, sphereEvery = 2
+    /// The most a foot is lifted when it stands on another Jelbie's tail (Skinner.liftFeetOverPeers).
+    static let footLiftMax: Float = 0.2
+    /// The swell on the back is a skin of this many small spheres of this radius (Skinner.captureTailSpheres).
+    static let swellSpheres = 16, swellSphereR: Float = 0.09
     static var vertexCount: Int { 2 + around * rings }
 
     static func triangles(firstVertex f: Int) -> [UInt32] {

@@ -49,6 +49,8 @@ final class FeatureSet {
         var primed = false
         var hideAll = false
         var carry = EyeMaskModel.Carry()
+        /// Contact planes this step (PeerContact; n.xyz, offset w): a wing or a flower is pressed flat onto a plane it would cross, never through the partner.
+        var planes: [SIMD4<Float>] = []
         // motion drive
         var lastCentroid = SIMD3<Float>.zero, lastVel = SIMD3<Float>.zero, lastSquash: Float = 1
         var accel: [SIMD3<Float>] = Array(repeating: .zero, count: FeatureTuning.accelHistory)      // ring, newest at `accelHead`
@@ -159,6 +161,8 @@ final class FeatureSet {
         guard slots.indices.contains(id) else { return }
         let pose = sim.bodyPose(iterations: 3)
         slots[id].carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
+        slots[id].planes.removeAll(keepingCapacity: true)
+        for k in 0..<sim.planeCount { let pl = sim.plane(k); slots[id].planes.append(SIMD4(pl.n, pl.s)) }
     }
 
     /// The body's acceleration history (for the lagged drives) and squash rate.
@@ -434,6 +438,7 @@ final class FeatureSet {
                 }
                 if ownTuck != 1 { q = pivotW + (q - pivotW) * ownTuck }           // a covered ridge spike shrinks onto its own base
                 if ps != 1 { q = anchorW + (q - anchorW) * ps }
+                if s.feature != .spines { for pl in s.planes { let pen = simd_dot(q, SIMD3(pl.x, pl.y, pl.z)) - pl.w; if pen > 0 { q -= SIMD3(pl.x, pl.y, pl.z) * pen } } }          // (the tail spikes ride the tail, which is a solid for the others instead)
                 m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
         }

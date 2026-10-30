@@ -80,6 +80,8 @@ nonisolated final class Skinner {
     // Pip's tail (TailBean): a block of body vertices after the foot beans. Off (every Jelly but Pip), it is collapsed onto its base pole (zero-area, invisible).
     // On, it sways (walking), wags (happy) and bobs (vertical motion); `tailYaw` / `tailPitch` (deg) are read by the spike layer so the tail spikes ride it.
     var tailFirst = -1, tailOn = false, tailHappy = false
+    /// 0...1: he is in the air near another Jelbie; the floor-lying part of the tail then rides the body's height too (BlobBrain+TailPlay).
+    var tailAir: Float = 0
     private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
@@ -98,6 +100,89 @@ nonisolated final class Skinner {
         }
     }
     private var tailBump: [(Int, Float)] = []
+    /// The contact planes of this body this step (PeerContact: n.xyz, offset w; the body stays on the `dot(p, n) <= w` side). The arms and the foot beans are drawn from the
+    /// brain's own geometry, not from the sim particles, so a hug would carry them into the partner: their vertices are pressed flat onto the plane instead (a squashed
+    /// hand against a squashed side), never through it.
+    var peerPlanes: [SIMD4<Float>] = []
+    private func clampLimbsToPeers(_ dyn: UnsafeMutablePointer<Float>) {
+        func clamp(_ first: Int, _ count: Int) {
+            for i in 0..<count {
+                let o = 6 * (first + i)
+                var x = dyn[o], y = dyn[o + 1], z = dyn[o + 2]
+                for pl in peerPlanes {
+                    let pen = x * pl.x + y * pl.y + z * pl.z - pl.w
+                    if pen > 0 { x -= pl.x * pen; y -= pl.y * pen; z -= pl.z * pen }
+                }
+                dyn[o] = x; dyn[o + 1] = y; dyn[o + 2] = z
+            }
+        }
+        if armCapsulesActive { for s in 0..<2 { clamp(armFirst[s], ArmCapsule.vertexCount) } }
+        if beansActive { for s in 0..<2 { clamp(beanFirst[s], FootBean.vertexCount) } }
+    }
+    /// The drawn egg reaches past the particles that carry it (the back's swell, the jiggle's lag, the lean's shear): whatever skin would cross a contact plane is pressed flat onto it, so the
+    /// two skins meet in one soft patch and never pass.
+    private func clampEggToPeers(_ dyn: UnsafeMutablePointer<Float>) {
+        guard let end = armFirst.min() else { return }
+        for pl in peerPlanes {
+            let nx = pl.x, ny = pl.y, nz = pl.z, w = pl.w
+            for v in 0..<end {
+                let o = 6 * v
+                let pen = dyn[o] * nx + dyn[o + 1] * ny + dyn[o + 2] * nz - w
+                if pen > 0 { dyn[o] -= nx * pen; dyn[o + 1] -= ny * pen; dyn[o + 2] -= nz * pen }
+            }
+        }
+    }
+    /// Other bodies' solid tails near him this step (world centre xyz, radius w; PeerContact). A foot bean that stands on one is lifted onto it, as a foot steps on a rope.
+    var peerSpheres: [SIMD4<Float>] = []
+    private func liftFeetOverPeers(_ dyn: UnsafeMutablePointer<Float>) {
+        guard beansActive else { return }
+        for s in 0..<2 {
+            var lift: Float = 0
+            for i in 0..<FootBean.vertexCount {
+                let o = 6 * (beanFirst[s] + i)
+                for sp in peerSpheres {
+                    let dx = dyn[o] - sp.x, dz = dyn[o + 2] - sp.z, h = sp.w * sp.w - dx * dx - dz * dz
+                    if h > 0 { lift = max(lift, sp.y + h.squareRoot() - dyn[o + 1]) }
+                }
+            }
+            lift = min(lift, TailBean.footLiftMax)
+            if lift > 0 { for i in 0..<FootBean.vertexCount { dyn[6 * (beanFirst[s] + i) + 1] += lift } }
+        }
+    }
+    /// The drawn tail as solid spheres (world centre xyz, radius w): every `TailBean.sphereEvery`th ring from the first visible one, read from this frame's skinned
+    /// vertices. Other bodies' particles are kept out of them (PeerContact), so nobody passes through Pip's tail. Empty while the tail is off.
+    private(set) var tailSpheres: [SIMD4<Float>] = []
+    private func captureTailSpheres(_ dyn: UnsafeMutablePointer<Float>, first f: Int) {
+        tailSpheres.removeAll(keepingCapacity: true)
+        guard tailScale > 0.5 else { return }
+        let a = TailBean.around
+        for r in stride(from: TailBean.firstSolidRing, to: TailBean.rings, by: TailBean.sphereEvery) {
+            var c = SIMD3<Float>.zero
+            let o0 = 6 * (f + 1 + a * r)
+            for j in 0..<a { let o = o0 + 6 * j; c += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
+            c /= Float(a)
+            var rad: Float = 0
+            for j in 0..<a { let o = o0 + 6 * j; rad += simd_distance(SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]), c) }
+            tailSpheres.append(SIMD4(c, rad / Float(a)))
+        }
+        // the swell on his lower back (the tail's fillet: egg vertices pushed out along the tail's start): a skin of small spheres a radius under the displaced vertices (those with the
+        // most weight, thinned to `TailBean.swellSpheres`), so a back that meets his back dents round the bump
+        var sc = SIMD3<Float>.zero, cnt: Float = 0
+        for (v, w) in tailBump where w > 0.15 { let o = 6 * v; sc += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]); cnt += 1 }
+        if cnt > 3 {
+            sc /= cnt
+            let step = max(1, Int(cnt) / TailBean.swellSpheres), r = TailBean.swellSphereR
+            var k = 0
+            for (v, w) in tailBump where w > 0.15 {
+                k += 1
+                guard k % step == 0 else { continue }
+                let o = 6 * v, p = SIMD3(dyn[o], dyn[o + 1], dyn[o + 2])
+                let d = p - sc, l = simd_length(d)
+                tailSpheres.append(SIMD4(p - (l > 1e-4 ? d / l : SIMD3(0, 0, 1)) * r, r))
+            }
+        }
+    }
+
     private var tailRotLast = matrix_identity_float3x3
     /// After the normal pass: pull the root rings' normals toward the egg's own normal there, so the shading flows from the back into the tail with no tonal step.
     private func blendTailNormals(_ dyn: UnsafeMutablePointer<Float>) {
@@ -533,6 +618,8 @@ nonisolated final class Skinner {
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
             }
         }
+        if !peerPlanes.isEmpty { clampLimbsToPeers(dyn) }
+        if !peerSpheres.isEmpty { liftFeetOverPeers(dyn) }
         applyTail(dyn)
         eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
@@ -550,6 +637,7 @@ nonisolated final class Skinner {
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
         applyBeanGuard(dyn)
+        if !peerPlanes.isEmpty { clampEggToPeers(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
@@ -566,6 +654,7 @@ nonisolated final class Skinner {
             let B = P(0)
             for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
             tailPrimed = false; tailYaw = 0; tailPitch = 0; tailScale = 0; tailRingQ = []
+            tailSpheres.removeAll(keepingCapacity: true)
             return
         }
         // carry the tail rigidly on the frame of its three landmark egg vertices (rest -> skinned)
@@ -586,7 +675,7 @@ nonisolated final class Skinner {
             let L = TailBean.localF[i]
             let full = Cs + Rot * (L - Cr)
             var flat = Cs + RotY.act(L - Cr); flat.y = L.y - TailBean.restFloor
-            let w = 1 - simd_smoothstep(0.22, 0.5, TailBean.ringY[i])
+            let w = (1 - simd_smoothstep(0.22, 0.5, TailBean.ringY[i])) * (1 - tailAir)
             let p = full + (flat - full) * w
             let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
         }
@@ -600,6 +689,7 @@ nonisolated final class Skinner {
         if !tailOn && tailScale <= 0.002 {                       // off: every vertex onto the base pole (inside the body)
             for i in 1..<n { let o = 6 * (f + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
             tailPrimed = false; tailYaw = 0; tailPitch = 0; tailRingQ = []
+            tailSpheres.removeAll(keepingCapacity: true)
             return
         }
         let vel = tailPrimed ? (B - tailLastB) / dt : SIMD3<Float>.zero
@@ -608,6 +698,7 @@ nonisolated final class Skinner {
         let speed = (vel.x * vel.x + vel.z * vel.z).squareRoot()
         let pivot = Cs + Rot * (TailBean.rootF - Cr)                   // exactly where the tail leaves the back
         bendTail(dyn, first: f, n: n, speed: speed, vy: vel.y, heading: atan2f(fwd.x, fwd.z), pivot: pivot, base: B, tip: T, rot: Rot, cs: Cs, cr: Cr)       // the travelling-wave bend (TailMotion.swift)
+        captureTailSpheres(dyn, first: f)
     }
 
     // MARK: vertex normals

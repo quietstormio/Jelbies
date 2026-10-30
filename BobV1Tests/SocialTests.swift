@@ -100,6 +100,8 @@ final class SocialTests: XCTestCase {
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: $0.brain.activity == .walking || $0.brain.activity == .coming) }          // (as the stage: the body's centroid while a hop / scoot / slide has the body, else the root)
             asideClock += 1.0 / 60
             if asideClock >= 0.25 { MelonController.makeRoom(snapshot: snapshot, brains: rigs.map { $0.brain }, cooldown: &aside, dt: asideClock); asideClock = 0 }
+            for r in rigs where r.skinner.tailOn { r.render() }          // (Pip's tail spheres come from his skin)
+            PeerContact.prepare(rigs.map { $0.sim }, skins: rigs.map { $0.skinner })          // as the stage: contact planes + the solid tail, before the bodies step
             for (i, r) in rigs.enumerated() { r.tick(); if watching { watch[i].sample(r) } }
         }
         func brainGap(_ i: Int, _ j: Int) -> Float { simd_distance(rigs[i].brain.position, rigs[j].brain.position) }

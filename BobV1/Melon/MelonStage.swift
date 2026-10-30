@@ -360,6 +360,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     static let jellyGap: Float = 1.4
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
     var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
+    private var contactSims: [SoftBody] = [], contactSkins: [Skinner?] = []
 
     /// Wires one brain into the room: it steers around the other Jellies (a standing Jelly is an obstacle to everybody; between two walkers the
     /// lower id gives way) and walks by the room's floor rules.
@@ -959,6 +960,14 @@ final class MelonController: NSObject, MTKViewDelegate {
             while acc >= sim.stepDt && steps < maxSteps {
                 hopTick(reduce: reduce)
                 let st0 = CACurrentMediaTime()
+                contactSims.removeAll(keepingCapacity: true); contactSkins.removeAll(keepingCapacity: true)
+                for a in actors { a.sim.clearPeers(); a.skinner.peerPlanes.removeAll(keepingCapacity: true); a.skinner.peerSpheres.removeAll(keepingCapacity: true) }
+                for a in parkActors { a.sim.clearPeers(); a.skinner.peerPlanes.removeAll(keepingCapacity: true); a.skinner.peerSpheres.removeAll(keepingCapacity: true) }
+                if !(game && model.care.raceBusy) {          // (the race, the show and volleyball keep their own spacing)
+                    for a in actors where !(game && model.care.parkHides(a.id)) { contactSims.append(a.sim); contactSkins.append(a.skinner) }
+                    for a in parkActors { contactSims.append(a.sim); contactSkins.append(a.skinner) }
+                    PeerContact.prepare(contactSims, skins: contactSkins)          // (touching Jelbies: contact planes + Pip's solid tail; before the sleep check, a contact wakes a sleeper)
+                }
                 stepSims.removeAll(keepingCapacity: true)
                 for a in actors where !(game && model.care.volley.inScene && model.care.volleyHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (volleyball: the Jelbies at home are not stepped, drawn or worn; at most 4 bodies play)
                 for a in parkActors where a.updateSleep(forceAwake: !(a.brain?.isNapping ?? false)) { stepSims.append(a.sim) }          // (a guest asleep at home skips his step like the Jelbies)

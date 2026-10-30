@@ -23,6 +23,10 @@ struct TailPlayState {
     var thumps = 0, thumpsDone = 0, impactT: Float = 9
     /// The hug: 0...1 curl blend and the side of the tail (+1 = +x).
     var hug: Float = 0
+    /// Somebody stands behind him (touching round 2026-10-30): the tail curls round to the side away from him so the two backs can meet, easing in and out (0...1) with the side it goes to.
+    var aside: Float = 0, asideSide: Float = 1
+    /// While another Jelbie is near and he is in the air the tail lifts with the body instead of dragging along the floor through the other one (0...1).
+    var air: Float = 0
     /// How many times each emote has played (tests).
     var played: [IdleKind: Int] = [:]
 }
@@ -31,6 +35,8 @@ extension BlobBrain {
     static let tailKinds: Set<IdleKind> = [.tailThump, .tailHug]
     /// Raise of the thumped tail (deg), thump cycle (s): raise, fast drop, rest.
     static let thumpLiftDeg: Float = 40, thumpRaise: Float = 0.34, thumpDrop: Float = 0.11, thumpCycle: Float = 0.64
+    /// The tail aside for a partner behind him: curl (deg) toward the tail's own +x side / the unwinding curl toward -x when the partner is on the +x side, the reach of the rule (a partner within this distance and inside the rear arc).
+    static let asideCurlDeg: Float = 110, asideUnwindDeg: Float = 210, asideReach: Float = 1.75, asideArc: Float = 1.4, asideTime: Float = 0.35
     static let hugCurlDeg: Float = 110, hugLiftTip: Float = 45, hugIn: Float = 1.0, hugHold: Float = 2.3, hugOut: Float = 0.8
 
     /// Pip is the only one with a tail to play with.
@@ -48,8 +54,8 @@ extension BlobBrain {
     }
 
     /// Every tick from driveLimbs: tells the skinner what the tail is to do.
-    func tailPlayTick(_ skinner: Skinner, _ dt: Float) {
-        guard hasTailToPlay else { skinner.tailDrive = TailDrive(); tailPlay = TailPlayState(); skinner.tailSeatOn = false; return }
+    func tailPlayTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        guard hasTailToPlay else { skinner.tailDrive = TailDrive(); tailPlay = TailPlayState(); skinner.tailSeatOn = false; skinner.tailAir = 0; return }
         tailSeatTick(skinner)
         var d = TailDrive()
         d.stride = stridePhase; d.strideLive = feet.active
@@ -80,13 +86,63 @@ extension BlobBrain {
         // the emotes' shaped values; with no emote they ease back to rest
         if kind != .tailThump { tailPlay.lift *= expf(-dt / 0.12); tailPlay.thumpsDone = 0 }
         if kind != .tailHug { tailPlay.curl *= expf(-dt / 0.2); tailPlay.hug *= expf(-dt / 0.2); if kind != .tailThump { tailPlay.liftTip *= expf(-dt / 0.2) } }
+        tailAsideTick(sim, skinner, dt)
         d.liftRoot = tailPlay.lift
         d.liftTip += tailPlay.liftTip
         d.bendYaw = tailPlay.curl; d.bendPow = tailPlay.curlPow
+        if kind != .tailHug { applyAside(&d) }
         skinner.tailDrive = d
     }
 
+    /// The nearest other Jelbie that is close and behind him (inside the rear arc), with which side of the tail's own x axis he is on; nil = nobody.
+    func partnerBehind(from me: SIMD2<Float>? = nil) -> (dist: Float, side: Float)? {
+        var best: (dist: Float, side: Float)?
+        let at = me ?? position          // (the body's own spot: his root stays at the take-off spot until a hop lands)
+        for o in socialOthers() where o !== self {
+            let d = o.position - at, dist = simd_length(d)
+            guard dist < Self.asideReach, dist > 1e-3 else { continue }
+            let rel = wrapAngle(atan2f(d.x, d.y) - (yaw + .pi))
+            guard abs(rel) < Self.asideArc else { continue }
+            let lat = d.x * cosf(yaw) - d.y * sinf(yaw)          // along his own +x
+            if best == nil || dist < best!.dist { best = (dist, lat > 0.15 * dist ? 1 : -1) }
+        }
+        return best
+    }
+
+    /// The aside curl on top of the drive's own bend.
+    private func applyAside(_ d: inout TailDrive) {
+        guard tailPlay.aside > 0.001 else { return }
+        d.bendYaw += tailPlay.asideSide > 0 ? -Self.asideCurlDeg * tailPlay.aside : Self.asideUnwindDeg * tailPlay.aside
+        d.bendPow = max(d.bendPow, 1.3)
+    }
+
+    /// A hop (leapfrog, ring around ...) runs outside `tailPlayTick`: the aside curl and the airborne lift still follow the neighbours.
+    func tailHopTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        guard hasTailToPlay else { return }
+        tailAsideTick(sim, skinner, dt)
+        var d = skinner.tailDrive
+        d.bendYaw = tailPlay.curl; d.bendPow = tailPlay.curlPow
+        applyAside(&d)
+        skinner.tailDrive = d
+    }
+
+    /// Eases the aside curl (and the airborne lift) toward what the neighbours ask. Not while he walks (a Jelbie behind him on a walk is following, the tail swishes as ever).
+    private func tailAsideTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        let walking = activity == .walking || activity == .coming
+        var want: Float = 0
+        let c = sim.centroid()
+        if !walking, !held, let p = partnerBehind(from: SIMD2(c.x, c.z)) { want = 1; tailPlay.asideSide = p.side > 0 ? 1 : -1 }
+        tailPlay.aside += max(-dt / Self.asideTime, min(dt / Self.asideTime, want - tailPlay.aside))
+        // airborne near somebody: the tail goes up with him (the floor part of the tail otherwise drags through whoever he hops over)
+        var near = false
+        for o in socialOthers() where o !== self && simd_distance(o.position, SIMD2(c.x, c.z)) < Self.asideReach * 1.25 { near = true; break }
+        let up = near ? min(1, max(0, (sim.minY() - sim.floorY) / 0.2)) : 0
+        tailPlay.air += (up - tailPlay.air) * min(1, dt / 0.08)
+        skinner.tailAir = tailPlay.air
+    }
+
     // MARK: start
+
 
     /// From `idleStart`: false = not Pip / no room for it.
     func tailEmoteBegin(_ kind: IdleKind, _ sim: SoftBody) -> Bool {

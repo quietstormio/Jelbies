@@ -75,7 +75,7 @@ nonisolated final class SoftBody {
     /// The body is at a fixed point: not held or pressed, perfectly still for the rest-snap time, and whatever pulls on it (pose attractor, foot / hand
     /// targets) is exactly what pulled on it in its last step. Stepping it again would change nothing, so a sleeping Jelly may skip the step.
     var isSettled: Bool {
-        guard !grabbing, !pressing, restSteps > 15, kineticEnergy() < 1e-9 else { return false }
+        guard !grabbing, !pressing, peerDepth < 2e-4, restSteps > 15, kineticEnergy() < 1e-9 else { return false }
         let a = attractor, p = attPrev
         guard a.strength == p.strength else { return false }
         if a.strength > 0 {
@@ -501,6 +501,90 @@ nonisolated final class SoftBody {
     /// Deepest push of the spheres during the last step (sim units): how hard the fingertip works on him.
     private(set) var pressDepth: Float = 0
 
+    // MARK: peer contact (2026-10-30)
+    // Two Jelbies that touch must not pass into each other. PeerContact.prepare (once per fixed step, before the bodies step) hands each body up to `maxPlanes` contact planes
+    // (one per near partner, placed where the two surfaces meet, the overlap split evenly) and the world spheres of other bodies' rigid tails. Inside the substeps every particle past
+    // a plane goes back onto it (like the floor) and every particle inside a sphere moves out of it; the volume constraints do the bulge, the shape constraints the wobble.
+    // `peerGiveBack` of what the contact pushed is given back to the whole body (the press solver's zero-net-pull: the centroid is not shoved, only the dent moves).
+    static let maxPlanes = 3, maxSpheres = 32
+    private var planeN = [SIMD3<Float>](repeating: .zero, count: SoftBody.maxPlanes)
+    private var planeS = [Float](repeating: 0, count: SoftBody.maxPlanes)
+    private(set) var planeCount = 0
+    var sphereTotal: Int { sphereCount }
+    var sphereListCount: Int { sphereList.count }
+    private var sphereC = [SIMD4<Float>](repeating: .zero, count: SoftBody.maxSpheres)
+    private var sphereCount = 0
+    private var sphereList: [Int32] = []
+    var peerGiveBack: Float = 0.5
+    /// Deepest particle past a plane or into a sphere during the last step (the contact's own work: a body still being pushed is not at rest).
+    private(set) var peerDepth: Float = 0
+    private var peerDeepest: Float = 0
+
+    /// Drops last step's contact (no allocation).
+    func clearPeers() { planeCount = 0; sphereCount = 0; if !sphereList.isEmpty { sphereList.removeAll(keepingCapacity: true) } }
+    /// A contact plane: the body stays on the `-n` side of `dot(x, n) = s`. Returns false when all slots are taken by deeper ones.
+    @discardableResult func addPlane(normal n: SIMD3<Float>, offset s: Float) -> Bool {
+        guard planeCount < Self.maxPlanes else { return false }
+        planeN[planeCount] = n; planeS[planeCount] = s; planeCount += 1
+        return true
+    }
+    /// A solid sphere of another body (centre xyz, radius w) the particles may not enter.
+    @discardableResult func addSphere(_ c: SIMD4<Float>) -> Bool { guard sphereCount < Self.maxSpheres else { return false }; sphereC[sphereCount] = c; sphereCount += 1; return true }
+    /// A real contact reaches this body (a sleeper wakes: the epoch is the wake signal).
+    func wakeForContact() { epoch &+= 1 }
+    /// The contact planes as set (tests, the metric).
+    func plane(_ i: Int) -> (n: SIMD3<Float>, s: Float) { (planeN[i], planeS[i]) }
+
+    private func buildSphereList() {
+        sphereList.removeAll(keepingCapacity: true)
+        for i in 0..<n {
+            for s in 0..<sphereCount {
+                let c = sphereC[s], r = c.w + 0.12
+                let dx = x[3 * i] - c.x, dy = x[3 * i + 1] - c.y, dz = x[3 * i + 2] - c.z
+                if dx * dx + dy * dy + dz * dz < r * r { sphereList.append(Int32(i)); break }
+            }
+        }
+    }
+
+    private func solvePeers(_ x: UnsafeMutablePointer<Float>) {
+        var sx: Float = 0, sy: Float = 0, sz: Float = 0
+        var deepest: Float = 0
+        for p in 0..<planeCount {
+            let nx = planeN[p].x, ny = planeN[p].y, nz = planeN[p].z, s = planeS[p]
+            for i in 0..<n {
+                let k = 3 * i
+                let pen = x[k] * nx + x[k + 1] * ny + x[k + 2] * nz - s
+                if pen <= 0 { continue }
+                x[k] -= nx * pen; x[k + 1] -= ny * pen; x[k + 2] -= nz * pen
+                deepest = max(deepest, pen)
+                let m = mass[i] * pen
+                sx -= nx * m; sy -= ny * m; sz -= nz * m
+            }
+        }
+        // the spheres (a rigid tail): a particle inside goes to the surface (at most 0.05 a substep: no pop)
+        if !sphereList.isEmpty {
+            for q in 0..<sphereCount {
+                let c = sphereC[q], R2 = c.w * c.w
+                for kk in sphereList {
+                    let k = 3 * Int(kk)
+                    let dx = x[k] - c.x, dy = x[k + 1] - c.y, dz = x[k + 2] - c.z
+                    let d2 = dx * dx + dy * dy + dz * dz
+                    if d2 >= R2 { continue }
+                    let d = d2.squareRoot(), push = min(c.w - d, 0.05)
+                    if d > 1e-6 { let f = push / d; x[k] += dx * f; x[k + 1] += dy * f; x[k + 2] += dz * f } else { x[k + 1] += push }
+                    deepest = max(deepest, c.w - d)
+                }
+            }
+        }
+        peerDeepest = max(peerDeepest, deepest)
+        let gb = peerGiveBack
+        if gb > 0, planeCount > 0 {
+            let inv = gb / totalMass
+            let gx = sx * inv, gy = sy * inv, gz = sz * inv
+            if abs(gx) + abs(gy) + abs(gz) > 0 { for j in 0..<n { x[3 * j] -= gx; x[3 * j + 1] -= gy; x[3 * j + 2] -= gz } }
+        }
+    }
+
     /// Fingertip sphere (slot 0 = the pet finger, slots 0 and 1 = the two cheek fingers) at `center` with `radius`:
     /// every particle inside is moved out to its surface (collision only, no attachment).
     func setPress(center: SIMD3<Float>, radius: Float, slot: Int = 0) {
@@ -571,6 +655,8 @@ nonisolated final class SoftBody {
         var bad = false
         // attractor state for this step (off while held); interpolated across the substeps
         if pressing { buildPressList(); pressDeepest = 0 }
+        if sphereCount > 0 { buildSphereList() }
+        peerDeepest = 0
         var a1 = attractor
         if isGrabbing { a1.strength = 0 }
         var a0 = attPrev
@@ -612,6 +698,7 @@ nonisolated final class SoftBody {
         attPrev = a1
         targetsPrev = targets
         if pressing { pressDepth = pressDeepest }
+        peerDepth = peerDeepest
         if bad { reset(drop: 0.2) }
     }
 
@@ -634,6 +721,7 @@ nonisolated final class SoftBody {
         if attOn { solveAttractor(dt, x, att) }
         if !targets.isEmpty { solveTargets(dt, x) }
         if pressing { solvePress(x) }
+        if planeCount > 0 || !sphereList.isEmpty { solvePeers(x) }
         solveFloor(x)
         if arenaRadius.isFinite, !arenaSuspended { solveArena(x) }
         let inv = 1 / dt, vmax = maxSpeed

@@ -31,7 +31,7 @@ extension MelonController {
         if !st.running {
             guard now >= st.next, ba.socialFree, bb.socialFree else { return }
             ba.autonomy = true; bb.autonomy = true
-            if ba.socialStart(kind, with: bb, a.sim) { st.running = true; st.depth = 0; st.tail = 0; st.plays += 1; NSLog("[touch] %@ play %d starts (seat %d crouches/leads)", kind.rawValue, st.plays, st.seat % 2) }
+            if ba.socialStart(kind, with: bb, a.sim) { st.running = true; st.depth = 0; st.tail = 0; st.plays += 1; NSLog("[contact] %@ play %d starts (seat %d crouches/leads)", kind.rawValue, st.plays, st.seat % 2) }
             else { st.next = now + 1 }
             return
         }
@@ -41,14 +41,14 @@ extension MelonController {
             let tf = renderMesh.armCapsule?.tailFirst ?? -1
             let skip = tf >= 0 ? tf..<(tf + TailBean.vertexCount) : 0..<0
             let pa = renderer.skinPointer(body: a.id), pb = renderer.skinPointer(body: b.id)
-            let d = ContactMetric.mutualDepth(pa, pb, vertices: n, skip: skip)
+            let d = ContactMetric.mutualDepth(pa, pb, vertices: n, skip: skip, surface: renderMesh.armCapsule?.firstVertex.min())
             if d > st.depth + 0.01 { st.depth = d }
             if tf >= 0 {
                 for (p, o) in [(pa, pb), (pb, pa)] where (p == pa ? a : b).skinner.tailOn { st.tail = max(st.tail, ContactMetric.tailIntrusion(tail: p, first: tf, other: o, vertices: n, skip: skip)) }
             }
         }
         if ba.social == nil, bb.social == nil {
-            NSLog("[touch] %@ play %d ends: depth %.3f tail %.3f", kind.rawValue, st.plays, st.depth, st.tail)
+            NSLog("[contact] %@ play %d ends: depth %.3f tail %.3f", kind.rawValue, st.plays, st.depth, st.tail)
             st.running = false; st.seat += 1
             st.next = now + max(1, UserDefaults.standard.double(forKey: "SocialDemoGap") > 0 ? UserDefaults.standard.double(forKey: "SocialDemoGap") : 3)
         }
