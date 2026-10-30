@@ -10,14 +10,15 @@
 //    B2    "Belly, clear":  the same oval, a bit larger, lighter and crisper
 //    C1    "Tall oval":     B2's tone and edge as ONE marking from the belly up to the forehead, about B2's width all the way
 //    C2    "Egg":           the same, B2's width at the belly narrowing toward the forehead
+//    C2w / C2ww  the egg about 12 % / 22 % wider (belly half-width 0.375 / 0.41, forehead 0.32 / 0.35)
 //  Light tone = the shaded body blue taken 40 % (A), 36 % (B1) or 44 % (B2) toward white, in the shader (so it is always derived from the real body colour).
-//  DEBUG capture aid: launch with `-BlueBelly off|A|B1|B2|C1|C2`.
+//  DEBUG capture aid: launch with `-BlueBelly off|A|B1|B2|C1|C2|C2w|C2ww`.
 //
 
 import Foundation
 
 nonisolated enum BlueBelly: Int, CaseIterable {
-    case off = 0, front, bellySubtle, bellyClear, tallOval, egg
+    case off = 0, front, bellySubtle, bellyClear, tallOval, egg, eggWide, eggWider
 
     /// The variant in force. Off until the user picks; tests / captures set it directly.
     nonisolated(unsafe) static var current: BlueBelly = launchValue
@@ -37,6 +38,8 @@ nonisolated enum BlueBelly: Int, CaseIterable {
         case "b2": return .bellyClear
         case "c1": return .tallOval
         case "c2": return .egg
+        case "c2w": return .eggWide
+        case "c2ww": return .eggWider
         default: return nil
         }
     }
