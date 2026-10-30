@@ -72,13 +72,16 @@ nonisolated enum FeatureMeshes {
     }
 
     /// The prepared feature (cached per placement). `body` binds the part pivots.
-    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared) -> FeaturePrepared? {
+    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridgeBrim: Float? = nil) -> FeaturePrepared? {
         guard f != .none else { return nil }
         if f == .spines {          // Pip: the original spikes spaced down his back + on his tail (PipSpikes); none on his head
-            lock.lock(); let c = prepared["pip_ridge"]; lock.unlock()
+            // (the re-flowed row under a hat is cached per brim height, quantised to 1 cm)
+            let brim = ridgeBrim.map { ($0 * 100).rounded() / 100 }
+            let ck = brim.map { String(format: "pip_ridge|b%.2f", $0) } ?? "pip_ridge"
+            lock.lock(); let c = prepared[ck]; lock.unlock()
             if let c { return c }
-            let r = PipSpikes.build(body: body, spec: spec)
-            lock.lock(); prepared["pip_ridge"] = r; lock.unlock()
+            let r = PipSpikes.build(body: body, spec: spec, brimY: brim)
+            lock.lock(); prepared[ck] = r; lock.unlock()
             return r
         }
         let id = (f == .daisy && p.onHat) ? spec.daisyOnHat.id : f.art

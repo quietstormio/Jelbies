@@ -375,7 +375,20 @@ final class WearSweepTests: XCTestCase {
         var spheres: [[Double]] = []
         var t = 0.0
         while t <= sh.length { let c = sh.point(t); spheres.append([c.x, c.y, c.z, sh.radius(t) * sh.ys]); t += 0.02 }
-        let obj: [String: Any] = ["spikeVertices": spikes, "tailSpheres": spheres, "restTop": Double(FeatureSpec.shared.top)]
+        // the re-flowed rows under each crown-enclosing hat (restyled variants), keyed by the hat's brim y (1 cm): a neck cord can thread the same layout the game shows
+        var hatLayouts: [String: [[Float]]] = [:]
+        if PipTailVariant.active.reflowsUnderHat {
+            for look in WearLook.pieces where look.slot == .head {
+                guard let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing, let lo = piece.rest.map({ $0.y }).min(),
+                      let hp = FeatureMeshes.prepare(.spines, placement: FeatureMeshes.Placement(), body: WearBody.shared, ridgeBrim: lo) else { continue }
+                let key = String(format: "%.2f", (lo * 100).rounded() / 100)
+                if hatLayouts[key] != nil { continue }
+                var verts: [[Float]] = []
+                for part in hp.parts where part.name.hasPrefix("spike") || part.name.hasPrefix("tail") { for v in part.first..<(part.first + part.count) { let r = hp.rest[v]; verts.append([r.x, r.y, r.z]) } }
+                hatLayouts[key] = verts
+            }
+        }
+        let obj: [String: Any] = ["variant": PipTailVariant.active.rawValue, "spikeVertices": spikes, "tailSpheres": spheres, "restTop": Double(FeatureSpec.shared.top), "hatLayouts": hatLayouts]
         try JSONSerialization.data(withJSONObject: obj).write(to: URL(fileURLWithPath: d + "/pip_geometry.json"))
         MotionLog.write("PIPGEOM \(spikes.count) spike vertices, \(spheres.count) tail spheres")
     }

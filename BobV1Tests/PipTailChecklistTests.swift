@@ -517,6 +517,100 @@ final class PipTailChecklistTests: XCTestCase {
         _ = GameCamera.camera(aspect: 603.0 / 1311.0)
     }
 
+    // MARK: 8. hats re-flow the ridge (g-piptail3 round 2): PIPTAIL4_DIR, one process per PIPTAIL variant
+
+    private func dir4() throws -> String {
+        guard let d = ProcessInfo.processInfo.environment["PIPTAIL4_DIR"], !d.isEmpty else { throw XCTSkip("PIPTAIL4_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        return d
+    }
+    /// Crown-enclosing head pieces by brim height (lowest vertex y), and the perch items.
+    private func hatInfo() -> (enclosing: [(WearLook, Float)], perch: [WearLook]) {
+        var enc: [(WearLook, Float)] = [], perch: [WearLook] = []
+        for look in WearLook.pieces where look.slot == .head {
+            guard let piece = WearMeshes.prepare(look, body: WearBody.shared) else { continue }
+            if piece.crownEnclosing { enc.append((look, piece.rest.map { $0.y }.min() ?? 0)) } else { perch.append(look) }
+        }
+        return (enc.sorted { $0.1 < $1.1 }, perch)
+    }
+    private func cellImage(_ outfit: Outfit, views: [View], size: Int = 520, settleFrames: Int = 40) throws -> [LockImage] {
+        let chars = [Char(id: 1, outfit: outfit)]
+        let lab = makeLab(chars); let dr = dress(lab, chars); settle(lab, dr, chars, frames: settleFrames)
+        let c = try makeCtx(sim: lab.rigs[0].sim, W: size, H: size)
+        let s = subj(lab, dr, chars)
+        var memo = SIMD3<Float>(0, 0, 1)
+        return views.map { render(c, s, cam: cam($0, s.sim, memo: &memo), neutral: true) }
+    }
+
+    func testTail4Hats() throws {
+        let d = try dir4()
+        let name = PipTailVariant.active.rawValue
+        let od = "\(d)/\(name)"
+        try FileManager.default.createDirectory(atPath: od, withIntermediateDirectories: true)
+        _ = WearBody.install(MotionRig.renderMesh)
+        let info = hatInfo()
+        var report = "variant \(name)\ncrown-enclosing hats (brim y): " + info.enclosing.map { "\($0.0.art)=\(String(format: "%.3f", $0.1))" }.joined(separator: ", ") + "\nperch: " + info.perch.map { $0.art }.joined(separator: ", ") + "\n"
+        let beanie = info.enclosing.first { $0.0 == .beaniePink }
+        let others = info.enclosing.filter { $0.0 != .beaniePink }
+        var picks: [(String, Outfit)] = [("bare", [:])]
+        if let b = beanie { picks.append(("beanie", [.head: b.0])) }
+        if let lo = others.first { picks.append(("hat_low_" + lo.0.art, [.head: lo.0])) }
+        if let hi = others.last, hi.0 != others.first?.0 { picks.append(("hat_high_" + hi.0.art, [.head: hi.0])) }
+        if let mid = others.count > 2 ? others[others.count / 2] : nil { picks.append(("hat_mid_" + mid.0.art, [.head: mid.0])) }
+        if let pr = [WearLook.hairBow, .headphones, .catEars].first(where: { l in info.perch.contains(l) }) { picks.append(("perch_" + pr.art, [.head: pr])) }
+        picks.append(("beanie_shades", [.head: .beaniePink, .face: .heartShades]))
+        picks.append(("neck_scarf", [.neck: .scarfCosy]))
+        picks.append(("neck_scarf_beanie", [.neck: .scarfCosy, .head: .beaniePink]))
+        picks.append(("neck_chain", [.neck: .chainGold]))
+        picks.append(("neck_chain_beanie", [.neck: .chainGold, .head: .beaniePink]))
+        picks.append(("medal", [WearLook.medalGold.slot: .medalGold]))
+        let views: [View] = [View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35), View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35), View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)]
+        for (n, outfit) in picks {
+            let imgs = try cellImage(outfit, views: views)
+            for (v, im) in zip(views, imgs) { try write(im.uiImage()!, "\(od)/\(n)__\(v.name).png") }
+            let fit = FeatureCompat.solve(.spines, worn: outfit.values.map { $0.art })
+            _ = PipSpikes.build(body: WearBody.shared, spec: .shared, brimY: fit.spineBrimY)
+            report += "\(n): brimY=\(fit.spineBrimY.map { String(format: "%.3f", $0) } ?? "nil") hidden=\(fit.hiddenParts.sorted())  \(PipSpikes.debug)\n"
+            if n.hasPrefix("perch") { XCTAssertNil(fit.spineBrimY, "a perch item moves nothing"); XCTAssertTrue(fit.hiddenParts.isEmpty) }
+            if n == "beanie" || n.hasPrefix("hat_") { XCTAssertTrue(fit.hiddenParts.isEmpty, "\(n): a hat hides no spike") }
+        }
+        try report.write(toFile: "\(od)/hats_report.txt", atomically: true, encoding: .utf8)
+    }
+
+    /// A strip of the glide: beanie on, then off, one frame per 0.1 s, 3/4 back and side.
+    func testTail4OnOff() throws {
+        let d = try dir4()
+        let name = PipTailVariant.active.rawValue
+        let od = "\(d)/\(name)/onoff"
+        try FileManager.default.createDirectory(atPath: od, withIntermediateDirectories: true)
+        var chars = [Char(id: 1)]
+        let lab = makeLab(chars); let dr = dress(lab, chars); settle(lab, dr, chars, frames: 40)
+        let c = try makeCtx(sim: lab.rigs[0].sim, W: 400, H: 400)
+        let s = subj(lab, dr, chars)
+        var memo = SIMD3<Float>(0, 0, 1)
+        let views: [View] = [View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35), View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35)]
+        var n = 0
+        func shoot(_ label: String) throws {
+            for v in views {
+                let img = ui(render(c, s, cam: cam(v, s.sim, memo: &memo), neutral: true), "\(name) \(label) \(v.name)")
+                try write(img, String(format: "%@/%03d_%@.png", od, n, v.name))
+            }
+            n += 1
+        }
+        try shoot("bare t=0")
+        chars[0].outfit = [.head: .beaniePink]
+        var log = ""
+        for phase in ["hat on", "hat off"] {
+            if phase == "hat off" { chars[0].outfit = [:] }
+            for f in 0..<120 {
+                step(lab, dr, chars); _ = skin(s.skinner, s.sim)
+                if f % 6 == 5, f < 100 { try shoot("\(phase) t=\(String(format: "%.1f", Float(f + 1) / 60))") }
+                if let sl = dr.feats[0].slot(0), f % 6 == 5 { log += "\(phase) f\(f + 1): w=\(sl.layoutW) from=\(String(describing: sl.layoutFrom)) to=\(String(describing: sl.layoutTo))\n" }
+            }
+        }
+        try log.write(toFile: od + "/glide_log.txt", atomically: true, encoding: .utf8)
+    }
+
     // MARK: 6. closeups
 
     func testCloseups() throws {

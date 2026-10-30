@@ -102,6 +102,8 @@ nonisolated extension Array where Element == Float {
 nonisolated struct FeatureFit: Equatable, Sendable {
     /// Pip: the art id of the head item the spines grow through (when it encloses the head; see FeatureSet.emit).
     var spineHat: String?
+    /// Pip (restyled tail variants): the lowest y of that crown-enclosing hat. The back spikes re-flow to start below it instead of hiding (PipSpikes.build); nil = bare layout.
+    var spineBrimY: Float?
     /// (Spines are never hidden any more; kept empty so the tests and old callers read the same shape.)
     var hiddenParts: Set<String> = []
     /// Moss: the sprout is hidden (propeller beanie).
@@ -142,7 +144,11 @@ nonisolated enum FeatureCompat {
             // line shrinks away while that piece is worn (FeatureSet eases partScale over 0.15 s). The band comes from the piece's own art, so it is data-driven.
             // (the same for the pieces that cover the lower back: the cape, the tutu, the puffer vest and the cardigan have a slot over the tail root on Pip)
             for w in worn where Self.pipVariants.contains(w) { fit.hatVariant[w] = w + "_pip" }
-            fit.hiddenParts = coveredSpikes(worn: worn, variants: fit.hatVariant, spec: spec)
+            if PipTailVariant.active.reflowsUnderHat, let art = fit.spineHat, let look = WearLook.pieces.first(where: { $0.art == art }),
+               let piece = WearMeshes.prepare(look, body: WearBody.shared), piece.crownEnclosing {
+                fit.spineBrimY = piece.rest.map { $0.y }.min()
+            }
+            fit.hiddenParts = coveredSpikes(worn: worn, variants: fit.hatVariant, spec: spec, brimY: fit.spineBrimY)
         case .daisy:
             // one head item at most; its rule places the sprout
             for w in worn {
@@ -179,7 +185,7 @@ nonisolated enum FeatureCompat {
 
     /// The names of Pip's back spikes covered by what he wears (neck and body pieces; hats have their own crown rule): a spike is covered when the piece's
     /// vertices at the back centre line (|x| < 0.14, behind the body) span a y band that overlaps the spike's extent (base down the lean, plus a margin).
-    static func coveredSpikes(worn: [String], variants: [String: String], spec: FeatureSpec) -> Set<String> {
+    static func coveredSpikes(worn: [String], variants: [String: String], spec: FeatureSpec, brimY: Float? = nil) -> Set<String> {
         let body = WearBody.shared
         var pts: [SIMD3<Float>] = []
         for w in worn {
@@ -187,7 +193,7 @@ nonisolated enum FeatureCompat {
                   let piece = WearMeshes.prepare(look, body: body, art: variants[w]) else { continue }
             for r in piece.rest where r.z < -0.3 { pts.append(r) }
         }
-        guard !pts.isEmpty, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec) else { return [] }
+        guard !pts.isEmpty, let prep = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridgeBrim: brimY) else { return [] }
         var out = Set<String>()
         for part in prep.parts where part.name.hasPrefix("spike") || part.name.hasPrefix("tail") {
             // the spike's footprint: its base and a point a spike-height down the lean (the spike leans toward the tail); covered when a vertex of the piece is

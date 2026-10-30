@@ -19,6 +19,9 @@ nonisolated enum PipSpikes {
     /// Restyle (T1 / T2): the row starts at the same height on the back as the shipped one (the thinner tail leaves the back lower, which would otherwise pull the whole row down onto the tail),
     /// and heights are explicit (mean of today's row x the variant's scale x a per-spike grade) so the scales read as true multiples of today's spikes.
     static let rowStartY: Double = 1.203
+    static let restyledBareSpacing: Float = 0.32               // the bare row's arc spacing between spikes (about)
+    static let reflowTailEnd: Double = 0.90                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
+    static let rowStartOffset: Double = 0.063                 // the first spike's base stands this far below the path's start (rowStartY 1.203 -> first base at about 1.14)
     static let restyledMinChord: Float = 0.30                 // minimum straight-line spacing of the ridge spikes
     static let restyledBaseHeight: Float = 0.095              // the shipped row's mean height
     static let restyledGrade: [Float] = [0.80, 1.0, 1.0, 0.92, 0.75]          // per spike, top of the back to the tail tip: biggest at the junction / middle, smallest at the tip
@@ -96,8 +99,11 @@ nonisolated enum PipSpikes {
         }
     }
 
-    static func build(body: WearBody, spec: FeatureSpec) -> FeaturePrepared {
-        let r = FeaturePrepared(art: "pip_spikes", key: "ridge")
+    /// `brimY` (restyled variants only): the lowest point of the crown-enclosing hat he wears. The row then RE-FLOWS: it starts just below the brim line (a base `hatMargin`
+    /// under it, so no spike tucks under the brim) and runs down the back and onto the tail with the same even spacing and size grading, instead of vanishing under the hat.
+    /// A hat that sits higher than the bare row's first spike changes nothing.
+    static func build(body: WearBody, spec: FeatureSpec, brimY: Float? = nil) -> FeaturePrepared {
+        let r = FeaturePrepared(art: "pip_spikes", key: brimY.map { String(format: "ridge|b%.2f", $0) } ?? "ridge")
         var m = Mesh()
         func f3(_ v: SIMD3<Double>) -> SIMD3<Float> { SIMD3(Float(v.x), Float(v.y), Float(v.z)) }
         // ---- a short row of small rounded cones along the TOP ridge of the tail only (none on the head or the back), evenly spaced from the root to near the tip
@@ -125,7 +131,7 @@ nonisolated enum PipSpikes {
             }
         }
         let crossRg = sh.ridge(tCross), crossRest = f3(crossRg.p + crossRg.up * crossRg.r)
-        var y = max(0.47 * Double(spec.top), PipTailVariant.active == .current ? Double(crossRest.y) + 0.42 : PipSpikes.rowStartY)          // mid-back, but always a good stretch above the junction
+        var y = max(0.47 * Double(spec.top), PipTailVariant.active == .current ? Double(crossRest.y) + 0.42 : min(PipSpikes.rowStartY, brimY.map { Double($0 - FeatureSet.hatMargin) + PipSpikes.rowStartOffset } ?? PipSpikes.rowStartY))          // mid-back, but always a good stretch above the junction
         while y > Double(crossRest.y) {
             var lo = -1.2, hi = 0.0
             for _ in 0..<40 { let mid = (lo + hi) / 2; if BobForm.sdf(SIMD3(0, y, mid)) > 0 { lo = mid } else { hi = mid } }
@@ -135,7 +141,7 @@ nonisolated enum PipSpikes {
         }
         let backCount = path.count
         var tt = tCross
-        while tt <= sh.sink + 0.86 * (sh.length - sh.sink) {
+        while tt <= sh.sink + (brimY == nil ? 0.86 : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
             let rg = sh.ridge(tt), rp = f3(rg.p + rg.up * rg.r)
             path.append(PP(shown: rp, rest: rp, n: f3(rg.up), t: tt, isTail: true)); tt += 0.01
         }
@@ -147,6 +153,10 @@ nonisolated enum PipSpikes {
         // pass 1: where each spike stands, its normal / lean and its graded size
         struct Sp { var sK: Float; var pt: PP; var n: SIMD3<Float>; var tg: SIMD3<Float>; var H: Float; var asp: Float = 1; var bw: Float { H / asp }; var baseShown: SIMD3<Float> = .zero; var ax: SIMD3<Float> = .zero; var lean: Float = 0.21 }
         var sps: [Sp] = []
+        // a hat re-flow packs the same five spikes into a shorter row: the straight-line spacing floor eases to 75% of the even arc spacing (bare: unchanged)
+        // a re-flowed row is shorter, so its five spikes are a little smaller (half-way between their bare size and the size that keeps the bare spacing ratio), never bigger
+        let reflowSize: Float = brimY == nil ? 1 : 0.5 + 0.5 * min(1, (L * 0.87 / Float(nSp - 1)) / PipSpikes.restyledBareSpacing)
+        let rowMinChord: Float = brimY == nil ? PipSpikes.restyledMinChord : min(PipSpikes.restyledMinChord, 0.75 * L * 0.87 / Float(nSp - 1))
         // restyle (PipTailVariant): spikes get taller by heightScale while the base only widens by baseScale, so they read taller and pointier; `aspect` = height / base diameter
         let vr = PipTailVariant.active, heightScale = vr.spikeHeightScale, aspect = heightScale / vr.spikeBaseScale
         for k in 0..<nSp {
@@ -155,7 +165,7 @@ nonisolated enum PipSpikes {
             // restyle: the ridge path doubles back where the swelled back meets the tail, so equal ARC spacing can bunch two spikes together in 3D; step on along the path until
             // each spike stands at least `restyledMinChord` (straight-line) from the one before it, so the row reads evenly spaced in every view
             if PipTailVariant.active != .current, let prev = sps.last {
-                while i < arc.count - 1 && simd_distance(path[i].shown, prev.pt.shown) < PipSpikes.restyledMinChord { i += 1 }
+                while i < arc.count - 1 && simd_distance(path[i].shown, prev.pt.shown) < rowMinChord { i += 1 }
             }
             let pt = path[i]
             let tgRaw = simd_normalize(path[min(i + 1, path.count - 1)].shown - path[max(i - 1, 0)].shown)
@@ -165,7 +175,7 @@ nonisolated enum PipSpikes {
             let f: Float = sK <= sJ ? 1 - 0.40 * (sJ - sK) / max(sJ, 1e-3) : 1 - 0.50 * (sK - sJ) / max(L - sJ, 1e-3)
             var H = 0.15 * f
             if pt.isTail { H = min(H, max(0.08, 0.7 * Float(sh.ridge(pt.t).r))) }
-            if PipTailVariant.active != .current { H = PipSpikes.restyledBaseHeight * heightScale * PipSpikes.restyledGrade[min(k, PipSpikes.restyledGrade.count - 1)] }          // explicit graded heights
+            if PipTailVariant.active != .current { H = PipSpikes.restyledBaseHeight * heightScale * PipSpikes.restyledGrade[min(k, PipSpikes.restyledGrade.count - 1)] * reflowSize }          // explicit graded heights
             sps.append(Sp(sK: sK, pt: pt, n: n, tg: tgP, H: H, asp: aspect, lean: pt.isTail ? 0.21 : 0.45))
         }
         // pass 2: no two neighbours may touch in ANY view: their bases must be at least 1.5 base-diameters apart (a gap of 0.5x the larger diameter) and their whole
