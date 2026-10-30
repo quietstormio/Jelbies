@@ -462,7 +462,7 @@ final class MelonRenderer {
         u.skin = SIMD4(palette.skin, 1)
         u.stripe = SIMD4(palette.stripe, 1)
         u.seed = SIMD4(palette.seed, 1)
-        u.shape = SIMD4(palette.extra, palette.bodyHeight)   // white-tone fleshDeep (shape is unused by the Bob shader)
+        u.shape = SIMD4(palette.extra, BlueBelly.mode(for: palette))   // white-tone fleshDeep; .w = the blue-belly mode (BlueBelly.swift; shape is otherwise unused by the matte body shaders)
         u.shadowTint = SIMD4(palette.shadowTint, palette.matte ? 2 : 1)
     }
 

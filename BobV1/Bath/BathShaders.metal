@@ -211,6 +211,22 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (bCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
+    float bb = u.shape.w;
+    if (bb > 0.5) {
+        float bk;
+        float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
+        if (bb < 1.5) {
+            float cz = Q.z / max(length(Q.xz), 0.05);              // 1 = straight ahead, 0 = side, -1 = back
+            bk = smoothstep(0.0, 0.62, cz) * (1.0 - smoothstep(0.98, 1.22, Q.y)) * smoothstep(0.02, 0.14, Q.y);
+        } else {
+            bool crisp = bb > 2.5;
+            float2 bp2 = (float2(Q.x, Q.y - (crisp ? 0.335 : 0.325))) / (crisp ? float2(0.335, 0.205) : float2(0.285, 0.170));
+            bk = (1.0 - smoothstep(crisp ? 0.70 : 0.30, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
+            lk = crisp ? 0.44 : 0.36;
+        }
+        col = mix(col, mix(col, float3(1.0), lk), bk);
+    }
 
     // ---- soot: mostly a light DUSTY film (matte, a touch desaturated, faint warm-grey, powdery grain), heavier on the lower half and
     // feet like settled dust, plus (when quite dirty) one or two very faint soft cheek / belly smudges. The 12 x 24 grid is ONLY the wash
@@ -433,6 +449,22 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (bCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
+    float bb = u.shape.w;
+    if (bb > 0.5) {
+        float bk;
+        float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
+        if (bb < 1.5) {
+            float cz = Q.z / max(length(Q.xz), 0.05);              // 1 = straight ahead, 0 = side, -1 = back
+            bk = smoothstep(0.0, 0.62, cz) * (1.0 - smoothstep(0.98, 1.22, Q.y)) * smoothstep(0.02, 0.14, Q.y);
+        } else {
+            bool crisp = bb > 2.5;
+            float2 bp2 = (float2(Q.x, Q.y - (crisp ? 0.335 : 0.325))) / (crisp ? float2(0.335, 0.205) : float2(0.285, 0.170));
+            bk = (1.0 - smoothstep(crisp ? 0.70 : 0.30, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
+            lk = crisp ? 0.44 : 0.36;
+        }
+        col = mix(col, mix(col, float3(1.0), lk), bk);
+    }
 
     // ---- soot: mostly a light DUSTY film (matte, a touch desaturated, faint warm-grey, powdery grain), heavier on the lower half and
     // feet like settled dust, plus (when quite dirty) one or two very faint soft cheek / belly smudges. The 12 x 24 grid is ONLY the wash
