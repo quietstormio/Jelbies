@@ -14,7 +14,7 @@ import UIKit
 final class BlueBellyCaptureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias V = BlueBelly
-    static let variants: [(V, String)] = [(.off, "off"), (.bellyClear, "B2"), (.tallOval, "C1"), (.egg, "C2")]
+    static let variants: [(V, String)] = [(.off, "off"), (.egg, "C2"), (.eggWide, "C2w"), (.eggWider, "C2ww")]
 
     override func setUp() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { BlueBelly.current = .off; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
@@ -234,24 +234,7 @@ final class BlueBellyCaptureTests: XCTestCase {
         boards["jersey"] = try fourUp(dir, "jersey_front", "wearing the sky jersey, front", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: 0), prep: jerseyPrep)
         boards["jersey34"] = try fourUp(dir, "jersey_34", "wearing the sky jersey, 3/4", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: 0.7), prep: jerseyPrep)
 
-        // 2. squished with a drag poke (a fingertip sphere denting the belly), front + 3/4 + side
-        do {
-            let (cen, fwd) = pose(s.sim, memo: &memo)
-            let floor = s.sim.floorY
-            let radius: Float = 0.34
-            for i in 0...50 {
-                let depth = 0.52 * Float(i) / 50
-                let centre = SIMD3(cen.x, floor + 0.38, cen.z) + fwd * (0.62 + radius - depth)
-                s.sim.setPress(center: centre, radius: radius)
-                step(lab, dr, ids, brains: false)
-            }
-            for _ in 0..<6 { step(lab, dr, ids, brains: false) }
-            for (n, yaw) in [("front", Float(0)), ("34", 0.7), ("side", .pi / 2)] {
-                boards["squish_" + n] = try fourUp(dir, "squish_" + n, "squished (poke) \(n)", ctx: c, subj: s, cam: view(s.sim, memo: &memo, yaw: yaw))
-            }
-            s.sim.endPress()
-            for _ in 0..<150 { step(lab, dr, ids) }
-        }
+        // (the rig's direct fingertip-sphere poke was removed from this board: see testPokeRealVsRig, which drives the real touch code)
         // 2b. dragged (grabbed on the belly and pulled sideways + up)
         do {
             let (cen, fwd) = pose(s.sim, memo: &memo)
@@ -371,7 +354,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             for (label, tier, bath) in [("tier 0 (locked matte)", 0, false), ("fast tier 1", 1, false), ("fast tier 2", 2, false), ("fast tier 3", 3, false), ("bath shader", 0, true)] {
                 c.ren.gfxOpt.fastMatteTier = tier
                 c.ren.forceBathShader = bath
-                for (v, tag) in [(V.bellyClear, "B2"), (V.tallOval, "C1"), (V.egg, "C2")] {
+                for (v, tag) in [(V.egg, "C2"), (V.eggWide, "C2w"), (V.eggWider, "C2ww")] {
                     BlueBelly.current = v
                     let img = render(c, s2, cam: cam, neutral: true)
                     try save(img.uiImage()!, dir + "/tier_\(tier)\(bath ? "bath" : "")_\(tag).png")
@@ -408,9 +391,9 @@ final class BlueBellyCaptureTests: XCTestCase {
 
         // boards
         func row(_ keys: [String]) -> [UIImage] { keys.flatMap { boards[$0] ?? [] } }
-        try save(grid(row(["angle_front", "angle_34", "angle_side", "squish_front"]), cols: 4), dir + "/OVERVIEW.png")
+        try save(grid(row(["angle_front", "angle_34", "angle_side", "face_front"]), cols: 4), dir + "/OVERVIEW.png")
         try save(grid(row(["angle_front", "angle_34", "angle_side", "angle_back"]), cols: 4), dir + "/BOARD_angles.png")
-        try save(grid(row(["walkfront", "walk", "walkside", "squish_front", "squish_34", "squish_side", "drag", "drag34"]), cols: 4), dir + "/BOARD_motion.png")
+        try save(grid(row(["walkfront", "walk", "walkside", "drag", "drag34"]), cols: 4), dir + "/BOARD_motion.png")
         try save(grid(row(["sleep_front", "sleep_34", "sleep_side", "sleep_top"]), cols: 4), dir + "/BOARD_sleep.png")
         try save(grid(row(["room", "landscape_crop", "picker_rest", "picker_orbit_front"]), cols: 4), dir + "/BOARD_context.png")
         try save(grid(row(["roomfull", "landscape"]), cols: 4), dir + "/BOARD_room_landscape_full.png")
@@ -418,6 +401,147 @@ final class BlueBellyCaptureTests: XCTestCase {
         try save(grid(row(["jersey", "jersey34", "mouth", "mouth34"]), cols: 4), dir + "/BOARD_clothes_mouth.png")
         try save(grid(boards["tiers"] ?? [], cols: 3), dir + "/BOARD_tiers.png")
         try save(grid(row(["face_front", "face_34", "face_side"]), cols: 4), dir + "/BOARD_face.png")
+    }
+
+    // MARK: the poke "mustache": the real touch path vs the rig's direct press
+
+    /// Drives the REAL touch code (TouchPlay.petFrame = what MelonStage calls every frame for a press-hold / stroke, with the real finger radius, dent depth,
+    /// eased centre, skinner dent relaxation and normal smoothing; and SoftBody.beginGrab / moveGrab as the pick-up gesture does) and, for comparison, the
+    /// capture rig's old direct fingertip-sphere poke (radius 0.34, depth 0.52, no skinner smoothing). Writes BOARD_poke_real_vs_rig.png and BOARD_squish.png.
+    func testPokeRealVsRig() throws {
+        let dir = try outDir()
+        let ids = [0]
+        let lab = makeLab(ids: ids, positions: [SIMD2(0.0, 0.6)]); let dr = dress(lab, ids); settle(lab, dr, ids)
+        let r0 = lab.rigs[0]
+        let c = try makeCtx(sim: r0.sim, W: 560, H: 560)
+        let s = subj(lab, dr, ids)
+        var memo = SIMD3<Float>(0, 0, 1)
+        let rec = RecordingHapticSink()
+        let driver = HapticDriver(sinks: [rec]); rec.clock = { 0 }
+        let play = TouchPlay(haptics: driver); driver.enabled = true; driver.setWarm(true)
+        var clock = 100.0; rec.clock = { clock }
+        let surface = RestSurface(mesh: MotionRig.renderMesh)
+        for _ in 0..<60 { r0.tick() }
+        let camF = view(s.sim, memo: &memo, yaw: 0, dist: 3.0, lookY: 0.05)
+        func ray(_ x: Float, _ y: Float) -> (o: SIMD3<Float>, d: SIMD3<Float>) {
+            let e = BodyEllipsoid(sim: s.sim)
+            let p = e.center + e.rot.act(SIMD3(x, y, 0))
+            return (camF.pos, simd_normalize(p - camF.pos))
+        }
+        /// One stage frame of touch: petFrame (ray nil = no finger), then the brain / sim / jelly like the stage.
+        func frame(_ rayIn: (o: SIMD3<Float>, d: SIMD3<Float>)?) {
+            play.petFrame(dt: 1.0 / 60, now: clock, ray: rayIn, screen: nil, sim: s.sim, brain: s.brain, skinner: s.skinner, surface: surface)
+            play.trackImpacts(now: clock, sim: s.sim)
+            r0.tick(touched: play.contact)
+            s.skinner.jelly.tick(brain: s.brain, sim: s.sim, dt: s.sim.stepDt)
+            clock += 1.0 / 60
+        }
+        func settleOut() { for _ in 0..<240 { frame(nil) } }
+        var rows: [(String, [UIImage])] = []     // each row: label + tiles (front, 3/4)
+        func shotPair(_ label: String, variants: [(V, String)] = [(.off, "off")], name: String) throws -> [UIImage] {
+            var out: [UIImage] = []
+            for (yaw, vn) in [(Float(0), "front"), (Float(0.7), "3/4")] {
+                let cam = view(s.sim, memo: &memo, yaw: yaw, dist: 3.0, lookY: 0.05)
+                for (v, tag) in variants {
+                    BlueBelly.current = v
+                    let img = render(c, s, cam: cam, neutral: true)
+                    try save(img.uiImage()!, dir + "/poke_\(name)_\(vn.replacingOccurrences(of: "/", with: ""))_\(tag).png")
+                    out.append(labelled(img.uiImage()!, "\(label) \(vn) [\(tag)]", bar: 36))
+                }
+            }
+            BlueBelly.current = .off
+            return out
+        }
+        var squishBoard: [UIImage] = []
+        let allVariants = Self.variants
+        // real press-and-hold at three spots, then let go
+        for (spot, x, y) in [("belly", Float(0), Float(-0.30)), ("mouth level", 0, 0), ("cheek", 0.40, 0.15)] {
+            let tag = spot.replacingOccurrences(of: " ", with: "")
+            for _ in 0..<12 { frame(nil) }
+            var tiles: [UIImage] = []
+            for k in 0..<110 {
+                frame(ray(x, y))
+                if k == 29 { tiles += try shotPair("REAL press \(spot) 0.5 s", name: tag + "_p05") }
+                if k == 109 {
+                    tiles += try shotPair("REAL press \(spot) 1.8 s", name: tag + "_p18")
+                    if spot != "cheek" { squishBoard += try shotPair("REAL press \(spot) 1.8 s", variants: allVariants, name: tag + "_v") }
+                    NSLog("BLUEBELLY real press %@: pressDepth=%.3f ramp=%.2f contact=%d zone=%@ smoothing=%.2f", spot, s.sim.pressDepth, play.ramp, play.contact ? 1 : 0, "\(play.zone)", s.skinner.normalSmoothing)
+                }
+            }
+            for k in 0..<30 {
+                frame(nil)
+                if k == 5 { tiles += try shotPair("REAL just released (+0.1 s)", name: tag + "_r01") }
+                if k == 17 { tiles += try shotPair("REAL released +0.3 s", name: tag + "_r03") }
+            }
+            rows.append(("real " + spot, tiles))
+            settleOut()
+        }
+        // a real stroke across the body (drag)
+        do {
+            var tiles: [UIImage] = []
+            for _ in 0..<10 { frame(nil) }
+            for k in 0..<100 {
+                let x = -0.32 + 0.64 * Float(k) / 99
+                frame(ray(x, -0.10))
+                if k == 50 { tiles += try shotPair("REAL stroke (mid)", name: "stroke_mid") }
+            }
+            for k in 0..<12 { frame(nil); if k == 5 { tiles += try shotPair("REAL stroke released", name: "stroke_rel") } }
+            rows.append(("real stroke", tiles))
+            settleOut()
+        }
+        // the two-finger cheek pinch (TouchPlay.cheeksFrame: two fingertip spheres + a smooth skin squeeze), as the stage drives it
+        do {
+            var tiles: [UIImage] = []
+            for _ in 0..<10 { frame(nil) }
+            func cframe(_ rays: [(o: SIMD3<Float>, d: SIMD3<Float>)]?, gap: Float) {
+                play.cheeksFrame(dt: 1.0 / 60, now: clock, rays: rays, gap: gap, sim: s.sim, brain: s.brain, skinner: s.skinner, surface: surface)
+                r0.tick(touched: rays != nil); s.skinner.jelly.tick(brain: s.brain, sim: s.sim, dt: s.sim.stepDt); clock += 1.0 / 60
+            }
+            for k in 0..<60 { let g = 0.5 - 0.3 * Float(k) / 60; cframe([ray(-g, 0.25), ray(g, 0.25)], gap: g * 400) }
+            for k in 0..<60 { cframe([ray(-0.2, 0.25), ray(0.2, 0.25)], gap: 80); if k == 40 { tiles += try shotPair("REAL two-finger cheek pinch", name: "cheeks_pinch") } }
+            for k in 0..<30 { cframe(nil, gap: 0); if k == 6 { tiles += try shotPair("REAL cheeks released (+0.1 s)", name: "cheeks_rel") } }
+            rows.append(("real cheeks", tiles))
+            for _ in 0..<240 { cframe(nil, gap: 0) }
+        }
+        // the pick-up gesture's grab (SoftBody.beginGrab radius 0.4 + moveGrab), held on the belly and pulled
+        do {
+            var tiles: [UIImage] = []
+            let (cen, fwd) = pose(s.sim, memo: &memo)
+            let hit = SIMD3(cen.x, s.sim.floorY + 0.36, cen.z) + fwd * 0.6
+            s.sim.beginGrab(hit: hit, radius: 0.4)
+            let side = SIMD3<Float>(fwd.z, 0, -fwd.x)
+            for i in 0...45 {
+                let k = Float(i) / 45
+                s.sim.moveGrab(target: hit + side * (0.5 * k) + SIMD3(0, 0.45 * k, 0), rot: nil)
+                r0.tick(touched: true); s.skinner.jelly.tick(brain: s.brain, sim: s.sim, dt: s.sim.stepDt)
+                play.heldFrame(dt: 1.0 / 60, now: clock, grabbing: true, liftHeight: 0.3 * k, sim: s.sim, brain: s.brain, skinner: s.skinner); clock += 1.0 / 60
+            }
+            tiles += try shotPair("REAL pick-up grab held", name: "grab_held")
+            s.sim.endGrab(); play.heldFrame(dt: 1.0 / 60, now: clock, grabbing: false, liftHeight: 0, sim: s.sim, brain: s.brain, skinner: s.skinner)
+            for k in 0..<30 { frame(nil); if k == 8 { tiles += try shotPair("REAL pick-up dropped (+0.15 s)", name: "grab_drop") } }
+            rows.append(("real pick-up", tiles))
+            settleOut()
+        }
+        // the rig's old direct poke (what the earlier board showed): a big sphere, 0.52 deep, no skinner smoothing
+        do {
+            var tiles: [UIImage] = []
+            let (cen, fwd) = pose(s.sim, memo: &memo)
+            let radius: Float = 0.34
+            for i in 0...50 {
+                let depth = 0.52 * Float(i) / 50
+                s.sim.setPress(center: SIMD3(cen.x, s.sim.floorY + 0.38, cen.z) + fwd * (0.62 + radius - depth), radius: radius)
+                r0.tick(); s.skinner.jelly.tick(brain: s.brain, sim: s.sim, dt: s.sim.stepDt)
+            }
+            tiles += try shotPair("RIG direct sphere (r .34, depth .52)", name: "rig")
+            s.sim.endPress(); s.skinner.normalSmoothing = 0
+            rows.append(("rig direct", tiles))
+        }
+        BlueBelly.current = .off
+        // boards: one row per case; tiles are front / 3-4 pairs per moment
+        var all: [UIImage] = []
+        for (_, tiles) in rows { all += tiles }
+        try save(grid(all, cols: 4), dir + "/BOARD_poke_real_vs_rig.png")
+        try save(grid(squishBoard, cols: 4), dir + "/BOARD_squish.png")
     }
 
     /// Always runs: the default is off, and only the baby blue palette ever gets a mode.
