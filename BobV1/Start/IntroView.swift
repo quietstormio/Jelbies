@@ -30,7 +30,8 @@ enum IntroGate {
 struct IntroView: View {
     var done: () -> Void
     @State private var player: AVPlayer?
-    @State private var ready = false
+    @State private var ready = false          // the item can play
+    @State private var shown = false          // the clip is visible: playback has really advanced (or the last frame is up)
     @State private var settled = false
     @State private var leaving = false
     @State private var finished = false
@@ -49,9 +50,10 @@ struct IntroView: View {
                 IntroGate.background
                 if let player {
                     IntroPlayerView(player: player).frame(width: side, height: side)
-                        .opacity(ready ? 1 : 0)
+                        .opacity(shown ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.5), value: shown)
                 }
-                if A11ySettings.shared.captions, !settled, ready {
+                if A11ySettings.shared.captions, !settled, shown {
                     Text("Piano and strings, sparkles and pops")          // caption for the intro clip's sound
                         .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
                         .padding(.horizontal, 14).padding(.vertical, 6)
@@ -98,32 +100,50 @@ struct IntroView: View {
             Task { @MainActor in settle() }
         }
         statusObserver = item.observe(\.status, options: [.initial, .new]) { it, _ in
+            if it.status == .failed { Task { @MainActor in settle() } }          // no clip: straight to "Tap to start"
             guard it.status == .readyToPlay else { return }
             Task { @MainActor in begin() }
         }
+        Task { @MainActor in          // never ready within 3 s: don't leave a blank screen
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if !ready { settle() }
+        }
     }
 
-    /// The first frame is decoded: show the clip and play it (Reduce Motion shows its last frame instead).
+    /// The first frame is decoded: play the clip, still white until playback advances (Reduce Motion shows its last frame instead).
     private func begin() {
-        guard let p = player, !ready, !finished else { return }
+        guard let p = player, !ready, !settled, !finished else { return }
         if still {
             let end = p.currentItem?.duration ?? .zero
             p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-                Task { @MainActor in ready = true; settle() }
+                Task { @MainActor in ready = true; LaunchTiming.mark("intro: clip ready"); settle() }
             }
         } else {
             ready = true
+            LaunchTiming.mark("intro: clip ready")
             p.play()
+            Task { @MainActor in          // playback never advanced: fade in anyway
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                reveal()
+            }
             var base: Double?          // wall minus clip time at the first tick; growth beyond it is playback falling behind
             lagProbe = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { t in
                 MainActor.assumeIsolated {
                     guard p.rate > 0 else { return }
+                    if t.seconds >= 1.0 / 30 { reveal() }
                     let off = CACurrentMediaTime() - t.seconds
                     if base == nil { base = off }
                     lagWorst = max(lagWorst, off - (base ?? off))
                 }
             }
         }
+    }
+
+    /// Fades the clip in from white (once).
+    private func reveal() {
+        guard !shown else { return }
+        shown = true
+        LaunchTiming.mark("intro: clip shown")
     }
 
     private func tapped() {
@@ -150,6 +170,7 @@ struct IntroView: View {
     private func settle() {
         guard !settled else { return }
         player?.pause()
+        shown = true          // the last frame (or nothing, if there is no clip) fades in with "Tap to start"
         settled = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(IntroClip.autoAdvance * 1_000_000_000))

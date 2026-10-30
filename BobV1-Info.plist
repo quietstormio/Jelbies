@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Launch screen: plain white in light and dark, so launch hands over to the white intro without a flash. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<!-- Lets CADisplayLink / MTKView run above 60 Hz on ProMotion iPhones (RateGovernor requests 120 only with GPU headroom).
 	     The documented key is ...OnPhone; the earlier `CADisableMinimumFrameDuration` had no effect. -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>
