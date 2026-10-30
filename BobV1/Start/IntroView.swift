@@ -86,6 +86,7 @@ struct IntroView: View {
     private func start() {
         guard player == nil else { return }
         IntroWarmup.begin()          // quiet start-up work runs while the clip plays
+        if UserDefaults.standard.integer(forKey: "IntroSkip") != 0 { settle(); return }          // capture aid: -IntroSkip 1 (the simulator's clip can stall on its audio queue)
         guard let url = Bundle.main.url(forResource: IntroClip.resource, withExtension: IntroClip.fileExtension) else { settle(); return }
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
