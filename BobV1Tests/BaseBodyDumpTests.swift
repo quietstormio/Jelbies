@@ -136,25 +136,24 @@ nonisolated struct LockImage {
         for k in 0..<bgra.count { m = max(m, abs(Int(bgra[k]) - Int(o.bgra[k]))) }
         return m
     }
-    func png(to url: URL) {
+    /// The pixels as a CGImage, copied while the backing array is alive. (The old pattern let the CGContext escape `withUnsafeMutableBytes`
+    /// and drew it afterwards; under -O the array's lifetime ends at its last use, so large frames came out black.)
+    func cgImage() -> CGImage? {
         let cs = CGColorSpaceCreateDeviceRGB()
         var data = bgra
-        let ctx = data.withUnsafeMutableBytes { p in
-            CGContext(data: p.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs,
-                      bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        return data.withUnsafeMutableBytes { p -> CGImage? in
+            let ctx = CGContext(data: p.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs,
+                                bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+            return ctx?.makeImage()
         }
-        guard let cg = ctx?.makeImage(), let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
+    }
+    func png(to url: URL) {
+        guard let cg = cgImage(), let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(dest, cg, nil)
         CGImageDestinationFinalize(dest)
     }
     func uiImage() -> UIImage? {
-        let cs = CGColorSpaceCreateDeviceRGB()
-        var data = bgra
-        let ctx = data.withUnsafeMutableBytes { p in
-            CGContext(data: p.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs,
-                      bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
-        }
-        guard let cg = ctx?.makeImage() else { return nil }
+        guard let cg = cgImage() else { return nil }
         return UIImage(cgImage: cg)
     }
 }

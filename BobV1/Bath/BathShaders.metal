@@ -12,6 +12,14 @@ using namespace metal;
 
 constant float BATH_PI = 3.14159265;
 
+// Function constants (MelonRenderer builds one fsSoftMatteBath pipeline per combination the frame needs, from BodySlot.sootAny / foamAny /
+// wet / sparkle): the unused blocks are compiled out instead of branched over per fragment, which frees registers for the live ones.
+// The all-true variant is the original shader.
+constant bool bathHasSoot [[function_constant(0)]];
+constant bool bathHasFoam [[function_constant(1)]];
+constant bool bathHasWet [[function_constant(2)]];
+constant bool bathHasSparkle [[function_constant(3)]];
+
 static float bhash3(float3 p) {
     float3 q = fract(p * 0.1031);
     q += dot(q, q.yzx + 33.33);
@@ -116,6 +124,15 @@ static float bSootAt(constant BathParams& bp, float3 d) {
 /// One sooty wipe: an elongated, rotated, feathered streak in the face plane (p = rest x,y), its outline domain-warped by smooth noise,
 /// streaky texture stretched ALONG the wipe, a darker core that breaks into grainy speckle at the edges. 0...~1.3.
 static float bSmear(float2 p, float2 c, float ang, float len, float wid, float3 Q, float seed) {
+    // Cheap reject BEFORE the noise: the streak is exactly 0 beyond |a| = len (feathered end) and <= ~1e-11 beyond 5 widths across (~1e-11)
+    // (wid * 1.35 is the widest wobble); the domain warp moves the outline by at most 0.5 * 0.045 + 0.5 * 0.014 = 0.0295. Most pixels
+    // are outside most of the 23 streaks, so they skip the ~10 noise evaluations each (this was the whole cost of the soot).
+    {
+        float2 q0 = p - c;
+        float ca0 = cos(ang), sa0 = sin(ang);
+        float a0 = q0.x * ca0 + q0.y * sa0, b0 = -q0.x * sa0 + q0.y * ca0;
+        if (abs(a0) > len + 0.032 || abs(b0) > wid * 6.75 + 0.032) { return 0.0; }
+    }
     float2 w1 = float2(bvnoise(float3(p * 9.0, seed)), bvnoise(float3(p * 9.0 + 7.3, seed + 3.0))) - 0.5;
     float2 w2 = float2(bvnoise(float3(p * 21.0 + 2.0, seed + 5.0)), bvnoise(float3(p * 21.0 + 9.1, seed + 8.0))) - 0.5;
     float2 q = p - c + w1 * 0.045 + w2 * 0.014;
@@ -350,6 +367,228 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     }
 
     if (spk > 0.001) {
+        // squeaky clean: a soft bright rim, a clean brightening, and many twinkling four-point stars with a soft halo
+        col = mix(col, col * 1.10 + 0.02, spk);
+        col += float3(0.80, 0.93, 1.0) * pow(1.0 - NdV, 2.2) * 0.18 * spk;
+        float3 T = normalize(cross(abs(Nsurf.y) < 0.9 ? float3(0, 1, 0) : float3(1, 0, 0), Nsurf));
+        float3 Bt = cross(Nsurf, T);
+        float3 glint = float3(0.0);
+        for (int layer = 0; layer < 2; layer++) {       // two cell sizes: about half the glints of the first pass
+            float cs = layer == 0 ? 0.38 : (layer == 1 ? 0.24 : 0.15);
+            float3 gq = (Q + float3(0.37, 0.11, 0.53) * float(layer)) / cs;
+            float3 gi = floor(gq);
+            float3 h3 = bhash33(gi + float(layer) * 31.7);
+            float gate = bhash3(gi + 91.0 + float(layer));
+            float dens = layer == 0 ? 0.8 : 0.6;
+            if (gate < spk * dens) {
+                float3 pc = 0.5 + (h3 - 0.5) * 0.40;
+                float3 dv = (fract(gq) - pc) * cs;                      // rest-space offset to the speck centre
+                float u1 = dot(dv, T), v1 = dot(dv, Bt);
+                float r = length(dv);
+                float reach = 0.245 * cs;
+                float ph = fract(time * (0.18 + 0.5 * h3.z) + h3.x * 7.0);   // each star twinkles at its own rate
+                float pop = pow(max(sin(ph * BATH_PI), 0.0), 2.5);
+                float core = exp(-r * r / (reach * reach * 0.06));
+                float halo = exp(-r * r / (reach * reach * 0.55)) * 0.20;
+                float crs = exp(-abs(u1 * v1) / (reach * reach * 0.05)) * exp(-r / (reach * 0.6));
+                float star = (1.0 * core + 1.1 * crs + halo) * smoothstep(reach, reach * 0.5, r);
+                float3 gc = mix(float3(1.0, 0.98, 0.92), float3(0.82, 0.94, 1.0), h3.y);
+                glint += gc * star * pop;
+            }
+        }
+        col += glint * 1.5 * smoothstep(0.0, 0.2, NdV + 0.15);
+    }
+    return float4(col / max(u.misc.x, 1e-3), 0.0);
+}
+
+/// The same shader specialised with the function constants above (MelonRenderer.gfxOpt.bathVariants, -BathVariants 1): unused blocks are
+/// compiled out. Kept as a separate function because any specialised build (even all-true) is folded a few ulps differently from the plain
+/// function: BathSootSeedZeroTests hashes the plain one. Keep the two bodies identical.
+fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
+                                bool ff [[front_facing]],
+                                constant BathBase& u [[buffer(0)]],
+                                constant BathParams& bp [[buffer(3)]]) {
+    float3 N = normalize(i.n);
+    if (!ff) { N = -N; }
+    float3 Q = i.rest;
+    float e = 0.012;
+    float c0 = bCrinkle(Q);
+    float3 g = float3(bCrinkle(Q + float3(e, 0, 0)) - c0, bCrinkle(Q + float3(0, e, 0)) - c0, bCrinkle(Q + float3(0, 0, e)) - c0) / e;
+    g -= N * dot(g, N);
+    N = normalize(N - g * 0.0022);
+    float fb = bFibre(Q);
+    float ef = 0.0018;
+    float3 gf = float3(bFibre(Q + float3(ef, 0, 0)) - fb, bFibre(Q + float3(0, ef, 0)) - fb, bFibre(Q + float3(0, 0, ef)) - fb) / ef;
+    gf -= N * dot(gf, N);
+    N = normalize(N - gf * 0.0003);
+
+    float3 L = normalize(u.keyDir.xyz);
+    float d = dot(N, L);
+    float occ = clamp(i.mat / 0.4, 0.0, 1.0);
+    float down = clamp(-N.y, 0.0, 1.0);
+    float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
+    s *= 1.0 - 0.62 * occ;
+    float3 t = pow(float3(s), float3(0.55, 1.0, 1.25));
+    float3 col = mix(u.fleshDeep.rgb, u.flesh.rgb, t);
+    col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
+    col *= 1.0 + (bCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
+    col *= 1.0 + 0.04 * fb;
+
+    // ---- soot: mostly a light DUSTY film (matte, a touch desaturated, faint warm-grey, powdery grain), heavier on the lower half and
+    // feet like settled dust, plus (when quite dirty) one or two very faint soft cheek / belly smudges. The 12 x 24 grid is ONLY the wash
+    // mask (1 = still dusty), sampled bilinearly; nothing here has cells. His colour stays his colour: <= ~10 % darker, ~15 % desaturated at 1.0.
+    float dirtK = clamp(bp.a.w, 0.0, 1.0);
+    float ps = bp.centre.w;                                                                            // per-Jelly soot placement seed (Bob = 0)
+    float sootHere = 0.0;
+    float3 sd = Q - bp.centre.xyz;
+    float wash = smoothstep(0.0, 0.7, bSootAt(bp, sd));
+    if (bathHasSoot && wash > 0.003 && dirtK > 0.01) {
+        float3 d = normalize(sd + float3(0.0, 1e-4, 0.0));
+        float film = pow(dirtK, 0.75) * wash;
+        float low = mix(1.0, 0.3, smoothstep(-0.25, 0.85, d.y));                              // dust settles low, thin on the crown
+        float dustAmt = film * low;
+        float grain = 1.0 + (bvnoise(Q * 44.0 + 2.0) - 0.5) * 0.09 * film;                  // faint powder, seen up close
+        float lum = dot(col, float3(0.299, 0.587, 0.114));
+        float3 dustTint = float3(lum) * float3(1.04, 1.0, 0.93);                                // faint warm grey
+        col = mix(col, mix(col, dustTint, 0.24), dustAmt);                                      // up to ~15 % desaturated
+        col *= (1.0 - 0.14 * dustAmt) * grain;                                                  // up to ~10 % darker
+        // charcoal soot WIPES, mainly on the face (like a sooty hand smeared across it): sideways / diagonal streaks on the cheeks, one across the
+        // brow, grime beside the eyes and nose, a chin smear and an uneven dusting of the whole face; a couple of fainter ones on the body.
+        // Elongated feathered ellipses in the face plane (see bSmear), no round blobs. Eyes / brows are separate draws on top, so they stay crisp.
+        float2 fp = Q.xy;
+        float front = smoothstep(0.22, 0.6, d.z);
+        float field = 0.0;
+        field += smoothstep(0.05, 0.28, dirtK) * bSmearFace(fp, float2( 0.15, 0.655), -0.38, 0.150, 0.034, Q, 1.0, ps);       // right cheek wipe
+        field += smoothstep(0.26, 0.50, dirtK) * bSmearFace(fp, float2(-0.16, 0.620), 0.20, 0.140, 0.032, Q, 2.0, ps);       // left cheek wipe
+        field += smoothstep(0.30, 0.52, dirtK) * 0.9 * bSmearFace(fp, float2(0.04, 0.445), 0.45, 0.140, 0.030, Q, 3.0, ps);   // chin smear
+        field += smoothstep(0.40, 0.62, dirtK) * 0.8 * bSmearFace(fp, float2(-0.03, 0.985), 0.08, 0.190, 0.032, Q, 4.0, ps);  // brow / forehead
+        field += smoothstep(0.34, 0.58, dirtK) * 0.7 * bSmearFace(fp, float2( 0.115, 0.775), 1.25, 0.075, 0.024, Q, 5.0, ps); // beside the right eye / nose
+        field += smoothstep(0.42, 0.66, dirtK) * 0.7 * bSmearFace(fp, float2(-0.105, 0.760), 1.75, 0.070, 0.024, Q, 6.0, ps); // beside the left eye
+        float n2 = 0.6 * bvnoise(Q * 7.0 + 11.0 + ps * 17.0) + 0.4 * bvnoise(Q * 16.0 + 3.0 + ps * 17.0);
+        float faceMask = smoothstep(0.42, 0.55, fp.y) * (1.0 - smoothstep(0.98, 1.1, fp.y));
+        field += 0.55 * smoothstep(0.1, 0.5, dirtK) * smoothstep(0.38, 0.78, n2) * faceMask;                      // uneven dusting
+        field *= front;
+        // the rest of the body: wipes all over, in the body's own tangent frame (front, sides, back, crown, arms, feet), appearing as he gets dirtier
+        float bd = smoothstep(0.1, 0.5, dirtK) * smoothstep(0.35, 0.8, 0.6 * bvnoise(Q * 5.0 + 21.0 + ps * 17.0) + 0.4 * bvnoise(Q * 12.0 + 5.0 + ps * 17.0));
+        field += 0.4 * bd;                                                                                            // uneven dusting, whole body
+        field += smoothstep(0.40, 0.60, dirtK) * 0.9 * bSmearBody(sd, d, float3( 0.05, -0.40,  0.90), 0.32, 0.16, 0.045, Q, 7.0, ps);   // belly
+        field += smoothstep(0.50, 0.70, dirtK) * 0.8 * bSmearBody(sd, d, float3(-0.30, -0.15,  0.94), -0.50, 0.14, 0.040, Q, 8.0, ps);
+        field += smoothstep(0.65, 0.85, dirtK) * 0.7 * bSmearBody(sd, d, float3( 0.35, -0.55,  0.76), 1.35, 0.13, 0.030, Q, 9.0, ps);   // drip
+        field += smoothstep(0.42, 0.62, dirtK) * 0.9 * bSmearBody(sd, d, float3( 1.00,  0.15,  0.10), 0.50, 0.18, 0.045, Q, 10.0, ps);  // right side
+        field += smoothstep(0.62, 0.82, dirtK) * 0.7 * bSmearBody(sd, d, float3( 0.95, -0.35, -0.20), 1.50, 0.15, 0.035, Q, 11.0, ps);
+        field += smoothstep(0.48, 0.68, dirtK) * 0.9 * bSmearBody(sd, d, float3(-1.00,  0.05,  0.15), -0.40, 0.18, 0.045, Q, 12.0, ps); // left side
+        field += smoothstep(0.66, 0.86, dirtK) * 0.7 * bSmearBody(sd, d, float3(-0.95, -0.40, -0.10), 1.40, 0.15, 0.035, Q, 13.0, ps);
+        field += smoothstep(0.45, 0.65, dirtK) * 0.9 * bSmearBody(sd, d, float3( 0.20,  0.15, -0.95), 0.35, 0.24, 0.058, Q, 14.0, ps);  // back
+        field += smoothstep(0.58, 0.78, dirtK) * 0.8 * bSmearBody(sd, d, float3(-0.35, -0.25, -0.90), -0.60, 0.22, 0.052, Q, 15.0, ps);
+        field += smoothstep(0.72, 0.90, dirtK) * 0.7 * bSmearBody(sd, d, float3( 0.10, -0.60, -0.80), 1.45, 0.14, 0.032, Q, 16.0, ps);
+        field += smoothstep(0.50, 0.70, dirtK) * 0.8 * bSmearBody(sd, d, float3( 0.55, -0.05, -0.83), 0.55, 0.18, 0.045, Q, 22.0, ps);
+        field += smoothstep(0.60, 0.80, dirtK) * 0.8 * bSmearBody(sd, d, float3(-0.50,  0.40, -0.77), -0.35, 0.18, 0.045, Q, 23.0, ps);
+        field += smoothstep(0.55, 0.75, dirtK) * 0.8 * bSmearBody(sd, d, float3( 0.10,  1.00,  0.10), 0.40, 0.15, 0.040, Q, 17.0, ps);  // crown
+        field += smoothstep(0.50, 0.70, dirtK) * 0.9 * bSmearBody(sd, d, float3( 1.00, -0.05,  0.15), 0.80, 0.09, 0.035, Q, 18.0, ps);  // arm nubs
+        field += smoothstep(0.55, 0.75, dirtK) * 0.9 * bSmearBody(sd, d, float3(-1.00, -0.02,  0.12), -0.80, 0.09, 0.035, Q, 19.0, ps);
+        field += smoothstep(0.60, 0.80, dirtK) * 0.9 * bSmearBody(sd, d, float3( 0.42, -0.92,  0.30), 0.60, 0.10, 0.035, Q, 20.0, ps);  // feet
+        field += smoothstep(0.65, 0.85, dirtK) * 0.9 * bSmearBody(sd, d, float3(-0.42, -0.92,  0.30), -0.60, 0.10, 0.035, Q, 21.0, ps);
+        float smudge = smoothstep(0.03, 0.95, field) * wash;
+        float strength = 0.16 + 0.16 * smoothstep(0.2, 0.5, dirtK) + 0.16 * smoothstep(0.5, 0.85, dirtK);        // ~16 % -> 32 % -> 48 % toward charcoal
+        col = mix(col, float3(lum * 0.16 + 0.010), smudge * strength);
+        sootHere = clamp(dustAmt * 1.3, 0.0, 1.0);
+    }
+
+    float mo = u.stripe.w;
+    if (mo > 0.002 && Q.z > 0.15) {
+        float o = clamp(mo, 0.0, 1.0);
+        float2 p = float2(Q.x, Q.y - 0.665);
+        float hw = mix(0.030, 0.088, smoothstep(0.0, 1.0, o));
+        float hh = mix(0.0045, 0.066, o * o * (3.0 - 2.0 * o));
+        float2 q = p / float2(hw, hh);
+        q.y *= (q.y > 0.0) ? 1.45 : 0.9;
+        float dd = length(q) - 1.0;
+        float aa = max(fwidth(dd) * 1.2, 0.04);
+        float cover = 1.0 - smoothstep(-aa, aa, dd);
+        float3 eyeC = float3(0.0423, 0.0194, 0.0144);
+        float3 tongue = float3(0.13, 0.045, 0.040);
+        float tg = smoothstep(-0.05, -0.75, q.y) * smoothstep(1.0, 0.35, abs(q.x)) * smoothstep(0.35, 0.8, o);
+        float3 mc = mix(eyeC, tongue, tg * 0.85);
+        col = mix(col, mc, cover);
+    }
+
+    // ---- bath terms: each one is gated by its own control, so all-zero is the plain matte look ----
+    float wet = clamp(bp.a.x, 0.0, 1.0), spk = clamp(bp.a.y, 0.0, 1.0);
+    float3 V = normalize(u.camPos.xyz - i.wp);
+    float NdV = max(dot(N, V), 1e-3);
+    float time = u.camPos.w;
+    float3 Nsurf = normalize(i.n);
+    if (!ff) { Nsurf = -Nsurf; }
+
+    if (bathHasWet && wet > 0.001) {
+        col *= 1.0 - 0.10 * wet;                                           // wet skin darkens a touch
+        // droplet beads (rest space): small domes that catch the key light
+        float3 bq = Q * 64.0;
+        float3 bi = floor(bq), bf = fract(bq);
+        float3 bj = bhash33(bi);
+        float3 bc = 0.5 + (bj - 0.5) * 0.5;
+        float bd = length(bf - bc);
+        float present = step(1.0 - 0.34 * wet, bhash3(bi + 7.0));
+        float br = 0.20 + 0.14 * bj.x;
+        float dome = present * smoothstep(br, br * 0.35, bd);
+        float3 tilt = (bf - bc) / br;
+        tilt -= N * dot(tilt, N);
+        float3 Nw = normalize(N - tilt * 0.55 * dome);
+        float rough = mix(0.5, 0.12, wet);
+        float3 H = normalize(L + V);
+        float key = u.keyDir.w;
+        float glossK = 1.0 - 0.5 * sootHere;                              // soot dulls the gloss
+        float spec = bGGX(Nw, V, L, rough) * key * 0.35 * wet * glossK;
+        spec += pow(max(dot(Nw, H), 0.0), 70.0) * dome * 0.55 * wet * glossK;
+        float F = 0.03 + 0.97 * pow(1.0 - NdV, 5.0);
+        float3 R = reflect(-V, N);
+        float3 sky = mix(u.bg.rgb * 0.8, float3(0.78, 0.9, 1.0), smoothstep(-0.1, 0.8, R.y));
+        col += float3(1.0, 0.98, 0.95) * spec;
+        col += sky * F * 0.30 * wet * glossK;
+        col = mix(col, col * 1.12 + 0.015, dome * wet);                    // bead body is slightly lighter
+    }
+
+    float foamOn = bp.a.z;
+    if (bathHasFoam && foamOn > 0.5) {
+        float f = bFoamAt(bp, Q - bp.centre.xyz);
+        if (f > 0.012) {
+            // soap suds: dense small bubbles (nearest of the 8 neighbouring jittered cells), bump normal from the dome
+            float3 sp = Q * 21.0;
+            float3 si = floor(sp);
+            float3 sf = fract(sp);
+            float3 st = step(0.5, sf) * 2.0 - 1.0;               // which neighbour to look toward on each axis
+            float bestH = 0.0; float3 bestTilt = float3(0.0); float bestId = 0.0;
+            for (int k = 0; k < 8; k++) {
+                float3 off = float3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1)) * st;
+                float3 cid = si + off;
+                float3 h3 = bhash33(cid);
+                float3 cc = off + 0.5 + (h3 - 0.5) * 0.55;
+                float rad = 0.46 + 0.42 * h3.x;
+                float3 dv = sf - cc;
+                float dl = length(dv) / rad;
+                float hh = sqrt(max(1.0 - dl * dl, 0.0));
+                if (hh > bestH) { bestH = hh; bestTilt = dv / rad; bestId = h3.y; }
+            }
+            float big = bvnoise(Q * 9.0 + 3.0);
+            float lump = bvnoise(Q * 17.0 + 11.0);
+            float cover = smoothstep(0.16, 0.46, f + (big - 0.5) * 0.42 + (lump - 0.5) * 0.16);
+            float3 tl = bestTilt - N * dot(bestTilt, N);
+            float3 Nf = normalize(N - tl * 1.0);
+            float nd = dot(Nf, L);
+            float lit = clamp(0.80 + 0.28 * nd, 0.0, 1.05);
+            float crev = mix(0.84, 1.0, smoothstep(0.0, 0.5, bestH));    // dark crevice between bubbles
+            float3 tint = mix(float3(0.97, 0.985, 1.0), float3(1.0, 0.96, 0.99), bestId);
+            tint = mix(tint, u.flesh.rgb, 0.05);
+            tint = mix(tint, float3(0.62, 0.625, 0.64), clamp(sootHere * 0.55, 0.0, 0.55));           // suds over soot go grey
+            float3 foamC = tint * lit * crev;
+            float3 Hh = normalize(L + V);
+            foamC += float3(1.0) * pow(max(dot(Nf, Hh), 0.0), 90.0) * bestH * 0.30;   // pinpoint glints on the bubbles
+            foamC += float3(0.85, 0.93, 1.0) * pow(1.0 - NdV, 3.0) * 0.10;            // soft cool rim
+            col = mix(col, foamC, cover);                                              // thick foam hides the skin
+        }
+    }
+
+    if (bathHasSparkle && spk > 0.001) {
         // squeaky clean: a soft bright rim, a clean brightening, and many twinkling four-point stars with a soft halo
         col = mix(col, col * 1.10 + 0.02, spk);
         col += float3(0.80, 0.93, 1.0) * pow(1.0 - NdV, 2.2) * 0.18 * spk;

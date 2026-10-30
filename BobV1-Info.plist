@@ -2,9 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Lets CADisplayLink / MTKView run above 60 Hz on ProMotion iPhones (RateGovernor requests 120 only with GPU headroom). -->
-	<key>CADisableMinimumFrameDuration</key>
+	<!-- Lets CADisplayLink / MTKView run above 60 Hz on ProMotion iPhones (RateGovernor requests 120 only with GPU headroom).
+	     The documented key is ...OnPhone; the earlier `CADisableMinimumFrameDuration` had no effect. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- Game Mode (iOS 18 / 26): fewer background interruptions and lower Bluetooth latency while the game is up. -->
+	<key>GCSupportsGameMode</key>
+	<true/>
+	<key>LSSupportsGameMode</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.simulation-games</string>
 	<!-- The widget's deep link: jelbies://jelly/<id> opens the game and selects that Jelly. -->
 	<key>CFBundleURLTypes</key>
 	<array>

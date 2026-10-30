@@ -104,7 +104,8 @@ final class RoomFootprintTests: XCTestCase {
         let cam = GameCamera.camera(aspect: 440.0 / 956.0, focus: 1)
         let c = SIMD3<Float>(0, 0, 2.4)
         let r = RoomFootprint.rect(min: c + SIMD3(-0.9, 0, -0.9), max: c + SIMD3(0.9, 1.5, 0.9), shadowDir: GameCamera.shadowDir, viewProj: cam.viewProj, width: 1320, height: 2868)
-        XCTAssertGreaterThan(RoomFootprint.share(r, width: 1320, height: 2868), RoomCacheState.maxFootprint)
+        // a focus close-up covers most of the screen (it used to trip the 0.5 cap; the cap is 0.85 now, so the cache still helps there)
+        XCTAssertGreaterThan(RoomFootprint.share(r, width: 1320, height: 2868), 0.5)
     }
 
     func testBehindCameraOrNaNFallsBackToFullScreen() {

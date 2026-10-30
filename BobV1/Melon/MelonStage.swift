@@ -239,6 +239,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgStart: CFTimeInterval = 0
     private var matCost = 0.0, matN = 0
     private var dbgCPU: Double = 0
+    private var dbgWait: Double = 0
     private var dbgSim: Double = 0
     private var dbgSteps = 0
     private var dbgSkin: Double = 0
@@ -582,6 +583,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var idleRest = IdleRestGovernor()
     private var restFrames = 0, activeFrames = 0, restWakes = 0, lastEnergy: Float = 0
     private static let roomCacheFlag = GfxFlags.roomCache
+    private static let gfxOptFlags = GfxFlags.gfxOpt
 
     private func adaptScale(_ stage: MelonStageView, dt: Double) {
         guard Self.adaptiveEnabled else { return }
@@ -610,8 +612,9 @@ final class MelonController: NSObject, MTKViewDelegate {
     private func gfxSummary(_ r: MelonRenderer, frames: Double, rw: Int, rh: Int) -> String {
         let shaded = r.roomPixelsBaseline > 0 ? r.roomPixelsShaded / r.roomPixelsBaseline * 100 : 100
         let tot = Double(max(restFrames + activeFrames, 1))
-        let out = String(format: "room cache %@ %@, room px shaded %.0f%% of old path, render %dx%d, MetalFX %@, idle rest %@ (%.0f%% of frames at 30 fps, %d wakes, KE %.5f)",
+        let out = String(format: "room cache %@ %@, room px shaded %.0f%% of old path, render %dx%d, MetalFX %@, memoryless %@, order %@, fastMatte %d, idle rest %@ (%.0f%% of frames at 30 fps, %d wakes, KE %.5f)",
                          Self.roomCacheFlag ? "on" : "off", r.roomCacheSummary, shaded, rw, rh, r.metalFXState,
+                         r.targetsMemoryless ? "on" : "off", r.gfxOpt.frontToBack ? "near-first" : "slot", r.gfxOpt.fastMatteTier,
                          Self.idleRestFlag ? (idleRest.resting ? "RESTING" : "awake") : "off", Double(restFrames) / tot * 100, restWakes, Double(lastEnergy))
         r.resetRoomCacheCounters(); restFrames = 0; activeFrames = 0
         return out
@@ -662,7 +665,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         lastTime = now
         adaptScale(stage, dt: Double(dt))
 
+        // Waits only when the GPU is BodySlot.ring frames behind; logged apart so "cpu" is CPU work (sim + skin + encode), not the GPU wait.
+        let w0 = CACurrentMediaTime()
         renderer.beginFrame()
+        dbgWait += CACurrentMediaTime() - w0
         let m = model
         let reduce = m.reduceMotion
 
@@ -761,6 +767,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             rw = max(2, Int((Double(rw) * k).rounded())); rh = max(2, Int((Double(rh) * k).rounded()))
         }
         renderer.roomCacheEnabled = Self.roomCacheFlag
+        renderer.gfxOpt = Self.gfxOptFlags
         if game {
             // every Jelly: his own dirt / shine (Bob's and the washed Jelly's from the clean-up flow); the bath close-up shows the washed Jelly alone
             let bathRoom = model.care.bath.look.visible || model.care.bath.cameraBlend > 0
@@ -802,8 +809,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             let el = now - dbgStart
             let f = Double(dbgFrames)
             let g = renderer.takeGPUStats()
-            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms, gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms",
-                         dbgCPU / f * 1000, g.avgMs, dbgSim / f * 1000,
+            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms",
+                         (dbgCPU - dbgWait) / f * 1000, dbgWait / f * 1000, g.avgMs, dbgSim / f * 1000,
                          dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000))
             NSLog("%@", String(format: "[melon] env: thermal %@, lowPower %@, drawable %dx%d @ %.2fx (native %.0fx), fps pref %d (display max %d, measured %.1f), focus %@, adaptive %@ (%d changes), gpu mem %.1f MB, target rebuilds %d | gfx: %@%@",
                                Self.thermalName(ProcessInfo.processInfo.thermalState), ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off",
@@ -822,7 +829,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                                    dbgTouch / f * 1000, hc.ms))
             }
             dbgBrain = 0; dbgStepOnly = 0; dbgTouch = 0; dbgSkin = 0
-            dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgSim = 0; dbgSteps = 0
+            dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgWait = 0; dbgSim = 0; dbgSteps = 0
             fflush(stdout)
         }
     }
@@ -864,7 +871,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// A real Jelly's render vertices projected to screen points (for his outline and for hit tests).
     private func screenPoints(of id: Int, _ size: CGSize, _ vp: simd_float4x4) -> [CGPoint] {
         guard let renderer, id < actors.count else { return [] }
-        let d = renderer.dynPointer(body: id)
+        let d = renderer.skinPointer(body: id)
         var out: [CGPoint] = []
         out.reserveCapacity(renderMesh.vertexCount)
         for i in 0..<renderMesh.vertexCount {
@@ -937,7 +944,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private func pickJelly(_ p: CGPoint, _ size: CGSize) -> (id: Int, hit: SIMD3<Float>)? {
         guard let renderer else { return nil }
         let ids = (game && model.care.focus.isActive && !model.care.focusGroup.ids.isEmpty) ? model.care.focusGroup.ids : Array(actors.indices)
-        let bodies = ids.filter { $0 < actors.count }.map { TouchPick.Body(id: $0, dyn: UnsafePointer(renderer.dynPointer(body: $0)), x: actors[$0].sim.x) }
+        let bodies = ids.filter { $0 < actors.count }.map { TouchPick.Body(id: $0, dyn: renderer.skinPointer(body: $0), x: actors[$0].sim.x) }
         return TouchPick.pick(p, size: size, viewProj: lastCam.viewProj, invViewProj: lastCam.invViewProj, bodies: bodies,
                               index: renderMesh.index, bodyIndexCount: renderMesh.body.first + renderMesh.body.count)
     }
