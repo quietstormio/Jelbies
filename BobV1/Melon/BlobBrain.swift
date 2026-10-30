@@ -165,6 +165,8 @@ final class BlobBrain {
     var toy = ToyBrain()
     var flopKicks = 0
     var sleep = SleepState()
+    /// The last get-up + flourish he did (memory only, never saved): he does not repeat the pair (BlobBrain+WakeUps.swift).
+    var wakeLast: WakePair?
     /// Seconds until he may again decide to go and snuggle beside a sleeper (BlobBrain+Sleep.swift).
     var snuggleCool: Float = 0
     /// Seconds he stays up after any wake (no bedtime roll outside deep night): kills the sleep / wake / sleep loop (BlobBrain+Sleep.swift).

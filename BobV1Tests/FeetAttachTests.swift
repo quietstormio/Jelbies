@@ -93,6 +93,13 @@ final class FeetAttachTests: XCTestCase {
         XCTAssertLessThanOrEqual(w.overlap, core ? minCoreOverlap : minOverlap, "\(name): a foot is not fused to the body (gap)")
     }
 
+    /// A sleep (hold 2 s) that wakes in this get-up and flourish.
+    static func wakeMove(_ r: MotionRig, _ up: GetUp, _ flo: WakeFlourish, groggy: Bool = false, feature: JellyFeature = .none) {
+        r.brain.feature = feature
+        r.brain.idleForced = true; _ = r.brain.idleStart(.sleep, r.sim); r.brain.sleep.hold = 2
+        r.brain.sleep.groggy = groggy
+        r.brain.sleep.plan = WakePlan(up: up, flo: flo, chosen: true)
+    }
     struct Move {
         let name: String, game: Bool, seconds: Float, expectBeans: Bool
         let start: (MotionRig) -> Void
@@ -144,6 +151,17 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "jumping jacks", game: true, seconds: 8, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.jacks, $0.sim) }),
         Move(name: "sit", game: true, seconds: 5, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sit, $0.sim) }),
         Move(name: "sleep: roll onto the back and up again", game: true, seconds: 16, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 2 }),
+        // the wake-ups (BlobBrain+WakeUps.swift): every get-up and every flourish, the plan set by hand so nothing else leaks the style
+        Move(name: "wake: get-up pop", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .pop, .stretch) }),
+        Move(name: "wake: get-up rock-a-bye", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .rock, .stretch) }),
+        Move(name: "wake: get-up side roll", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .side, .stretch) }),
+        Move(name: "wake: get-up slow sit-up", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .sit, .look, groggy: true) }),
+        Move(name: "wake: get-up spring", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .spring, .stretch) }),
+        Move(name: "wake: flourish shake", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .pop, .shake) }),
+        Move(name: "wake: flourish happy bounce", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .spring, .bounce) }),
+        Move(name: "wake: signature tail thumps", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .pop, .signature, feature: .spines) }),
+        Move(name: "wake: signature wings", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .pop, .signature, feature: .wings) }),
+        Move(name: "wake: signature sun stretch", game: true, seconds: 12, expectBeans: false, start: { wakeMove($0, .pop, .signature, feature: .daisy) }),
         Move(name: "sleep: hand-hold", game: true, seconds: 18, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 5; $0.brain.sleep.holdForce = true }),
         Move(name: "sleep: hand-hold + cuddle lean", game: true, seconds: 18, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sleep, $0.sim); $0.brain.sleep.hold = 5; $0.brain.sleep.holdForce = true; $0.brain.sleep.mode = .cuddle }),
         Move(name: "antic: spin after his tail", game: true, seconds: 6, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.tail, $0.sim) }),

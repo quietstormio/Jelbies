@@ -142,6 +142,7 @@ extension BlobBrain {
         default: break
         }
         if let k = idleState.kind {
+            if k == .sleep, sleep.stage == 5, sleep.faceFree { return false }          // (the wake's flourish smiles with the face layer)
             switch k {
             case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail, .tailHug: return true
             default: break

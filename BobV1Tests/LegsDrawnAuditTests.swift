@@ -300,7 +300,7 @@ final class LegsDrawnAuditTests: XCTestCase {
 
     static func allScenarios() -> [Scenario] {
         let names = ["hop", "antic: spin after his tail", "flip", "faceplant", "run", "zoomies", "walk (game)", "antic: roll", "flourish: roll along the leg",
-                     "sleep: roll onto the back and up again", "sit", "jumping jacks", "belly slide", "antic: flop", "Lavender: flap-hop", "flourish: skip-hop",
+                     "sleep: roll onto the back and up again", "wake: get-up rock-a-bye", "wake: get-up side roll", "wake: get-up slow sit-up", "wake: get-up spring", "wake: flourish shake", "wake: flourish happy bounce", "wake: signature wings", "sit", "jumping jacks", "belly slide", "antic: flop", "Lavender: flap-hop", "flourish: skip-hop",
                      "flourish: mid-leg spin", "jump for joy", "decor2: climb the slide, sit, ride, exit", "decor: hop on the mat", "ears dance", "antic: cartwheel"]
         var list = names.compactMap { fromMove($0) }
         list.append(ride("toy: scooter", .kickscooter, at: SIMD2(1.2, 0.4), move: .decorSlide, seconds: 45))

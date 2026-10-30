@@ -194,7 +194,7 @@ final class WearTests: XCTestCase {
         XCTAssertNotNil(w.shown(0, .neck)); XCTAssertNotNil(w.shown(0, .hands))
         XCTAssertGreaterThan(w.poofOuts, 0); XCTAssertGreaterThan(w.puffSpawns, 0)
         // waking (past half of the roll back): they pop back
-        b.sleep.stage = 4; b.sleep.t = SleepTuning.rollBackTime * 0.8
+        b.sleep.stage = 4; b.sleep.t = SleepTuning.rollBackTime * 0.8; b.sleep.k = 0.04          // (past the mask's k)
         tick(40)
         XCTAssertEqual(w.shown(0, .head), .tophat); XCTAssertEqual(w.shown(0, .face), .sunglassesStar)
         b.idleState.kind = nil

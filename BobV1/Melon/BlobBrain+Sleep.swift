@@ -56,6 +56,17 @@ struct SleepState {
     /// A bedtime (the player's word or the night-idle rule): this sleep never fails to lie down.
     var force = false
     var forceRetried = false
+    /// The wake in hand (BlobBrain+WakeUps.swift): the get-up and flourish styles, what the get-up adds to the pose this tick, the face handed to the expression
+    /// layer (the flourishes that smile), the happy hops done, the room (not this brain) calls the morning wake.
+    var plan = WakePlan()
+    var x = WakeLie()
+    var faceFree = false
+    var bounceDone = false
+    var wakeHopT: Float = -1
+    var landDip: Float = 0
+    var roomMorning = false
+    /// The mask / hats stay on until the roll-up has come this far (k, real roll progress: a rock or a pause never hides them early); the slow sit-up and the spring are upright early, so they let go earlier.
+    var maskK: Float { plan.up == .sit || plan.up == .spring ? 0.6 : 0.25 }
     /// Small life while asleep (stage 3 only): shifts, rolls, scoots, twitches, a half-wake. Timers only; see `sleepFidgetTick`.
     var fid = SleepFidget()
 }
@@ -84,7 +95,7 @@ enum SleepTuning {
     /// pose and a damped spring back; `lieTime` = fall + overshoot + settle, then stage 3 (asleep) with the pose exactly final (isSettled / the sim skip).
     static let fallTime: Float = 0.42, overshootRise: Float = 0.09, overshoot: Float = 0.095, settleTime: Float = 0.35
     static let lieTime: Float = fallTime + overshootRise + settleTime
-    /// The wake: a quick ease-out roll-up (a pop) and a short stretch. (The hats' / mask's poof at `holdRoll` of the roll scales with it.)
+    /// The wake: a quick ease-out roll-up (a pop) and a short stretch. (The hats' / mask's poof is keyed to the roll's real progress, `sleep.maskK`, so it follows whatever get-up he does.)
     static let rollBackTime: Float = 0.5
     static let stretchTime: Float = 1.5
     /// The yawn before the flop (seconds).
@@ -395,16 +406,20 @@ extension BlobBrain {
 
     // MARK: waking
 
-    /// Wake now: roll back and stretch. `groggy` = a tap (a slower, sleepier stretch); `fast` = something needs him (a meal, a command): no stretch.
-    func sleepWake(groggy: Bool, fast: Bool = false) {
+    /// Wake now: get up and a flourish (BlobBrain+WakeUps.swift). `groggy` = a tap (sleepier styles, a yawning stretch); `fast` = something needs him (a meal, a command): the
+    /// plain pop + stretch. `plan` = the group's draw (everybody different, one landing); nil = his own.
+    func sleepWake(groggy: Bool, fast: Bool = false, plan: WakePlan? = nil) {
         if idleState.kind == .sleep { postEvent(.wokeUp) }
         guard idleState.kind == .sleep else { return }
         if sleep.stage <= 1 { idleState.yielding = true; return }          // not down yet: the usual yield ends it
         if sleep.stage >= 4 { return }
         sleep.wakeAsked = true
         sleep.groggy = groggy
-        if sleep.stage == 3 || sleep.stage == 2 { sleep.kStart = sleep.k; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true }
-        _ = fast
+        if sleep.stage == 3 || sleep.stage == 2 {
+            if let p = plan, sleep.stage == 3 { sleep.plan = p }
+            wakePlanBegin(plain: fast || sleep.stage == 2)
+            sleep.kStart = sleep.k; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true
+        }
     }
 
     // MARK: per-stage work in the normal flow (stages 1 and 5)
@@ -437,16 +452,21 @@ extension BlobBrain {
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if sleep.t > SleepTuning.yawnTime && !feet.active { sleepToLie(sim, skinner) }
         case 5:
-            // the stretch after the roll back (groggy = slower and sleepier, eyes only half open)
+            // the flourish after the get-up (W1 = the stretch, groggy = slower and sleepier, eyes only half open; W2...W5 in BlobBrain+WakeUps.swift)
             // (the old 2.7 s stretch's shape, played in `stretchTime`; a groggy one is half again as long)
-            let slow: Float = (sleep.groggy ? 1.5 : 1) * SleepTuning.stretchTime / 2.7
-            let t = sleep.t / slow
-            let k = smooth01(t / 0.8) * (1 - smooth01((t - 1.7) / 0.6))
-            let m = smooth01((t - 0.7) / 0.4) * (1 - smooth01((t - 1.35) / 0.4))
-            sleepYawnPose(skinner, k: k, mouth: sleep.groggy ? 0.95 * m : 0, shake: false, sleepy: max(0.95 * (1 - smooth01(sleep.t / (0.6 * SleepTuning.stretchTime / 2.7))), sleep.groggy ? 0.5 * (1 - smooth01((t - 1.6) / 1.2)) : 0))
+            let (end, fs) = WakeTuning.floTiming(sleep.plan, groggy: sleep.groggy, feature: feature)
+            if sleep.landDip > 0 { squash *= 1 - sleep.landDip * smooth01(sleep.t / 0.03) * expf(-sleep.t / 0.12) }          // the landing squish
+            if sleep.plan.flo == .stretch {
+                let slow: Float = (sleep.groggy ? 1.5 : 1) * SleepTuning.stretchTime / 2.7 * fs
+                let t = sleep.t / slow
+                let k = smooth01(t / 0.8) * (1 - smooth01((t - 1.7) / 0.6))
+                let m = smooth01((t - 0.7) / 0.4) * (1 - smooth01((t - 1.35) / 0.4))
+                sleepYawnPose(skinner, k: k, mouth: sleep.groggy ? 0.95 * m : 0, shake: false, sleepy: max(0.95 * (1 - smooth01(sleep.t / (0.6 * SleepTuning.stretchTime / 2.7 * fs))), sleep.groggy ? 0.5 * (1 - smooth01((t - 1.6) / 1.2)) : 0))
+            } else { wakeFlourishPose(skinner, sleep.t / fs, dt) }
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
-            if t > 2.7 && !feet.active {
+            if sleep.t >= end && !feet.active {
                 skinner.setEyeOpenness(1); mouthOpen = 0; armDirW = 0; armDirOut = 0; armWalkWant = 0
+                wakeFlourishEnd()
                 if sleep.bed >= 0, sleep.bedHop == 0, let f = DecorField.shared.foot(sleep.bed) {
                     sleep.bedHop = 3; sleep.t = 0          // up and over the rim again
                     bagHop(sim, to: bedExitSpot(f), ground: 0, apex: 0.42)
@@ -483,7 +503,7 @@ extension BlobBrain {
     /// Ticked from `BlobBrain.tick` right after the idle gate; true = this tick is fully handled.
     func sleepBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if bedHopTick(sim, skinner, dt) { return true }
-        guard idleState.kind == .sleep, case .idle = script, sleep.stage >= 2, sleep.stage <= 4 else { return false }
+        guard idleState.kind == .sleep, case .idle = script, (sleep.stage >= 2 && sleep.stage <= 4) || wakeBodyOn else { return false }
         activity = .lookingAround
         mouthOpen = 0
         sleep.t += dt
@@ -505,18 +525,24 @@ extension BlobBrain {
             if sleep.breath >= SleepTuning.breathPeriod { sleep.breath = 0; jellyKick = max(jellyKick, SleepTuning.breathKick) }           // the slow breathing: a soft ripple under the skin (in)
             else if sleep.breath - dt < SleepTuning.breathPeriod * 0.5, sleep.breath >= SleepTuning.breathPeriod * 0.5 { jellyKick = max(jellyKick, SleepTuning.breathKick * 0.45) }          // (and out)
             if !sleep.wakeAsked { sleepFidgetTick(dt) }
-            let morning = idleDeepNight < 0.5 && idleNight < SleepTuning.nightEdge
+            // (the morning wake is the room's call when a room runs him: GameCare wakes the sleepers together; this one is the fallback for a brain with no room)
+            let morning = idleDeepNight < 0.5 && idleNight < SleepTuning.nightEdge && !sleep.roomMorning
             if sleep.wakeAsked || sleep.t >= sleep.hold || (morning && sleep.t >= sleep.minHold && sleep.hold > 600) {
+                wakePlanBegin(plain: false)
                 sleep.kStart = 1; sleep.stage = 4; sleep.t = 0
             }
-        default:    // 4: roll back over the way he went down
-            let x = min(sleep.t / SleepTuning.rollBackTime, 1)
-            sleep.k = sleep.kStart * (1 - x) * (1 - x)          // ease-out: the roll-up pops up fast, then settles onto his feet
-            if sleep.t >= SleepTuning.rollBackTime {
+        case 4:     // roll back over the way he went down, in the style he got up in (every one ends at k = 0)
+            let (end, scale, lead) = WakeTuning.upTiming(sleep.plan)
+            sleep.x = WakeTuning.getUp(sleep.plan.up, lt: (sleep.t - lead) / scale, side: sleep.plan.side)
+            if sleep.t < lead { sleep.x.yRoll = 0.03 * sinf(2 * .pi * 1.6 * sleep.t) * sleep.plan.side; sleep.x.eyeMul = 1 }          // a stir on his back while the others get going
+            sleep.k = sleep.kStart * sleep.x.k
+            if sleep.t >= end {
                 sleep.k = 0
                 sleepStand(sim, skinner)
-                return false
+                if !wakeBodyOn { return false }
             }
+        default:    // 5, the happy hops
+            if !wakeBounceTick(sim, skinner, dt) { return false }
         }
         applyLie(sim, skinner, dt)
         return true
@@ -637,7 +663,7 @@ extension BlobBrain {
     /// The attractor at lie blend `sleep.k`.
     private func applyLie(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         let k = sleep.k
-        let pitchAng = pitchBase * (1 - k) - SleepTuning.lieAngle * k
+        let pitchAng = pitchBase * (1 - k) - SleepTuning.lieAngle * k + sleep.x.pitch
         // snuggle: ramp the hold arm / the turn toward the other while both sleep, back out when either wakes
         let together = isNapping && !race.active && (sleep.holdForce || (sleep.partner.map { $0.isNapping && simd_distance($0.position, position) < SleepTuning.minGap * 1.5 } ?? false))
         // (in at the snuggle ramp, out fast: the quick roll-up is over in half a second and the arm must be back by then)
@@ -651,14 +677,11 @@ extension BlobBrain {
         } else if sleep.holdForce { sleep.holdSide = 1 }
         let leanSign: Float = sleep.holdSide == 1 ? 1 : -1
         let fid = sleep.fid, fa = fid.active && sleep.stage == 3
-        let q0 = yawQuat(yaw + (fa ? fid.yawOff : 0)) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
+        let q0 = yawQuat(yaw + (fa ? fid.yawOff : 0)) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign + sleep.x.yRoll, axis: SIMD3(0, 1, 0))
         let q = fa && (fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW, axis: SIMD3(0, 0, 1)) : q0
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
-        else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
-            let x = sleep.t / SleepTuning.rollBackTime
-            if x > 0.5 { sq *= 1 + 0.07 * sinf(.pi * min((x - 0.5) / 0.5, 1)) }
-        }
+        else if sleep.stage >= 4 { sq *= sleep.x.sq }                                                       // the get-up's body: the pop's taller body for a beat, the spring's crouch, ...
         sim.attractor.rotation = q
         sim.attractor.squash = sq
         var a: SIMD3<Float>
@@ -670,11 +693,11 @@ extension BlobBrain {
         let g = sim.groundedAnchorY(rotation: q, squash: sq)
         let kk = smooth01(min(k, 1))
         a.x += (px - a.x) * kk; a.z += (pz - a.z) * kk
-        a.y = max(a.y, g)
+        a.y = max(a.y, g) + sleep.x.lift
         sim.attractor.anchor = a
-        sim.attractor.strength = kPose
+        sim.attractor.strength = sleep.x.lift > 0.003 ? gait.kHop : kPose          // (a hop needs the stiffer pull)
         poseW = 1
-        skinner.setEyeOpenness(1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0))
+        if sleep.stage < 5 { skinner.setEyeOpenness(max(0.04, (1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0)) * sleep.x.eyeMul)) }          // (the happy hops leave the eyes to the face layer)
         // feet: the rigid beans ride the body, arms stay the rest nubs
         armWalkWant = 0; armDirW = 0
         if sleep.holdW > 0.001 {
@@ -701,7 +724,13 @@ extension BlobBrain {
     /// Back on his feet: hand the body to the normal pose path (feet re-seeded square under the root).
     private func sleepStand(_ sim: SoftBody, _ skinner: Skinner) {
         sleep.stage = 5; sleep.t = 0
-        jellyKick = max(jellyKick, SleepTuning.wakeKick)
+        let land = WakeTuning.landing(sleep.plan.up)
+        jellyKick = max(jellyKick, land.kick)
+        sleep.landDip = land.dip
+        if sleep.plan.up == .rock || sleep.plan.up == .spring || sleep.plan.up == .side { AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7) }
+        sleep.x = WakeLie(); sleep.bounceDone = false; sleep.wakeHopT = -1
+        sleep.faceFree = sleep.plan.flo == .shake || sleep.plan.flo == .bounce || sleep.plan.flo == .signature          // (these smile with the face layer; the stretch and the look-around keep the eyes themselves)
+        if sleep.plan.flo == .signature, feature == .spines { tailPlay.thumpsDone = 0; tailPlay.impactT = 9 }
         // a good-morning from the nearest awake Jelly (a look at him, then a hop)
         if let g = socialOthers().filter({ $0 !== self && $0.idleState.kind == nil && $0.social == nil && simd_distance($0.position, position) < 6 }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) {
             g.socialWakeGreetStart(from: self)

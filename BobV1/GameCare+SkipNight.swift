@@ -116,7 +116,7 @@ extension GameCare {
         guard !nightSkip.woke else { return }
         nightSkip.woke = true
         nightRest.wanted.removeAll(); nightRest.dayOnce.removeAll(); nightRest.nightWoken.removeAll()
-        for a in rosterActors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: true) } }
+        wakeGroup(rosterActors.map(\.id), groggy: true)          // the chime wakes them together, each a different sleepy way
         noteInteraction()
     }
 }

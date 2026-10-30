@@ -78,8 +78,8 @@ extension BlobBrain {
         default: break
         }
         // the emotes' shaped values; with no emote they ease back to rest
-        if kind != .tailThump { tailPlay.lift *= expf(-dt / 0.12); tailPlay.thumpsDone = 0 }
-        if kind != .tailHug { tailPlay.curl *= expf(-dt / 0.2); tailPlay.hug *= expf(-dt / 0.2); if kind != .tailThump { tailPlay.liftTip *= expf(-dt / 0.2) } }
+        if kind != .tailThump && !wakeThumpOn { tailPlay.lift *= expf(-dt / 0.12); tailPlay.thumpsDone = 0 }
+        if kind != .tailHug { tailPlay.curl *= expf(-dt / 0.2); tailPlay.hug *= expf(-dt / 0.2); if kind != .tailThump && !wakeThumpOn { tailPlay.liftTip *= expf(-dt / 0.2) } }
         d.liftRoot = tailPlay.lift
         d.liftTip += tailPlay.liftTip
         d.bendYaw = tailPlay.curl; d.bendPow = tailPlay.curlPow

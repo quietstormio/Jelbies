@@ -104,7 +104,7 @@ final class WornSet {
         guard b.idleState.kind == .sleep else { return false }
         let st = b.sleep.stage
         if st == 2 || st == 3 { return true }
-        return st == 4 && b.sleep.t < SleepTuning.rollBackTime * SleepMaskTuning.holdRoll
+        return st == 4 && b.sleep.k > b.sleep.maskK          // (real roll progress, whatever the get-up's style or pace)
     }
     static func eating(_ b: BlobBrain) -> Bool {
         switch b.script { case .dine, .eat: return true; default: return false }

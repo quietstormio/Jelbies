@@ -11,8 +11,8 @@ import simd
 @MainActor
 final class SleepMaskTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
-    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    override func setUp() { WakeTuning.debugLoaded = true; WakeTuning.forceUp = .pop; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
+    override func tearDown() { WakeTuning.forceUp = nil; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     private func sleeper(hold: Float = 500) -> (MotionRig, SleepMaskSet) {
         let r = MotionRig(game: true)

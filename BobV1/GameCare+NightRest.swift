@@ -25,6 +25,17 @@ enum NightRestTuning {
     /// Sleep hold for a bedtime sleep (the stage-3 morning rule ends it).
     static let untilMorning: Float = 36_000
     nonisolated(unsafe) static var debugLoaded = false
+    /// DEBUG `-WakeNoMorning 1`: the room never calls the morning wake (the capture clips fire their own).
+    static var noMorning: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "WakeNoMorning")
+        #else
+        false
+        #endif
+    }
+    #if DEBUG
+    @MainActor static func logSolo(_ a: JellyActor) { NSLog("[wake] solo %d -> %@", a.id, a.brain.map { "\($0.chooseWakePlanPreview())" } ?? "") }
+    #endif
 }
 
 struct NightRestBook {
@@ -39,6 +50,8 @@ struct NightRestBook {
     var lastSelected: Int?
     var autoFired = false                      // the idle rule fired for this stretch (re-arms on interaction)
     var debugRead = false
+    var debugClock: Float = 0                  // DEBUG: seconds since the first tick (the wake demo arguments)
+    var wakeDemoDone = false
 }
 
 extension GameCare {
@@ -75,10 +88,10 @@ extension GameCare {
     // MARK: waking
 
     /// Wake ONLY this Jelbie (a name, a poke). A no-op on an awake one besides the bookkeeping.
-    func wakeSleeper(_ id: Int, groggy: Bool = true) {
+    func wakeSleeper(_ id: Int, groggy: Bool = true, plan: WakePlan? = nil) {
         if let b = selectBrain(id), b.isSleeping, !b.sleep.wakeAsked {
             b.commandedGoodnight = false
-            b.sleepWake(groggy: groggy)
+            b.sleepWake(groggy: groggy, plan: plan)
             if isBedtimeHours { nightRest.nightWoken.insert(id) }
         }
         nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)          // a named command also cancels a pending bedtime for an awake one
@@ -87,10 +100,24 @@ extension GameCare {
     /// A deliberate poke on a sleeper (W3 wires the gesture).
     func pokeSleeper(_ id: Int) { wakeSleeper(id, groggy: true) }
 
-    /// "Wake up everyone".
+    /// Wake these Jelbies TOGETHER (BlobBrain+WakeUps.swift): each gets a different get-up and flourish, they start on this tick, land on the same frame and finish together.
+    /// One sleeper alone is just his own wake. The ones not down yet (or already up) only get the bookkeeping.
+    func wakeGroup(_ ids: [Int], groggy: Bool) {
+        let down = ids.compactMap { id in selectBrain(id).flatMap { b in b.isSleeping && !b.sleep.wakeAsked && b.sleep.stage == 3 ? (id, b) : nil } }
+        let plans = down.count >= 2 ? BlobBrain.groupWakePlans(down.map(\.1), groggy: groggy) : []
+        #if DEBUG
+        if !plans.isEmpty { NSLog("[wake] group %@ -> %@", down.map { String($0.0) }.joined(separator: ","), plans.map { "\($0.up)/\($0.flo)" }.joined(separator: " ")) }
+        #endif
+        for id in ids {
+            let i = down.firstIndex { $0.0 == id }
+            wakeSleeper(id, groggy: groggy, plan: i.flatMap { plans.indices.contains($0) ? plans[$0] : nil })
+        }
+    }
+
+    /// "Wake up everyone": lively, together.
     func wakeAll() {
         nightRest.wanted.removeAll(); nightRest.dayOnce.removeAll()
-        for a in raceBook.actors { wakeSleeper(a.id) }
+        wakeGroup(raceBook.actors.map(\.id), groggy: false)
         if isBedtimeHours { nightRest.nightWoken.formUnion(presentActorIDs) }
         noteInteraction()
     }
@@ -165,7 +192,30 @@ extension GameCare {
                 book.personal[id] = 0; book.roomIdle = 0; book.autoFired = false
             }
         }
+        // the room runs the morning wake: every bedtime sleeper's own morning rule stands down and the sleepers wake together (a brain with no room keeps its own rule)
+        for b in actors.compactMap(\.brain) { b.sleep.roomMorning = true }
+        #if DEBUG
+        // capture aids: -WakeGroupAfter <s> wakes everyone together s seconds after the first tick (-WakeGroggy 1: the chime's sleepy sets), -WakeSoloAfter <s> wakes one Jelbie alone (-WakeSoloID <slot>, default 0)
+        book.debugClock += dt
+        if !book.wakeDemoDone, !actors.isEmpty {
+            let d = UserDefaults.standard
+            if case let s = d.double(forKey: "WakeGroupAfter"), s > 0, book.debugClock >= Float(s), actors.allSatisfy({ $0.brain?.isNapping ?? false }) {
+                book.wakeDemoDone = true
+                nightRest = book; wakeGroup(ids, groggy: d.integer(forKey: "WakeGroggy") == 1); book = nightRest
+            } else if case let s = d.double(forKey: "WakeSoloAfter"), s > 0, book.debugClock >= Float(s), let a = actors.sorted(by: { $0.id < $1.id }).first(where: { $0.id == d.integer(forKey: "WakeSoloID") }), a.brain?.isNapping ?? false {
+                book.wakeDemoDone = true
+                NightRestTuning.logSolo(a)
+                nightRest = book; wakeSleeper(a.id, groggy: d.integer(forKey: "WakeGroggy") == 1); book = nightRest
+            }
+        }
+        #endif
         if raceBusy || show.active { book.wanted.removeAll(); book.dayOnce.removeAll(); return }
+        // morning: due for any bedtime sleeper -> all the napping ones wake as one group (lively)
+        if actors.contains(where: { $0.brain?.sleepMorningDue ?? false }), !NightRestTuning.noMorning {
+            nightRest = book
+            wakeGroup(actors.filter { $0.brain?.isNapping ?? false }.map(\.id), groggy: false)
+            book = nightRest
+        }
         if book.arrivalAsleep, !actors.isEmpty {
             nightRest = book; applyArrivalAsleep(); book = nightRest
             book.arrivalAsleep = false

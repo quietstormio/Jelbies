@@ -287,7 +287,7 @@ final class FeatureSet {
     private func stepWings(_ s: inout Slot, brain: BlobBrain, dt: Float) {
         s.clock += dt
         var flap: Float, spread: Float
-        if brain.flapHop.active, !s.folded {
+        if brain.flapHop.active || brain.wakeWingsOn, !s.folded {
             flap = brain.flapHop.flapDeg; spread = brain.flapHop.spreadDeg
         } else {
             flap = FeatureTuning.flutterA * sinf(2 * .pi * FeatureTuning.flutterHzA * s.clock) + FeatureTuning.flutterB * sinf(2 * .pi * FeatureTuning.flutterHzB * s.clock + 1.3)

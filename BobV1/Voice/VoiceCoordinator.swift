@@ -852,7 +852,7 @@ final class VoiceCoordinator {
             case .jellies(let named): meant = named
             case .selected: meant = focused ? [care.targetJelly] : presentIDs
             }
-            if Set(meant) == Set(presentIDs) { care.wakeAll() } else { for id in meant { care.wakeSleeper(id) } }
+            if Set(meant) == Set(presentIDs) { care.wakeAll() } else if meant.count > 1 { care.wakeGroup(meant, groggy: false) } else { for id in meant { care.wakeSleeper(id, groggy: false) } }
             return
         }
         if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
