@@ -21,6 +21,8 @@ import simd
 enum Friends2Tuning {
     /// Where the sides meet: centre distance as a fraction of `peerGap` (a body is ~1.4 wide, so the bodies just touch and squish a little).
     static let sideGap: Float = 0.82, faceGap: Float = 0.76
+    /// How much further than twice the distance the leapfrog hop lands (the crouched one lies flat, longer than he is wide).
+    static let leapExtra: Float = 0.35
     static let raceLane: Float = 1.05
     static let tagRounds = 3
 }
@@ -278,7 +280,7 @@ extension BlobBrain {
                         socialBook.passThrough = true
                         letGo()
                         leapGaitOn()
-                        let across = simd_distance(position, o.position) * 2
+                        let across = simd_distance(position, o.position) * 2 + Friends2Tuning.leapExtra          // (lands clear of the crouched one, who lies about a body long)
                         startHopPlay(sim: sim, distance: across)
                         AudioHub.shared.chirp(jelly: steerID, .happy)
                     } else if t > 4 { s.finish(.aborted) }

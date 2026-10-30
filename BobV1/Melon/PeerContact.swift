@@ -22,11 +22,11 @@ enum PeerContact {
         /// ... but never when the centres are nearer than this (a degenerate line; the root spring separates those).
         static let minCentre: Float = 0.25
         /// An overlap deeper than this wakes a sleeper: the plane has particles to move.
-        static let wakeDepth: Float = 0.003
+        static let wakeDepth: Float = 0.01
         /// How far a tail sphere may be from a body's centre to matter (body radius + the tube).
         static let tailReach: Float = 1.25
-        /// The drawn skin reaches a little past the particles that carry it (the back's swell, the jiggle's lag): each body keeps this far inside the plane so the SKINS meet at it.
-        static let skin: Float = 0.02
+        /// Each body keeps this far inside the plane (0: the drawn egg is pressed onto the plane itself, Skinner.clampEggToPeers, so no allowance is needed; any value > 0 holds a steady squeeze that never lets the pair settle).
+        static let skin: Float = 0
         /// What the contact gives back to the whole body (SoftBody.peerGiveBack).
         static let giveBack: Float = 0.5
     }

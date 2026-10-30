@@ -86,6 +86,7 @@ nonisolated final class Skinner {
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
         guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
+        eggCount = cap.firstVertex.min() ?? 0
         tailFirst = cap.tailFirst
         tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
         tailLMRest = tailLM.map { SIMD3(rm.rest[3 * $0], rm.rest[3 * $0 + 1], rm.rest[3 * $0 + 2]) }
@@ -119,16 +120,48 @@ nonisolated final class Skinner {
         if armCapsulesActive { for s in 0..<2 { clamp(armFirst[s], ArmCapsule.vertexCount) } }
         if beansActive { for s in 0..<2 { clamp(beanFirst[s], FootBean.vertexCount) } }
     }
+    private func pushArmsOutOfPeerSpheres(_ dyn: UnsafeMutablePointer<Float>) {
+        guard armCapsulesActive else { return }
+        for s in 0..<2 {
+            for i in 0..<ArmCapsule.vertexCount {
+                let o = 6 * (armFirst[s] + i)
+                for sp in peerSpheres {
+                    let dx = dyn[o] - sp.x, dy = dyn[o + 1] - sp.y, dz = dyn[o + 2] - sp.z, d2 = dx * dx + dy * dy + dz * dz
+                    if d2 < sp.w * sp.w, d2 > 1e-8 { let k = (sp.w / d2.squareRoot() - 1); dyn[o] += dx * k; dyn[o + 1] += dy * k; dyn[o + 2] += dz * k }
+                }
+            }
+        }
+    }
     /// The drawn egg reaches past the particles that carry it (the back's swell, the jiggle's lag, the lean's shear): whatever skin would cross a contact plane is pressed flat onto it, so the
     /// two skins meet in one soft patch and never pass.
+    /// The egg's own vertices are 0..<eggCount (the arm capsules, foot beans and the tail block come after); set by configureTail.
+    private(set) var eggCount = 0
     private func clampEggToPeers(_ dyn: UnsafeMutablePointer<Float>) {
-        guard let end = armFirst.min() else { return }
+        let end = eggCount
+        guard end > 0 else { return }
         for pl in peerPlanes {
             let nx = pl.x, ny = pl.y, nz = pl.z, w = pl.w
             for v in 0..<end {
                 let o = 6 * v
                 let pen = dyn[o] * nx + dyn[o + 1] * ny + dyn[o + 2] * nz - w
                 if pen > 0 { dyn[o] -= nx * pen; dyn[o + 1] -= ny * pen; dyn[o + 2] -= nz * pen }
+            }
+        }
+    }
+    /// The same for another body's solid tail: the drawn egg skin that is inside one of its spheres is pushed out to the surface (the particles are kept out already; the skin
+    /// between them and the plane clamp above can still dip into it).
+    private func pushEggOutOfPeerSpheres(_ dyn: UnsafeMutablePointer<Float>) {
+        let end = eggCount
+        guard end > 0, !peerSpheres.isEmpty else { return }
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for sp in peerSpheres { let c = SIMD3(sp.x, sp.y, sp.z), r = SIMD3<Float>(repeating: sp.w); lo = simd_min(lo, c - r); hi = simd_max(hi, c + r) }
+        for v in 0..<end {
+            let o = 6 * v
+            let x = dyn[o], y = dyn[o + 1], z = dyn[o + 2]
+            if x < lo.x || x > hi.x || y < lo.y || y > hi.y || z < lo.z || z > hi.z { continue }
+            for sp in peerSpheres {
+                let dx = x - sp.x, dy = y - sp.y, dz = z - sp.z, d2 = dx * dx + dy * dy + dz * dz
+                if d2 < sp.w * sp.w, d2 > 1e-8 { let k = sp.w / d2.squareRoot() - 1; dyn[o] += dx * k; dyn[o + 1] += dy * k; dyn[o + 2] += dz * k; break }
             }
         }
     }
@@ -619,7 +652,7 @@ nonisolated final class Skinner {
             }
         }
         if !peerPlanes.isEmpty { clampLimbsToPeers(dyn) }
-        if !peerSpheres.isEmpty { liftFeetOverPeers(dyn) }
+        if !peerSpheres.isEmpty { liftFeetOverPeers(dyn); pushArmsOutOfPeerSpheres(dyn) }
         applyTail(dyn)
         eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
@@ -638,6 +671,7 @@ nonisolated final class Skinner {
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
         applyBeanGuard(dyn)
         if !peerPlanes.isEmpty { clampEggToPeers(dyn) }
+        if !peerSpheres.isEmpty { pushEggOutOfPeerSpheres(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }

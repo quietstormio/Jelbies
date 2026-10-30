@@ -75,7 +75,7 @@ nonisolated final class SoftBody {
     /// The body is at a fixed point: not held or pressed, perfectly still for the rest-snap time, and whatever pulls on it (pose attractor, foot / hand
     /// targets) is exactly what pulled on it in its last step. Stepping it again would change nothing, so a sleeping Jelly may skip the step.
     var isSettled: Bool {
-        guard !grabbing, !pressing, peerDepth < 2e-4, restSteps > 15, kineticEnergy() < 1e-9 else { return false }
+        guard !grabbing, !pressing, peerDrift < 2e-5, restSteps > 15, kineticEnergy() < 1e-9 else { return false }
         let a = attractor, p = attPrev
         guard a.strength == p.strength else { return false }
         if a.strength > 0 {
@@ -516,8 +516,11 @@ nonisolated final class SoftBody {
     private var sphereCount = 0
     private var sphereList: [Int32] = []
     var peerGiveBack: Float = 0.5
-    /// Deepest particle past a plane or into a sphere during the last step (the contact's own work: a body still being pushed is not at rest).
+    /// Deepest particle past a plane or into a sphere during the last step (pre-projection: a body pressed hard keeps meeting the plane every substep, so this alone says nothing about rest).
     private(set) var peerDepth: Float = 0
+    /// How far the contact left any particle from where the step began (a pressed body at its fixed point returns to the same place every step: 0): what keeps a body in contact from sleeping.
+    private(set) var peerDrift: Float = 0
+    private var stepStart: [Float] = []
     private var peerDeepest: Float = 0
 
     /// Drops last step's contact (no allocation).
@@ -657,6 +660,8 @@ nonisolated final class SoftBody {
         if pressing { buildPressList(); pressDeepest = 0 }
         if sphereCount > 0 { buildSphereList() }
         peerDeepest = 0
+        let contact = planeCount > 0 || !sphereList.isEmpty
+        if contact { if stepStart.count != x.count { stepStart = x } else { for i in 0..<x.count { stepStart[i] = x[i] } } }
         var a1 = attractor
         if isGrabbing { a1.strength = 0 }
         var a0 = attPrev
@@ -699,6 +704,7 @@ nonisolated final class SoftBody {
         targetsPrev = targets
         if pressing { pressDepth = pressDeepest }
         peerDepth = peerDeepest
+        if contact { var d: Float = 0; for i in 0..<x.count { d = max(d, abs(x[i] - stepStart[i])) }; peerDrift = d } else { peerDrift = 0 }
         if bad { reset(drop: 0.2) }
     }
 

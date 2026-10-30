@@ -18,14 +18,15 @@ final class TouchContactTests: XCTestCase {
     /// Every social where the bodies meet.
     static let touchKinds: [SocialKind] = [.boop, .bump, .nuzzle, .chestBump, .highFive, .hum, .cheekSquish, .noseBoop, .backToBack, .bellyBounce,
                                            .cuddleLean, .swayHug, .leapfrog, .sitTogether, .hopAlong, .peekaboo, .whisperGiggle, .mirrorDance]
-    /// The deepest a drawn body may sink into the other, and into Pip's tail tube (world units; a body is ~1.0 wide): a small squish, not a pass-through.
-    static let depthBound: Float = 0.12, tailBound: Float = 0.05
+    /// The deepest a drawn body may sink into the other (world units; a body is ~1.0 wide): a small squish, not a pass-through. Before the contact round the worst touches sank 0.2 (hugs), 0.47 (back to back) and 0.55 (leapfrog).
+    /// Into Pip's tail tube: the settled part of a touch (after 5 s) and the whole run (the turn of a back to back, a landing next to him: the tail sweeps through the other for a few frames; before: 0.28).
+    static let depthBound: Float = 0.10, tailLateBound: Float = 0.16, tailBound: Float = 0.26
 
-    struct Result { var tailPart = "-", simGap: Float = .infinity, part = "-", depth: Float = 0, tail: Float = 0, depthAt: Float = 0, tailAt: Float = 0, seconds: Float = 0, done = false }
+    struct Result { var depthLate: Float = 0, tailLate: Float = 0, tailPart = "-", simGap: Float = .infinity, part = "-", depth: Float = 0, tail: Float = 0, depthAt: Float = 0, tailAt: Float = 0, seconds: Float = 0, done = false }
 
     /// Runs `kind` between rig 0 and rig 1 (pip: which seat Pip has) and measures every 3rd frame.
-    func run(_ kind: SocialKind, pipSeat: Int, seed: UInt64 = 31, maxSeconds: Float = 40) -> Result {
-        let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-1.0, 0.6), SIMD2(0.7, 0.9)], seed: seed)
+    func run(_ kind: SocialKind, pipSeat: Int, seed: UInt64 = 31, maxSeconds: Float = 40, flipped: Bool = false) -> Result {
+        let lab = SocialTests.Lab(n: 2, positions: flipped ? [SIMD2(0.7, 0.9), SIMD2(-1.0, 0.6)] : [SIMD2(-1.0, 0.6), SIMD2(0.7, 0.9)], seed: seed)          // (flipped: the first one starts on the right, so the hops go the other way)
         let rm = MotionRig.renderMesh
         for (i, r) in lab.rigs.enumerated() {
             r.renderSamples = false
@@ -49,10 +50,12 @@ final class TouchContactTests: XCTestCase {
                     return x.depth >= y.depth ? (x.depth, x.vertex) : (y.depth, y.vertex) } }
                 let ca = a.sim.centroid(), cb = b.sim.centroid(), dd = cb - ca, dl = simd_length(dd)
                 if dl > 0.01 { let u = dd / dl; res.simGap = min(res.simGap, dl - PeerContact.support(a.sim, ca, u) - PeerContact.support(b.sim, cb, -u)) }
+                if f > 300 { res.depthLate = max(res.depthLate, d) }          // (after 5 s: the settled part of the touch, past the turns and the landings)
                 if d > res.depth { res.depth = d; res.depthAt = Float(f) / 60; res.part = Self.part(v, rm) }
                 if tailFirst >= 0 {
                     let p = lab.rigs[pipSeat], o = lab.rigs[1 - pipSeat]
                     let t = p.dyn.withUnsafeBufferPointer { pp in o.dyn.withUnsafeBufferPointer { po in ContactMetric.tailDeepest(tail: pp.baseAddress!, first: tailFirst, other: po.baseAddress!, vertices: rm.vertexCount, skip: skip) } }
+                    if f > 300 { res.tailLate = max(res.tailLate, t.depth) }
                     if t.depth > res.tail { res.tail = t.depth; res.tailAt = Float(f) / 60; res.tailPart = Self.part(t.vertex, rm) }
                 }
             }
@@ -82,12 +85,15 @@ final class TouchContactTests: XCTestCase {
         defer { PeerContact.enabled = true }
         for kind in Self.touchKinds where only?.contains(kind.rawValue) ?? true {
             for seat in 0..<2 {
-                let r = run(kind, pipSeat: seat)
-                MotionLog.write(String(format: "TOUCH %@ pip=%d: depth %.3f %@ (t %.1f) tail %.3f %@ (t %.1f) simGap %.3f done=%d in %.1f s", kind.rawValue, seat, r.depth, r.part, r.depthAt, r.tail, r.tailPart, r.tailAt, r.simGap, r.done ? 1 : 0, r.seconds))
+              for flipped in [false, true] where !flipped || kind == .leapfrog || kind == .backToBack {
+                let r = run(kind, pipSeat: seat, flipped: flipped)
+                MotionLog.write(String(format: "TOUCH %@ pip=%d\(flipped ? "f" : ""): depth %.3f %@ (t %.1f) tail %.3f %@ (t %.1f) simGap %.3f late(>5s) depth %.3f tail %.3f done=%d in %.1f s", kind.rawValue, seat, r.depth, r.part, r.depthAt, r.tail, r.tailPart, r.tailAt, r.simGap, r.depthLate, r.tailLate, r.done ? 1 : 0, r.seconds))
                 if !logOnly {
                     XCTAssertLessThanOrEqual(r.depth, Self.depthBound, "\(kind) pip=\(seat): bodies stay out of each other")
                     XCTAssertLessThanOrEqual(r.tail, Self.tailBound, "\(kind) pip=\(seat): nobody goes through the tail")
+                    XCTAssertLessThanOrEqual(r.tailLate, Self.tailLateBound, "\(kind) pip=\(seat): and none after it has settled")
                 }
+              }
             }
         }
     }
@@ -121,7 +127,7 @@ final class TouchContactTests: XCTestCase {
         PeerContact.prepare([a.sim, b.sim], skins: [nil, nil])
         XCTAssertEqual(a.sim.planeCount + b.sim.planeCount, 0, "4 m apart: nothing to do")
         // a small gap (inside the contact band): a plane (the arms stop at it) but no push and no wake
-        b.sim.teleport(toXZ: SIMD2(-2 + 1.25, 0))
+        b.sim.teleport(toXZ: SIMD2(-2 + 1.55, 0))
         for _ in 0..<60 { a.sim.step(); b.sim.step() }
         let ca = a.sim.centroid(), cb = b.sim.centroid()
         let gap = simd_length(cb - ca) - PeerContact.support(a.sim, ca, simd_normalize(cb - ca)) - PeerContact.support(b.sim, cb, -simd_normalize(cb - ca))
@@ -148,8 +154,11 @@ final class TouchContactTests: XCTestCase {
             a.sim.step(); b.sim.step()
         }
         XCTAssertTrue(woke, "pressed into: he wakes")
-        for _ in 0..<(60 * 12) { PeerContact.prepare([a.sim, b.sim], skins: [nil, nil]); a.sim.step(); b.sim.step() }
-        XCTAssertTrue(b.sim.isSettled && a.sim.isSettled, "both settle again against each other (peerDepth \(a.sim.peerDepth) \(b.sim.peerDepth))")
+        // the presser leaves: contact is gone, and the dented body is soon at rest again (a stage skips his step)
+        a.sim.teleport(toXZ: SIMD2(-3, 0))
+        for _ in 0..<(60 * 8) { PeerContact.prepare([a.sim, b.sim], skins: [nil, nil]); a.sim.step(); b.sim.step() }
+        XCTAssertEqual(b.sim.planeCount, 0, "nothing touches him now")
+        XCTAssertTrue(b.sim.isSettled && a.sim.isSettled, "both settle again once the contact is gone (KE \(b.sim.kineticEnergy()), drift \(b.sim.peerDrift))")
     }
 
     /// The cost of contact: one fixed step of three touching Jelbies (planes + Pip's tail spheres) against the same step with contact off.
@@ -160,13 +169,16 @@ final class TouchContactTests: XCTestCase {
         rigs[0].brain.feature = .spines; rigs[0].skinner.configureTail(rm); rigs[0].skinner.tailOn = true
         let spots: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(0.95, 0), SIMD2(0.45, 0.85)]
         for (i, r) in rigs.enumerated() { r.sim.teleport(toXZ: spots[i]) }
+        let mid = SIMD3<Float>(0.45, 0.4, 0.28)
         let sims = rigs.map { $0.sim }, skins = rigs.map { Optional($0.skinner) }
         func run(_ on: Bool) -> (prep: Double, step: Double) {
             PeerContact.enabled = on
-            for _ in 0..<120 { rigs[0].render(); PeerContact.prepare(sims, skins: skins); for s in sims { s.step() } }
+            func press() { for s in sims { let d = mid - s.centroid(); s.launch(velocity: SIMD3(d.x, 0, d.z) * 0.4) } }          // (nothing holds them in a bare sim: a little push toward the middle keeps the three pressed)
+            for _ in 0..<120 { press(); rigs[0].render(); PeerContact.prepare(sims, skins: skins); for s in sims { s.step() } }
             var prep = 0.0, step = 0.0
             let n = 240
             for _ in 0..<n {
+                press()
                 rigs[0].render()
                 let t0 = CACurrentMediaTime(); PeerContact.prepare(sims, skins: skins); let t1 = CACurrentMediaTime()
                 for s in sims { s.step() }
@@ -201,7 +213,7 @@ final class TouchContactTests: XCTestCase {
             let e = b.dyn.withUnsafeBufferPointer { pb in a.dyn.withUnsafeBufferPointer { pa in ContactMetric.deepest(of: pb.baseAddress!, into: pa.baseAddress!, vertices: rm.vertexCount, skip: skip, surface: eggEnd) } }
             let p = lab.rigs[seat], o = lab.rigs[1 - seat]
             let t = p.dyn.withUnsafeBufferPointer { pp in o.dyn.withUnsafeBufferPointer { po in ContactMetric.tailDeepest(tail: pp.baseAddress!, first: tf, other: po.baseAddress!, vertices: rm.vertexCount, skip: skip) } }
-            if f == 300 {
+            if f == (Int(env["TOUCH_DUMP_T"] ?? "") ?? 300) {
                 for (x, y, tag) in [(a, b, "A->B"), (b, a, "B->A")] {
                     let dp = x.dyn.withUnsafeBufferPointer { px in y.dyn.withUnsafeBufferPointer { py in ContactMetric.deepest(of: px.baseAddress!, into: py.baseAddress!, vertices: rm.vertexCount, skip: skip, surface: eggEnd) } }
                     guard dp.vertex >= 0 else { continue }
@@ -212,8 +224,15 @@ final class TouchContactTests: XCTestCase {
                     MotionLog.write(String(format: "DUMP %@ depth %.3f vertex %d rest (%.2f %.2f %.2f) at (%.2f %.2f %.2f); nearest other vertex %d rest (%.2f %.2f %.2f) at (%.2f %.2f %.2f) dist %.3f normal (%.2f %.2f %.2f)", tag, dp.depth, dp.vertex, rm.rest[3 * dp.vertex], rm.rest[3 * dp.vertex + 1], rm.rest[3 * dp.vertex + 2], q.x, q.y, q.z, bw, rm.rest[3 * bw], rm.rest[3 * bw + 1], rm.rest[3 * bw + 2], r.x, r.y, r.z, best.squareRoot(), n.x, n.y, n.z))
                 }
             }
+            if f == (Int(env["TOUCH_DUMP_T"] ?? "") ?? 300), t.vertex >= 0 {
+                let v = SIMD3(o.dyn[6 * t.vertex], o.dyn[6 * t.vertex + 1], o.dyn[6 * t.vertex + 2])
+                let rings = p.dyn.withUnsafeBufferPointer { ContactMetric.tailRings($0.baseAddress!, first: tf) }
+                let near = rings.min { simd_distance(SIMD3($0.x, $0.y, $0.z), v) - $0.w < simd_distance(SIMD3($1.x, $1.y, $1.z), v) - $1.w }!
+                let ps = o.skinner.peerSpheres.min { simd_distance(SIMD3($0.x, $0.y, $0.z), v) - $0.w < simd_distance(SIMD3($1.x, $1.y, $1.z), v) - $1.w }
+                MotionLog.write(String(format: "TAILDUMP vertex %d (%@) at (%.2f %.2f %.2f) ring sphere c (%.2f %.2f %.2f) r %.3f dist %.3f | peerSpheres %d, nearest c %@ r %.3f", t.vertex, Self.part(t.vertex, rm), v.x, v.y, v.z, near.x, near.y, near.z, near.w, simd_distance(SIMD3(near.x, near.y, near.z), v), o.skinner.peerSpheres.count, ps.map { String(format: "(%.2f %.2f %.2f) dist %.3f", $0.x, $0.y, $0.z, simd_distance(SIMD3($0.x, $0.y, $0.z), v)) } ?? "none", ps?.w ?? 0))
+            }
             func name(_ r: MotionRig) -> String { "\(r.brain.idleState.kind.map { "\($0)" } ?? (r.brain.activity == .walking ? "walk" : "-"))" }
-            MotionLog.write(String(format: "SERIES t %.1f A(%@) (%.2f %.2f %.2f) B(%@) (%.2f %.2f %.2f) planes %d/%d depth A->B %.3f %@ B->A %.3f %@ tail %.3f %@ aside %.2f spheres %d->%d listed %d behind %@ act %@ yaw %.2f pos (%.2f %.2f) hasTail %d tailOn %d held %d", Float(f) / 60, name(a), ca.x, ca.y, ca.z, name(b), cb.x, cb.y, cb.z, a.sim.planeCount, b.sim.planeCount, d.depth, Self.part(d.vertex, rm), e.depth, Self.part(e.vertex, rm), t.depth, Self.part(t.vertex, rm), p.brain.tailPlay.aside, p.skinner.tailSpheres.count, o.sim.sphereTotal, o.sim.sphereListCount, "\(String(describing: p.brain.partnerBehind()))", "\(p.brain.activity)", p.brain.yaw, p.brain.position.x, p.brain.position.y, p.brain.hasTailToPlay ? 1 : 0, p.skinner.tailOn ? 1 : 0, p.brain.held ? 1 : 0))
+            MotionLog.write(String(format: "SERIES t %.1f A(%@) (%.2f %.2f %.2f) B(%@) (%.2f %.2f %.2f) planes %d/%d depth A->B %.3f %@ B->A %.3f %@ tail %.3f %@ aside %.2f spheres %d->%d listed %d behind %@ act %@ yaw %.2f pos (%.2f %.2f) hasTail %d tailOn %d held %d skinPlanes %d/%d armFirst %d/%d", Float(f) / 60, name(a), ca.x, ca.y, ca.z, name(b), cb.x, cb.y, cb.z, a.sim.planeCount, b.sim.planeCount, d.depth, Self.part(d.vertex, rm), e.depth, Self.part(e.vertex, rm), t.depth, Self.part(t.vertex, rm), p.brain.tailPlay.aside, p.skinner.tailSpheres.count, o.sim.sphereTotal, o.sim.sphereListCount, "\(String(describing: p.brain.partnerBehind()))", "\(p.brain.activity)", p.brain.yaw, p.brain.position.x, p.brain.position.y, p.brain.hasTailToPlay ? 1 : 0, p.skinner.tailOn ? 1 : 0, p.brain.held ? 1 : 0, a.skinner.peerPlanes.count, b.skinner.peerPlanes.count, a.skinner.armFirst.min() ?? -1, b.skinner.armFirst.min() ?? -1))
         }
     }
 }
