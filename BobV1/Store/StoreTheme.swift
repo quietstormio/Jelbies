@@ -200,7 +200,7 @@ enum StoreThumb {
     }
 
     /// The cached thumbnail of a mesh (one render per key).
-    static func image(_ key: String, mesh: RoomMesh, glass: RoomMesh? = nil, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil) -> UIImage? {
+    static func image(_ key: String, mesh: RoomMesh, glass: RoomMesh? = nil, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil, tight: Bool = false) -> UIImage? {
         if let c = cache[key] { return c }
         guard !mesh.vertices.isEmpty, let device else { return nil }
         let scene = SCNScene()
@@ -209,6 +209,7 @@ enum StoreThumb {
         for v in mesh.vertices + (glass?.vertices ?? []) { let p = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, p); hi = simd_max(hi, p) }
         if let glass, !glass.vertices.isEmpty { node.addChildNode(glassNode(glass)) }          // a drink's glass and what is seen through it
         var c = (lo + hi) / 2, r = max(simd_length(hi - lo) / 2, 0.01)
+        if tight { r = max(max(hi.x - lo.x, hi.y - lo.y), hi.z - lo.z) / 2 * 1.18 }          // a compact pile or a flat slice: frame by its longest side, not its diagonal, so it fills the card
         if let focus { c = focus.0; r = focus.1 }
         node.pivot = SCNMatrix4MakeTranslation(c.x, c.y, c.z)
         node.eulerAngles = SCNVector3(0, yaw, 0)
@@ -241,7 +242,13 @@ enum StoreThumb {
         if let w = item.wear { return w.slot == .face || w.slot == .head ? (0.45, 0.12) : w.slot == .hands ? (0.35, 0.2) : w.slot == .feet ? (0.55, 0.36) : w.anchor == .back ? (3.5, 0.2) : (0.5, 0.18) }
         if item.decor != nil { return (0.5, 0.5) }
         if item.id == "taco" { return (0.38, 0.42) }
+        if item.id == "pizza" { return (0.3, 0.8) }          // a flat slice: from higher up so it fills the card
         return (0.55, 0.42)
+    }
+    /// A free-standing food or drink's thumbnail (water, soda): the same render as a store item's.
+    static func image(for c: Consumable) -> UIImage? {
+        let a = (yaw: Float(0.55), pitch: Float(0.42))
+        return image(c.id, mesh: foodMesh(c), glass: glassMesh(c), yaw: a.yaw, pitch: a.pitch)
     }
     static func image(for item: StoreItem) -> UIImage? {
         if let r = item.room { return UIImage(named: "room_thumb_\(r.rawValue)") }
@@ -249,7 +256,26 @@ enum StoreThumb {
         let a = angles(for: item)
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
         let glass = item.food.flatMap { Consumables.with(id: $0) }.flatMap { glassMesh($0) }
-        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch)
+        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch, tight: item.id == "berries" || item.id == "pizza")
+    }
+}
+
+/// A consumable's picture (water, soda) on the same card as `ItemArt`.
+struct ConsumableArt: View {
+    let consumable: Consumable
+    var size: CGFloat = 96
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(consumable.kind == .drink ? SK.sky.opacity(0.4) : SK.honey.opacity(0.55))
+            if let img = StoreThumb.image(for: consumable) {
+                Image(uiImage: img).resizable().scaledToFit().padding(size * 0.06)
+            } else {
+                Image(systemName: UIImage(systemName: consumable.symbol) != nil ? consumable.symbol : "drop.fill")
+                    .font(.system(size: size * 0.42, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

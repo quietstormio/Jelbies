@@ -26,13 +26,13 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(BagSheet.BagTab.rooms.rawValue, "Rooms")
         let care = care3()
         XCTAssertTrue(care.store.ownsRoom(.home), "the home room is always in the Bag's Rooms")
-        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
+        XCTAssertEqual(HUDMenu.items(.group).count, 5)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
     }
 
     func testGroupModeWhenNothingHighlighted() {
         let care = care3()
         XCTAssertEqual(HUDMenu.mode(care), .group)
-        XCTAssertEqual(HUDMenu.items(.group), [.feed, .snacks, .drink, .play, .decor, .bedtime])
+        XCTAssertEqual(HUDMenu.items(.group), [.feed, .drink, .play, .decor, .bedtime])
     }
 
     func testOneJelbieCanBeHighlightedForTheIndividualMenu() {
@@ -96,7 +96,6 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(HUDMenu.compete(.show, id: 2), .town(.show, who: 2))
         XCTAssertEqual(HUDMenu.perform(.feed, .group, care: care), .picker(.food))
         XCTAssertEqual(HUDMenu.perform(.drink, .group, care: care), .picker(.drink))
-        XCTAssertEqual(HUDMenu.perform(.snacks, .group, care: care), .snacks)
     }
 
     func testBedtimeCallsBedtimeAll() {

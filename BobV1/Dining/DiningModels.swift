@@ -316,6 +316,26 @@ nonisolated enum DiningModels {
         ellipsoid(b, centre: c + SIMD3(0, 0.054 * s, 0), rx: 0.032 * s, ry: 0.013 * s, color: leaf, rings: 3, segments: 8)
     }
 
+    /// A glossy heap of six berries (raspberry, strawberry and deep blueberry reds / blues) with green caps: the Shop / Feed thumbnail. The in-game berries are
+    /// pastel on purpose (they are tiny on a plate); at card size they need real colour to read as berries at once.
+    static func berryCluster(palette p: ConsumablePalette, scale s: Float) -> RoomMesh {
+        let b = RoomMeshBuilder(); b.material = .plain
+        let rasp = Consumables.srgb(0.86, 0.13, 0.27), straw = Consumables.srgb(0.93, 0.22, 0.18), blue = Consumables.srgb(0.24, 0.30, 0.72), deep = Consumables.srgb(0.17, 0.20, 0.52)
+        let leaf = Consumables.srgb(0.28, 0.66, 0.28)
+        let shine = Consumables.srgb(1.0, 0.93, 0.93)
+        // (x, y, z, colour): three on the bottom, two above them, one on top
+        let spots: [(Float, Float, Float, SIMD3<Float>)] = [
+            (-0.075, 0.0, 0.035, rasp), (0.075, 0.0, 0.03, blue), (0.0, 0.0, -0.075, straw),
+            (-0.04, 0.085, -0.02, deep), (0.045, 0.085, 0.0, rasp), (0.0, 0.17, 0.0, straw)]
+        for q in spots {
+            let c = SIMD3(q.0, q.1, q.2) * s
+            berry(b, centre: c, color: q.3, leaf: leaf, scale: s * 1.1)
+            // the glossy highlight: a small bright bead on the lit side
+            ellipsoid(b, centre: c + SIMD3(-0.02, 0.03, 0.045) * s, rx: 0.016 * s, ry: 0.011 * s, color: shine, rings: 3, segments: 8)
+        }
+        return b.mesh
+    }
+
     /// Standalone berry for a held item (centred on the origin).
     static func heldBerry(color i: Int, scale s: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain

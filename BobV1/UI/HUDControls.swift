@@ -1,7 +1,7 @@
 //
 //  HUDControls.swift
 //  The one main HUD control (the paw, side of the screen) as a pure model: with nobody highlighted it serves the GROUP
-//  (Feed, Snacks, Drink, Play, Decor, Bedtime); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
+//  (Feed, Drink, Play, Decor, Bedtime); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
 //  CareMenu draws it; the tests drive it headless.
 //
 
@@ -10,12 +10,12 @@ import SwiftUI
 enum HUDMode: Equatable { case group, individual(Int) }
 
 enum HUDItem: String, CaseIterable {           // the raw value is the accessibility identifier
-    case feed = "care-feed", snacks = "care-snacks", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
+    case feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
     case come = "hud-come", dress = "hud-dress", clean = "care-clean", train = "hud-train", compete = "hud-compete"
 }
 
 enum HUDRoute: Equatable {
-    case none, picker(ConsumableKind), snacks, bag(BagSheet.BagTab, who: Int), town(TownScreen, who: Int), competeChips
+    case none, picker(ConsumableKind), bag(BagSheet.BagTab, who: Int), town(TownScreen, who: Int), competeChips
 }
 
 @MainActor
@@ -29,7 +29,7 @@ enum HUDMenu {
     /// Top to bottom. Six rows in the group menu, five in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
-        case .group: return [.feed, .snacks, .drink, .play, .decor, .bedtime]
+        case .group: return [.feed, .drink, .play, .decor, .bedtime]
         case .individual: return [.dress, .clean, .train, .compete, .come]
         }
     }
@@ -40,7 +40,6 @@ enum HUDMenu {
         switch i {
         case .feed: return name.map { "Feed \($0)" } ?? "Feed"
         case .come: return "Come here"
-        case .snacks: return "Snacks"
         case .drink: return name.map { "Water \($0)" } ?? "Drink"
         case .play: return "Play"
         case .decor: return "Decor"
@@ -66,7 +65,6 @@ enum HUDMenu {
         switch i {
         case .feed: return "fork.knife"
         case .come: return sym("hand.wave.fill", "hand.raised.fill")
-        case .snacks: return "bag.fill"
         case .drink: return CareMenu.waterSymbol
         case .play: return sym("teddybear.fill", "soccerball")
         case .decor: return sym("sofa.fill", "chair.lounge.fill")
@@ -81,7 +79,7 @@ enum HUDMenu {
     static func enabled(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> Bool {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
-        case .feed, .snacks, .drink: return !care.trayOut && !care.bath.active
+        case .feed, .drink: return !care.trayOut && !care.bath.active
         case .clean: return care.canClean(jelly: id)
         case .train: return !care.focus.isActive && !care.bath.active && !care.tripActive
         case .come: return care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy
@@ -96,7 +94,7 @@ enum HUDMenu {
         guard !enabled(i, mode, care: care) else { return nil }
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
-        case .feed, .snacks, .drink: return care.trayOut ? "Food is already out" : "Not while cleaning"
+        case .feed, .drink: return care.trayOut ? "Food is already out" : "Not while cleaning"
         case .clean:
             if care.bath.active { return "Already cleaning" }
             if care.trayOut { return "Not while food is out" }
@@ -127,7 +125,6 @@ enum HUDMenu {
         switch i {
         case .feed: return .picker(.food)
         case .drink: return .picker(.drink)
-        case .snacks: return .snacks
         case .play: return .bag(.toys, who: id)
         case .decor: return .bag(.furniture, who: id)
         case .dress: return .bag(.wear, who: id)

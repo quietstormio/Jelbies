@@ -1,6 +1,6 @@
 //
 //  ShopUI.swift
-//  The Shop: a full screen with a pink wavy header, tabs (Snacks / Care / Wear / Tricks / Furniture / Toys), two-column item cards
+//  The Shop: a full screen with a pink wavy header, tabs (Food / Care / Wear / Tricks / Furniture / Toys), two-column item cards
 //  (picture, perk chip, price, owned count) and a bottom sheet per item (what it does, condition chips, quantity, Buy).
 //  Drops are earned only; there is no purchase of Drops anywhere.
 //
@@ -8,11 +8,11 @@
 import SwiftUI
 
 enum ShopTab: String, CaseIterable, Identifiable {
-    case snacks = "Snacks", drinks = "Drinks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys", rooms = "Rooms"
+    case food = "Food", drinks = "Drinks", care = "Care", wear = "Wear", tricks = "Tricks", furniture = "Furniture", toys = "Toys", rooms = "Rooms"
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .snacks: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
+        case .food: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
         }
     }
     var items: [StoreItem] {
@@ -33,7 +33,7 @@ struct ShopScreen: View {
     var who: Int
     var back: () -> Void
     var goHome: () -> Void = {}          // leaves the Town / Shop (a room move starts its fade at once)
-    @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .snacks          // (-StoreTab decor: capture aid)
+    @State private var tab: ShopTab = ShopTab.named(UserDefaults.standard.string(forKey: "StoreTab")) ?? .food          // (-StoreTab decor: capture aid)
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
     @Environment(\.dynamicTypeSize) private var dts

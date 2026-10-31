@@ -72,7 +72,7 @@ final class A11yUITests: XCTestCase {
         paw.tap()
         XCTAssertTrue(app.buttons["hud-bedtime"].waitForExistence(timeout: 5))
         XCTAssertEqual(paw.value as? String, "expanded")
-        for id in ["care-feed", "care-snacks", "care-water", "hud-play", "hud-decor", "hud-bedtime"] { XCTAssertFalse(app.buttons[id].label.isEmpty, id) }
+        for id in ["care-feed", "care-water", "hud-play", "hud-decor", "hud-bedtime"] { XCTAssertFalse(app.buttons[id].label.isEmpty, id) }
         overlay(app, "paw_group_portrait")
     }
 

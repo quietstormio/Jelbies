@@ -175,7 +175,7 @@ struct TownView: View {
         let visit = care.guestBook.visit.map { v in care.parkBook.visitor(v.visitor).map { v.arrived ? "\($0.name) is visiting" : "\($0.name) is coming over" } ?? "Ask a friend over" } ?? "Ask a friend over"
         let full = JellyRoster.savedIDs().count >= JellyRoster.maxCount
         return [
-            Place(id: "town-shop", title: "Shop", sub: "Snacks, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
+            Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
             Place(id: "town-track", title: "Track", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
             Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
             Place(id: "town-cafe", title: "Café", sub: "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
@@ -419,19 +419,19 @@ struct BagSheet: View {
     @Environment(\.verticalSizeClass) private var vsc
     @State private var tab: BagTab
 
-    /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Snacks.
+    /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Food.
     init(care: GameCare, who: Int, tab: BagTab? = nil, close: @escaping () -> Void) {
         self.care = care; self._who = State(initialValue: who); self.close = close
-        self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .snacks)          // (-StoreTab decor: capture aid)
+        self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .food)          // (-StoreTab decor: capture aid)
     }
 
-    enum BagTab: String, CaseIterable, Identifiable { case snacks = "Snacks", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
+    enum BagTab: String, CaseIterable, Identifiable { case food = "Food", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
     private var tabs: [BagTab] { BagTab.allCases }
     private func entries(_ t: BagTab) -> [StoreItem] {
         switch t {
-        case .snacks: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
+        case .food: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
         case .wear: return StoreCatalog.items.filter { $0.isWearable && book.owns($0) && (wearSlot == nil || $0.wear?.slot == wearSlot) }
         case .furniture: return StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }
         case .toys: return StoreCatalog.decorItems(.toys).filter { book.count($0.id) > 0 }
@@ -474,7 +474,7 @@ struct BagSheet: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("bag-arrange")
                 }
                 if list.isEmpty, tab != .rooms {
-                    Text(tab == .snacks ? "No snacks yet. The Shop has plenty." : tab == .furniture ? "No furniture yet. Beanbags, sofas and more are in the Shop." : tab == .toys ? "No toys yet. Balls, ducks and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
+                    Text(tab == .food ? "No food yet. The Shop has plenty." : tab == .furniture ? "No furniture yet. Beanbags, sofas and more are in the Shop." : tab == .toys ? "No toys yet. Balls, ducks and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
                         .frame(maxWidth: .infinity, minHeight: 80)
                 }
                 if tab == .rooms { roomsList } else {
