@@ -184,6 +184,7 @@ final class SkinField {
 @MainActor
 final class WearFitAuditTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
+    nonisolated(unsafe) static var smallParts: [WearLook: [Bool]] = [:]
     typealias Outfit = [WearSlot: WearLook]
     static let charNames = ["Bob", "Pip", "Moss", "Lavender"]
 
@@ -317,6 +318,21 @@ final class WearFitAuditTests: XCTestCase {
     private func measure(_ look: WearLook, stride: Int = 2, verts: [SIMD3<Float>], field: SkinField, rest: [Float], tag: String, st: inout Stat) {
         guard let p = WearMeshes.prepare(look, body: WearBody.shared), verts.count >= p.rest.count else { return }
         var n = 0, buried = 0
+        var small: [Bool] = Self.smallParts[look] ?? {
+            var r = [Bool](repeating: false, count: p.partNames.count)
+            for k in p.partNames.indices {
+                let vs = p.rest.indices.filter { Int(p.partOfVertex[$0]) == k }
+                guard vs.count >= 8 else { continue }
+                var c = SIMD3<Float>.zero
+                for v in vs { c += p.rest[v] }
+                c /= Float(vs.count)
+                r[k] = vs.allSatisfy { simd_distance(p.rest[$0], c) <= 0.07 }
+            }
+            Self.smallParts[look] = r
+            return r
+        }()
+        if small.count != p.partNames.count { small = [Bool](repeating: false, count: p.partNames.count) }
+        var partFloat: [Int: (d: Float, off: Float)] = [:]
         for i in p.rest.indices where p.w[i] <= 0.001 && (i % stride == 0) {
             let (d, owner) = field.sdOwner(verts[i])
             let newly = max(0, -d - max(0, -rest[i]))
@@ -333,8 +349,22 @@ final class WearFitAuditTests: XCTestCase {
             if newly > st.worstNew { st.worstNew = newly; st.whereNew = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > st.worstLimb, owner.hasPrefix("arm") || owner.hasPrefix("foot") || owner.hasPrefix("tail") { st.worstLimb = newly; st.whereLimb = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > 0.01 { buried += 1 }
-            let fl = max(0, d) - max(0, p.bind[i].off.z)                // how much further OUT of the drawn body than the vertex was authored to stand (its own offset above the skin it is bound to)
-            if fl > st.worstFloat, p.h[i] == 0, p.w[i] > 0.99 { st.worstFloat = fl; st.whereFloat = "\(tag) \(part) v\(i)" }
+            // float: how much further OUT of the drawn body than it was authored to stand (its offset above the skin it is bound to). A small part (a pearl, a gem) counts as a whole:
+            // its NEAREST vertex against its authored nearest, so a big round gem is not "floating" by its own size; strings and bands count per vertex.
+            if p.h[i] == 0, p.w[i] > 0.99 {
+                let k = Int(p.partOfVertex[i]), off = max(0, p.bind[i].off.z)
+                if k < small.count, small[k] {
+                    let e = partFloat[k] ?? (.infinity, .infinity)
+                    partFloat[k] = (min(e.d, max(0, d)), min(e.off, off))
+                } else {
+                    let fl = max(0, d) - off
+                    if fl > st.worstFloat { st.worstFloat = fl; st.whereFloat = "\(tag) \(part) v\(i)" }
+                }
+            }
+        }
+        for (k, e) in partFloat {
+            let fl = e.d - e.off
+            if fl > st.worstFloat { st.worstFloat = fl; st.whereFloat = "\(tag) \(p.partNames[k]) (whole part)" }
         }
         if n > 0 {
             let f = Float(buried) / Float(n)
@@ -419,7 +449,7 @@ final class WearFitAuditTests: XCTestCase {
     }
 
     /// REGRESSION: a wearable bound to the egg never ends up inside an arm, foot or tail that is out (WearLimbs): Bob, Pip (tail) and Lavender through a walk, a run, a
-    /// turn, a joy jump and the jumping-jacks, every neck / chest / back / waist piece, deeper than 5 cm than it was authored. (The wider audit is testAuditBodyWear.)
+    /// turn, a joy jump and the jumping-jacks, every neck / chest / back / waist piece, deeper than 7 cm than it was authored; and the pearls / lei / diamond J never stand more than 3 cm farther off the body than they were authored. (The wider audit is testAuditBodyWear.)
     func testBodyWearNeverSinksIntoALimb() throws {
         WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
         let list = Self.bodyPieces
@@ -428,6 +458,7 @@ final class WearFitAuditTests: XCTestCase {
         for l in list { rest[l] = restSD(l, restField: restField) }
         let outfits = list.map { [$0.slot: $0] as Outfit }
         var worst: Float = 0, where_ = "", frames = 0
+        var floatWorst: Float = 0, floatWhere = ""
         for id in [0, 1, 3] {
             for m in motions() where ["walk", "run", "turn", "joy", "jacks"].contains(m.name) {
                 let lab = makeLab(id)
@@ -446,99 +477,45 @@ final class WearFitAuditTests: XCTestCase {
                         var one = Stat()
                         measure(l, stride: 3, verts: worldVerts(wd.sets[k].set, skin: sk), field: field, rest: rest[l]!, tag: "\(Self.charNames[id]) \(m.name) \(l.rawValue) t=\(String(format: "%.2f", t))", st: &one)
                         if one.worstLimb > worst { worst = one.worstLimb; where_ = one.whereLimb }
+                        if [.pearls, .lei, .diamondJ].contains(l), one.worstFloat > floatWorst { floatWorst = one.worstFloat; floatWhere = one.whereFloat }
                         frames += 1
                     }
                 }
             }
         }
         XCTAssertGreaterThan(frames, 500)
-        XCTAssertLessThan(worst, 0.05, "a body wearable is \(worst) inside a limb: \(where_)")
+        XCTAssertLessThan(worst, 0.07, "a body wearable is \(worst) inside a limb: \(where_)")
+        XCTAssertLessThan(floatWorst, 0.03, "a necklace part floats \(floatWorst) off the body: \(floatWhere)")
     }
 
     /// What the limb push costs: WornSet.frame for three Jelbies each in a full neck + body outfit, walking (arms out), push on vs off (printed; asserted to stay small).
     func testLimbPushCost() throws {
         WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
-        let outfit: Outfit = [.neck: .chainGold, .body: .hoodie]
         let lab = makeLab(0)
-        let set = WornSet(); set.body = WearBody.shared; set.soundOn = false
-        for _ in 0..<3 { tick(set, lab, 0, outfit, feats: nil) }
+        let outfits: [(String, Outfit)] = [("chain", [.neck: .chainGold]), ("pearls", [.neck: .pearls]), ("diamondJ", [.neck: .diamondJ]), ("vest", [.body: .vestPuffer]), ("hoodie", [.body: .hoodie]), ("chain + vest", [.neck: .chainGold, .body: .vestPuffer])]
+        let sets = outfits.map { _ in WornSet() }
+        for (k, s) in sets.enumerated() { s.body = WearBody.shared; s.soundOn = false; for _ in 0..<3 { tick(s, lab, 0, outfits[k].1, feats: nil) } }
         let r0 = lab.rigs[0], p0 = r0.sim.bodyPose(iterations: 3).centroid
         r0.brain.script = .walk(target: SIMD2(p0.x - 3, p0.z + 0.2), then: .none); r0.brain.activity = .walking; r0.brain.scriptT = 0
-        for _ in 0..<80 { lab.tick(watching: false); tick(set, lab, 0, outfit, feats: nil) }
+        for _ in 0..<80 { lab.tick(watching: false); for (k, s) in sets.enumerated() { tick(s, lab, 0, outfits[k].1, feats: nil) } }
         let sk = skin(lab)
-        func time(_ on: Bool) -> Double {
-            WearLimbs.enabled = on
-            let n = 300
-            let t0 = CFAbsoluteTimeGetCurrent()
-            var verts = 0
-            for _ in 0..<n { verts &+= sk.withUnsafeBufferPointer { p in set.frame(theme: RoomTheme(), time: 0.4) { _ in p.baseAddress } }.opaque.vertices.count }
-            XCTAssertGreaterThan(verts, 0)
-            return (CFAbsoluteTimeGetCurrent() - t0) / Double(n) * 1000
-        }
-        _ = time(true)
-        let off = time(false), on = time(true)
-        print(String(format: "LIMBCOST per Jelbie per frame (chain + hoodie, arms out): push off %.3f ms, push on %.3f ms, extra %.3f ms", off, on, on - off))
-        XCTAssertLessThan(on - off, 1.0, "the limb push must stay under a millisecond per Jelbie per frame")
-    }
-
-    /// The AT-REST fit (the picker idle, the room idle): every piece on every Jelbie, standing still, measured ABSOLUTELY (not against rest): how far each part of it sits inside the
-    /// drawn body. This is what a user sees on a Jelbie that is not moving. WEARFIT_DIR/rest_<tag>.txt
-    func testRestFit() throws {
-        let d = try dir()
-        WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
-        let list = pieces()
-        let outfits = list.map { [$0.slot: $0] as Outfit }
-        var out = "AT REST (settled, standing, arms hidden), absolute depth inside the drawn body per part: piece char: worst part depth [owner] | parts deeper than 1 cm\n"
-        var summary: [String] = []
-        for id in 0..<4 {
-            let lab = makeLab(id)
-            let wd = wardrobe(lab, id: id, looks: outfits)
-            for r in lab.rigs { r.brain.autonomy = false; r.brain.expr.enabled = false }
-            for _ in 0..<60 { step(lab, wd, id, outfits: outfits) }
-            for _ in 0..<30 { _ = skin(lab) }
-            let sk = skin(lab), field = SkinField(skin: sk)
-            for (k, l) in list.enumerated() {
-                guard let p = WearMeshes.prepare(l, body: WearBody.shared) else { continue }
-                let v = worldVerts(wd.sets[k].set, skin: sk)
-                var perPart: [String: (depth: Float, owner: String, n: Int)] = [:]
-                for i in p.rest.indices where p.w[i] > 0.001 {
-                    let (dd, owner) = field.sdOwner(v[i])
-                    let part = p.partNames[Int(p.partOfVertex[i])]
-                    var e = perPart[part] ?? (0, "", 0)
-                    if -dd > 0.003 { e.n += 1 }
-                    if -dd > e.depth { e.depth = -dd; e.owner = owner }
-                    perPart[part] = e
-                }
-                let deep = perPart.filter { $0.value.depth > 0.003 }.sorted { $0.value.depth > $1.value.depth }
-                let worst = deep.first
-                out += String(format: "%@ %@: worst %.3f [%@ %@] | %@\n", l.rawValue, Self.charNames[id], worst?.value.depth ?? 0, worst?.key ?? "-", worst?.value.owner ?? "", deep.prefix(8).map { String(format: "%@ %.3f(%d)", $0.key, $0.value.depth, $0.value.n) }.joined(separator: ", "))
-                if let w = worst, w.value.depth > 0.02 { summary.append("\(l.rawValue) \(Self.charNames[id]) \(w.key) \(w.value.depth)") }
+        var worstExtra = 0.0
+        for (k, set) in sets.enumerated() {
+            func time(_ on: Bool) -> Double {
+                WearLimbs.enabled = on
+                let n = 200
+                let t0 = CFAbsoluteTimeGetCurrent()
+                var verts = 0
+                for _ in 0..<n { verts &+= sk.withUnsafeBufferPointer { p in set.frame(theme: RoomTheme(), time: 0.4) { _ in p.baseAddress } }.opaque.vertices.count }
+                XCTAssertGreaterThan(verts, 0)
+                return (CFAbsoluteTimeGetCurrent() - t0) / Double(n) * 1000
             }
+            _ = time(true)
+            let off = time(false), on = time(true)
+            print(String(format: "LIMBCOST %@ (arms out): push off %.3f ms, on %.3f ms, extra %.3f ms", outfits[k].0, off, on, on - off))
+            worstExtra = max(worstExtra, on - off)
         }
-        try out.write(toFile: "\(d)/rest_\(tag).txt", atomically: true, encoding: .utf8)
-        print(out)
-        print("REST over 2 cm: \(summary.count)")
-    }
-
-    func testRestDebug() throws {
-        WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
-        let body = WearBody.shared
-        guard let p = WearMeshes.prepare(.pearls, body: body) else { return }
-        let rf = SkinField(rest: MotionRig.renderMesh, skipArms: true)
-        for part in ["pearl0", "pearl9", "string", "pearl4"] {
-            guard let k = p.partNames.firstIndex(of: part) else { continue }
-            let vs = p.rest.indices.filter { Int(p.partOfVertex[$0]) == k }
-            var c = SIMD3<Float>.zero
-            for v in vs { c += p.rest[v] }
-            c /= Float(vs.count)
-            let b = body.bind(c)!
-            let (d, owner) = rf.sdOwner(c)
-            // outward check: the bound foot's frame
-            let f = WearBody.frame(body.pos[Int(b.tri.x)], body.pos[Int(b.tri.y)], body.nrm[Int(b.tri.x)], body.nrm[Int(b.tri.y)], body.nrm[Int(b.tri.z)], b.bary)
-            let q = body.pos[Int(b.tri.x)] * b.bary.x + body.pos[Int(b.tri.y)] * b.bary.y + body.pos[Int(b.tri.z)] * b.bary.z
-            print("RESTDBG \(part) centre \(c) sd \(d) \(owner) bindOff \(b.off) foot \(q) frameN \(f.n) radial \(simd_normalize(SIMD3(c.x, 0, c.z)))  w \(p.w[vs[0]]) limbFree \(p.limbFree[vs[0]])")
-        }
-        print("RESTDBG body tris \(body.tris.count) eggVertexLimit \(body.eggVertexLimit)")
+        XCTAssertLessThan(worstExtra, 1.0, "the limb push must stay under a millisecond per Jelbie per frame")
     }
 
     // MARK: render

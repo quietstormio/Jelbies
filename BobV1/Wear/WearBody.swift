@@ -38,7 +38,15 @@ nonisolated struct WearLimbs: Sendable {
     /// How far past the drawn surface a pushed vertex ends up (the skin's own relief and the strand's thickness).
     static let margin: Float = 0.006
     /// The most a limb may move a vertex off the skin it is bound to: past this the piece would hang in the air (the skin dips and bulges round a swung arm), so it stays and the limb pokes through.
-    static let maxPush: Float = 0.14
+    nonisolated(unsafe) static var maxPush: Float = Float(ProcessInfo.processInfo.environment["WEARFIT_PUSHMAX"] ?? "") ?? 0.14
+    /// 0...1: how much of the way back DOWN onto the skin a pushed point goes after it has slid round a limb (it slides along the wall's tangent plane, which leaves the curved wall).
+    nonisolated(unsafe) static var rehugBlend: Float = Float(ProcessInfo.processInfo.environment["WEARFIT_REHUGBLEND"] ?? "") ?? 0.5
+    static let rehugVertexBudget = 10
+    nonisolated(unsafe) static var alwaysSlide = ProcessInfo.processInfo.environment["WEARFIT_RADIAL"] == nil
+    nonisolated(unsafe) static var maxPushVertex: Float = Float(ProcessInfo.processInfo.environment["WEARFIT_PUSHMAXV"] ?? "") ?? 0.14
+    /// How far along a strand a push is shared with its neighbours (falling quadratically): the string leaves and rejoins the wall in a curve, not a V.
+    nonisolated(unsafe) static var spread: Float = Float(ProcessInfo.processInfo.environment["WEARFIT_SPREAD"] ?? "") ?? 0.09
+    nonisolated(unsafe) static var spreadMax: Float = Float(ProcessInfo.processInfo.environment["WEARFIT_SPREADMAX"] ?? "") ?? 0.03
 
     /// `P(i)` = the position of render vertex i. `blocks` = (first vertex, around, rings).
     static func build(blocks: [(first: Int, around: Int, rings: Int)], P: (Int) -> SIMD3<Float>) -> WearLimbs {
@@ -128,13 +136,13 @@ nonisolated struct WearLimbs: Sendable {
     }
 
     /// `p` moved along the wall (normal `n`) away from the limb axis until it is outside the limb by the margin; unchanged when it is clear.
-    func push(_ p0: SIMD3<Float>, wallNormal n: SIMD3<Float>, margin: Float = WearLimbs.margin) -> SIMD3<Float> {
+    func push(_ p0: SIMD3<Float>, wallNormal n: SIMD3<Float>, margin: Float = WearLimbs.margin, cap: Float = WearLimbs.maxPush) -> SIMD3<Float> {
         var p = p0
         for ch in chains where all(p .>= ch.lo) && all(p .<= ch.hi) {
             var (d, axis) = depth(ch, p)
             guard d > -margin else { continue }
             var away = p - axis
-            if simd_dot(away, n) < 0 { away -= n * simd_dot(away, n) }        // out of the limb by the shortest way (over its surface, so the piece rests ON the limb, never hangs off the body); if that is into the wall, along the wall instead
+            if Self.alwaysSlide || simd_dot(away, n) < 0 { away -= n * simd_dot(away, n) }        // out of the limb by the shortest way (over its surface, so the piece rests ON the limb, never hangs off the body); if that is into the wall, along the wall instead
             var l = simd_length(away)
             if l < 1e-4 { away = SIMD3(0, 1, 0) - n * n.y; l = simd_length(away) }
             if l < 1e-4 { away = SIMD3(1, 0, 0) - n * n.x; l = simd_length(away) }
@@ -146,7 +154,7 @@ nonisolated struct WearLimbs: Sendable {
             }
         }
         let d = p - p0, l = simd_length(d)
-        if l > Self.maxPush { p = p0 + d * (Self.maxPush / l) }
+        if l > cap { p = p0 + d * (cap / l) }
         return p
     }
 }

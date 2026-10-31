@@ -317,14 +317,96 @@ final class WornSet {
         if useLimbs, let limbs {
             // pass 1: where everything is before the limbs are considered; pass 2: small parts move rigidly out of a limb (they stay round), the rest vertex by vertex
             for i in 0..<p.rest.count { let (q, wall) = place(i); scratchQ.append(q); scratchWall.append(wall ?? .zero) }
+            // a pushed point goes back down onto the SKIN at its authored height (a slide along the wall's tangent plane would leave the curved wall: the piece would hang in the air)
+            let body = WearBody.shared
+            let Minv = simd_float3x3(diagonal: SIMD3(1 / sxz, 1 / c.squash, 1 / sxz)) * R.transpose
+            func rehug(_ q: SIMD3<Float>, _ h0: Float) -> SIMD3<Float> {
+                guard WearLimbs.rehugBlend > 0, let skin, let nb = body.bind(Minv * (q - c.centroid) + c.restCentroid) else { return q }
+                var b = nb; b.off = SIMD3(0, 0, h0)
+                return WearBody.world(b, skin: skin)
+            }
+            // units: a small part moves by ONE displacement (its centre's), every other bound vertex by its own
             var delta = [SIMD3<Float>](repeating: .zero, count: p.clusterRep.count)
+            var srcPos: [SIMD3<Float>] = [], srcDelta: [SIMD3<Float>] = []
             for k in p.clusterRep.indices where p.clusterRep[k] >= 0 {
-                if let x = clusterXf[k] { delta[k] = limbs.push(x.c, wallNormal: x.wall, margin: p.clusterRadius[k] + WearLimbs.margin) - x.c }
+                if let x = clusterXf[k] {
+                    let m = p.clusterRadius[k] + WearLimbs.margin, h0 = p.clusterBind[k].off.z
+                    var d = limbs.push(x.c, wallNormal: x.wall, margin: m) - x.c
+                    if simd_length_squared(d) > 1e-5 {
+                        if WearLimbs.rehugBlend > 0 {
+                            let slid = x.c + d, down = rehug(slid, h0)
+                            d = slid + (down - slid) * WearLimbs.rehugBlend - x.c
+                        }
+                    }
+                    delta[k] = d
+                    if simd_length_squared(d) > 1e-5 { srcPos.append(x.c); srcDelta.append(d) }
+                }
+            }
+            var own = [SIMD3<Float>](repeating: .zero, count: p.rest.count)
+            var pushed: [Int] = []
+            for i in 0..<p.rest.count {
+                let k = Int(p.partOfVertex[i])
+                if k < p.clusterRep.count, p.clusterRep[k] >= 0 { continue }
+                if scratchWall[i] != .zero {
+                    let d = limbs.push(scratchQ[i], wallNormal: scratchWall[i], cap: WearLimbs.maxPushVertex) - scratchQ[i]
+                    own[i] = d
+                    if simd_length_squared(d) > 1e-5 {
+                        pushed.append(i)
+                        if srcPos.count < 600 { srcPos.append(scratchQ[i]); srcDelta.append(d) }
+                    }
+                }
+            }
+            // the biggest vertex pushes go back down towards the skin (a few only: each is a nearest-triangle query)
+            if WearLimbs.rehugBlend > 0, p.look.slot == .neck, !pushed.isEmpty {
+                pushed.sort { simd_length_squared(own[$0]) > simd_length_squared(own[$1]) }
+                for i in pushed.prefix(WearLimbs.rehugVertexBudget) {
+                    let slid = scratchQ[i] + own[i], down = rehug(slid, p.bind[i].off.z)
+                    own[i] = slid + (down - slid) * WearLimbs.rehugBlend - scratchQ[i]
+                }
+            }
+            // the push is spread along the strand: a neighbour within `reach` of a pushed point follows it by a falling share, so the string leaves and rejoins the wall in a smooth
+            // curve instead of a V (WearLimbs.spread)
+            if !srcPos.isEmpty {
+                let R = WearLimbs.spread
+                var lo = srcPos[0], hi = srcPos[0]
+                for q in srcPos { lo = simd_min(lo, q); hi = simd_max(hi, q) }
+                lo -= R; hi += R
+                // sources hashed into cells of size R: a neighbour only looks at the 27 cells round it
+                let dim = SIMD3<Int>(Int(((hi.x - lo.x) / R).rounded(.up)) + 1, Int(((hi.y - lo.y) / R).rounded(.up)) + 1, Int(((hi.z - lo.z) / R).rounded(.up)) + 1)
+                var cells = [[Int32]](repeating: [], count: dim.x * dim.y * dim.z)
+                func cell(_ q: SIMD3<Float>) -> SIMD3<Int> { let f = ((q - lo) / R).rounded(.down); return SIMD3(min(max(Int(f.x), 0), dim.x - 1), min(max(Int(f.y), 0), dim.y - 1), min(max(Int(f.z), 0), dim.z - 1)) }
+                for j in srcPos.indices { let c = cell(srcPos[j]); cells[(c.z * dim.y + c.y) * dim.x + c.x].append(Int32(j)) }
+                func share(_ q: SIMD3<Float>) -> SIMD3<Float> {
+                    guard all(q .>= lo) && all(q .<= hi) else { return .zero }
+                    let c0 = cell(q)
+                    var best = SIMD3<Float>.zero, bestL: Float = 0
+                    for z in max(c0.z - 1, 0)...min(c0.z + 1, dim.z - 1) { for y in max(c0.y - 1, 0)...min(c0.y + 1, dim.y - 1) { for x in max(c0.x - 1, 0)...min(c0.x + 1, dim.x - 1) {
+                        for j32 in cells[(z * dim.y + y) * dim.x + x] {
+                            let j = Int(j32), d = simd_distance(q, srcPos[j])
+                            if d >= R { continue }
+                            let f = (1 - d / R) * (1 - d / R)
+                            var v = srcDelta[j] * f
+                            let ln = simd_length(v)
+                            if ln > WearLimbs.spreadMax { v *= WearLimbs.spreadMax / ln }          // a neighbour never leaves the wall by more than this on a push that is not its own
+                            let l = simd_length_squared(v)
+                            if l > bestL { bestL = l; best = v }
+                        }
+                    } } }
+                    return best
+                }
+                for k in p.clusterRep.indices where p.clusterRep[k] >= 0 {
+                    if let x = clusterXf[k], simd_length_squared(delta[k]) < 1e-5 { delta[k] = share(x.c) }
+                }
+                for i in 0..<p.rest.count where scratchWall[i] != .zero {
+                    let k = Int(p.partOfVertex[i])
+                    if k < p.clusterRep.count, p.clusterRep[k] >= 0 { continue }
+                    let sh = share(scratchQ[i])
+                    own[i] = simd_length_squared(sh) > simd_length_squared(own[i]) ? sh : own[i]
+                }
             }
             for i in 0..<p.rest.count {
                 let k = Int(p.partOfVertex[i])
-                if k < p.clusterRep.count, p.clusterRep[k] >= 0 { scratchQ[i] += delta[k] }
-                else if scratchWall[i] != .zero { scratchQ[i] = limbs.push(scratchQ[i], wallNormal: scratchWall[i]) }     // never inside an arm, foot or tail that is out (WearLimbs)
+                if k < p.clusterRep.count, p.clusterRep[k] >= 0 { scratchQ[i] += delta[k] } else { scratchQ[i] += own[i] }
             }
         }
         for i in 0..<p.rest.count {
