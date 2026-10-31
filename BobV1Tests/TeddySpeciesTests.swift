@@ -57,7 +57,8 @@ final class TeddySpeciesTests: XCTestCase {
     func testBellyAndPaletteAreTeddysOnly() {
         let teddy = JellyRoster.palette(4)!
         XCTAssertEqual(BlueBelly.mode(for: teddy), 43, "the clear belly oval in tone 3")
-        for c in 0..<4 { let p = JellyRoster.palette(c) ?? PaletteKey.blue.palette; XCTAssertEqual(BlueBelly.mode(for: p), 0, "character \(c) has no belly patch") }
+        XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(0) ?? PaletteKey.blue.palette), Float(BlueBelly.shipped.rawValue), "Bob has the shipped blue front (not Teddy's)")
+        for c in 1..<4 { let p = JellyRoster.palette(c) ?? PaletteKey.blue.palette; XCTAssertEqual(BlueBelly.mode(for: p), 0, "character \(c) has no belly patch") }
         for c in 0..<4 { XCTAssertNotEqual(JellyRoster.palette(c)?.flesh ?? PaletteKey.blue.palette.flesh, teddy.flesh) }
     }
 
