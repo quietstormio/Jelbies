@@ -18,7 +18,7 @@ final class FeedCaptureUITests: XCTestCase {
     @MainActor
     func testFeedAndDrinkRows() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-Mute", "1", "-SetRoster", "pip", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES", "-BlobDrops.v1", "300", "-BlobNoWander", "1", "-StoreSeed", "1"]
+        app.launchArguments += ["-Mute", "1", "-SetRoster", "pip", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES", "-BlobDrops.v1", "300", "-BlobNoWander", "1", "-StoreSeed", "2"]
         app.launch()
         sleep(6)
         for (orient, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {

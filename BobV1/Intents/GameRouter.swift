@@ -38,6 +38,11 @@ final class GameRouter {
     @ObservationIgnored var onBed: (() -> Void)?
     /// The food id to serve for a Siri / widget feed (the Bag's pick; default the free basic food).
     @ObservationIgnored var foodFor: (Int?) -> String = { _ in Consumables.berries.id }
+    /// A Siri / widget feed with NO food in the bag: the screen opens the Feed row (everything dimmed "none left") and says so.
+    @ObservationIgnored var onNoFood: (() -> Void)?
+    /// What is said when there is nothing to feed.
+    static let noFoodLine = "No food left. Visit the Shop to get more."
+    private(set) var noFoodCount = 0
     @ObservationIgnored var directory: URL? = JellyShare.containerURL
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored var live: LiveActivities? = LiveActivities.shared
@@ -85,7 +90,15 @@ final class GameRouter {
         case .feed(let id):
             guard !care.trayOut, !care.bath.active else { return false }
             if care.focus.isActive { care.release() }
-            care.feed(foodFor(id), jelly: care.jellyCount > 1 ? id : 0)
+            let want = foodFor(id)
+            // the wanted food, else any food the player owns (foods before treats, shop order); with none: say so instead of doing nothing
+            let owned = Consumables.with(id: want).map { !$0.stored || care.store.count(food: $0.id) > 0 } ?? false
+            guard let serve = owned ? want : care.store.snacks.first?.item.food else {
+                noFoodCount += 1
+                if let onNoFood { onNoFood() } else { A11yAnnounce.say(Self.noFoodLine) }
+                break
+            }
+            care.feed(serve, jelly: care.jellyCount > 1 ? id : 0)
         case .water(let id):
             guard !care.trayOut, !care.bath.active else { return false }
             if care.focus.isActive { care.release() }

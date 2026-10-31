@@ -73,4 +73,40 @@ final class StapleFoodTests: XCTestCase {
         XCTAssertEqual(c.store.count(food: "berries"), StoreBook.starterBerries)
         XCTAssertEqual(c.store.count(food: "pizza"), StoreBook.starterPizza)
     }
+
+    // MARK: Siri / widget feed with an empty or partial bag
+
+    private func router(_ name: String) -> (GameRouter, GameCare) {
+        let d = UserDefaults(suiteName: "StapleFoodTests.\(name)")!; d.removePersistentDomain(forName: "StapleFoodTests.\(name)")
+        let care = GameCare(jellyCount: 1, persistent: false, defaults: d)
+        let r = GameRouter(directory: nil)
+        Self.keep.append(care); Self.keep.append(r)
+        return (r, care)
+    }
+    /// Empties the bag of every food (the starter stock included).
+    private func emptyBag(_ care: GameCare) {
+        for it in StoreCatalog.items where it.food != nil && it.kind != .drink { while care.store.count(it.id) > 0 { care.store.use(it.id) } }
+    }
+
+    func testSiriFeedFallsBackToAnyOwnedFood() {
+        let (r, care) = router("fallback")
+        emptyBag(care)
+        care.store.grant("fries", 2)
+        var said = 0; r.onNoFood = { said += 1 }
+        r.request(.feed(0)); r.apply(care: care)
+        XCTAssertEqual(said, 0, "there was food to serve")
+        XCTAssertTrue(care.foodOut, "the berries were gone, so the fries came out")
+        XCTAssertEqual(care.selectedFoodID, "fries")
+    }
+
+    func testSiriFeedWithNoFoodSaysSoInsteadOfDoingNothing() {
+        let (r, care) = router("none")
+        emptyBag(care)
+        var said = 0; r.onNoFood = { said += 1 }
+        r.request(.feed(0)); r.apply(care: care)
+        XCTAssertEqual(said, 1); XCTAssertEqual(r.noFoodCount, 1)
+        XCTAssertFalse(care.trayOut, "no tray with nothing to serve")
+        XCTAssertTrue(r.pending.isEmpty, "handled, not left waiting forever")
+        XCTAssertFalse(GameRouter.noFoodLine.isEmpty)
+    }
 }

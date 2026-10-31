@@ -274,6 +274,7 @@ struct GameScreen: View {
                 care.rosterPick(id, quietHop: true); care.requestTown(.track)
             }
             router.onRace = toTrack; router.onTrain = toTrack
+            router.onNoFood = { A11yAnnounce.say(GameRouter.noFoodLine); withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }          // Siri feed with an empty bag: the Feed row, "none left", spoken
             router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
             JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
@@ -707,6 +708,9 @@ struct GameScreen: View {
         care.store.grantStarterIfNeeded()
         care.store.ensureFeedable()
         for (id, n) in [("sushi", 2), ("donut", 1), ("nuggets", 3), ("lavender", 1), ("fries", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
+        if d.integer(forKey: "StoreSeed") >= 2 {          // -StoreSeed 2 (capture aid): bought drinks too, so the Drink row has something to scroll
+            for (id, n) in [("boba", 2), ("smoothie", 1), ("lemonade", 3), ("cocoa", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
+        }
         care.store.grant("shoe-mint"); care.store.grant("shoe-rain")
         if care.bath.wallet.count < 60 { care.bath.wallet.add(60 - care.bath.wallet.count, silent: true) }
         care.jelly(0)?.perks.grant(.cozy); care.jelly(0)?.perks.grant(.zoomies, duration: 25 * 60)

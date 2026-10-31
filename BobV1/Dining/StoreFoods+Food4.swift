@@ -46,14 +46,39 @@ extension StoreThumb {
     /// A store food's thumbnail mesh: the mini pizza shows the WHOLE pie (the plate and the hand use single slices); a drink shows the full cup.
     static func foodMesh(_ c: Consumable) -> RoomMesh {
         if c.id == "minipizza", let whole = FoodMeshes.mesh(id: "minipizza_whole") { return whole }
-        if c.id == "pizza" { return DiningModels.heldSlice(scale: 1.25, palette: c.palette) }
+        if c.id == "pizza" { return pizzaThumbMesh() }
         if c.id == "berries" { return DiningModels.berryCluster(palette: c.palette, scale: 1.5) }
-        if c.kind == .drink { return DiningModels.containerModel(c, layout: DiningLayout.make(n: 1))?.opaque ?? RoomMesh() }
+        if c.kind == .drink { return DiningModels.containerModel(c, layout: DiningLayout.make(n: 1), palette: thumbPalette(c))?.opaque ?? RoomMesh() }
         return DiningModels.heldPiece(c, index: 0, scale: 1.25)
     }
     /// The translucent part of a drink's thumbnail (the glass and its contents).
     static func glassMesh(_ c: Consumable) -> RoomMesh? {
         guard c.kind == .drink else { return nil }
-        return DiningModels.containerModel(c, layout: DiningLayout.make(n: 1))?.translucent
+        return DiningModels.containerModel(c, layout: DiningLayout.make(n: 1), palette: thumbPalette(c))?.translucent
+    }
+    /// Water and soda are pale in the room (tiny, on a tray); on a card the glass needs a clearly coloured drink in it.
+    static func thumbPalette(_ c: Consumable) -> ConsumablePalette? {
+        func s(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { Consumables.srgb(r, g, b) }
+        switch c.id {
+        case "water": return ConsumablePalette(primary: s(0.18, 0.55, 0.95), secondary: s(0.60, 0.82, 1.0), accent: s(0.25, 0.65, 1.0), detail: s(0.35, 0.65, 0.98))
+        case "soda": return ConsumablePalette(primary: s(0.93, 0.25, 0.50), secondary: s(1.0, 0.70, 0.82), accent: s(0.80, 0.15, 0.40), detail: s(1.0, 0.92, 0.95))
+        default: return nil
+        }
+    }
+    /// A big warm slice for the card: golden crust, red sauce showing round the cheese, pepperoni (the mini pizza is the whole pie, so the two read differently).
+    static func pizzaThumbMesh() -> RoomMesh {
+        func s(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { Consumables.srgb(r, g, b) }
+        let pal = ConsumablePalette(primary: s(0.84, 0.52, 0.18), secondary: s(1.0, 0.76, 0.26), accent: s(0.80, 0.14, 0.12), detail: s(1.0, 0.9, 0.6))
+        let sc: Float = 1.7
+        let b = RoomMeshBuilder(); b.material = .plain
+        let hl = DiningModels.sliceHalfLength, hw = DiningModels.sliceHalfWidth
+        DiningModels.extrudeRounded(b, poly: [SIMD2(0, (hl + 0.016) * sc), SIMD2(-(hw + 0.016) * sc, -hl * sc), SIMD2((hw + 0.016) * sc, -hl * sc)],
+                                    y0: -0.026 * sc, y1: 0.004 * sc, bevel: 0.016 * sc, color: s(0.78, 0.16, 0.10))
+        DiningModels.pizzaSlice(b, centre: .zero, yaw: 0, palette: pal, scale: sc)
+        // a plump slice: wider and a little thicker than the one in his hand, so the card is filled with cheese and pepperoni
+        let out = RoomMeshBuilder(); out.material = .plain
+        let fat = simd_float4x4(diagonal: SIMD4<Float>(1.55, 1.5, 1.0, 1))
+        DiningModels.append(b.mesh, to: out, transform: fat)
+        return out.mesh
     }
 }
