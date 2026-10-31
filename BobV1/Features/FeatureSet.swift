@@ -68,6 +68,8 @@ final class FeatureSet {
         /// Wings: the current flap / spread (deg) as drawn; `flapBase` / `spreadBase` = the chased flutter / flap-hop under the burst.
         var flap: Float = 0, spread: Float = 0, flapBase: Float = 0, spreadBase: Float = 0
         var folded = false
+        /// Wings: a re-tint of the art's colours (the white candidate species); nil = the art as drawn.
+        var wingTint: WingTint?
         /// Wings: the flap burst. `burstWait` = seconds until the next may start; while one runs `burstT` counts up to `burstN / burstHz`.
         var burstWait: Float = 6, burstT: Float = -1, burstN = 3, burstHz: Float = 7, burstAmp: Float = 42, burstDeg: Float = 0
         var burstActive: Bool { burstT >= 0 }
@@ -92,6 +94,10 @@ final class FeatureSet {
     func slot(_ id: Int) -> Slot? { slots.indices.contains(id) ? slots[id] : nil }
     func shown(_ id: Int) -> JellyFeature? { slot(id).flatMap { $0.scale > 0.001 ? $0.feature : nil } }
     var anyShown: Bool { slots.contains { $0.scale > 0.001 && $0.feature != .none } }
+    func setWingTint(_ id: Int, _ t: WingTint?) {
+        while slots.count <= id { slots.append(Self.newSlot(slots.count)) }
+        if slots[id].wingTint != t { slots[id].wingTint = t }
+    }
     func reset() { slots = slots.indices.map { Self.newSlot($0) } }
     /// A fresh slot with its own (non-zero) random seed per Jelly.
     static func newSlot(_ id: Int) -> Slot {
@@ -336,7 +342,7 @@ final class FeatureSet {
             var pl = FeatureMeshes.Placement()
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }
-            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil) else { continue }
+            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil, wingTint: s.wingTint) else { continue }
             let first = m.vertices.count
             if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutFrom) {
                 // gliding between two ridge layouts: both are emitted (same topology), the vertices blended by the eased progress
