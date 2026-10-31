@@ -2,7 +2,7 @@
 //  PipWatchUITests.swift
 //  Not a regression test: drives the REAL app into the room and keeps it there while the host records the simulator screen
 //  (xcrun simctl io <udid> recordVideo). Env-gated: PIPWATCH_SECS (TEST_RUNNER_PIPWATCH_SECS) = how long to stay; PIPWATCH_ARGS = extra launch
-//  arguments separated by spaces, or by | when any of them holds spaces (e.g. "-WearForce beanie_honey"); PIPWATCH_MARK = a file written when the HUD is up (the host starts its clip there).
+//  arguments separated by spaces, or by | when any of them holds spaces (e.g. "-WearForce beanie_honey"); PIPWATCH_PIPBACK = the PIPBACK override handed to the app (optional); PIPWATCH_MARK = a file written when the HUD is up (the host starts its clip there).
 //
 
 import XCTest
@@ -14,6 +14,7 @@ final class PipWatchUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-SetRoster", "pip,moss,lavender"]
         if let extra = env["PIPWATCH_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: extra.contains("|") ? "|" : " ").map(String.init) }
+        if let v = env["PIPWATCH_PIPBACK"], !v.isEmpty { app.launchEnvironment["PIPBACK"] = v }          // (comparison only: PIPBACK=now = the old back; unset = the shipped one)
         app.launch()
         let cont = app.buttons["Continue"]
         // (the title can still be fading in / the intro running, and a tap during the forced rotation can miss: tap until Continue is really gone, the room is behind it)

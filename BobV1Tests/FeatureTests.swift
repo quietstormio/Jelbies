@@ -662,20 +662,25 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(bare.count, 5)
         func axisTurns(_ c: [PipSpikes.ConeInfo]) -> [Float] { (1..<c.count).map { acosf(max(-1, min(1, simd_dot(c[$0 - 1].axis, c[$0].axis)))) * 180 / .pi } }
         let bareTurn = axisTurns(bare).max() ?? 0
-        let junction = PipSpikes.bareJunction(body: WearBody.shared, spec: .shared)
         let elevations: [Float] = [7, 14, 26.7].map { $0 * .pi / 180 }
         var views: [(Float, Float)] = []
         for e in elevations { for a in stride(from: 90, through: 270, by: 15) { views.append((Float(a) * .pi / 180, e)) } }
-        var worstDeep: Float = 0, bareDeep: Float = 0, skipped = 0, tested = 0, worstScale: Float = 1, worstName = "", below75: [String] = []
+        var worstGap: (Float, String) = (0, ""), worstGapNeck: (Float, String) = (0, ""), worstDeep: Float = 0, bareDeep: Float = 0, skipped = 0, tested = 0, worstScale: Float = 1, worstName = "", below75: [String] = []
         for combo in combos {
             let names = combo.map { $0.art }
             let fit = FeatureCompat.solve(.spines, worn: names)
             _ = PipSpikes.build(body: WearBody.shared, spec: .shared, layout: fit.spineLayout)
             let c = PipSpikes.lastCones, label = names.isEmpty ? "bare" : names.joined(separator: "+")
             XCTAssertEqual(c.count, 5, "\(label): five spikes")
-            for k in c { // keep-out
-                if k.isTail { XCTAssertGreaterThanOrEqual(k.t, junction.firstTailT - 0.0021, "\(label): a tail spike stands inside the junction keep-out (t=\(k.t))") }
-                else { XCTAssertGreaterThanOrEqual(k.restY, junction.minBackY - PipSpikes.junctionEps - 1e-4, "\(label): a back spike stands inside the junction keep-out (y=\(k.restY))") }
+            let jpt = PipSpikes.lastJunction
+            for k in c { XCTAssertGreaterThanOrEqual(simd_distance(k.shownBase, jpt), 0.025, "\(label): a spike stands on the back-to-tail bend") }          // keep-out round the bend (arc 0.035)
+            let ch = (1..<c.count).map { simd_distance(c[$0 - 1].shownBase, c[$0].shownBase) }, med = ch.sorted()[ch.count / 2]
+            let hasNeck = combo.contains { $0.slot == .neck }          // (a neck piece's cord / cloth blocks a stretch of the back for good: the gap there is its width, reported but not asserted)
+            let gapRatio = (ch.max() ?? 0) / med
+            if hasNeck { if gapRatio > worstGapNeck.0 { worstGapNeck = (gapRatio, label) } }
+            else {
+                if gapRatio > worstGap.0 { worstGap = (gapRatio, label) }
+                XCTAssertLessThanOrEqual(gapRatio, 1.6, "\(label): a gap in the row is more than 1.6x the median chord (\(ch))")
             }
             XCTAssertLessThanOrEqual(axisTurns(c).max() ?? 0, bareTurn + 5, "\(label): the row turns too sharply between neighbours")
             XCTAssertGreaterThanOrEqual(PipSpikes.lastClearance, 0, "\(label): a spike touches the worn piece")
@@ -686,7 +691,7 @@ final class FeatureTests: XCTestCase {
                     let (az, el) = (atan2f(d.x, d.z) * 180 / .pi, asinf(d.y) * 180 / .pi)
                     let deep = PipSpikes.silhouetteDepth(c[i], c[j], d)
                     worstDeep = max(worstDeep, deep)
-                    if label == "bare" { bareDeep = max(bareDeep, deep) }
+                    if label == "bare" { bareDeep = max(bareDeep, deep); XCTAssertLessThanOrEqual(deep, PipSpikes.shippedBareOverlap + 0.001, "bare spikes \(i) and \(j) overlap by \(deep) (shipped bare row: \(PipSpikes.shippedBareOverlap))") }
                     else { XCTAssertLessThanOrEqual(deep, bareDeep + 0.001, "\(label): spikes \(i) and \(j) overlap by \(deep) at azimuth \(Int(az)) elevation \(Int(el))") }
                 } }
             }
@@ -695,6 +700,6 @@ final class FeatureTests: XCTestCase {
             if sc < 0.75 { below75.append(String(format: "%@ %.2f", label, sc)) }
             if label == "bare" || label == "beanie_pink" || label == "cap_team_pink+scarf_silk" || label == "cap_team_pink" { MotionLog.write(String(format: "JUNCTION %@ smallest scale vs bare %.2f heights=%@ at=%@", label, sc, c.map { String(format: "%.3f", $0.height) }.joined(separator: ","), c.map { $0.isTail ? String(format: "t%.2f", $0.t) : String(format: "y%.2f", $0.restY) }.joined(separator: ","))) }
         }
-        MotionLog.write(String(format: "JUNCTION combos=%d silhouettePairsTested=%d skipped(view within 15deg of base line)=%d bareMaxTurn=%.1f bareSilhouetteOverlap=%.4f worstSilhouetteOverlap=%.4f worstScale=%.2f at %@ below0.75=%@", combos.count, tested, skipped, bareTurn, bareDeep, worstDeep, worstScale, worstName, below75.joined(separator: "; ")))
+        MotionLog.write(String(format: "JUNCTION combos=%d silhouettePairsTested=%d skipped(view within 15deg of base line)=%d bareMaxTurn=%.1f bareSilhouetteOverlap=%.4f worstSilhouetteOverlap=%.4f worstGapOverMedian(hats/bare)=%.2f (%@) worstGapOverMedian(with a neck piece)=%.2f (%@) worstScale=%.2f at %@ below0.75=%@", combos.count, tested, skipped, bareTurn, bareDeep, worstDeep, worstGap.0, worstGap.1, worstGapNeck.0, worstGapNeck.1, worstScale, worstName, below75.joined(separator: "; ")))
     }
 }

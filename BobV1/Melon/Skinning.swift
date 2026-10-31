@@ -90,14 +90,13 @@ nonisolated final class Skinner {
         // the swell: the egg's own lower-back vertices near the tail root are pushed out along the tail's start direction (Gaussian falloff, lower back only:
         // TailBean.swellWeight), so the back flows into the tail root as one surface instead of a tube meeting a wall
         let limit = cap.firstVertex.min() ?? rm.vertexCount
-        tailBumpDir = TailBean.startDir
         tailBump = []
         for v in 0..<min(limit, rm.rest.count / 3) {
-            let w = TailBean.swellWeight(SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]))
-            if w > 0.01 { tailBump.append((v, w)) }
+            let d = TailBean.swellVector(SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]))
+            if simd_length(d) > 0.003 { tailBump.append((v, d)) }
         }
     }
-    private var tailBump: [(Int, Float)] = []
+    private var tailBump: [(Int, SIMD3<Float>)] = []
     private var tailRotLast = matrix_identity_float3x3
     /// After the normal pass: pull the root rings' normals toward the egg's own normal there, so the shading flows from the back into the tail with no tonal step.
     private func blendTailNormals(_ dyn: UnsafeMutablePointer<Float>) {
@@ -112,7 +111,6 @@ nonisolated final class Skinner {
             if m.x.isFinite { dyn[o] = m.x; dyn[o + 1] = m.y; dyn[o + 2] = m.z }
         }
     }
-    private var tailBumpDir = SIMD3<Float>(0, 0, -1)
     private(set) var tailYaw: Float = 0, tailPitch: Float = 0
     /// The tail's motion (TailMotion.swift): what the brain asks (`tailDrive`), the filters / clocks, and each ring's world rotation for the spike layer.
     var tailDrive = TailDrive(), tailMotion = TailMotion()
@@ -591,7 +589,7 @@ nonisolated final class Skinner {
             let o = 6 * (f + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
         }
         if tailScale > 0.001 { for (v, w) in tailBump {                                           // the swell (scaled by the tail's own ease in / out below through tailScale)
-            let o = 6 * v, d = Rot * (tailBumpDir * (TailBean.swellHeight * w * tailScale))
+            let o = 6 * v, d = Rot * (w * tailScale)
             dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
         } }
         let B = P(0), T = P(n - 1)

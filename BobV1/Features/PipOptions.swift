@@ -31,6 +31,7 @@ nonisolated enum PipSpikes {
     /// and heights are explicit (mean of today's row x the variant's scale x a per-spike grade) so the scales read as true multiples of today's spikes.
     static let rowStartY: Double = 1.203
     static let restyledBareSpacing: Float = 0.32               // the bare row's arc spacing between spikes (about)
+    static let bareTailEnd: Double = 0.93                    // how far down the tail (fraction of its visible length) the bare row's path runs
     static let reflowTailEnd: Double = 1.0                   // under a hat the row also runs a little further down the tail (its bare end is 0.86), since the back part is shorter
     static let rowStartOffset: Double = 0.063                 // the first spike's base stands this far below the path's start (rowStartY 1.203 -> first base at about 1.14)
     static let restyledMinChord: Float = 0.30                 // minimum straight-line spacing of the ridge spikes
@@ -46,6 +47,8 @@ nonisolated enum PipSpikes {
     /// The last layout's cones in rest space (diagnostics for the tests): base, unit axis, height, base radius, tip softness, on the tail?, tail t.
     struct ConeInfo { var base: SIMD3<Float>; var axis: SIMD3<Float>; var height: Float; var baseR: Float; var tipSoft: Float; var isTail: Bool; var t: Double; var restY: Float = 0; var shownBase: SIMD3<Float> = .zero }
     nonisolated(unsafe) static var lastCones: [ConeInfo] = []
+    /// Where the last layout's ridge turns from the back onto the tail (shown / swelled rest space): the keep-out centre (diagnostic, the tests read it).
+    nonisolated(unsafe) static var lastJunction: SIMD3<Float> = .zero
     /// Silhouette check shared by the build and the tests: how deep two spike cones (as DRAWN: on the swelled back / the tail) overlap when seen along `d` (unit, toward the camera),
     /// orthographic; 0 = clear. The visible part only (from 15% of the height up: the base is sunk in the skin).
     static func silhouetteDepth(_ a: ConeInfo, _ b: ConeInfo, _ d: SIMD3<Float>) -> Float {
@@ -92,6 +95,10 @@ nonisolated enum PipSpikes {
     nonisolated(unsafe) private static var junctionCache: (minBackY: Float, firstTailT: Double)?
     nonisolated(unsafe) private static var bareTurnCache: Float = 0
     static let junctionEps: Float = 0.004
+    /// Half-width (ridge arc length) of the keep-out round the back-to-tail bend: small, so the row stays evenly spaced across the junction under hats too.
+    static let junctionHalf: Float = 0.035
+    /// The shipped bare row's worst silhouette overlap (0.0413): the bare row of the new back may touch no more than that (+0.0005).
+    static let shippedBareOverlap: Float = 0.0413
     static func bareJunction(body: WearBody, spec: FeatureSpec) -> (minBackY: Float, firstTailT: Double) {
         if let j = junctionCache { return j }
         let saved = (debug, lastClearance, lastLayout, lastCones)
@@ -195,8 +202,7 @@ nonisolated enum PipSpikes {
         // ---- ONE shared ridge path: down the back's centreline from 47% of his height, over the swell where the back becomes the tail, then along the tail's top.
         // Spikes are spaced evenly by arc length along it and sized by distance from the junction (largest there).
         struct PP { var shown: SIMD3<Float>; var rest: SIMD3<Float>; var n: SIMD3<Float>; var t: Double; var isTail: Bool }
-        let sd = TailBean.startDir, sH = TailBean.swellHeight
-        func swelled(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * TailBean.swellWeight(q)) }          // (the skin's own swell: Skinner.configureTail)
+        func swelled(_ q: SIMD3<Float>) -> SIMD3<Float> { q + TailBean.swellVector(q) }          // (the skin's own swell: Skinner.configureTail)
         func inEgg(_ q: SIMD3<Float>) -> Bool { BobForm.sdf(SIMD3(Double(q.x), Double(q.y), Double(q.z))) <= 0 }
         var path: [PP] = []
         // the first tail ridge sample that stands outside the swelled back
@@ -205,7 +211,7 @@ nonisolated enum PipSpikes {
             var t = sh.sink
             while t < sh.length {
                 let rg = sh.ridge(t), rp = f3(rg.p + rg.up * rg.r)
-                let inv = rp - sd * (sH * TailBean.swellWeight(rp))
+                let inv = TailBean.unswell(rp)
                 if !inEgg(inv) { tCross = t; break }
                 t += 0.01
             }
@@ -221,7 +227,7 @@ nonisolated enum PipSpikes {
         }
         let backCount = path.count
         var tt = tCross
-        while tt <= sh.sink + (bareLayout ? 0.86 : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
+        while tt <= sh.sink + (bareLayout ? PipSpikes.bareTailEnd : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
             let rg = sh.ridge(tt), rp = f3(rg.p + rg.up * rg.r)
             path.append(PP(shown: rp, rest: rp, n: f3(rg.up), t: tt, isTail: true)); tt += 0.01
         }
@@ -253,9 +259,10 @@ nonisolated enum PipSpikes {
             return simd_normalize(raw - n * simd_dot(raw, n))
         }
         var blocked = [Bool](repeating: false, count: path.count)
-        if !bareLayout && vr.reflowsUnderHat {          // the junction keep-out (see bareJunction)
-            let j = bareJunction(body: body, spec: spec)
-            for i in path.indices where path[i].isTail ? path[i].t < j.firstTailT - 0.002 : path[i].rest.y < j.minBackY - PipSpikes.junctionEps { blocked[i] = true }
+        if vr.reflowsUnderHat {          // the junction keep-out: no spike base stands within `junctionHalf` (arc) of the point where the ridge turns from the back onto the tail (bare and under every hat alike)
+            let aJ = arc[min(max(backCount, 0), arc.count - 1)]
+            lastJunction = path[min(max(backCount, 0), path.count - 1)].shown
+            for i in path.indices where abs(arc[i] - aJ) < PipSpikes.junctionHalf { blocked[i] = true }
         }
         if !obstacles.isEmpty {
             let H0 = restyledBaseHeight * heightScale, bR0 = H0 / aspect / 2
@@ -277,7 +284,7 @@ nonisolated enum PipSpikes {
         // a hat re-flow packs the same five spikes into a shorter row: the straight-line spacing floor eases to 75% of the even arc spacing (bare: unchanged)
         // a re-flowed row is shorter, so its five spikes are a little smaller (half-way between their bare size and the size that keeps the bare spacing ratio), never bigger
         let reflowSize: Float = bareLayout ? 1 : 0.5 + 0.5 * min(1, (Lreal * 0.87 / Float(nSp - 1)) / PipSpikes.restyledBareSpacing)
-        let rowMinChord: Float = bareLayout ? PipSpikes.restyledMinChord : min(PipSpikes.restyledMinChord, 0.75 * Lreal * 0.87 / Float(nSp - 1))
+        let rowMinChord: Float = bareLayout ? min(PipSpikes.restyledMinChord, 0.85 * Lreal * 0.87 / Float(nSp - 1)) : min(PipSpikes.restyledMinChord, 0.75 * Lreal * 0.87 / Float(nSp - 1))
         // restyle (PipTailVariant): spikes get taller by heightScale while the base only widens by baseScale, so they read taller and pointier; `aspect` = height / base diameter
         for k in 0..<nSp {
             let sK = L * (0.05 + 0.87 * Float(k) / Float(nSp - 1))
@@ -309,7 +316,7 @@ nonisolated enum PipSpikes {
         }
         func place() { for k in 0..<sps.count { let bR = sps[k].bw / 2; sps[k].baseShown = sps[k].pt.shown - sps[k].n * (0.3 * bR)
             sps[k].ax = simd_normalize(sps[k].n * cosf(sps[k].lean) + sps[k].tg * sinf(sps[k].lean)) } }
-        let silTol: Float = bareLayout ? .infinity : bareSilhouetteTolerance(body: body, spec: spec) + 0.0005          // restyled rows may touch no more than the approved bare row does
+        let silTol: Float = bareLayout ? PipSpikes.shippedBareOverlap + 0.0005 : bareSilhouetteTolerance(body: body, spec: spec) + 0.0005          // restyled rows may touch no more than the approved bare row does
         for _ in 0..<80 {
             place()
             var changed = false
@@ -360,6 +367,18 @@ nonisolated enum PipSpikes {
                 }
                 if !any { break }
             }
+        }
+        if silTol.isFinite {          // the flow nudges above turned some axes: shrink any pair that now overlaps beyond the tolerance (the larger of the pair), until all clear
+            for _ in 0..<60 {
+                place()
+                var changed = false
+                for i in 0..<sps.count { for j in (i + 1)..<sps.count {
+                    func info(_ q: Sp) -> ConeInfo { ConeInfo(base: .zero, axis: q.ax, height: q.H, baseR: q.bw / 2, tipSoft: vr.spikeTipSoft, isTail: q.pt.isTail, t: q.pt.t, restY: 0, shownBase: q.baseShown) }
+                    if worstSilhouette(info(sps[i]), info(sps[j])) > silTol { if sps[i].H >= sps[j].H { sps[i].H *= 0.97 } else { sps[j].H *= 0.97 }; changed = true }
+                } }
+                if !changed { break }
+            }
+            place()
         }
         var minChord = Float.infinity, minSeg = Float.infinity
         lastClearance = .infinity

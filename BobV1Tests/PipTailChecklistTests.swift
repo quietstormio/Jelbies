@@ -525,8 +525,8 @@ final class PipTailChecklistTests: XCTestCase {
     }
     /// Close-ups centred on the DRAWN junction: where the tail's top ridge leaves the (displaced) back. Rest point, found analytically.
     private func junctionRest() -> SIMD3<Float> {
-        let sd = TailBean.startDir, sH = TailBean.swellHeight, sh = TailBean.shape
-        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { var p = q; for _ in 0..<5 { p = q - sd * (sH * TailBean.swellWeight(p)) }; return p }
+        let sh = TailBean.shape
+        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { TailBean.unswell(q) }
         var last = sh.sink, t = 0.0
         while t < sh.length * 0.8 { let r = sh.ridge(t), q = r.p + r.up * r.r, i = inv(SIMD3(Float(q.x), Float(q.y), Float(q.z))); if BobForm.sdf(SIMD3(Double(i.x), Double(i.y), Double(i.z))) <= 0 { last = t }; t += 0.004 }
         let r = sh.ridge(last + 0.01), q = r.p + r.up * r.r
@@ -552,7 +552,15 @@ final class PipTailChecklistTests: XCTestCase {
             let v = PipSpikes.silhouetteDepth(cones[i], cones[j], d)
             if v > worst { worst = v; at = "\(i)-\(j) from \(n)" }
         } } }
-        return String(format: "  spikeOverlap worst depth=%.4f at %@ (0 = clear)\n", worst, at)
+        // the coordinator's junction metric: views az 90...270 step 15 at el 7 / 14 / 26.7, pairs within 15 deg of looking along the row skipped
+        var jw: Float = 0, jat = "", pairs = ""
+        for i in cones.indices { for j in (i + 1)..<max(cones.count, i + 1) {
+            var w: Float = 0
+            for d in PipSpikes.viewsFor(cones[i], cones[j]).views { let v = PipSpikes.silhouetteDepth(cones[i], cones[j], d); if v > w { w = v }; if v > jw { jw = v; jat = "\(i)-\(j) az\(Int((atan2f(d.x, d.z) * 180 / .pi).rounded())) el\(Int((asinf(d.y) * 180 / .pi).rounded()))" } }
+            if w > 0.01 { pairs += String(format: " %d-%d:%.3f", i, j, w) }
+        } }
+        let ch = zip(cones, cones.dropFirst()).map { simd_distance($0.shownBase, $1.shownBase) }, med = ch.sorted()[ch.count / 2]
+        return String(format: "  spikeOverlap(all views) worst=%.4f at %@\n  JUNCTIONMETRIC overlap worst=%.4f at %@ pairs>0.01:%@\n  shownChords=%@ max/min=%.2f max/median=%.2f\n", worst, at, jw, jat, pairs, ch.map { String(format: "%.3f", $0) }.joined(separator: ","), (ch.max() ?? 0) / max(ch.min() ?? 1, 1e-6), (ch.max() ?? 0) / max(med, 1e-6))
     }
     /// The drawn body's silhouette (every body triangle projected, no shadow, no spikes / wear) as a white-on-black image.
     private func bodyMask(_ skin: [Float], cam: CameraState, W: Int, H: Int) -> LockImage {
@@ -641,9 +649,9 @@ final class PipTailChecklistTests: XCTestCase {
 
     /// (a)(b)(c) analytic numbers about the displaced egg and the exposed tail, in rest space.
     private func backNumbers() -> String {
-        let sd = TailBean.startDir, sH = TailBean.swellHeight, sh = TailBean.shape
-        func fwd(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * TailBean.swellWeight(q)) }
-        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { var p = q; for _ in 0..<5 { p = q - sd * (sH * TailBean.swellWeight(p)) }; return p }
+        let sh = TailBean.shape
+        func fwd(_ q: SIMD3<Float>) -> SIMD3<Float> { q + TailBean.swellVector(q) }
+        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { TailBean.unswell(q) }
         func inside(_ q: SIMD3<Float>) -> Bool { BobForm.sdf(SIMD3(Double(inv(q).x), Double(inv(q).y), Double(inv(q).z))) <= 0 }
         // (a)
         var plain: [Int: Float] = [:], disp: [Int: Float] = [:]
@@ -671,7 +679,7 @@ final class PipTailChecklistTests: XCTestCase {
         let exposed = sh.length - tExit + sh.tipR
         out += String(format: "exposedTail=%.4f tExit=%.3f length=%.3f sink=%.2f tipR=%.3f width=%.3f\n", exposed, tExit, sh.length, sh.sink, sh.tipR, sh.width)
         // (c)
-        func hOf(_ q: SIMD3<Float>) -> Float { sH * TailBean.swellWeight(q) }
+        func hOf(_ q: SIMD3<Float>) -> SIMD3<Float> { TailBean.swellVector(q) }
         var angles: [Double] = [], topAngles: [Double] = []
         for j in 0..<TailBean.around {
             let ph = 2 * Double.pi * Double(j) / Double(TailBean.around)
@@ -692,7 +700,7 @@ final class PipTailChecklistTests: XCTestCase {
             for a in 0..<3 {
                 var dq = SIMD3<Float>(repeating: 0); dq[a] = 0.01
                 let g = (hOf(p0 + dq) - hOf(p0 - dq)) / 0.02
-                cols[a] += sd * g
+                cols[a] += g
             }
             let Jm = simd_float3x3(cols[0], cols[1], cols[2])
             let nE = simd_normalize(Jm.inverse.transpose * SIMD3(Float(n0.x), Float(n0.y), Float(n0.z)))
