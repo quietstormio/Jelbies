@@ -517,6 +517,194 @@ final class PipTailChecklistTests: XCTestCase {
         _ = GameCamera.camera(aspect: 603.0 / 1311.0)
     }
 
+    // MARK: 9. back shape comparison (g-piptail3 phase 1): PIPBACK_DIR, one process per PIPBACK value (the env var itself selects the back shape in TailBean)
+
+    private func pbViews() -> [(String, View)] {
+        [("side", View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35)), ("back34", View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35)),
+         ("back", View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)), ("top", View(name: "top", yaw: 0, dist: 4.2, lookBack: 0.15, top: true)),
+         ("j_side", View(name: "j_side", yaw: .pi / 2, dist: 1.8, lookY: -0.4, lookBack: 0.95)), ("j_back34", View(name: "j_back34", yaw: 2.5, dist: 1.8, lookY: -0.4, lookBack: 0.95))]
+    }
+    /// The drawn body's silhouette (every body triangle projected, no shadow, no spikes / wear) as a white-on-black image.
+    private func bodyMask(_ skin: [Float], cam: CameraState, W: Int, H: Int) -> LockImage {
+        var px = [UInt8](repeating: 0, count: W * H * 4)
+        for i in 0..<(W * H) { px[4 * i + 3] = 255 }
+        let idx = MotionRig.renderMesh.index
+        var proj: [SIMD3<Float>?] = []
+        proj.reserveCapacity(skin.count / 6)
+        for v in 0..<(skin.count / 6) {
+            let c = cam.viewProj * SIMD4<Float>(skin[6 * v], skin[6 * v + 1], skin[6 * v + 2], 1)
+            if c.w <= 0.01 { proj.append(nil); continue }
+            proj.append(SIMD3((c.x / c.w * 0.5 + 0.5) * Float(W), (1 - (c.y / c.w * 0.5 + 0.5)) * Float(H), 0))
+        }
+        var t = 0
+        while t + 2 < idx.count {
+            defer { t += 3 }
+            guard let a = proj[Int(idx[t])], let b = proj[Int(idx[t + 1])], let c = proj[Int(idx[t + 2])] else { continue }
+            let minX = max(0, Int(min(a.x, b.x, c.x).rounded(.down))), maxX = min(W - 1, Int(max(a.x, b.x, c.x).rounded(.up)))
+            let minY = max(0, Int(min(a.y, b.y, c.y).rounded(.down))), maxY = min(H - 1, Int(max(a.y, b.y, c.y).rounded(.up)))
+            if minX > maxX || minY > maxY { continue }
+            let den = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
+            if abs(den) < 1e-6 { continue }
+            for y in minY...maxY { for x in minX...maxX {
+                let px_ = Float(x) + 0.5, py_ = Float(y) + 0.5
+                let l1 = ((b.y - c.y) * (px_ - c.x) + (c.x - b.x) * (py_ - c.y)) / den
+                let l2 = ((c.y - a.y) * (px_ - c.x) + (a.x - c.x) * (py_ - c.y)) / den
+                let l3 = 1 - l1 - l2
+                if l1 >= -0.02 && l2 >= -0.02 && l3 >= -0.02 { let o = 4 * (y * W + x); px[o] = 255; px[o + 1] = 255; px[o + 2] = 255 }
+            } }
+        }
+        return LockImage(w: W, h: H, bgra: px)
+    }
+
+    private func closestOnTri(_ p: SIMD3<Float>, _ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> SIMD3<Float> {
+        let ab = b - a, ac = c - a, ap = p - a
+        let d1 = simd_dot(ab, ap), d2 = simd_dot(ac, ap)
+        if d1 <= 0 && d2 <= 0 { return a }
+        let bp = p - b, d3 = simd_dot(ab, bp), d4 = simd_dot(ac, bp)
+        if d3 >= 0 && d4 <= d3 { return b }
+        let vc = d1 * d4 - d3 * d2
+        if vc <= 0 && d1 >= 0 && d3 <= 0 { return a + ab * (d1 / (d1 - d3)) }
+        let cp = p - c, d5 = simd_dot(ab, cp), d6 = simd_dot(ac, cp)
+        if d6 >= 0 && d5 <= d6 { return c }
+        let vb = d5 * d2 - d1 * d6
+        if vb <= 0 && d2 >= 0 && d6 <= 0 { return a + ac * (d2 / (d2 - d6)) }
+        let va = d3 * d6 - d5 * d4
+        if va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0 { return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6))) }
+        let den = 1 / (va + vb + vc)
+        return a + ab * (vb * den) + ac * (vc * den)
+    }
+
+    /// (d) the world position of each spike's base in the settled pose, and its signed distance to the drawn (skinned) body surface (+ above it, - sunk in).
+    private func spikeSeating(_ s: Subj, skin: [Float]) -> String {
+        guard let slot = s.feats.slot(0), slot.feature == .spines, let body = s.feats.body,
+              let p = FeatureMeshes.prepare(.spines, placement: FeatureMeshes.Placement(), body: body, spec: .shared, ridge: slot.layoutTo) else { return "  (no spikes)\n" }
+        let c = slot.carry, R = simd_float3x3(c.rotation), sxz = 1 / c.squash.squareRoot()
+        let M = R * simd_float3x3(diagonal: SIMD3(sxz, c.squash, sxz))
+        let idx = MotionRig.renderMesh.index
+        func P(_ i: UInt32) -> SIMD3<Float> { SIMD3(skin[6 * Int(i)], skin[6 * Int(i) + 1], skin[6 * Int(i) + 2]) }
+        func N(_ i: UInt32) -> SIMD3<Float> { SIMD3(skin[6 * Int(i) + 3], skin[6 * Int(i) + 4], skin[6 * Int(i) + 5]) }
+        var out = "", bases: [SIMD3<Float>] = []
+        for part in p.parts {
+            var w: SIMD3<Float>
+            if part.tailLocal >= 0, slot.tailFirst >= 0 {
+                let o = 6 * (slot.tailFirst + part.tailLocal), r = (part.tailLocal - 1) / TailBean.around
+                let off = M * (part.pivot - part.skinAnchor)
+                w = SIMD3(skin[o], skin[o + 1], skin[o + 2]) + (r >= 0 && r < slot.tailRingQ.count ? slot.tailRingQ[r].act(off) : off)
+            } else if part.bind.tri != .zero {
+                w = skin.withUnsafeBufferPointer { WearBody.world(part.bind, skin: $0.baseAddress!) }
+            } else { continue }
+            var best = Float.infinity, sign: Float = 1
+            var t = 0
+            while t + 2 < idx.count {
+                defer { t += 3 }
+                let a = P(idx[t]), b = P(idx[t + 1]), cc = P(idx[t + 2])
+                if (a.y == b.y && b.y == cc.y && a.y < -50) { continue }
+                let cp = closestOnTri(w, a, b, cc), d = simd_distance(w, cp)
+                if d < best { best = d; sign = simd_dot(w - cp, N(idx[t]) + N(idx[t + 1]) + N(idx[t + 2])) >= 0 ? 1 : -1 }
+            }
+            out += String(format: "  %@ %@ signedDist=%.4f world=(%.3f,%.3f,%.3f)\n", part.name, part.tailLocal >= 0 ? "tail" : "back", sign * best, w.x, w.y, w.z)
+            bases.append(w)
+        }
+        out += "  chords(base to next base)=" + zip(bases, bases.dropFirst()).map { String(format: "%.3f", simd_distance($0, $1)) }.joined(separator: ",") + "\n"
+        return out
+    }
+
+    /// (a)(b)(c) analytic numbers about the displaced egg and the exposed tail, in rest space.
+    private func backNumbers() -> String {
+        let sd = TailBean.startDir, sH = TailBean.swellHeight, sh = TailBean.shape
+        func fwd(_ q: SIMD3<Float>) -> SIMD3<Float> { q + sd * (sH * TailBean.swellWeight(q)) }
+        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { var p = q; for _ in 0..<5 { p = q - sd * (sH * TailBean.swellWeight(p)) }; return p }
+        func inside(_ q: SIMD3<Float>) -> Bool { BobForm.sdf(SIMD3(Double(inv(q).x), Double(inv(q).y), Double(inv(q).z))) <= 0 }
+        // (a)
+        var plain: [Int: Float] = [:], disp: [Int: Float] = [:]
+        for xi in -29...29 where abs(Double(xi) * 0.01) < 0.3 {
+            let x = Double(xi) * 0.01
+            for yi in 0...560 {
+                let y = Double(yi) * 0.0025
+                if BobForm.sdf(SIMD3(x, y, 0)) > 0 { continue }
+                var lo = -1.2, hi = 0.0
+                for _ in 0..<40 { let m = (lo + hi) / 2; if BobForm.sdf(SIMD3(x, y, m)) > 0 { lo = m } else { hi = m } }
+                let q0 = SIMD3(Float(x), Float(y), Float(hi)), q1 = fwd(q0)
+                let k0 = Int((q0.y / 0.05).rounded(.down)), k1 = Int((q1.y / 0.05).rounded(.down))
+                plain[k0] = max(plain[k0] ?? -9, -q0.z); disp[k1] = max(disp[k1] ?? -9, -q1.z)
+            }
+        }
+        var exAbove: Float = 0, exAll: Float = 0, atY: Float = 0
+        for (k, pz) in plain { if let dz = disp[k] { let e = dz - pz; if e > exAll { exAll = e; atY = Float(k) * 0.05 }; if Float(k) * 0.05 >= 0.9 { exAbove = max(exAbove, e) } } }
+        var exMid: Float = 0
+        for (k, pz) in plain { if let dz = disp[k], Float(k) * 0.05 >= 0.15 { exMid = max(exMid, dz - pz) } }
+        var out = String(format: "backExcess_y>0.9=%.4f backExcess_max=%.4f (at y=%.2f; bottom bins are shifted-in tube root) backExcess_max_y>=0.15=%.4f\n", exAbove, exAll, atY, exMid)
+        out += "backExcess profile by y: " + (0...27).compactMap { k -> String? in if let a = plain[2 * k], let b = disp[2 * k] { return String(format: "%.1f:%.3f", Float(2 * k) * 0.05, b - a) }; return nil }.joined(separator: " ") + "\n"
+        // (b)
+        var tExit = 0.0, t = 0.0
+        while t <= sh.length { let pt = sh.point(t); if inside(SIMD3(Float(pt.x), Float(pt.y), Float(pt.z))) { tExit = t }; t += 0.004 }
+        let exposed = sh.length - tExit + sh.tipR
+        out += String(format: "exposedTail=%.4f tExit=%.3f length=%.3f sink=%.2f tipR=%.3f width=%.3f\n", exposed, tExit, sh.length, sh.sink, sh.tipR, sh.width)
+        // (c)
+        func hOf(_ q: SIMD3<Float>) -> Float { sH * TailBean.swellWeight(q) }
+        var angles: [Double] = [], topAngles: [Double] = []
+        for j in 0..<TailBean.around {
+            let ph = 2 * Double.pi * Double(j) / Double(TailBean.around)
+            var tj = -1.0
+            var tt = 0.0
+            while tt <= sh.length {
+                let f = sh.frame(tt), tg = sh.tangent(tt), v = simd_normalize(simd_cross(tg, f.side))
+                let rad = f.side * cos(ph) + v * sin(ph), q = sh.point(tt) + rad * sh.radius(tt)
+                if inside(SIMD3(Float(q.x), Float(q.y), Float(q.z))) { tj = tt }
+                tt += 0.004
+            }
+            if tj < 0 || tj >= sh.length - 0.01 { continue }
+            let f = sh.frame(tj), tg = sh.tangent(tj), v = simd_normalize(simd_cross(tg, f.side))
+            let rad = f.side * cos(ph) + v * sin(ph), q = sh.point(tj) + rad * sh.radius(tj)
+            let qf = SIMD3(Float(q.x), Float(q.y), Float(q.z)), p0 = inv(qf)
+            let n0 = BobForm.normal(SIMD3(Double(p0.x), Double(p0.y), Double(p0.z)))
+            var cols = [SIMD3<Float>(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
+            for a in 0..<3 {
+                var dq = SIMD3<Float>(repeating: 0); dq[a] = 0.01
+                let g = (hOf(p0 + dq) - hOf(p0 - dq)) / 0.02
+                cols[a] += sd * g
+            }
+            let Jm = simd_float3x3(cols[0], cols[1], cols[2])
+            let nE = simd_normalize(Jm.inverse.transpose * SIMD3(Float(n0.x), Float(n0.y), Float(n0.z)))
+            let nT = simd_normalize(SIMD3(Float(rad.x), Float(rad.y), Float(rad.z)))
+            let ang = Double(acosf(max(-1, min(1, simd_dot(nE, nT))))) * 180 / .pi
+            angles.append(ang); if v.y * sin(ph) > 0 { topAngles.append(ang) }
+        }
+        func st(_ a: [Double]) -> String { a.isEmpty ? "n/a" : String(format: "mean=%.1f max=%.1f n=%d", a.reduce(0, +) / Double(a.count), a.max()!, a.count) }
+        out += "crease_deg all-around: \(st(angles)); upper half: \(st(topAngles))\n"
+        return out
+    }
+
+    func testPipBackStills() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let root = env["PIPBACK_DIR"], !root.isEmpty else { throw XCTSkip("PIPBACK_DIR not set") }
+        let tag = PipBack.tag.replacingOccurrences(of: ":", with: "_").replacingOccurrences(of: ",", with: "_")
+        let base = "\(root)/\(tag)"
+        try FileManager.default.createDirectory(atPath: base, withIntermediateDirectories: true)
+        var numbers = "PIPBACK=\(PipBack.tag)\n" + backNumbers()
+        for (who, id, outfit, dressed) in [("bob", 0, Outfit(), false), ("bare", 1, Outfit(), false), ("dressed", 1, [.head: .beaniePink, .face: .heartShades] as Outfit, true)] {
+            let d = "\(base)/\(who)"
+            try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+            let chars = [Char(id: id, outfit: outfit)]
+            let lab = makeLab(chars); let dr = dress(lab, chars); settle(lab, dr, chars)
+            let c = try makeCtx(sim: lab.rigs[0].sim, W: 560, H: 560)
+            let s = subj(lab, dr, chars)
+            var memo = SIMD3<Float>(0, 0, 1)
+            for (n, v) in pbViews() {
+                let cm = cam(v, s.sim, memo: &memo)
+                try write(render(c, s, cam: cm, neutral: true).uiImage()!, "\(d)/\(n).png")
+                if !dressed { try write(bodyMask(skin(s.skinner, s.sim), cam: cm, W: 560, H: 560).uiImage()!, "\(d)/\(n)_mask.png") }
+            }
+            let rc = try makeCtx(sim: lab.rigs[0].sim, W: 603, H: 1311)
+            let rcam = GameCamera.camera(aspect: 603.0 / 1311.0)
+            try write(render(rc, s, cam: rcam, neutral: false).uiImage()!, "\(d)/room_portrait.png")
+            if !dressed { try write(bodyMask(skin(s.skinner, s.sim), cam: rcam, W: 603, H: 1311).uiImage()!, "\(d)/room_portrait_mask.png") }
+            if id == 1 { numbers += "[\(who)] spike seating (settled pose):\n" + spikeSeating(s, skin: skin(s.skinner, s.sim)) + "[\(who)] \(PipSpikes.debug.prefix(160))\n" }
+        }
+        try numbers.write(toFile: "\(base)/numbers.txt", atomically: true, encoding: .utf8)
+        _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+    }
+
     // MARK: 8. hats re-flow the ridge (g-piptail3 round 2): PIPTAIL4_DIR, one process per PIPTAIL variant
 
     private func dir4() throws -> String {

@@ -32,6 +32,31 @@ nonisolated enum PipTailVariant: String {
     var reflowsUnderHat: Bool { self != .current }
 }
 
+/// TEST-ONLY comparison override for the shape of Pip's back where the tail grows out of it (PIPBACK environment variable, read once, no UserDefaults):
+/// `now` (default, the Gaussian swell), `none` (no swell), `fillet:<k>` (a smooth-union fillet against the tail tube only, rolloff width k), each with an optional
+/// `,len:<f>` suffix that replaces the 0.74 tail-length factor in TailBean.shape (`vis = f * width - tipR`).
+nonisolated enum PipBack {
+    enum Mode: Equatable { case now, none, fillet(Float) }
+    static let parsed: (mode: Mode, len: Double) = {
+        guard let raw = ProcessInfo.processInfo.environment["PIPBACK"], !raw.isEmpty else { return (.now, 0.74) }
+        var mode = Mode.now, len = 0.74
+        for part in raw.split(separator: ",") {
+            let kv = part.split(separator: ":", maxSplits: 1).map(String.init)
+            switch kv[0] {
+            case "now": mode = .now
+            case "none": mode = .none
+            case "fillet": if kv.count == 2, let k = Float(kv[1]), k > 0 { mode = .fillet(k) }
+            case "len": if kv.count == 2, let f = Double(kv[1]), f > 0 { len = f }
+            default: break
+            }
+        }
+        return (mode, len)
+    }()
+    static var mode: Mode { parsed.mode }
+    static var lenFactor: Double { parsed.len }
+    static var tag: String { ProcessInfo.processInfo.environment["PIPBACK"].flatMap { $0.isEmpty ? nil : $0 } ?? "now" }
+}
+
 nonisolated enum TailBean {
     /// Named tail size constants (rest units / fractions of the body width) so contact spheres can follow the tail: radius knots at 0 / 40% / 75% / 100% of the visible
     /// length (half-widths as fractions of the body width) BEFORE `radiusScale`, the scale itself, and the tip cap radius.
@@ -110,7 +135,7 @@ nonisolated enum TailBean {
         let width = 2 * xlo
         let tipR = TailBean.tipRadius, sink = 0.30, ys = 1.0
         let baseR = width * radiusKnots[0].1 * radiusScale                                             // about a third of the body width across
-        let vis = 0.74 * width - tipR                                      // surface -> start of the round tip cap
+        let vis = PipBack.lenFactor * width - tipR                                      // surface -> start of the round tip cap
         let length = sink + vis
         let step = 0.004
         var shape = Shape(root: root, table: [], step: step, length: length, sink: sink, tipR: tipR, baseR: baseR, xs: 1.0, ys: ys, width: width)
@@ -165,7 +190,8 @@ nonisolated enum TailBean {
     /// The rest-space height of the floor under the tail (the egg sits about this much below its rest y once settled).
     static let restFloor: Float = 0.12
     /// The swell on the egg's lower back (Skinner.configureTail): how far (rest units) its vertices are pushed along the tail's start direction, and how widely.
-    static let swellHeight: Float = 0.30, swellSigma: Float = 0.42
+    static let swellHeight: Float = { switch PipBack.mode { case .now: return 0.30; case .none: return 0; case .fillet(let k): return k / 4 } }()
+    static let swellSigma: Float = 0.42
     /// The swell fades out over this rest height band (the root is at 0.47 and the tail tube's top meets the back below 0.9, which the swell must keep covering; the head cap the crown fit reads starts at about 1.19): it shapes the lower back
     /// where it becomes the tail, never the head. Unfaded, the Gaussian pushed the back of his head out under the hat, and the per-frame crown fit
     /// (CrownFit) lifted and dropped the hat by up to 0.45 every step: the bouncing head and the broken back of the hat.
@@ -173,7 +199,28 @@ nonisolated enum TailBean {
     /// The swell's weight at rest point `q` (0...1): a Gaussian about the tail root, faded out above `swellTopFade`. The skin (Skinner.configureTail) and
     /// the spike ridge (PipOptions) share it, so the spikes stay seated on the swelled back.
     static func swellWeight(_ q: SIMD3<Float>) -> Float {
-        expf(-simd_length_squared(q - rootF) / (2 * swellSigma * swellSigma)) * (1 - simd_smoothstep(swellTopFade.lowerBound, swellTopFade.upperBound, q.y))
+        switch PipBack.mode {
+        case .none: return 0
+        case .fillet(let k): return filletWeight(q, k: k) * (1 - simd_smoothstep(swellTopFade.lowerBound, swellTopFade.upperBound, q.y))
+        case .now: break
+        }
+        return expf(-simd_length_squared(q - rootF) / (2 * swellSigma * swellSigma)) * (1 - simd_smoothstep(swellTopFade.lowerBound, swellTopFade.upperBound, q.y))
+    }
+    /// (test-only PIPBACK=fillet:k) Smooth-union fillet against the round tail tube: b = distance from the rest point to the tube surface (centre-line table, radius profile);
+    /// the displacement is (k - b)^2 / 4k for 0 <= b < k and k/4 inside the tube, expressed as swellHeight (k/4) * ((k - b) / k)^2 clamped to 0...1.
+    static func filletWeight(_ q: SIMD3<Float>, k: Float) -> Float {
+        if simd_distance(q, rootF) > 1.0 { return 0 }                                   // cheap early-out: nothing within k of the tube this far from the root
+        let s = shape, qd = SIMD3<Double>(Double(q.x), Double(q.y), Double(q.z))
+        var b = Double.infinity
+        var i = 0
+        while i < s.table.count - 1 {                                                  // every 2nd sample (8 mm)
+            let t = Double(i) * s.step
+            if t > s.length { break }
+            b = min(b, simd_distance(qd, s.table[i]) - s.radius(t))
+            i += 2
+        }
+        let w = (Double(k) - b) / Double(k)
+        return Float(min(max(w, 0), 1) * min(max(w, 0), 1))
     }
     static let startDir: SIMD3<Float> = { let d = shape.tangent(shape.sink + 0.05); return SIMD3(Float(d.x), Float(d.y), Float(d.z)) }()
     /// Per vertex: the rest height of its ring's centre (so a whole ring blends rigid -> floor-lying by the same weight and is never squashed).
