@@ -128,6 +128,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
             float2 bp2 = (float2(Q.x, Q.y - (crisp ? 0.335 : 0.325))) / (crisp ? float2(0.335, 0.205) : float2(0.285, 0.170));
             bk = (1.0 - smoothstep(crisp ? 0.70 : 0.30, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
             lk = crisp ? 0.44 : 0.36;
+            if (tn > 2.5) { bk = (1.0 - smoothstep(0.95, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z); }          // Teddy: a clean defined edge (a narrow soft rim), not B2's wider fade
         }
         float3 lt = mix(col, float3(1.0), lk);
         if (tn > 2.5) { lt = mix(col, float3(1.0, 0.92, 0.76), 0.50); }          // tone 3 (Teddy): a warm cream-tan lift of the shaded body colour

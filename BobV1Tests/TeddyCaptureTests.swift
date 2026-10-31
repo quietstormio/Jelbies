@@ -175,7 +175,8 @@ extension FeatureCaptureTests {
     func testTeddyHats() throws {
         let d = try teddyDir(); teddyTone()
         DayClock.shared.forcedHour = 12
-        let hats = WearLook.looks(.head)
+        var hats = WearLook.looks(.head)
+        if let only = ProcessInfo.processInfo.environment["TEDDY_HATS"], !only.isEmpty { let n = only.split(separator: ",").map(String.init); hats = hats.filter { n.contains($0.art) } }
         var front: [UIImage] = [], back: [UIImage] = [], notes = "hat | ears | slide | pom\n"
         for look in hats {
             let sF = try teddyShot(outfit: [.head: look], yaw: 0.6, size: 460, dist: 3.0, lookY: 0.32, lift: 0.1)

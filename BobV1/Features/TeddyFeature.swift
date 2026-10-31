@@ -51,29 +51,35 @@ nonisolated enum TeddyLook {
     }()
     /// Linear colours (vertex stream): the ear's outer lobe = the drawn body colour; the inner cup a touch deeper and warmer (as in the reference, where the cup is the
     /// deeper tone of the ear); the pom the belly's warm cream.
-    /// The vertex-coloured parts are lit by the room's plain shader, a touch darker than the matte body shader lights the body: lift them to match.
-    static let furLift: Float = 1.08
-    static func earOuter(_ t: Tone = current) -> SIMD3<Float> { OKLab.srgbToLinear(simd_clamp(t.drawn * furLift, SIMD3(repeating: 0), SIMD3(repeating: 1))) }
-    static func earInner(_ t: Tone = current) -> SIMD3<Float> { OKLab.srgbToLinear(simd_clamp(t.drawn * furLift * SIMD3(0.82, 0.72, 0.64), SIMD3(repeating: 0), SIMD3(repeating: 1))) }
+    /// The ears / pom are vertex-coloured and lit by the room's plain shader, the body by the matte fur shader: `earGain` (per channel, calibrated by
+    /// TeddyCalibrateTests.testTeddyEarMatch against the body pixels next to the ear) makes the ear DRAW as the same colour as the body.
+    nonisolated(unsafe) static var earGain = SIMD3<Float>(0.875, 0.92, 0.97)
+    static func tuned(_ c: SIMD3<Float>) -> SIMD3<Float> { OKLab.srgbToLinear(simd_clamp(c * earGain, SIMD3(repeating: 0), SIMD3(repeating: 1))) }
+    static func earOuter(_ t: Tone = current) -> SIMD3<Float> { tuned(t.drawn) }
+    /// The cup: only a touch deeper than the body (a soft shallow dish).
+    static func earInner(_ t: Tone = current) -> SIMD3<Float> { tuned(t.drawn * SIMD3(0.90, 0.85, 0.80)) }
     static func pomColor(_ t: Tone = current) -> SIMD3<Float> {
         let cream = SIMD3<Float>(1.0, 0.93, 0.78)
-        return OKLab.srgbToLinear(simd_clamp((t.drawn + (cream - t.drawn) * 0.50) * furLift, SIMD3(repeating: 0), SIMD3(repeating: 1)))
+        return tuned(simd_clamp(t.drawn + (cream - t.drawn) * 0.35, SIMD3(repeating: 0), SIMD3(repeating: 1)) * 1.04)
     }
 }
 
 nonisolated enum TeddyMesh {
     // MARK: the design numbers (rest space: y up, +z = the face)
 
-    /// Ear anchor: polar angle from straight up (deg) and azimuth from the front (deg; > 90 = behind the ears' centre line). The ear's centre sits
-    /// `earEmbed` x its radius out along the surface normal (half sunk), its cup faces `earFace` of the way from the normal toward the front.
-    static let earPolar: Float = 42, earAzimuth: Float = 84
-    static let earRadius: Float = 0.185, earThick: Float = 0.62, earEmbed: Float = 0.42, earFace: Float = 0.95
-    static let cupRadius: Float = 0.62, cupDepth: Float = 0.30
+    /// The RIGHT (+x) ear, matched to the reference (revision 2): an upright round disc standing vertically and FACING FORWARD at the top corner of the head, its centre
+    /// on the head's outline as seen from the front (so the head overlaps its lower inner third), slightly behind the centre plane. `earHome` = its centre (rest space);
+    /// `earFace` = the direction the disc faces (the cup side); `earRoll` = the point the ears slide about (down the side of the head) under a hat.
+    nonisolated(unsafe) static var earHome = SIMD3<Float>(0.391, 1.217, 0.02)
+    nonisolated(unsafe) static var earFace = SIMD3<Float>(0.22, 0.12, 1.0)
+    static let earRoll = SIMD2<Float>(0, 0.85)
+    nonisolated(unsafe) static var earRadius: Float = 0.156
+    nonisolated(unsafe) static var earThick: Float = 0.72, cupRadius: Float = 0.62, cupDepth: Float = 0.22
     /// The pom: a ball on the lower back centre line.
-    static let pomRadius: Float = 0.112, pomY: Float = 0.50, pomEmbed: Float = 0.30
-    static let earCentreFrom = SIMD3<Float>(0, 0.80, 0)
+    static let pomRadius: Float = 0.118, pomY: Float = 0.50, pomEmbed: Float = 0.30, pomFluff: Float = 0.035
 
-    static let segments = 20, rings = 14, pomSegments = 16, pomRings = 10
+    static let plushWrap: Float = 0.45
+    static let segments = 20, rings = 14, pomSegments = 20, pomRings = 12
 
     // MARK: surface helpers (BobForm.bodySDF, the egg)
 
@@ -89,11 +95,13 @@ nonisolated enum TeddyMesh {
         return (SIMD3(Float(p.x), Float(p.y), Float(p.z)), SIMD3(Float(n.x), Float(n.y), Float(n.z)))
     }
 
-    /// Where the RIGHT (+x) ear grows from the egg, `slide` degrees further down the side of the head than its home spot.
-    static func earSpot(slide: Float) -> (p: SIMD3<Float>, n: SIMD3<Float>) {
-        let pol = (earPolar + slide) * .pi / 180, az = earAzimuth * .pi / 180
-        let dir = SIMD3<Float>(sinf(pol) * sinf(az), cosf(pol), sinf(pol) * cosf(az))
-        return surface(from: earCentreFrom, dir: simd_normalize(dir))
+    /// The right ear's centre and facing, `slide` degrees round the head's side (positive = down and out, negative = in and up) about `earRoll`.
+    static func earSpot(slide: Float) -> (p: SIMD3<Float>, w: SIMD3<Float>) {
+        let th = slide * .pi / 180
+        func roll(_ x: Float, _ y: Float) -> (Float, Float) { (x * cosf(th) + y * sinf(th), -x * sinf(th) + y * cosf(th)) }
+        let d = earHome - SIMD3(earRoll.x, earRoll.y, 0)
+        let (x, y) = roll(d.x, d.y)
+        return (SIMD3(earRoll.x + x, earRoll.y + y, earHome.z), simd_normalize(earFace))
     }
     static func pomSpot() -> (p: SIMD3<Float>, n: SIMD3<Float>) { surface(from: SIMD3(0, pomY, 0), dir: SIMD3(0, 0, -1)) }
 
@@ -105,7 +113,7 @@ nonisolated enum TeddyMesh {
 
     /// Frame: `w` = the facing axis (the cup looks along it), centre, radius `r` across and `h` along w. `cup` = (radius fraction, depth fraction of h) or nil.
     static func lobe(centre: SIMD3<Float>, w: SIMD3<Float>, up: SIMD3<Float>, r: Float, h: Float, cup: (rho: Float, depth: Float)?, outer: SIMD3<Float>, inner: SIMD3<Float>,
-                     segs: Int, rings nr: Int, aoBack: Float) -> Lobe {
+                     segs: Int, rings nr: Int, aoBack: Float, fluff: Float = 0) -> Lobe {
         var L = Lobe()
         let e1 = simd_normalize(simd_cross(up, w)), e2 = simd_cross(w, e1)
         for i in 0...nr {
@@ -114,7 +122,9 @@ nonisolated enum TeddyMesh {
             for j in 0..<segs {
                 let ph = 2 * Float.pi * Float(j) / Float(segs)
                 let cx = cosf(ph), cy = sinf(ph)
-                var lw = h * ct
+                // a soft puffy surface: low lumps (fluff) in the radius
+                let fl = 1 + fluff * sinf(5 * th) * cosf(3 * ph + 1.1)
+                var lw = h * ct * fl
                 var tint: Float = 0
                 var ao: Float = 1
                 if let c = cup, ct > 0 {
@@ -125,7 +135,7 @@ nonisolated enum TeddyMesh {
                     ao = 1 - 0.14 * (1 - smoothstep(0, 1, rho))
                 }
                 if ct < 0 { ao = 1 - (1 - aoBack) * min(1, -ct * 1.6) }            // the half sunk into the head
-                L.pos.append(centre + e1 * (r * st * cx) + e2 * (r * st * cy) + w * lw)
+                L.pos.append(centre + e1 * (r * fl * st * cx) + e2 * (r * fl * st * cy) + w * lw)
                 L.nrm.append(w)         // replaced by the smoothed face normals below
                 L.col.append(outer + (inner - outer) * tint)
                 L.ao.append(ao)
@@ -140,6 +150,15 @@ nonisolated enum TeddyMesh {
             }
         }
         smoothNormals(&L, centre: centre)
+        // the two poles are rings of coincident vertices with different face fans: give each the mean normal of the ring next to it (no pinched shading)
+        for (pole, next) in [(0, 1), (nr, nr - 1)] {
+            var m = SIMD3<Float>.zero
+            for j in 0..<segs { m += L.nrm[next * segs + j] }
+            let nn = simd_length(m) > 1e-9 ? simd_normalize(m) : w
+            for j in 0..<segs { L.nrm[pole * segs + j] = nn }
+        }
+        // soft plush lighting: lean every normal toward a fixed "up and forward" so the back / underside of a lobe is not much darker than the matte body next to it
+        for k in 0..<L.nrm.count { L.nrm[k] = simd_normalize(L.nrm[k] * (1 - plushWrap) + SIMD3<Float>(0, 0.6, 0.8) * plushWrap) }
         return L
     }
     static func smoothstep(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t) }
@@ -163,20 +182,17 @@ nonisolated enum TeddyMesh {
     // MARK: the whole feature
 
     static func ear(slide: Float, left: Bool, tone: TeddyLook.Tone) -> (lobe: Lobe, pivot: SIMD3<Float>) {
-        var (p, n) = earSpot(slide: slide)
-        let fwd = SIMD3<Float>(0, 0, 1)
-        var w = simd_normalize(n + fwd * earFace)
-        var centre = p + n * (earEmbed * earRadius)
-        if left { p.x = -p.x; n.x = -n.x; w.x = -w.x; centre.x = -centre.x }
-        let L = lobe(centre: centre, w: w, up: SIMD3(0, 1, 0), r: earRadius, h: earRadius * earThick, cup: (cupRadius, cupDepth), outer: TeddyLook.earOuter(tone), inner: TeddyLook.earInner(tone),
-                     segs: segments, rings: rings, aoBack: 0.55)
-        return (L, p)
+        var (c, w) = earSpot(slide: slide)
+        if left { c.x = -c.x; w.x = -w.x }
+        let L = lobe(centre: c, w: w, up: SIMD3(0, 1, 0), r: earRadius, h: earRadius * earThick, cup: (cupRadius, cupDepth), outer: TeddyLook.earOuter(tone), inner: TeddyLook.earInner(tone),
+                     segs: segments, rings: rings, aoBack: 0.8, fluff: 0)
+        return (L, c)
     }
     static func pom(tone: TeddyLook.Tone) -> (lobe: Lobe, pivot: SIMD3<Float>) {
         let (p, n) = pomSpot()
         let centre = p + n * (pomEmbed * pomRadius)
-        let L = lobe(centre: centre, w: n, up: SIMD3(0, 1, 0), r: pomRadius, h: pomRadius, cup: nil, outer: TeddyLook.pomColor(tone), inner: TeddyLook.pomColor(tone),
-                     segs: pomSegments, rings: pomRings, aoBack: 0.7)
+        let L = lobe(centre: centre, w: SIMD3(0, 0, -1), up: SIMD3(0, 1, 0), r: pomRadius, h: pomRadius, cup: nil, outer: TeddyLook.pomColor(tone), inner: TeddyLook.pomColor(tone),
+                     segs: pomSegments, rings: pomRings, aoBack: 0.7, fluff: pomFluff)
         return (L, p)
     }
 
