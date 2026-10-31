@@ -148,3 +148,33 @@ final class RenderScalerTests: XCTestCase {
         for _ in 0..<(60 * 8) { XCTAssertNil(g.update(dt: dt, gpuMs: 3, thermal: .nominal, lowPower: false, atNative: false)) }
     }
 }
+
+final class FramePacingTests: XCTestCase {
+    func testSteadyDisplaySnapsToOneStepPerFrame() {
+        var acc: Float = 0
+        var steps: [Int] = []
+        let stepDt: Float = 1.0 / 60
+        for raw in [0.0158, 0.0175, 0.0166, 0.0181, 0.0152, 0.0169] {
+            acc += MelonController.pacedDt(raw, fps: 60)
+            var n = 0
+            while acc >= stepDt - 1e-6 && n < 2 { acc -= stepDt; n += 1 }
+            steps.append(n)
+        }
+        XCTAssertEqual(steps, [1, 1, 1, 1, 1, 1])
+    }
+    func testHitchesPassThroughAndSlowFramesSnapToWholeIntervals() {
+        XCTAssertEqual(MelonController.pacedDt(0.0333, fps: 60), Float(2.0 / 60), accuracy: 1e-6)
+        XCTAssertEqual(MelonController.pacedDt(0.0250, fps: 60), 0.0250, accuracy: 1e-6)          // between two intervals: left alone
+        XCTAssertEqual(MelonController.pacedDt(0.5, fps: 60), 0.1, accuracy: 1e-6)
+    }
+    func test120HzRunsEveryOtherFrame() {
+        var acc: Float = 0; var total = 0
+        for _ in 0..<120 { acc += MelonController.pacedDt(0.0085, fps: 120); if acc >= Float(1.0 / 60) - 1e-6 { acc -= Float(1.0 / 60); total += 1 } }
+        XCTAssertEqual(total, 60)
+    }
+    func testRateNeedsCPUHeadroomFor120() {
+        var g = RateGovernor(maxFPS: 120)
+        for _ in 0..<(60 * 8) { XCTAssertNil(g.update(dt: 1.0 / 60, gpuMs: 3, thermal: .nominal, lowPower: false, cpuMs: 12)) }
+        XCTAssertNotNil((0..<(60 * 4)).compactMap { _ in g.update(dt: 1.0 / 60, gpuMs: 3, thermal: .nominal, lowPower: false, cpuMs: 3) }.first)
+    }
+}

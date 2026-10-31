@@ -90,6 +90,8 @@ struct RenderScaler {
 struct RateGovernor {
     static let upBelowMs = 5.0          // 120 only if the smoothed GPU time is this low at the current scale
     static let downAboveMs = 7.0        // 8.33 ms x 0.85
+    static let cpuUpBelowMs = 5.0       // 120 also needs the main thread under this (a 120 Hz frame is 8.33 ms of CPU too)
+    static let cpuDownAboveMs = 7.0
     static let upAfter = 3.0, downAfter = 0.5, retryAfterDrop = 30.0
 
     let maxFPS: Int
@@ -100,7 +102,7 @@ struct RateGovernor {
     init(maxFPS: Int) { self.maxFPS = maxFPS }
 
     /// Returns the new preferred fps if it changed.
-    mutating func update(dt: Double, gpuMs: Double?, thermal: ProcessInfo.ThermalState, lowPower: Bool, atNative: Bool = true) -> Int? {
+    mutating func update(dt: Double, gpuMs: Double?, thermal: ProcessInfo.ThermalState, lowPower: Bool, atNative: Bool = true, cpuMs: Double = 0) -> Int? {
         guard dt > 0, dt < 0.1 else { return nil }
         let hot = thermal == .serious || thermal == .critical
         if hold > 0 { hold -= dt }
@@ -110,9 +112,9 @@ struct RateGovernor {
         let ms = smoothed!
         if fps == 120 {
             overT = ms > Self.downAboveMs ? overT + dt : 0
-            if overT >= Self.downAfter { return set(60, hold: Self.retryAfterDrop) }
+            if overT >= Self.downAfter || cpuMs > Self.cpuDownAboveMs { return set(60, hold: Self.retryAfterDrop) }
         } else if !hot, !lowPower, atNative, hold <= 0, thermal != .fair {   // only at full resolution: never trade resolution for Hz
-            underT = ms < Self.upBelowMs ? underT + dt : 0
+            underT = (ms < Self.upBelowMs && cpuMs < Self.cpuUpBelowMs) ? underT + dt : 0          // CPU headroom too: cpuMs is the main thread's frame time (0 = not measured, tests)
             if underT >= Self.upAfter { return set(120, hold: 0) }
         }
         return nil

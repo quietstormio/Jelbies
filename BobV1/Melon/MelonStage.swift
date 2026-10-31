@@ -298,6 +298,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgStart: CFTimeInterval = 0
     private var matCost = 0.0, matN = 0
     private var dbgCPU: Double = 0
+    private var lastCPUMs = 0.0          // the last second's main-thread frame time (no GPU wait): the RateGovernor's CPU headroom check
     private var dbgWait: Double = 0
     private var dbgSim: Double = 0
     private var dbgSteps = 0
@@ -843,7 +844,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             NSLog("%@", String(format: "[melon] scale: -> %.2fx (gpu %.1f ms, budget %.1f ms, thermal %d%@)", s, gpu ?? 0, scaler?.budgetMs ?? 0, thermal.rawValue, Self.metalFXFlag ? ", MetalFX" : ""))
         }
         let atNative = (scaler?.level ?? 0) == 0
-        if let f = rateGov?.update(dt: dt, gpuMs: gpu, thermal: thermal, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled, atNative: atNative), f != lastAppliedFPS {
+        if let f = rateGov?.update(dt: dt, gpuMs: gpu, thermal: thermal, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled, atNative: atNative, cpuMs: lastCPUMs), f != lastAppliedFPS {
             lastAppliedFPS = f
             applyFrameRate(stage)
             NSLog("[melon] frame rate request -> %d Hz", f)
@@ -901,13 +902,24 @@ final class MelonController: NSObject, MTKViewDelegate {
         if flipped { applyFrameRate(stage); NSLog("[melon] idle rest: %@ (KE %.5f)", idleRest.resting ? "30 fps" : "back to full rate", Double(e ?? -1)) }
     }
 
+    /// Frame pacing: the wall-clock gap between two draws jitters by a millisecond or two around the display's interval, which made the
+    /// accumulator run 0 / 1 / 2 steps on a steady display. A gap within 35% of a whole number of display intervals is snapped to exactly
+    /// that many, so a steady 60 Hz display runs one 1/60 step per frame (and 120 Hz exactly every other frame); real hitches pass through.
+    static func pacedDt(_ raw: Double, fps: Int) -> Float {
+        let raw = min(raw, 0.1)
+        let interval = 1.0 / Double(max(fps, 1))
+        let n = (raw / interval).rounded()
+        if n >= 1, abs(raw / interval - n) < 0.35 { return Float(n * interval) }
+        return Float(raw)
+    }
+
     func draw(in view: MTKView) {
         guard let renderer, let stage = stageView, view.drawableSize.width >= 2, view.drawableSize.height >= 2,
               let drawable = view.currentDrawable else { return }
         LaunchTiming.mark("first frame drawn")
         let cpu0 = CACurrentMediaTime()
         let now = cpu0
-        let dt = lastTime == 0 ? Float(1.0 / 60) : min(Float(now - lastTime), 0.1)
+        let dt = lastTime == 0 ? Float(1.0 / 60) : Self.pacedDt(Double(now - lastTime), fps: stage.preferredFramesPerSecond)
         lastTime = now
         adaptScale(stage, dt: Double(dt))
 
@@ -956,7 +968,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
             let maxSteps = 2
             var steps = 0
-            while acc >= sim.stepDt && steps < maxSteps {
+            while acc >= sim.stepDt - 1e-6 && steps < maxSteps {          // (1e-6: a snapped 1/60 frame is exactly one step)
                 hopTick(reduce: reduce)
                 let st0 = CACurrentMediaTime()
                 stepSims.removeAll(keepingCapacity: true)
@@ -1110,6 +1122,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let el = now - dbgStart
             let f = Double(dbgFrames)
             let g = renderer.takeGPUStats()
+            lastCPUMs = (dbgCPU - dbgWait) / f * 1000
             NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms",
                          (dbgCPU - dbgWait) / f * 1000, dbgWait / f * 1000, g.avgMs, dbgSim / f * 1000,
                          dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000))
