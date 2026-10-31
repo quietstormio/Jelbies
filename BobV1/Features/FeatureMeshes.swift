@@ -74,7 +74,7 @@ nonisolated enum FeatureMeshes {
     }
 
     /// The prepared feature (cached per placement). `body` binds the part pivots.
-    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridge: RidgeLayout? = nil) -> FeaturePrepared? {
+    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridge: RidgeLayout? = nil, wingTint: WingTint? = nil) -> FeaturePrepared? {
         guard f != .none else { return nil }
         if f == .ears { return TeddyMesh.prepare(slide: p.slide, body: body) }          // built in code (TeddyFeature.swift)
         if f == .spines {          // Pip: the original spikes spaced down his back + on his tail (PipSpikes); none on his head
@@ -88,18 +88,18 @@ nonisolated enum FeatureMeshes {
             return r
         }
         let id = (f == .daisy && p.onHat) ? spec.daisyOnHat.id : f.art
-        let key = id + "|" + p.key + (f == .wings ? String(format: "|s%.3f", wingScale) : f == .spines ? String(format: "|k%.3f", spikeScale) : "")
+        let key = id + "|" + p.key + (f == .wings ? String(format: "|s%.3f", wingScale) : f == .spines ? String(format: "|k%.3f", spikeScale) : "") + (f == .wings ? (wingTint.map { "|w" + $0.key } ?? "") : "")
         lock.lock(); let c = prepared[key]; lock.unlock()
         if let c { return c }
         guard let a = art(id) else { return nil }
-        let r = build(f, id: id, art: a, placement: p, body: body, spec: spec)
+        let r = build(f, id: id, art: a, placement: p, body: body, spec: spec, wingTint: f == .wings ? wingTint : nil)
         lock.lock(); prepared[key] = r; lock.unlock()
         return r
     }
 
     static func rotX(_ deg: Float) -> simd_float3x3 { simd_float3x3(simd_quatf(angle: deg * .pi / 180, axis: SIMD3(1, 0, 0))) }
 
-    static func build(_ f: JellyFeature, id: String, art a: DecorMeshes.Art, placement p: Placement, body: WearBody, spec: FeatureSpec) -> FeaturePrepared {
+    static func build(_ f: JellyFeature, id: String, art a: DecorMeshes.Art, placement p: Placement, body: WearBody, spec: FeatureSpec, wingTint: WingTint? = nil) -> FeaturePrepared {
         let r = FeaturePrepared(art: id, key: p.key)
         // the rest-space placement of every vertex: anchor + offset, then the variant transform
         let anchorRest: SIMD3<Float>
@@ -150,7 +150,7 @@ nonisolated enum FeatureMeshes {
             for k in 0..<part.positions.count {
                 var q = place(part.positions[k])
                 if partScale != 1 { q = pivot + (q - pivot) * partScale }           // the wings: smaller about their hinge, still rooted there
-                r.rest.append(q); r.off.append(q - pivot); r.nrm.append(simd_normalize(placeN(part.normals[k]))); r.col.append(part.colors[k]); r.ao.append(part.ao[k])
+                r.rest.append(q); r.off.append(q - pivot); r.nrm.append(simd_normalize(placeN(part.normals[k]))); r.col.append(wingTint?.recolour(part.colors[k]) ?? part.colors[k]); r.ao.append(wingTint.map { 1 + $0.glow * (0.4 + 0.6 * min(part.ao[k], 1)) } ?? part.ao[k])
                 r.partOfVertex.append(pi)
                 centroid += q
             }
