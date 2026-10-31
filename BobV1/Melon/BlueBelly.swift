@@ -1,10 +1,10 @@
 //
 //  BlueBelly.swift
-//  MOCKUP (user picks before anything ships): a lighter blue on the front of the blue species (character 0, Bob / Blueberry) for distinction.
+//  SHIPPED (default ON, Release too): variant C2w3 / D1 (`eggW3D1`). A lighter blue on the front of the blue species (character 0, Bob / Blueberry) for distinction.
 //  The shaders (Shaders.metal, GfxBodyFast.metal, GfxJersey.metal, BathShaders.metal) draw it in rest space like the blush, so it follows the body
 //  as it squishes and never slides. It rides in `u.shape.w` (the body shaders never read `shape`), set by `MelonRenderer.applyPalette` for any body
 //  whose palette is the baby blue; every other colour gets 0 (pixel-identical to before). No per-frame allocation: one enum compare and one vector compare.
-//    off   no patch (the shipped look, and the default until the user picks)
+//    off   no patch (DEBUG override only)
 //    A     "Front":         the whole front of the body, blending softly round the sides
 //    B1    "Belly, subtle": a soft-edged lighter oval on the lower front belly
 //    B2    "Belly, clear":  the same oval, a bit larger, lighter and crisper
@@ -12,6 +12,7 @@
 //    C2    "Egg":           the same, B2's width at the belly narrowing toward the forehead
 //    C2w / C2ww  the egg about 12 % / 22 % wider (belly half-width 0.375 / 0.41, forehead 0.32 / 0.35); C2w3 / C2w4 about 32 % / 42 % (0.44 / 0.475, forehead 0.38 / 0.41)
 //  Light tone = the shaded body blue taken 40 % (A), 36 % (B1) or 44 % (B2) toward white, in the shader (so it is always derived from the real body colour).
+//  The blue Jelbie also draws NO cheek blush (Renderer.encodeFrame zeroes seed.w for the blue flesh; other colours keep it).
 //  DEBUG capture aid: launch with `-BlueBelly off|A|B1|B2|C1|C2|C2w|C2ww|C2w3|C2w4`.
 //
 
@@ -22,14 +23,17 @@ nonisolated enum BlueBelly: Int, CaseIterable {
     /// Darker, still-blue tones of the two widest eggs (raw value = shape mode + 10 x tone: 1 = D1, 2 = D2).
     case eggW3D1 = 18, eggW3D2 = 28, eggW4D1 = 19, eggW4D2 = 29
 
-    /// The variant in force. Off until the user picks; tests / captures set it directly.
+    /// What ships (Release too): the egg at +32 % width in the D1 tone (user pick, 2026-10-31).
+    static let shipped: BlueBelly = .eggW3D1
+
+    /// The variant in force. The shipped look unless a DEBUG launch arg / test sets it.
     nonisolated(unsafe) static var current: BlueBelly = launchValue
 
     static let launchValue: BlueBelly = {
         #if DEBUG
-        if let s = UserDefaults.standard.string(forKey: "BlueBelly") { return parse(s) ?? .off }
+        if let s = UserDefaults.standard.string(forKey: "BlueBelly") { return parse(s) ?? shipped }     // DEBUG-only override (off, A, B1 ... C2w4D2) to show the alternatives
         #endif
-        return .off
+        return shipped
     }()
 
     static func parse(_ s: String) -> BlueBelly? {
@@ -54,6 +58,12 @@ nonisolated enum BlueBelly: Int, CaseIterable {
 
     /// The baby blue body colour (lit tone): the one palette that gets the patch.
     static let blueFlesh: SIMD3<Float> = PaletteKey.blue.palette.flesh
+
+    /// The blue Jelbie draws no cheek blush (true when shipped). Tests / captures flip it to render the old look.
+    nonisolated(unsafe) static var noBlushOnBlue = true
+
+    /// True when a uniform flesh colour is the baby blue (the blue Jelbie has no cheek blush; see Renderer.encodeFrame).
+    static func isBlueFlesh(_ f: SIMD4<Float>) -> Bool { f.x == blueFlesh.x && f.y == blueFlesh.y && f.z == blueFlesh.z }
 
     /// The shader mode for a body painted with `palette` (0 = none).
     @inline(__always) static func mode(for palette: Palette) -> Float {

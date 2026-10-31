@@ -877,7 +877,10 @@ final class MelonRenderer {
         // mouthOpen rides in `stripe.w` (byte 460 of MelonUniforms); written here so it is always current for this frame.
         for (i, slot) in slots.enumerated() {
             slot.uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? slot.mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
-            slot.uboBuf.contents().storeBytes(of: min(max(forcedBlush ?? slot.blush, 0), 1), toByteOffset: 476, as: Float.self)          // seed.w
+            // The baby-blue Jelbie has no cheek blush at all (rest or emotional): the lighter front stands instead. Every other colour keeps its blush.
+            let fleshAt = MemoryLayout<MelonUniforms>.offset(of: \.flesh) ?? 0
+            let isBlue = BlueBelly.noBlushOnBlue && BlueBelly.isBlueFlesh(slot.uboBuf.contents().load(fromByteOffset: fleshAt, as: SIMD4<Float>.self))
+            slot.uboBuf.contents().storeBytes(of: isBlue ? 0 : min(max(forcedBlush ?? slot.blush, 0), 1), toByteOffset: 476, as: Float.self)          // seed.w
             _ = i
         }
         let m = mesh

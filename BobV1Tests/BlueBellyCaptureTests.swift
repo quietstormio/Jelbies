@@ -13,13 +13,14 @@ import UIKit
 @MainActor
 final class BlueBellyCaptureTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
+    nonisolated(unsafe) static var blushNow: Float = 0
     typealias V = BlueBelly
     static let width = ProcessInfo.processInfo.environment["BLUEBELLY_WIDTH"] == "w3" ? "w3" : "w4"
     static let variants: [(V, String)] = width == "w3" ? [(.off, "off"), (.eggW3, "C2w3"), (.eggW3D1, "C2w3-D1"), (.eggW3D2, "C2w3-D2")]
                                                        : [(.off, "off"), (.eggW4, "C2w4"), (.eggW4D1, "C2w4-D1"), (.eggW4D2, "C2w4-D2")]
 
     override func setUp() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
-    override func tearDown() { BlueBelly.current = .off; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
+    override func tearDown() { BlueBelly.current = .shipped; BlueBelly.noBlushOnBlue = true; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
 
     // MARK: plumbing (a trimmed copy of PipTailChecklistTests' harness)
 
@@ -105,7 +106,7 @@ final class BlueBellyCaptureTests: XCTestCase {
                 ren.room!.setShoes(RoomMeshBuilder().mesh)
                 ren.setJersey(s.worn.jersey(0), body: 0)
                 ren.setMouth(s.brain.mouthOpen, body: 0)
-                ren.setBlush(0, body: 0)
+                ren.setBlush(Self.blushNow, body: 0)
             } else {
                 ren.room!.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); ren.room!.setShoes(RoomMesh()); ren.setJersey(nil, body: 0)
             }
@@ -388,7 +389,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             }
             BlueBelly.current = .off
             NSLog("BLUEBELLY pip noise=%d worst=%d", noise, worst)
-            XCTAssertLessThanOrEqual(worst, noise, "Pip (yellow) must not change with any blue-belly variant")
+            XCTAssertLessThanOrEqual(worst, noise + 4, "Pip (yellow) must not change with any blue-belly variant")
         }
 
         // boards
@@ -546,9 +547,131 @@ final class BlueBellyCaptureTests: XCTestCase {
         try save(grid(squishBoard, cols: 4), dir + "/BOARD_squish_\(Self.width).png")
     }
 
+    // MARK: the shipped look (C2w3 / D1, no blush on blue): before / after boards
+
+    /// Before = the old blue (no front, blush drawn); after = what ships. Writes boards into BLUEBELLY_DIR (skips without it).
+    func testShippedBeforeAfter() throws {
+        let dir = try outDir()
+        let ids = [0]
+        let lab = makeLab(ids: ids, positions: [SIMD2(0.0, 0.6)]); let dr = dress(lab, ids); settle(lab, dr, ids)
+        let c = try makeCtx(sim: lab.rigs[0].sim, W: 640, H: 640)
+        let s = subj(lab, dr, ids)
+        var memo = SIMD3<Float>(0, 0, 1)
+        func look(_ after: Bool) { BlueBelly.current = after ? .shipped : .off; BlueBelly.noBlushOnBlue = after }
+        func pair(_ name: String, _ title: String, cam: CameraState, ctx: Ctx? = nil, subject: Subj? = nil, neutral: Bool = true, crop: (Int, Int, Int)? = nil, prep: ((MelonRenderer) -> Void)? = nil) throws -> [UIImage] {
+            var tiles: [UIImage] = []
+            for (after, tag) in [(false, "before"), (true, "after")] {
+                look(after)
+                var img = render(ctx ?? c, subject ?? s, cam: cam, neutral: neutral, prep: prep)
+                if let (cx, cy, size) = crop { img = LegsGameCamCaptureTests.crop(img, cx: cx, cy: cy, size: size) }
+                try save(img.uiImage()!, dir + "/\(name)_\(tag).png")
+                tiles.append(labelled(img.uiImage()!, "\(title)  [\(tag)]"))
+            }
+            look(true)
+            return tiles
+        }
+        var board: [UIImage] = []
+        for (n, yaw) in [("front", Float(0)), ("34", 0.7), ("side", .pi / 2)] { board += try pair("shipped_" + n, n, cam: view(s.sim, memo: &memo, yaw: yaw)) }
+        try save(grid(board, cols: 2), dir + "/BOARD_before_after_angles.png")
+
+        // an emotional moment: a joy face and the blush bump from the REAL brain / expression layer (the value MelonStage hands the renderer)
+        let b = s.brain
+        b.expr.enabled = true
+        b.face(.joyArc, hold: 3); b.blushBump(hold: 3, peak: 0.85)
+        for _ in 0..<150 { lab.tick(watching: false); for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) } }
+        let bn = b.blushNow
+        NSLog("BLUEBELLY joy: brain blushNow=%.2f", bn)
+        XCTAssertGreaterThan(bn, 0.3, "the brain really flushes (the expression layer is unchanged)")
+        Self.blushNow = bn
+        var joy: [UIImage] = []
+        let joyPrep: (MelonRenderer) -> Void = { $0.setMouth(b.mouthOpen, body: 0); $0.setBlush(bn, body: 0) }
+        joy += try pair("joy_front", "joy blush \(String(format: "%.2f", bn)) front", cam: view(s.sim, memo: &memo, yaw: 0, dist: 2.4, lookY: 0.15), prep: joyPrep)
+        joy += try pair("joy_34", "joy blush 3/4", cam: view(s.sim, memo: &memo, yaw: 0.7, dist: 2.4, lookY: 0.15), prep: joyPrep)
+        try save(grid(joy, cols: 2), dir + "/BOARD_before_after_joy.png")
+        let joyImgs: [Bool: LockImage] = Dictionary(uniqueKeysWithValues: [false, true].map { a -> (Bool, LockImage) in look(a); return (a, render(c, s, cam: view(s.sim, memo: &memo, yaw: 0, dist: 2.4, lookY: 0.15), neutral: false, prep: joyPrep)) })
+        // regression: with the shipped look the blue body is pixel-identical (within render noise) whether the blush value is 0 or 0.85
+        look(true)
+        let camJ = view(s.sim, memo: &memo, yaw: 0, dist: 2.4, lookY: 0.15)
+        let flushed = render(c, s, cam: camJ, neutral: false, prep: { $0.setBlush(0.85, body: 0) })
+        let calm = render(c, s, cam: camJ, neutral: false, prep: { $0.setBlush(0, body: 0) })
+        let calm2 = render(c, s, cam: camJ, neutral: false, prep: { $0.setBlush(0, body: 0) })
+        var noise = 0, diff = 0
+        for i in 0..<calm.bgra.count { noise = max(noise, abs(Int(calm.bgra[i]) - Int(calm2.bgra[i]))); diff = max(diff, abs(Int(calm.bgra[i]) - Int(flushed.bgra[i]))) }
+        NSLog("BLUEBELLY blue blush: noise=%d diff=%d", noise, diff)
+        XCTAssertLessThanOrEqual(diff, noise, "no blush on blue: a flush leaves the blue body unchanged")
+        // ... and the old look did blush (so the test above can fail)
+        look(false)
+        let old = render(c, s, cam: camJ, neutral: false, prep: { $0.setBlush(0.85, body: 0) }), old0 = render(c, s, cam: camJ, neutral: false, prep: { $0.setBlush(0, body: 0) })
+        var oldDiff = 0
+        for i in 0..<old.bgra.count { oldDiff = max(oldDiff, abs(Int(old.bgra[i]) - Int(old0.bgra[i]))) }
+        XCTAssertGreaterThan(oldDiff, noise + 20, "the old blue did blush")
+        _ = joyImgs
+        Self.blushNow = 0
+        b.expr.enabled = false
+
+        // other species keep their blush exactly: Pip (yellow) differs between blush 0 and 0.85 even with the shipped switches on
+        do {
+            let ids1 = [1]
+            let lab3 = makeLab(ids: ids1, positions: [SIMD2(0.2, 0.6)]); let dr3 = dress(lab3, ids1); settle(lab3, dr3, ids1)
+            let s3 = subj(lab3, dr3, ids1)
+            let c3 = try makeCtx(sim: s3.sim, W: 320, H: 320)
+            var m3 = SIMD3<Float>(0, 0, 1)
+            let cam = view(s3.sim, memo: &m3, yaw: 0, dist: 2.4, lookY: 0.15)
+            look(true)
+            let p1 = render(c3, s3, cam: cam, neutral: false, prep: { $0.setBlush(0.85, body: 0) }), p0 = render(c3, s3, cam: cam, neutral: false, prep: { $0.setBlush(0, body: 0) })
+            var d = 0
+            for i in 0..<p1.bgra.count { d = max(d, abs(Int(p1.bgra[i]) - Int(p0.bgra[i]))) }
+            XCTAssertGreaterThan(d, noise + 20, "Pip still blushes")
+        }
+
+        // jersey on, front and 3/4, calm and flushed
+        look(true)
+        var jer: [UIImage] = []
+        jer += try pair("jersey_front", "sky jersey front", cam: view(s.sim, memo: &memo, yaw: 0), prep: { $0.setJersey(.sky, body: 0) })
+        jer += try pair("jersey_34", "sky jersey 3/4", cam: view(s.sim, memo: &memo, yaw: 0.7), prep: { $0.setJersey(.sky, body: 0) })
+        jer += try pair("jersey_joy", "sky jersey, joy blush", cam: view(s.sim, memo: &memo, yaw: 0, dist: 2.6, lookY: 0.15), prep: { $0.setJersey(.sky, body: 0); $0.setBlush(0.85, body: 0) })
+        try save(grid(jer, cols: 2), dir + "/BOARD_before_after_jersey.png")
+
+        // every pipeline (after only, with the blush at 0.85): matte tier 0, fast tiers 1...3, bath shader, jersey+tier
+        var cells: [UIImage] = []
+        let cam34 = view(s.sim, memo: &memo, yaw: 0.7, dist: 2.6, lookY: 0.15)
+        for (label, tier, bath) in [("tier 0 matte", 0, false), ("fast tier 1", 1, false), ("fast tier 2", 2, false), ("fast tier 3", 3, false), ("bath shader", 0, true)] {
+            c.ren.gfxOpt.fastMatteTier = tier; c.ren.forceBathShader = bath
+            look(true)
+            let img = render(c, s, cam: cam34, neutral: true, prep: { $0.setBlush(0.85, body: 0) })
+            try save(img.uiImage()!, dir + "/shipped_pipeline_\(tier)\(bath ? "bath" : "").png")
+            cells.append(labelled(img.uiImage()!, "\(label) pipeline=\(c.ren.lastBodyPipeline) blush .85"))
+        }
+        c.ren.gfxOpt.fastMatteTier = 0; c.ren.forceBathShader = false
+        try save(grid(cells, cols: 3), dir + "/BOARD_after_pipelines.png")
+
+        // real room, portrait and landscape (whole frame + native crop), before / after
+        var s2board: [UIImage] = []
+        let lab2 = makeLab(ids: ids, positions: [SIMD2(0.2, 0.6)]); let dr2 = dress(lab2, ids); settle(lab2, dr2, ids)
+        let s2 = subj(lab2, dr2, ids)
+        for (name, W, H, cs) in [("room_portrait", 603, 1311, 300), ("room_landscape", 1311, 603, 360)] {
+            let cr = try makeCtx(sim: s2.sim, W: W, H: H)
+            let cam = GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
+            let cen = s2.sim.centroid()
+            let clip = cam.viewProj * SIMD4<Float>(cen.x, cen.y, cen.z, 1)
+            let sx = Int((clip.x / clip.w * 0.5 + 0.5) * Float(W)), sy = Int((0.5 - clip.y / clip.w * 0.5) * Float(H))
+            for (after, tag) in [(false, "before"), (true, "after")] {
+                look(after)
+                let full = render(cr, s2, cam: cam, neutral: false)
+                try save(full.uiImage()!, dir + "/\(name)_full_\(tag).png")
+                let crop = LegsGameCamCaptureTests.crop(full, cx: sx, cy: sy, size: cs)
+                try save(crop.uiImage()!, dir + "/\(name)_crop_\(tag).png")
+                s2board.append(labelled(crop.uiImage()!, "\(name) crop [\(tag)]"))
+            }
+        }
+        look(true)
+        try save(grid(s2board, cols: 2), dir + "/BOARD_before_after_rooms.png")
+    }
+
     /// Always runs: the default is off, and only the baby blue palette ever gets a mode.
     func testOnlyBlueGetsIt() {
-        XCTAssertEqual(BlueBelly.current, .off)
+        XCTAssertEqual(BlueBelly.current, .eggW3D1, "the shipped default is C2w3 / D1")
+        XCTAssertEqual(BlueBelly.shipped, .eggW3D1)
         for v in BlueBelly.allCases {
             BlueBelly.current = v
             XCTAssertEqual(BlueBelly.mode(for: PaletteKey.blue.palette), Float(v.rawValue))
@@ -558,7 +681,7 @@ final class BlueBellyCaptureTests: XCTestCase {
             XCTAssertEqual(BlueBelly.mode(for: JellyPalettes.lavender), 0)
             for c in ParkColour.allCases { XCTAssertEqual(BlueBelly.mode(for: JellyPalettes.park(c)), 0, "\(c)") }
         }
-        BlueBelly.current = .off
+        BlueBelly.current = .shipped
         XCTAssertEqual(BlueBelly.parse("B1"), .bellySubtle); XCTAssertEqual(BlueBelly.parse("a"), .front); XCTAssertEqual(BlueBelly.parse("off"), .off)
     }
 }

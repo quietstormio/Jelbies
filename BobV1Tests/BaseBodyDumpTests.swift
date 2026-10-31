@@ -222,6 +222,7 @@ final class LockScene {
     }
 
     func render(_ v: LockView, palette: PaletteKey) -> LockImage {
+        let keptBelly = BlueBelly.current; BlueBelly.current = .off; defer { BlueBelly.current = keptBelly }          // the golden images are the plain locked body, without the blue Jelbie's lighter front
         var rig = CameraRig()
         rig.azimuth = v.azimuth; rig.elevation = v.elevation; rig.zoom = v.zoom
         let cam = rig.camera(viewSize: lockPoints, safeRect: CameraRig.fullSafeRect(lockPoints))
