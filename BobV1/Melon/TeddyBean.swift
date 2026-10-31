@@ -43,15 +43,15 @@ nonisolated enum TeddyBean {
     /// The right ear's root on the egg: polar angle from straight up (deg) and azimuth from the front (deg).
     nonisolated(unsafe) static var earPolar = 40.0, earAzimuth = 78.0
     /// The plate: half width, half height above / below its centre, outline exponent (2 = ellipse, a bit more = slightly squarish), splay of the face outward (deg).
-    nonisolated(unsafe) static var earA = 0.18, earTopB = 0.255, earLowB = 0.21, earN = 2.3, earSplay = 22.0
+    nonisolated(unsafe) static var earA = 0.20, earTopB = 0.275, earLowB = 0.22, earN = 2.3, earSplay = 22.0, earPitch = 9.0
     /// How far the plate's centre is sunk below the head surface along the ear's up axis (covers the head's curve under the base corners).
     nonisolated(unsafe) static var earSink = 0.04
     /// Half thickness at the root and at the rim, and the rim's round radius.
-    nonisolated(unsafe) static var earHalfRoot = 0.060, earHalfRim = 0.040, earRimR = 0.034
+    nonisolated(unsafe) static var earHalfRoot = 0.075, earHalfRim = 0.050, earRimR = 0.046
     /// The inner hollow: an ellipsoid (semi axes u, v, w) whose centre sits on the face line `earHollowV` above the surface line, `earHollowDepth` deep; blended with `earHollowK`.
     nonisolated(unsafe) static var earHollowDepth = 0.030, earHollowK = 0.022
-    nonisolated(unsafe) static var earHollowAxes = SIMD3<Double>(0.135, 0.138, 0.075)
-    nonisolated(unsafe) static var earHollowV = 0.055          // the hollow's centre, above the surface line (the plate centre is `earSink` below it)
+    nonisolated(unsafe) static var earHollowAxes = SIMD3<Double>(0.162, 0.150, 0.075)
+    nonisolated(unsafe) static var earHollowV = 0.045          // the hollow's centre, above the surface line (the plate centre is `earSink` below it)
     /// The fillets (rolling-ball radius, rest units).
     nonisolated(unsafe) static var earFilletR = 0.05, pomFilletR = 0.07
     /// The pom: the old feature's size and spot.
@@ -98,12 +98,14 @@ nonisolated enum TeddyBean {
         var g = simd_normalize(simd_cross(n, f0)); if g.x < 0 { g = -g }        // outward along the head surface
         let sa = earSplay * .pi / 180
         let f = simd_normalize(f0 * cos(sa) + g * sin(sa))
-        let v = simd_normalize(n - f * simd_dot(n, f))
-        let u = simd_cross(v, f)
-        let o = p - v * earSink
-        var right = Part(name: "ear_r", isEar: true, o: o, u: u, v: v, f: f, filletR: earFilletR, reach: 0.55, landmarkTargets: [])
+        let v0 = simd_normalize(n - f * simd_dot(n, f))
+        let u = simd_cross(v0, f)
+        let pa = earPitch * .pi / 180                                            // the face tips up toward a camera that looks down on the room
+        let f1 = simd_normalize(f * cos(pa) + v0 * sin(pa)), v = simd_normalize(v0 * cos(pa) - f * sin(pa))
+        let o = p - v0 * earSink
+        var right = Part(name: "ear_r", isEar: true, o: o, u: u, v: v, f: f1, filletR: earFilletR, reach: 0.55, landmarkTargets: [])
         func mir(_ a: SIMD3<Double>) -> SIMD3<Double> { SIMD3(-a.x, a.y, a.z) }
-        let ov = mir(o), vv = mir(v), ff = mir(f)
+        let ov = mir(o), vv = mir(v), ff = mir(f1)
         var left = Part(name: "ear_l", isEar: true, o: ov, u: simd_cross(vv, ff), v: vv, f: ff, filletR: earFilletR, reach: 0.55, landmarkTargets: [])
         func targets(_ p: SIMD3<Double>, _ a: SIMD3<Double>, _ b: SIMD3<Double>) -> [SIMD3<Float>] {
             [p + a * 0.16, p - a * 0.16, p + b * 0.16].map { SIMD3<Float>(Float($0.x), Float($0.y), Float($0.z)) }
@@ -210,8 +212,7 @@ nonisolated enum TeddyBean {
                     let nl = simd_length(g) > 1e-12 ? simd_normalize(g) : simd_normalize(dv)
                     blk.pos.append(part.o + part.u * l.x + part.v * l.y + part.f * l.z)
                     blk.nrm.append(simd_normalize(part.u * nl.x + part.v * nl.y + part.f * nl.z))
-                    let m = hollowMask(l)
-                    blk.mat.append(m > 0.004 ? Float(-m) : 0)
+                    blk.mat.append(0)                                            // (the cream hollow is a per-pixel shader shape: teddyEarMask)
                 }
                 let thetas = earThetas.map { $0 * .pi / 180 }
                 hit(SIMD3(0, 0, 1))                                              // the front pole (base + 1)
@@ -229,7 +230,7 @@ nonisolated enum TeddyBean {
                 for j in 0..<earAround { blk.tri += [UInt32(top), ring(thetas.count - 1, j + 1), ring(thetas.count - 1, j)] }
             } else {
                 let cs = cubeSphere(pomGrid)
-                for dir in cs.dirs { blk.pos.append(part.o + dir * pomRadius); blk.nrm.append(dir); blk.mat.append(-1) }          // (a full cream mask; the Renderer drops it for the fur pom)
+                for dir in cs.dirs { blk.pos.append(part.o + dir * pomRadius); blk.nrm.append(dir); blk.mat.append(-0.85) }          // (a cream mask that keeps some of the fur's shading, so the ball reads round; the Renderer drops it for the fur pom)
                 blk.tri += cs.tri.map { $0 + UInt32(base + 1) }
             }
             part.count = blk.pos.count - base
@@ -381,5 +382,17 @@ extension Skinner {
                 dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
             }
         }
+    }
+}
+
+extension TeddyBean {
+    /// What the shaders' `teddyEarMask` needs (rest space, the right ear): frame, and (cream half width, U-cap centre, top, skin line) in ear-local v. TeddyBeanTests prints / checks them.
+    static let creamHalfWidth = 0.13
+    static var shaderConstants: (o: SIMD3<Double>, u: SIMD3<Double>, v: SIMD3<Double>, f: SIMD3<Double>, p: SIMD4<Double>) {
+        let e = parts[0]
+        let skin = earSink * cos(earPitch * .pi / 180)
+        let top = earTopB
+        let visH = top - skin
+        return (e.o, e.u, e.v, e.f, SIMD4(creamHalfWidth, skin + 0.31 * visH, skin + 0.70 * visH, skin))
     }
 }

@@ -56,7 +56,7 @@ final class TeddySpeciesTests: XCTestCase {
 
     func testBellyAndPaletteAreTeddysOnly() {
         let teddy = JellyRoster.palette(4)!
-        XCTAssertEqual(BlueBelly.mode(for: teddy), 33, "the clear belly oval in tone 3")
+        XCTAssertEqual(BlueBelly.mode(for: teddy), 43, "the clear belly oval in tone 3")
         for c in 0..<4 { let p = JellyRoster.palette(c) ?? PaletteKey.blue.palette; XCTAssertEqual(BlueBelly.mode(for: p), 0, "character \(c) has no belly patch") }
         for c in 0..<4 { XCTAssertNotEqual(JellyRoster.palette(c)?.flesh ?? PaletteKey.blue.palette.flesh, teddy.flesh) }
     }
@@ -105,9 +105,9 @@ final class TeddySpeciesTests: XCTestCase {
             XCTAssertEqual(r.slide, 0)
         }
         // ear headbands are ears themselves
-        for hat in ["cat_ears", "frog_ears", "bunny_ears"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
+        for hat in ["cat_ears", "frog_ears", "bunny_ears", "headphones"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
         // open / perching pieces leave the ears out (possibly nudged)
-        for hat in ["flower_clip", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold", "bee_antennae", "headphones"] {
+        for hat in ["flower_clip", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold", "bee_antennae"] {
             let r = TeddyFit.solve(worn: [hat])
             XCTAssertFalse(r.earsHidden, "\(hat): the ears stay out")
             XCTAssertEqual(r.slide, 0, "no slide any more")

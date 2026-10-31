@@ -224,7 +224,7 @@ nonisolated struct TeddyFitResult: Equatable, Sendable {
 
 nonisolated enum TeddyFit {
     /// Ear headbands: they ARE ears, so the bear ears tuck under them.
-    static let earBands: Set<String> = ["cat_ears", "frog_ears", "bunny_ears"]
+    static let earBands: Set<String> = ["cat_ears", "frog_ears", "bunny_ears", "headphones"]          // (headphones: the band cuts through the ears)
     /// How far an ear must stay from a hat's surface, and how far the hat may rise / widen at run time (CrownFit lifts it to the drawn skin).
     static let clearance: Float = 0.035
     /// Open pieces (bands, crowns, visors, bows) are carried rigidly while the skin wobbles under them (only enclosing hats are re-seated on the skin every frame): more room.

@@ -311,3 +311,41 @@ extension FeatureCaptureTests {
         if let d = ProcessInfo.processInfo.environment["TEDDYEARS_DIR"] { try? out.write(toFile: d + "/hat_numbers.txt", atomically: true, encoding: .utf8) }
     }
 }
+
+extension FeatureCaptureTests {
+    func testEarShaderConstants() throws {
+        let c = TeddyBean.shaderConstants
+        func f(_ v: SIMD3<Double>) -> String { String(format: "%.5f,%.5f,%.5f", v.x, v.y, v.z) }
+        let line = "o=\(f(c.o)) u=\(f(c.u)) v=\(f(c.v)) f=\(f(c.f)) p=\(String(format: "%.5f,%.5f,%.5f,%.5f", c.p.x, c.p.y, c.p.z, c.p.w))"
+        print("EARCONST " + line)
+        if let d = ProcessInfo.processInfo.environment["TEDDYEARS_DIR"] { try? line.write(toFile: d + "/ear_constants.txt", atomically: true, encoding: .utf8) }
+        // the generated shader text matches (every copy)
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("BobV1")
+        for rel in ["Melon/Shaders.metal", "Melon/GfxBodyFast.metal", "Wear/GfxJersey.metal", "Bath/BathShaders.metal"] {
+            guard let s = try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8) else { continue }
+            XCTAssertTrue(s.contains("TE_O = float3(\(f(c.o)))"), "\(rel): TE_O is stale")
+            XCTAssertTrue(s.contains("TE_F = float3(\(f(c.f)))"), "\(rel): TE_F is stale")
+            XCTAssertTrue(s.contains("TE_P = float4(\(String(format: "%.5f,%.5f,%.5f,%.5f", c.p.x, c.p.y, c.p.z, c.p.w)))"), "\(rel): TE_P is stale")
+        }
+    }
+}
+
+extension FeatureCaptureTests {
+    /// Close-ups of every open piece (and headphones) at the ear: does it cut through the ear?
+    func testEarsHatCloseups() throws {
+        let d = try earsDir(); DayClock.shared.forcedHour = 12
+        variant(.cream); TeddyFit.clearCache()
+        let arts = ["crown_gold", "flower_crown", "hair_bow", "visor_tennis", "bee_antennae", "sweatband", "flower_clip", "headphones"]
+        let ear = TeddyBean.parts[0].o
+        let tgt = SIMD3<Float>(Float(ear.x) * 0.8, Float(ear.y) + 0.12, Float(ear.z))
+        var cells: [UIImage] = []
+        for a in arts {
+            guard let look = WearLook.looks(.head).first(where: { $0.art == a }) else { continue }
+            for (lab, yaw) in [("front 3/4", Float(0.7)), ("side", Float.pi / 2), ("back 3/4", Float(2.4))] {
+                let s = try earShot(outfit: [.head: look], yaw: yaw, size: 420, dist: 1.5, lookRest: tgt, lift: 0.15, ticks: 40)
+                cells.append(tlabel(s.img.uiImage()!, ["\(look.title) - \(lab) - ears \(s.fit.earsHidden ? "tucked" : "out")"], bar: 26))
+            }
+        }
+        try writePNG(tgrid(cells, cols: 6), d + "/05_hat_ear_closeups.png")
+    }
+}

@@ -13,6 +13,23 @@
 
 #include <metal_stdlib>
 using namespace metal;
+// TEDDYEAR-BEGIN (generated from TeddyBean.shaderConstants; TeddyBeanTests checks it still matches)
+constant float3 TE_O = float3(0.32355,1.19294,0.06709);
+constant float3 TE_U = float3(0.76821,-0.52312,-0.36906);
+constant float3 TE_V = float3(0.57131,0.82031,0.02647);
+constant float3 TE_F = float3(0.28890,-0.23118,0.92903);
+constant float4 TE_P = float4(0.13000,0.11251,0.20435,0.03951);          // cream half width, U-cap centre height, top height, skin-line height (ear-local v)
+/// Teddy's inner ear (right ear in rest space, mirrored by |x|): a clean U / half-moon, per pixel, open at the root; 0 anywhere else on the body.
+static float teddyEarMask(float3 Q) {
+    float3 d = float3(fabs(Q.x), Q.y, Q.z) - TE_O;
+    float lx = dot(d, TE_U), ly = dot(d, TE_V), lz = dot(d, TE_F);
+    if (lz < 0.0 || lz > 0.10 || fabs(lx) > 0.2 || ly < TE_P.w - 0.02 || ly > TE_P.z + 0.03) return 0.0;
+    float hv = TE_P.z - TE_P.y;
+    float e = ly > TE_P.y ? length(float2(lx / TE_P.x, (ly - TE_P.y) / hv)) : fabs(lx) / TE_P.x;
+    float m = 1.0 - smoothstep(0.965, 1.035, e);
+    return m * smoothstep(TE_P.w - 0.01, TE_P.w + 0.012, ly);
+}
+// TEDDYEAR-END
 
 constant int fastTier [[function_constant(0)]];
 
@@ -122,7 +139,9 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        col = mix(col, lt, max(bk, clamp(-i.mat, 0.0, 1.0)));      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
+        float ek = tn > 3.5 ? teddyEarMask(Q) : 0.0;
+        float pm = clamp(-i.mat, 0.0, 1.0);
+        col = mix(col, lt * (1.0 - (pm * 0.40 + ek * 0.25) * (1.0 - s)), max(max(bk, ek), pm));          // (the pom / inner ear keep the light falloff: a puffy ball, a shaded hollow)      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
     }
     // mouth: same block as the locked shader
     float mo = u.stripe.w;
