@@ -56,7 +56,7 @@ nonisolated enum TeddyBean {
     nonisolated(unsafe) static var earFilletR = 0.05, pomFilletR = 0.07
     /// The pom: the old feature's size and spot.
     static let pomRadius = Double(TeddyMesh.pomRadius), pomY = Double(TeddyMesh.pomY), pomEmbed = Double(TeddyMesh.pomEmbed)
-    static let pomGrid = 6, earAround = 36
+    static let pomGrid = 10, earAround = 36
     /// Colatitudes (deg from the front axis) of the ear's rings: dense over the front face (the hollow's soft edge needs it), then the rim, a few over the back.
     static let earThetas: [Double] = [6, 14, 22, 30, 37, 43, 48, 53, 58, 64, 72, 81, 90, 99, 108, 117, 128, 140, 155]
 
@@ -230,7 +230,7 @@ nonisolated enum TeddyBean {
                 for j in 0..<earAround { blk.tri += [UInt32(top), ring(thetas.count - 1, j + 1), ring(thetas.count - 1, j)] }
             } else {
                 let cs = cubeSphere(pomGrid)
-                for dir in cs.dirs { blk.pos.append(part.o + dir * pomRadius); blk.nrm.append(dir); blk.mat.append(-0.85) }          // (a cream mask that keeps some of the fur's shading, so the ball reads round; the Renderer drops it for the fur pom)
+                for dir in cs.dirs { blk.pos.append(part.o + dir * pomRadius); blk.nrm.append(dir); blk.mat.append(0) }          // (the cream is a per-pixel shader shape too: teddyPomMask, which also fades it out over the fillet)
                 blk.tri += cs.tri.map { $0 + UInt32(base + 1) }
             }
             part.count = blk.pos.count - base
@@ -388,11 +388,12 @@ extension Skinner {
 extension TeddyBean {
     /// What the shaders' `teddyEarMask` needs (rest space, the right ear): frame, and (cream half width, U-cap centre, top, skin line) in ear-local v. TeddyBeanTests prints / checks them.
     static let creamHalfWidth = 0.13
-    static var shaderConstants: (o: SIMD3<Double>, u: SIMD3<Double>, v: SIMD3<Double>, f: SIMD3<Double>, p: SIMD4<Double>) {
+    static var shaderConstants: (o: SIMD3<Double>, u: SIMD3<Double>, v: SIMD3<Double>, f: SIMD3<Double>, p: SIMD4<Double>, pc: SIMD4<Double>) {
         let e = parts[0]
         let skin = earSink * cos(earPitch * .pi / 180)
         let top = earTopB
         let visH = top - skin
-        return (e.o, e.u, e.v, e.f, SIMD4(creamHalfWidth, skin + 0.31 * visH, skin + 0.70 * visH, skin))
+        let pm = parts[2].o
+        return (e.o, e.u, e.v, e.f, SIMD4(creamHalfWidth, skin + 0.31 * visH, skin + 0.70 * visH, skin), SIMD4(pm.x, pm.y, pm.z, pomRadius))
     }
 }

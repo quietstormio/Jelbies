@@ -316,7 +316,8 @@ extension FeatureCaptureTests {
     func testEarShaderConstants() throws {
         let c = TeddyBean.shaderConstants
         func f(_ v: SIMD3<Double>) -> String { String(format: "%.5f,%.5f,%.5f", v.x, v.y, v.z) }
-        let line = "o=\(f(c.o)) u=\(f(c.u)) v=\(f(c.v)) f=\(f(c.f)) p=\(String(format: "%.5f,%.5f,%.5f,%.5f", c.p.x, c.p.y, c.p.z, c.p.w))"
+        let pcs = String(format: "%.5f,%.5f,%.5f,%.5f", c.pc.x, c.pc.y, c.pc.z, c.pc.w)
+        let line = "pc=\(pcs) o=\(f(c.o)) u=\(f(c.u)) v=\(f(c.v)) f=\(f(c.f)) p=\(String(format: "%.5f,%.5f,%.5f,%.5f", c.p.x, c.p.y, c.p.z, c.p.w))"
         print("EARCONST " + line)
         if let d = ProcessInfo.processInfo.environment["TEDDYEARS_DIR"] { try? line.write(toFile: d + "/ear_constants.txt", atomically: true, encoding: .utf8) }
         // the generated shader text matches (every copy)
@@ -324,6 +325,7 @@ extension FeatureCaptureTests {
         for rel in ["Melon/Shaders.metal", "Melon/GfxBodyFast.metal", "Wear/GfxJersey.metal", "Bath/BathShaders.metal"] {
             guard let s = try? String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8) else { continue }
             XCTAssertTrue(s.contains("TE_O = float3(\(f(c.o)))"), "\(rel): TE_O is stale")
+            XCTAssertTrue(s.contains("TE_PC = float4(\(pcs))"), "\(rel): TE_PC is stale")
             XCTAssertTrue(s.contains("TE_F = float3(\(f(c.f)))"), "\(rel): TE_F is stale")
             XCTAssertTrue(s.contains("TE_P = float4(\(String(format: "%.5f,%.5f,%.5f,%.5f", c.p.x, c.p.y, c.p.z, c.p.w)))"), "\(rel): TE_P is stale")
         }
@@ -347,5 +349,19 @@ extension FeatureCaptureTests {
             }
         }
         try writePNG(tgrid(cells, cols: 6), d + "/05_hat_ear_closeups.png")
+    }
+}
+
+extension FeatureCaptureTests {
+    /// A mid-distance back 3/4 of Teddy (the pom as the user sees it), a wider and a closer one.
+    func testEarsPomMidDistance() throws {
+        let d = try earsDir(); DayClock.shared.forcedHour = 12
+        variant(.cream)
+        var cells: [UIImage] = []
+        for (label, yaw, dist) in [("back 3/4, room distance", Float(2.5), Float(5.0)), ("back, room distance", Float.pi, 5.0), ("back 3/4, mid", 2.5, 3.2)] {
+            let s = try earShot(yaw: yaw, size: 560, dist: dist, lookRest: SIMD3(0, 0.6, -0.1), lift: 0.25)
+            cells.append(tlabel(s.img.uiImage()!, [label]))
+        }
+        try writePNG(tgrid(cells, cols: 3), d + "/06c_pom_mid_distance.png")
     }
 }

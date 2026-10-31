@@ -83,7 +83,7 @@ extension FeatureCaptureTests {
             let s = try earShot(yaw: yaw, size: 560, dist: 1.0, lookRest: pomP, lift: 0.05)
             cells2.append(tlabel(s.img.uiImage()!, [label]))
         }
-        try writePNG(tgrid(cells2, cols: 3), d + "/03_pom_closeups.png")
+        try writePNG(tgrid(cells2, cols: 3), d + "/03_pom_closeups_v2.png")
     }
 
     // MARK: 02 turnaround

@@ -18,6 +18,7 @@ constant float3 TE_O = float3(0.32355,1.19294,0.06709);
 constant float3 TE_U = float3(0.76821,-0.52312,-0.36906);
 constant float3 TE_V = float3(0.57131,0.82031,0.02647);
 constant float3 TE_F = float3(0.28890,-0.23118,0.92903);
+constant float4 TE_PC = float4(0.00000,0.49466,-0.54430,0.11200);         // the pom: rest-space centre, radius
 constant float4 TE_P = float4(0.13000,0.11251,0.20435,0.03951);          // cream half width, U-cap centre height, top height, skin-line height (ear-local v)
 /// Teddy's inner ear (right ear in rest space, mirrored by |x|): a clean U / half-moon, per pixel, open at the root; 0 anywhere else on the body.
 static float teddyEarMask(float3 Q) {
@@ -28,6 +29,12 @@ static float teddyEarMask(float3 Q) {
     float e = ly > TE_P.y ? length(float2(lx / TE_P.x, (ly - TE_P.y) / hv)) : fabs(lx) / TE_P.x;
     float m = 1.0 - smoothstep(0.965, 1.035, e);
     return m * smoothstep(TE_P.w - 0.01, TE_P.w + 0.012, ly);
+}
+/// Teddy's pom: cream on the ball (rest distance <= radius), fading into the fur over the fillet at its base (~1.5 cm).
+static float teddyPomMask(float3 Q) {
+    float dd = length(Q - TE_PC.xyz);
+    float f = 1.0 - smoothstep(TE_PC.w + 0.001, TE_PC.w + 0.015, dd);
+    return f * f;
 }
 // TEDDYEAR-END
 
@@ -140,8 +147,8 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
             lt = saturate(ll + (lt - ll) * 1.1);
         }
         float ek = tn > 3.5 ? teddyEarMask(Q) : 0.0;
-        float pm = clamp(-i.mat, 0.0, 1.0);
-        col = mix(col, lt * (1.0 - (pm * 0.40 + ek * 0.25) * (1.0 - s)), max(max(bk, ek), pm));          // (the pom / inner ear keep the light falloff: a puffy ball, a shaded hollow)      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
+        float pk = tn > 3.5 ? teddyPomMask(Q) : 0.0;
+        col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), max(max(bk, ek), pk));          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
     }
     // mouth: same block as the locked shader
     float mo = u.stripe.w;
