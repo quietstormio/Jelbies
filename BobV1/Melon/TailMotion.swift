@@ -77,7 +77,8 @@ nonisolated struct TailMotion {
         return (0..<TailBean.rings).map { r in
             let k = min(r + 1, TailBean.bodyRings)
             let t = Float(s.length) * Float(k) / Float(TailBean.bodyRings)
-            return min(1, max(0, (t - Float(s.sink)) / Float(s.length - s.sink)))
+            let h = Float(s.sink + PipBack.shift)          // (the hinge: where the tail leaves the back; a shifted tail leaves it `shift` further along)
+            return min(1, max(0, (t - h) / (Float(s.length) - h)))
         }
     }()
 

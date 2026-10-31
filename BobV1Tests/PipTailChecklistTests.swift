@@ -521,8 +521,38 @@ final class PipTailChecklistTests: XCTestCase {
 
     private func pbViews() -> [(String, View)] {
         [("side", View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35)), ("back34", View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35)),
-         ("back", View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)), ("top", View(name: "top", yaw: 0, dist: 4.2, lookBack: 0.15, top: true)),
-         ("j_side", View(name: "j_side", yaw: .pi / 2, dist: 1.8, lookY: -0.4, lookBack: 0.95)), ("j_back34", View(name: "j_back34", yaw: 2.5, dist: 1.8, lookY: -0.4, lookBack: 0.95))]
+         ("back", View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)), ("top", View(name: "top", yaw: 0, dist: 4.2, lookBack: 0.15, top: true))]
+    }
+    /// Close-ups centred on the DRAWN junction: where the tail's top ridge leaves the (displaced) back. Rest point, found analytically.
+    private func junctionRest() -> SIMD3<Float> {
+        let sd = TailBean.startDir, sH = TailBean.swellHeight, sh = TailBean.shape
+        func inv(_ q: SIMD3<Float>) -> SIMD3<Float> { var p = q; for _ in 0..<5 { p = q - sd * (sH * TailBean.swellWeight(p)) }; return p }
+        var last = sh.sink, t = 0.0
+        while t < sh.length * 0.8 { let r = sh.ridge(t), q = r.p + r.up * r.r, i = inv(SIMD3(Float(q.x), Float(q.y), Float(q.z))); if BobForm.sdf(SIMD3(Double(i.x), Double(i.y), Double(i.z))) <= 0 { last = t }; t += 0.004 }
+        let r = sh.ridge(last + 0.01), q = r.p + r.up * r.r
+        return SIMD3(Float(q.x), Float(q.y), Float(q.z))
+    }
+    private func junctionCams(_ s: Subj, skin: [Float], memo: inout SIMD3<Float>) -> [(String, CameraState)] {
+        let J = junctionRest(), f = s.skinner.tailFirst
+        var best = 0, bd = Double.infinity
+        for i in 1..<(TailBean.vertexCount - 1) { let d = simd_distance(TailBean.local.pos[i], SIMD3(Double(J.x), Double(J.y), Double(J.z))); if d < bd { bd = d; best = i } }
+        let target = SIMD3(skin[6 * (f + best)], skin[6 * (f + best) + 1], skin[6 * (f + best) + 2])
+        let (_, fwd) = pose(s.sim, memo: &memo)
+        func dir(_ yaw: Float) -> SIMD3<Float> { SIMD3(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw)) }
+        return [("j_side", lookCamera(target: target, dir: dir(.pi / 2), dist: 1.8, lift: 0.05)), ("j_back34", lookCamera(target: target, dir: dir(2.5), dist: 1.8, lift: 0.05)),
+                ("j_lowback", lookCamera(target: target, dir: dir(.pi), dist: 2.2, lift: 0.0))]
+    }
+    /// Spike overlap as seen from every side (the shipped silhouette test): worst depth and where, over all pairs and the camera directions that can see the back (not from the front): 24 yaws x 3 lifts + from above.
+    private func spikeOverlap() -> String {
+        let cones = PipSpikes.lastCones
+        var worst: Float = 0, at = ""
+        var dirs: [(String, SIMD3<Float>)] = [("top", SIMD3(0, 1, 0))]
+        for k in 0..<24 { let y = Float(k) * .pi / 12; for l in [Float(0.12), 0.5, 1.2] where cosf(y) < 0.2 { dirs.append((String(format: "yaw%.0f/lift%.2f", y * 180 / .pi, l), simd_normalize(SIMD3(sinf(y), l, cosf(y))))) } }
+        for (n, d) in dirs { for i in cones.indices { for j in (i + 1)..<max(cones.count, i + 1) {
+            let v = PipSpikes.silhouetteDepth(cones[i], cones[j], d)
+            if v > worst { worst = v; at = "\(i)-\(j) from \(n)" }
+        } } }
+        return String(format: "  spikeOverlap worst depth=%.4f at %@ (0 = clear)\n", worst, at)
     }
     /// The drawn body's silhouette (every body triangle projected, no shadow, no spikes / wear) as a white-on-black image.
     private func bodyMask(_ skin: [Float], cam: CameraState, W: Int, H: Int) -> LockImage {
@@ -670,6 +700,33 @@ final class PipTailChecklistTests: XCTestCase {
             let ang = Double(acosf(max(-1, min(1, simd_dot(nE, nT))))) * 180 / .pi
             angles.append(ang); if v.y * sin(ph) > 0 { topAngles.append(ang) }
         }
+        // buried flare check: per angle round the tube, the first t where its surface leaves the displaced egg vs the last t where it is inside; a gap = it pokes out of the side / underside before it really exits
+        var reent = 0.0, reentAt = ""
+        for j in 0..<TailBean.around {
+            let ph = 2 * Double.pi * Double(j) / Double(TailBean.around)
+            var first = -1.0, lastIn = -1.0, tt = 0.0
+            while tt <= sh.length * 0.7 {
+                let f = sh.frame(tt), tg = sh.tangent(tt), v = simd_normalize(simd_cross(tg, f.side))
+                let q = sh.point(tt) + (f.side * cos(ph) + v * sin(ph)) * sh.radius(tt)
+                if inside(SIMD3(Float(q.x), Float(q.y), Float(q.z))) { lastIn = tt } else if first < 0 { first = tt }
+                tt += 0.004
+            }
+            if first >= 0 && lastIn - first > reent { reent = lastIn - first; reentAt = "phi=\(j * 15) firstOut=\(String(format: "%.2f", first)) lastIn=\(String(format: "%.2f", lastIn))" }
+        }
+        var deep = -Double.infinity
+        do {
+            var tt = sh.sink - 0.1
+            while tt < tExit - 0.1 {
+                let f = sh.frame(tt), tg = sh.tangent(tt), v = simd_normalize(simd_cross(tg, f.side))
+                for j in 0..<TailBean.around {
+                    let ph = 2 * Double.pi * Double(j) / Double(TailBean.around), q = sh.point(tt) + (f.side * cos(ph) + v * sin(ph)) * sh.radius(tt)
+                    let i = inv(SIMD3(Float(q.x), Float(q.y), Float(q.z))); deep = max(deep, BobForm.sdf(SIMD3(Double(i.x), Double(i.y), Double(i.z))))
+                }
+                tt += 0.01
+            }
+        }
+        out += String(format: "buriedTube t in [sink-0.1, exit-0.1]: max sdf of its surface vs the displaced egg=%.4f (<=0 inside; >0 pokes out by that much)\n", deep)
+        out += String(format: "buriedTubePoke max re-entrance=%.3f (0 = the tube never pokes out before its real exit) %@\n", reent, reentAt)
         func st(_ a: [Double]) -> String { a.isEmpty ? "n/a" : String(format: "mean=%.1f max=%.1f n=%d", a.reduce(0, +) / Double(a.count), a.max()!, a.count) }
         out += "crease_deg all-around: \(st(angles)); upper half: \(st(topAngles))\n"
         return out
@@ -695,11 +752,12 @@ final class PipTailChecklistTests: XCTestCase {
                 try write(render(c, s, cam: cm, neutral: true).uiImage()!, "\(d)/\(n).png")
                 if !dressed { try write(bodyMask(skin(s.skinner, s.sim), cam: cm, W: 560, H: 560).uiImage()!, "\(d)/\(n)_mask.png") }
             }
+            if id == 1 { for (n, cm) in junctionCams(s, skin: skin(s.skinner, s.sim), memo: &memo) { try write(render(c, s, cam: cm, neutral: true).uiImage()!, "\(d)/\(n).png") } }
             let rc = try makeCtx(sim: lab.rigs[0].sim, W: 603, H: 1311)
             let rcam = GameCamera.camera(aspect: 603.0 / 1311.0)
             try write(render(rc, s, cam: rcam, neutral: false).uiImage()!, "\(d)/room_portrait.png")
             if !dressed { try write(bodyMask(skin(s.skinner, s.sim), cam: rcam, W: 603, H: 1311).uiImage()!, "\(d)/room_portrait_mask.png") }
-            if id == 1 { numbers += "[\(who)] spike seating (settled pose):\n" + spikeSeating(s, skin: skin(s.skinner, s.sim)) + "[\(who)] \(PipSpikes.debug.prefix(160))\n" }
+            if id == 1 { numbers += "[\(who)] spike seating (settled pose):\n" + spikeSeating(s, skin: skin(s.skinner, s.sim)) + spikeOverlap() + "[\(who)] \(PipSpikes.debug.prefix(160))\n" }
         }
         try numbers.write(toFile: "\(base)/numbers.txt", atomically: true, encoding: .utf8)
         _ = GameCamera.camera(aspect: 603.0 / 1311.0)

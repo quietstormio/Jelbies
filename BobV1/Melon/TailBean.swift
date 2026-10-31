@@ -37,9 +37,9 @@ nonisolated enum PipTailVariant: String {
 /// `,len:<f>` suffix that replaces the 0.74 tail-length factor in TailBean.shape (`vis = f * width - tipR`).
 nonisolated enum PipBack {
     enum Mode: Equatable { case now, none, fillet(Float) }
-    static let parsed: (mode: Mode, len: Double) = {
-        guard let raw = ProcessInfo.processInfo.environment["PIPBACK"], !raw.isEmpty else { return (.now, 0.74) }
-        var mode = Mode.now, len = 0.74
+    static let parsed: (mode: Mode, len: Double, shift: Double) = {
+        guard let raw = ProcessInfo.processInfo.environment["PIPBACK"], !raw.isEmpty else { return (.now, 0.74, 0) }
+        var mode = Mode.now, len = 0.74, shift = 0.0
         for part in raw.split(separator: ",") {
             let kv = part.split(separator: ":", maxSplits: 1).map(String.init)
             switch kv[0] {
@@ -47,13 +47,16 @@ nonisolated enum PipBack {
             case "none": mode = .none
             case "fillet": if kv.count == 2, let k = Float(kv[1]), k > 0 { mode = .fillet(k) }
             case "len": if kv.count == 2, let f = Double(kv[1]), f > 0 { len = f }
+            case "shift": if kv.count == 2, let f = Double(kv[1]), f >= 0 { shift = f }
             default: break
             }
         }
-        return (mode, len)
+        return (mode, len, shift)
     }()
     static var mode: Mode { parsed.mode }
     static var lenFactor: Double { parsed.len }
+    /// `shift:<d>`: the whole tail (centre line + tube) is translated d toward the body (+z), heights kept; the surface root (`shape.root`, landmarks, pivot) stays where the plain back is.
+    static var shift: Double { parsed.shift }
     static var tag: String { ProcessInfo.processInfo.environment["PIPBACK"].flatMap { $0.isEmpty ? nil : $0 } ?? "now" }
 }
 
@@ -143,7 +146,7 @@ nonisolated enum TailBean {
         var cur = root + SIMD3(0, 0, sink)
         var t = 0.0
         while t <= length + step {
-            table.append(cur)
+            table.append(cur + SIMD3(0, 0, PipBack.shift))
             let u = max(0, (t - sink) / vis)
             let psi = 140 * pow(u, 1.7) * Double.pi / 180                // heading: straight back, then curving sideways (+x, the Jelbie's left)
             let floorY = shape.radius(t) * ys + Double(restFloor) + 0.02 + 0.07 * pow(max(0, (u - 0.8) / 0.2), 2)                     // rest on the floor
@@ -209,7 +212,7 @@ nonisolated enum TailBean {
     /// (test-only PIPBACK=fillet:k) Smooth-union fillet against the round tail tube: b = distance from the rest point to the tube surface (centre-line table, radius profile);
     /// the displacement is (k - b)^2 / 4k for 0 <= b < k and k/4 inside the tube, expressed as swellHeight (k/4) * ((k - b) / k)^2 clamped to 0...1.
     static func filletWeight(_ q: SIMD3<Float>, k: Float) -> Float {
-        if simd_distance(q, rootF) > 1.0 { return 0 }                                   // cheap early-out: nothing within k of the tube this far from the root
+        if simd_distance(q, rootF) > 1.3 { return 0 }                                   // cheap early-out: nothing within k of the tube this far from the root
         let s = shape, qd = SIMD3<Double>(Double(q.x), Double(q.y), Double(q.z))
         var b = Double.infinity
         var i = 0
@@ -239,7 +242,7 @@ nonisolated enum TailBean {
     static let bodyNormals: [SIMD3<Float>] = local.pos.map { let n = BobForm.normal($0); return SIMD3(Float(n.x), Float(n.y), Float(n.z)) }
     static let normalBlend: [Float] = {
         let s = shape
-        func w(_ t: Double) -> Float { let u = min(max((t - s.sink) / 0.5, 0), 1); return 1 - Float(u * u * (3 - 2 * u)) }
+        func w(_ t: Double) -> Float { let u = min(max((t - s.sink - PipBack.shift) / 0.5, 0), 1); return 1 - Float(u * u * (3 - 2 * u)) }
         var out: [Float] = [1]
         for k in 1...bodyRings { out += Array(repeating: w(s.length * Double(k) / Double(bodyRings)), count: around) }
         for _ in 1...capRings { out += Array(repeating: 0, count: around) }
