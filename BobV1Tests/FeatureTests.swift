@@ -87,7 +87,7 @@ final class FeatureTests: XCTestCase {
     func testFourCharactersAvailableThreeInTheRoom() {
         XCTAssertEqual(JellyRoster.maxCount, 3, "three Jelbies in the room at once")
         XCTAssertEqual(JellyRoster.characterCount, 4, "four characters to pick from")
-        XCTAssertEqual(JellyRoster.names, ["Bob", "Pip", "Moss", "Lavender"])
+        XCTAssertEqual(Array(JellyRoster.names.prefix(4)), ["Bob", "Pip", "Moss", "Lavender"], "the four on offer; Teddy (5th, test hooks only) follows")
         XCTAssertEqual((0..<4).map { JellyRoster.feature($0) }, [.none, .spines, .daisy, .wings])
         XCTAssertEqual(JellyRoster.spawnSpots(count: 3).count, 3)
         XCTAssertNotNil(JellyRoster.palette(3))

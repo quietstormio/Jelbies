@@ -13,6 +13,10 @@ Signature features belong to a colour **species**, not to individual characters.
 | Green (incl. park mint, lime) | Head daisy, sits on the hat band under hats |
 | Blue and every other colour | None |
 
+### Teddy (look phase only, 2026-10-31; user request, not yet offered anywhere)
+
+Character 4, light brown with a lighter cream belly, signature = two round bear ears + a small puffy pom tail (`JellyFeature.ears`, `Features/TeddyFeature.swift`). It is NOT in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator; it only spawns through the `-ForceSpecies teddy` (this launch only, slot 0, never saved) or `-SetRoster teddy` launch flags. Ears and pom are separate meshes bound to the egg surface (the body is never reshaped). Hat rule: an ear that clears the worn hat stays (with a nudge in / down the head if needed), an ear a snug hat would clip tucks away, the ear headbands (cat / frog / bunny) tuck the bear ears, and the pom tucks under pieces that cover the lower back (cape, backpack, ...). The belly is the blue-belly shader patch (`BlueBelly.swift`, branch g-bluebelly) in a warm cream tone (tone 3, mode 33).
+
 Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
 
 ## Species names and lore (2026-10-26)

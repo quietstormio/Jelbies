@@ -90,7 +90,7 @@ nonisolated enum ShaderChunks {
             out.removeSubrange(r.lowerBound...i)
             return out
         }
-        return strip("float bl = u.seed.w;", strip("float mo = u.stripe.w;", t))
+        return strip("float bb = u.shape.w;", strip("float bl = u.seed.w;", strip("float mo = u.stripe.w;", t)))
     }
     /// Top-level definitions of the .metal file keyed by name, each hashed after comment stripping + whitespace folding.
     static func hashes(of text: String) -> [String: String] {

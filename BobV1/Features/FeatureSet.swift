@@ -34,6 +34,8 @@ nonisolated enum FeatureTuning {
     static let burstWait: ClosedRange<Float> = 4...9, burstFlaps: ClosedRange<Int> = 2...4, burstHz: ClosedRange<Float> = 6...8, burstAmp: ClosedRange<Float> = 35...50
     static let burstHappyRate: Float = 1.5, burstCalmScale: Float = 0.5
     static let accelHistory = 30
+    /// Teddy's ears / pom: spring (Hz), damping, acceleration push (deg per u/s^2) and the largest flop (deg).
+    static let earHz: Float = 3.0, earZeta: Float = 0.30, earGain: Float = 9, earSquash: Float = 0.9, earMax: Float = 11
 }
 
 @MainActor
@@ -106,7 +108,7 @@ final class FeatureSet {
     /// Spines and wings lie on his back: off while he lies down (the hats' rule) and in flips / rolls.
     static func hidden(_ f: JellyFeature, _ b: BlobBrain) -> Bool {
         switch f {
-        case .spines, .wings: return WornSet.sleepHides(b) || WornSet.flipping(b)
+        case .spines, .wings, .ears: return WornSet.sleepHides(b) || WornSet.flipping(b)          // Teddy's ears + pom lie on the floor then, like the wings
         default: return false
         }
     }
@@ -151,6 +153,7 @@ final class FeatureSet {
         case .spines: stepSpines(&s, spec: spec, dt: dt); stepTail(&s, brain: brain, dt: dt)
         case .daisy: stepDaisy(&s, brain: brain, spec: spec, dt: dt)
         case .wings: stepWings(&s, brain: brain, dt: dt)
+        case .ears: stepEars(&s, dt: dt)
         case .none: break
         }
         slots[id] = s
@@ -255,6 +258,27 @@ final class FeatureSet {
         s.close = s.primed ? s.close + max(-dt / d.closeTime, min(dt / d.closeTime, wantClose - s.close)) : wantClose
     }
 
+    // MARK: Teddy's ears + pom
+
+    /// The ears and the pom jiggle on the body's acceleration like the daisy's head (a lagged spring, small), and tuck away when the hat rule says so.
+    private func stepEars(_ s: inout Slot, dt: Float) {
+        s.clock += dt
+        let Rinv = simd_float3x3(s.carry.rotation).transpose
+        let a = Rinv * accel(s, lag: 0.02, dt: dt)
+        // the body's acceleration tips the ears (nod about x from the fore-aft acceleration, side about z from the sideways), and a squash (hop landing, breath) bounces them
+        let push = SIMD2<Float>(a.z, -a.x) * FeatureTuning.earGain * 0.01 + SIMD2<Float>(-s.squashRate * FeatureTuning.earSquash, 0)
+        let w = 2 * .pi * FeatureTuning.earHz, z = FeatureTuning.earZeta
+        s.swayV += (-w * w * s.sway - 2 * z * w * s.swayV + push * w * w) * dt
+        s.sway += s.swayV * dt
+        let l = simd_length(s.sway)
+        if l > FeatureTuning.earMax { s.sway *= FeatureTuning.earMax / l }
+        if !l.isFinite { s.sway = .zero; s.swayV = .zero }
+        for (name, want) in [("ear_r", s.fit.earsHidden ? Float(0) : 1), ("ear_l", s.fit.earsHidden ? Float(0) : 1), ("pom", s.fit.pomHidden ? Float(0) : 1)] {
+            let cur = s.partScale[name] ?? want
+            s.partScale[name] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
+        }
+    }
+
     // MARK: wings
 
     /// No flap burst now: asleep (any sleep stage), at a meal (reserved / dining), in the wash, folded, mid pop, or while the flap-hop owns the wings.
@@ -336,6 +360,7 @@ final class FeatureSet {
             var pl = FeatureMeshes.Placement()
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }
+            if s.feature == .ears { pl.slide = s.fit.earSlide }
             guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil) else { continue }
             let first = m.vertices.count
             if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutFrom) {
@@ -398,6 +423,12 @@ final class FeatureSet {
             let droop = d.droopDeg * s.close
             let q = simd_quatf(angle: (sw.x + droop) * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: sw.y * .pi / 180, axis: SIMD3(0, 0, 1))
             return simd_float3x3(q)
+        case .ears:
+            // the ears flop a little about their bases (nod about x, side about z, the two mirrored), the pom wobbles a bit more on its short stalk
+            let k: Float = part.name == "pom" ? 1.7 : 1
+            let sgn: Float = part.side == 1 ? -1 : 1
+            let q = simd_quatf(angle: s.sway.x * k * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: sgn * s.sway.y * k * .pi / 180, axis: SIMD3(0, 0, 1))
+            return simd_float3x3(q)
         case .wings:
             guard let side = spec.wings.sides[part.side == 1 ? "l" : "r"] else { return matrix_identity_float3x3 }
             let sgn: Float = part.side == 1 ? -1 : 1
@@ -421,9 +452,10 @@ final class FeatureSet {
         let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
         for (pi, part) in p.parts.enumerated() {
             let tuck = s.partScale[part.name] ?? 1
-            let ps = (s.feature == .spines ? 1 : tuck) * s.scale
+            let ownScaled = s.feature == .spines || s.feature == .ears                          // these shrink onto their own bases
+            let ps = (ownScaled ? 1 : tuck) * s.scale
             if ps * tuck <= 0.001 { keep[pi] = false }
-            let ownTuck: Float = s.feature == .spines ? tuck : 1
+            let ownTuck: Float = ownScaled ? tuck : 1
             // the tail is a bent chain: this spike turns with its own ring (world rotation from the Skinner), not with a rigid whole-tail turn
             var ringTurn: simd_quatf? = nil
             if part.tailLocal >= 0, !s.tailRingQ.isEmpty { let r = (part.tailLocal - 1) / TailBean.around; if r >= 0 && r < s.tailRingQ.count { ringTurn = s.tailRingQ[r] } }

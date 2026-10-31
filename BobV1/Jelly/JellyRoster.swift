@@ -31,9 +31,11 @@ enum JellyKeys {
 /// What grows on a Jelly besides Bob's body (BobV1/Features): mapped from his colour. Saved nowhere: it follows the character id.
 nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
     case none, spines, daisy, wings
-    /// The feature art of the bundle (feature_<id>.bin); "" for none.
+    /// Teddy: round bear ears + a small puffy pom tail (built in code, Features/TeddyFeature.swift; there is no .bin).
+    case ears
+    /// The feature art of the bundle (feature_<id>.bin); "" for none (and for the ears: they are built in code).
     var art: String {
-        switch self { case .none: return ""; case .spines: return "pip_c_final"; case .daisy: return "moss_a_final"; case .wings: return "lav_a_final" }
+        switch self { case .none, .ears: return ""; case .spines: return "pip_c_final"; case .daisy: return "moss_a_final"; case .wings: return "lav_a_final" }
     }
 }
 
@@ -43,7 +45,12 @@ nonisolated enum JellyRoster {
     /// Characters available (Bob, Pip, Moss, Lavender).
     static let characterCount = 4
     /// The species' own names (what the Adoption Center offers as the default).
-    static let baseNames = ["Bob", "Pip", "Moss", "Lavender"]
+    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy"]
+    /// Teddy (character 4): a species that exists but is NOT offered anywhere yet (not in the intro, the Jelly Spring picker or the starter roster; never
+    /// padded into a short roster, not in any default). Reachable only through the `-ForceSpecies teddy` / `-SetRoster teddy` test hooks.
+    static let teddyID = 4
+    /// Every character id that exists (the four on offer + Teddy).
+    static let knownCount = 5
     static let namesKey = "JellyNames.v1"
     /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).
     nonisolated(unsafe) static var names: [String] = loadNames()
@@ -59,7 +66,7 @@ nonisolated enum JellyRoster {
     static func setName(_ id: Int, _ raw: String, _ d: UserDefaults = .standard) {
         guard (0..<characterCount).contains(id) else { return }
         var saved = d.stringArray(forKey: namesKey) ?? []
-        while saved.count < characterCount { saved.append("") }
+        while saved.count < baseNames.count { saved.append("") }
         saved[id] = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(14))
         d.set(saved, forKey: namesKey)
         names = loadNames(d)
@@ -68,10 +75,11 @@ nonisolated enum JellyRoster {
     static let defaultIDs = [0, 1, 2]
     static let rosterKey = "BlobRoster.v1"
     static let setRosterKey = "SetRoster"
+    static let forceSpeciesKey = "ForceSpecies"
 
     /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings. (By CHARACTER id.)
     static func feature(_ id: Int) -> JellyFeature {
-        switch id { case 1: return .spines; case 2: return .daisy; case 3: return .wings; default: return .none }
+        switch id { case 1: return .spines; case 2: return .daisy; case 3: return .wings; case teddyID: return .ears; default: return .none }
     }
 
     // MARK: the roster (characters by slot)
@@ -80,7 +88,7 @@ nonisolated enum JellyRoster {
     static func characterID(named raw: String) -> Int? {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let i = baseNames.firstIndex(where: { $0.lowercased() == t }) ?? names.firstIndex(where: { $0.lowercased() == t }) { return i }
-        if let n = Int(t), (0..<characterCount).contains(n) { return n }
+        if let n = Int(t), (0..<knownCount).contains(n) { return n }
         return nil
     }
     /// `-SetRoster pip,moss,lavender` -> [1, 2, 3]: unknown names dropped, repeats dropped, capped at `maxCount`; nil when nothing usable is left.
@@ -95,7 +103,7 @@ nonisolated enum JellyRoster {
     /// A saved / given list made valid: known characters, no repeats, 1...maxCount (empty -> the default roster).
     static func sanitised(_ ids: [Int]) -> [Int] {
         var out: [Int] = []
-        for c in ids where (0..<characterCount).contains(c) && !out.contains(c) { out.append(c) }
+        for c in ids where (0..<knownCount).contains(c) && !out.contains(c) { out.append(c) }
         return out.isEmpty ? defaultIDs : Array(out.prefix(maxCount))
     }
     /// The roster saved in `d` (the default roster when none was saved).
@@ -119,7 +127,9 @@ nonisolated enum JellyRoster {
     }
     /// The characters in the room at launch, by slot: `-SetRoster` applied, then the saved roster, cut to `-BlobCount` when given.
     static func launchIDs(_ d: UserDefaults = .standard) -> [Int] {
-        let ids = applySetRoster(d)
+        var ids = applySetRoster(d)
+        // `-ForceSpecies teddy`: that species takes slot 0 for this launch only (never saved), so a capture can spawn one without touching the saved roster
+        if let f = d.string(forKey: forceSpeciesKey), let c = characterID(named: f) { ids = Array(([c] + ids.filter { $0 != c }).prefix(maxCount)) }
         guard d.object(forKey: "BlobCount") != nil else { return ids }
         return Array(ids.prefix(min(max(d.integer(forKey: "BlobCount"), 1), ids.count)))
     }
@@ -156,6 +166,7 @@ nonisolated enum JellyRoster {
         case 1: return PaletteKey.yellow.palette
         case 2: return JellyPalettes.green
         case 3: return JellyPalettes.lavender
+        case teddyID: return TeddyLook.current.palette
         default: return nil
         }
     }
@@ -166,6 +177,7 @@ nonisolated enum JellyRoster {
         case 1: return SIMD3(0.99, 0.90, 0.62)
         case 2: return SIMD3(0.70, 0.90, 0.66)
         case 3: return SIMD3(0.80, 0.72, 0.93)
+        case teddyID: return TeddyLook.current.flesh
         default: return SIMD3(0.70, 0.83, 0.945)
         }
     }

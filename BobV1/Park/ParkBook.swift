@@ -123,7 +123,7 @@ final class ParkBook {
     @ObservationIgnored private var writingLines = false
 
     private static func words(_ f: JellyFeature) -> String {
-        switch f { case .none: return ""; case .spines: return "spikes on its back"; case .daisy: return "a daisy on its head"; case .wings: return "little wings" }
+        switch f { case .none: return ""; case .spines: return "spikes on its back"; case .daisy: return "a daisy on its head"; case .wings: return "little wings"; case .ears: return "round bear ears and a puffy tail" }
     }
 
     /// A level-up line from the model, kept for next time (the hand-written one shows now).

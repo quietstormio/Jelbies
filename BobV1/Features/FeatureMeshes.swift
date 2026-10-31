@@ -68,12 +68,15 @@ nonisolated enum FeatureMeshes {
         var onHat = false
         var anchor = SIMD3<Float>(0, 1.3458, 0), tilt: Float = 0, sink: Float = 0
         var dy: Float = 0
+        /// Teddy's ears: degrees they slide down the side of the head under a hat (TeddyFit).
+        var slide: Float = 0
         var key: String { onHat ? String(format: "hat:%.4f,%.4f,%.4f/%.1f/%.3f", anchor.x, anchor.y, anchor.z, tilt, sink) : String(format: "dy:%.3f", dy) }
     }
 
     /// The prepared feature (cached per placement). `body` binds the part pivots.
     static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridge: RidgeLayout? = nil) -> FeaturePrepared? {
         guard f != .none else { return nil }
+        if f == .ears { return TeddyMesh.prepare(slide: p.slide, body: body) }          // built in code (TeddyFeature.swift)
         if f == .spines {          // Pip: the original spikes spaced down his back + on his tail (PipSpikes); none on his head
             // (the re-flowed rows are cached per layout: the hat's brim height and the neck pieces threaded around)
             let layout = ridge ?? .bare
@@ -104,7 +107,7 @@ nonisolated enum FeatureMeshes {
         case .spines: anchorRest = SIMD3(0, spec.top, 0)
         case .daisy: anchorRest = (p.onHat ? spec.daisyOnHat : spec.daisy).anchor.v3
         case .wings: anchorRest = spec.wings.anchor.v3
-        case .none: anchorRest = .zero
+        case .none, .ears: anchorRest = .zero
         }
         let crown = SIMD3<Float>(0, spec.top, 0)
         let RT = rotX(p.tilt)
@@ -138,7 +141,7 @@ nonisolated enum FeatureMeshes {
             case .wings:
                 let side = part.name.hasPrefix("wing_l") ? "l" : "r"
                 pivot = placePoint(spec.wings.sides[side]?.hinge.v3 ?? .zero); pr.side = side == "l" ? 1 : 0
-            case .none: pivot = .zero
+            case .none, .ears: pivot = .zero
             }
             pr.pivot = pivot
             pr.bind = body.bind(pivot) ?? SurfaceBind()
