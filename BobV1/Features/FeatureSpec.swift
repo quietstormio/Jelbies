@@ -119,6 +119,9 @@ nonisolated struct FeatureFit: Equatable, Sendable {
     /// Lavender: the vertical wing shift and the flap / spread clamps; `folded` = no placement fits, the wings lie flat and the flap-hop is a plain hop.
     var wingDY: Float = 0, flapMin: Float = -40, flapMax: Float = 75, spreadMax: Float = 40
     var folded = false
+    /// Teddy: how far the ears slide down the side of the head under a hat, whether they / the pom tuck away (TeddyFit).
+    var earSlide: Float = 0
+    var earsHidden = false, pomHidden = false
 }
 
 nonisolated enum FeatureCompat {
@@ -137,6 +140,9 @@ nonisolated enum FeatureCompat {
         var fit = FeatureFit()
         switch feature {
         case .none: return fit
+        case .ears:
+            let t = TeddyFit.solve(worn: worn)
+            fit.earSlide = t.slide; fit.earsHidden = t.earsHidden; fit.pomHidden = t.pomHidden
         case .spines:
             // Pip's spines NEVER vanish under what he wears. Under a hat that encloses his head they grow through the TOP of its crown (a mohawk through
             // the hat: FeatureSet.emit seats each base on the fitted crown); with the perch items (bows, headphones, antennae ...) they stay as they are.

@@ -20,7 +20,7 @@ final class FeatureCaptureTests: XCTestCase {
     override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0) }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
 
-    private func dir() throws -> String {
+    func dir() throws -> String {
         guard let d = ProcessInfo.processInfo.environment["CHAR_CAP_DIR"], !d.isEmpty else { throw XCTSkip("CHAR_CAP_DIR not set") }
         try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
         return d
@@ -29,7 +29,7 @@ final class FeatureCaptureTests: XCTestCase {
     /// A character on a rig: the roster id (palette + feature) and what he wears.
     struct Char { var id: Int; var outfit: Outfit = [:] }
 
-    private func renderer(_ lab: SocialTests.Lab) throws -> (MelonRenderer, MTLTexture) {
+    func renderer(_ lab: SocialTests.Lab) throws -> (MelonRenderer, MTLTexture) {
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
         let r0 = lab.rigs[0]
         guard let ren = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: MotionRig.renderMesh, simEdges: r0.sim.edges, particleCount: r0.sim.n, game: true), ren.room != nil else { throw XCTSkip("no renderer") }
@@ -40,7 +40,7 @@ final class FeatureCaptureTests: XCTestCase {
         return (ren, device.makeTexture(descriptor: td)!)
     }
 
-    private func setUpLab(_ positions: [SIMD2<Float>], chars: [Char], seed: UInt64 = 5) -> SocialTests.Lab {
+    func setUpLab(_ positions: [SIMD2<Float>], chars: [Char], seed: UInt64 = 5) -> SocialTests.Lab {
         let lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: true, seed: seed)
         SocialTests.keep.append(lab)
         for (k, r) in lab.rigs.enumerated() {
@@ -53,7 +53,7 @@ final class FeatureCaptureTests: XCTestCase {
 
     /// The wardrobe + feature of every rig (id 0 each: the renderer draws one body per pass).
     final class Dressed { var worn: [WornSet] = [], feats: [FeatureSet] = [] }
-    private func dress(_ lab: SocialTests.Lab, _ chars: [Char]) -> Dressed {
+    func dress(_ lab: SocialTests.Lab, _ chars: [Char]) -> Dressed {
         let d = Dressed()
         for (k, r) in lab.rigs.enumerated() {
             let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
@@ -63,7 +63,7 @@ final class FeatureCaptureTests: XCTestCase {
         }
         return d
     }
-    private func tick(_ d: Dressed, _ k: Int, _ r: MotionRig, _ c: Char, dt: Float = 1.0 / 60) {
+    func tick(_ d: Dressed, _ k: Int, _ r: MotionRig, _ c: Char, dt: Float = 1.0 / 60) {
         let w = d.worn[k], f = d.feats[k]
         w.tick(id: 0, brain: r.brain, sim: r.sim, outfit: c.outfit, role: .none, hideAll: false, dt: dt)
         var art: [String] = []
@@ -72,13 +72,13 @@ final class FeatureCaptureTests: XCTestCase {
         if let s = f.slot(0) { w.setArtOverride(0, s.fit.hatVariant); r.brain.wingsFolded = s.fit.folded; r.brain.wingFlapLimit = s.fit.flapMax }
     }
 
-    private func skin(_ r: MotionRig) -> [Float] {
+    func skin(_ r: MotionRig) -> [Float] {
         var d = [Float](repeating: 0, count: MotionRig.renderMesh.vertexCount * 6)
         r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &d)
         return d
     }
 
-    private func composite(_ lab: SocialTests.Lab, _ d: Dressed, _ chars: [Char], _ ren: MelonRenderer, _ target: MTLTexture, cam camOverride: CameraState? = nil, hour: Double? = 12, bboxes: ((Int, CGRect) -> Void)? = nil) -> LockImage {
+    func composite(_ lab: SocialTests.Lab, _ d: Dressed, _ chars: [Char], _ ren: MelonRenderer, _ target: MTLTexture, cam camOverride: CameraState? = nil, hour: Double? = 12, bboxes: ((Int, CGRect) -> Void)? = nil) -> LockImage {
         let cam = camOverride ?? GameCamera.camera(aspect: Float(W) / Float(H), focus: 0)
         ren.dayHourOverride = hour
         func shot(only: Int?) -> LockImage {
@@ -151,7 +151,7 @@ final class FeatureCaptureTests: XCTestCase {
 
     // MARK: sheets
 
-    private func labelled(_ img: UIImage, _ text: String) -> UIImage {
+    func labelled(_ img: UIImage, _ text: String) -> UIImage {
         let w = img.size.width, h = img.size.height, bar: CGFloat = 40
         let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
         return UIGraphicsImageRenderer(size: CGSize(width: w, height: h + bar), format: fmt).image { _ in
@@ -160,7 +160,7 @@ final class FeatureCaptureTests: XCTestCase {
             img.draw(in: CGRect(x: 0, y: bar, width: w, height: h))
         }
     }
-    private func hstack(_ imgs: [UIImage]) -> UIImage {
+    func hstack(_ imgs: [UIImage]) -> UIImage {
         let h = imgs.map { $0.size.height }.max() ?? 0, w = imgs.reduce(0) { $0 + $1.size.width }
         let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
         return UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
@@ -168,7 +168,7 @@ final class FeatureCaptureTests: XCTestCase {
             for i in imgs { i.draw(at: CGPoint(x: x, y: 0)); x += i.size.width }
         }
     }
-    private func vstack(_ imgs: [UIImage]) -> UIImage {
+    func vstack(_ imgs: [UIImage]) -> UIImage {
         let w = imgs.map { $0.size.width }.max() ?? 0, h = imgs.reduce(0) { $0 + $1.size.height }
         let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
         return UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: fmt).image { _ in
@@ -176,10 +176,10 @@ final class FeatureCaptureTests: XCTestCase {
             for i in imgs { i.draw(at: CGPoint(x: 0, y: y)); y += i.size.height }
         }
     }
-    private func write(_ img: UIImage, _ path: String) throws { try img.pngData()!.write(to: URL(fileURLWithPath: path)) }
+    func write(_ img: UIImage, _ path: String) throws { try img.pngData()!.write(to: URL(fileURLWithPath: path)) }
 
     /// The part of a room frame around the Jellies.
-    private func cropJellies(_ img: LockImage, _ lab: SocialTests.Lab, cam: CameraState, pad: Float = 0.09) -> UIImage? {
+    func cropJellies(_ img: LockImage, _ lab: SocialTests.Lab, cam: CameraState, pad: Float = 0.09) -> UIImage? {
         let pts = lab.rigs.map { r -> SIMD2<Float> in
             let c = r.sim.centroid(); let k = cam.viewProj * SIMD4<Float>(c.x, c.y, c.z, 1)
             return SIMD2((k.x / k.w * 0.5 + 0.5) * Float(W), (1 - (k.y / k.w * 0.5 + 0.5)) * Float(H))
@@ -193,7 +193,7 @@ final class FeatureCaptureTests: XCTestCase {
     }
 
     /// A 900 x 900 close-up of rig 0 of a one-character lab from `yaw` radians round his facing (0 front, pi back).
-    private func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, dist: Float = 3.4, lookY: Float = 0.25, lookBack: Float = 0, lift: Float = 0.1, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
+    func closeup(_ c: Char, yaw: Float, label: String, seed: UInt64 = 3, dist: Float = 3.4, lookY: Float = 0.25, lookBack: Float = 0, lift: Float = 0.1, prepare: ((SocialTests.Lab, Dressed) -> Void)? = nil) throws -> UIImage {
         W = 900; H = 900
         let chars = [c]
         let lab = setUpLab([SIMD2(0.2, 0.6)], chars: chars, seed: seed)
@@ -468,7 +468,7 @@ final class FeatureCaptureTests: XCTestCase {
     }
 
     /// Walk with a mid-route turn, before (refitWorldPlaced false) vs after (true): the same frames side by side, and the drawn feet's per-vertex difference.
-    private func walkRun(id: Int, refit: Bool, shots: [Int]) throws -> (imgs: [UIImage], feet: [[SIMD3<Float>]], detaching: [Bool]) {
+    func walkRun(id: Int, refit: Bool, shots: [Int]) throws -> (imgs: [UIImage], feet: [[SIMD3<Float>]], detaching: [Bool]) {
         BlobBrain.refitWorldPlaced = refit
         defer { BlobBrain.refitWorldPlaced = true }
         W = 603; H = 1311
@@ -710,7 +710,7 @@ final class FeatureCaptureTests: XCTestCase {
     /// A Jelbie at each extreme corner of the roaming polygon (front-left, front-right, back-left, back-right), the real renderer, the real room camera, with
     /// Lavender (wings), Pip (spines) and Moss (flower): the saved contact sheet + a pixel check that the whole body (shadow included) is on screen and the
     /// side margin / bottom margin hold. Output: corners_port.png / corners_land.png (ROAM_DIR or CHAR_CAP_DIR).
-    private func cornersSheet(land: Bool) throws {
+    func cornersSheet(land: Bool) throws {
         let env = ProcessInfo.processInfo.environment
         guard let d = (env["ROAM_DIR"] ?? env["CHAR_CAP_DIR"]).flatMap({ $0.isEmpty ? nil : $0 }) else { throw XCTSkip("ROAM_DIR / CHAR_CAP_DIR not set") }
         try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)

@@ -90,6 +90,40 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
+    float bb = u.shape.w;
+    float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
+    float bm = bb - 10.0 * tn;                           // shape mode 1...9
+    if (bb > 0.5) {
+        float bk;
+        float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
+        if (bm < 1.5) {
+            float cz = Q.z / max(length(Q.xz), 0.05);              // 1 = straight ahead, 0 = side, -1 = back
+            bk = smoothstep(0.0, 0.62, cz) * (1.0 - smoothstep(0.98, 1.22, Q.y)) * smoothstep(0.02, 0.14, Q.y);
+        } else if (bm > 3.5) {
+            // C1 tall oval / C2 egg: one continuous marking from the belly up to the forehead (above the brows, well under the crown), B2's tone and crisp edge
+            float py = (Q.y - 0.665) / 0.535;
+            float hw = 0.345;
+            if (bm > 4.5) { float2 ew = bm > 8.5 ? float2(0.475, 0.41) : bm > 7.5 ? float2(0.44, 0.38) : bm > 6.5 ? float2(0.41, 0.35) : (bm > 5.5 ? float2(0.375, 0.32) : float2(0.335, 0.285)); hw = mix(ew.x, ew.y, smoothstep(0.35, 1.05, Q.y)); }          // C2 / C2w (+12 %) / C2ww (+22 %) / C2w3 (+32 %) / C2w4 (+42 %)          // egg: B2's width at the belly, narrower toward the forehead
+            float px = Q.x / hw;
+            float dd = pow(pow(abs(px), 2.4) + pow(abs(py), 2.4), 1.0 / 2.4);
+            bk = (1.0 - smoothstep(0.70, 1.0, dd)) * smoothstep(0.08, 0.30, Q.z);
+            lk = 0.44;
+        } else {
+            bool crisp = bm > 2.5;
+            float2 bp2 = (float2(Q.x, Q.y - (crisp ? 0.335 : 0.325))) / (crisp ? float2(0.335, 0.205) : float2(0.285, 0.170));
+            bk = (1.0 - smoothstep(crisp ? 0.70 : 0.30, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
+            lk = crisp ? 0.44 : 0.36;
+        }
+        float3 lt = mix(col, float3(1.0), lk);
+        if (tn > 2.5) { lt = mix(col, float3(1.0, 0.92, 0.76), 0.50); }          // tone 3 (Teddy): a warm cream-tan lift of the shaded body colour
+        else if (tn > 0.5) {                                          // D1 / D2: lift a little toward white, then restore the chroma so it stays a clear sky BLUE (never a white face-paint tone)
+            lt = mix(col, float3(1.0), tn < 1.5 ? 0.26 : 0.16);
+            float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
+            lt = saturate(ll + (lt - ll) * 1.1);
+        }
+        col = mix(col, lt, bk);
+    }
     // mouth: same block as the locked shader
     float mo = u.stripe.w;
     if (mo > 0.002 && Q.z > 0.15) {

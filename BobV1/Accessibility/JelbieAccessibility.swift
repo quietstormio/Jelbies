@@ -52,6 +52,7 @@ nonisolated enum JelbieA11yText {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"
         case .daisy: return "green with a daisy on his head"
+        case .ears: return "light brown with round bear ears and a puffy tail"
         case .wings: return "lavender with little wings"
         }
     }
