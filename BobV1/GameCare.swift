@@ -243,6 +243,7 @@ final class GameCare {
         bath = BathFlow(grimeKey: c0 == 0 ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
         group = DiningGroup(dining: dining, shared: true)
         store = StoreBook(wallet: bath.wallet, persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+        store.grantStaplesIfNeeded()          // berries and pizza are store foods now: every save (new or older) gets a small stock once
         let v = voice ?? VoiceCoordinator(training: c0 == 0 ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent))
         self.voice = v
         v.care = self

@@ -38,6 +38,8 @@ final class StoreBook {
         var stash: [String: [PlacedDecor]]? = nil
         /// The removed Garden's room price was refunded (once). Optional: older saves decode without it.
         var gardenRefunded: Bool? = nil
+        /// The starter stock of berries and pizza was given (once; berries and pizza used to be free, so a save from before gets it too). Optional: older saves decode without it.
+        var staplesGiven: Bool? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -110,6 +112,26 @@ final class StoreBook {
         wallet.add(StoreTuning.starterDrops, silent: true)
         save()
         return true
+    }
+
+    /// Berries and pizza were free until they became store foods: every save (new or older) gets a small stock once, so nobody is left unable to feed. Never touches Drops.
+    static let starterBerries = 6, starterPizza = 3
+    @discardableResult
+    func grantStaplesIfNeeded() -> Bool {
+        guard saved.staplesGiven != true else { return false }
+        saved.staplesGiven = true
+        saved.counts["berries", default: 0] += Self.starterBerries
+        saved.counts["pizza", default: 0] += Self.starterPizza
+        save()
+        return true
+    }
+    /// The never-starve floor: with no food of any kind in the bag and too few Drops for the cheapest one, one berry appears.
+    @discardableResult
+    func ensureFeedable() -> Bool {
+        guard StoreCatalog.items.allSatisfy({ $0.food == nil || $0.kind == .drink || count($0.id) == 0 }) else { return false }
+        guard wallet.count < (StoreCatalog.item("berries")?.price ?? 4) else { return false }
+        saved.counts["berries", default: 0] += 1
+        save(); return true
     }
 
     // MARK: queries

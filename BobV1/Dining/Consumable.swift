@@ -121,14 +121,17 @@ nonisolated struct Consumable {
 nonisolated enum Consumables {
     static func srgb(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { OKLab.srgbToLinear(SIMD3(r, g, b)) }
 
-    static let berries = Consumable(
+    /// Berries and pizza are bought in the Shop like every other food (fed from the bag; a new player starts with a small stock, see StoreBook.grantStaplesIfNeeded).
+    static let berries: Consumable = { var c = berriesBase; c.stored = true; c.storeID = "berries"; return c }()
+    private static let berriesBase = Consumable(
         id: "berries", name: "Berries", kind: .food, eatStyle: .finger, symbol: "circle.hexagongrid.fill",
         palette: ConsumablePalette(primary: srgb(0.96, 0.58, 0.66), secondary: srgb(0.74, 0.62, 0.92), accent: srgb(0.60, 0.74, 0.96),
                                    detail: srgb(0.62, 0.84, 0.62)),
         benefits: [.hunger: 0.3, .happy: 0.1],
         serving: { b, st, pal, lay in DiningModels.berries(b, state: st, palette: pal, layout: lay) })
 
-    static let pizza = Consumable(
+    static let pizza: Consumable = { var c = pizzaBase; c.stored = true; c.storeID = "pizza"; return c }()
+    private static let pizzaBase = Consumable(
         id: "pizza", name: "Pizza", kind: .food, eatStyle: .finger, symbol: "triangle.fill",
         palette: ConsumablePalette(primary: srgb(0.93, 0.74, 0.50), secondary: srgb(1.0, 0.88, 0.55), accent: srgb(0.92, 0.50, 0.46),
                                    detail: srgb(1.0, 0.96, 0.78)),
@@ -153,8 +156,8 @@ nonisolated enum Consumables {
 
     /// Menu order.
     static let all: [Consumable] = [berries, pizza, water, soda] + storeFoods + storeDrinks
-    /// The FREE foods of the Feed picker (store foods are fed from the inventory).
-    static var foods: [Consumable] { all.filter { $0.kind == .food && !$0.stored } }
+    /// The two everyday foods with their own serving builders (berries, pizza). Like every food they are bought and fed from the bag.
+    static var foods: [Consumable] { [berries, pizza] }
     /// The FREE drinks (water, soda). The store's drinks (`storeDrinks`) are offered from the bag: `GameCare.drinkChoices`.
     static var drinks: [Consumable] { all.filter { $0.kind == .drink && !$0.stored } }
     static func with(id: String) -> Consumable? { all.first { $0.id == id } }

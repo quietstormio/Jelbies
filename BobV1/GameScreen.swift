@@ -263,6 +263,7 @@ struct GameScreen: View {
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
+            model.care.store.ensureFeedable()
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
@@ -704,6 +705,7 @@ struct GameScreen: View {
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()
+        care.store.ensureFeedable()
         for (id, n) in [("sushi", 2), ("donut", 1), ("nuggets", 3), ("lavender", 1), ("fries", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
         care.store.grant("shoe-mint"); care.store.grant("shoe-rain")
         if care.bath.wallet.count < 60 { care.bath.wallet.add(60 - care.bath.wallet.count, silent: true) }
@@ -798,10 +800,10 @@ struct CareMenu: View {
 
     /// The rows' natural size (they scroll when the screen is too short).
     @State private var careNatural: CGSize?
-    /// Which picker is unfolded under its row: Feed (berries, pizza) and Drink (water, soda), each as two chips.
+    /// Which picker is unfolded under its row: Feed (every food in the bag, one scrolling row) and Drink (water, soda, bought drinks, one scrolling row).
     @State private var picker: ConsumableKind?
-    /// The Snacks picker (store foods in the bag, with counts) is unfolded.
-    @State private var snackPicker = false
+    /// The width the unfolded picker row wants (it scrolls sideways when the screen is narrower).
+    @State private var pickerWidth: CGFloat = 0
     /// Compete is unfolded into its two chips (Track / Jelly Show).
     @State private var competeRow = false
     @Environment(\.verticalSizeClass) private var vsc
@@ -814,15 +816,16 @@ struct CareMenu: View {
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
-        let items = HUDMenu.items(mode)
+        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
+        let all = HUDMenu.items(mode)
+        let items = tight && picker != nil ? all.filter { $0 == .feed || $0 == .drink } : all
         CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
                     ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
                         row(item, count: items.count, index: index)
-                        if picker == .food, item == .feed { pickerRow(Consumables.foods, kind: .food) }
-                        if picker == .drink, item == .drink { pickerRow(care.drinkChoices, kind: .drink) }
-                        if snackPicker, item == .snacks { snackRow }
+                        if picker == .food, item == .feed { pickerRow(kind: .food) }
+                        if picker == .drink, item == .drink { pickerRow(kind: .drink) }
                         if competeRow, item == .compete { competeChips }
                     }
                 }
@@ -832,10 +835,10 @@ struct CareMenu: View {
             mainButton
         }
         .onChange(of: open) { _, isOpen in
-            if !isOpen { picker = nil; snackPicker = false; competeRow = false }
+            if !isOpen { picker = nil; competeRow = false }
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.items(mode).first } }      // focus moves into the opened rows
         }
-        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; snackPicker = false; competeRow = false } }
+        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false } }
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
@@ -855,78 +858,70 @@ struct CareMenu: View {
                            removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity).animation(Self.fadeOut))
     }
 
-    /// A tiny row of the catalogue's items in the same cream style; tapping one starts it and closes the menu.
-    private func pickerRow(_ list: [Consumable], kind: ConsumableKind) -> some View {
-        ViewThatFits(in: .horizontal) {
-            pickerChips(list, kind: kind)
-            ScrollView(.horizontal, showsIndicators: false) { pickerChips(list, kind: kind) }          // water, soda and four bought drinks do not fit one line
-        }
+    /// One entry of the Feed / Drink row.
+    private struct PickEntry: Identifiable {
+        let id: String
+        let name: String
+        let art: AnyView
+        let count: Int?          // nil = unlimited (water, soda)
+        let ident: String
+        let run: () -> Void
+        var out: Bool { count == 0 }
     }
-    private func pickerChips(_ list: [Consumable], kind: ConsumableKind) -> some View {
-        HStack(spacing: 10) {
-            ForEach(Array(list.enumerated()), id: \.element.id) { i, c in
-                Button {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    if kind == .food { care.feed(c.id, jelly: care.singledOutForFood) } else { care.drink(c.id, jelly: care.singledOutForFood) }
-                    withAnimation(Self.spring) { picker = nil; open = false }
-                } label: {
-                    VStack(spacing: 3) {
-                        if c.stored, let it = StoreCatalog.item(forFood: c.id) {
-                            ItemArt(item: it, size: tight ? 44 : 46)          // a bought drink shows its own cup
-                                .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
-                        } else {
-                        Image(systemName: UIImage(systemName: c.symbol) != nil ? c.symbol : "drop.fill")
-                            .font(.system(size: 19, weight: .semibold))
-                            .foregroundStyle(Self.brown)
-                            .frame(width: tight ? 44 : 46, height: tight ? 44 : 46)
-                            .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-                        }
-                        Text(c.name)
-                            .jFont(12, .semibold)
-                            .foregroundStyle(Self.brown)
-                            .padding(.horizontal, 8).padding(.vertical, 2)
-                            .background(Capsule().fill(Self.cream))
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("care-\(kind == .food ? "food" : "drink")-\(c.id)")
-                .accessibilityLabel(c.name)
-                .transition(chipTransition(i))
+    /// Feed: every food in the bag in shop order (foods, then treats), with berries and pizza always shown (dimmed at 0). Drink: water, soda, then the bought drinks.
+    private func pickEntries(_ kind: ConsumableKind) -> [PickEntry] {
+        let jelly = care.singledOutForFood
+        if kind == .drink {
+            return care.drinkChoices.map { c in
+                let item = c.stored ? StoreCatalog.item(forFood: c.id) : nil
+                let art: AnyView = item.map { AnyView(ItemArt(item: $0, size: 50)) } ?? AnyView(ConsumableArt(consumable: c, size: 50))
+                return PickEntry(id: c.id, name: c.name, art: art, count: item.map { care.store.count($0.id) }, ident: "care-drink-\(c.id)") { care.drink(c.id, jelly: jelly) }
             }
         }
-        .padding(.trailing, 8)
+        return StoreCatalog.items.compactMap { it in
+            guard it.food != nil, it.kind != .drink else { return nil }
+            let n = care.store.count(it.id)
+            guard n > 0 || it.id == "berries" || it.id == "pizza" else { return nil }
+            return PickEntry(id: it.id, name: it.name, art: AnyView(ItemArt(item: it, size: 50)), count: n, ident: "care-food-\(it.id)") { care.feedSnack(it.id, jelly: jelly) }
+        }
     }
 
-    /// The snacks in the bag as chips (3D thumbnail, count); tapping one feeds the selected Jelly (or everybody with nobody singled out).
-    private var snackRow: some View {
-        let list = care.store.snacks
-        return HStack(spacing: 10) {
-            if list.isEmpty {
-                Text("None yet. Visit the Shop!").jFont(13, .semibold).foregroundStyle(Self.brown)
-                    .padding(.horizontal, 12).padding(.vertical, 8).background(Capsule().fill(Self.cream))
-            }
-            ForEach(Array(list.prefix(4).enumerated()), id: \.element.item.id) { i, s in
-                Button {
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    care.feedSnack(s.item.id, jelly: care.singledOutForFood)
-                    withAnimation(Self.spring) { snackPicker = false; open = false }
-                } label: {
-                    VStack(spacing: 3) {
-                        ItemArt(item: s.item, size: 50).overlay(alignment: .topTrailing) {
-                            Text("\(s.count)").jFont(11, .black).foregroundStyle(.white)
-                                .frame(minWidth: 18, minHeight: 18).background(Circle().fill(FocusStyle.pink)).offset(x: 5, y: -5)
+    /// The Feed / Drink picker: ONE row of picture cards that scrolls sideways when it is wider than the screen.
+    private func pickerRow(kind: ConsumableKind) -> some View {
+        let entries = pickEntries(kind)
+        let cap = max(160, UIScreen.main.bounds.width - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
+                    Button {
+                        guard !e.out else { return }
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                        e.run()
+                        withAnimation(Self.spring) { picker = nil; open = false }
+                    } label: {
+                        VStack(spacing: 3) {
+                            e.art.overlay(alignment: .topTrailing) {
+                                if let n = e.count {
+                                    Text("\(n)").jFont(11, .black).foregroundStyle(.white)
+                                        .frame(minWidth: 18, minHeight: 18).background(Circle().fill(FocusStyle.pink)).offset(x: 5, y: -5)
+                                }
+                            }
+                            .opacity(e.out ? 0.45 : 1)
+                            Text(e.name).jFont(11, .semibold).foregroundStyle(Self.brown).lineLimit(1)
+                                .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Self.cream))
                         }
-                        Text(s.item.name).jFont(11, .semibold).foregroundStyle(Self.brown).lineLimit(1)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Self.cream))
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(e.ident)
+                    .accessibilityLabel(e.count.map { $0 == 0 ? "\(e.name), none left" : "\(e.name), \($0) left" } ?? e.name)
+                    .transition(chipTransition(i))
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("care-snack-\(s.item.id)").accessibilityLabel("\(s.item.name), \(s.count) left")
-                .transition(chipTransition(i))
             }
+            .padding(.horizontal, 8).padding(.vertical, 8)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pickerWidth = $0 }
         }
-        .padding(.trailing, 8)
+        .frame(width: min(max(pickerWidth, 1), cap))
+        .padding(.trailing, 0)
     }
 
     /// Compete unfolds into Track (train or race) and Jelly Show, for the highlighted Jelbie.
@@ -966,11 +961,10 @@ struct CareMenu: View {
         let route = HUDMenu.perform(item, mode, care: care)
         switch route {
         case .picker(let k):
-            if k == .food { withAnimation(Self.spring) { picker = picker == .food ? nil : .food; snackPicker = false; competeRow = false }; return }
-            if care.drinkChoices.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; snackPicker = false; competeRow = false }; return }
+            if k == .food { withAnimation(Self.spring) { picker = picker == .food ? nil : .food; competeRow = false }; return }
+            if care.drinkChoices.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; competeRow = false }; return }
             care.drink(care.drinkChoices.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
-        case .snacks: withAnimation(Self.spring) { snackPicker.toggle(); picker = nil; competeRow = false }; return
-        case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil; snackPicker = false }; return
+        case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil }; return
         case .bag(let tab, let who): openBag(tab, who)
         case .town(let t, let who): openTown(t, who)
         case .none: break

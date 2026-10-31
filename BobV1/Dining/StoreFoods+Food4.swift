@@ -46,6 +46,8 @@ extension StoreThumb {
     /// A store food's thumbnail mesh: the mini pizza shows the WHOLE pie (the plate and the hand use single slices); a drink shows the full cup.
     static func foodMesh(_ c: Consumable) -> RoomMesh {
         if c.id == "minipizza", let whole = FoodMeshes.mesh(id: "minipizza_whole") { return whole }
+        if c.id == "pizza" { return DiningModels.heldSlice(scale: 1.25, palette: c.palette) }
+        if c.id == "berries" { return DiningModels.berryCluster(palette: c.palette, scale: 1.5) }
         if c.kind == .drink { return DiningModels.containerModel(c, layout: DiningLayout.make(n: 1))?.opaque ?? RoomMesh() }
         return DiningModels.heldPiece(c, index: 0, scale: 1.25)
     }

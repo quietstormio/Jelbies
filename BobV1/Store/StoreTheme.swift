@@ -243,6 +243,11 @@ enum StoreThumb {
         if item.id == "taco" { return (0.38, 0.42) }
         return (0.55, 0.42)
     }
+    /// A free-standing food or drink's thumbnail (water, soda): the same render as a store item's.
+    static func image(for c: Consumable) -> UIImage? {
+        let a = (yaw: Float(0.55), pitch: Float(0.42))
+        return image(c.id, mesh: foodMesh(c), glass: glassMesh(c), yaw: a.yaw, pitch: a.pitch)
+    }
     static func image(for item: StoreItem) -> UIImage? {
         if let r = item.room { return UIImage(named: "room_thumb_\(r.rawValue)") }
         guard let m = mesh(for: item) else { return nil }
@@ -250,6 +255,25 @@ enum StoreThumb {
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
         let glass = item.food.flatMap { Consumables.with(id: $0) }.flatMap { glassMesh($0) }
         return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch)
+    }
+}
+
+/// A consumable's picture (water, soda) on the same card as `ItemArt`.
+struct ConsumableArt: View {
+    let consumable: Consumable
+    var size: CGFloat = 96
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(consumable.kind == .drink ? SK.sky.opacity(0.4) : SK.honey.opacity(0.55))
+            if let img = StoreThumb.image(for: consumable) {
+                Image(uiImage: img).resizable().scaledToFit().padding(size * 0.06)
+            } else {
+                Image(systemName: UIImage(systemName: consumable.symbol) != nil ? consumable.symbol : "drop.fill")
+                    .font(.system(size: size * 0.42, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

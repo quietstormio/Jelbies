@@ -316,6 +316,14 @@ nonisolated enum DiningModels {
         ellipsoid(b, centre: c + SIMD3(0, 0.054 * s, 0), rx: 0.032 * s, ry: 0.013 * s, color: leaf, rings: 3, segments: 8)
     }
 
+    /// Three berries in a little heap (the Shop / Feed thumbnail).
+    static func berryCluster(palette p: ConsumablePalette, scale s: Float) -> RoomMesh {
+        let b = RoomMeshBuilder(); b.material = .plain
+        let spots: [(Float, Float, Float, SIMD3<Float>)] = [(-0.062, 0.0, 0.03, p.primary), (0.062, 0.0, 0.03, p.secondary), (0.0, 0.0, -0.07, p.accent)]
+        for q in spots { berry(b, centre: SIMD3(q.0, q.1, q.2) * s, color: q.3, leaf: p.detail, scale: s) }
+        return b.mesh
+    }
+
     /// Standalone berry for a held item (centred on the origin).
     static func heldBerry(color i: Int, scale s: Float) -> RoomMesh {
         let b = RoomMeshBuilder(); b.material = .plain

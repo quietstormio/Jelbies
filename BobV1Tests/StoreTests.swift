@@ -119,7 +119,7 @@ final class StoreTests: XCTestCase {
                 XCTAssertNotNil(c, "\(i.id) feeds a real food")
                 XCTAssertTrue(c?.stored ?? false)
                 XCTAssertEqual(c?.perk, i.perk, "\(i.id): the card's perk is what eating gives")
-                XCTAssertTrue(c?.piece != nil || c?.container != nil, "\(i.id) has a 3D piece (a drink: a cup)")
+                XCTAssertTrue(c?.piece != nil || c?.container != nil || c?.serving != nil, "\(i.id) has a 3D piece (a drink: a cup)")
                 XCTAssertEqual(c?.kind == .drink, i.kind == .drink, "\(i.id): drinks are the Drinks tab")
             }
             if i.kind == .trickPage { XCTAssertNotNil(i.trick); XCTAssertFalse(i.trick!.isStarter) }
@@ -133,7 +133,7 @@ final class StoreTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(decor.count, 29)
         XCTAssertTrue(decor.allSatisfy { $0.decor != nil && $0.roomUnits > 0 }, "every decor item is a placeable decor kind")
         XCTAssertEqual(StoreTuning.roomCapacity, 10)
-        XCTAssertFalse(Consumables.foods.contains { $0.stored }, "store foods stay out of the free Feed picker")
+        XCTAssertTrue(Consumables.foods.allSatisfy { $0.stored }, "berries and pizza are store foods too: bought, fed from the bag")
         XCTAssertTrue(Consumables.foods.map(\.id).contains("berries"))
         // a treat costs about two races (12 / 7 / 4)
         let treats = StoreCatalog.items(.treat).map(\.price)

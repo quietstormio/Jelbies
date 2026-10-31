@@ -105,7 +105,9 @@ nonisolated enum StoreCatalog {
     ].map { StoreItem(id: $0.0.storeID, name: $0.0.title, kind: .decor, price: $0.1, perk: nil, description: $0.0.use, symbol: $0.2, roomUnits: $0.0.spec.units) }
 
     private static let base: [StoreItem] = [
-        // food (hand-held, tossed into his mouth)
+        // food (hand-held, tossed into his mouth). Berries and pizza are the everyday basics: cheap, no perk.
+        StoreItem(id: "berries", name: "Berries", kind: .food, price: 4, perk: nil, description: "Sweet and simple. Fills his tummy a little.", symbol: "circle.hexagongrid.fill", food: "berries"),
+        StoreItem(id: "pizza", name: "Pizza", kind: .food, price: 8, perk: nil, description: "A cheesy slice. Fills his tummy and cheers him up.", symbol: "triangle.fill", food: "pizza"),
         StoreItem(id: "nuggets", name: "Chicken nuggets", kind: .food, price: 12, perk: .fullBelly, description: "Crispy and filling. Hunger falls slower for 4 hours.", symbol: "fork.knife", food: "nuggets"),
         StoreItem(id: "fries", name: "Fries", kind: .food, price: 10, perk: .bouncy, description: "Salty and fun. More bouncing for an hour.", symbol: "fork.knife", food: "fries"),
         StoreItem(id: "sushi", name: "Sushi roll", kind: .food, price: 18, perk: .cozy, description: "Calm and cozy. Stays happy longer for 4 hours.", symbol: "fork.knife", food: "sushi"),
@@ -151,6 +153,6 @@ nonisolated enum StoreCatalog {
 
     /// Tabs the store shows (a kind with no items stays hidden).
     static var tabs: [StoreKind] { StoreKind.allCases.filter { !items($0).isEmpty } }
-    /// The item that feeds consumable `id` (nil for the free berries / pizza).
+    /// The item that feeds consumable `id`.
     static func item(forFood id: String) -> StoreItem? { items.first { $0.food == id } }
 }
