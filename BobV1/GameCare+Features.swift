@@ -21,7 +21,7 @@ extension GameCare {
         let f = a.profile?.feature ?? JellyRoster.feature(slot: a.id)
         b.feature = f
         b.trainingLock = voice.nickLesson != nil || voice.teachPrompt != nil
-        features.setWingTint(a.id, WhiteWing.isForced(a.profile?.character ?? JellyRoster.character(a.id)) ? WhiteWing.wingTint : nil)
+        features.setWingTint(a.id, WhiteWing.hasLook(a.profile?.character ?? JellyRoster.character(a.id)) ? WhiteWing.wingTint : nil)
         features.tick(id: a.id, brain: b, sim: a.sim, feature: f, worn: wornArt(a.id), hideAll: hideAll, dt: dt)
         if let s = features.slot(a.id) {
             b.wingsFolded = f == .wings && s.fit.folded

@@ -45,12 +45,15 @@ nonisolated enum JellyRoster {
     /// Characters available (Bob, Pip, Moss, Lavender).
     static let characterCount = 4
     /// The species' own names (what the Adoption Center offers as the default).
-    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy"]
+    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl"]
     /// Teddy (character 4): a species that exists but is NOT offered anywhere yet (not in the intro, the Jelly Spring picker or the starter roster; never
     /// padded into a short roster, not in any default). Reachable only through the `-ForceSpecies teddy` / `-SetRoster teddy` test hooks.
     static let teddyID = 4
     /// Every character id that exists (the four on offer + Teddy).
-    static let knownCount = 5
+    static let knownCount = 6
+    /// Pearl (character 5): the white winged Jelbie (WhiteWing.swift): Lavender's wings re-tinted pearl, a soft white body. Like Teddy it is NOT offered anywhere
+    /// (not in the intro, the Jelly Spring picker, the starter roster or any generator); a roster gets him only by `-SetRoster` / `-NewGame` / a save.
+    static let pearlID = 5
     static let namesKey = "JellyNames.v1"
     /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).
     nonisolated(unsafe) static var names: [String] = loadNames()
@@ -64,7 +67,7 @@ nonisolated enum JellyRoster {
     }
     /// Gives character `id` a name (empty = back to the base name) and saves it.
     static func setName(_ id: Int, _ raw: String, _ d: UserDefaults = .standard) {
-        guard (0..<characterCount).contains(id) else { return }
+        guard (0..<knownCount).contains(id) else { return }
         var saved = d.stringArray(forKey: namesKey) ?? []
         while saved.count < baseNames.count { saved.append("") }
         saved[id] = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(14))
@@ -80,7 +83,7 @@ nonisolated enum JellyRoster {
     /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings. (By CHARACTER id.)
     static func feature(_ id: Int) -> JellyFeature {
         if WhiteWing.isForced(id) { return .wings }          // -ForceSpecies whitewing (look-only candidate, captures)
-        switch id { case 1: return .spines; case 2: return .daisy; case 3: return .wings; case teddyID: return .ears; default: return .none }
+        switch id { case 1: return .spines; case 2: return .daisy; case 3, pearlID: return .wings; case teddyID: return .ears; default: return .none }
     }
 
     // MARK: the roster (characters by slot)
@@ -163,7 +166,7 @@ nonisolated enum JellyRoster {
 
     /// Body colours by CHARACTER: Bob is the model's palette (baby blue in the game; nil); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
     static func palette(_ id: Int) -> Palette? {
-        if WhiteWing.isForced(id) { return WhiteWing.palette }
+        if WhiteWing.hasLook(id) { return WhiteWing.palette }
         switch id {
         case 1: return PaletteKey.yellow.palette
         case 2: return JellyPalettes.green
@@ -175,7 +178,7 @@ nonisolated enum JellyRoster {
 
     /// sRGB 0...1 swatch for the roster card / selection preview (by CHARACTER).
     static func tint(_ id: Int) -> SIMD3<Float> {
-        if WhiteWing.isForced(id) { return WhiteWing.swatch }
+        if WhiteWing.hasLook(id) { return WhiteWing.swatch }
         switch id {
         case 1: return SIMD3(0.99, 0.90, 0.62)
         case 2: return SIMD3(0.70, 0.90, 0.66)

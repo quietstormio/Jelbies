@@ -36,7 +36,7 @@ final class TeddySpeciesTests: XCTestCase {
         XCTAssertEqual(JellyRoster.launchIDs(d), [1, 2, 3])
         d.set(["", "Pipsqueak", "", ""], forKey: JellyRoster.namesKey)    // a name saved before Teddy existed (4 entries)
         let names = JellyRoster.loadNames(d)
-        XCTAssertEqual(names.count, 5)
+        XCTAssertEqual(names.count, 6)
         XCTAssertEqual(Array(names.prefix(4)), ["Bob", "Pipsqueak", "Moss", "Lavender"])
         XCTAssertEqual(names[4], "Teddy")
         XCTAssertEqual(JellyKeys.needs(1), NeedsTuning.defaultsKey + ".jelly1", "other characters' keys are untouched")

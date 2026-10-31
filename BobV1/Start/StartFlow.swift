@@ -54,6 +54,35 @@ final class StartFlow {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
+        // Not simulator-gated: a device Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
+        applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
+                     coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
+    }
+
+    static let newGameKey = "NewGame", newGameCoinsKey = "NewGameCoins", newGameAppliedKey = "NewGame.applied"
+
+    /// `-NewGame a,b,c` (names or ids): wipes everything, saves exactly that roster, sets the JellyCoins balance (DropsWallet.key) and marks the save as started
+    /// (the store's one-time starter grant given, the intro seen), so the next screen is the main menu's Continue straight into the room with those Jelbies: no
+    /// opening story, no picker, no first-day beat. Applied once per (roster, coins) value: the value is stored under `NewGame.applied` AFTER the wipe (the
+    /// launch argument itself lives in the argument domain; this marker is in the app domain), so relaunching with the same arguments changes nothing.
+    /// Returns true when it applied.
+    @discardableResult
+    static func applyNewGame(text: String?, coins: Int, defaults d: UserDefaults = .standard, wipe: (() -> Void)? = nil) -> Bool {
+        guard let text, let ids = JellyRoster.parseRoster(text) else { return false }
+        let value = "\(ids.map(String.init).joined(separator: ","))|\(coins)"
+        guard d.string(forKey: newGameAppliedKey) != value else { return false }
+        if let wipe { wipe() } else { wipeAll() }
+        JellyRoster.save(ids, to: d)
+        d.set(max(coins, 0), forKey: DropsWallet.key)
+        var store = StoreBook.Saved()
+        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true
+        if let data = try? JSONEncoder().encode(store) { d.set(data, forKey: StoreBook.key) }
+        d.set(true, forKey: startedKey)
+        IntroGate.markSeen(d)
+        d.set(value, forKey: newGameAppliedKey)
+        JellyRoster.names = JellyRoster.loadNames(d)
+        JellyRoster.current = ids
+        return true
     }
 
     // MARK: moves

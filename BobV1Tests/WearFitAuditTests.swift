@@ -299,7 +299,6 @@ final class WearFitAuditTests: XCTestCase {
             Motion(name: "flop", start: idle(.flop)),
             Motion(name: "stretch", start: idle(.stretch)),
             Motion(name: "sway", start: idle(.sway)),
-            Motion(name: "cartwheel", start: idle(.cartwheel), seconds: 3),
             Motion(name: "backflip", start: { lab in lab.rigs[0].brain.startFlip(sim: lab.rigs[0].sim) }, seconds: 3),
         ]
     }

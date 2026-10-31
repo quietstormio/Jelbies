@@ -107,8 +107,8 @@ final class JellyNames {
     /// Character of a slot (or of an absent id; a slot past the roster is the same-numbered character, as before the roster existed).
     func character(_ id: Int) -> Int {
         if roster.indices.contains(id) { return roster[id] }
-        if id >= JellyRoster.maxCount, id - JellyRoster.maxCount < JellyRoster.characterCount, !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
-        return min(max(id, 0), JellyRoster.characterCount - 1)
+        if id >= JellyRoster.maxCount, id - JellyRoster.maxCount < JellyRoster.knownCount, !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
+        return min(max(id, 0), JellyRoster.knownCount - 1)
     }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String

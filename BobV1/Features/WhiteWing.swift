@@ -1,7 +1,7 @@
 //
 //  WhiteWing.swift
 //  LOOK-ONLY candidate species (placeholder name "whitewing"): Bob's body in a clean soft white, plus Lavender's wing feature in a pale tint.
-//  It is NOT a roster character and is wired into no player-facing surface (intro, Jelly Spring, starters); it only exists when the launch argument
+//  It is also the real character Pearl (id 5, JellyRoster.pearlID, added for the phone's new game); the forced look still works for captures. Wired into no player-facing surface (intro, Jelly Spring, starters); it only exists when the launch argument
 //  `-ForceSpecies whitewing` (or `whitewing:<character id>`, default character 0) makes one roster character LOOK like it, for captures. Saved data
 //  stays keyed by the real character, so an existing save loads unchanged. The wings are `JellyFeature.wings` untouched (same art, hinges, clamps,
 //  clearance tables); only their vertex colours are re-mapped (FeatureMeshes.prepare, `WingTint`).
@@ -62,4 +62,6 @@ nonisolated enum WhiteWing {
         return 0
     }
     static func isForced(_ character: Int) -> Bool { forcedCharacter == character }
+    /// The white look (palette, swatch, pearl wing tint) applies to the real character Pearl (id 5) and to any character `-ForceSpecies whitewing` forces.
+    static func hasLook(_ character: Int) -> Bool { character == JellyRoster.pearlID || isForced(character) }
 }
