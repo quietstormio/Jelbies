@@ -1,6 +1,6 @@
 //
 //  BlueBelly.swift
-//  SHIPPED (default ON, Release too): variant C2w3 / D1 (`eggW3D1`). A lighter blue on the front of the blue species (character 0, Bob / Blueberry) for distinction.
+//  SHIPPED (default ON, Release too): variant C2w4 / D1 (`eggW4D1`). A lighter blue on the front of the blue species (character 0, Bob / Blueberry) for distinction.
 //  The shaders (Shaders.metal, GfxBodyFast.metal, GfxJersey.metal, BathShaders.metal) draw it in rest space like the blush, so it follows the body
 //  as it squishes and never slides. It rides in `u.shape.w` (the body shaders never read `shape`), set by `MelonRenderer.applyPalette` for any body
 //  whose palette is the baby blue; every other colour gets 0 (pixel-identical to before). No per-frame allocation: one enum compare and one vector compare.
@@ -25,7 +25,7 @@ nonisolated enum BlueBelly: Int, CaseIterable {
     case eggW3D1 = 18, eggW3D2 = 28, eggW4D1 = 19, eggW4D2 = 29
 
     /// What ships (Release too): the egg at +32 % width in the D1 tone (user pick, 2026-10-31).
-    static let shipped: BlueBelly = .eggW3D1
+    static let shipped: BlueBelly = .eggW4D1
 
     /// The variant in force. The shipped look unless a DEBUG launch arg / test sets it.
     nonisolated(unsafe) static var current: BlueBelly = launchValue

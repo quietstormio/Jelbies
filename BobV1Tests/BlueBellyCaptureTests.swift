@@ -670,8 +670,8 @@ final class BlueBellyCaptureTests: XCTestCase {
 
     /// Always runs: the default is off, and only the baby blue palette ever gets a mode.
     func testOnlyBlueGetsIt() {
-        XCTAssertEqual(BlueBelly.current, .eggW3D1, "the shipped default is C2w3 / D1")
-        XCTAssertEqual(BlueBelly.shipped, .eggW3D1)
+        XCTAssertEqual(BlueBelly.current, .eggW4D1, "the shipped default is C2w4 / D1")
+        XCTAssertEqual(BlueBelly.shipped, .eggW4D1)
         for v in BlueBelly.allCases {
             BlueBelly.current = v
             XCTAssertEqual(BlueBelly.mode(for: PaletteKey.blue.palette), Float(v.rawValue))
