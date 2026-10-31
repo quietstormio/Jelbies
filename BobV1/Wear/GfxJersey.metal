@@ -136,7 +136,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        col = mix(col, lt, bk);
+        col = mix(col, lt, max(bk, clamp(-i.mat, 0.0, 1.0)));      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
     }
 
     // ---- the jersey band (egg only)

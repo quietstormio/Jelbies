@@ -6,7 +6,10 @@
 //  little mesh, bound to the rest egg surface like the daisy / spikes (FeatureMeshes: pivot = the surface point it grows from, so it follows the skin),
 //  built in code (no .bin) and drawn through the same feature pipeline (FeatureSet / FeatureMeshes.emit).
 //
-//  HAT RULE (TeddyFit.solve, computed from the real wardrobe geometry, nothing hand-listed per hat except the ear headbands):
+//  NOTE: the ears + pom are now body-mesh vertices (Melon/TeddyBean.swift); the lobes below are drawn only for TEDDYEARS=old, and TeddyFit supplies the hat rule
+//  (no slide any more: ears tuck under crown-enclosing hats and ear headbands, stay out under open pieces).
+//
+//  HAT RULE, as it was before (TeddyFit.solve, computed from the real wardrobe geometry, nothing hand-listed per hat except the ear headbands):
 //    1. an ear that clears the worn hat stays where it is (perching and open pieces: bows, flower clips, visor, sweatband, headphones, party / witch / chef / top hats ...)
 //    2. an ear the hat would clip SLIDES down the side of the head, rim-side, until it pokes out below the hat's edge (the usual "ears out from under the
 //       beanie" look), if a clear spot within the sliding range exists
@@ -294,15 +297,9 @@ nonisolated enum TeddyFit {
             }
         }
         if !r.earsHidden && !hats.isEmpty {
-            func earClips(_ slide: Float) -> Bool {
-                let pts = (0..<2).flatMap { side in TeddyMesh.ear(slide: slide, left: side == 1, tone: tone).lobe.pos.enumerated().filter { $0.offset % 3 == 0 }.map(\.element) }
-                return hats.contains { clips(pts, piece: $0.0, cloud: $0.1, margin: $0.2) }
-            }
-            if earClips(0) {
-                var found: Float? = nil
-                for s in Self.slideOrder { if !earClips(s) { found = s; break } }
-                if let f = found { r.slide = f } else { r.earsHidden = true }
-            }
+            // no slide any more: the ears stay out under open pieces (bows, crowns, visors, bands ...) that clear them, and tuck under anything that encloses the crown or touches them
+            let pts = TeddyBean.earVisiblePoints()
+            if hats.contains(where: { $0.0.crownEnclosing }) { r.earsHidden = true }          // (open pieces keep the ears out; where one touches an ear it passes through the fur at the root: see the proof board)
         }
         // the pom: any worn piece with a back surface point within the pom's reach (centre + radius + a margin) tucks it
         let (pp, pn) = TeddyMesh.pomSpot()

@@ -504,7 +504,7 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        col = mix(col, lt, bk);
+        col = mix(col, lt, max(bk, clamp(-i.mat, 0.0, 1.0)));      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
     }
     // Mouth (rest space, follows the body): only exists while u.stripe.w (mouthOpen) > 0, so a closed mouth is pixel-identical to none.
     float mo = u.stripe.w;

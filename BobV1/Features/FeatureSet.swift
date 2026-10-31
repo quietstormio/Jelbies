@@ -62,6 +62,7 @@ final class FeatureSet {
         var tailYaw: Float = 0, tailPitch: Float = 0, tailSway: Float = 0, tailSwayV: Float = 0, tailPitchV: Float = 0
         /// Spines: angle (deg) about (along, across) and its rate, per spine; the visible scale of each part (hidden under a hat -> 0).
         var spineA: [SIMD2<Float>] = [], spineV: [SIMD2<Float>] = []
+        var pomSleep = false
         var partScale: [String: Float] = [:]
         /// Pip (restyled variants): the ridge layout being left (`layoutFrom`, a hat's brim y, nil = bare), the one being glided to (`layoutTo`) and the glide progress 0...1.
         var layoutFrom = RidgeLayout.bare, layoutTo = RidgeLayout.bare, layoutW: Float = 1
@@ -114,6 +115,7 @@ final class FeatureSet {
     /// Spines and wings lie on his back: off while he lies down (the hats' rule) and in flips / rolls.
     static func hidden(_ f: JellyFeature, _ b: BlobBrain) -> Bool {
         switch f {
+        case .ears where TeddyEarsVariant.active.inBody: return false          // body-mesh ears + pom ride the body through flips; only the pom lifts off the floor asleep (tick)
         case .spines, .wings, .ears: return WornSet.sleepHides(b) || WornSet.flipping(b)          // Teddy's ears + pom lie on the floor then, like the wings
         default: return false
         }
@@ -130,6 +132,7 @@ final class FeatureSet {
         let pose = sim.bodyPose(iterations: 3)
         s.carry = EyeMaskModel.Carry(centroid: pose.centroid, rotation: pose.rotation, squash: sim.attractor.squash, restCentroid: sim.restCentroid)
         s.feature = feature; s.hideAll = hideAll
+        s.pomSleep = feature == .ears && WornSet.sleepHides(brain)
         s.fit = FeatureCompat.solve(feature, worn: worn, spec: spec)
         s.folded = s.fit.folded
         stepDrive(&s, dt: dt)
@@ -162,6 +165,11 @@ final class FeatureSet {
         case .ears: stepEars(&s, dt: dt)
         case .none: break
         }
+        // Teddy's ears + pom are body vertices (TeddyBean): hand the skinner what the pop / hat rule / follow-through say (nothing drawn by the feature pipeline then)
+        brain.teddyBody = feature == .ears && TeddyEarsVariant.active.inBody          // (BlobBrain.driveLimbs copies these onto the skinner every tick)
+        brain.teddyEarScale = s.scale * (s.partScale["ear_r"] ?? 1)
+        brain.teddyPomScale = s.scale * (s.partScale["pom"] ?? 1)
+        brain.teddySway = s.sway * (4 / FeatureTuning.earMax)
         slots[id] = s
     }
 
@@ -279,7 +287,7 @@ final class FeatureSet {
         let l = simd_length(s.sway)
         if l > FeatureTuning.earMax { s.sway *= FeatureTuning.earMax / l }
         if !l.isFinite { s.sway = .zero; s.swayV = .zero }
-        for (name, want) in [("ear_r", s.fit.earsHidden ? Float(0) : 1), ("ear_l", s.fit.earsHidden ? Float(0) : 1), ("pom", s.fit.pomHidden ? Float(0) : 1)] {
+        for (name, want) in [("ear_r", s.fit.earsHidden ? Float(0) : 1), ("ear_l", s.fit.earsHidden ? Float(0) : 1), ("pom", (s.fit.pomHidden || s.pomSleep) ? Float(0) : 1)] {
             let cur = s.partScale[name] ?? want
             s.partScale[name] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
         }
@@ -362,7 +370,7 @@ final class FeatureSet {
         var m = RoomMesh()
         lastBounds = []
         guard !hidden, let body else { return m }
-        for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none {
+        for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none && !(s.feature == .ears && TeddyEarsVariant.active.inBody) {
             var pl = FeatureMeshes.Placement()
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }

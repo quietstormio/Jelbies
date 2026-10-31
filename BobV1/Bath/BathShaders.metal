@@ -243,7 +243,7 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        col = mix(col, lt, bk);
+        col = mix(col, lt, max(bk, clamp(-i.mat, 0.0, 1.0)));      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
     }
 
     // ---- soot: mostly a light DUSTY film (matte, a touch desaturated, faint warm-grey, powdery grain), heavier on the lower half and
@@ -499,7 +499,7 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        col = mix(col, lt, bk);
+        col = mix(col, lt, max(bk, clamp(-i.mat, 0.0, 1.0)));      // (a negative mat = Teddy's inner-ear hollow mask, TeddyBean: the belly's own lift)
     }
 
     // ---- soot: mostly a light DUSTY film (matte, a touch desaturated, faint warm-grey, powdery grain), heavier on the lower half and
