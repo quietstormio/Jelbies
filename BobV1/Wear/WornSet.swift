@@ -234,6 +234,11 @@ final class WornSet {
         guard !hidden else { return (op, tr.mesh) }
         for (id, s) in slots.enumerated() {
             let sk = skin(id)
+            // the limbs standing out of the egg right now, read from the same skin the pieces are bound to (see WearLimbs)
+            var limbs: WearLimbs?
+            if WearLimbs.enabled, let sk, let body, !body.limbBlocks.isEmpty, s.items.values.contains(where: { $0.scale > 0.001 }) || s.bib != nil {
+                limbs = WearLimbs.build(blocks: body.limbBlocks) { i in SIMD3(sk[6 * i], sk[6 * i + 1], sk[6 * i + 2]) }
+            }
             let first = op.vertices.count
             defer {
                 if op.vertices.count > first {
@@ -245,11 +250,11 @@ final class WornSet {
             for (slot, it) in s.items where it.scale > 0.001 {
                 guard let look = it.look, let body, let p = WearMeshes.prepare(look, body: body, art: s.artOverride[look.art]) else { continue }
                 if slot == .hands { Self.emitArms(p, into: &op, slot: s, scale: it.scale) }
-                else { Self.emit(p, into: &op, slot: s, skin: sk, scale: it.scale, time: time) }
+                else { Self.emit(p, into: &op, slot: s, skin: sk, limbs: limbs, scale: it.scale, time: time) }
             }
             if let b = s.bib, let body, let p = WearMeshes.bib(team: b.team, number: b.number, body: body) {
                 let sc: Float = s.role == .none ? (s.items[.body]?.scale ?? 0) : 1
-                if sc > 0.001 { Self.emit(p, into: &op, slot: s, skin: sk, scale: sc, time: time) }
+                if sc > 0.001 { Self.emit(p, into: &op, slot: s, skin: sk, limbs: limbs, scale: sc, time: time) }
             }
         }
         if puffs.isActive {
@@ -259,8 +264,9 @@ final class WornSet {
         return (op, tr.mesh)
     }
 
+    nonisolated(unsafe) private static var scratchQ: [SIMD3<Float>] = [], scratchWall: [SIMD3<Float>] = []
     /// One rest-anchored piece (rigid + surface-bound + swinging parts) at `scale` about its pivot.
-    static func emit(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, skin: UnsafePointer<Float>?, scale: Float, time: Float) {
+    static func emit(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, skin: UnsafePointer<Float>?, limbs: WearLimbs? = nil, scale: Float, time: Float) {
         let c = s.carry
         let R = simd_float3x3(c.rotation)
         let sxz = 1 / c.squash.squareRoot()
@@ -274,22 +280,57 @@ final class WornSet {
         var lift: Float = 0, widen: Float = 1, seat: Float = 0
         if p.crownEnclosing, let skin { (lift, widen, seat) = CrownFit.fit(p, carry: c, skin: skin, body: WearBody.shared) }
         let mats = p.mat
-        for i in 0..<p.rest.count {
+        let useLimbs = skin != nil && !(limbs?.isEmpty ?? true) && p.limbFree.count == p.rest.count
+        if useLimbs { scratchQ.removeAll(keepingCapacity: true); scratchWall.removeAll(keepingCapacity: true) }
+        /// One vertex: the carried, skinned and swung world position, and the wall normal under it when the limb push may move it.
+        var clusterXf = [(c: SIMD3<Float>, R: simd_float3x3, wall: SIMD3<Float>)?](repeating: nil, count: p.hasClusters && skin != nil ? p.clusterRep.count : 0)
+        func place(_ i: Int) -> (q: SIMD3<Float>, wall: SIMD3<Float>?) {
             var r = p.rest[i]
-            var n = p.nrm[i]
             if p.spin[i] {
                 let o = r - WearTuning.propellerCentre
                 r = WearTuning.propellerCentre + SIMD3(o.x * cs + o.z * sn, o.y, -o.x * sn + o.z * cs)
-                n = SIMD3(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs)
             }
             if lift != 0 || widen != 1 || seat != 0 { r = SIMD3(c.restCentroid.x + (r.x - c.restCentroid.x) * widen, r.y + seat + lift * CrownFit.liftWeight(r.y - p.pivot.y), c.restCentroid.z + (r.z - c.restCentroid.z) * widen) }
             var q = c.centroid + M * (r - c.restCentroid)
             let w = p.w[i]
+            var wall: SIMD3<Float>?
             if w > 0.001, let skin {
-                let sp = WearBody.world(p.bind[i], skin: skin)
-                q += (sp - q) * w
+                let k = Int(p.partOfVertex[i])
+                if k < clusterXf.count, p.clusterRep[k] >= 0 {
+                    // a small part rides its centre's skin frame as one rigid piece
+                    if clusterXf[k] == nil {
+                        let (cw, f1) = WearBody.worldFrame(p.clusterBind[k], skin: skin)
+                        clusterXf[k] = (cw, f1 * p.clusterFrame0[k].transpose, f1.columns.2)
+                    }
+                    let x = clusterXf[k]!
+                    q = x.c + x.R * (p.rest[i] - p.clusterCentre[k])
+                    if useLimbs { wall = x.wall }
+                } else {
+                    let (wpos, wn) = WearBody.worldWithNormal(p.bind[i], skin: skin)
+                    q += (wpos - q) * w
+                    if useLimbs, p.limbFree[i] { wall = wn }
+                }
             }
             if p.h[i] > 0 { q += swing * p.h[i] }
+            return (q, wall)
+        }
+        if useLimbs, let limbs {
+            // pass 1: where everything is before the limbs are considered; pass 2: small parts move rigidly out of a limb (they stay round), the rest vertex by vertex
+            for i in 0..<p.rest.count { let (q, wall) = place(i); scratchQ.append(q); scratchWall.append(wall ?? .zero) }
+            var delta = [SIMD3<Float>](repeating: .zero, count: p.clusterRep.count)
+            for k in p.clusterRep.indices where p.clusterRep[k] >= 0 {
+                if let x = clusterXf[k] { delta[k] = limbs.push(x.c, wallNormal: x.wall, margin: p.clusterRadius[k] + WearLimbs.margin) - x.c }
+            }
+            for i in 0..<p.rest.count {
+                let k = Int(p.partOfVertex[i])
+                if k < p.clusterRep.count, p.clusterRep[k] >= 0 { scratchQ[i] += delta[k] }
+                else if scratchWall[i] != .zero { scratchQ[i] = limbs.push(scratchQ[i], wallNormal: scratchWall[i]) }     // never inside an arm, foot or tail that is out (WearLimbs)
+            }
+        }
+        for i in 0..<p.rest.count {
+            var n = p.nrm[i]
+            if p.spin[i] { n = SIMD3(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs) }
+            var q = useLimbs ? scratchQ[i] : place(i).q
             if scale != 1 { q = wp + (q - wp) * scale }
             m.vertices.append(RoomVertex(pos: SIMD4(q, mats.isEmpty ? 0 : mats[i]), normal: SIMD4(R * n, p.ao[i]), color: SIMD4(p.col[i], 1)))
         }

@@ -19,6 +19,15 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// Surface binds (parallel to `rest`; `.zero` tri for vertices with w == 0), weights, swing weights, spin flags.
     var bind: [SurfaceBind] = [], w: [Float] = [], h: [Float] = [], spin: [Bool] = []
     var anyBound = false, anySwing = false
+    /// Per vertex: may the limb push (WearLimbs) move it? False for the vertices the art itself puts inside a resting arm nub (a garment's own cover of the arm).
+    var limbFree: [Bool] = []
+    /// Small surface-bound parts (a pearl, a chain link, a button, a gem) that the limb push moves as ONE rigid piece so they stay round: per part the vertex nearest its
+    /// centre (-1 = not such a part), its radius, and its first vertex (parts are contiguous).
+    var clusterRep: [Int32] = [], clusterRadius: [Float] = [], partFirst: [Int] = []
+    /// A cluster part is carried RIGIDLY: its centre (rest), the centre's surface bind and the rest frame of that bind (columns T, B, N). At runtime every vertex is
+    /// centre + (current frame x rest frame^-1) x (rest - centre), so a pearl stays a pearl however hard the skin under it shears (a bump, a collar, a spin).
+    var clusterCentre: [SIMD3<Float>] = [], clusterBind: [SurfaceBind] = [], clusterFrame0: [simd_float3x3] = []
+    var hasClusters = false
     var partNames: [String] = [], partOfVertex: [UInt8] = []
     /// Vertices the jewellery twinkles on (the top vertex of every part named gem*): WornSet.emit pops 4-point star glints there.
     var sparkleSites: [Int] = []
@@ -135,16 +144,138 @@ nonisolated enum WearMeshes {
             }
         } else { for i in p.w.indices { p.w[i] = 0 } }
         if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l) { raise(p, body: body, by: lift) } }
+        if let body, !isArm, l.slot == .neck, WearLimbs.enabled { seat(p, body: body) }
+        markLimbFree(p, body: body, authoredCover: l.slot != .neck, clusters: WearLimbs.enabled && (l.slot == .neck || l.slot == .body))
         return p
+    }
+
+    /// The neck pieces were drawn round a plain egg, but the real rest egg stands out around the arm roots (the resting arm nub and its shoulder): where a strand, band or
+    /// knot crosses that bump its vertices start 4-11 cm INSIDE the skin (a pearl necklace reads as two arcs with the middle under the shoulder). Each bound vertex that is
+    /// sunk deeper than `floor` below the skin it is bound to is lifted along that skin's normal to just under the surface, and the lift is spread to everything within
+    /// `plateau` of it (falling to nothing by `reach`), so a pearl or link rises as one round piece and a band keeps its thickness over the bump. Nothing else moves.
+    static func seat(_ p: WearPrepared, body: WearBody, floor: Float = -0.004, plateau: Float = 0.10, reach: Float = 0.17) {
+        let n = p.rest.count
+        func wallNormal(_ i: Int) -> SIMD3<Float> {
+            let b = p.bind[i]
+            return WearBody.frame(body.pos[Int(b.tri.x)], body.pos[Int(b.tri.y)], body.nrm[Int(b.tri.x)], body.nrm[Int(b.tri.y)], body.nrm[Int(b.tri.z)], b.bary).n
+        }
+        // small parts (a pearl, a link, a gem) are lifted as ONE rigid piece; everything else (string, band, wrap) by a smooth lift field
+        var partOf = [[Int]](repeating: [], count: p.partNames.count)
+        for i in 0..<n where p.w[i] > 0.001 && Int(p.partOfVertex[i]) < partOf.count { partOf[Int(p.partOfVertex[i])].append(i) }
+        var small = [Bool](repeating: false, count: n)
+        var smallParts: [[Int]] = []
+        for vs in partOf where vs.count >= 8 {
+            var c = SIMD3<Float>.zero
+            for v in vs { c += p.rest[v] }
+            c /= Float(vs.count)
+            if vs.allSatisfy({ simd_distance(p.rest[$0], c) <= 0.07 }) { smallParts.append(vs); for v in vs { small[v] = true } }
+        }
+        for _ in 0..<3 {
+            var need = [Float](repeating: 0, count: n)
+            var anyNeed = false
+            for i in 0..<n where p.w[i] > 0.001 {
+                let z = p.bind[i].off.z
+                if z < floor - 0.002 { need[i] = floor - z; anyNeed = true }
+            }
+            guard anyNeed else { return }
+            for vs in smallParts {
+                let m = vs.map { need[$0] }.max() ?? 0
+                guard m > 0 else { continue }
+                var c = SIMD3<Float>.zero
+                for v in vs { c += p.rest[v] }
+                c /= Float(vs.count)
+                let rep = vs.min { simd_distance(p.rest[$0], c) < simd_distance(p.rest[$1], c) }!
+                let delta = wallNormal(rep) * m
+                for v in vs { if let nb = body.bind(p.rest[v] + delta) { p.bind[v] = nb; p.rest[v] = body.restPoint(nb) } }
+            }
+            let src = (0..<n).filter { need[$0] > 0 && !small[$0] }
+            guard !src.isEmpty else { continue }
+            var nrm = [SIMD3<Float>](repeating: .zero, count: n)
+            for i in 0..<n where p.w[i] > 0.001 && !small[i] { nrm[i] = wallNormal(i) }
+            for i in 0..<n where p.w[i] > 0.001 && !small[i] {
+                var lift: Float = 0
+                for j in src {
+                    let d = simd_distance(p.rest[i], p.rest[j])
+                    if d >= reach { continue }
+                    lift = max(lift, need[j] * (d <= plateau ? 1 : (reach - d) / (reach - plateau)))
+                }
+                guard lift > 0 else { continue }
+                // one common direction for the neighbourhood (the skin's normals fan out over a bump)
+                var dir = SIMD3<Float>.zero
+                for j in 0..<n where p.w[j] > 0.001 && !small[j] && simd_distance(p.rest[i], p.rest[j]) < 0.07 { dir += nrm[j] }
+                dir = simd_length(dir) > 1e-4 ? simd_normalize(dir) : nrm[i]
+                if let nb = body.bind(p.rest[i] + dir * lift) { p.bind[i] = nb; p.rest[i] = body.restPoint(nb) }
+            }
+        }
+    }
+
+    /// Which bound vertices the limb push may move: the ones that are NOT inside a resting arm nub as authored.
+    static func markLimbFree(_ p: WearPrepared, body: WearBody?, authoredCover: Bool = true, clusters: Bool = true) {
+        p.limbFree = [Bool](repeating: false, count: p.rest.count)
+        p.clusterRep = [Int32](repeating: -1, count: p.partNames.count); p.clusterRadius = [Float](repeating: 0, count: p.partNames.count)
+        p.partFirst = [Int](repeating: p.rest.count, count: p.partNames.count)
+        p.clusterCentre = [SIMD3<Float>](repeating: .zero, count: p.partNames.count); p.clusterBind = [SurfaceBind](repeating: SurfaceBind(), count: p.partNames.count)
+        p.clusterFrame0 = [simd_float3x3](repeating: matrix_identity_float3x3, count: p.partNames.count); p.hasClusters = false
+        guard let body else { return }
+        for i in p.rest.indices where p.w[i] > 0.001 { p.limbFree[i] = !authoredCover || !body.restLimbs.inside(p.rest[i], tol: 0.02) }          // (a neck piece has no authored cover: seat() has lifted it clear)
+        for i in p.rest.indices.reversed() where Int(p.partOfVertex[i]) < p.partFirst.count { p.partFirst[Int(p.partOfVertex[i])] = i }
+        for k in p.partNames.indices {
+            let vs = p.rest.indices.filter { Int(p.partOfVertex[$0]) == k }
+            guard vs.count >= 8, vs.allSatisfy({ p.w[$0] > 0.99 && p.h[$0] == 0 }) else { continue }
+            var ctr = SIMD3<Float>.zero
+            for v in vs { ctr += p.rest[v] }
+            ctr /= Float(vs.count)
+            var rad: Float = 0
+            var rep = vs[0], best = Float.infinity
+            for v in vs { let d = simd_distance(p.rest[v], ctr); rad = max(rad, d); if d < best { best = d; rep = v } }
+            if clusters, rad <= 0.07, p.limbFree[rep], let cb = body.bind(ctr) {
+                p.clusterRep[k] = Int32(rep); p.clusterRadius[k] = rad
+                p.clusterCentre[k] = ctr; p.clusterBind[k] = cb
+                let f = WearBody.frame(body.pos[Int(cb.tri.x)], body.pos[Int(cb.tri.y)], body.nrm[Int(cb.tri.x)], body.nrm[Int(cb.tri.y)], body.nrm[Int(cb.tri.z)], cb.bary)
+                p.clusterFrame0[k] = simd_float3x3(columns: (f.t, f.b, f.n)); p.hasClusters = true
+            }
+        }
     }
 
     /// A chain-type neck piece raised clear of the arms (the arm roots sit at the sides, top ~0.66): every bound vertex slides up the egg wall by `lift` times
     /// a weight that is 0 over the mouth (front) and full from the arms round the back, then is re-seated on the wall there keeping its own offset (the
     /// tangent part turned with the wall's normal, the normal part unchanged), so the links stay on the skin and the pendant keeps hanging at the front.
     static func raise(_ p: WearPrepared, body: WearBody, by lift: WearRules.NeckLift) {
+        // a small part (a pearl, a link, a gem) is lifted by the weight at ITS centre, so the lift cannot differ across it and shear it into a rock
+        var centre = [SIMD3<Float>?](repeating: nil, count: p.rest.count)
+        var byPart = [[Int]](repeating: [], count: p.partNames.count)
+        for i in p.rest.indices where p.w[i] > 0.001 && Int(p.partOfVertex[i]) < byPart.count { byPart[Int(p.partOfVertex[i])].append(i) }
+        for vs in byPart where vs.count >= 8 && WearLimbs.enabled {
+            var c = SIMD3<Float>.zero
+            for v in vs { c += p.rest[v] }
+            c /= Float(vs.count)
+            if vs.allSatisfy({ simd_distance(p.rest[$0], c) <= 0.07 }) { for v in vs { centre[v] = c } }
+        }
+        // small parts move as one piece: the lift of their centre, applied to every vertex as the same translation
+        for vs in byPart where vs.count >= 8 {
+            guard let c = centre[vs[0]], let b0 = body.bind(c) else { continue }
+            let az = abs(atan2(c.x, c.z))
+            let u = min(max((az - lift.from) / (lift.full - lift.from), 0), 1)
+            let k = u * u * (3 - 2 * u)
+            guard k > 0.001 else { continue }
+            let a0 = body.pos[Int(b0.tri.x)], c0 = body.pos[Int(b0.tri.y)], d0 = body.pos[Int(b0.tri.z)]
+            let f0 = WearBody.frame(a0, c0, body.nrm[Int(b0.tri.x)], body.nrm[Int(b0.tri.y)], body.nrm[Int(b0.tri.z)], b0.bary)
+            let q0 = a0 * b0.bary.x + c0 * b0.bary.y + d0 * b0.bary.z
+            guard let b1 = body.bind(q0 + SIMD3(0, lift.up * k, 0)) else { continue }
+            let f1 = WearBody.frame(body.pos[Int(b1.tri.x)], body.pos[Int(b1.tri.y)], body.nrm[Int(b1.tri.x)], body.nrm[Int(b1.tri.y)], body.nrm[Int(b1.tri.z)], b1.bary)
+            let tang = f0.t * b0.off.x + f0.b * b0.off.y
+            let ax = simd_cross(f0.n, f1.n), sn = simd_length(ax), cs = simd_dot(f0.n, f1.n)
+            var t1 = tang
+            if sn > 1e-6 { let kk = ax / sn; t1 = tang * cs + simd_cross(kk, tang) * sn + kk * simd_dot(kk, tang) * (1 - cs) }
+            let cNew = body.restPoint(SurfaceBind(tri: b1.tri, bary: b1.bary, off: SIMD3(simd_dot(t1, f1.t), simd_dot(t1, f1.b), b0.off.z)))
+            let delta = cNew - c
+            for v in vs { let r2 = p.rest[v] + delta; if let nb = body.bind(r2) { p.bind[v] = nb; p.rest[v] = body.restPoint(nb) } }
+        }
         for i in p.rest.indices where p.w[i] > 0.001 {
+            if centre[i] != nil { continue }                               // (done above)
             let r = p.rest[i]
-            let az = abs(atan2(r.x, r.z))                                  // 0 at the front, pi at the back
+            let rc = r
+            let az = abs(atan2(rc.x, rc.z))                                // 0 at the front, pi at the back
             let u = min(max((az - lift.from) / (lift.full - lift.from), 0), 1)
             let k = u * u * (3 - 2 * u)
             guard k > 0.001 else { continue }
@@ -236,6 +367,7 @@ nonisolated enum WearMeshes {
             }
             x0 += (bh - bl) + gap
         }
+        markLimbFree(p, body: body)
         lock.lock(); bibs[key] = p; lock.unlock()
         return p
     }
