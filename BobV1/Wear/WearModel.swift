@@ -74,10 +74,10 @@ nonisolated enum WearRules {
     static func neckLift(_ l: WearLook) -> NeckLift? {
         let up: Float
         switch l {
-        case .pearls, .chainGold, .diamondJ: up = 0.15
-        case .scarfCosy, .scarfSky, .whistleCoach, .bandanaCoral, .bandanaMint: up = 0.14
-        case .scarfSilk, .bowtiePink, .bowtieSky: up = 0.17
-        case .lei: up = 0.18
+        case .pearls, .chainGold, .diamondJ: up = 0.20
+        case .scarfCosy, .scarfSky, .whistleCoach, .bandanaCoral, .bandanaMint: up = 0.19
+        case .scarfSilk, .bowtiePink, .bowtieSky: up = 0.22
+        case .lei: up = 0.23
         default: return nil
         }
         return NeckLift(up: up, from: 0.44, full: 1.48)
