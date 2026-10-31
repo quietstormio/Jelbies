@@ -296,10 +296,10 @@ final class BlobBrain {
     var beanG: Float = 0                 // 0 = hidden (plain embedded feet) ... 1 = beans out, embedded feet retracted
     var beanCorr: [SIMD3<Float>] = [.zero, .zero]      // the eased post-step correction applied to each world-placed bean (refitBeans)
     var beanFitUsed: BodyPose? = nil     // the fitted body pose the beans were last placed on (nil = placed on the attractor): the post-step refit carries them onto the pose the body reaches after the step
-    var beanSplay: Float = 0              // 0...1: how far the legs are splayed in a V (flip / cartwheel flight)
+    var beanSplay: Float = 0              // 0...1: how far the legs are splayed in a V (flip flight)
     var beanFitHold = 0                  // steps left of the post-spin hold: feet stay on the fitted pose, keep their shape
-    var beanForceLast = false            // the last driveBeansRigid call was a flip / cartwheel's (the post-step refit keeps the foot's shape then)
-    var beanForce = false                // a spin move (flip / cartwheel) owns the beans: out for the whole flight, placed on the FITTED pose
+    var beanForceLast = false            // the last driveBeansRigid call was a flip's (the post-step refit keeps the foot's shape then)
+    var beanForce = false                // a spin move (flip) owns the beans: out for the whole flight, placed on the FITTED pose
     var beanHold: Float = 0              // seconds the beans stay out after the last foot motion
     var beanHoldTime: Float = 0.7
     /// He wears shoes (GameCare.syncPerks sets it): the beans stay out for good so the rendered foot IS the bean the shell is grown from (no soft-skin foot sagging out under the sole).
@@ -421,7 +421,7 @@ final class BlobBrain {
         if d.object(forKey: "BlobPitch") != nil { b.attentionPitch = Float(d.double(forKey: "BlobPitch")) }
         if d.integer(forKey: "BlobNoWander") != 0 { b.autonomy = false }
         // capture aid: -BlobGameDemo gwalk|gturn|ghop|gcome|gwave|gstep runs a scripted loop in the game without the care menu
-        if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot, .cartwheel].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
+        if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
         return b
     }
@@ -1484,10 +1484,10 @@ final class BlobBrain {
         }
     }
 
-    /// 2026-10-27 (cartwheel feet): the brain places the beans BEFORE the sim step, the body then moves (a cartwheel turns it ~0.1 rad per step, a hitch frame runs
+    /// 2026-10-27 (feet): the brain places the beans BEFORE the sim step, the body then moves (a flip turns it ~0.1 rad per step, a hitch frame runs
     /// two steps), so the drawn bean trailed the drawn body and its buried part came up out of the belly (only ~0.01 u inside at take-off). Called by the stage after the
     /// steps: the beans placed on the fitted pose are carried rigidly onto the pose the body has NOW, then the always-attached clamp runs again.
-    nonisolated(unsafe) static var refitWorldPlaced = true          // (false = the cartwheel-only behaviour: the gait stress test's "before")
+    nonisolated(unsafe) static var refitWorldPlaced = true          // (false = the old behaviour: the gait stress test's "before")
     static let refitEase: Float = 1.0 / 3, refitFloorDepth: Float = -0.025
     func refitBeans(_ sim: SoftBody, _ skinner: Skinner) {
         guard skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { beanCorr = [.zero, .zero]; return }
@@ -1554,7 +1554,7 @@ final class BlobBrain {
         skinner.beanStart = beanStartScratch
         skinner.beanBlend = beanBlend
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot()
-        // (on the FITTED pose when the beans follow it: the attractor's rotation is tens of degrees ahead of the real body in a flip / cartwheel and would push the sunk foot slab the wrong way)
+        // (on the FITTED pose when the beans follow it: the attractor's rotation is tens of degrees ahead of the real body in a flip and would push the sunk foot slab the wrong way)
         let RS = simd_float3x3(beanFitUsed?.rotation ?? att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
         skinner.retractMatrix = RS
         skinner.retractShift = footShift
@@ -1569,13 +1569,13 @@ final class BlobBrain {
         let pv = SIMD3<Float>(0, Float(FootBean.pivotLocal.y), 0)
         // The attractor is only the body's pose while the brain drives him. Thrown / launched / held far from it (a bean that lingers 0.7 s after
         // a release) it is stale: the feet would stay where he was. Then the feet follow the body's fitted pose.
-        // 2026-10-24 (legs never come off): the soft body LAGS the attractor in a flip / cartwheel / roll / tumble (it can trail by tens of degrees), so a bean
+        // 2026-10-24 (legs never come off): the soft body LAGS the attractor in a flip / roll / tumble (it can trail by tens of degrees), so a bean
         // placed on the attractor's pose floated off the real surface. Whenever the fitted pose has drifted from the attractor's (any rotation or position), the feet follow the
         // fitted pose; and every bean gets the always-attached clamp below.
         let fit = sim.bodyPose(iterations: 3)
         let attQ = sim.attractor.rotation
         let drift = simd_length(simd_float3x3(fit.rotation).columns.1 - simd_float3x3(attQ).columns.1) + simd_length(simd_float3x3(fit.rotation).columns.2 - simd_float3x3(attQ).columns.2)
-        // after a flip / cartwheel the body is still shaking (the settle shake, a hard squash): the feet stay on the fitted pose for a moment (`beanFitHold`) instead of
+        // after a flip the body is still shaking (the settle shake, a hard squash): the feet stay on the fitted pose for a moment (`beanFitHold`) instead of
         // flickering between the fitted and the attractor pose from one frame to the next (0.8 u pops of the leg in the flip's shake)
         let fitNeeded = activity == .touched || activity == .recovering || simd_length(sim.attractor.anchor - fit.centroid) > 0.1 || drift > 0.12
         if scale == 1 && Self.forceLegsFix {
@@ -1598,7 +1598,7 @@ final class BlobBrain {
             func place(_ i: Int, _ m: Float) -> SIMD3<Float> {
                 var l = pv + (FootBean.morphed(i, m) - pv) * scale
                 if splay > 0.001 {
-                    // the cartwheel's legs: a V outward in the wheel's plane (the body's x-y plane), about the buried top of the leg, a little longer (stubby still)
+                    // the flight legs: a V outward in the body plane (the body's x-y plane), about the buried top of the leg, a little longer (stubby still)
                     var d = l - Self.splayHip
                     d.y *= 1 + Self.splayStretch * splay
                     let phi = sxs * Self.splayAngle * splay, cs = cosf(phi), sn = sinf(phi)
@@ -1608,7 +1608,7 @@ final class BlobBrain {
                 let r = SIMD3(c.x + l.x, c.y + l.y, c.z + l.z)
                 return fitted.map { $0.centroid + $0.rotation.act(r - sim.restCentroid) } ?? bodyRigid(sim, r)
             }
-            // 2026-10-28 (legs stay legs): in a flip / cartwheel (`beanForce`) the foot keeps its boot shape (`forceMorphCap`: no round bun pressed on the body) and a landing
+            // 2026-10-28 (legs stay legs): in a flip (`beanForce`) the foot keeps its boot shape (`forceMorphCap`: no round bun pressed on the body) and a landing
             // squash that drives the fitted bean below the floor LIFTS the whole bean onto the floor instead of clamping every vertex to it (which flattened the foot into a
             // sliver / wedge under the belly: half of its vertices on the floor plane). Every other move keeps the per-vertex clamp, so the walk is untouched.
             let keepShape = (beanForce || beanFitHold > 0) && Self.forceLegsFix && scale == 1
@@ -1634,7 +1634,7 @@ final class BlobBrain {
         }
     }
 
-    /// The foot of a flip / cartwheel while it is out: boot at the floor, rounded no further than this (0 = boot, 1 = ball).
+    /// The foot of a flip while it is out: boot at the floor, rounded no further than this (0 = boot, 1 = ball).
     static let forceMorphCap: Float = 0.25
     static let splayAngle: Float = 1.15, splayStretch: Float = 0.25, splayIn: Float = 0.17, splayOut: Float = 0.11
     /// The top of the leg (the buried crown) in bean-local coordinates: the hip the V pivots about.
@@ -1648,7 +1648,7 @@ final class BlobBrain {
     }
 
     func driveBeansRigid(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, tuck: Float = 0, force: Bool = false) {
-        // (shoes / the hands-off path drive the beans again in the same tick without `force`: a flip / cartwheel in flight stays forced)
+        // (shoes / the hands-off path drive the beans again in the same tick without `force`: a flip in flight stays forced)
         let force = force || (gait.isSpinMove && (gait.phase == .air || gait.phase == .land))
         beanForce = force; beanForceLast = force
         defer { beanForce = false }

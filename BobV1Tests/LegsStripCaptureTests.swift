@@ -1,7 +1,7 @@
 //
 //  LegsStripCaptureTests.swift
 //  Not a regression test: writes a labelled-by-order frame strip (PNG) of one spin move when LEGS_STRIP_OUT is set
-//  (TEST_RUNNER_LEGS_STRIP_OUT=/path/x.png, TEST_RUNNER_LEGS_MOVE=cartwheel|flip|roll). Skipped otherwise.
+//  (TEST_RUNNER_LEGS_STRIP_OUT=/path/x.png, TEST_RUNNER_LEGS_MOVE=flip|roll). Skipped otherwise.
 //
 
 import XCTest
@@ -15,7 +15,7 @@ final class LegsStripCaptureTests: XCTestCase {
     func testStrip() throws {
         let env = ProcessInfo.processInfo.environment
         guard let out = env["LEGS_STRIP_OUT"] else { throw XCTSkip("LEGS_STRIP_OUT not set") }
-        let move = env["LEGS_MOVE"] ?? "cartwheel"
+        let move = env["LEGS_MOVE"] ?? "flip"
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
         let T = 450, cols = 4, nFrames = 12
         let r = MotionRig(game: true)
@@ -81,7 +81,7 @@ final class LegsStripCaptureTests: XCTestCase {
         switch move {
         case "flip": r.brain.startFlip(sim: r.sim, compact: false)
         case "roll": XCTAssertTrue(r.brain.idleStart(.roll, r.sim))
-        default: XCTAssertTrue(r.brain.idleStart(.cartwheel, r.sim))
+        default: XCTFail("unknown LEGS_MOVE")
         }
         // collect every tick while the body is meaningfully tilted or airborne, then thin to nFrames
         var cands: [[UInt8]] = []

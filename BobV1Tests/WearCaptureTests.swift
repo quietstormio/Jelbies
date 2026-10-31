@@ -491,7 +491,7 @@ extension WearCaptureTests {
 }
 
 extension WearCaptureTests {
-    /// STORE SWEEP (shoes): every shoe on all four Jelbies (Bob, Pip, Moss, Lavender) standing, mid-walk, mid-run, sitting and in two cartwheel frames, one
+    /// STORE SWEEP (shoes): every shoe on all four Jelbies (Bob, Pip, Moss, Lavender) standing, mid-walk, mid-run, and sitting, one
     /// low 3/4 camera over the whole row. SHOE_LOOKS="sneakerMint,rainBoots" and SHOE_POSES="stand,walk" limit the run; writes shoes4_<look>.png.
     func testCaptureShoesAllJelbies() throws {
         let d = try dir()
@@ -499,7 +499,7 @@ extension WearCaptureTests {
         let env = ProcessInfo.processInfo.environment
         let looks = (env["SHOE_LOOKS"].map { $0.isEmpty ? [] : $0.components(separatedBy: ",") } ?? []).compactMap { WearLook(rawValue: $0) }
         let poses = (env["SHOE_POSES"].map { $0.isEmpty ? [] : $0.components(separatedBy: ",") } ?? [])
-        let allPoses = ["stand", "walk", "run", "sit", "cartwheelA", "cartwheelB"]
+        let allPoses = ["stand", "walk", "run", "sit"]
         let names = ["Bob", "Pip", "Moss", "Lavender"]
         let cell = (w: 600, h: 520)
         W = cell.w; H = cell.h
@@ -524,11 +524,6 @@ extension WearCaptureTests {
                     var n = 0
                     while n < 120, lab.rigs[0].footBottom(0) - lab.rigs[0].sim.floorY < 0.05, lab.rigs[0].footBottom(1) - lab.rigs[0].sim.floorY < 0.05 { step(1); n += 1 }
                 case "sit": for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.sit, r.sim) }; step(60 * 3)
-                case "cartwheelA", "cartwheelB":
-                    for r in lab.rigs { r.brain.idleForced = true; _ = r.brain.idleStart(.cartwheel, r.sim) }
-                    let want: Float = pose == "cartwheelA" ? 1.0 : 2.3
-                    var n = 0
-                    while n < 60 * 6, lab.rigs[0].sim.bodyPose(iterations: 4).tilt < want { step(1); n += 1 }
                 default: break
                 }
                 var cells: [UIImage] = []

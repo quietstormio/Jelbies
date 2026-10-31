@@ -154,7 +154,6 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "antic: shake", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.shake, $0.sim) }),
         Move(name: "antic: lie down", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.lieDown, $0.sim) }),
         Move(name: "antic: chirp", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.chirp, $0.sim) }),
-        Move(name: "antic: cartwheel", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.cartwheel, $0.sim) }),
         Move(name: "antic: window walk", game: true, seconds: 16, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: window", game: true, seconds: 9, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.window, $0.sim) }),
         Move(name: "antic: stretch", game: true, seconds: 5, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stretch, $0.sim) }),
@@ -230,7 +229,7 @@ final class FeetAttachTests: XCTestCase {
         }
     }()
 
-    /// `FEET_ONLY="antic: shake,antic: cartwheel"` (run with `TEST_RUNNER_FEET_ONLY`) limits the scripted-move suites to the rows whose name contains one of the parts (targeted runs; unset = all).
+    /// `FEET_ONLY="antic: shake"` (run with `TEST_RUNNER_FEET_ONLY`) limits the scripted-move suites to the rows whose name contains one of the parts (targeted runs; unset = all).
     static var movesToCheck: [Move] {
         guard let only = ProcessInfo.processInfo.environment["FEET_ONLY"], !only.isEmpty else { return moves }
         let parts = only.components(separatedBy: ",")

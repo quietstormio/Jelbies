@@ -37,18 +37,18 @@ enum FlourishTuning {
         if night > 0.5 { return 0 }
         switch m { case .okay: return 0.62; case .happy: return 0.78; case .grumpy: return 0.15 }
     }
-    static let weights: [(IdleKind, Float)] = [(.skipHop, 3), (.hopscotch, 1.5), (.legSpin, 1), (.trot, 2), (.stopLook, 2), (.rollTrip, 1.2), (.chirp, 1.6), (.shake, 1.2), (.cartwheel, 2.4)]
+    static let weights: [(IdleKind, Float)] = [(.skipHop, 3), (.hopscotch, 1.5), (.legSpin, 1), (.trot, 2), (.stopLook, 2), (.rollTrip, 1.2), (.chirp, 1.6), (.shake, 1.2)]
     static let minLeg: Float = 1.5, minRemaining: Float = 0.6
     /// Distance along the leg each flourish needs (the hop distance, a trot's two seconds).
     static func need(_ k: IdleKind) -> Float {
-        switch k { case .skipHop: return 1.2; case .hopscotch: return 1.7; case .trot: return 1.9; case .rollTrip: return 1.5; case .legSpin: return 0.8; case .cartwheel: return 1.4; default: return 0.8 }
+        switch k { case .skipHop: return 1.2; case .hopscotch: return 1.7; case .trot: return 1.9; case .rollTrip: return 1.5; case .legSpin: return 0.8; default: return 0.8 }
     }
 }
 
 extension BlobBrain {
-    static let flourishKinds: Set<IdleKind> = [.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .joy, .giggle, .startle, .rollTrip, .chirp, .shake, .cartwheel]
+    static let flourishKinds: Set<IdleKind> = [.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .joy, .giggle, .startle, .rollTrip, .chirp, .shake]
     /// The flourishes that are rolled mid-walk (the reaction moves .giggle / .startle and .joy are started by their own triggers).
-    static let walkFlourishes: [IdleKind] = [.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .chirp, .shake, .cartwheel]
+    static let walkFlourishes: [IdleKind] = [.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .chirp, .shake]
 
     // MARK: the leg roll
 
@@ -70,7 +70,7 @@ extension BlobBrain {
         leg.wanted += 1
         // the kind is chosen now, from what this leg is long enough for and what is off cooldown (variety: what he has done least first)
         var w = FlourishTuning.weights.filter { kindCool[$0.0] == nil && leg.total - 0.3 >= FlourishTuning.need($0.0) }
-        if idleMood == .grumpy { w.removeAll { $0.0 == .hopscotch || $0.0 == .skipHop || $0.0 == .rollTrip || $0.0 == .cartwheel || $0.0 == .chirp } }
+        if idleMood == .grumpy { w.removeAll { $0.0 == .hopscotch || $0.0 == .skipHop || $0.0 == .rollTrip || $0.0 == .chirp } }
         let cooling = kindCooling; let wf = w.filter { !cooling.contains($0.0) }; if !wf.isEmpty { w = wf }
         for i in w.indices { w[i].1 /= 1 + 0.7 * Float(idleState.counts[w[i].0] ?? 0) }
         guard !w.isEmpty else { return }
@@ -159,8 +159,6 @@ extension BlobBrain {
             face(.curious, hold: 1.0 + idleState.hold + 0.8)
         case .chirp, .shake:
             guard livelyStart(kind, sim, resume: resume) else { return false }
-        case .cartwheel:
-            guard cartwheelStart(sim, resume: resume) else { return false }
         default: return false
         }
         kindCooldownStart(kind)

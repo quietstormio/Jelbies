@@ -1,10 +1,9 @@
 //
 //  BlobBrain+Lively.swift
-//  Liveliness round (W2, 2026-10-22: "too much walk-stop-walk"): four more things to do, all body-led (the arms stay thumbs, the feet stay under him):
+//  Liveliness round (W2, 2026-10-22: "too much walk-stop-walk"): three more things to do, all body-led (the arms stay thumbs, the feet stay under him):
 //    shake      a wet-dog wiggle on the spot
 //    lieDown    flops flat on the floor, lies there a few seconds, pushes back up (NOT the sleep: no sleep code, no "lie down" voice word)
 //    chirp      a little perk-up and a chirp (AudioHub only through `chirp(jelly:)`)
-//    cartwheel  a sideways airborne turn over his side, landing ~0.8 u across on both feet (GaitDriver.cartwheel: the flip's machinery about the forward axis)
 //  plus the window antic that now walks to the window before it looks out.
 //
 
@@ -159,109 +158,5 @@ extension BlobBrain {
             roll += 0.04 * sinf(2 * .pi * 2.2 * t) * win * kk
         }
         skinner.setEyeOpenness(1 - 0.55 * kk)
-    }
-
-    // MARK: cartwheel
-
-    static let cartwheelApex: Float = 0.34
-
-    /// Start attempts and refusals by reason (diagnostics: a minute of the 3-Jelly room logs them, LivelinessMinuteTests).
-    static var cartwheelStats = (tried: 0, floor: 0, leg: 0, peer: 0, started: 0)
-    /// Travels tried in turn: the full cartwheel, then shorter ones when a wall, a piece of furniture or a Jelly is in the way.
-    static var cartwheelTravels: [Float] = [0.8, 0.6, 0.45]
-
-    /// Where a cartwheel toward `side` (+1 right / -1 left of `yawNow`) would land and how far it travels, or nil when it has no room even for the shortest.
-    func cartwheelLanding(side: Float, yawNow: Float, from here: SIMD2<Float>, count: Bool = false) -> (to: SIMD2<Float>, travel: Float)? {
-        let right = SIMD2<Float>(cosf(yawNow), -sinf(yawNow))
-        var why = 0
-        for travel in Self.cartwheelTravels {
-            let raw = here + right * side * travel
-            let to = fixed(raw)
-            if simd_distance(to, raw) >= 0.1 { why = max(why, 1); continue }
-            if !legClear(here, to, margin: steerMargin) { why = max(why, 2); continue }
-            if !peerFree(to) { why = max(why, 3); continue }
-            return (to, travel)
-        }
-        if count { if why == 1 { Self.cartwheelStats.floor += 1 } else if why == 2 { Self.cartwheelStats.leg += 1 } else { Self.cartwheelStats.peer += 1 } }
-        return nil
-    }
-
-    /// A cartwheel from standing (`resume` nil: he turns to the camera first, so it reads side-on) or in the middle of a walk (to the side of the leg, no turn).
-    func cartwheelStart(_ sim: SoftBody, resume: SIMD2<Float>?) -> Bool {
-        let here = position
-        let yawFor = resume == nil ? faceCameraYaw() : yaw
-        var side: Float = idleState.kind == nil ? (rand() < 0.5 ? -1 : 1) : 1
-        Self.cartwheelStats.tried += 1
-        if cartwheelLanding(side: side, yawNow: yawFor, from: here) == nil {
-            side = -side
-            if cartwheelLanding(side: side, yawNow: yawFor, from: here, count: true) == nil { return false }
-        }
-        Self.cartwheelStats.started += 1
-        idleBegin(.cartwheel)
-        idleState.resume = resume
-        idleState.sign = side
-        idleState.goalYaw = yawFor
-        script = .idle; activity = .playing
-        if resume != nil { cartwheelLaunch(sim) }
-        return true
-    }
-
-    /// The turn to the camera before the launch (phase 0 of the idle script).
-    func runCartwheelTurn(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        guard idleState.phase == 0 else { return }
-        let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
-        gaitPose(sway: 0.04, bob: 0, rock: 0.2)
-        if turning || feet.active { return }
-        if cartwheelLanding(side: idleState.sign, yawNow: yaw, from: position) == nil {
-            let other = -idleState.sign
-            if cartwheelLanding(side: other, yawNow: yaw, from: position) != nil { idleState.sign = other } else { idleFinish(skinner); return }
-        }
-        cartwheelLaunch(sim)
-    }
-
-    func cartwheelLaunch(_ sim: SoftBody) {
-        AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.7)
-        postEvent(.joyJump)
-        sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false; walkFinal = false; route = []
-        gait.wander = false
-        gait.facingYaw = yaw
-        gait.home = position
-        poseW = 0; poseOn = false
-        flipArmA = 0
-        let travel = cartwheelLanding(side: idleState.sign, yawNow: yaw, from: position)?.travel ?? Self.cartwheelTravels.last!
-        gait.cartwheel(sim, apex: Self.cartwheelApex, side: idleState.sign, travel: travel, reduceMotion: amplitude < 0.7)
-        idleState.phase = 1; idleState.phaseT = 0; idleState.landT = 0
-        idleState.hop = 0
-        script = .idle; activity = .playing
-    }
-
-    /// The cartwheel's flight (the hop machinery owns the body, like the flip): arms up as thumbs throughout, a kick at the landing.
-    func cartwheelBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
-        activity = .playing
-        mouthOpen = 0
-        idleState.phaseT += dt
-        let goal = -hopTipBack * attentionPitch * amplitude
-        pitchBase += max(-1.2 * dt, min(1.2 * dt, goal - pitchBase))
-        gait.basePitch = pitchBase
-        let before = gait.phase
-        gait.tick(sim, held: false, reduce: amplitude < 0.7)
-        if before == .air && gait.phase == .land {
-            jellyKick = max(jellyKick, 2.4)
-            AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.6)
-            if rand() < 0.4 { AudioHub.shared.chirp(jelly: steerID, .happy, x: px) }
-        }
-        flipArmA += max(-dt / 0.10, min(dt / 0.10, 1 - flipArmA))
-        armWalkWant = 1
-        armDirW = smooth01(flipArmA)
-        armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
-        driveBeansRigid(sim, skinner, dt, tuck: gait.tuck, force: gait.phase == .air || gait.phase == .land)
-        driveArms(sim, skinner, dt)
-        if !gait.isBusy {
-            gait.basePitch = 0
-            currentPose(sim)
-            armDirW = 0; armDirOut = 0; flipArmA = 0
-            idleFinish(skinner)
-        }
-        return true
     }
 }

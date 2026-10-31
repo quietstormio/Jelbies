@@ -1,6 +1,6 @@
 //
 //  LivelyMovesTests.swift
-//  The liveliness round's new moves (W2): shake, lie down, chirp, cartwheel and the window walk: each returns to rest, the cartwheel lands to the side upright,
+//  The liveliness round's new moves (W2): shake, lie down, chirp and the window walk: each returns to rest,
 //  the window antic walks there and faces the wall, and the scheduler's "recent" filter keeps his own last picks out.
 //
 
@@ -21,7 +21,7 @@ final class LivelyMovesTests: XCTestCase {
     }
 
     func testEachNewMoveReturnsToRest() {
-        for k in [IdleKind.shake, .lieDown, .chirp, .cartwheel, .window] {
+        for k in [IdleKind.shake, .lieDown, .chirp, .window] {
             let r = rig()
             let rest = r.sim.bodyPose(iterations: 6).tilt
             XCTAssertTrue(r.brain.idleStart(k, r.sim), "\(k) starts")
@@ -33,33 +33,6 @@ final class LivelyMovesTests: XCTestCase {
             XCTAssertLessThan(abs(p.tilt - rest), 0.12, "\(k): upright again (rest \(rest), now \(p.tilt))")
             XCTAssertFalse(r.root.x.isNaN || r.root.y.isNaN, "\(k): no NaN")
         }
-    }
-
-    func testCartwheelLandsToTheSideUpright() {
-        let r = rig()
-        let start = r.root
-        let rest = r.sim.bodyPose(iterations: 6).tilt
-        XCTAssertTrue(r.brain.idleStart(.cartwheel, r.sim))
-        var maxTilt: Float = 0, minY: Float = .infinity
-        r.run(8, until: { r.brain.idleState.kind == nil && r.t > 0.5 }, each: { maxTilt = max(maxTilt, r.sim.bodyPose(iterations: 3).tilt); minY = min(minY, r.sim.centroid().y) })
-        r.run(1.5)
-        let d = simd_distance(r.root, start)
-        XCTAssertGreaterThan(d, 0.55, "he travelled across (\(d))"); XCTAssertLessThan(d, 1.05)
-        XCTAssertGreaterThan(maxTilt, 1.2, "he went over his side (\(maxTilt))")
-        XCTAssertLessThan(abs(r.sim.bodyPose(iterations: 6).tilt - rest), 0.12, "upright after")
-        XCTAssertGreaterThan(minY, r.sim.floorY + 0.2, "never through the floor")
-    }
-
-    func testCartwheelRefusesWhenWalledBothSides() {
-        let r = rig()
-        let here = r.root
-        let yaw = r.brain.faceCameraYaw()
-        let right = SIMD2<Float>(cosf(yaw), -sinf(yaw))
-        // two peers 0.8 u either side
-        let a = here + right * 0.8, b = here - right * 0.8
-        r.brain.peers = { [(id: 0, pos: a), (id: 1, pos: b)] }
-        r.brain.steerID = 5; r.brain.peerGap = 1.0
-        XCTAssertFalse(r.brain.idleStart(.cartwheel, r.sim), "no room either side")
     }
 
     func testWindowWalksThereAndFacesTheWall() {

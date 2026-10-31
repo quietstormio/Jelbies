@@ -9,7 +9,7 @@ import SwiftUI
 
 /// What a Moves-tab play button (or an idle emote) makes the stage's Jelbie do. Existing moves only.
 enum StageMove: Equatable {
-    case idle(IdleKind)      // a commanded idle move (look, roll, tail spin, stretch, sway, flap-hop, cartwheel...)
+    case idle(IdleKind)      // a commanded idle move (look, roll, tail spin, stretch, sway, flap-hop...)
     case hop                 // the jump for joy
     case blink
     case face(FaceKind)
@@ -58,7 +58,6 @@ struct SpeciesInfo {
                     lore: "Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language.",
                     bestAt: "Sporty", bestAtKey: .sporty, loves: "Donut", traits: [58, 60, 46, 28, 85],
                     moves: [SpeciesMoveInfo(title: "Tail wag", subtitle: "Signature move", icon: "sun.max.fill", move: .idle(.tail)),
-                            SpeciesMoveInfo(title: "Cartwheel", subtitle: "Shows off", icon: "figure.gymnastics", move: .idle(.cartwheel)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.bounce), .hop, .face(.excited), .idle(.tail), .hop]),
         SpeciesInfo(character: 3, name: "Taro", epithet: "The dreamy one",

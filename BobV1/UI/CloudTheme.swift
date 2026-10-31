@@ -98,7 +98,6 @@ private struct JelbiePose {
     static let sit = JelbiePose(sx: 1.06, sy: 0.92, aL: 0.5, aR: 0.5, fx: 0.3, fy: -0.04, fs: 1.25)
     static let lean = JelbiePose(rot: 0.38, aL: 0.9, aR: 0.1, fx: 0.22)
     static let sleep = JelbiePose(sx: 1.04, sy: 0.96, rot: 1.45, aL: 0.15, aR: 0.15, fx: 0.18)
-    static let cartwheel = JelbiePose(rot: -0.95, aL: 2.9, aR: 2.9, fx: 0.3, fy: -0.06)
     func mixed(_ o: JelbiePose, _ m: Double) -> JelbiePose {
         func l(_ a: Double, _ b: Double) -> Double { a + (b - a) * m }
         return JelbiePose(sx: l(sx, o.sx), sy: l(sy, o.sy), rot: l(rot, o.rot), aL: l(aL, o.aL), aR: l(aR, o.aR), fx: l(fx, o.fx), fy: l(fy, o.fy), fs: l(fs, o.fs))
@@ -116,7 +115,7 @@ struct CloudSky: View {
         Shape(x: 0.97, y: 0.34, size: 0.22, ax: 0.06, ay: 0.06, per: 23, ph: 1.7, a: .hop, b: .squish),
         Shape(x: 0.52, y: 1.02, size: 0.42, ax: 0.09, ay: 0.04, per: 37, ph: 3.1, a: .sit, b: .lean),
         Shape(x: 0.14, y: 0.64, size: 0.17, ax: 0.10, ay: 0.07, per: 27, ph: 4.4, a: .sleep, b: .stand),
-        Shape(x: 0.88, y: 0.76, size: 0.26, ax: 0.07, ay: 0.06, per: 33, ph: 2.3, a: .cartwheel, b: .lean),
+        Shape(x: 0.88, y: 0.76, size: 0.26, ax: 0.07, ay: 0.06, per: 33, ph: 2.3, a: .hop, b: .lean),
         Shape(x: 0.60, y: 0.02, size: 0.20, ax: 0.08, ay: 0.04, per: 29, ph: 5.2, a: .squish, b: .wave),
     ]
     private static let mist = (r: 0xEE / 255.0, g: 0xF5 / 255.0, b: 0xFB / 255.0)

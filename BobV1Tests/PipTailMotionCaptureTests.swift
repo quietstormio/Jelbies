@@ -256,7 +256,6 @@ final class PipTailMotionCaptureTests: XCTestCase {
             Scenario(name: "hug", cams: [.game, .close, .top, .side], seconds: 7.0, start: idle("tailHug"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 12),
             Scenario(name: "sit", warm: 0.2, seconds: 3.0, start: idle("sit")),
             Scenario(name: "asleep", warm: 0.2, seconds: 3.5, start: { s in let b = s.rig.brain; b.idleForced = true; XCTAssertTrue(b.idleStart(.sleep, s.rig.sim)); b.sleep.hold = 500 }),
-            Scenario(name: "cartwheel", warm: 0.0, seconds: 3.0, start: idle("cartwheel")),
             Scenario(name: "hugwear", cams: [.close], seconds: 7.0, outfit: [.neck: .scarfCosy, .body: .backpackSky], start: idle("tailHug"), until: { $0.rig.brain.idleState.kind == nil }, sheetFrames: 8),
         ]
     }

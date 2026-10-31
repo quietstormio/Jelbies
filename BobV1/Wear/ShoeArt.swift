@@ -3,7 +3,7 @@
 //  The modelled shoes. Each shoe is a Blender model (tools/shoes/model_shoes.py) bound to the foot bean by tools/shoes/convert_shoe_art.py into
 //  Resources/shoe_<look>.bin: every shoe vertex is stored as (bean triangle, barycentric b1, b2, distance d along the bean's interpolated normal), so
 //      position = sum b_i * bean_i  +  d * normalize(sum b_i * normal_i)
-//  evaluated on the bean that is DRAWN (walking, hopping, the lifted ball, sitting, sleeping, a cartwheel ...) puts the shoe exactly where the foot is:
+//  evaluated on the bean that is DRAWN (walking, hopping, the lifted ball, sitting, sleeping...) puts the shoe exactly where the foot is:
 //  attached by construction, with no slot of its own and nothing the body has to know. The shoe's own normals are stored in the bean's frame at that spot
 //  (the interpolated normal and ring tangent) and turn with it, twist included, so the shading follows the squash and the turns. Layout of the bin: see convert_shoe_art.py.
 //

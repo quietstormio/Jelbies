@@ -3,7 +3,7 @@
 //  Not a regression test: a REUSABLE visual-verification harness for Pip's body-mesh dino tail + orange ridge spikes. Env-gated on TAILCHECK_DIR
 //  (xcodebuild passes it as TEST_RUNNER_TAILCHECK_DIR) and writes one labelled contact sheet per checklist item:
 //    angles.png    rest views (front, 3/4 L/R, side L/R, 3/4 back, back, TOP) on a neutral backdrop and in the room
-//    motions.png   sway, walk, run, turn, sit, sleep, hop, joy jump, cartwheel, backflip, eating, drinking (real brain / care paths)
+//    motions.png   sway, walk, run, turn, sit, sleep, hop, joy jump, backflip, eating, drinking (real brain / care paths)
 //    wear.png      enclosing hat, crown, backpack, hero cape, hoodie, scarf from 3/4 back + side
 //    others.png    Bob / Moss / Lavender from 3/4 back + top in the real brain path AND the bare MotionRig paths (no tail / back swell allowed)
 //    picker.png    the Lemon Drop species-picker framing at its resting yaw + orbit yaws
@@ -264,7 +264,6 @@ final class PipTailChecklistTests: XCTestCase {
             Motion(name: "sleep (lying)", start: { lab in let b = lab.rigs[0].brain; b.idleForced = true; XCTAssertTrue(b.idleStart(.sleep, lab.rigs[0].sim)); b.sleep.hold = 500 }, wait: { $0.rigs[0].brain.isNapping }, times: [1.0, 3.0]),
             Motion(name: "bounce hop", start: idle(.bounce), times: [-0.05, 0.2], apex: true),
             Motion(name: "joy jump", start: idle(.joy), times: [-0.05, 0.2], apex: true),
-            Motion(name: "cartwheel", start: idle(.cartwheel), times: [-0.15, 0.15], apex: true),
             Motion(name: "backflip", start: { lab in lab.rigs[0].brain.startFlip(sim: lab.rigs[0].sim) }, times: [-0.15, 0.15], apex: true),
         ]
     }

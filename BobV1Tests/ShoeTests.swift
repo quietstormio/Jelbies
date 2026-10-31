@@ -169,7 +169,7 @@ final class ShoeTests: XCTestCase {
 
     // MARK: the modelled shoes
 
-    /// The sole's bottom is a drawn face: it faces DOWN (a lifted foot, a cartwheel and a sit show it), and the ledge round the upper faces up.
+    /// The sole's bottom is a drawn face: it faces DOWN (a lifted foot and a sit show it), and the ledge round the upper faces up.
     func testTheSolesBottomFacesDown() {
         for look in WearLook.shoes {
             let b = RoomMeshBuilder(); b.material = .plain

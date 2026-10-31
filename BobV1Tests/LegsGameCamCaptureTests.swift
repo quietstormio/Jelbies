@@ -1,6 +1,6 @@
 //
 //  LegsGameCamCaptureTests.swift
-//  Not a regression test: when AUDIT_CAP_DIR is set (TEST_RUNNER_AUDIT_CAP_DIR, optional TEST_RUNNER_AUDIT_TAG = before / after) it renders one full cartwheel per
+//  Not a regression test: when AUDIT_CAP_DIR is set (TEST_RUNNER_AUDIT_CAP_DIR, optional TEST_RUNNER_AUDIT_TAG = before / after) it renders one full flip per
 //  character (Pip, Moss, Lavender, Bob), bare and in shoes, in the room with THREE Jelbies at the real game camera (portrait phone framing) and in a medium
 //  side-on shot, at a 120 fps frame cadence, every frame: contact sheets (every 2nd frame) and one MP4 per case (played at half speed).
 //
@@ -78,7 +78,7 @@ final class LegsGameCamCaptureTests: XCTestCase {
     }
 
     /// One move of one character (bare / shoes) in the room of three, rendered every frame at a 120 fps cadence: the real game camera, a medium shot along the game camera's
-    /// own direction ("front") and a medium side-on shot. `move`: cartwheel / flip / faceplant. Output under AUDIT_CAP_DIR/game_cam2/<tag>/.
+    /// own direction ("front") and a medium side-on shot. `move`: flip / faceplant. Output under AUDIT_CAP_DIR/game_cam2/<tag>/.
     func capture(char c: Int, shoes: Bool, move: String, tag: String, dir: String, device: MTLDevice) throws {
         let W = 604, H = 1312
         let rm = MotionRig.renderMesh
@@ -86,7 +86,7 @@ final class LegsGameCamCaptureTests: XCTestCase {
         BlobBrain.forceLegsFix = tag != "before"
         defer { BlobBrain.forceLegsFix = true }
         let ids = c == 0 ? [0, 2, 3] : [1, 2, 3]
-        // the cartwheeler stands at the front spot (nearest the camera), the others at the two back spots: nobody within 1.5 u of him
+        // the mover stands at the front spot (nearest the camera), the others at the two back spots: nobody within 1.5 u of him
         let spots = JellyRoster.spawnSpots(count: 3)
         let slot = 0
         var order = ids; order.removeAll { $0 == c }; order.insert(c, at: 0)
@@ -110,7 +110,7 @@ final class LegsGameCamCaptureTests: XCTestCase {
         switch move {
         case "flip": me.brain.startFlip(sim: me.sim)
         case "faceplant": me.brain.startFlip(sim: me.sim, fail: true)
-        default: guard me.brain.idleStart(.cartwheel, me.sim) else { XCTFail("cartwheel did not start for \(names[c])"); return }
+        default: XCTFail("unknown move \(move)"); return
         }
         guard let ren = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: rm, simEdges: me.sim.edges, particleCount: me.sim.n, game: true, bodyCount: 3), ren.room != nil else { throw XCTSkip("no renderer") }
         ren.roomCacheEnabled = false
@@ -184,7 +184,7 @@ final class LegsGameCamCaptureTests: XCTestCase {
             }
             if steps > 0 { for r in rigs { r.brain.refitBeans(r.sim, r.skinner) } }
             for r in rigs { r.skinner.tickBlink(dt: dt) }
-            let moving = me.brain.idleState.kind == .cartwheel || me.brain.gait.isBusy
+            let moving = me.brain.gait.isBusy
             if moving { seen = true } else if seen { after += dt }
             if after > 0.5 { break }
             if !seen && t > 3 { break }
@@ -244,7 +244,6 @@ final class LegsGameCamCaptureTests: XCTestCase {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2)
         _ = GameCamera.camera(aspect: 604.0 / 1312.0)
         var cases: [(Int, Bool, String)] = []
-        for c in [1, 2, 3, 0] { for shoes in [false, true] { cases.append((c, shoes, "cartwheel")) } }
         cases += [(0, false, "flip"), (1, true, "flip"), (2, false, "faceplant"), (0, true, "faceplant")]
         if let only = env["AUDIT_CASES"] { let idx = only.split(separator: ",").compactMap { Int($0) }; cases = idx.compactMap { $0 < cases.count ? cases[$0] : nil } }
         for (c, shoes, move) in cases { try capture(char: c, shoes: shoes, move: move, tag: tag, dir: dir, device: device) }

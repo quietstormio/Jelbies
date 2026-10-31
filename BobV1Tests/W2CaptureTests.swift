@@ -3,7 +3,7 @@
 //  Not a regression test: the liveliness round's pictures (W2). Output: scratchpad/w2/ (override with W2_OUT).
 //    testRoomMinuteMontage   12 frames over 60 s of the lively room, portrait (4x3) and landscape (3x4), each labelled with the three Jellies' activities
 //    testCloseUpOthersRoam   comeHere(jelly:1), then +2 / +6 / +10 s after arrival, portrait and landscape, plus a copy with the keep-out wedge outlined
-//    testMovesStrip          the new moves at their peak (cartwheel mid-air, lie-down hold, shake, window look), cropped around the Jelly
+//    testMovesStrip          the new moves at their peak (lie-down hold, shake, window look), cropped around the Jelly
 //
 
 import XCTest
@@ -148,17 +148,6 @@ final class W2CaptureTests: XCTestCase {
         }
         var panels: [(String, LockImage)] = []
         func snap(_ label: String) { let (img, cam) = shot.frame(r); panels.append((label, crop(img, cam))) }
-        // cartwheel: three frames through the air
-        r.place(0, at: SIMD2(0, 0.6))
-        b.idleReset(a.skinner); b.restTimer = 1e6
-        XCTAssertTrue(b.idleStart(.cartwheel, a.sim))
-        var shots = 0
-        for _ in 0..<(8 * 60) {
-            r.tick()
-            if b.gait.phase == .air, shots < 3, Int(b.gait.flipU * 6) == [1, 3, 5][shots] { snap("cartwheel u=\(String(format: "%.2f", b.gait.flipU))"); shots += 1 }
-            if b.idleState.kind == nil && r.actors[0].sim.stepDt > 0 && shots >= 3 { break }
-        }
-        r.run(1.5)
         // lie down hold
         b.idleReset(a.skinner)
         XCTAssertTrue(b.idleStart(.lieDown, a.sim))

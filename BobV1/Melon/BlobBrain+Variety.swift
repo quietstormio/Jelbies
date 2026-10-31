@@ -18,7 +18,7 @@ enum VarietyFamily: Int, CaseIterable, Sendable { case movement, spot, rest, dec
 enum VarietyTuning {
     /// Seconds for a kind to come back to full weight (x floor right after); the big specials take longer.
     static let recover: Float = 210, bigRecover: Float = 360, floor: Float = 0.05
-    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .cartwheel, .soccerKick, .flapHop, .lieDown, .tail, .tailThump, .tailHug]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
+    static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .soccerKick, .flapHop, .lieDown, .tail, .tailThump, .tailHug]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
     static let socialRecover: Float = 150
     /// A friend did / is doing the same lately.
     static let syncWindow: Float = 20, syncMul: Float = 0.25, startGap: Float = 10
@@ -41,7 +41,7 @@ enum VarietyTuning {
     static let personality: [JellyFeature: Personality] = [
         .none: Personality(),
         .spines: Personality(     // Pip: energetic
-            idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.cartwheel], 1.2), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6), ([.tail, .tailThump], 1.7), ([.tailHug], 1.3)],
+            idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6), ([.tail, .tailThump], 1.7), ([.tailHug], 1.3)],
             social: [([.chase, .zoomies, .bump, .keepAway], 1.6)]),
         .daisy: Personality(      // Moss: calm
             idle: [([.look, .window, .flop, .sit, .stretch, .sway, .decorSit, .decorBoop, .decorPeek], 1.6), ([.zoomies], 0.6)],
@@ -68,7 +68,7 @@ extension BlobBrain {
         switch k {
         case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return .decor
         case .sit, .slump, .yawn, .flop, .lieDown, .sigh, .sleep, .stretch, .tailHug: return .rest
-        case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .cartwheel, .rollTrip, .stopLook: return .movement
+        case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .rollTrip, .stopLook: return .movement
         default: return .spot
         }
     }

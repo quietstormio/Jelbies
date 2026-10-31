@@ -11,10 +11,10 @@ import simd
 @MainActor
 final class LivelinessMinuteTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
-    override func tearDown() { BlobBrain.cartwheelTravels = [0.8, 0.6, 0.45]; RoomLayout.dynamicBoxes = []; DecorField.shared.clear(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    override func tearDown() { RoomLayout.dynamicBoxes = []; DecorField.shared.clear(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     static let outDir = ProcessInfo.processInfo.environment["W2_OUT"] ?? "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/w2"
-    static let dashes: Set<String> = ["idle:run", "idle:zoomies", "idle:slide", "idle:trot", "idle:cartwheel", "social:chase", "social:zoomies"]
+    static let dashes: Set<String> = ["idle:run", "idle:zoomies", "idle:slide", "idle:trot", "social:chase", "social:zoomies"]
 
     func minute(mood: BlobMood, seed: UInt64, maxPlain: Float) {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
@@ -25,8 +25,6 @@ final class LivelinessMinuteTests: XCTestCase {
             b.idleMood = mood; b.socialBook.cooldown = 8; b.idleState.cooldown = 9; b.restTimer = 0.5 + Float(i)
             b.anticsEnabled = true; b.watching = true; b.sleepEnabled = true
         }
-        BlobBrain.cartwheelStats = (0, 0, 0, 0, 0)
-        BlobBrain.cartwheelTravels = ProcessInfo.processInfo.environment["W2_CW_SINGLE"] != nil ? [0.8] : [0.8, 0.6, 0.45]          // (the env var reproduces the single-travel baseline)
         var labels = [[String]](repeating: [], count: 3)
         var distinct = [Set<String>](repeating: [], count: 3)
         var plain = 0, total = 0
@@ -67,8 +65,6 @@ final class LivelinessMinuteTests: XCTestCase {
         // the log
         var out = "# 60 s \(mood.rawValue) seed \(seed): one row per 0.5 s, columns = Jelly 0 | 1 | 2\n"
         for n in 0..<labels[0].count { out += String(format: "%5.1f  ", Float(n) * 0.5) + (0..<3).map { labels[$0][n].padding(toLength: 22, withPad: " ", startingAt: 0) }.joined(separator: " ") + "\n" }
-        let cw = BlobBrain.cartwheelStats
-        out += "\nCARTWHEEL tried \(cw.tried) started \(cw.started) refused: floor \(cw.floor) leg \(cw.leg) peer \(cw.peer)\n"
         out += "\nSUMMARY plain share \(Float(plain) / Float(total)) dash starts \(dashStarts) socials \(socials)\n"
         for i in 0..<3 { out += "Jelly \(i): \(distinct[i].count) distinct: \(distinct[i].sorted().joined(separator: ", "))\n" }
         try? FileManager.default.createDirectory(atPath: Self.outDir, withIntermediateDirectories: true)
@@ -78,7 +74,6 @@ final class LivelinessMinuteTests: XCTestCase {
         for i in 0..<3 { XCTAssertGreaterThanOrEqual(distinct[i].count, 6, "Jelly \(i) shows at least 6 different things: \(distinct[i].sorted())") }
         let union = distinct.reduce(into: Set<String>()) { $0.formUnion($1) }
         XCTAssertGreaterThanOrEqual(union.count, 14, "the room shows at least 14 different things: \(union.sorted())")
-        XCTAssertTrue(union.contains("idle:cartwheel"), "the cartwheel shows in a minute (tried \(BlobBrain.cartwheelStats)): \(union.sorted())")
         XCTAssertGreaterThanOrEqual(dashStarts, 3, "at least 3 dashes in the room")
         XCTAssertGreaterThanOrEqual(socials, 1, "at least one social")
         XCTAssertLessThan(Float(plain) / Float(total), maxPlain, "plain walking / standing share")

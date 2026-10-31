@@ -8,7 +8,7 @@
 //    burial   how deep the bean's crown (the part meant to be buried) lies INSIDE the drawn body (signed distance to the nearest drawn triangle, sign from the
 //             skinned vertex normals). <= 0 = even the deepest crown vertex is outside the drawn body = the leg came off.
 //    gap      max(0, -burial): the closest approach of the bean's top to the drawn surface when it is not inside (0 = joined).
-//  Env: AUDIT_ONLY="a,b" (scenario name parts), AUDIT_CW_N (cartwheel reps), AUDIT_CAP_DIR (render the worst frames + cartwheel strips), AUDIT_STRIPS_ONLY=1.
+//  Env: AUDIT_ONLY="a,b" (scenario name parts), AUDIT_CAP_DIR (render the worst frames), AUDIT_STRIPS_ONLY=1.
 //
 
 import XCTest
@@ -264,24 +264,6 @@ final class LegsDrawnAuditTests: XCTestCase {
 
     // MARK: scenarios
 
-    static func cartwheel(_ entry: String) -> Scenario {
-        Scenario(name: "cartwheel-\(entry)", game: true, seconds: 14, setup: { r, seed in
-            var s = seed &* 2654435761 &+ 17
-            let px = (lcg(&s) - 0.5) * 2.4, pz = (lcg(&s) - 0.3) * 1.8
-            r.sim.teleport(toXZ: SIMD2(px, pz)); r.run(0.4)
-            r.brain.currentPose(r.sim)
-            if lcg(&s) < 0.5 { let p = r.root + SIMD2(0.55 + 0.2 * lcg(&s), 0.3 * (lcg(&s) - 0.5)); r.brain.peers = { [(id: 1, pos: p)] }; r.brain.steerID = 0; r.brain.peerGap = 0.9 }
-            r.brain.idleForced = true
-            let goal = SIMD2<Float>(-px * 0.6 + 0.3 * (lcg(&s) - 0.5), 1.0 + 0.8 * lcg(&s))
-            switch entry {
-            case "stand": return r.brain.idleStart(.cartwheel, r.sim)
-            case "walk": r.brain.requestNow(.goTo(goal)); r.run(0.4 + 1.2 * lcg(&s)); return r.brain.flourishStart(.cartwheel, resume: goal, r.sim, r.skinner)
-            case "run": _ = r.brain.idleStart(.run, r.sim); r.run(0.5 + 1.5 * lcg(&s)); return r.brain.flourishStart(.cartwheel, resume: goal, r.sim, r.skinner)
-            default: r.brain.seed = 11; _ = r.brain.idleStart(.zoomies, r.sim); r.run(0.8 + 2.5 * lcg(&s)); return r.brain.flourishStart(.cartwheel, resume: goal, r.sim, r.skinner)
-            }
-        }, endKind: .cartwheel)
-    }
-
     static func ride(_ name: String, _ kind: DecorKind, at p: SIMD2<Float>, move: IdleKind, seconds: Float) -> Scenario {
         Scenario(name: name, game: true, seconds: seconds, setup: { r, _ in
             DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: p.x, z: p.y)])
@@ -301,7 +283,7 @@ final class LegsDrawnAuditTests: XCTestCase {
     static func allScenarios() -> [Scenario] {
         let names = ["hop", "antic: spin after his tail", "flip", "faceplant", "run", "zoomies", "walk (game)", "antic: roll", "flourish: roll along the leg",
                      "sleep: roll onto the back and up again", "sit", "jumping jacks", "belly slide", "antic: flop", "Lavender: flap-hop", "flourish: skip-hop",
-                     "flourish: mid-leg spin", "jump for joy", "decor2: climb the slide, sit, ride, exit", "decor: hop on the mat", "ears dance", "antic: cartwheel"]
+                     "flourish: mid-leg spin", "jump for joy", "decor2: climb the slide, sit, ride, exit", "decor: hop on the mat", "ears dance"]
         var list = names.compactMap { fromMove($0) }
         list.append(ride("toy: scooter", .kickscooter, at: SIMD2(1.2, 0.4), move: .decorSlide, seconds: 45))
         list.append(ride("toy: rocket", .toyrocket, at: SIMD2(1.1, 0.5), move: .decorSit, seconds: 50))
@@ -330,21 +312,6 @@ final class LegsDrawnAuditTests: XCTestCase {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var rows: [Row] = []
-        let cwN = Int(env["AUDIT_CW_N"] ?? "") ?? 256
-        // cartwheels: character x shoes x entry x cadence all covered, many random seeds
-        var cwScs: [Scenario] = []
-        for e in ["stand", "walk", "run", "zoomies"] { cwScs.append(Self.cartwheel(e)) }
-        for sc in filtered(cwScs) {
-            let entry = sc.name
-            for n in 0..<(cwN / 4) {
-                let fi = n % 4, shoes = (n / 4) % 2 == 1, cad = (n / 8) % Self.cadences.count
-                let seed = UInt64(1 + n) &+ UInt64(entry.count * 1000)
-                let res = Self.run(sc, feature: Self.features[fi].1, shoes: shoes, cad: Self.cadences[cad], seed: seed)
-                if !res.started { continue }
-                rows.append(Row(sc: sc, fi: fi, shoes: shoes, cad: cad, seed: seed, res: res))
-                MotionLog.write(line(sc.name, fi, shoes, cad, seed, res))
-            }
-        }
         // the other moves: every character x shoes, cadences rotating
         for (si, sc) in filtered(Self.allScenarios()).enumerated() {
             for v in 0..<sc.variants {
@@ -479,31 +446,7 @@ final class LegsDrawnAuditTests: XCTestCase {
         }
     }
 
-    /// Every 2nd frame through one full cartwheel (120 fps cadence), close on the legs, side view + below 3/4.
-    func testCartwheelStrips() throws {
-        guard let dir = ProcessInfo.processInfo.environment["AUDIT_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("AUDIT_CAP_DIR not set") }
-        GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
-        for (fi, tag) in [(0, "Bob"), (1, "Pip")] {
-            var tiles: [[UInt8]] = [], labels: [String] = []
-            var shooter: Shooter? = nil
-            let sc = Self.cartwheel("stand")
-            let res = Self.run(sc, feature: Self.features[fi].1, shoes: false, cad: Self.cadences[1], seed: 7) { frame, r, _ in
-                guard frame % 2 == 0, r.brain.idleState.kind == .cartwheel else { return }
-                if shooter == nil { shooter = Shooter(r: r, T: 300) }
-                guard let sh = shooter else { return }
-                let m = Self.measure(r, shoes: false)
-                let tgt = sh.legCentre(r)
-                tiles.append(sh.shot(r, az: .pi / 2, el: 0.05, dist: 1.9, target: tgt, palette: Self.palette(fi)))
-                labels.append(String(format: "f%d %@ burial %.3f beans %d", frame, "\(r.brain.gait.phase)", m.beans ? m.burial : 0, m.beans ? 1 : 0))
-            }
-            XCTAssertTrue(res.started)
-            guard !tiles.isEmpty else { continue }
-            Self.compose(tiles, T: 300, cols: 10, labels: labels, header: "\(tag) cartwheel, 120 fps, every 2nd frame, side view, close on the legs. minBurial \(res.minBurial)", to: dir + "/cartwheel_strip_\(tag).png")
-            MotionLog.write("AUDITPNG \(dir)/cartwheel_strip_\(tag).png frames=\(tiles.count) minBurial=\(res.minBurial) off=\(res.off) core=\(res.coreFrames)")
-        }
-    }
-
-    /// Cost of the drawn-space bean guard: Skinner.update for 3 Jelbies walking / cartwheeling with the guard on vs off (best of 5 batches, microseconds per frame for all three).
+    /// Cost of the drawn-space bean guard: Skinner.update for 3 Jelbies running / zooming with the guard on vs off (best of 5 batches, microseconds per frame for all three).
     func testBeanGuardCost() throws {
         let rigs = (0..<3).map { _ in MotionRig(game: true, settle: 0.5) }
         Self.keep += rigs

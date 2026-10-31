@@ -34,7 +34,7 @@ extension GameCare {
         return rigid
     }
 
-    /// 2026-10-28 (legs stay legs): in a flip / cartwheel the body is upside down for most of the flight and the shoe soles would show as black discs on its side / two
+    /// 2026-10-28 (legs stay legs): in a flip the body is upside down for most of the flight and the shoe soles would show as black discs on its side / two
     /// sneakers on top of the head. While the leg points more than ~30 degrees away from straight down the shoe shrinks into the top of the leg (the leg itself stays a leg), and
     /// grows back as the leg comes down to the floor (smooth in the angle, so no pop). Only while a spin move owns the body: the walk and every other move are untouched.
     static func poofShoes(_ w: inout [[SIMD3<Float>]], brain b: BlobBrain) {

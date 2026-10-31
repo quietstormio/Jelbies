@@ -73,7 +73,6 @@ enum IdleKind: String, CaseIterable, Sendable {
     case shake         // wet-dog shake: a fast body wiggle, standing
     case lieDown       // flops flat on the floor, lies there a few seconds, pushes back up
     case chirp         // a little perk-up and a chirp
-    case cartwheel     // a sideways airborne turn over his side, landing on both feet ~0.8 u across
     case soccerKick    // (soccer) walks up behind the soccer ball and stomp-kicks it; dribbles it; shoots at the mini goal and celebrates: BlobBrain+Soccer.swift
 }
 
@@ -111,10 +110,10 @@ enum IdleTable {
         switch m {
         case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.roll, 1.2), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
                               (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2), (.rollTrip, 0.8),
-                              (.cartwheel, 3.6), (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
+                              (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
                              (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.rollTrip, 0.5), (.sigh, 0.8),
-                             (.cartwheel, 2.4), (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
+                             (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
         case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
         }
         for (k, x) in extra where x > 0 { w.append((k, x * mul)) }
@@ -252,7 +251,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
-        case .cartwheel, .shake, .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop, .tailThump: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop, .tailThump: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -615,8 +614,6 @@ extension BlobBrain {
             return flourishStart(.rollTrip, resume: nil, sim, nil)
         case .shake, .lieDown, .chirp:
             return livelyStart(kind, sim, resume: nil)
-        case .cartwheel:
-            return cartwheelStart(sim, resume: nil)
         case .sigh, .hmph:
             idleBegin(kind)
             script = .idle; activity = .lookingAround
@@ -694,7 +691,6 @@ extension BlobBrain {
         case .shake: runShake(sim, skinner, dt)
         case .lieDown: runLieDown(sim, skinner, dt)
         case .chirp: runChirp(sim, skinner, dt)
-        case .cartwheel: runCartwheelTurn(sim, skinner, dt)
         case .sleep: runSleep(sim, skinner, dt)
         case .jacks:
             // phase 0 only: stand square toward the camera and lift the arms; the hops themselves run in `idleJacksTick`
@@ -983,8 +979,7 @@ extension BlobBrain {
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
-        guard let kind = idleState.kind, kind == .cartwheel || kind == .slide || kind == .scoot || kind == .bounce || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
-        if kind == .cartwheel { return cartwheelBodyTick(sim, skinner, dt) }
+        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt

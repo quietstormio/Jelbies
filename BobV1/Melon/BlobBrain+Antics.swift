@@ -17,7 +17,7 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .rollTrip, .flapHop, .soccerKick, .cartwheel]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .roll, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .rollTrip, .flapHop, .soccerKick]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float { baseKindCooldown(k) * 0.6 }          // (2026-10-27 more going on: 40 % shorter, same order between kinds)
     static func baseKindCooldown(_ k: IdleKind) -> Float {
@@ -25,7 +25,6 @@ extension BlobBrain {
         case .zoomies: return 14
         case .slide: return 18
         case .run: return 10
-        case .cartwheel: return 22
         case .shake: return 16
         case .lieDown: return 28
         case .chirp: return 9
@@ -66,7 +65,7 @@ extension BlobBrain {
     }
 
     /// The dashes look alike from the sofa: a run next to a zoomies is "the same thing".
-    static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot, .slide, .cartwheel]
+    static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot, .slide]
     /// The hops look alike too: a bounce next to a scoot is "the same thing".
     static let hopKinds: Set<IdleKind> = [.bounce, .scoot, .joy, .skipHop, .hopscotch, .startle, .flapHop]
     static func family(_ k: IdleKind) -> Set<IdleKind> { dashKinds.contains(k) ? dashKinds : (hopKinds.contains(k) ? hopKinds : [k]) }
