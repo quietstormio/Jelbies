@@ -94,6 +94,8 @@ nonisolated enum PipSpikes {
     /// samples before its first tail spike are blocked under every hat / neck piece, so the back-to-tail junction always looks exactly like the bare row.
     nonisolated(unsafe) private static var junctionCache: (minBackY: Float, firstTailT: Double)?
     nonisolated(unsafe) private static var bareTurnCache: Float = 0
+    /// PIPBACK=now (comparison tests only): the spike layout rules of the old Gaussian-swell back (junction keep-out of the bare row, bare tail end 0.86, no bare overlap cap), so before / after renders show what was shipped.
+    static var legacyLayout: Bool { PipBack.mode == .now && PipBack.shift == 0 }
     static let junctionEps: Float = 0.004
     /// Half-width (ridge arc length) of the keep-out round the back-to-tail bend: small, so the row stays evenly spaced across the junction under hats too.
     static let junctionHalf: Float = 0.035
@@ -227,7 +229,7 @@ nonisolated enum PipSpikes {
         }
         let backCount = path.count
         var tt = tCross
-        while tt <= sh.sink + (bareLayout ? PipSpikes.bareTailEnd : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
+        while tt <= sh.sink + (bareLayout ? (PipSpikes.legacyLayout ? 0.86 : PipSpikes.bareTailEnd) : PipSpikes.reflowTailEnd) * (sh.length - sh.sink) {
             let rg = sh.ridge(tt), rp = f3(rg.p + rg.up * rg.r)
             path.append(PP(shown: rp, rest: rp, n: f3(rg.up), t: tt, isTail: true)); tt += 0.01
         }
@@ -259,10 +261,17 @@ nonisolated enum PipSpikes {
             return simd_normalize(raw - n * simd_dot(raw, n))
         }
         var blocked = [Bool](repeating: false, count: path.count)
-        if vr.reflowsUnderHat {          // the junction keep-out: no spike base stands within `junctionHalf` (arc) of the point where the ridge turns from the back onto the tail (bare and under every hat alike)
-            let aJ = arc[min(max(backCount, 0), arc.count - 1)]
-            lastJunction = path[min(max(backCount, 0), path.count - 1)].shown
-            for i in path.indices where abs(arc[i] - aJ) < PipSpikes.junctionHalf { blocked[i] = true }
+        if vr.reflowsUnderHat {
+            if PipSpikes.legacyLayout {          // (old back) the keep-out is the bare row's own junction gap
+                if !bareLayout {
+                    let j = bareJunction(body: body, spec: spec)
+                    for i in path.indices where path[i].isTail ? path[i].t < j.firstTailT - 0.002 : path[i].rest.y < j.minBackY - PipSpikes.junctionEps { blocked[i] = true }
+                }
+            } else {          // the keep-out: no spike base stands within `junctionHalf` (arc) of the point where the ridge turns from the back onto the tail (bare and under every hat alike)
+                let aJ = arc[min(max(backCount, 0), arc.count - 1)]
+                lastJunction = path[min(max(backCount, 0), path.count - 1)].shown
+                for i in path.indices where abs(arc[i] - aJ) < PipSpikes.junctionHalf { blocked[i] = true }
+            }
         }
         if !obstacles.isEmpty {
             let H0 = restyledBaseHeight * heightScale, bR0 = H0 / aspect / 2
@@ -284,7 +293,7 @@ nonisolated enum PipSpikes {
         // a hat re-flow packs the same five spikes into a shorter row: the straight-line spacing floor eases to 75% of the even arc spacing (bare: unchanged)
         // a re-flowed row is shorter, so its five spikes are a little smaller (half-way between their bare size and the size that keeps the bare spacing ratio), never bigger
         let reflowSize: Float = bareLayout ? 1 : 0.5 + 0.5 * min(1, (Lreal * 0.87 / Float(nSp - 1)) / PipSpikes.restyledBareSpacing)
-        let rowMinChord: Float = bareLayout ? min(PipSpikes.restyledMinChord, 0.85 * Lreal * 0.87 / Float(nSp - 1)) : min(PipSpikes.restyledMinChord, 0.75 * Lreal * 0.87 / Float(nSp - 1))
+        let rowMinChord: Float = bareLayout ? (PipSpikes.legacyLayout ? PipSpikes.restyledMinChord : min(PipSpikes.restyledMinChord, 0.85 * Lreal * 0.87 / Float(nSp - 1))) : min(PipSpikes.restyledMinChord, 0.75 * Lreal * 0.87 / Float(nSp - 1))
         // restyle (PipTailVariant): spikes get taller by heightScale while the base only widens by baseScale, so they read taller and pointier; `aspect` = height / base diameter
         for k in 0..<nSp {
             let sK = L * (0.05 + 0.87 * Float(k) / Float(nSp - 1))
@@ -316,7 +325,7 @@ nonisolated enum PipSpikes {
         }
         func place() { for k in 0..<sps.count { let bR = sps[k].bw / 2; sps[k].baseShown = sps[k].pt.shown - sps[k].n * (0.3 * bR)
             sps[k].ax = simd_normalize(sps[k].n * cosf(sps[k].lean) + sps[k].tg * sinf(sps[k].lean)) } }
-        let silTol: Float = bareLayout ? PipSpikes.shippedBareOverlap + 0.0005 : bareSilhouetteTolerance(body: body, spec: spec) + 0.0005          // restyled rows may touch no more than the approved bare row does
+        let silTol: Float = bareLayout ? (PipSpikes.legacyLayout ? .infinity : PipSpikes.shippedBareOverlap + 0.0005) : bareSilhouetteTolerance(body: body, spec: spec) + 0.0005          // restyled rows may touch no more than the approved bare row does
         for _ in 0..<80 {
             place()
             var changed = false
@@ -368,7 +377,7 @@ nonisolated enum PipSpikes {
                 if !any { break }
             }
         }
-        if silTol.isFinite {          // the flow nudges above turned some axes: shrink any pair that now overlaps beyond the tolerance (the larger of the pair), until all clear
+        if silTol.isFinite && !PipSpikes.legacyLayout {          // the flow nudges above turned some axes: shrink any pair that now overlaps beyond the tolerance (the larger of the pair), until all clear
             for _ in 0..<60 {
                 place()
                 var changed = false
