@@ -159,6 +159,7 @@ final class ExpressionTests: XCTestCase {
     func testBlushZeroIsIdenticalAndBlushStaysOffTheMouth() throws {
         let scene = try XCTUnwrap(LockScene())
         let v = lockViews[0]
+        BlueBelly.noBlushOnBlue = false; defer { BlueBelly.noBlushOnBlue = true }          // the blue Jelbie ships with no blush; this test drives the shader's blush on the blue body directly
         scene.renderer.setBlush(0, body: 0)
         scene.renderer.mouthOpen = 0.9
         let base = scene.render(v, palette: .blue)
