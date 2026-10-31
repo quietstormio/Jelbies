@@ -1401,6 +1401,8 @@ final class BlobBrain {
         skinnerRef?.clearOverride()
     }
     weak var skinnerRef: Skinner?
+    /// Teddy's ears + pom as body vertices (TeddyBean): what the feature layer (hat rule, pop, follow-through) wants; driveLimbs hands it to the skinner.
+    var teddyBody = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1, teddySway = SIMD2<Float>.zero
 
     // MARK: foot beans
 
@@ -1673,6 +1675,7 @@ final class BlobBrain {
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
+        skinner.teddyOn = teddyBody && feature == .ears; skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
         tailPlayTick(skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)
         var list: [ParticleTarget] = []

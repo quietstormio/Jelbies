@@ -80,9 +80,15 @@ nonisolated final class Skinner {
     // Pip's tail (TailBean): a block of body vertices after the foot beans. Off (every Jelly but Pip), it is collapsed onto its base pole (zero-area, invisible).
     // On, it sways (walking), wags (happy) and bobs (vertical motion); `tailYaw` / `tailPitch` (deg) are read by the spike layer so the tail spikes ride it.
     var tailFirst = -1, tailOn = false, tailHappy = false
+    // Teddy's ears + pom (TeddyBean.swift): a block of body vertices after the tail block. `teddyOn` (Teddy's feature layer sets it) carries the parts rigidly on
+    // landmark frames; each part's scale (0 = tucked / collapsed onto its pole, 1 = out) comes from the hat rule and the pop; `teddySway` (deg) is the small follow-through.
+    var teddyFirst = -1, teddyOn = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1
+    var teddySway = SIMD2<Float>.zero
+    var teddyRig: TeddyBean.Rig? = nil
     private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
+        configureTeddy(rm)
         guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
         tailFirst = cap.tailFirst
         tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
@@ -532,6 +538,7 @@ nonisolated final class Skinner {
             }
         }
         applyTail(dyn)
+        applyTeddy(dyn)
         eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
         if !antennae.isEmpty { applyAntennae(x, dyn) }

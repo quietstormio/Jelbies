@@ -58,7 +58,7 @@ nonisolated enum BlueBelly: Int, CaseIterable {
     /// The shader mode for a body painted with `palette` (0 = none).
     @inline(__always) static func mode(for palette: Palette) -> Float {
         // Teddy (the light-brown species) always has the clear belly oval (B2's shape, clear of the mouth) in a warm cream-tan lift of the shaded body (tone 3), whatever the blue mockup says
-        if palette.flesh == TeddyLook.current.flesh { return 33 }        // shape 3 (clear oval) in tone 3 (warm cream-tan)
+        if palette.flesh == TeddyLook.current.flesh { return TeddyEarsVariant.active == .cream ? 43 : 33 }        // 43 = the same plus the cream inner ear (tone 4, shader teddyEarMask)        // shape 3 (clear oval) in tone 3 (warm cream-tan)
         let c = current
         return c == .off || palette.flesh != blueFlesh ? 0 : Float(c.rawValue)
     }

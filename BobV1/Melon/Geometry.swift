@@ -1029,6 +1029,11 @@ private func buildRenderMeshBob() -> RenderMesh {
         add(TailBean.local.pos[i], TailBean.local.nrm[i], m)
     }
     idx += TailBean.triangles(firstVertex: tailFirst)
+    // Teddy's ears and pom (TeddyBean): after the tail block, still in the body index range; skinned like the body, collapsed for every Jelly but Teddy (Skinner)
+    let teddyFirst = pos.count / 3
+    TeddyBean.builtFirst = teddyFirst
+    for i in 0..<TeddyBean.vertexCount { add(TeddyBean.built.block.pos[i], TeddyBean.built.block.nrm[i], TeddyBean.built.block.mat[i]) }
+    idx += TeddyBean.triangles(firstVertex: teddyFirst)
     let bodyIndexCount = idx.count
 
     // decals: footprints in the x-y plane, projected onto the front surface
@@ -1125,7 +1130,7 @@ private func buildRenderMeshBob() -> RenderMesh {
     return RenderMesh(
         rest: pos.map { Float($0) }, restNormal: nrm.map { Float($0) }, mat: mat, index: idx,
         body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
-        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst))
+        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst))
 }
 
 private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {

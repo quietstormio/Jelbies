@@ -56,7 +56,7 @@ final class TeddySpeciesTests: XCTestCase {
 
     func testBellyAndPaletteAreTeddysOnly() {
         let teddy = JellyRoster.palette(4)!
-        XCTAssertEqual(BlueBelly.mode(for: teddy), 33, "the clear belly oval in tone 3")
+        XCTAssertEqual(BlueBelly.mode(for: teddy), 43, "the clear belly oval in tone 3")
         for c in 0..<4 { let p = JellyRoster.palette(c) ?? PaletteKey.blue.palette; XCTAssertEqual(BlueBelly.mode(for: p), 0, "character \(c) has no belly patch") }
         for c in 0..<4 { XCTAssertNotEqual(JellyRoster.palette(c)?.flesh ?? PaletteKey.blue.palette.flesh, teddy.flesh) }
     }
@@ -105,13 +105,15 @@ final class TeddySpeciesTests: XCTestCase {
             XCTAssertEqual(r.slide, 0)
         }
         // ear headbands are ears themselves
-        for hat in ["cat_ears", "frog_ears", "bunny_ears"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
+        for hat in ["cat_ears", "frog_ears", "bunny_ears", "headphones"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
         // open / perching pieces leave the ears out (possibly nudged)
-        for hat in ["flower_clip", "party_hat", "tophat", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold"] {
+        for hat in ["flower_clip", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold", "bee_antennae"] {
             let r = TeddyFit.solve(worn: [hat])
             XCTAssertFalse(r.earsHidden, "\(hat): the ears stay out")
-            XCTAssertLessThanOrEqual(abs(r.slide), 54)
+            XCTAssertEqual(r.slide, 0, "no slide any more")
         }
+        // party / top hats enclose the crown too: the ears tuck, the head under them is exactly Bob's
+        for hat in ["party_hat", "tophat"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, "\(hat): the ears tuck") }
         // the pom tucks under what covers the lower back, and stays under hats / scarves
         XCTAssertTrue(TeddyFit.solve(worn: ["cape_hero"]).pomHidden)
         XCTAssertTrue(TeddyFit.solve(worn: ["backpack_sky"]).pomHidden)

@@ -315,6 +315,13 @@ final class MelonRenderer {
                 }
             }
         }
+        // Teddy's inner-ear hollow rides in the mat channel as a negative mask (TeddyBean); the `fur` variant draws the same shape without it
+        if let cap = mesh.armCapsule, cap.teddyFirst >= 0 {
+            let pomFirst = cap.teddyFirst + TeddyBean.parts[2].first
+            for i in cap.teddyFirst..<min(cap.teddyFirst + TeddyBean.vertexCount, nV) where st[4 * i + 3] < 0 {
+                if i >= pomFirst, !TeddyEarsVariant.pomCream { st[4 * i + 3] = 0 }
+            }
+        }
         guard let ib = device.makeBuffer(bytes: mesh.index, length: max(mesh.index.count * 4, 16), options: .storageModeShared)
         else { return nil }
         indexBuf = ib
@@ -824,6 +831,7 @@ final class MelonRenderer {
                 for i in a..<min(e, f.count) { f[i] = 0 }
             }
             if info.tailFirst >= 0 { for i in info.tailFirst..<min(info.tailFirst + TailBean.vertexCount, f.count) { f[i] = 0 } }
+            if info.teddyFirst >= 0 { for i in info.teddyFirst..<min(info.teddyFirst + TeddyBean.vertexCount, f.count) { f[i] = 0 } }
         }
         eggFlagBuf = device.makeBuffer(bytes: f, length: max(f.count, 1), options: .storageModeShared)
         eggFlagBuf?.label = "jersey egg flags"
