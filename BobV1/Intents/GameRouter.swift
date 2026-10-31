@@ -13,7 +13,7 @@
 //    bed     -> the curtains to night (DayClock.skipToNextPhase until night) and the nap Live Activity
 //    race    -> `onRace` (the Track panel; Jelly Circuit worker) - until it is wired, the roster highlight
 //    train   -> `onTrain` (training; its worker) - until it is wired, the roster highlight
-//  Food comes from the Bag when there is one: `foodFor` is the hook (default: the free basic food, Consumables.berries).
+//  Food comes from the Bag when there is one: `foodFor` is the hook (default: berries, a store food; with none owned the feed says so and serves nothing).
 //
 
 import Foundation
@@ -36,7 +36,7 @@ final class GameRouter {
     @ObservationIgnored var onRace: ((Int) -> Void)?
     @ObservationIgnored var onTrain: ((Int) -> Void)?
     @ObservationIgnored var onBed: (() -> Void)?
-    /// The food id to serve for a Siri / widget feed (the Bag's pick; default the free basic food).
+    /// The food id to serve for a Siri / widget feed (the Bag's pick; default berries, a store food; nothing is served when the bag has none).
     @ObservationIgnored var foodFor: (Int?) -> String = { _ in Consumables.berries.id }
     /// A Siri / widget feed with NO food in the bag: the screen opens the Feed row (everything dimmed "none left") and says so.
     @ObservationIgnored var onNoFood: (() -> Void)?

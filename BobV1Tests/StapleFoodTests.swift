@@ -1,6 +1,6 @@
 //
 //  StapleFoodTests.swift
-//  Berries and pizza are store foods: bought like the rest, stocked once for every save, and the player is never left unable to feed.
+//  Berries and pizza are store foods: bought like the rest; nobody is handed any.
 //
 
 import XCTest
@@ -36,42 +36,37 @@ final class StapleFoodTests: XCTestCase {
         for c in [Consumables.water, Consumables.soda] { XCTAssertNotNil(StoreThumb.image(for: c), c.id) }
     }
 
-    func testStarterStockIsGivenOnceAndKeepsMoney() {
-        let (b, w) = book(7)
-        XCTAssertEqual(b.count("berries"), 0)
-        XCTAssertTrue(b.grantStaplesIfNeeded())
-        XCTAssertEqual(b.count("berries"), StoreBook.starterBerries); XCTAssertEqual(b.count("pizza"), StoreBook.starterPizza)
-        XCTAssertFalse(b.grantStaplesIfNeeded(), "never twice")
-        XCTAssertEqual(w.count, 7, "currency is untouched")
+    func testAFreshSaveHasNoFoodAndNothingGrantsIt() {
+        let (b, w) = book(0)
+        for it in StoreCatalog.items where it.food != nil && it.kind != .drink { XCTAssertEqual(b.count(it.id), 0, it.id) }
+        b.grantStarterIfNeeded()
+        XCTAssertEqual(b.count("berries"), 0); XCTAssertEqual(b.count("pizza"), 0)
+        XCTAssertEqual(w.count, StoreTuning.starterDrops, "the 40-Drop starter is unchanged")
     }
 
-    func testAnOlderSaveLoadsUnchangedAndGetsTheStockOnce() throws {
+    func testAnOlderSaveWithTheLegacyKeyStillLoadsAndGetsNoFood() {
         let d = UserDefaults(suiteName: "StapleFoodTests.old")!; d.removePersistentDomain(forName: "StapleFoodTests.old")
-        // a save from before staples existed: no staplesGiven key, other goods present
-        let old = #"{"counts":{"sushi":2,"berries":1},"pages":["spin"],"wearables":[],"worn":{},"starterGiven":true,"newItems":0,"placed":[]}"#
+        let old = #"{"counts":{"sushi":2},"pages":["spin"],"wearables":[],"worn":{},"starterGiven":true,"staplesGiven":true,"newItems":0,"placed":[]}"#
         d.set(Data(old.utf8), forKey: "k")
         let (b, _) = book(0, defaults: d, key: "k")
         XCTAssertEqual(b.count("sushi"), 2); XCTAssertTrue(b.saved.pages.contains("spin"))
-        b.grantStaplesIfNeeded()
-        XCTAssertEqual(b.count("berries"), 1 + StoreBook.starterBerries, "added to what was there")
-        XCTAssertEqual(b.count("sushi"), 2)
-        let (b2, _) = book(0, defaults: d, key: "k")
-        XCTAssertFalse(b2.grantStaplesIfNeeded(), "the flag is saved")
+        XCTAssertEqual(b.count("berries"), 0); XCTAssertEqual(b.count("pizza"), 0)
     }
 
-    func testNeverStuckWithNoFoodAndNoDrops() {
-        let (b, _) = book(0)
-        XCTAssertTrue(b.ensureFeedable()); XCTAssertEqual(b.count("berries"), 1)
-        XCTAssertFalse(b.ensureFeedable(), "only while nothing is left")
-        let (b2, _) = book(50)
-        XCTAssertFalse(b2.ensureFeedable(), "with Drops to spend there is no hand-out")
-    }
-
-    func testANewPlayerCanFeedAtOnce() {
+    func testANewPlayerStartsWithNoFoodAndNoneAppearsWhenBroke() {
         let c = GameCare(jellyCount: 1, persistent: false, defaults: UserDefaults(suiteName: "StapleFoodTests.care")!)
         Self.keep.append(c)
-        XCTAssertEqual(c.store.count(food: "berries"), StoreBook.starterBerries)
-        XCTAssertEqual(c.store.count(food: "pizza"), StoreBook.starterPizza)
+        XCTAssertEqual(c.store.count(food: "berries"), 0)
+        XCTAssertEqual(c.store.count(food: "pizza"), 0)
+        let (b, _) = book(0)
+        XCTAssertEqual(b.count("berries"), 0, "broke with an empty bag: still no hand-out")
+    }
+
+    func testBuyingBerriesAndPizzaFillsTheBag() {
+        let (b, w) = book(100)
+        _ = b.buy("berries"); _ = b.buy("pizza")
+        XCTAssertEqual(b.count("berries"), 1); XCTAssertEqual(b.count("pizza"), 1)
+        XCTAssertEqual(w.count, 100 - StoreCatalog.item("berries")!.price - StoreCatalog.item("pizza")!.price)
     }
 
     // MARK: Siri / widget feed with an empty or partial bag
@@ -83,7 +78,7 @@ final class StapleFoodTests: XCTestCase {
         Self.keep.append(care); Self.keep.append(r)
         return (r, care)
     }
-    /// Empties the bag of every food (the starter stock included).
+    /// Empties the bag of every food .
     private func emptyBag(_ care: GameCare) {
         for it in StoreCatalog.items where it.food != nil && it.kind != .drink { while care.store.count(it.id) > 0 { care.store.use(it.id) } }
     }
@@ -95,7 +90,7 @@ final class StapleFoodTests: XCTestCase {
         var said = 0; r.onNoFood = { said += 1 }
         r.request(.feed(0)); r.apply(care: care)
         XCTAssertEqual(said, 0, "there was food to serve")
-        XCTAssertTrue(care.foodOut, "the berries were gone, so the fries came out")
+        XCTAssertTrue(care.foodOut, "no berries, so the fries came out")
         XCTAssertEqual(care.selectedFoodID, "fries")
     }
 

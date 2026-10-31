@@ -121,7 +121,7 @@ nonisolated struct Consumable {
 nonisolated enum Consumables {
     static func srgb(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { OKLab.srgbToLinear(SIMD3(r, g, b)) }
 
-    /// Berries and pizza are bought in the Shop like every other food (fed from the bag; a new player starts with a small stock, see StoreBook.grantStaplesIfNeeded).
+    /// Berries and pizza are bought in the Shop like every other food (fed from the bag; a new player starts with none and buys them).
     static let berries: Consumable = { var c = berriesBase; c.stored = true; c.storeID = "berries"; return c }()
     private static let berriesBase = Consumable(
         id: "berries", name: "Berries", kind: .food, eatStyle: .finger, symbol: "circle.hexagongrid.fill",

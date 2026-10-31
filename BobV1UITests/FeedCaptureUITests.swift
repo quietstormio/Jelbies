@@ -71,4 +71,48 @@ final class FeedCaptureUITests: XCTestCase {
             }
         }
     }
+
+    /// The user's exact situation: -NewGame lavender,pearl,teddy with 10000 JellyCoins. Empty Feed row, the Food tab, buy berries + pizza, the Feed row again; portrait then landscape.
+    @MainActor
+    func testFreshNewGameBuyFlow() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-NewGame", "lavender,pearl,teddy", "-NewGameCoins", "10000", "-MainMenu", "0", "-Mute", "1", "-BlobNoWander", "1"]
+        app.launch()
+        for (orient, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {
+            XCUIDevice.shared.orientation = orient
+            sleep(5)
+            let menu = app.buttons["care-menu"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 30))
+            func openFeed(_ tag: String) {
+                if !app.buttons["care-feed"].exists { menu.tap(); sleep(1) }
+                if !app.buttons["care-feed"].waitForExistence(timeout: 8) { save("\(name)_\(tag)_nofeedbutton"); menu.tap(); sleep(1) }
+                app.buttons["care-feed"].tap(); sleep(2)
+                save("\(name)_\(tag)")
+                menu.tap(); sleep(1)
+                if app.buttons["care-feed"].exists { menu.tap(); sleep(1) }
+            }
+            if name == "portrait" { openFeed("1_feed_empty") } else { openFeed("5_feed_after_buy_landscape") }
+            app.buttons["go-out"].tap()
+            XCTAssertTrue(app.buttons["town-shop"].waitForExistence(timeout: 10))
+            app.buttons["town-shop"].tap(); sleep(2)
+            if app.buttons["shop-tab-food"].waitForExistence(timeout: 5) { app.buttons["shop-tab-food"].tap() }
+            sleep(2)
+            save("\(name)_2_shop_food")
+            if name == "portrait" {
+                for id in ["berries", "pizza"] {
+                    app.buttons["shop-item-\(id)"].tap(); sleep(2)
+                    save("portrait_2b_item_sheet_\(id)")
+                    if app.buttons["item-qty-plus"].waitForExistence(timeout: 5) { app.buttons["item-qty-plus"].tap() }
+                    let buy = app.buttons["item-buy"].exists ? app.buttons["item-buy"] : app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Buy '")).firstMatch
+                    if buy.waitForExistence(timeout: 5) { buy.tap(); sleep(1) }
+                    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
+                    sleep(1)
+                }
+                save("portrait_3_shop_after_buy")
+            }
+            (app.buttons["shop-back"].exists ? app.buttons["shop-back"] : app.buttons["Back"]).tap(); sleep(2)
+            if app.buttons["town-home"].exists { app.buttons["town-home"].tap(); sleep(2) }
+            if name == "portrait" { openFeed("4_feed_after_buy") }
+        }
+    }
 }

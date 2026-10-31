@@ -263,7 +263,6 @@ struct GameScreen: View {
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
-            model.care.store.ensureFeedable()
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
@@ -706,7 +705,6 @@ struct GameScreen: View {
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()
-        care.store.ensureFeedable()
         for (id, n) in [("sushi", 2), ("donut", 1), ("nuggets", 3), ("lavender", 1), ("fries", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
         if d.integer(forKey: "StoreSeed") >= 2 {          // -StoreSeed 2 (capture aid): bought drinks too, so the Drink row has something to scroll
             for (id, n) in [("boba", 2), ("smoothie", 1), ("lemonade", 3), ("cocoa", 1)] where care.store.count(id) < n { care.store.grant(id, n - care.store.count(id)) }
@@ -894,7 +892,9 @@ struct CareMenu: View {
     private func pickerRow(kind: ConsumableKind) -> some View {
         let entries = pickEntries(kind)
         let cap = max(160, UIScreen.main.bounds.width - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
-        return ScrollView(.horizontal, showsIndicators: false) {
+        let noFood = kind == .food && entries.allSatisfy { $0.out }          // an empty bag: say where food comes from
+        return VStack(spacing: 2) {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
                     Button {
@@ -926,6 +926,14 @@ struct CareMenu: View {
         }
         .frame(width: min(max(pickerWidth, 1), cap))
         .padding(.trailing, 0)
+            if noFood {
+                Text("No food yet. Buy some in the Shop (Go out).").jFont(12, .bold).foregroundStyle(Self.brown)
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 16).fill(Self.cream))
+                    .frame(width: min(max(pickerWidth, 1), cap))
+                    .accessibilityIdentifier("care-feed-empty-hint")
+            }
+        }
     }
 
     /// Compete unfolds into Track (train or race) and Jelly Show, for the highlighted Jelbie.

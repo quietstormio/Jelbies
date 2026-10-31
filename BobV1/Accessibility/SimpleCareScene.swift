@@ -33,7 +33,6 @@ struct SimpleCareScene: View {
             DayClock.shared.snapToNow()
             care.launched()
             care.store.grantStarterIfNeeded()
-            care.store.ensureFeedable()
             AudioHub.shared.start()
         }
         .onChange(of: scenePhase) { _, p in          // the same leave / return the full game does: time away is applied, state saved
