@@ -286,22 +286,20 @@ final class BobV1UITests: XCTestCase {
         chooseWater()
     }
 
-    /// The roster card shows the Nintendogs-style status words (Hunger, Thirst, Attention, Coat) for each Blob.
+    /// The roster row reads "<name>, <mood>, boosts: ..." and no longer draws the need words (Hunger, Thirst, Attention, Coat).
     @MainActor
-    func testRosterCardShowsStatusWords() throws {
+    func testRosterCardShowsBoostsNotNeeds() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-NeedsReset", "1"]          // first-launch seed: hunger 0.2 (Hungry), thirst / attention 0.85 (Quenched / Content)
+        app.launchArguments += ["-NeedsReset", "1", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES"]
         app.launch()
         let button = app.buttons["roster-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 20))
         button.tap()
         let card = app.buttons["roster-card-0"]
         XCTAssertTrue(card.waitForExistence(timeout: 10), "the panel lists Bob's card")
-        let v = (card.value as? String) ?? ""
-        // the seed drains a hair as the app starts, so the tier is one of the neighbours: check the shape, not the exact word
-        XCTAssertNotNil(v.range(of: #"Hunger (Full|Normal|Hungry|Famished), Thirst (Quenched|Normal|Thirsty|Parched), Attention (Content|Normal|Lonely|Neglected), Coat (Beautiful|Clean|Normal|Dirty|Filthy)"#, options: .regularExpression), "status summary: \(v)")
+        XCTAssertNotNil(card.label.range(of: #"^.+, (Happy|Okay|Grumpy|\w+), boosts: .+"#, options: .regularExpression), "row label: \(card.label)")
         for title in ["Hunger", "Thirst", "Attention", "Coat"] {
-            XCTAssertTrue(app.staticTexts[title].exists || card.staticTexts[title].exists, "the \(title) title is drawn on the card")
+            XCTAssertFalse(app.staticTexts[title].exists, "the \(title) title is gone from the roster")
         }
     }
 

@@ -28,7 +28,7 @@ final class BubbleCaptureUITests: XCTestCase {
     @MainActor
     func testRosterListsAllThreeWithTheirOwnWords() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-BlobCount", "3"]
+        app.launchArguments += ["-BlobCount", "3", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES"]
         app.launch()
         let button = app.buttons["roster-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 20))
@@ -37,12 +37,13 @@ final class BubbleCaptureUITests: XCTestCase {
         for id in 0..<3 {
             let card = app.buttons["roster-card-\(id)"]
             XCTAssertTrue(card.waitForExistence(timeout: 10), "card \(id)")
-            let v = (card.value as? String) ?? ""
-            XCTAssertNotNil(v.range(of: #"Hunger \w+, Thirst \w+, Attention \w+, Coat \w+"#, options: .regularExpression), v)
+            let v = card.label
+            XCTAssertNotNil(v.range(of: #"^\w+, \w+, boosts: .+"#, options: .regularExpression), v)
+            XCTAssertFalse(v.contains("Hunger"), v)
             values.append(v)
         }
-        XCTAssertNotEqual(values[0], values[1], "Pip's words are his own")
-        XCTAssertNotEqual(values[1], values[2], "Moss's words are his own")
+        XCTAssertNotEqual(values[0], values[1], "each row names its own Jelbie")
+        XCTAssertNotEqual(values[1], values[2], "each row names its own Jelbie")
         sleep(1)
         save(app.screenshot(), label: "Roster: all 3 Jellies, own words", name: "roster-three")
     }

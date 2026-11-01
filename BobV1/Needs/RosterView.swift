@@ -1,7 +1,7 @@
 //
 //  RosterView.swift
 //  "See them all, tap one" (Nintendogs-style). A round button at the top-right (opposite the gear) opens a panel of Blob cards: a pastel colour
-//  dot, the name, the mood word and the three need meters (food, drink, heart) with the wanting one highlighted. Tapping a card closes the panel
+//  dot, the name, the mood word and the current power-ups (boosts) with their time left, one compact row per Blob (the needs live in the Condition card and the bubbles). Tapping a card closes the panel
 //  and plays the outline highlight on that Blob in the room; then the action button shows for him. No Blob drawings on the cards.
 //
 
@@ -45,7 +45,7 @@ struct RosterButton: View {
     }
 }
 
-/// The panel under the button: a scrim plus a frosted card (width min(screen - 32, 380), 16 pt inside padding, scrolls when the cards do not fit).
+/// The panel under the button: a scrim plus a 90%-opaque cream card (portrait width min(screen - 32, 340), landscape up to 60% of the width, 12 pt inside padding, scrolls when the cards do not fit).
 struct RosterPanel: View {
     let care: GameCare
     @Binding var open: Bool
@@ -54,9 +54,10 @@ struct RosterPanel: View {
 
     var body: some View {
         GeometryReader { g in
-            let width = min(g.size.width - 32, 380)
+            let landscape = g.size.width > g.size.height
+            let width = landscape ? min(g.size.width * 0.6, 460) : min(g.size.width - 32, 340)          // landscape: at most ~60% of the width, top-right
             let top: CGFloat = 52
-            let chrome: CGFloat = 32 + 10 + 28          // padding, spacing, header
+            let chrome: CGFloat = 24 + 8 + 28          // padding, spacing, header
             let avail = max(120, g.size.height - top - 16 - chrome)
             ZStack(alignment: .topTrailing) {
                 if open {
@@ -64,7 +65,7 @@ struct RosterPanel: View {
                         .ignoresSafeArea()
                         .onTapGesture { withAnimation(CareMenu.spring) { open = false } }
                         .transition(.opacity)
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Your Jelbies")
                                 .jFont(17, .bold)
@@ -74,9 +75,9 @@ struct RosterPanel: View {
                         }
                         .frame(minHeight: 28)
                         ScrollView {
-                            VStack(spacing: 10) {
+                            VStack(spacing: 6) {
                                 ForEach(care.select.blobs) { b in
-                                    BlobCard(blob: b, needs: care.needs(for: b.id), coat: care.coat(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? []) {
+                                    BlobCard(blob: b, needs: care.needs(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? []) {
                                         UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { open = false }
                                         onPick(b.id)
@@ -88,12 +89,11 @@ struct RosterPanel: View {
                         .frame(height: contentH > 0 ? min(contentH, avail) : avail)
                         .scrollBounceBehavior(.basedOnSize)
                     }
-                    .padding(16)
+                    .padding(12)
                     .frame(width: width)
-                    .background {
-                        let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        if GfxFlags.noMaterials { shape.fill(HUDGlass.opaque).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2) }          // -NoMaterials 1: opaque, no backdrop glass
-                        else { shape.fill(HUDGlass.white.opacity(0.7)).glassEffect(.regular.tint(HUDGlass.white.opacity(0.55)), in: shape) }
+                    .background {          // plain alpha fill: a normal blend, no glass / material / blur over the live Metal view
+                        RoundedRectangle(cornerRadius: 22, style: .continuous).fill(HUDGlass.opaque.opacity(0.9))
+                            .shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2)
                     }
                     .padding(.top, top).padding(.trailing, 16)
                     .transition(.scale(scale: 0.4, anchor: .topTrailing).combined(with: .opacity))
@@ -106,11 +106,9 @@ struct RosterPanel: View {
 }
 
 struct BlobCard: View {
-    @Environment(\.dynamicTypeSize) private var dts
     let blob: SelectBlob
     let needs: BlobNeeds
-    var coat: BlobGrime.CoatTier = .normal
-    var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active food boosts, shown as chips under the status words
+    var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
     let action: () -> Void
 
     static func moodColor(_ m: BlobMood) -> Color {
@@ -121,84 +119,43 @@ struct BlobCard: View {
         }
     }
 
+    /// "Cozy 2h 40m, Sugar rush 22m" or "none"
+    var boostSummary: String {
+        perks.isEmpty ? "none" : perks.map { "\($0.kind.title) \(SK.timeLeft($0.left)) left" }.joined(separator: ", ")
+    }
+
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 9) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
                     Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
-                        .frame(width: 22, height: 22)
+                        .frame(width: 18, height: 18)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
                         .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
-                    Text(blob.name).jFont(18, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(blob.name).jFont(17, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
                     Spacer(minLength: 4)
                     Text(needs.mood.word)
-                        .jFont(13, .semibold).foregroundStyle(FocusStyle.brown)
+                        .jFont(12, .semibold).foregroundStyle(FocusStyle.brown)
                         .lineLimit(1).fixedSize()
-                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .padding(.horizontal, 9).padding(.vertical, 3)
                         .background(Capsule().fill(Self.moodColor(needs.mood)))
                 }
-                let meters = dts.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 6))
-                meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }
-                    .frame(maxWidth: .infinity)
-                status
-                if !perks.isEmpty {
+                if perks.isEmpty {
+                    Text("no boosts").jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.75))
+                } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {          // wraps instead of clipping
                         ForEach(perks, id: \.kind.rawValue) { p in PerkChip(kind: p.kind, left: p.left) }
                     }
                 }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.white.opacity(0.0), lineWidth: 1.5))
+            .accessibilityElement(children: .ignore)          // one element per row: "<name>, <mood>, boosts: ..."
+            .accessibilityLabel("\(blob.name), \(needs.mood.word), boosts: \(boostSummary)")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.6)))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("roster-card-\(blob.id)")
-        .accessibilityLabel("\(blob.name), \(needs.mood.word)")
-        .accessibilityValue(statusSummary)
-    }
-
-    /// The Nintendogs-style status words, per Blob: Hunger, Thirst, Attention (their tier words) and Coat.
-    var statusItems: [(title: String, word: String)] {
-        [("Hunger", needs.tier(.hunger).word(.hunger)), ("Thirst", needs.tier(.thirst).word(.thirst)),
-         ("Attention", needs.tier(.attention).word(.attention)), ("Coat", coat.word)]
-    }
-    var statusSummary: String { statusItems.map { "\($0.title) \($0.word)" }.joined(separator: ", ") }
-
-    private var status: some View {
-        let cols = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
-        return LazyVGrid(columns: cols, alignment: .leading, spacing: 3) {
-            ForEach(statusItems, id: \.title) { item in
-                HStack(spacing: 4) {
-                    Text(item.title).jMuted()
-                    Text(item.word).foregroundStyle(FocusStyle.brown).fontWeight(.bold)
-                        .accessibilityIdentifier("status-\(item.title.lowercased())-\(blob.id)")
-                }
-                .jFont(12, .medium)
-                .lineLimit(dts.isAccessibilitySize ? nil : 1).minimumScaleFactor(dts.isAccessibilitySize ? 1 : 0.8)
-            }
-        }
-    }
-
-    private func meter(_ k: NeedKind) -> some View {
-        let v = CGFloat(needs.levels[k.rawValue])
-        let want = needs.wantedNeed == k || v < CGFloat(NeedsTuning.wanting)
-        return HStack(spacing: 3) {
-            NeedGlyph(kind: k, size: 18)
-            Capsule().fill(FocusStyle.brown.opacity(0.12))
-                .overlay(alignment: .leading) {
-                    GeometryReader { bar in
-                        Capsule().fill(want ? SK.pinkStrong : Color(red: 0.62, green: 0.82, blue: 0.62))
-                            .overlay { if want { StripePattern(color: .white.opacity(0.7)).clipShape(Capsule()) } }          // wanting = stripes + "!", not only pink vs green
-                            .frame(width: max(5, bar.size.width * v))
-                    }
-                }
-                .frame(minWidth: 12, maxWidth: .infinity).frame(height: 8)          // the bar shrinks to fit the card
-            if want { Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(SK.pinkStrong) }
-        }
-        .padding(.horizontal, 4).padding(.vertical, 4)
-        .frame(maxWidth: .infinity)
-        .background(Capsule().fill(want ? FocusStyle.pink.opacity(0.16) : Color.clear))
-        .overlay(Capsule().strokeBorder(want ? FocusStyle.pink.opacity(0.7) : Color.clear, lineWidth: 1.2))
     }
 }
