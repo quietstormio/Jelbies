@@ -209,8 +209,8 @@ private enum DragMode { case none, grab, orbit, pet, pending, cheeks }
 /// Sub-part timers inside hopTick's big callees (brain / jelly / care sections): mean and LONGEST single call per window, printed on `[melon] hop parts`.
 /// One array write per section (no allocation); the main thread only.
 @MainActor enum HopDiag {
-    enum Part: Int, CaseIterable { case bobBrain, bobJelly, bobCare, careFocus, careNeeds, careWidget, careNight, careSelect, otherBrain, otherJelly
-        var label: String { ["bob brain.tick", "bob jelly.tick", "care.tick total", "care focus", "care needs", "care widget", "care nightrest+skip", "care select", "other brain.tick", "other jelly.tick"][rawValue] } }
+    enum Part: Int, CaseIterable { case bobBrain, bobJelly, bobCare, careFocus, careNeeds, careWidget, careNight, careSelect, otherBrain, otherJelly, tkPre, tkReact, tkCommands, tkIdle, tkSocial, tkPickSocial, tkPickIdle, tkPickWander, tkPick, tkScript, tkToy, tkDrivePose, tkDrive, tkExpr
+        var label: String { ["bob brain.tick", "bob jelly.tick", "care.tick total", "care focus", "care needs", "care widget", "care nightrest+skip", "care select", "other brain.tick", "other jelly.tick", "tick: bag+timers", "tick: reactTick", "tick: commanded starts", "tick: idle gates+bodyMove+sleep", "tick: socialTick", "pick: socialMaybeStart", "pick: idleMaybeStart", "pick: wander goal", "tick: pickAutonomous total", "tick: runScript", "tick: toyPoseTick", "tick: drivePose", "tick: driveLimbs+activity", "tick: expression"][rawValue] } }
     static var sum = [Double](repeating: 0, count: Part.allCases.count)
     static var mx = [Double](repeating: 0, count: Part.allCases.count)
     @inline(__always) static func lap(_ p: Part, _ t0: inout Double) {
@@ -291,6 +291,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var lastNudge: Int
     private var lastReset: Int
     private var lastPaused = false
+    private var lastCover = false
     var lastCam = CameraState()
     private var drillFollow: SIMD3<Float>?
     var haveCam = false
@@ -316,6 +317,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgStart: CFTimeInterval = 0
     private var matCost = 0.0, matN = 0
     private var dbgCPU: Double = 0
+    private var lastCPUFrameMs = 0.0          // the previous frame's own CPU time (no GPU wait)
     private var lastCPUMs = 0.0          // the last second's main-thread frame time (no GPU wait): the RateGovernor's CPU headroom check
     private var dbgWait: Double = 0
     private var dbgSim: Double = 0
@@ -582,6 +584,8 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Called once before each fixed sim step.
     private func hopTick(reduce: Bool) {
+        // the one-time foot set-up of each brain, one brain per step, before it has to walk (see BlobBrain.warmFeet)
+        if let a = actors.first(where: { !($0.brain?.feetWarm ?? true) && ($0.brain?.hasRenderMesh ?? false) }) ?? parkActors.first(where: { !($0.brain?.feetWarm ?? true) && ($0.brain?.hasRenderMesh ?? false) }) { a.brain?.warmFeet(a.sim, a.skinner) }
         BlobBrain.stepProbeBudget = BlobBrain.probesPerStep          // all the brains' route searches together stay within this many floor probes per fixed step
         var lt = CACurrentMediaTime()
         publishPeers()
@@ -878,16 +882,28 @@ final class MelonController: NSObject, MTKViewDelegate {
     private static let roomCacheFlag = GfxFlags.roomCache
     private static let gfxOptFlags = GfxFlags.gfxOpt
 
+    /// `-ThermalFirst 0` goes back to the old "whatever fits in 16.7 ms" budget (diagnostics).
+    private static let noThermalFirst = UserDefaults.standard.object(forKey: "ThermalFirst") != nil && !UserDefaults.standard.bool(forKey: "ThermalFirst")
+    private let launchClock = CACurrentMediaTime()
+    private var lastThermalLogged = ProcessInfo.ThermalState.nominal
     private func adaptScale(_ stage: MelonStageView, dt: Double) {
         guard Self.adaptiveEnabled else { return }
         if scaler == nil {
             let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
             // with MetalFX the ladder starts at the MetalFX render scale (never above native); without it, at native
-            scaler = RenderScaler(native: native, metalFX: Self.metalFXFlag)          // -MetalFX: native, then 2.5 / 2.19 / 1.5 upscaled; otherwise the raw ladder
+            scaler = RenderScaler(native: native, metalFX: Self.metalFXFlag, thermalFirst: !Self.noThermalFirst)          // -MetalFX: native, then 2.5 / 2.19 / 1.5 upscaled; otherwise the raw ladder
             rateGov = RateGovernor(maxFPS: stage.window?.screen.maximumFramesPerSecond ?? 60)
+            if let s = scaler?.scale, s < native - 0.01 {          // thermal-first: the scaler starts at its calm rung, not at native
+                if Self.metalFXFlag { fxScale = s } else { stage.contentScaleFactor = CGFloat(s) }
+                NSLog("%@", String(format: "[melon] scale: start at %.2fx (native %.0fx, thermal-first budget %.1f ms)", s, native, scaler?.budgetMs ?? 0))
+            }
         }
         let gpu = renderer?.lastGPUMs
         let thermal = ProcessInfo.processInfo.thermalState
+        if thermal != lastThermalLogged {
+            NSLog("%@", String(format: "[melon] thermal: %@ -> %@ at +%.0f s (scale %.2fx, gpu %.1f ms, cpu %.1f ms, lowPower %@)", Self.thermalName(lastThermalLogged), Self.thermalName(thermal), CACurrentMediaTime() - launchClock, scaler?.scale ?? 0, gpu ?? 0, lastCPUMs, ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off"))
+            lastThermalLogged = thermal
+        }
         if let s = scaler?.update(dt: dt, gpuMs: gpu, thermal: thermal) {
             if Self.metalFXFlag { fxScale = s } else { stage.contentScaleFactor = CGFloat(s) }
             scaleChanges += 1
@@ -915,7 +931,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// preferredFramesPerSecond = the governor's 60 / 120, or 30 while resting.
     private func applyFrameRate(_ stage: MelonStageView) {
-        let want = idleRest.resting ? 30 : lastAppliedFPS
+        let want = model.coverUp ? 5 : idleRest.resting ? 30 : lastAppliedFPS          // (covered by a full-screen screen: nobody sees the room)
         if stage.preferredFramesPerSecond != want { stage.preferredFramesPerSecond = want }
     }
 
@@ -974,6 +990,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         adaptScale(stage, dt: Double(dt))
 
         // Waits only when the GPU is BodySlot.ring frames behind; logged apart so "cpu" is CPU work (sim + skin + encode), not the GPU wait.
+        let waitBefore = dbgWait
         let w0 = CACurrentMediaTime()
         renderer.beginFrame()
         dbgWait += CACurrentMediaTime() - w0
@@ -983,6 +1000,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         // model -> sim
         for a in actors { a.sim.firmness = Float(m.firmness); a.sim.damping = Float(m.damping) }
         let paused = m.paused
+        if m.coverUp != lastCover { lastCover = m.coverUp; applyFrameRate(stage); acc = 0; NSLog("[melon] cover: %@", m.coverUp ? "up (5 fps)" : "down") }
         if paused != lastPaused {
             lastPaused = paused
             if paused { cancelGrab() }
@@ -1016,7 +1034,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         if !paused {
             acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale * GameCare.volleySlowScale : 1)          // (-VolleySlow: capture aid)
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
-            let maxSteps = 2
+            // (a frame whose last pass already cost over 12 ms of CPU does at most ONE step: slow motion for a moment instead of a catch-up spiral of 2 steps per frame)
+            let maxSteps = lastCPUFrameMs > 12 ? 1 : 2
             var steps = 0
             while acc >= sim.stepDt - 1e-6 && steps < maxSteps {          // (1e-6: a snapped 1/60 frame is exactly one step)
                 hopTick(reduce: reduce)
@@ -1183,6 +1202,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
 
         dbgCPU += CACurrentMediaTime() - cpu0
+        lastCPUFrameMs = (CACurrentMediaTime() - cpu0 - (dbgWait - waitBefore)) * 1000
         dbgFrames += 1
         if dbgStart == 0 { dbgStart = now }
         if now - dbgStart >= 1 {

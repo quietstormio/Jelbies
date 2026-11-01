@@ -35,6 +35,8 @@ final class MelonModel {
     var firmness: Double = 0.95
     /// 0...1
     var damping: Double = 0.45
+    /// A full-screen screen (town, shop, bag, settings, ...) covers the game: GameScreen sets this and the stage drops to 5 fps (the sim keeps its fixed-step time, no catch-up burst on return).
+    var coverUp = false
     var paused: Bool = false {
         didSet {
             // Keep the chip in step with the Pause/Resume button.
