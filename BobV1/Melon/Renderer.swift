@@ -232,6 +232,16 @@ final class MelonRenderer {
     private let pPresent: MTLRenderPipelineState
     /// GPU-side options (GfxSavings.swift: GfxOpt). Memoryless targets / draw order are pixel-identical; `fastMatteTier` > 0 is a visible opt-in.
     var gfxOpt = GfxOpt()
+    /// Diagnostics only (GpuBodyCostTests): leave parts of the game pass out to time the rest by difference. Empty in the app.
+    struct BodyProbe: OptionSet { let rawValue: Int
+        static let skipBody = BodyProbe(rawValue: 1), skipEyes = BodyProbe(rawValue: 2), skipBlended = BodyProbe(rawValue: 4), skipRoom = BodyProbe(rawValue: 8) }
+    var bodyProbe: BodyProbe = []
+    /// Species-specialised matte body pipelines (GfxBodyFast.metal tier 0: the locked maths with the belly / Teddy blocks compiled out per body).
+    var matteSpec = true
+    /// Measurement probe for the specialised shader (see `probeMode` in GfxBodyFast.metal); 0 in the app.
+    var matteProbe = 0
+    /// Measurement only: keep the belly / Teddy blocks compiled in for every body (what the unspecialised shader pays).
+    var matteForceAllBlocks = false
     private let library: MTLLibrary
     private let meshVD: MTLVertexDescriptor
     /// fsSoftMatteFast pipelines by tier (GfxBodyFast.metal), built on first use.
@@ -367,6 +377,7 @@ final class MelonRenderer {
         self.meshVD = pl.meshVD
         pCacheBlit = pl.cacheBlit; pPresent = pl.present
         pMatteBath = pl.matteBath
+        pMatteFast = pl.matteSpec
         pDepth = pl.depth; pBackground = pl.background; pProps = pl.props; pBack = pl.back; pCopy = pl.copy; pJelly = pl.jelly; pMatte = pl.matte; pEyes = pl.eyes; pLines = pl.lines; pPost = pl.post
 
         func ds(_ fn: MTLCompareFunction, _ write: Bool) -> MTLDepthStencilState? {
@@ -785,23 +796,11 @@ final class MelonRenderer {
     }
 
     /// The opt-in cheaper matte body pipeline for `tier` (1...3), built once (function constant `fastTier`). nil -> the locked shader is used.
-    private func fastMattePipeline(tier: Int) -> MTLRenderPipelineState? {
-        if let p = pMatteFast[tier] { return p }
-        let cv = MTLFunctionConstantValues()
-        var t = Int32(tier)
-        cv.setConstantValue(&t, type: .int, index: 0)
-        guard let fs = try? library.makeFunction(name: "fsSoftMatteFast", constantValues: cv), let vs = library.makeFunction(name: "vsJelly") else {
-            print("MelonRenderer: fsSoftMatteFast tier \(tier) unavailable"); return nil
-        }
-        let d = MTLRenderPipelineDescriptor()
-        d.label = "matte fast \(tier)"
-        d.vertexFunction = vs; d.fragmentFunction = fs
-        d.vertexDescriptor = meshVD
-        d.colorAttachments[0].pixelFormat = Self.hdrFormat
-        d.depthAttachmentPixelFormat = Self.depthFormat
-        d.rasterSampleCount = Self.msaa
-        guard let p = try? device.makeRenderPipelineState(descriptor: d) else { print("MelonRenderer: matte fast \(tier) pipeline failed"); return nil }
-        pMatteFast[tier] = p
+    private func fastMattePipeline(tier: Int, belly: Bool = true, teddy: Bool = true) -> MTLRenderPipelineState? {
+        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe
+        if let p = pMatteFast[key] { return p }
+        guard let p = MelonPipelines.makeMatteSpec(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe) else { return nil }
+        pMatteFast[key] = p
         return p
     }
 
@@ -1061,7 +1060,7 @@ final class MelonRenderer {
                                 topViewProj: uniforms.topVP, heightTex: topTex, parts: .diningOnly)
                 }
                 e.setScissorRect(sc)
-            } else {
+            } else if !bodyProbe.contains(.skipRoom) {
                 roomPixelsShaded += fullPx
                 room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
                             topViewProj: uniforms.topVP, heightTex: topTex)
@@ -1080,8 +1079,9 @@ final class MelonRenderer {
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)
             let order = bodyOrder(camPos: camPos3)
+            let shapeAt = MemoryLayout<MelonUniforms>.offset(of: \.shape) ?? 0
             lastBodyOrder = order
-            let fast = gfxOpt.fastMatteTier > 0 ? fastMattePipeline(tier: gfxOpt.fastMatteTier) : nil
+            let tierNow = gfxOpt.fastMatteTier
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
                 e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
@@ -1098,17 +1098,22 @@ final class MelonRenderer {
                     e.setFragmentBytes(&par, length: MemoryLayout.size(ofValue: par), index: 1)
                     jerseyDraws += 1
                 } else {
-                    e.setRenderPipelineState(fast ?? pMatte)
+                    // shape.w (BlueBelly.mode) says whether the belly / Teddy blocks can run at all for this body
+                    let bellyMode = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
+                    let sp = (tierNow > 0 || matteSpec) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    e.setRenderPipelineState(sp ?? pMatte)
                 }
-                e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
-                if m.seeds.count > 0 {
+                if !bodyProbe.contains(.skipBody) { e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4) }
+                if m.seeds.count > 0 && !bodyProbe.contains(.skipEyes) {
                     e.setRenderPipelineState(pEyes)
                     e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
                 }
             }
             // translucent room pieces (dining puffs, contact shadows) blend over Bob; sets its own state (not part of the body path)
-            room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,
-                               shadowTex: shadowTex, topViewProj: uniforms.topVP, heightTex: topTex)
+            if !bodyProbe.contains(.skipBlended) {
+                room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,
+                                   shadowTex: shadowTex, topViewProj: uniforms.topVP, heightTex: topTex)
+            }
             e.endEncoding()
             split(&cmd, "bob")
             encodePostOrUpscale(cmd, target: target, hdrTex: hdrTex)

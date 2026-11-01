@@ -11,6 +11,8 @@ nonisolated enum MelonPipelines {
     struct Pipes: @unchecked Sendable {
         let depth, background, props, back, copy, jelly, matte, eyes, matteBath, lines, post, cacheBlit, present: MTLRenderPipelineState
         let meshVD: MTLVertexDescriptor
+        /// Tier-0 species-specialised matte body pipelines (GfxBodyFast.metal), keyed like MelonRenderer.fastMattePipeline: none / belly / belly+Teddy.
+        let matteSpec: [Int: MTLRenderPipelineState]
     }
     private static let lock = NSLock()
     nonisolated(unsafe) private static var libraries: [ObjectIdentifier: MTLLibrary] = [:]
@@ -112,6 +114,33 @@ nonisolated enum MelonPipelines {
         guard let cb = makeGfx("room cache blit", fs: "gfxCacheFS", color: hdr, depth: true, samples: ms),
               let pr = makeGfx("present", fs: "gfxPresentFS", color: colorPixelFormat, depth: false, samples: 1)
         else { return nil }
-        return MelonPipelines.Pipes(depth: a, background: b, props: c, back: d, copy: e, jelly: f, matte: mt, eyes: ey, matteBath: mtb, lines: g, post: h, cacheBlit: cb, present: pr, meshVD: meshVD)
+        var spec: [Int: MTLRenderPipelineState] = [:]
+        for (bl, td) in [(false, false), (true, false), (true, true)] {
+            if let sp = makeMatteSpec(device: device, library: library, vd: meshVD, tier: 0, belly: bl, teddy: td, probe: 0) { spec[0 + (bl ? 10 : 0) + (td ? 20 : 0)] = sp }
+        }
+        return MelonPipelines.Pipes(depth: a, background: b, props: c, back: d, copy: e, jelly: f, matte: mt, eyes: ey, matteBath: mtb, lines: g, post: h, cacheBlit: cb, present: pr, meshVD: meshVD, matteSpec: spec)
+    }
+
+    /// The matte body pipeline of fsSoftMatteFast: `tier` 0 = the locked maths (pixel-identical), 1...3 = the opt-in cheaper tiers; `belly` / `teddy`
+    /// compile the lighter-front and Teddy ear / pom blocks in or out (a body whose BlueBelly mode is 0 needs neither); `probe` is the measurement mode.
+    static func makeMatteSpec(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, tier: Int, belly: Bool, teddy: Bool, probe: Int) -> MTLRenderPipelineState? {
+        let cv = MTLFunctionConstantValues()
+        var t = Int32(tier), bl = belly, td = teddy, pr = Int32(probe)
+        cv.setConstantValue(&t, type: .int, index: 0)
+        cv.setConstantValue(&bl, type: .bool, index: 1)
+        cv.setConstantValue(&td, type: .bool, index: 2)
+        cv.setConstantValue(&pr, type: .int, index: 3)
+        guard let fs = try? library.makeFunction(name: "fsSoftMatteFast", constantValues: cv), let vs = library.makeFunction(name: "vsJelly") else {
+            print("MelonRenderer: fsSoftMatteFast tier \(tier) unavailable"); return nil
+        }
+        let d = MTLRenderPipelineDescriptor()
+        d.label = "matte fast \(tier)\(belly ? " belly" : "")\(teddy ? " teddy" : "")"
+        d.vertexFunction = vs; d.fragmentFunction = fs
+        d.vertexDescriptor = vd
+        d.colorAttachments[0].pixelFormat = MelonRenderer.hdrFormat
+        d.depthAttachmentPixelFormat = MelonRenderer.depthFormat
+        d.rasterSampleCount = MelonRenderer.msaa
+        guard let p = try? device.makeRenderPipelineState(descriptor: d) else { print("MelonRenderer: matte fast \(tier) pipeline failed"); return nil }
+        return p
     }
 }
