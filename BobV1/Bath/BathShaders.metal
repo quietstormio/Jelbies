@@ -10,10 +10,10 @@
 #include <metal_stdlib>
 using namespace metal;
 // TEDDYEAR-BEGIN (generated from TeddyBean.shaderConstants; TeddyBeanTests checks it still matches)
-constant float3 TE_O = float3(0.32355,1.19294,0.06709);
-constant float3 TE_U = float3(0.76821,-0.52312,-0.36906);
-constant float3 TE_V = float3(0.57131,0.82031,0.02647);
-constant float3 TE_F = float3(0.28890,-0.23118,0.92903);
+constant float3 TE_O = float3(0.35000,1.17621,0.03588);
+constant float3 TE_U = float3(0.71549,-0.59071,-0.37301);
+constant float3 TE_V = float3(0.61910,0.78350,-0.05326);
+constant float3 TE_F = float3(0.32371,-0.19282,0.92630);
 constant float4 TE_PC = float4(0.00000,0.49466,-0.54430,0.11200);         // the pom: rest-space centre, radius
 constant float4 TE_P = float4(0.13000,0.11251,0.20435,0.03951);          // cream half width, U-cap centre height, top height, skin-line height (ear-local v)
 /// Teddy's inner ear (right ear in rest space, mirrored by |x|): a clean U / half-moon, per pixel, open at the root; 0 anywhere else on the body.
