@@ -15,6 +15,9 @@ enum IntroClip {
     /// about 7.9 s at 60 fps, Blue theme, ending on empty paper. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
     static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
     static let fileExtension = "mp4"
+    /// The clip pauses here (8/3 s = the first frame of the clip's hold: the word is complete and the jelly has settled on the "i") and shows "Tap to play";
+    /// a tap plays the rest (the hold, the stomp, the letters pop, the jelly falls away).
+    static let pauseAt: Double = 8.0 / 3.0
     /// Seconds to fade to white after the clip (and the menu then fades in from white over the same time, see ContentView).
     static let fadeToWhite: Double = 0.5
 }
@@ -35,6 +38,9 @@ struct IntroView: View {
     @State private var ready = false          // the item can play
     @State private var shown = false          // the clip is visible: playback has really advanced (or the last frame is up)
         @State private var settledAny = false
+    @State private var awaitingTap = false     // paused on the finished logo with the "Tap to play" pill up
+    @State private var pausedOnce = false
+    @State private var pauseObserver: Any?
     @State private var leaving = false
     @State private var finished = false
     @State private var volume: Float = 0
@@ -62,6 +68,14 @@ struct IntroView: View {
                         .frame(maxHeight: .infinity, alignment: .top).padding(.top, max(48, geo.size.height * 0.08))
                         .accessibilityHidden(true)
                 }
+                Text("Tap to play").font(SK.font(18, .bold)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 26).padding(.vertical, 12)
+                    .background(Capsule().fill(SK.cream))          // the HUD's opaque cream pill, brown text
+                    .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 28)
+                    .padding(.bottom, 34)          // above the home indicator's safe area
+                    .opacity(awaitingTap ? 1 : 0)
+                    .animation(.easeOut(duration: 0.3), value: awaitingTap)
+                    .accessibilityHidden(true)
                 Color.white.opacity(leaving ? 1 : 0)          // the clip ends (or is skipped): fade to white, then the menu fades in from white
                     .animation(.easeInOut(duration: IntroClip.fadeToWhite), value: leaving)
             }
@@ -71,12 +85,12 @@ struct IntroView: View {
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { tapped() }
-        .onAppear { start(UIScreen.main.bounds.width > UIScreen.main.bounds.height); A11yAnnounce.say("Jelbies. Double tap to skip.", priority: .low) }
+        .onAppear { start(UIScreen.main.bounds.width > UIScreen.main.bounds.height); A11yAnnounce.say("Jelbies. Double tap to play.", priority: .low) }
         .onDisappear { teardown() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.")
+        .accessibilityLabel(awaitingTap ? "Tap to play" : "Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Skips the intro")
+        .accessibilityHint(awaitingTap ? "Plays the rest of the intro" : "Skips the intro")
         .accessibilityIdentifier("intro")
     }
 
@@ -111,14 +125,19 @@ struct IntroView: View {
     private func begin() {
         guard let p = player, !ready, !settledAny, !finished else { return }
         if still {
-            let end = p.currentItem?.duration ?? .zero
-            p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-                Task { @MainActor in ready = true; LaunchTiming.mark("intro: clip ready"); settle() }
+            p.seek(to: CMTime(seconds: IntroClip.pauseAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                Task { @MainActor in          // Reduce Motion: the finished logo with the pill; a tap goes straight to the fade
+                    ready = true; shown = true; pausedOnce = true; awaitingTap = true
+                    LaunchTiming.mark("intro: clip ready")
+                }
             }
         } else {
             ready = true
             LaunchTiming.mark("intro: clip ready")
             p.play()
+            pauseObserver = p.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(seconds: IntroClip.pauseAt, preferredTimescale: 600))], queue: .main) {
+                MainActor.assumeIsolated { pauseOnLogo(p) }
+            }
             Task { @MainActor in          // playback never advanced: fade in anyway
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 reveal()
@@ -126,7 +145,7 @@ struct IntroView: View {
             var base: Double?          // wall minus clip time at the first tick; growth beyond it is playback falling behind
             lagProbe = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { t in
                 MainActor.assumeIsolated {
-                    guard p.rate > 0 else { return }
+                    guard p.rate > 0, !pausedOnce else { return }
                     if t.seconds >= 1.0 / 30 { reveal() }
                     let off = CACurrentMediaTime() - t.seconds
                     if base == nil { base = off }
@@ -143,9 +162,30 @@ struct IntroView: View {
         LaunchTiming.mark("intro: clip shown")
     }
 
-    /// A tap during the clip skips to the fade (audio ramps out).
+    /// The clip reached the finished logo: video and its sting pause together and the pill appears.
+    private func pauseOnLogo(_ p: AVPlayer) {
+        guard !pausedOnce, !settledAny, !finished else { return }
+        pausedOnce = true
+        p.pause()
+        awaitingTap = true
+        LaunchTiming.mark("intro: paused on the logo")
+    }
+
+    /// Tap 1 (on the pill, or earlier in the clip) plays / jumps to the second half; a tap during the second half skips to the fade (audio ramps out).
     private func tapped() {
         guard !settledAny else { return }
+        if awaitingTap {
+            awaitingTap = false
+            guard let p = player, !still else { settledAny = true; finish(); return }
+            p.play()
+            return
+        }
+        if !pausedOnce, let p = player, ready, !still {          // first half: jump to the finished logo and its pill
+            p.seek(to: CMTime(seconds: IntroClip.pauseAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                Task { @MainActor in pauseOnLogo(p) }
+            }
+            return
+        }
         settledAny = true
         if let p = player, ready { fadeOutAudio(p) }
         finish()
@@ -182,6 +222,7 @@ struct IntroView: View {
     }
 
     private func teardown() {
+        if let o = pauseObserver, let p = player { p.removeTimeObserver(o); pauseObserver = nil }
         if let o = lagProbe, let p = player { p.removeTimeObserver(o); lagProbe = nil; NSLog("%@", String(format: "[melon] launch: intro playback: worst lag behind the wall clock %.0f ms", lagWorst * 1000)) }
         player?.pause()
         statusObserver?.invalidate(); statusObserver = nil
