@@ -1508,6 +1508,7 @@ final class BlobBrain {
         if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
         skinner.joinTilt = now.tilt
+        skinner.joinPose = (now.centroid, now.rotation, sim.restCentroid)
         // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
         // not moved with the body, but the always-attached clamp runs again against the pose the body has NOW (it ran before the step against the pose before it).
         let dq: simd_quatf? = beanFitUsed.map { now.rotation * $0.rotation.inverse }
