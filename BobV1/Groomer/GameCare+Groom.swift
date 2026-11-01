@@ -76,16 +76,16 @@ extension GameCare {
 
     func tickGroom(_ actors: [JellyActor], dt simDt: Float) {
         #if targetEnvironment(simulator)
-        if Self.startGroomFrames > 0, !groom.active {          // capture aid: `-StartGroom 1` takes Jelbie 0 to the Jelly Spa (Quick Splash, coins topped up) once the room is up
+        if Self.startGroomFrames > 0, !groom.active {          // capture aid: `-StartGroom N` takes the first N Jelbies to the Jelly Spa (Quick Splash, coins topped up) once the room is up
             Self.startGroomFrames += 1
-            if Self.startGroomFrames > 120 { Self.startGroomFrames = 0; if bath.wallet.count < 20 { bath.wallet.add(40, silent: true) }; groom.openPicker(all: [0]); startGroom(.quick) }
+            if Self.startGroomFrames > 120 { Self.startGroomFrames = 0; if bath.wallet.count < 20 { bath.wallet.add(40, silent: true) }; groom.openPicker(all: Array(0..<max(1, min(UserDefaults.standard.integer(forKey: "StartGroom"), jellies.count)))); startGroom(.quick) }
         }
         #endif
         groomBook.actors = actors
         tickOutExit(actors, dt: simDt)
         // the cut-scene runs on the wall clock (a slow sim must not stretch the 8-9 s visit)
         let now = CACurrentMediaTime()
-        let dt = groomBook.lastTick.map { Float(min(max(now - $0, 0), 0.1)) } ?? simDt
+        let dt = groomBook.fixedDt ?? groomBook.lastTick.map { Float(min(max(now - $0, 0), 0.1)) } ?? simDt          // (`fixedDt`: tests drive the visit on the sim clock)
         groomBook.lastTick = groom.active ? now : nil
         guard groom.active else { return }
         if !groom.picking { for a in actors { a.brain?.sleepLocked = true } }
@@ -96,12 +96,20 @@ extension GameCare {
         if groom.dryerOn, !groom.dryerCaptioned { groom.dryerCaptioned = true; CaptionCenter.shared.post("Hair dryer humming") }
         guard groom.phase == .reveal else { return }
         let mine = actors.filter { picked.contains($0.id) }
-        // the door opens, then they hop out into the street and run to the front
-        if book.out.isEmpty, groom.cheerT >= GroomTuning.doorOpen * 0.6 {
-            for (k, a) in mine.enumerated() {
-                guard let b = a.brain else { continue }
-                book.out.insert(a.id)
-                rehome(a, at: b.fixed(GroomScenery.doorStep + SIMD2(Float(k % 2) * 0.3 - 0.15, 0)))
+        // the door opens, then they come out ONE AT A TIME (spaced GroomTuning.exitSpacing, and the next only once the last is a body-gap clear of the door),
+        // each running to its own spot in the line-up, so the paths fan out and never overlap
+        let openAt = GroomTuning.doorOpen * 0.6
+        if groom.cheerT >= openAt, book.out.count < mine.count {
+            let k = book.out.count
+            let a = mine[k]
+            let prevClear: Bool = {
+                guard k > 0, let pb = mine[k - 1].brain else { return true }
+                if let t0 = book.outAt[mine[k - 1].id], groom.cheerT - t0 >= GroomTuning.exitPatience { return true }          // (never wait forever on a stalled one)
+                return simd_length(GameCare.floorPos(pb, mine[k - 1].sim) - GroomScenery.doorStep) >= MelonController.jellyGap
+            }()
+            if let b = a.brain, groom.cheerT >= openAt + Float(k) * GroomTuning.exitSpacing, prevClear {
+                book.out.insert(a.id); book.outAt[a.id] = groom.cheerT
+                rehome(a, at: b.fixed(GroomScenery.doorStep))
                 b.autonomy = false; b.idleBlocked = true
                 b.startTurn(to: 0, sim: a.sim)
                 b.face(.excited, hold: 3)
@@ -109,13 +117,12 @@ extension GameCare {
                 touchPlay?.spawnHeart(now: CACurrentMediaTime())
                 let spot = GroomScenery.lineUp(index: k, of: mine.count)
                 b.requestNow(.goTo(b.fixed(spot)))
+                AudioHub.shared.play(.cheerSmall, volume: k == 0 ? 0.7 : 0.4)
             }
-            AudioHub.shared.play(.cheerSmall, volume: 0.7)
-            return
         }
-        for (k, a) in mine.enumerated() {
-            guard let b = a.brain else { continue }
-            let t = groom.cheerT - GroomTuning.doorOpen - GroomTuning.walkOut - Float(k) * GroomTuning.cheerStagger
+        for a in mine {
+            guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
+            let t = groom.cheerT - outAt - GroomTuning.walkOut
             let idle = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
             if t >= 0, !book.emoted.contains(a.id) {
                 book.emoted.insert(a.id)
@@ -130,7 +137,7 @@ extension GameCare {
                 book.twirled.insert(a.id)
                 b.commandedIdle = .tail
                 touchPlay?.spawnHeart(now: CACurrentMediaTime())
-                if k == 0 { AudioHub.shared.play(.cheerSmall, volume: 0.8) }
+                if a.id == mine[0].id { AudioHub.shared.play(.cheerSmall, volume: 0.8) }
             }
         }
     }
@@ -151,7 +158,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []
+        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -181,7 +188,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []
+        book.out = []; book.outAt = [:]
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
         if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -221,7 +228,7 @@ extension GameCare {
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits
