@@ -118,4 +118,70 @@ final class GpuFrameTests: XCTestCase {
             report("resize")
         }
     }
+
+    /// Writes the PNG into the app container and attaches it to the result bundle (the sandboxed Mac app cannot write to the scratchpad).
+    func save(_ img: LockImage, _ name: String) {
+        let url = URL(fileURLWithPath: Self.outPath + "/" + name + ".png")
+        img.png(to: url)
+        if let d = try? Data(contentsOf: url) { let a = XCTAttachment(data: d, uniformTypeIdentifier: "public.png"); a.name = name + ".png"; a.lifetime = .keepAlways; add(a) }
+    }
+    static var outPath: String { NSTemporaryDirectory() + "gpuframe" }
+
+    static func resized(_ img: LockImage, toW w: Int, h: Int) -> LockImage {
+        var src = img.bgra
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let info = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        let cg = src.withUnsafeMutableBytes { CGContext(data: $0.baseAddress, width: img.w, height: img.h, bitsPerComponent: 8, bytesPerRow: img.w * 4, space: cs, bitmapInfo: info)!.makeImage()! }
+        var out = [UInt8](repeating: 0, count: w * h * 4)
+        out.withUnsafeMutableBytes {
+            let c = CGContext(data: $0.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs, bitmapInfo: info)!
+            c.interpolationQuality = .low        // bilinear: what the compositor does with a smaller drawable
+            c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+        return LockImage(w: w, h: h, bgra: out)
+    }
+
+    static func psnr(_ a: LockImage, _ b: LockImage) -> Double {
+        var se = 0.0
+        for i in stride(from: 0, to: a.bgra.count, by: 4) { for c in 0..<3 { let d = Double(a.bgra[i + c]) - Double(b.bgra[i + c]); se += d * d } }
+        let mse = se / Double(a.w * a.h * 3)
+        return mse == 0 ? 99 : 10 * log10(255 * 255 / mse)
+    }
+
+    /// MetalFX spatial upscaling quality + cost against today's bilinear-scaled smaller drawable, all presented at native 1206 x 2622.
+    func testMetalFX() throws {
+        UserDefaults.standard.removeObject(forKey: "PerfPasses"); UserDefaults.standard.removeObject(forKey: "PerfEncoders")
+        try FileManager.default.createDirectory(atPath: Self.outPath, withIntermediateDirectories: true)
+        func row(_ s: String) { print("GPUFRAME " + s); NSLog("GPUFRAME %@", s) }
+        row("out dir \(Self.outPath) metalfx supported \(GfxUpscaler.supported(MTLCreateSystemDefaultDevice()!))")
+        let NW = 1206, NH = 2622
+        func run(_ w: Int, _ h: Int, fx: Bool) throws -> (LockImage, Double) {
+            let s = try XCTUnwrap(GpuOptPerfTests.Scene(n: 3, W: w, H: h))
+            Self.keep.append(s)
+            var o = GfxOpt(); o.memorylessMSAA = true; s.ren.gfxOpt = o
+            s.ren.roomCacheEnabled = true
+            if fx {
+                let td = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: NW, height: NH, mipmapped: false)
+                td.usage = [.renderTarget, .shaderRead, .shaderWrite]; td.storageMode = .shared
+                s.target = s.ren.device.makeTexture(descriptor: td)!
+                s.ren.metalFXEnabled = true
+            }
+            for _ in 0..<6 { s.frame(advance: false) }
+            let ms = measure(s, frames: 60).gpu
+            s.frame(advance: false)
+            return (s.image(), ms)
+        }
+        let (native, nms) = try run(NW, NH, fx: false)
+        save(native, "native_1206")
+        row(String(format: "native %dx%d: gpu %.2f ms", NW, NH, nms))
+        for (w, h) in [(1005, 2185), (880, 1912), (804, 1748), (603, 1311), (585, 1271)] {
+            let (raw, rms) = try run(w, h, fx: false)
+            let up = Self.resized(raw, toW: NW, h: NH)
+            save(up, "bilinear_\(w)")
+            row(String(format: "raw %dx%d + compositor bilinear: gpu %.2f ms, PSNR vs native %.2f dB", w, h, rms, Self.psnr(native, up)))
+            let (fx, fms) = try run(w, h, fx: true)
+            save(fx, "metalfx_\(w)")
+            row(String(format: "MetalFX %dx%d -> %dx%d: gpu %.2f ms (upscale+present +%.2f), PSNR vs native %.2f dB", w, h, NW, NH, fms, fms - rms, Self.psnr(native, fx)))
+        }
+    }
 }
