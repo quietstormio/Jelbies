@@ -18,7 +18,7 @@ import Foundation
 import simd
 
 struct GaitDriver {
-    enum Phase { case idle, crouch, air, land, roll, right, thrown, recover, glide, slide }
+    enum Phase: CaseIterable { case idle, crouch, air, land, roll, right, thrown, recover, glide, slide }
     enum Move { case hop, roll, flip, slide }
 
     // tuning
@@ -123,6 +123,8 @@ struct GaitDriver {
     var isFlipFaceplant: Bool { move == .flip && flipFail }
     /// A flip owns the body (the beans stay in their leg shape in its air / landing phases: BlobBrain.driveBeansRigid).
     var isSpinMove: Bool { move == .flip }
+    /// The side roll is running (crouch into it, the tip over, the righting): the feet are drawn as pieces for all of it (BlobBrain: one-piece feet).
+    var isRollMove: Bool { move == .roll && phase != .idle && phase != .land }
     private func yawQ(_ y: Float) -> simd_quatf {
         let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
         let p = basePitch + flipPitch + slidePitchNow
@@ -264,7 +266,7 @@ struct GaitDriver {
             let u = t / tc
             let sy = 1 - (move == .flip ? 0.24 : 0.18) * amp * smooth(u)
             let k = (move == .flip ? kFlip : kHop) * min(1, t / 0.06)
-            let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + 0.3))
+            let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + (move == .roll && Self.rollYawFix ? Self.rollYawTail : 0.3)))
             if move == .flip { flipClock = min(t, tc) }
             setUpright(sim, xz: from, yaw: yawNow, squash: sy, lift: 0, strength: k)
             if move == .flip { tuckFeet(sim, u: 0, amp: 0, ramp: Self.flipFootGrip * smooth(t / tc)) }       // the soles follow the squashed rigid pose from the start of the crouch
@@ -419,7 +421,10 @@ struct GaitDriver {
             let u = min(1, t / T)
             let th = rollAngle * smooth(u)
             let xz = from + (to - from) * smooth(u)
-            setTilted(sim, xz: xz, theta: th, strength: kRoll)
+            // 2026-10-31 (one piece): the turn to face across the leg used to be only ~27% done when the crouch ended and the tilt then snapped the other ~63 degrees at once
+            // (the soft body lagged, the feet with it): the yaw now finishes `rollYawTail` s into the roll, eased on the same curve as the crouch's.
+            let tcRoll = crouchTime * 1.3
+            setTilted(sim, xz: xz, theta: th, strength: kRoll, yaw: Self.rollYawFix ? yawEase((tcRoll + t) / (tcRoll + Self.rollYawTail)) : facingYaw)
             if t >= T { phase = .right; t = 0 }
 
         case .right:
@@ -430,7 +435,7 @@ struct GaitDriver {
             let e = 1 + c3 * powf(u - 1, 3) + c1 * powf(u - 1, 2)
             let th = rollAngle * (1 - e)
             let k = kRoll * (1 - smooth((t - 0.35) / 0.25))
-            setTilted(sim, xz: to, theta: th, strength: k)
+            setTilted(sim, xz: to, theta: th, strength: k, yaw: facingYaw)
             if t >= T { endMove(sim) }
 
         case .thrown:
@@ -505,10 +510,12 @@ struct GaitDriver {
         sim.attractor.strength = strength
     }
 
-    private func setTilted(_ sim: SoftBody, xz: SIMD2<Float>, theta: Float, strength: Float) {
+    static let rollYawTail: Float = 0.18
+    nonisolated(unsafe) static var rollYawFix = true          // (false = the e4062d6 snap, for before / after numbers)
+    private func setTilted(_ sim: SoftBody, xz: SIMD2<Float>, theta: Float, strength: Float, yaw: Float) {
         // tip about the horizontal axis perpendicular to the roll direction, on top of the facing yaw
         let axis = simd_cross(SIMD3<Float>(0, 1, 0), SIMD3<Float>(rollDir.x, 0, rollDir.y))
-        let q = simd_quatf(angle: theta, axis: axis) * yawQ(facingYaw)
+        let q = simd_quatf(angle: theta, axis: axis) * yawQ(yaw)
         sim.attractor.rotation = q
         sim.attractor.squash = 1
         sim.attractor.anchor = SIMD3(xz.x, sim.groundedAnchorY(rotation: q), xz.y)

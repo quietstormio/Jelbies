@@ -375,7 +375,8 @@ final class LegsDrawnAuditTests: XCTestCase {
             return c / n
         }
         /// Renders the dyn buffer the audit measured. az: camera azimuth (0 = front), el: elevation (negative = from below).
-        func shot(_ r: MotionRig, az: Float, el: Float, dist: Float, target tgt: SIMD3<Float>, palette: PaletteKey) -> [UInt8] {
+        func shot(_ r: MotionRig, az: Float, el: Float, dist: Float, target tgt: SIMD3<Float>, palette: PaletteKey) -> [UInt8] { shot(r, az: az, el: el, dist: dist, target: tgt, pal: palette.palette) }
+        func shot(_ r: MotionRig, az: Float, el: Float, dist: Float, target tgt: SIMD3<Float>, pal: Palette) -> [UInt8] {
             let eye = tgt + SIMD3(dist * sinf(az) * cosf(el), dist * sinf(el), dist * cosf(az) * cosf(el))
             var cam = CameraState()
             cam.view = M4.lookAt(eye: eye, at: tgt, up: SIMD3(0, 1, 0))
@@ -388,7 +389,6 @@ final class LegsDrawnAuditTests: XCTestCase {
             var fp = FrameParams()
             fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
             fp.exposure = 1; fp.meshAlpha = 0
-            let pal = palette.palette
             fp.bg = pal.matte ? melonCreamLinear : melonBackgroundLinear
             ren.setUniforms(camera: cam, light: light, palette: pal, params: fp, viewSize: SIMD2<Float>(Float(T), Float(T)))
             let cmd = ren.queue.makeCommandBuffer()!
