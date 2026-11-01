@@ -1644,6 +1644,7 @@ final class BlobBrain {
         skinner.beanPos = beanScratch
         skinner.beanStart = beanStartScratch
         skinner.beanBlend = beanBlend
+        skinner.collarFade = 1 - min(beanMorphLast[0], beanMorphLast[1])          // (both feet off the floor: the collar fillet would tear into a saw-toothed rim round the leg roots)
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot()
         // (on the FITTED pose when the beans follow it: the attractor's rotation is tens of degrees ahead of the real body in a flip and would push the sunk foot slab the wrong way)
         let RS = simd_float3x3(beanFitUsed?.rotation ?? att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))

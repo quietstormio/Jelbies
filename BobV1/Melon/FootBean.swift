@@ -72,7 +72,17 @@ nonisolated enum FootBean {
         SIMD3(Float(d.x) * ballRadii.x, ballRadii.y + Float(d.y) * ballRadii.y, ballZ + Float(d.z) * ballRadii.z)
     }
     /// Vertex `i` morphed by `m` (0 = planted boot, 1 = lifted ball).
-    @inline(__always) static func morphed(_ i: Int, _ m: Float) -> SIMD3<Float> { localF[i] + (ballF[i] - localF[i]) * m }
+    /// 2026-11-01 (a foot never pinches off in the air): the ball is a sphere, its top ring is far narrower than the boot's crown, so a lifted foot (jacks, hops, flips) was a ball hanging under the body with a gap and a frayed rim.
+    /// Only the LOWER part of the foot rounds now: `neckKeep` holds the crown (rings >= 10) at the boot's shape, so the neck stays as wide as when standing and the join stays filled; it fades to a full ball at ring 4.
+    nonisolated(unsafe) static var neckKeepOn = true          // (false = the old pinching ball: before / after captures)
+    static let neckKeep: [Float] = (0..<vertexCount).map { i in
+        if i == 0 { return 0 }
+        if i == vertexCount - 1 { return 1 }
+        let r = Float((i - 1) / around)
+        let t = max(0, min(1, (r - 4) / 6))
+        return t * t * (3 - 2 * t)
+    }
+    @inline(__always) static func morphed(_ i: Int, _ m: Float) -> SIMD3<Float> { localF[i] + (ballF[i] - localF[i]) * (neckKeepOn ? m * (1 - neckKeep[i]) : m) }
 
     static let localF: [SIMD3<Float>] = local.pos.map { SIMD3(Float($0.x), Float($0.y), Float($0.z)) }
 
