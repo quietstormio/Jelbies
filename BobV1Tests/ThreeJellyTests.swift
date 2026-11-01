@@ -179,7 +179,8 @@ final class ThreeJellyTests: XCTestCase {
         XCTAssertEqual(lav.select.blobs.map(\.name), ["Pip", "Moss", "Lavender"], "Lavender is tappable when she is in the roster")
         XCTAssertEqual(lav.select.blobs.map(\.id), [0, 1, 2], "selection ids are slots")
         XCTAssertNotEqual(EyeMaskModel.palette(3).band, EyeMaskModel.palette(0).band, "Lavender has her own sleep mask")
-        XCTAssertEqual(EyeMaskModel.rests.count, 4, "one mask per available character")
+        XCTAssertEqual(EyeMaskModel.rests.count, EyeMaskModel.paletteCount, "one mask per palette")
+        XCTAssertEqual(EyeMaskModel.paletteCount, JellyRoster.knownCount, "a mask for every species that exists")
         // the matte transform equals PaletteKey's for the same base
         var base = PaletteKey.blue.palette
         base.pale = SIMD3(repeating: 0.5); base.skin = base.pale; base.stripe = base.pale; base.extra = .zero
