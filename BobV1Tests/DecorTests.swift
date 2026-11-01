@@ -58,9 +58,9 @@ final class DecorTests: XCTestCase {
             XCTAssertEqual(i.roomUnits, i.decor?.spec.units)
             XCTAssertTrue((1...3).contains(i.roomUnits))
         }
-        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases))
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.beanbag, .bouncymat, .diningset, .loveseat, .minigoal])
-        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .slide, .swing], "the 1.25x swing, slide and pet bed count 3 spots")
+        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting([.seesaw, .springrider, .sandbox]), "every kind but the park-only toys is sold")
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.aquarium, .beanbag, .bouncymat, .diningset, .loveseat, .minigoal, .rockinghorse, .toyrocket])
+        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .playtunnel, .slide, .swing], "the 1.25x swing, slide, play tunnel and pet bed count 3 spots")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
         // prices and spots come from the Blender exports' JSON
