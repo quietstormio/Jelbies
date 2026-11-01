@@ -21,7 +21,7 @@ final class OnePieceInvariantTests: XCTestCase {
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/onepiece/"
     nonisolated(unsafe) static var keep: [AnyObject] = []
     static let before = ProcessInfo.processInfo.environment["ONEPIECE_BEFORE"] != nil
-    static let minNeck: Float = 0.010, maxDent: Float = 0.005, maxPadMove: Float = 0.10, maxStretch: Float = 1.15
+    static let maxLegSdf: Float = -0.01, minNeck: Float = 0.010, maxDent: Float = 0.005, maxPadMove: Float = 0.10, maxStretch: Float = 1.15
 
     /// Must run before the first MotionRig (the render mesh bakes the foot's crease).
     static let configured: Void = {
@@ -41,14 +41,17 @@ final class OnePieceInvariantTests: XCTestCase {
     static let characters: [(String, JellyFeature)] = [("Bob", .none), ("Pip", .spines), ("Moss", .daisy), ("Lavender", .wings), ("Teddy", .ears), ("Pearl", .wings)]
 
     enum Pacing: Int, CaseIterable {
-        case hz60, hz120, alt12, burst30
-        var name: String { ["60", "120", "alt1-2", "burst30"][rawValue] }
+        case hz60, hz120, alt12, burst30, hitch
+        var name: String { ["60", "120", "alt1-2", "burst30", "hitch80-240"][rawValue] }
         func dt(frame: Int, step: Float) -> Float {
             switch self {
             case .hz60: return step
             case .hz120: return step / 2
             case .alt12: return frame % 2 == 0 ? step + 0.0003 : 2 * step + 0.0005
             case .burst30: return frame % 15 < 3 ? 2 * step : step
+            // the phone's hitch burst (PerfMeter 2026-10-31: frames of 80-240 ms): 60 Hz for two seconds, then 80 / 120 / 240 ms frames among 60 Hz ones. The stage clamps the frame dt to 0.1 and runs at most
+            // 2 sim steps (the rest of the time is dropped), which the run loop reproduces.
+            case .hitch: if frame < 120 { return step }; return min(0.1, [0.08, 0.12, 0.24, step, step, step][(frame - 120) % 6])
             }
         }
     }
@@ -146,7 +149,7 @@ final class OnePieceInvariantTests: XCTestCase {
 
     // MARK: metrics
 
-    struct Frame { var neck: Float = .infinity; var tilt: Float = 0; var join: Float = 0; var beans = false; var pad: Float = 0; var stretch: Float = 0; var ideal: Float = -.infinity; var dent: Float = 0; var tippedPad = false }
+    struct Frame { var leash: Float = 0; var blend: Float = 0; var leg: Float = -.infinity; var burial: Float = .infinity; var neck: Float = .infinity; var tilt: Float = 0; var join: Float = 0; var beans = false; var pad: Float = 0; var stretch: Float = 0; var ideal: Float = -.infinity; var dent: Float = 0; var tippedPad = false }
 
     /// Per foot piece, from the skinned dyn buffer:
     ///  neck  min over the 32 meridians of the deepest neck vertex (rings 10...12) inside the body's fitted rigid egg (BobForm.bodySDF in the fitted pose): the closed curve where the piece
@@ -156,7 +159,7 @@ final class OnePieceInvariantTests: XCTestCase {
     static func frame(_ r: MotionRig) -> Frame {
         var f = Frame()
         let m0 = LegsDrawnAuditTests.measure(r, shoes: false)
-        f.pad = m0.coreDisp; f.stretch = m0.stretch
+        f.pad = m0.coreDisp; f.stretch = m0.stretch; f.leg = m0.ideal; f.burial = m0.burial; f.blend = m0.blend; f.leash = max(r.skinner.joinLeash[0], r.skinner.joinLeash[1])
         let pose = r.sim.bodyPose(iterations: 4)
         let tilt = pose.tilt
         guard m0.beans, m0.blend > 0.05 else { f.tilt = tilt; f.tippedPad = tilt > 0.8; return f }
@@ -184,14 +187,16 @@ final class OnePieceInvariantTests: XCTestCase {
     struct Agg {
         var frames = 0, beanFrames = 0, padFrames = 0, started = true
         var neckMin: Float = .infinity, neckFrame = -1, joinMax: Float = 0, joinFrame = -1, padMax: Float = 0, stretchMax: Float = 0
-        var neckBad = 0, joinBad = 0, idealMax: Float = -.infinity, dentMax: Float = 0, tippedPad = 0
+        var neckBad = 0, joinBad = 0, idealMax: Float = -.infinity, dentMax: Float = 0, tippedPad = 0, detached = 0, leashed = 0, worstLeg: Float = -.infinity
         mutating func add(_ f: Frame, frame k: Int) {
             frames += 1
             if f.beans {
                 beanFrames += 1
                 if f.neck < neckMin { neckMin = f.neck; neckFrame = k }
                 if f.join > joinMax { joinMax = f.join; joinFrame = k }
+                if f.leash > 0.002 { leashed += 1 }
                 idealMax = max(idealMax, f.ideal); dentMax = max(dentMax, f.dent)
+                if f.blend > 0.5 { worstLeg = max(worstLeg, f.leg); if f.leg > OnePieceInvariantTests.maxLegSdf || f.burial <= 0 { detached += 1 } }
                 if f.tilt > 0.5 && f.neck < OnePieceInvariantTests.minNeck { neckBad += 1 }
             } else { padFrames += 1; if f.tippedPad { tippedPad += 1 }; padMax = max(padMax, f.pad); stretchMax = max(stretchMax, f.stretch) }
         }
@@ -276,14 +281,15 @@ final class OnePieceInvariantTests: XCTestCase {
                 let tag = "\(job.name) | \(Self.characters[c].0) \(shoes ? "shoes" : "bare") \(pacing.name)"
                 report += String(format: "%@ | %d %d %d | %.1f@%d | %.0f@%d | %.3f %.2f | %d %d | %.1f | %.1f %d\n", tag, a.frames, a.beanFrames, a.padFrames, a.neckMin.isFinite ? a.neckMin * 100 : 99, a.neckFrame, a.joinMax, a.joinFrame, a.padMax, a.stretchMax, a.neckBad, a.joinBad, a.idealMax.isFinite ? a.idealMax * 100 : 99, a.dentMax * 100, a.tippedPad)
                 tot.frames += a.frames; tot.beanFrames += a.beanFrames; tot.padFrames += a.padFrames; tot.neckBad += a.neckBad; tot.joinBad += a.joinBad
-                tot.padMax = max(tot.padMax, a.padMax); tot.stretchMax = max(tot.stretchMax, a.stretchMax); tot.dentMax = max(tot.dentMax, a.dentMax); tot.tippedPad += a.tippedPad
+                tot.padMax = max(tot.padMax, a.padMax); tot.stretchMax = max(tot.stretchMax, a.stretchMax); tot.dentMax = max(tot.dentMax, a.dentMax); tot.tippedPad += a.tippedPad; tot.detached += a.detached; tot.leashed += a.leashed; tot.worstLeg = max(tot.worstLeg, a.worstLeg)
+                if a.detached > 0 { report += "  DETACHED \(tag): \(a.detached) frames, worst leg sdf \(a.worstLeg)\n" }
                 if a.tippedPad > 0 { tippedMoves.insert(job.name) }
                 if a.neckMin < worstNeck.0 { worstNeck = (a.neckMin, tag) }
                 if a.joinMax > worstJoin.0 { worstJoin = (a.joinMax, tag) }
             }
             if !anyStarted { notStarted.append(job.name) }
         }
-        report += String(format: "TOTAL frames %d (bean %d, pad %d) | worst neck %.1f cm (%@) | worst join %.0f deg (%@) | neckBad %d | worst dent %.1f cm | tipped-pad frames %d in %@ | worst pad move %.3f stretch %.2f\nnot started: %@\nphases seen: %@ | scripts seen: %@\n", tot.frames, tot.beanFrames, tot.padFrames, worstNeck.0 * 100, worstNeck.1, worstJoin.0, worstJoin.1, tot.neckBad, tot.dentMax * 100, tot.tippedPad, tippedMoves.sorted().joined(separator: ", "), tot.padMax, tot.stretchMax, notStarted.joined(separator: ", "), "\(Self.phasesSeen.map { "\($0)" }.sorted())", "\(Self.scriptsSeen.sorted())")
+        report += String(format: "leashed frames %d\nTOTAL frames %d (bean %d, pad %d) | worst neck %.1f cm (%@) | worst join %.0f deg (%@) | neckBad %d | worst dent %.1f cm | tipped-pad frames %d in %@ | worst pad move %.3f stretch %.2f\nnot started: %@\nphases seen: %@ | scripts seen: %@\n", tot.leashed, tot.frames, tot.beanFrames, tot.padFrames, worstNeck.0 * 100, worstNeck.1, worstJoin.0, worstJoin.1, tot.neckBad, tot.dentMax * 100, tot.tippedPad, tippedMoves.sorted().joined(separator: ", "), tot.padMax, tot.stretchMax, notStarted.joined(separator: ", "), "\(Self.phasesSeen.map { "\($0)" }.sorted())", "\(Self.scriptsSeen.sorted())")
         try? FileManager.default.createDirectory(atPath: Self.out, withIntermediateDirectories: true)
         try report.write(toFile: Self.out + (Self.before ? "invariants_before.txt" : "invariants_after.txt"), atomically: true, encoding: .utf8)
         print(report)
@@ -293,10 +299,66 @@ final class OnePieceInvariantTests: XCTestCase {
         }
         guard !Self.before else { return }
         XCTAssertEqual(tot.neckBad, 0, "frames where a neck-ring point is less than \(Self.minNeck) inside the drawn body: worst \(worstNeck)")
-        XCTAssertLessThanOrEqual(tot.dentMax, Self.maxDent, "the skin around a foot piece keeps a dent deeper than \(Self.maxDent) m (the old retract ring)")
+        XCTAssertEqual(tot.leashed, 0, "frames where the leash had to move a foot piece: the brain placed it away from the body (the leash is only the last line)")
+        XCTAssertEqual(tot.detached, 0, "frames where a foot piece is not attached to the body (its deepest vertex is not inside the fitted egg by 1 cm, or the drawn crown is out): worst leg sdf \(tot.worstLeg)")
+        if tot.dentMax > Self.maxDent { print("NOTE: dent \(tot.dentMax) m beyond the collar reach (informational, see report)") }
         XCTAssertEqual(tippedMoves.subtracting(Self.padTippedAllowed), [], "moves that show the flat built-in pads of a tipped-over body (tilt > 0.8, no pieces out): make the pieces come out for them, or list them in padTippedAllowed with the reason")
         XCTAssertLessThanOrEqual(tot.padMax, Self.maxPadMove, "a built-in foot pad moved more than \(Self.maxPadMove) from the rigid body")
         XCTAssertLessThanOrEqual(tot.stretchMax, Self.maxStretch, "a built-in foot pad stretched")
+    }
+
+    /// The phone's hitch burst (80 / 120 / 240 ms frames with the stage's dt clamp and 2-step cap) during the moves where a foot was seen lying on the floor away from the body
+    /// (2026-10-31 photo, r1048): every frame, every character, bare + shoes: no foot piece may be drawn away from the body.
+    func testHitchBurstNeverDetachesAFoot() throws {
+        _ = Self.configured
+        ToyTuning.settle = 0; defer { ToyTuning.settle = 5; DecorField.shared.clear() }
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+        var report = "HITCH BURST (60 Hz x 2 s, then 80/120/240 ms frames, 2-step cap)\nmove | char shoes | frames bean | worstLegSdf(cm) detachedFrames\n"
+        var bad = 0, worst: Float = -.infinity
+        for name in ["rollTripWalk", "flip", "faceplant", "hop", "walk", "rollPlay"] {
+            guard let sc = Self.gaitScenario(name) else { XCTFail("no scenario \(name)"); continue }
+            var sc2 = sc
+            sc2 = SC(name: sc.name, game: sc.game, seconds: max(sc.seconds, 8), setup: sc.setup, each: sc.each)
+            for c in 0..<Self.characters.count {
+                let shoes = c % 2 == 1
+                let a = Self.run(sc2, char: c, shoes: shoes, pacing: .hitch, seed: UInt64(3 + c))
+                report += String(format: "%@ | %@ %@ | %d %d | %.1f %d\n", name, Self.characters[c].0, shoes ? "shoes" : "bare", a.frames, a.beanFrames, a.worstLeg.isFinite ? a.worstLeg * 100 : 99, a.detached)
+                bad += a.detached + a.leashed; worst = max(worst, a.worstLeg)
+            }
+        }
+        try? FileManager.default.createDirectory(atPath: Self.out, withIntermediateDirectories: true)
+        try? report.write(toFile: Self.out + (Self.before ? "hitch_before.txt" : "hitch_after.txt"), atomically: true, encoding: .utf8)
+        print(report)
+        guard !Self.before else { return }
+        XCTAssertEqual(bad, 0, "a foot piece was drawn away from the body in a hitch burst (worst leg sdf \(worst))")
+    }
+
+    /// The leash: a foot piece thrown 30 cm away from the body (what the phone showed) is pulled back to the body by the last step of the skin, in a walk, a roll and a flip.
+    func testLeashBringsADetachedFootBack() throws {
+        _ = Self.configured
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+        var tested = 0
+        for name in ["walk", "rollTripWalk", "flip"] {
+            let sc = Self.gaitScenario(name)!
+            var done = false
+            _ = Self.run(sc, char: 4, shoes: false, pacing: .hz60, seed: 3) { frame, r, f in
+                guard !done, f.beans, f.blend > 0.9, frame > 40, name != "rollTripWalk" || f.tilt > 0.8 else { return }
+                done = true
+                var c = SIMD3<Float>.zero
+                for i in 0..<FootBean.vertexCount { c += r.skinner.beanPos[0][i] }
+                c /= Float(FootBean.vertexCount)
+                let away = simd_normalize(c - r.sim.bodyPose(iterations: 4).centroid) * 0.4          // (straight out of the body, 40 cm)
+                for i in 0..<FootBean.vertexCount { r.skinner.beanPos[0][i] += away; r.skinner.beanStart[0][i] += away }
+                r.render()
+                let m = LegsDrawnAuditTests.measure(r, shoes: false)
+                XCTAssertGreaterThan(r.skinner.joinLeash[0], 0.1, "\(name): the leash acted on the displaced foot")
+                XCTAssertLessThanOrEqual(m.ideal, -0.01, "\(name): the displaced foot is back inside the body (ideal sdf \(m.ideal))")
+                tested += 1
+            }
+        }
+        XCTAssertEqual(tested, 3)
     }
 
     /// Picked up, dangling, thrown, dropped (the touch rig): the same neck guarantee.

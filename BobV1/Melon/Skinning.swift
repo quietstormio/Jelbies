@@ -261,6 +261,9 @@ nonisolated final class Skinner {
     /// Fillet radius of the quarter-circle collar (the skin rises along the foot axis by `r` at the foot's outline and meets the flat skin tangentially `r` away).
     nonisolated(unsafe) static var collarK: Float = 0.07
     var joinEnabled = true, collarEnabled = true
+    static let leashDepth: Float = 0.02, leashMax: Float = 0.6
+    /// How far the leash moved each piece last frame (m): 0 = the piece was where the brain put it.
+    private(set) var joinLeash: [Float] = [0, 0]
     /// Body tilt (rad, set by the brain each frame): the neck guarantee fades in between 0.3 and 0.6 rad, so the upright walk / run (the locked gait, whose toes legitimately stand out of the skin) is never touched; it is the tipped-over body (side roll, flips, dives, faceplants, held, thrown) whose feet must not slide.
     var joinTilt: Float = 0
     /// The fitted rigid pose of the body this frame (set by the brain with `joinTilt`): centroid, rotation, rest centroid.
@@ -275,6 +278,8 @@ nonisolated final class Skinner {
     private(set) var joinDent: [Float] = [0, 0]
     private var retractK: [Int32] = []
     private var joinDef = [Float](repeating: 0, count: FootBean.around)
+    private var joinDD = [SIMD3<Float>](repeating: .zero, count: FootBean.around)
+    private var collarAng = [Float](repeating: 0, count: 3 * FootBean.around), collarRad = [Float](repeating: 0, count: 3 * FootBean.around)
     private var joinDir = [SIMD3<Float>](repeating: .zero, count: FootBean.around)
 
     func ensureJoinTris() {
@@ -298,6 +303,29 @@ nonisolated final class Skinner {
 
     private func applyBeanJoin(_ dyn: UnsafeMutablePointer<Float>) {
         joinPull = [0, 0]
+        joinLeash = [0, 0]
+        // THE LEASH (2026-10-31, user's phone: a foot lying on the floor 15 cm from a rolling Teddy during a frame-hitch burst): whatever put a foot piece away from the body, the last step of the skin
+        // brings it back. Ungated: the deepest of the piece's top vertices (rings 11, 12, the pole) must lie `leashDepth` inside the fitted egg; the brain's own clamp keeps >= 4 cm there in every
+        // move, so this never touches a piece that is where the brain put it (the locked walk).
+        if joinEnabled, beansActive, beanBlend > 0.05, let pose = joinPose {
+            for s in 0..<2 {
+                let f = beanFirst[s], A = FootBean.around
+                for _ in 0..<3 {          // (the egg's gradient points straight in only near the surface: a piece far away comes in over a few passes)
+                    var best = -Float.infinity, dir = SIMD3<Float>(0, 1, 0)
+                    func probe(_ v: Int) {
+                        let (d, g) = Self.fittedDepth(SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]), pose)
+                        if d > best { best = d; dir = g }
+                    }
+                    probe(f + FootBean.vertexCount - 1)
+                    for r in Self.joinNeckRings { for j in stride(from: 0, to: A, by: 2) { probe(f + 1 + A * r + j) } }
+                    if best >= Self.leashDepth { break }
+                    let pull = min(Self.leashDepth - best, Self.leashMax)
+                    joinLeash[s] += pull
+                    let sh = dir * pull
+                    for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); dyn[o] += sh.x; dyn[o + 1] += sh.y; dyn[o + 2] += sh.z }
+                }
+            }
+        }
         let gate = max(0, min(1, (joinTilt - 0.3) / 0.3)), gateW = gate * gate * (3 - 2 * gate)
         guard joinEnabled, gateW > 0.001, beansActive, beanBlend > 0.05, let pose = joinPose else { return }
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
@@ -316,12 +344,11 @@ nonisolated final class Skinner {
                 if joinDef[j] > 0 { any = true }
             }
             if !any { continue }
-            var dd = [SIMD3<Float>](repeating: .zero, count: A)
             var mean = SIMD3<Float>.zero
             for j in 0..<A {
                 let nb = max(joinDef[(j + 1) % A], joinDef[(j + A - 1) % A])
                 let d = min(max(joinDef[j], 0.6 * nb), Self.joinMaxPull) * gateW
-                dd[j] = joinDir[j] * d; mean += dd[j]
+                joinDD[j] = joinDir[j] * d; mean += joinDD[j]
                 joinPull[s] = max(joinPull[s], d)
             }
             mean /= Float(A)
@@ -329,7 +356,7 @@ nonisolated final class Skinner {
             for r in 0..<FootBean.rings {
                 let w: Float = r >= top ? 1 : (r == top - 1 ? 0.67 : r == top - 2 ? 0.33 : r == top - 3 ? 0.1 : 0)
                 if w == 0 { continue }
-                for j in 0..<A { let o = 6 * (f + 1 + A * r + j); let d = dd[j] * w; dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z }
+                for j in 0..<A { let o = 6 * (f + 1 + A * r + j); let d = joinDD[j] * w; dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z }
             }
             let o = 6 * (f + FootBean.vertexCount - 1); dyn[o] += mean.x; dyn[o + 1] += mean.y; dyn[o + 2] += mean.z
         }
@@ -353,11 +380,14 @@ nonisolated final class Skinner {
             var c = SIMD3<Float>.zero
             for j in 0..<A { c += P(f + 1 + A * cr + j) }
             c /= Float(A)
-            var ang = [Float](repeating: 0, count: A), rad = [Float](repeating: 0, count: A)
-            for j in 0..<A {
-                let u = P(f + 1 + A * cr + j) - c
-                let x = simd_dot(u, e1), y = simd_dot(u, e2)
-                ang[j] = atan2f(y, x); rad[j] = (x * x + y * y).squareRoot()
+            // the outline the skin meets: the widest of the piece's rings 7...9 in the polar frame about the neck centre (the toe slopes down, so ring 9 alone is far narrower than the foot's footprint)
+            let outlineRings = [cr - 2, cr - 1, cr]
+            for (k, rr) in outlineRings.enumerated() {
+                for j in 0..<A {
+                    let u = P(f + 1 + A * rr + j) - c
+                    let x = simd_dot(u, e1), y = simd_dot(u, e2)
+                    collarAng[k * A + j] = atan2f(y, x); collarRad[k * A + j] = (x * x + y * y).squareRoot()
+                }
             }
             func wrap(_ x: Float) -> Float { var v = x; while v > .pi { v -= 2 * .pi }; while v < -.pi { v += 2 * .pi }; return v }
             for vi in collarIds[s] {
@@ -367,12 +397,16 @@ nonisolated final class Skinner {
                 let x = simd_dot(u, e1), y = simd_dot(u, e2)
                 let rr = (x * x + y * y).squareRoot()
                 let th = atan2f(y, x)
-                var R = rad[0]
-                for j in 0..<A {
-                    let j1 = (j + 1) % A
-                    let da = wrap(ang[j1] - ang[j]); if abs(da) < 1e-5 { continue }
-                    let t = wrap(th - ang[j]) / da
-                    if t >= 0 && t <= 1 { R = rad[j] + (rad[j1] - rad[j]) * t; break }
+                var R: Float = 0
+                for k in 0..<3 {
+                    var Rk = collarRad[k * A]
+                    for j in 0..<A {
+                        let j1 = (j + 1) % A
+                        let a0 = collarAng[k * A + j], da = wrap(collarAng[k * A + j1] - a0); if abs(da) < 1e-5 { continue }
+                        let t = wrap(th - a0) / da
+                        if t >= 0 && t <= 1 { Rk = collarRad[k * A + j] + (collarRad[k * A + j1] - collarRad[k * A + j]) * t; break }
+                    }
+                    R = max(R, Rk)
                 }
                 let dd = rr - R
                 var inward: Float = 0
