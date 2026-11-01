@@ -1,6 +1,6 @@
 //
 //  CallAllCaptureUITests.swift
-//  The bottom-centre "Come here" pill (calls everyone): before the tap, mid-walk, lined up, released. Portrait and landscape.
+//  The heart menu's "Come here" row (calls everyone): menu closed, menu open, mid-walk, lined up, released. Portrait and landscape.
 //  Launch: -NewGame bob,pearl,teddy -NewGameCoins 10000 -MainMenu 0. Screenshots go to CALLALL_OUT.
 //
 
@@ -17,50 +17,33 @@ final class CallAllCaptureUITests: XCTestCase {
     @MainActor
     func testCallEveryone() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-NewGame", "bob,pearl,teddy", "-NewGameCoins", "10000", "-MainMenu", "0"]
+        app.launchArguments += (ProcessInfo.processInfo.environment["CALLALL_HOUR"].map { ["-ClockHour", $0] } ?? []) + ["-NewGame", "bob,pearl,teddy", "-NewGameCoins", "10000", "-MainMenu", "0"]
         app.launch()
         sleep(8)
-        let only = ProcessInfo.processInfo.environment["CALLALL_ONLY"]
-        for (orient, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] where only == nil || only == name {
-            if only != nil && name == "landscape" { try landscapeBlind(app, orient); continue }
+                for (orient, name) in [(UIDeviceOrientation.portrait, "portrait"), (.landscapeLeft, "landscape")] {
+            if let only = ProcessInfo.processInfo.environment["CALLALL_ONLY"], only != name { continue }
             XCUIDevice.shared.orientation = orient
             sleep(5)
-            let pill = app.buttons["hud-call-all"]
-            XCTAssertTrue(pill.waitForExistence(timeout: 10), "the pill shows (\(name))")
-            XCTAssertGreaterThanOrEqual(pill.frame.height, 44)
-            XCTAssertEqual(pill.label, "Call everyone")
+            let menu = app.buttons["care-menu"], row = app.buttons["hud-call-all"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 10))
+            XCTAssertFalse(row.exists, "the row is folded away with the menu closed (\(name))")
             save("\(name)_1_before")
-            app.buttons["care-menu"].tap()
-            sleep(1)
-            XCTAssertFalse(pill.exists, "hidden while the paw menu is open (\(name))")
-            save("\(name)_1b_menu")
-            app.buttons["care-menu"].tap()
-            sleep(1)
-            XCTAssertTrue(pill.waitForExistence(timeout: 5))
-            pill.tap()
-            sleep(1)
-            save("\(name)_2_midwalk")
+            menu.tap()
+            XCTAssertTrue(row.waitForExistence(timeout: 5), "the heart menu has the Come here row (\(name))")
+            XCTAssertEqual(row.label, "Call everyone")
+            XCTAssertTrue(app.buttons["care-feed"].exists)
+            XCTAssertGreaterThan(row.frame.minY, app.buttons["hud-bedtime"].frame.minY, "Come here is the last row, below Bedtime (\(name))")
+            sleep(1); save("\(name)_2_menu")
+            if ProcessInfo.processInfo.environment["CALLALL_MENUONLY"] != nil { menu.tap(); sleep(1); continue }
+            row.tap()
+            if name == "landscape" { sleep(1); save("\(name)_3_midwalk"); sleep(150); save("\(name)_4_lined")
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.10, dy: 0.09)).tap(); sleep(6); save("\(name)_5_released"); continue }
+            sleep(1); save("\(name)_3_midwalk")
             XCTAssertTrue(app.buttons["focus-release"].waitForExistence(timeout: 420), "Let them go shows once they are lined up (\(name))")
-            sleep(2)
-            save("\(name)_3_lined")
-            XCTAssertFalse(pill.exists)
+            sleep(2); save("\(name)_4_lined")
+            XCTAssertFalse(row.exists)
             app.buttons["focus-release"].tap()
-            sleep(3)
-            save("\(name)_4_released")
-            XCTAssertTrue(pill.waitForExistence(timeout: 10), "the pill is back after release (\(name))")
+            sleep(3); save("\(name)_5_released")
         }
-    }
-
-    /// The Debug simulator's main thread is too busy for element queries during the walk: fixed waits and coordinate taps instead.
-    @MainActor
-    private func landscapeBlind(_ app: XCUIApplication, _ orient: UIDeviceOrientation) throws {
-        XCUIDevice.shared.orientation = orient
-        sleep(6)
-        save("landscape_1_before")
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.93)).tap()          // the pill (bottom centre)
-        sleep(1); save("landscape_2_midwalk")
-        sleep(150); save("landscape_3_lined")
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.10, dy: 0.09)).tap()          // Let them go (top left)
-        sleep(6); save("landscape_4_released")
     }
 }
