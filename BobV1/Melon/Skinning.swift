@@ -133,7 +133,7 @@ nonisolated final class Skinner {
     var retractSide: [Int8] = []                      // 0 / 1 = skinned to that foot's sim slab, -1 = belly skin
     var retractMatrix = matrix_identity_float3x3      // body-rigid pose (rotation * squash) that carries a rest delta into the world
     var retractShift: [SIMD3<Float>] = [.zero, .zero]  // how far each sim foot slab sits from the body-rigid pose (world): removed from its vertices
-    func clearBeans() { beanBlend = 0; beanPos = [[], []]; beanStart = [[], []] }
+    func clearBeans() { hipSeen = [false, false]; beanBlend = 0; beanPos = [[], []]; beanStart = [[], []] }
     var beansActive: Bool { beanBlend > 0 && beanPos[0].count == FootBean.vertexCount && beanStart[0].count == FootBean.vertexCount && beanFirst.count == 2 }
 
     // MARK: drawn-space bean guard
@@ -266,6 +266,10 @@ nonisolated final class Skinner {
     private(set) var joinLeash: [Float] = [0, 0]
     /// The body-embedded hip of each foot (world, this frame's skin), how far the piece's top pole is from it, and how far the tether pulled the piece.
     private(set) var hipAnchor: [SIMD3<Float>] = [.zero, .zero]
+    private var hipSeen = [false, false]
+    private(set) var frameDisagree: (Float, Float) = (0, 0)          // (diagnostic) this pass's tail-landmark frame vs the brain's fit: centroid distance, angle
+    /// The hip moving farther than this between two skinned frames is a teleport, not motion (a throw covers < 0.3 m a frame).
+    nonisolated(unsafe) static var teleportJump: Float = 1.0
     private(set) var weldDist: [Float] = [0, 0]
     private(set) var weldPull: [Float] = [0, 0]
     /// FootLog: the deepest of the piece's top vertices inside the fitted egg BEFORE the leash moved it (m, + inside; < 0 = the piece's top was outside the body), each foot. 1 = not measured.
@@ -311,6 +315,9 @@ nonisolated final class Skinner {
 
     /// The body's rigid frame from THIS pass's skin: the three back landmark vertices (the tail's anchors) skinned with the body. `joinPose` (the brain's fit, set after each sim step) is used while it agrees with it;
     /// if a stale or missing fit disagrees (a body re-skinned from another sim state than the one the brain last fitted: centroid > 6 cm or rotation > 0.2 rad apart), this frame's own wins.
+    /// 2026-11-01: the 3 back landmarks are a RIGID frame read off a soft body: a sitting / sliding body (squashed, slumped) puts them 6-8 cm / 6-12 deg off the brain's fit with nothing wrong (the old 6 cm / 0.2 rad switch
+    /// made the leash judge the foot against an egg displaced by that, and fire 5-15 cm in sit, sway, decor seats, the slide). A stale or missing fit is metres / radians off, far past these.
+    nonisolated(unsafe) static var frameDisagreeDist: Float = 0.12, frameDisagreeAngle: Float = 0.35
     private func bodyFrame(_ dyn: UnsafeMutablePointer<Float>) -> (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)? {
         guard let jp = joinPose else { return nil }
         guard tailLM.count == 3 else { return jp }
@@ -327,7 +334,8 @@ nonisolated final class Skinner {
         let own = (centroid: Cs + Rot * (jp.restCentroid - Cr), rotation: q, restCentroid: jp.restCentroid)
         let dc = simd_distance(own.centroid, jp.centroid)
         let ang = 2 * acosf(min(1, abs(simd_dot(own.rotation.vector, jp.rotation.vector))))
-        return (dc > 0.06 || ang > 0.2) ? own : jp
+        frameDisagree = (dc, ang)
+        return (dc > Self.frameDisagreeDist || ang > Self.frameDisagreeAngle) ? own : jp
     }
 
     private func applyBeanJoin(_ dyn: UnsafeMutablePointer<Float>) {
@@ -750,7 +758,17 @@ nonisolated final class Skinner {
                 var n: Float = 0
                 var i = 0
                 while i < FootBean.vertexCount { let o = 6 * (f + i); h += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]); n += 1; i += 8 }
-                hipAnchor[s] = h / n
+                let hn = h / n
+                // A TELEPORT (scene change, tub, stage spot, drop): the body root jumped, the pieces did not. Whatever path moved the body, the pieces move by the same delta here, in the same frame, before the skin
+                // is finished (the tether alone would leave them up to `weldReach` away for a frame or more).
+                if hipSeen[s], simd_length(hn - hipAnchor[s]) > Self.teleportJump {
+                    let dlt = hn - hipAnchor[s]
+                    // (only a piece still at the OLD spot: one the brain already re-placed at the new spot this frame is left alone)
+                    if beanPos[s].count == FootBean.vertexCount && beanStart[s].count == FootBean.vertexCount, simd_length(beanPos[s][FootBean.vertexCount - 1] - hn) > 0.5 {
+                        for i in 0..<FootBean.vertexCount { beanPos[s][i] += dlt; beanStart[s][i] += dlt }
+                    }
+                }
+                hipAnchor[s] = hn; hipSeen[s] = true
             }
             for s in 0..<2 {
                 let f = beanFirst[s]

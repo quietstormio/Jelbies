@@ -34,8 +34,8 @@ final class OnePieceInvariantTests: XCTestCase {
     /// Moves that still show the built-in pads while the body is tipped over, and why (none yet: filled from the first full run).
     static let padTippedAllowed: Set<String> = ["idle sleep"]          // asleep on his back (feet up): the built-in pads, nothing walks or swings; the lying pose is the one stage where the pads are the look
 
-    /// Moves where the leash is seen to act (a few frames): "toy: scooter" puts a foot on the deck with the top of the piece < 2 cm inside the egg; the leash corrects it. Fix the placement, then remove it from here.
-    static let leashAllowed: Set<String> = ["toy: scooter"]
+    /// Moves where the leash is seen to act: none (2026-11-01: the brain now places the top of the piece inside the egg itself; the scooter entry was fixed by the same change).
+    static let leashAllowed: Set<String> = []
 
     typealias SC = LegsDrawnAuditTests.Scenario
 
