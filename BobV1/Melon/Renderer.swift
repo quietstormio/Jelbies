@@ -650,6 +650,7 @@ final class MelonRenderer {
         frameBox = nil
         cmd.addCompletedHandler { c in
             let t = c.gpuEndTime - c.gpuStartTime
+            PerfMeter.gpuDone(ms: t * 1000)
             if let box { pt.add("post", t); gt.add(box.add(t)) } else { gt.add(t) }
             sem.signal()
         }

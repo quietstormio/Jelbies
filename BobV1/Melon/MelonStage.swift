@@ -769,9 +769,27 @@ final class MelonController: NSObject, MTKViewDelegate {
         #endif
     }
 
+    /// PerfMeter's per-line context (read every 5 s only).
+    private func perfContext(_ view: MelonStageView?) -> PerfContext {
+        var c = PerfContext()
+        if game {
+            let k = model.care
+            c.scene = k.race.active ? "race" : k.show.active ? "show" : k.cafe.active ? "cafe" : k.park.active ? "park" : k.groom.active ? "groom" : k.volley.active ? "volley" : k.bath.active ? "bath" : k.focus.isActive ? "focus" : "room"
+        } else { c.scene = "studio" }
+        c.jelbies = actors.count + parkActors.count
+        c.preferredFPS = view?.preferredFramesPerSecond ?? 0
+        c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
+        c.renderScale = Double(view?.contentScaleFactor ?? 0)
+        if Self.metalFXFlag { c.renderScale = fxScale }
+        c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
+                        Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
+        return c
+    }
+
     func attach(to view: MelonStageView) {
         stageView = view
         if game { MelonStageView.gameStage = view }
+        if PerfMeter.on { PerfMeter.context = { [weak self, weak view] in self?.perfContext(view) ?? PerfContext() } }
         view.controller = self
         a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }
@@ -905,6 +923,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard let renderer, let stage = stageView, view.drawableSize.width >= 2, view.drawableSize.height >= 2,
               let drawable = view.currentDrawable else { return }
         LaunchTiming.mark("first frame drawn")
+        PerfMeter.frameBegin()
         let cpu0 = CACurrentMediaTime()
         let now = cpu0
         let dt = lastTime == 0 ? Float(1.0 / 60) : min(Float(now - lastTime), 0.1)
@@ -913,7 +932,9 @@ final class MelonController: NSObject, MTKViewDelegate {
 
         // Waits only when the GPU is BodySlot.ring frames behind; logged apart so "cpu" is CPU work (sim + skin + encode), not the GPU wait.
         let w0 = CACurrentMediaTime()
+        let pmW = PerfMeter.begin()
         renderer.beginFrame()
+        PerfMeter.end(.gpuwait, pmW)
         dbgWait += CACurrentMediaTime() - w0
         let m = model
         let reduce = m.reduceMotion
@@ -957,18 +978,24 @@ final class MelonController: NSObject, MTKViewDelegate {
             let maxSteps = 2
             var steps = 0
             while acc >= sim.stepDt && steps < maxSteps {
+                let pmB = PerfMeter.begin()
                 hopTick(reduce: reduce)
+                PerfMeter.end(.brain, pmB)
                 let st0 = CACurrentMediaTime()
                 stepSims.removeAll(keepingCapacity: true)
                 for a in actors where !(game && model.care.volley.inScene && model.care.volleyHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (volleyball: the Jelbies at home are not stepped, drawn or worn; at most 4 bodies play)
                 for a in parkActors where a.updateSleep(forceAwake: !(a.brain?.isNapping ?? false)) { stepSims.append(a.sim) }          // (a guest asleep at home skips his step like the Jelbies)
+                let pmS = PerfMeter.begin()
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
+                PerfMeter.end(.sim, pmS)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
             steppedThisFrame = steps > 0
             if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
+            let pmF = PerfMeter.begin()
             if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
+            PerfMeter.end(.feature, pmF)
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps
         }
@@ -985,10 +1012,15 @@ final class MelonController: NSObject, MTKViewDelegate {
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
         }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
+        let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        PerfMeter.end(.skin, pmK)
         dbgSkin += CACurrentMediaTime() - sk0
+        let pmW2 = PerfMeter.begin()
         if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
+        PerfMeter.end(.wear, pmW2)
+        let pmM = PerfMeter.begin()
         for a in actors.dropFirst() {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
         }
@@ -1003,6 +1035,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             NSLog("%@", String(format: "[melon] wave arm mat writes: %.1f us per frame (%d frames)", matCost / Double(matN) * 1e6, matN))
             matCost = 0; matN = 0
         }
+        PerfMeter.end(.feature, pmM)
         let c = sim.centroid()
         if !game { rig.follow(centroid: c, dt: dt, grabbing: mode == .grab) }
 
@@ -1090,7 +1123,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.setUniforms(camera: cam, light: light, palette: m.palette.palette, params: fp,
                              viewSize: SIMD2<Float>(Float(rw), Float(rh)))
         if m.showMesh { sim.x.withUnsafeBufferPointer { renderer.uploadParticles($0.baseAddress!) } }
+        let pmE = PerfMeter.begin()
         renderer.draw(drawable: drawable, showMesh: m.showMesh)
+        PerfMeter.end(.encode, pmE)
 
         if !firstFrameDone {
             firstFrameDone = true
@@ -1103,6 +1138,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             publishReadouts()
         }
 
+        PerfMeter.frameEnd()
         dbgCPU += CACurrentMediaTime() - cpu0
         dbgFrames += 1
         if dbgStart == 0 { dbgStart = now }
