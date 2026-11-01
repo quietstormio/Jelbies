@@ -49,14 +49,24 @@ final class FocusGroup {
     /// The close-up was asked for by the "Train" button: the trick book opens on arrival (`training` stays true for the rest of that close-up).
     var trainPending = false
     var training = false
+    /// Seconds since the walk began, the Jelly who stands in the middle (he goes first: nobody has to pass between two standing ones), and Jelly 0's walk held back for him.
+    var clock: Float = 0
+    var front = 0
+    var zeroPending = false
+    /// The line-up is never stuck: after `softAccept` seconds a Jelly within `nearEnough` of his spot is taken as arrived where he stands, after `hardAccept` anyone is.
+    static let softAccept: Float = 5.5, hardAccept: Float = 8, nearEnough: Float = 1.5, sidesWait: Float = 2.5
+    /// A side Jelly may set off once the middle one is (nearly) there, or after `sidesWait` seconds.
+    func mayGo(_ id: Int, frontDistance: Float?) -> Bool {
+        id == front || ids.count < 3 || arrived.contains(front) || clock > Self.sidesWait || (frontDistance ?? 99) < 1.6
+    }
 
-    func begin(ids new: [Int], front: Int? = nil) {
-        ids = new; arrived = []; saved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+    func begin(ids new: [Int], front frontAsked: Int? = nil) {
+        ids = new; arrived = []; clock = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]
         if new.count > 1 {
             let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
             let row = GameCamera.focusRowSpots(count: new.count, anchor: FreeFloor.nearest(to: GameCamera.callSpot, all: offs))
-            let order = (front.flatMap { f in new.contains(f) ? f : nil } ?? new[0])
+            let order = front
             for (k, id) in ([order] + new.filter { $0 != order }).enumerated() { spots[id] = row[k] }
             GameCamera.focusSpots = new.map { spots[$0]! }
         } else {
@@ -74,7 +84,7 @@ final class FocusGroup {
     }
 
     func clear() {
-        ids = []; spots = [:]; arrived = []; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; trainPending = false; training = false; rowOpen = false; touchAnchor = nil; touchID = 0
+        ids = []; spots = [:]; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; trainPending = false; training = false; rowOpen = false; touchAnchor = nil; touchID = 0
         GameCamera.focusSpots = []
     }
 }
@@ -107,7 +117,41 @@ extension GameCare {
         focusGroup.begin(ids: ids, front: front)
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0; approachShort = 0
-        if ids.contains(0) { queued = [.come(to: focusGroup.spot(of: 0))] }
+        if ids.contains(0) {
+            if focusGroup.mayGo(0, frontDistance: nil) { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }
+        }
+    }
+
+    /// Distance of the middle Jelly from his spot (nil = he is the asker or gone).
+    func frontDistance(except id: Int) -> Float? {
+        let g = focusGroup
+        guard g.front != id, let b = brainFor(g.front) else { return nil }
+        return simd_length(Self.floorPos(b, g.front == 0 ? lastSim : bathPlug.actors[g.front]?.actor?.sim) - g.spot(of: g.front))
+    }
+
+    /// Never stuck: past `softAccept` seconds a Jelly near his spot, past `hardAccept` anyone, is accepted where he stands so the line-up completes
+    /// (a body pinned between two standing ones, pushed by the separation rule, never "arrives"). Called once per fixed step from `tickFocus`.
+    func focusSafetyNet(dt: Float) {
+        let g = focusGroup
+        guard focus.phase == .approaching, !g.ids.isEmpty else { return }
+        g.clock += dt
+        guard g.clock > FocusGroup.softAccept else { return }
+        for id in g.ids where !g.arrived.contains(id) {
+            guard let b = brainFor(id) else { if g.markArrived(id) { focus.arrive() }; continue }
+            let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim
+            let d = simd_length(Self.floorPos(b, sim) - g.spot(of: id))
+            guard d < FocusGroup.nearEnough || g.clock > FocusGroup.hardAccept else { continue }
+            b.pending = nil; b.interruptScript = true
+            if id == 0 {
+                queued.removeAll { if case .come = $0 { return true }; return false }; callRunning = false
+                g.zeroPending = false
+                enterFocus(brain: b)
+            } else {
+                g.saved[id] = b.autonomy; b.autonomy = false; b.onFinished = nil
+                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
+            }
+            if !focus.isActive { return }
+        }
     }
 
     /// The close-up's per-step work for Jelly `id` (Jelly 0 from `tick`, the others from `tickOthers`): pause the Jellies that are not in it,
@@ -134,6 +178,7 @@ extension GameCare {
         case .approaching:
             if g.arrived.contains(id) { return }
             if !s.requested {
+                guard g.mayGo(id, frontDistance: frontDistance(except: id)) else { return }
                 s.requested = true; s.age = 0
                 brain.onFinished = { [weak g] r in if case .come = r { g?.came.insert(id) } }
                 brain.requestNow(.come(to: g.spot(of: id)))

@@ -18,6 +18,8 @@ import simd
 final class GameCare {
     /// A tray is out (or about to be): Feed and Drink are disabled until it has poofed away.
     private(set) var trayOut = false
+    /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
+    var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
     private(set) var townRequest = 0
     @ObservationIgnored private(set) var townScreen: TownScreen?
@@ -557,7 +559,7 @@ final class GameCare {
         }
     }
 
-    private func enterFocus(brain: BlobBrain) {
+    func enterFocus(brain: BlobBrain) {
         if !focusGroup.arrived.contains(0) { savedAutonomy = brain.autonomy }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
         brain.autonomy = false                       // he stays on the front spot until released
         if focusGroup.markArrived(0) { focus.arrive() }
@@ -566,11 +568,17 @@ final class GameCare {
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
+        if focus.phase == .approaching {
+            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
+                focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
+            }
+            focusSafetyNet(dt: dt)
+        }
         switch focus.phase {
         case .approaching where focusGroup.includes(0):
             // the come request can be cancelled (for example he was grabbed): ask again a couple of times, then give up
             let act = brain.activity
-            if !callRunning, queued.isEmpty, act == .idle || act == .lookingAround || act == .steppingInPlace {
+            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, act == .idle || act == .lookingAround || act == .steppingInPlace {
                 approachIdle += dt
                 if approachIdle > 0.8 {
                     approachIdle = 0
@@ -813,6 +821,8 @@ final class GameCare {
         if let room = renderer?.room, let f = dining.frame(theme: room.theme) { room.setDining(f) }
         let out = wanted != nil || meal != nil || dining.isPresent || groupActive
         if out != trayOut { trayOut = out }
+        let cp = focus.phase == .approaching || groupActive || bedtimeWalking
+        if cp != cancelPill { cancelPill = cp }
         if !out, servingKind != nil { servingKind = nil }
         if bath.targetID == 0 { bath.tick(brain: brain, sim: sim, play: touchPlay, dt: dt) }         // another Jelly's clean-up ticks in tickOthers
         if !bath.active, !tripActive { voice.tick(care: self, brain: brain, sim: sim, dt: dt) }
