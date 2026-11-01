@@ -21,14 +21,14 @@ final class OnePieceInvariantTests: XCTestCase {
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/onepiece/"
     nonisolated(unsafe) static var keep: [AnyObject] = []
     static let before = ProcessInfo.processInfo.environment["ONEPIECE_BEFORE"] != nil
-    static let maxLegSdf: Float = -0.01, minNeck: Float = 0.010, maxDent: Float = 0.005, maxPadMove: Float = 0.10, maxStretch: Float = 1.15
+    static let maxLegSdf: Float = -0.01, minNeck: Float = 0.010, maxDent: Float = 0.008, maxPadMove: Float = 0.10, maxStretch: Float = 1.15
 
     /// Must run before the first MotionRig (the render mesh bakes the foot's crease).
     static let configured: Void = {
         let e = ProcessInfo.processInfo.environment
         if let v = e["ONEPIECE_COLLAR_R"], let f = Float(v) { Skinner.collarK = f }
         if let v = e["ONEPIECE_COLLAR_RING"], let n = Int(v) { Skinner.collarRing = n }
-        if before { BlobBrain.retractBand = 0.10; FootBean.creaseFadeAmount = 0; BlobBrain.onePieceRoll = false; GaitDriver.rollYawFix = false }
+        if before { BlobBrain.retractBand = 0.10; BlobBrain.retractSink = 0.025; FootBean.creaseFadeAmount = 0; BlobBrain.onePieceRoll = false; GaitDriver.rollYawFix = false }
     }()
 
     /// Moves that still show the built-in pads while the body is tipped over, and why (none yet: filled from the first full run).
@@ -301,7 +301,7 @@ final class OnePieceInvariantTests: XCTestCase {
         XCTAssertEqual(tot.neckBad, 0, "frames where a neck-ring point is less than \(Self.minNeck) inside the drawn body: worst \(worstNeck)")
         XCTAssertEqual(tot.leashed, 0, "frames where the leash had to move a foot piece: the brain placed it away from the body (the leash is only the last line)")
         XCTAssertEqual(tot.detached, 0, "frames where a foot piece is not attached to the body (its deepest vertex is not inside the fitted egg by 1 cm, or the drawn crown is out): worst leg sdf \(tot.worstLeg)")
-        if tot.dentMax > Self.maxDent { print("NOTE: dent \(tot.dentMax) m beyond the collar reach (informational, see report)") }
+        XCTAssertLessThanOrEqual(tot.dentMax, Self.maxDent, "the skin around a foot piece keeps a dent deeper than \(Self.maxDent) m")
         XCTAssertEqual(tippedMoves.subtracting(Self.padTippedAllowed), [], "moves that show the flat built-in pads of a tipped-over body (tilt > 0.8, no pieces out): make the pieces come out for them, or list them in padTippedAllowed with the reason")
         XCTAssertLessThanOrEqual(tot.padMax, Self.maxPadMove, "a built-in foot pad moved more than \(Self.maxPadMove) from the rigid body")
         XCTAssertLessThanOrEqual(tot.stretchMax, Self.maxStretch, "a built-in foot pad stretched")
