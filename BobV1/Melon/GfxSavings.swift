@@ -24,6 +24,8 @@ nonisolated enum GfxFlags {
     /// MetalFX defaults ON for device builds (user-approved 2026-10-31: native, then 1005 / 880 / 603 px wide upscaled, instead of the raw soft 585 rung);
     /// `-MetalFX 0` turns it off. XCTest and the simulator (no MetalFX) keep the raw ladder unless the flag is set.
     static var metalFX: Bool { flag("MetalFX", defaultOn: true) }
+    /// -NoMaterials 1: the HUD's Liquid Glass / material effects are swapped for opaque tints (A/B for GPU contention from the compositor, default off).
+    static var noMaterials: Bool { flag("NoMaterials", defaultOn: false) }
     static var idleRest: Bool { flag("IdleRest", defaultOn: true) }
     /// Render scale (in native-pixel multiples) MetalFX renders at when the adaptive scaler is not driving it. -MetalFXScale 1.5.
     static var metalFXScale: Double { let v = UserDefaults.standard.double(forKey: "MetalFXScale"); return v >= 1 ? v : 1.5 }

@@ -78,6 +78,17 @@ enum HUDGlass {
 extension View {
     /// White frosted Liquid Glass in `shape`, with a white fill under it so the room only shows through a little.
     func hudFrost<S: SwiftUI.Shape>(in shape: S) -> some View {
-        background(shape.fill(HUDGlass.white.opacity(0.4))).glassEffect(HUDGlass.frost, in: shape)
+        hudGlassEffect(HUDGlass.frost, opaque: HUDGlass.white.opacity(0.9), in: shape, under: HUDGlass.white.opacity(0.4))
+    }
+    /// `.glassEffect`, or with -NoMaterials 1 an opaque `opaque` fill instead (no backdrop sampling over the live Metal view).
+    @ViewBuilder
+    func hudGlassEffect<S: SwiftUI.Shape>(_ glass: Glass, opaque: Color, in shape: S, under: Color? = nil) -> some View {
+        if GfxFlags.noMaterials {
+            background(shape.fill(opaque))
+        } else if let under {
+            background(shape.fill(under)).glassEffect(glass, in: shape)
+        } else {
+            glassEffect(glass, in: shape)
+        }
     }
 }

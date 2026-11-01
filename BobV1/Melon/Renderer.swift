@@ -673,8 +673,8 @@ final class MelonRenderer {
         let dShaded = roomPixelsShaded - ctxShaded, dBase = roomPixelsBaseline - ctxBase
         ctxShaded = roomPixelsShaded; ctxBase = roomPixelsBaseline
         let frameCtx = FrameContextStats.Frame(action: Self.actionLabel(lastCacheAction), moving: moving, shadedShare: dBase > 0 ? dShaded / dBase : 1,
-                                               footprint: Double(lastFootprintShare), focus: perfFocus, note: perfNote)
-        let ctxS = ctxStats
+                                               footprint: Double(lastFootprintShare), focus: perfFocus, note: [perfNote, PerfOverlay.current].filter { !$0.isEmpty }.joined(separator: "+"))
+        let ctxS = ctxStats, qw = queueWait, tCommit = CACurrentMediaTime()
         let slowCtx: String? = perfPasses ? "\(lastCacheAction) fp\(Int(lastFootprintShare * 100))% \(width)x\(height) bodies\(slots.filter { !$0.hidden }.count) bath\(bathLook.visible ? 1 : 0)" : nil
         cmd.addCompletedHandler { [weak self] c in
             self?.resolveEncoderSamples(encL, ring: encRing)
@@ -682,11 +682,13 @@ final class MelonRenderer {
             PerfMeter.gpuDone(ms: t * 1000)
             if let box { pt.add("post", t); gt.add(box.add(t)) } else { gt.add(t) }
             ctxS.add(frameCtx, gpu: t)
+            qw.add(gpuWait: c.gpuStartTime - tCommit, kernelWait: c.kernelStartTime - tCommit)
             if let slowCtx, t > 0.024 { pt.addSlow(String(format: "%.0fms ", t * 1000) + slowCtx) }
             sem.signal()
         }
         frameOwned = false
         cmd.commit()
+        calibrator?.submit(on: queue)
     }
 
     // MARK: per-pass GPU timing (launch argument -PerfPasses 1; separate command buffers per pass, same pixels)
@@ -709,7 +711,17 @@ final class MelonRenderer {
     var perfNote = ""
     /// One line since the last call: frames by cache action with their mean GPU ms, camera moving vs still (mean GPU ms), mean room pixels shaded
     /// and footprint, focus frames. Empty when no frame completed. PerfMeter appends it to each window line.
-    func takePerfContext() -> String { ctxStats.take() }
+    func takePerfContext() -> String {
+        let base = ctxStats.take()
+        guard !base.isEmpty else { return base }
+        var parts = [base, queueWait.take(), thermalLog.take(), String(format: "gpuMem %.0fMB", Double(device.currentAllocatedSize) / 1_048_576)]
+        if let c = calibrator { parts.insert(c.take(), at: 1) }
+        return parts.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    /// -GpuCal 1: a fixed-cost compute workload timed every frame (GpuCal.swift), to tell "the GPU got slower" from "our frame got slower".
+    private lazy var calibrator: GpuCalibrator? = GfxFlags.flag("GpuCal", defaultOn: false) ? GpuCalibrator(device: device, library: library) : nil
+    private let queueWait = QueueWaitStats()
+    private let thermalLog = ThermalLog()
     private static func actionLabel(_ a: RoomCacheAction) -> String {
         switch a { case .use: return "use"; case .build: return "build"; case .bypass(let m): return "bypass-" + m.rawValue }
     }

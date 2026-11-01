@@ -8,6 +8,9 @@ import XCTest
 import Metal
 import simd
 import QuartzCore
+import SwiftUI
+import MetalKit
+import UIKit
 @testable import BobV1
 
 @MainActor
@@ -226,4 +229,86 @@ final class GpuFrameTests: XCTestCase {
             for k in 0..<3 { s.ren.setHidden(false, body: k) }
         }
     }
+
+    /// Our frame's GPU ms with a live MTKView in a real window and a SwiftUI HUD over it: no overlay, opaque pills, Liquid Glass pills.
+    /// (Mac "Designed for iPhone": WindowServer composites, not backboardd - structure only, the phone decides.)
+    func testGlassOverlayContention() throws {
+        UserDefaults.standard.removeObject(forKey: "PerfPasses"); UserDefaults.standard.removeObject(forKey: "PerfEncoders")
+        func row(_ s: String) { print("GPUFRAME " + s); NSLog("GPUFRAME %@", s) }
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { throw XCTSkip("no window scene") }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let device = MTLCreateSystemDefaultDevice()!
+        let view = MTKView(frame: window.bounds, device: device)
+        view.colorPixelFormat = .bgra8Unorm; view.framebufferOnly = true; view.isPaused = true; view.enableSetNeedsDisplay = false
+        view.isOpaque = true
+        let ds = view.drawableSize
+        row("window \(window.bounds.size) drawable \(Int(ds.width))x\(Int(ds.height)) scale \(view.contentScaleFactor)")
+        let W = Int(ds.width), H = Int(ds.height)
+        let s = try XCTUnwrap(GpuOptPerfTests.Scene(n: 3, W: W, H: H))
+        Self.keep.append(s)
+        var o = GfxOpt(); o.memorylessMSAA = true; s.ren.gfxOpt = o; s.ren.roomCacheEnabled = true
+
+        func hud(_ mode: Int) -> some View {
+            // mode 0 none, 1 opaque, 2 glass: a top pill row, a left rail, a paw circle and a roster-style panel
+            ZStack {
+                if mode > 0 {
+                    VStack {
+                        HStack { pill(mode, 90, 44); Spacer(); pill(mode, 160, 44) }.padding(.top, 60).padding(.horizontal, 16)
+                        Spacer()
+                        HStack(alignment: .bottom) { VStack { ForEach(0..<4, id: \.self) { _ in pill(mode, 52, 52) } }; Spacer(); pill(mode, 72, 72) }.padding(16).padding(.bottom, 20)
+                    }
+                    RoundedRectangle(cornerRadius: 26).fill(mode == 1 ? Color.white.opacity(0.95) : Color.white.opacity(0.01)).frame(width: 260, height: 300)
+                        .modifier(GlassIf(on: mode == 2)).offset(y: -60)
+                }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        func pill(_ mode: Int, _ w: CGFloat, _ h: CGFloat) -> some View {
+            Capsule().fill(mode == 1 ? Color.white.opacity(0.9) : Color.white.opacity(0.4)).frame(width: w, height: h).modifier(GlassIf(on: mode == 2))
+        }
+        func run(_ mode: Int, _ name: String) {
+            let host = UIHostingController(rootView: hud(mode))
+            host.view.backgroundColor = .clear
+            let root = UIViewController(); root.view.addSubview(view); view.frame = root.view.bounds
+            root.addChild(host); root.view.addSubview(host.view); host.view.frame = root.view.bounds; host.didMove(toParent: root)
+            window.rootViewController = root; window.isHidden = false; window.makeKeyAndVisible()
+            for _ in 0..<10 { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+            var ms: [Double] = [], wall: [Double] = []
+            let t0 = CACurrentMediaTime()
+            for i in 0..<240 {
+                guard let d = view.currentDrawable else { continue }
+                s.frame(advance: true, wait: false, drawable: d)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.001))
+                if i >= 30 { ms.append(s.ren.lastGPUMs) }
+            }
+            wall.append((CACurrentMediaTime() - t0) / 240 * 1000)
+            usleep(100_000)
+            ms.sort()
+            row(String(format: "%@: gpu mean %.2f p95 %.2f max %.2f ms, frame interval %.1f ms", name, ms.reduce(0, +) / Double(max(ms.count, 1)), ms[Int(Double(ms.count) * 0.95)], ms.last ?? 0, wall[0]))
+            host.willMove(toParent: nil); host.view.removeFromSuperview(); host.removeFromParent(); view.removeFromSuperview()
+        }
+        for round in 0..<2 { run(0, "r\(round) no overlay"); run(1, "r\(round) opaque pills"); run(2, "r\(round) Liquid Glass pills") }
+    }
+}
+
+extension GpuFrameTests {
+    /// -GpuCal: the calibration kernels should read the same cost every frame; the ctx line carries cal / qwait / thermal / gpuMem.
+    func testGpuCalibrationLine() throws {
+        UserDefaults.standard.set(true, forKey: "GpuCal"); defer { UserDefaults.standard.removeObject(forKey: "GpuCal") }
+        let s = try XCTUnwrap(GpuOptPerfTests.Scene(n: 3, W: 880, H: 1912))
+        Self.keep.append(s)
+        s.ren.roomCacheEnabled = true
+        for _ in 0..<150 { s.frame(wait: false); s.lastCmd?.waitUntilCompleted() }
+        usleep(300_000)
+        let line = s.ren.takePerfContext()
+        print("GPUFRAME " + line); NSLog("GPUFRAME %@", line)
+        XCTAssertTrue(line.contains("cal[alu"), line)
+        XCTAssertTrue(line.contains("qwait["), line)
+        XCTAssertTrue(line.contains("thermal "), line)
+    }
+}
+
+private struct GlassIf: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View { if on { content.glassEffect(.regular.tint(Color.white.opacity(0.55)).interactive(), in: .rect(cornerRadius: 26)) } else { content } }
 }

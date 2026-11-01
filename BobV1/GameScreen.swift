@@ -65,10 +65,28 @@ struct GameScreen: View {
         model.care.voice.prewarm()
     }
 
+    /// Which overlays are over the Metal view right now (PerfMeter ctx note).
+    private var perfOverlayTags: [String] {
+        var t: [String] = []
+        if menuOpen { t.append("menu") }
+        if rosterOpen { t.append("roster") }
+        if bookOpen { t.append("book") }
+        if soundOpen { t.append("sound") }
+        if bagOpen { t.append("bag") }
+        if settingsOpen { t.append("settings") }
+        if a11yOpen { t.append("a11y") }
+        if extrasOpen { t.append("extras") }
+        if openPicker != nil { t.append("picker") }
+        if let town { t.append("town-\(town)") }
+        if model.care.arranging { t.append("place") }
+        return t
+    }
+
     var body: some View {
         ZStack {
             MelonStage(model: model)
                 .ignoresSafeArea()
+                .onChange(of: perfOverlayTags, initial: true) { _, tags in PerfOverlay.set(tags) }          // PerfMeter ctx: which overlays are up
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
@@ -1077,7 +1095,7 @@ struct CareMenu: View {
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }
             .buttonStyle(.plain)
-            .glassEffect(HUDGlass.pink, in: .circle)
+            .hudGlassEffect(HUDGlass.pink, opaque: Color(red: 0.95, green: 0.38, blue: 0.56), in: .circle)
             .accessibilityIdentifier("care-menu")
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
             .accessibilityValue(open ? "expanded" : "collapsed")
