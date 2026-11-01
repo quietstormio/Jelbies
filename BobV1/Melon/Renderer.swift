@@ -378,6 +378,7 @@ final class MelonRenderer {
         pCacheBlit = pl.cacheBlit; pPresent = pl.present
         pMatteBath = pl.matteBath
         pMatteFast = pl.matteSpec
+        _ = MelonPipelines.fibreNoise(device)
         pDepth = pl.depth; pBackground = pl.background; pProps = pl.props; pBack = pl.back; pCopy = pl.copy; pJelly = pl.jelly; pMatte = pl.matte; pEyes = pl.eyes; pLines = pl.lines; pPost = pl.post
 
         func ds(_ fn: MTLCompareFunction, _ write: Bool) -> MTLDepthStencilState? {
@@ -850,12 +851,15 @@ final class MelonRenderer {
 
     /// The opt-in cheaper matte body pipeline for `tier` (1...3), built once (function constant `fastTier`). nil -> the locked shader is used.
     private func fastMattePipeline(tier: Int, belly: Bool = true, teddy: Bool = true) -> MTLRenderPipelineState? {
-        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe
+        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe + 1000 * gfxOpt.fibreMode
         if let p = pMatteFast[key] { return p }
-        guard let p = MelonPipelines.makeMatteSpec(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe) else { return nil }
+        guard let p = MelonPipelines.makeMatteSpec(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe, fibre: gfxOpt.fibreMode) else { return nil }
         pMatteFast[key] = p
         return p
     }
+
+    /// The 64^3 lattice texture behind -FibreLUT (MelonPipelines.fibreNoise: built during the launch warm-up; also bound, unused, by the exact pipelines).
+    private func fibreNoiseTexture() -> MTLTexture? { MelonPipelines.fibreNoise(device) }
 
     // MARK: jersey (Wear/GfxJersey.metal)
 
@@ -1158,7 +1162,8 @@ final class MelonRenderer {
                 } else {
                     // shape.w (BlueBelly.mode) says whether the belly / Teddy blocks can run at all for this body
                     let bellyMode = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                    let sp = (tierNow > 0 || matteSpec) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    let sp = (tierNow > 0 || matteSpec || gfxOpt.fibreMode > 0) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    if sp != nil { e.setFragmentTexture(fibreNoiseTexture(), index: 0) }
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 if !bodyProbe.contains(.skipBody) { e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4) }

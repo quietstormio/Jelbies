@@ -18,6 +18,31 @@ nonisolated enum MelonPipelines {
     nonisolated(unsafe) private static var libraries: [ObjectIdentifier: MTLLibrary] = [:]
     nonisolated(unsafe) private static var sets: [String: Pipes] = [:]
 
+    nonisolated(unsafe) private static var noiseTex: [ObjectIdentifier: MTLTexture] = [:]
+    /// 64^3 tiling lattice of the body shader's hash (r16Float), the source of -FibreLUT's value noise; one per device, made once (the launch warm-up calls it).
+    static func fibreNoise(_ device: MTLDevice) -> MTLTexture? {
+        lock.lock(); defer { lock.unlock() }
+        if let t = noiseTex[ObjectIdentifier(device)] { return t }
+        let n = 64
+        let d = MTLTextureDescriptor()
+        d.textureType = .type3D; d.pixelFormat = .r16Float; d.width = n; d.height = n; d.depth = n
+        d.usage = .shaderRead; d.storageMode = .shared
+        guard let t = device.makeTexture(descriptor: d) else { return nil }
+        t.label = "fibre noise lattice"
+        func fract(_ x: Float) -> Float { x - x.rounded(.down) }
+        var px = [Float16](repeating: 0, count: n * n * n)
+        for z in 0..<n { for y in 0..<n { for x in 0..<n {
+            // the shader's hash3 (Shaders.metal) at the lattice point
+            var q = SIMD3<Float>(fract(Float(x) * 0.1031), fract(Float(y) * 0.1031), fract(Float(z) * 0.1031))
+            let dd = q.x * (q.y + 33.33) + q.y * (q.z + 33.33) + q.z * (q.x + 33.33)
+            q += SIMD3<Float>(repeating: dd)
+            px[(z * n + y) * n + x] = Float16(fract((q.x + q.y) * q.z))
+        } } }
+        px.withUnsafeBytes { t.replace(region: MTLRegionMake3D(0, 0, 0, n, n, n), mipmapLevel: 0, slice: 0, withBytes: $0.baseAddress!, bytesPerRow: n * 2, bytesPerImage: n * n * 2) }
+        noiseTex[ObjectIdentifier(device)] = t
+        return t
+    }
+
     /// The app's default shader library for `device` (one per device, shared).
     static func library(_ device: MTLDevice) -> MTLLibrary? {
         lock.lock(); defer { lock.unlock() }
@@ -115,21 +140,25 @@ nonisolated enum MelonPipelines {
               let pr = makeGfx("present", fs: "gfxPresentFS", color: colorPixelFormat, depth: false, samples: 1)
         else { return nil }
         var spec: [Int: MTLRenderPipelineState] = [:]
-        for (bl, td) in [(false, false), (true, false), (true, true)] {
-            if let sp = makeMatteSpec(device: device, library: library, vd: meshVD, tier: 0, belly: bl, teddy: td, probe: 0) { spec[0 + (bl ? 10 : 0) + (td ? 20 : 0)] = sp }
+        for fibre in [1, 0] {          // 1 = the app's default noise (the lattice texture), 0 = the exact ALU noise (-FibreLUT 0, tests)
+            for (bl, td) in [(false, false), (true, false), (true, true)] {
+                if let sp = makeMatteSpec(device: device, library: library, vd: meshVD, tier: 0, belly: bl, teddy: td, probe: 0, fibre: fibre) { spec[(bl ? 10 : 0) + (td ? 20 : 0) + 1000 * fibre] = sp }
+            }
         }
         return MelonPipelines.Pipes(depth: a, background: b, props: c, back: d, copy: e, jelly: f, matte: mt, eyes: ey, matteBath: mtb, lines: g, post: h, cacheBlit: cb, present: pr, meshVD: meshVD, matteSpec: spec)
     }
 
     /// The matte body pipeline of fsSoftMatteFast: `tier` 0 = the locked maths (pixel-identical), 1...3 = the opt-in cheaper tiers; `belly` / `teddy`
     /// compile the lighter-front and Teddy ear / pom blocks in or out (a body whose BlueBelly mode is 0 needs neither); `probe` is the measurement mode.
-    static func makeMatteSpec(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, tier: Int, belly: Bool, teddy: Bool, probe: Int) -> MTLRenderPipelineState? {
+    static func makeMatteSpec(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, tier: Int, belly: Bool, teddy: Bool, probe: Int, fibre: Int = 0) -> MTLRenderPipelineState? {
         let cv = MTLFunctionConstantValues()
         var t = Int32(tier), bl = belly, td = teddy, pr = Int32(probe)
         cv.setConstantValue(&t, type: .int, index: 0)
         cv.setConstantValue(&bl, type: .bool, index: 1)
         cv.setConstantValue(&td, type: .bool, index: 2)
         cv.setConstantValue(&pr, type: .int, index: 3)
+        var fm = Int32(fibre)
+        cv.setConstantValue(&fm, type: .int, index: 4)
         guard let fs = try? library.makeFunction(name: "fsSoftMatteFast", constantValues: cv), let vs = library.makeFunction(name: "vsJelly") else {
             print("MelonRenderer: fsSoftMatteFast tier \(tier) unavailable"); return nil
         }

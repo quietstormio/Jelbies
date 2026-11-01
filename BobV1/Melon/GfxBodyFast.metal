@@ -41,10 +41,16 @@ static float teddyPomMask(float3 Q) {
 constant int fastTier [[function_constant(0)]];
 // Species specialisation (tier 0 and up): a body without the lighter-front marking compiles the whole belly block out; one that is not Teddy
 // compiles the ear / pom masks out. MelonRenderer picks the pipeline from the body's shape.w (= BlueBelly.mode) each frame.
+constexpr sampler lutSamp(coord::normalized, filter::linear, address::repeat);
 constant bool hasBelly [[function_constant(1)]];
 constant bool hasTeddy [[function_constant(2)]];
 // Measurement probe (GpuBodyCostTests only; 0 in the app): 1 = flat colour, 2 = no fibre, 3 = no crinkle/fibre bump, 4 = no colour-noise terms.
 constant int probeMode [[function_constant(3)]];
+// -FibreLUT (opt-in, changes pixels): bit 0 = value noise from a tiling texture (one fetch instead of 8 hashes), bit 1 = the fibre ridge uses one octave
+// (variance-matched) instead of two.
+constant int fibreMode [[function_constant(4)]];
+constant bool fibreLUT = (fibreMode & 1) != 0;
+constant bool fibreHalf = (fibreMode & 2) != 0;
 
 struct FastUniforms {
     float4x4 viewProj; float4x4 view; float4x4 invViewProj; float4x4 lightVP; float4x4 topVP;
@@ -67,28 +73,35 @@ static float fhash3(float3 p) {
     q += dot(q, q.yzx + 33.33);
     return fract((q.x + q.y) * q.z);
 }
-static float fvnoise(float3 p) {
+static float fvnoise(float3 p, texture3d<float> lut) {
+    if (fibreLUT) {
+        // lattice hashes from a tiling 64^3 texture: smooth the fractional part first, then ONE trilinear fetch interpolates the cell's 8 corners
+        float3 i = floor(p), f = fract(p);
+        float3 u = f * f * (3.0 - 2.0 * f);
+        return lut.sample(lutSamp, (i + u + 0.5) * (1.0 / 64.0)).r;
+    }
     float3 i = floor(p); float3 f = fract(p);
     float3 u = f * f * (3.0 - 2.0 * f);
     float a = mix(mix(fhash3(i + float3(0,0,0)), fhash3(i + float3(1,0,0)), u.x), mix(fhash3(i + float3(0,1,0)), fhash3(i + float3(1,1,0)), u.x), u.y);
     float b = mix(mix(fhash3(i + float3(0,0,1)), fhash3(i + float3(1,0,1)), u.x), mix(fhash3(i + float3(0,1,1)), fhash3(i + float3(1,1,1)), u.x), u.y);
     return mix(a, b, u.z);
 }
-static float fCrinkle(float3 Q) { return 0.6 * fvnoise(Q * 46.0) + 0.4 * fvnoise(Q * 97.0 + 3.1); }
-static float fRidge(float3 w) {
-    float n = 0.7 * fvnoise(w) + 0.3 * fvnoise(w * 2.3 + 5.5);
+static float fCrinkle(float3 Q, texture3d<float> lut) { return 0.6 * fvnoise(Q * 46.0, lut) + 0.4 * fvnoise(Q * 97.0 + 3.1, lut); }
+static float fRidge(float3 w, texture3d<float> lut) {
+    float n = fibreHalf ? 0.5 + 0.76 * (fvnoise(w, lut) - 0.5) : 0.7 * fvnoise(w, lut) + 0.3 * fvnoise(w * 2.3 + 5.5, lut);
     return smoothstep(0.88, 0.985, 1.0 - abs(2.0 * n - 1.0));
 }
-static float fFibre(float3 Q) {
-    float3 wq = Q * 72.0 + 0.7 * float3(fvnoise(Q * 14.0 + 1.7), fvnoise(Q * 14.0 + 9.1), fvnoise(Q * 14.0 + 4.2));
-    float dk = fRidge(wq) * smoothstep(0.38, 0.62, fvnoise(Q * 34.0 + 7.7));
-    float lt = fRidge(wq * 0.93 + float3(17.3, 3.1, 9.7)) * smoothstep(0.38, 0.62, fvnoise(Q * 34.0 + 21.1));
+static float fFibre(float3 Q, texture3d<float> lut) {
+    float3 wq = Q * 72.0 + 0.7 * float3(fvnoise(Q * 14.0 + 1.7, lut), fvnoise(Q * 14.0 + 9.1, lut), fvnoise(Q * 14.0 + 4.2, lut));
+    float dk = fRidge(wq, lut) * smoothstep(0.38, 0.62, fvnoise(Q * 34.0 + 7.7, lut));
+    float lt = fRidge(wq * 0.93 + float3(17.3, 3.1, 9.7), lut) * smoothstep(0.38, 0.62, fvnoise(Q * 34.0 + 21.1, lut));
     return lt - dk;
 }
 
 fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
                                 bool ff [[front_facing]],
-                                constant FastUniforms& u [[buffer(0)]]) {
+                                constant FastUniforms& u [[buffer(0)]],
+                                texture3d<float> lut [[texture(0)]]) {
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
@@ -97,14 +110,14 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     if (fastTier == 0) {
         // exactly the locked fsSoftMatte
         float e = 0.012;
-        float c0 = fCrinkle(Q);
-        float3 g = float3(fCrinkle(Q + float3(e, 0, 0)) - c0, fCrinkle(Q + float3(0, e, 0)) - c0, fCrinkle(Q + float3(0, 0, e)) - c0) / e;
+        float c0 = fCrinkle(Q, lut);
+        float3 g = float3(fCrinkle(Q + float3(e, 0, 0), lut) - c0, fCrinkle(Q + float3(0, e, 0), lut) - c0, fCrinkle(Q + float3(0, 0, e), lut) - c0) / e;
         g -= N * dot(g, N);
         if (probeMode != 3) { N = normalize(N - g * 0.0022); }
         float ef = 0.0018;
-        fb = probeMode == 2 || probeMode == 3 ? 0.0 : fFibre(Q);
+        fb = probeMode == 2 || probeMode == 3 ? 0.0 : fFibre(Q, lut);
         if (probeMode == 0 || probeMode == 4) {
-            float3 gf = float3(fFibre(Q + float3(ef, 0, 0)) - fb, fFibre(Q + float3(0, ef, 0)) - fb, fFibre(Q + float3(0, 0, ef)) - fb) / ef;
+            float3 gf = float3(fFibre(Q + float3(ef, 0, 0), lut) - fb, fFibre(Q + float3(0, ef, 0), lut) - fb, fFibre(Q + float3(0, 0, ef), lut) - fb) / ef;
             gf -= N * dot(gf, N);
             N = normalize(N - gf * 0.0003);
         }
@@ -114,14 +127,14 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     float3 B = cross(N, T);
     if (fastTier <= 2) {
         float e = 0.012;
-        float c0 = fCrinkle(Q);
-        float3 g = (T * (fCrinkle(Q + T * e) - c0) + B * (fCrinkle(Q + B * e) - c0)) / e;
+        float c0 = fCrinkle(Q, lut);
+        float3 g = (T * (fCrinkle(Q + T * e, lut) - c0) + B * (fCrinkle(Q + B * e, lut) - c0)) / e;
         N = normalize(N - g * 0.0022);
     }
-    fb = fFibre(Q);
+    fb = fFibre(Q, lut);
     if (fastTier <= 1) {
         float ef = 0.0018;
-        float3 gf = (T * (fFibre(Q + T * ef) - fb) + B * (fFibre(Q + B * ef) - fb)) / ef;
+        float3 gf = (T * (fFibre(Q + T * ef, lut) - fb) + B * (fFibre(Q + B * ef, lut) - fb)) / ef;
         gf -= N * dot(gf, N);
         N = normalize(N - gf * 0.0003);
     }
@@ -136,7 +149,7 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     float3 t = pow(float3(s), float3(0.55, 1.0, 1.25));
     float3 col = mix(u.fleshDeep.rgb, u.flesh.rgb, t);
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
-    if (probeMode != 4) { col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045; }
+    if (probeMode != 4) { col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0, lut) - 0.5) * 0.045; }
     col *= 1.0 + 0.04 * fb;
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
     float bb = u.shape.w;
