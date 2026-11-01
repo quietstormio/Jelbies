@@ -58,6 +58,8 @@ final class StartFlow {
         // Not simulator-gated: a device Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
         applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
                      coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
+        // Not simulator-gated: `-ImportSave 1` merges Documents/import_save.plist (an old save's room) into this game, once (`-ImportSave 0` re-arms). Runs before StoreBook is created.
+        ImportSave.apply(arg: UserDefaults.standard.object(forKey: ImportSave.argKey) != nil ? UserDefaults.standard.integer(forKey: ImportSave.argKey) : nil)
     }
 
     static let clearGuestKey = "ClearGuest", clearGuestAppliedKey = "ClearGuest.applied"
