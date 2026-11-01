@@ -169,6 +169,17 @@ extension BlobBrain {
             }
             return nil
         case .soccerKick: return soccerStand(f, from: here)
+        case .decorKick where f.kind.isBallLike:
+            // balls are solid: he stands just outside its contact circle on the side he comes from (the toe reaches from there: the kick lands inside 1.12)
+            let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
+            let gap = f.kind.rollRadius + RoomLayout.ballBodyGap(footprint) + 0.12
+            for k in 0..<9 {
+                let a = atan2f(base.x, base.y) + Float((k + 1) / 2) * 0.5 * (k % 2 == 0 ? 1 : -1)
+                let p = c + SIMD2(sinf(a), cosf(a)) * gap
+                let q = fixed(p)
+                if simd_distance(p, q) < 0.06, peerFree(q) { return q }
+            }
+            return nil
         case .decorPeek where f.kind == .playtunnel: return tunnelEntry(f, from: here)
         case .decorSit where f.kind == .beanbag, .decorBoop, .decorPeek:
             if !DecorKind.original.contains(f.kind) { return edgeStand(f, from: here, gap: max(0.8, footprint * f.spec.reach + 0.06)) }

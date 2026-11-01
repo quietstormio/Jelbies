@@ -631,6 +631,7 @@ final class DecorField {
         occupant = occupant.filter { o in a[o.key] != nil && list.first(where: { $0.uid == o.key })?.kind == oldKinds[o.key] }
         seatOccupant = seatOccupant.filter { so in a[so.key] != nil && list.first(where: { l in l.uid == so.key })?.kind == oldKinds[so.key] }
         RoomLayout.decorFeet = feet
+        spheres.removeAll(keepingCapacity: true); RoomLayout.ballSpheres = []; bodyPrev = [:]; bodyVel = [:]          // (the circles are rebuilt by the next tick)
         version &+= 1
     }
     func clear() { set([]) }
@@ -710,6 +711,7 @@ final class DecorField {
     func tick(dt: Float) {
         SoccerState.shared.advance(dt)
         toyAdvance(dt)
+        ballContactStep(dt: dt)          // (balls are solid: bodies push them, they push each other: Room/DecorField+BallContact.swift)
         for uid in Array(anim.keys) {
             guard var a = anim[uid], let f = foot(uid) else { continue }
             if a.active {
@@ -755,6 +757,10 @@ final class DecorField {
 
     /// The Jellies' floor positions (steer id, xz) this step, for the soccer ball's gentle bumps (the stage sets it in `tickDecor`; the tests set it by hand).
     var bodies: [(id: Int, pos: SIMD2<Float>)] = []
+    /// Ball contact bookkeeping (DecorField+BallContact.swift): the circles handed to the resolver, and each body's last position and smoothed velocity.
+    var spheres: [BallSphere] = []
+    var bodyPrev: [Int: SIMD2<Float>] = [:]
+    var bodyVel: [Int: SIMD2<Float>] = [:]
     /// (DecorField+Soccer.swift writes a piece's animation back.)
     func setAnim(_ uid: Int, _ a: DecorAnim) { if anim[uid] != nil { anim[uid] = a } }
 
