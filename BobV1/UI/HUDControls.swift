@@ -26,6 +26,12 @@ enum HUDMenu {
         return .group
     }
 
+    /// The bottom-centre "Come here" pill (calls everyone): only with nobody highlighted, roaming, and nothing else going on (bath, meal, trip, race, outing, guest cut-scenes).
+    static func callAllAvailable(_ care: GameCare) -> Bool {
+        mode(care) == .group && care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy && !care.trayOut
+            && !care.cafe.active && !care.arranging
+    }
+
     /// Top to bottom. Six rows in the group menu, five in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
@@ -137,4 +143,27 @@ enum HUDMenu {
     }
 
     static func compete(_ dest: TownScreen, id: Int) -> HUDRoute { .town(dest, who: id) }
+}
+
+/// "Come here" for everyone: a frosted capsule like the other HUD pills (Let them go, the gear / sound pill), 44 pt tall, bottom-centre.
+struct CallEveryoneButton: View {
+    let action: () -> Void
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            action()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: HUDMenu.symbol(.come)).font(.system(size: 15, weight: .semibold))
+                Text("Come here").jFont(16, .semibold).lineLimit(1).fixedSize()
+            }
+            .foregroundStyle(FocusStyle.brown)
+            .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .hudFrost(in: .capsule)
+        .accessibilityIdentifier("hud-call-all")
+        .accessibilityLabel("Call everyone")
+        .accessibilityHint("All your Jelbies walk over and line up")
+    }
 }
