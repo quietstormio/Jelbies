@@ -135,3 +135,6 @@ All seven work-in-progress branches are merged on **`integrate`** (1e8dea5), plu
 ## Where things are
 - Scratchpad: the /tmp scratchpad is wiped on reboot. It was copied to ~/BobV1_backups/scratchpad_2026-10-20/ (26 GB). Key items: art exports (food_art/export, wear_art/export, char_art/export + compat.json), plans (soccer_plan.md, fixC_diag.md, contest_research*.md, music_pick/picks.json), captures.
 - The phone has the fix-round-B build (pre-7c). The signed app from `final-touches` is at `dd_sign/Build/Products/Release-iphoneos/BobV1.app` inside its worktree (rebuild if the worktree is gone).
+
+## Performance
+See docs/PERFORMANCE.md: no Liquid Glass over the game view, thermal-first governor, how to measure on the phone.
