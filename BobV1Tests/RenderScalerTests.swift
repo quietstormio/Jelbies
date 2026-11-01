@@ -186,3 +186,37 @@ final class MetalFXLadderTests: XCTestCase {
         XCTAssertEqual(RenderScaler(native: 2, metalFX: true).levels, [2, 1.5])
     }
 }
+
+final class ThermalFirstScalerTests: XCTestCase {
+    private let dt = 1.0 / 60
+    private func run(_ s: inout RenderScaler, secs: Double, gpu: Double, thermal: ProcessInfo.ThermalState = .nominal) -> [Double] {
+        var out: [Double] = []
+        for _ in 0..<Int(secs / dt) { if let x = s.update(dt: dt, gpuMs: gpu, thermal: thermal) { out.append(x) } }
+        return out
+    }
+    func testStartsAtTheCalmRungNotNative() {
+        XCTAssertEqual(RenderScaler(native: 3, metalFX: true, thermalFirst: true).scale, 2.19)
+        XCTAssertEqual(RenderScaler(native: 3, thermalFirst: true).scale, 2)
+        XCTAssertEqual(RenderScaler(native: 3, metalFX: true).scale, 3, "the old mode still starts at native")
+    }
+    func testBudgetIsTheSustainedSixMs() {
+        var s = RenderScaler(native: 3, metalFX: true, thermalFirst: true)
+        XCTAssertEqual(s.budgetMs, 6.0)
+        XCTAssertEqual(run(&s, secs: 1.5, gpu: 8), [1.5], "8 ms is over the thermal budget: one rung down")
+    }
+    func testClimbsToNativeOnlyWhenCoolAndUnder4msFor30s() {
+        var s = RenderScaler(native: 3, metalFX: true, thermalFirst: true)
+        XCTAssertEqual(run(&s, secs: 25, gpu: 3), [], "25 s is not enough")
+        XCTAssertEqual(run(&s, secs: 10, gpu: 3), [2.5], "30 s of headroom climbs one rung")
+        var t = RenderScaler(native: 3, metalFX: true, thermalFirst: true)
+        XCTAssertEqual(run(&t, secs: 60, gpu: 5), [], "5 ms is not enough headroom for the climb above the calm rung")
+        var u = RenderScaler(native: 3, metalFX: true, thermalFirst: true)
+        XCTAssertEqual(run(&u, secs: 90, gpu: 3, thermal: .fair), [1.5], "steps down once when it warms and never climbs while the phone is warm")
+    }
+    func testThermalFairStepsDownAtOnceAndHolds60s() {
+        var s = RenderScaler(native: 3, metalFX: true, thermalFirst: true)
+        XCTAssertEqual(run(&s, secs: 0.1, gpu: 3, thermal: .fair), [1.5], "one rung down immediately")
+        XCTAssertEqual(run(&s, secs: 50, gpu: 1, thermal: .nominal), [], "held for 60 s after the thermal step")
+        XCTAssertFalse(run(&s, secs: 30, gpu: 1, thermal: .nominal).isEmpty, "then it may climb again")
+    }
+}

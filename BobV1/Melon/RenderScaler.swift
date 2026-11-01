@@ -22,13 +22,22 @@ struct RenderScaler {
     static let settle = 0.4             // s of ignored samples after any change (targets re-created, GPU warms)
     static let budgetFraction = 0.85    // of the target frame interval
     static let upHeadroom = 0.90        // predicted cost at the next scale must be under budget x this
+    // Thermal-first mode (the game): the phone must stay cool, so the budget is a SUSTAINED GPU time, not "whatever fits in a frame".
+    static let sustainedBudgetMs = 6.0          // GPU ms per frame we aim to stay under
+    static let calmScale = 2.2                  // the sharpest scale used by default (the 2.19x MetalFX rung; 2.0 on the raw ladder)
+    static let nativeClimbMs = 4.0              // climbing above calmScale needs this much GPU headroom ...
+    static let nativeClimbAfter = 30.0          // ... for this long, with the thermal state nominal
+    static let thermalHold = 60.0               // no climbing for this long after a thermal step down
 
     let levels: [Double]
     private(set) var level = 0
     var scale: Double { levels[level] }
     /// Frame interval the budget is measured against (s). Resolution is always judged against 60 Hz.
     var targetInterval: Double
-    var budgetMs: Double { targetInterval * 1000 * Self.budgetFraction }
+    var budgetMs: Double { thermalFirst ? Self.sustainedBudgetMs : targetInterval * 1000 * Self.budgetFraction }
+    let thermalFirst: Bool
+    private var lastThermal = ProcessInfo.ThermalState.nominal
+    private var holdT = 0.0
 
     private(set) var smoothedMs: Double?
     private var overT = 0.0, underT = 0.0, settleT = 0.0
@@ -36,10 +45,12 @@ struct RenderScaler {
     private var lastStepUpAt = -1000.0, clock = 0.0
     private var cap = 0                 // lowest allowed level index (thermal)
 
-    init(native: Double, targetInterval: Double = 1.0 / 60, metalFX: Bool = false) {
+    init(native: Double, targetInterval: Double = 1.0 / 60, metalFX: Bool = false, thermalFirst: Bool = false) {
         var l = [max(native, 1)]
         for s in (metalFX ? Self.metalFXLadder : Self.ladder) where s < l[0] - 0.01 { l.append(s) }
         levels = l
+        self.thermalFirst = thermalFirst
+        if thermalFirst { level = l.firstIndex { $0 <= Self.calmScale } ?? 0 }          // starts at the calm rung, climbs to native only when cool and idle
         self.targetInterval = targetInterval
     }
 
@@ -52,6 +63,12 @@ struct RenderScaler {
         clock += dt
         let newCap = (thermal == .serious || thermal == .critical) ? thermalLevel : 0
         cap = newCap
+        if thermalFirst {
+            if holdT > 0 { holdT -= dt }
+            let worse = thermal.rawValue > lastThermal.rawValue
+            lastThermal = thermal
+            if worse, thermal != .nominal { holdT = Self.thermalHold; if level < max(cap, min(level + 1, levels.count - 1)) { return move(to: max(cap, level + 1)) } }
+        }
         if level < cap { return move(to: cap) }              // thermal: drop at once
         if settleT > 0 { settleT -= dt; return nil }
         guard let g = gpuMs, g > 0 else { return nil }
@@ -70,9 +87,11 @@ struct RenderScaler {
         // Comfortably under: predicted cost at the next scale up (pixel count ~ scale^2) still fits with headroom.
         if level > cap {
             let r = levels[level - 1] / levels[level]
-            if ms * r * r < budgetMs * Self.upHeadroom {
+            let toNative = thermalFirst && levels[level - 1] > Self.calmScale
+            let coolEnough = !thermalFirst || (holdT <= 0 && thermal == .nominal && (!toNative || ms < Self.nativeClimbMs))
+            if coolEnough, ms * r * r < budgetMs * Self.upHeadroom {
                 underT += dt
-                if underT >= upWait {
+                if underT >= (toNative ? Self.nativeClimbAfter : upWait) {
                     lastStepUpAt = clock
                     return move(to: level - 1)
                 }
