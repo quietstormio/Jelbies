@@ -13,7 +13,21 @@ import QuartzCore
 enum IntroClip {
     /// The full-screen logo animation (stars, the word puffing up, the little jelly on the "i", its own music), 5 s at 60 fps, Blue theme.
     /// Two renders of the same animation: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
-    static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
+    static func resource(landscape: Bool) -> String {
+        let o = landscape ? "landscape" : "portrait"
+        return variant == .pop ? "jelbies_logo_intro_pop_" + o : "jelbies_logo_intro_" + o
+    }
+    enum Variant { case hold, pop }
+    /// A (.hold, the default): plays once and holds the finished logo, "Tap to start". B (.pop): the stomp and the letters pop, then a 0.4 s beat on the empty paper and straight to the game.
+    /// Flip the default here; `-IntroVariant B` (or A) on the launch line overrides it.
+    static let defaultVariant: Variant = .hold
+    static let variant: Variant = {
+        let a = ProcessInfo.processInfo.arguments
+        if let i = a.firstIndex(of: "-IntroVariant"), i + 1 < a.count { return a[i + 1].uppercased() == "B" ? .pop : .hold }
+        return defaultVariant
+    }()
+    /// Variant B: seconds to rest on the popped frame before the fade.
+    static let popBeat: Double = 0.4
     static let fileExtension = "mp4"
     /// Seconds after the clip ends before it moves on by itself.
     static let autoAdvance: Double = 2.0
@@ -35,6 +49,7 @@ struct IntroView: View {
     @State private var ready = false          // the item can play
     @State private var shown = false          // the clip is visible: playback has really advanced (or the last frame is up)
     @State private var settled = false
+    @State private var settledAny = false
     @State private var leaving = false
     @State private var finished = false
     @State private var volume: Float = 0
@@ -54,7 +69,7 @@ struct IntroView: View {
                         .opacity(shown ? 1 : 0)
                         .animation(.easeInOut(duration: 0.5), value: shown)
                 }
-                if A11ySettings.shared.captions, !settled, shown {
+                if A11ySettings.shared.captions, !settledAny, shown {
                     Text("Soft music and sparkles")          // caption for the intro clip's sound
                         .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
                         .padding(.horizontal, 14).padding(.vertical, 6)
@@ -113,7 +128,7 @@ struct IntroView: View {
 
     /// The first frame is decoded: play the clip, still white until playback advances (Reduce Motion shows its last frame instead).
     private func begin() {
-        guard let p = player, !ready, !settled, !finished else { return }
+        guard let p = player, !ready, !settledAny, !finished else { return }
         if still {
             let end = p.currentItem?.duration ?? .zero
             p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
@@ -148,7 +163,7 @@ struct IntroView: View {
     }
 
     private func tapped() {
-        if settled { finish(); return }
+        if settledAny { finish(); return }
         guard let p = player, ready else { settle(); return }
         fadeOutAudio(p)
         p.pause()
@@ -169,12 +184,14 @@ struct IntroView: View {
 
     /// The clip is on its last frame: "Tap to start" fades in and the auto-advance starts.
     private func settle() {
-        guard !settled else { return }
+        guard !settledAny else { return }
         player?.pause()
         shown = true          // the last frame (or nothing, if there is no clip) fades in with "Tap to start"
-        settled = true
+        let pop = IntroClip.variant == .pop && ready
+        settled = !pop          // variant B: no "Tap to start", just the beat on the empty paper
+        settledAny = true
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(IntroClip.autoAdvance * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64((pop ? IntroClip.popBeat : IntroClip.autoAdvance) * 1_000_000_000))
             finish()
         }
     }
