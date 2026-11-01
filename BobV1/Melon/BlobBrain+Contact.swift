@@ -19,6 +19,25 @@ enum ContactTuning {
 }
 
 extension BlobBrain {
+    /// The hard rule under the walk (2026-11-01): the root never ends a step closer than the gap to another Jelly's root. The route planner and `keepApart` steer the
+    /// TARGETS; the root itself still drifted ~5 cm inside the gap on a head-on meeting. The slide is the overlap only (a few cm), shifted into the running step like `unstickNudge`.
+    nonisolated(unsafe) static var rootClearEnabled = ProcessInfo.processInfo.environment["BODYSEP_NOCLAMP"] == nil
+    func keepRootClear() {
+        guard Self.rootClearEnabled, attached, !held, socialBook.passThrough != true else { return }
+        var moved = SIMD2<Float>.zero
+        for o in steerPeers() {
+            let g = socialGap(at: o.pos)
+            let d = SIMD2(px, pz) + moved - o.pos, L = simd_length(d)
+            guard L < g - 1e-4 else { continue }
+            moved += (L > 1e-4 ? d / L : SIMD2(1, 0)) * (g - L)
+        }
+        let ml = simd_length(moved)
+        guard ml > 1e-5 else { return }
+        if ml > 0.008 { moved *= 0.008 / ml }          // (at most 8 mm per step = 0.5 m/s: no jolt for the feet; a walker closing in is held at the gap; a pair that starts deep inside it (a huddle that just ended) drifts apart, no shove)
+        px += moved.x; pz += moved.y
+        stepRoot0 += moved
+    }
+
     /// A waypoint beside the leg root -> target that clears a Jelly in the way by the gap, or nil (nobody in the way, or no free spot).
     func lookAheadSidestep(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("lookAheadSidestep", probe) }
