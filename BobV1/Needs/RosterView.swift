@@ -92,7 +92,7 @@ struct RosterPanel: View {
                     .frame(width: width)
                     .background {
                         let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        if GfxFlags.noMaterials { shape.fill(HUDGlass.white.opacity(0.95)) }          // -NoMaterials 1: opaque, no backdrop glass
+                        if GfxFlags.noMaterials { shape.fill(HUDGlass.opaque).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2) }          // -NoMaterials 1: opaque, no backdrop glass
                         else { shape.fill(HUDGlass.white.opacity(0.7)).glassEffect(.regular.tint(HUDGlass.white.opacity(0.55)), in: shape) }
                     }
                     .padding(.top, top).padding(.trailing, 16)

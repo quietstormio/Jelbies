@@ -45,7 +45,7 @@ struct GroomChrome: View {
                 VStack {
                     Text(groom.tier.banner).font(SK.font(26, .black)).foregroundStyle(SK.ink)
                         .padding(.horizontal, 22).padding(.vertical, 10)
-                        .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
+                        .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         .scaleEffect(reduce || groom.cheerT > 0.35 ? 1 : 0.8)
                         .accessibilityIdentifier("groom-banner")
                     Spacer()
@@ -86,7 +86,7 @@ struct GroomChrome: View {
                 ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
             }
             .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
-            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 10, y: 4))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
         }

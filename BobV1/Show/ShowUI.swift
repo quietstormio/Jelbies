@@ -81,7 +81,7 @@ struct JelbiePortrait: View {
         }
         .frame(width: size, height: size)
         .overlay { if let r = outerRing { Circle().stroke(border, lineWidth: r).padding(-r / 2) } else { Circle().strokeBorder(border, lineWidth: 4) } }
-        .shadow(color: outerRing == nil ? .black.opacity(0.25) : SK.ink.opacity(0.18), radius: outerRing == nil ? 8 : 3, y: outerRing == nil ? 4 : 2)
+        .shadow(color: outerRing == nil ? .black.opacity(0.25) : SK.ink.opacity(0.18), radius: outerRing == nil ? 6 : 3, y: outerRing == nil ? 3 : 2)
         .accessibilityLabel(rival.map { "\($0.name), \($0.persona.title)" } ?? friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
         .accessibilityIdentifier("jelbie-portrait")
         .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)-\(rival?.name ?? "")") {
@@ -207,7 +207,7 @@ struct WardrobeStrip: View {
                             .padding(.horizontal, 4).frame(width: 78, height: 102)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(worn ? ShowUI.gold.opacity(0.35) : .white))
                             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(m >= 1 ? ShowUI.gold : m >= 0.5 ? Color(hex: 0xF4D98C) : ShowUI.bar, lineWidth: 2))
-                            .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.9 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 8 : 5)
+                            .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.9 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 6 : 5)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("\(look.title), \(look.tags.map(\.title).joined(separator: " ")), \(worn ? "worn" : "not worn")\(other.map { ", worn by \($0)" } ?? "")")
@@ -239,7 +239,7 @@ struct SlotChip: View {
                 }
                 .frame(width: 44, height: 44)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(look == nil ? ShowUI.lilac : m >= 1 ? ShowUI.gold : m >= 0.5 ? Color(hex: 0xF4D98C) : ShowUI.lilac, style: StrokeStyle(lineWidth: 2, dash: look == nil ? [5, 4] : [])))
-                .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.85 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 9 : 5)
+                .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.85 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 6 : 5)
             }
             .buttonStyle(.plain).disabled(action == nil)
             if caption { Text(slot.title.replacingOccurrences(of: "Faces", with: "Face").replacingOccurrences(of: "Hats", with: "Head").replacingOccurrences(of: "Shoes", with: "Feet").replacingOccurrences(of: "Necks", with: "Neck").replacingOccurrences(of: "Bodies", with: "Body")).font(SK.font(11, .heavy)).foregroundStyle(m >= 1 ? ShowUI.gold : ShowUI.mist) }

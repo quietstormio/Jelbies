@@ -99,7 +99,7 @@ struct ShowCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
     var body: some View {
         content().padding(padding).frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(0.96)).shadow(color: .black.opacity(0.18), radius: 8, y: 3))
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(0.96)).shadow(color: .black.opacity(0.18), radius: 6, y: 3))
     }
 }
 
@@ -346,7 +346,7 @@ struct DanceRound: View {
 
     private func numeral(_ s: String) -> some View {
         Text(s).font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 5).shadow(color: .black.opacity(0.35), radius: 10, y: 6)
+            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             .id(show.cueSerial).transition(.scale(scale: 1.6).combined(with: .opacity)).allowsHitTesting(false)
             .offset(y: compact ? 20 : 40)
             .accessibilityIdentifier("show-count")
@@ -535,7 +535,7 @@ struct TrickRound: View {
                 .frame(maxWidth: .infinity, minHeight: 56)
                 .background(Capsule().fill(s.burstUsed ? ShowUI.gold.opacity(0.4) : ShowUI.gold))
                 .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
-                .shadow(color: ShowUI.gold.opacity(s.burstUsed ? 0 : 0.7), radius: 14)
+                .shadow(color: ShowUI.gold.opacity(s.burstUsed ? 0 : 0.7), radius: 6)
             }
             .buttonStyle(.plain).disabled(!ready)
             .accessibilityLabel("Glow Burst, \(s.burstUsed ? "used" : armed ? "armed for this trick" : "ready"). Plus 10 points").accessibilityIdentifier("trick-burst")
@@ -688,7 +688,7 @@ struct ResultsScreen: View {
                             Circle().fill(Color(red: Double(tint.x), green: Double(tint.y), blue: Double(tint.z)))
                             Image(systemName: "face.smiling.fill").font(.system(size: 26, weight: .black)).foregroundStyle(.white.opacity(0.85))
                         }
-                        .frame(width: 52, height: 52).overlay(Circle().strokeBorder(ShowUI.gold, lineWidth: 3)).shadow(color: ShowUI.gold.opacity(0.7), radius: 10)
+                        .frame(width: 52, height: 52).overlay(Circle().strokeBorder(ShowUI.gold, lineWidth: 3)).shadow(color: ShowUI.gold.opacity(0.7), radius: 6)
                     } else { RivalBlob(tint: e.tint, size: 50) }
                     Text(e.name).font(SK.font(e.name.count > 9 ? 10 : 13, .black)).foregroundStyle(e.isPlayer ? ShowUI.gold : ShowUI.mist).lineLimit(1).minimumScaleFactor(0.6)
                     VStack(spacing: 2) {
@@ -868,7 +868,7 @@ struct PracticeChrome: View {
     }
     private func numeral(_ s: String) -> some View {
         Text(s).font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 5).shadow(color: .black.opacity(0.35), radius: 10, y: 6)
+            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             .id(show.cueSerial).transition(.scale(scale: 1.6).combined(with: .opacity)).allowsHitTesting(false).offset(y: compact ? 20 : 40)
     }
 }
@@ -913,7 +913,7 @@ struct PracticeResultCard: View {
             .buttonStyle(.plain).accessibilityIdentifier("practice-done")
         }
         .padding(.horizontal, 20).padding(.vertical, vsc == .compact ? 10 : 18)
-        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: .black.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: .black.opacity(0.3), radius: 6, y: 3))
         .accessibilityElement(children: .contain).accessibilityIdentifier("practice-card")
         .onAppear { withAnimation(.easeOut(duration: 1.3).delay(0.35)) { shown = true } }
     }

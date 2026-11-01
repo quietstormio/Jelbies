@@ -45,7 +45,7 @@ struct TrainCard: View {
             }
             .frame(maxWidth: landscape ? 360 : 520, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
-                .shadow(color: FocusStyle.shadow.opacity(0.25), radius: 10, y: 4))
+                .shadow(color: FocusStyle.shadow.opacity(0.25), radius: 6, y: 3))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("train-card")

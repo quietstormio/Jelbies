@@ -183,7 +183,7 @@ struct VoiceTutorialCard: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(maxWidth: 340)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.96))
-            .shadow(color: FocusStyle.shadow.opacity(0.2), radius: 8, y: 3))
+            .shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("voice-tutorial")

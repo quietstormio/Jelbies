@@ -70,6 +70,8 @@ enum HUDLayout {
 
 /// The one glass look of the home HUD: neutral white frosted glass (the clear glass picked up the brown room and hid the brown icons).
 enum HUDGlass {
+    /// The opaque HUD fill (the default; -NoMaterials 0 brings the glass back): near-white cream, the look of the frosted glass over the room.
+    static let opaque = Color(red: 0.985, green: 0.972, blue: 0.945)
     static let white = Color.white          // neutral, so it works over every room's colours
     static let frost: Glass = .regular.tint(white.opacity(0.55)).interactive()
     static let pink: Glass = .regular.tint(Color(red: 0.95, green: 0.38, blue: 0.56)).interactive()
@@ -78,13 +80,13 @@ enum HUDGlass {
 extension View {
     /// White frosted Liquid Glass in `shape`, with a white fill under it so the room only shows through a little.
     func hudFrost<S: SwiftUI.Shape>(in shape: S) -> some View {
-        hudGlassEffect(HUDGlass.frost, opaque: HUDGlass.white.opacity(0.9), in: shape, under: HUDGlass.white.opacity(0.4))
+        hudGlassEffect(HUDGlass.frost, opaque: HUDGlass.opaque, in: shape, under: HUDGlass.white.opacity(0.4))
     }
     /// `.glassEffect`, or with -NoMaterials 1 an opaque `opaque` fill instead (no backdrop sampling over the live Metal view).
     @ViewBuilder
     func hudGlassEffect<S: SwiftUI.Shape>(_ glass: Glass, opaque: Color, in shape: S, under: Color? = nil) -> some View {
         if GfxFlags.noMaterials {
-            background(shape.fill(opaque))
+            background(shape.fill(opaque).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 5, y: 2))
         } else if let under {
             background(shape.fill(under)).glassEffect(glass, in: shape)
         } else {

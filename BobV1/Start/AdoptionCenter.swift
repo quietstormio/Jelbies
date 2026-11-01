@@ -250,7 +250,7 @@ struct AdoptionCenter: View {
 
     private var sheetCard: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 10, y: 3)
+            RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 6, y: 3)
             Capsule().fill(SK.ink.opacity(0.16)).frame(width: 22, height: 5).offset(x: 193, y: 8).accessibilityHidden(true)
             if naming { nameCard } else {
                 tabs.offset(x: 14, y: 23)
