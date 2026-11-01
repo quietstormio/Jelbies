@@ -68,7 +68,7 @@ extension BlobBrain {
         switch k {
         case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return .decor
         case .sit, .slump, .yawn, .flop, .lieDown, .sigh, .sleep, .stretch, .tailHug: return .rest
-        case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .rollTrip, .stopLook: return .movement
+        case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .stopLook: return .movement
         default: return .spot
         }
     }

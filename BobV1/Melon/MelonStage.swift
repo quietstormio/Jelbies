@@ -1112,6 +1112,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         PerfMeter.end(.skin, pmK)
+        if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift)
+            let scene = !game ? "studio" : model.care.park.inScene ? "park" : model.care.volley.inScene ? "volley" : model.care.groom.inScene ? "groom" : (model.care.bath.look.visible || model.care.bath.cameraBlend > 0) ? "bath" : "room"
+            FootLog.shared.record(actors: actors + parkActors, dt: dt, scene: scene)
+        }
         dbgSkin += CACurrentMediaTime() - sk0
         lap[Lap.skin.rawValue] += CACurrentMediaTime() - sk0
         let pmW2 = PerfMeter.begin()
