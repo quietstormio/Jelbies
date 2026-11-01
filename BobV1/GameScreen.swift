@@ -342,6 +342,7 @@ struct GameScreen: View {
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
+        .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
@@ -393,6 +394,16 @@ struct GameScreen: View {
             await sleep(1.4)
             f()
             withAnimation(CareMenu.spring) { open.wrappedValue = false }
+        }
+        // capture aid: -InviteGuest <n> asks visitor n-1 over (a Friend of everybody) 3 s after the room is on screen: the arrival moment (Park/GuestArrival.swift) follows the knock
+        if d.integer(forKey: "InviteGuest") > 0 {
+            for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
+            await sleep(3)
+            let vid = d.integer(forKey: "InviteGuest") - 1
+            care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
+            for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
+            NSLog("[arrival] invite")
+            care.inviteFriend(vid, kind: .playDate)
         }
         // capture aid: -NeedsDemo bubble (the bubble pops, its tap opens Feed, he eats, it poofs) | roster (open it, tap Bob's card)
         if let demo = d.string(forKey: "NeedsDemo") {

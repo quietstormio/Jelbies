@@ -106,6 +106,7 @@ extension GameCare {
 
         // an outing sends the body away (the visit goes on)
         if guestOuting {
+            if g.arrival.active || g.arrivalCard != .hidden { guestArrivalCancel() }
             if g.actor != nil { guestRemove(); g.phase = .away }
             return
         }
@@ -113,11 +114,13 @@ extension GameCare {
 
         if g.actor == nil {
             g.phase = .away
+            if g.arrival.active { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment (Park/GuestArrival.swift): the body is made behind the card
             guard guestRoomQuiet, parkBook.spawn != nil else { g.knockT = 0; return }
             g.knockT += dt
             g.spawnFailT = max(0, g.spawnFailT - dt)
             let overdue = visit.arrived && now >= visit.endsAt
             guard g.knockT >= GuestTuning.knock, g.spawnFailT <= 0 else { return }
+            if !visit.arrived, guestWalksIn(actors, visit, overdue: overdue), guestArrivalBegin() { return }          // the first arrival: the doorbell, the card, the run-in
             guestSpawn(actors, v, visit, overdue: overdue)
             return
         }
@@ -126,6 +129,7 @@ extension GameCare {
         g.phaseT += dt
         visitorLook(a, v, dt: dt, sleepLocked: false)
         guestFriends(actors, a, v, dt: dt)
+        if g.arrival.active || g.hugWait != nil { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment drives him until it is done
 
         // the end of the visit
         if g.phase != .leaving, visit.arrived, now >= visit.endsAt { guestBeginLeaving(actors, a, v) }
@@ -146,12 +150,21 @@ extension GameCare {
         g.card = false
     }
 
-    private func guestSpawn(_ actors: [JellyActor], _ v: ParkVisitor, _ visit: GuestVisit, overdue: Bool) {
+    /// True = he comes in through the door (not already inside because the visit is over / the Jelbies are asleep).
+    func guestWalksIn(_ actors: [JellyActor], _ visit: GuestVisit, overdue: Bool) -> Bool {
+        let rosterAsleep = actors.contains { $0.brain?.isSleeping == true }
+        let sleepingIn = visit.kind == .sleepover && visit.arrived && !overdue && rosterAsleep && actors.first?.brain?.bedtimeHours == true
+        return !(overdue || sleepingIn)
+    }
+
+    /// `arrival`: the arrival moment's body (Park/GuestArrival.swift): made off the left edge of the room, held still until the run-in.
+    func guestSpawn(_ actors: [JellyActor], _ v: ParkVisitor, _ visit: GuestVisit, overdue: Bool, arrival: Bool = false) {
         let g = guestBook
         let now = Date().timeIntervalSince1970
         let rosterAsleep = actors.contains { $0.brain?.isSleeping == true }
         let sleepingIn = visit.kind == .sleepover && visit.arrived && !overdue && rosterAsleep && actors.first?.brain?.bedtimeHours == true
-        let spot: SIMD2<Float> = (overdue || sleepingIn) ? guestSpotNear(actors) : GuestTuning.door
+        var spot: SIMD2<Float> = (overdue || sleepingIn) ? guestSpotNear(actors) : GuestTuning.door
+        if arrival { let t = guestSpotNear(actors); g.arrivalTarget = t; spot = guestArrivalEntry(toward: t) }
         guard let a = (parkBook.spawn?([v], [spot]) ?? []).first(where: { $0.id == actors.count }), let b = a.brain else { g.spawnFailT = 3; return }
         g.actor = a
         g.greeted = false; g.settleT = 0; g.stage = 0; g.phaseT = 0; g.bedT = 1.5; g.wakeT = 0; g.friendSession = [:]
@@ -159,7 +172,12 @@ extension GameCare {
         b.idleMood = .happy
         if !visit.arrived {
             g.markArrived(now: now, sleepoverSeconds: DayClock.shared.secondsToSleepoverEnd)
-            park.say(visit.kind == .sleepover ? "\(v.name) came over for a sleepover!" : "\(v.name) came over to play!")
+            if !arrival { park.say(visit.kind == .sleepover ? "\(v.name) came over for a sleepover!" : "\(v.name) came over to play!") }
+        }
+        if arrival {
+            b.autonomy = false
+            g.phase = .walkingIn
+            return
         }
         if overdue {          // the app is back just after the end: he is still here, ready to go home
             g.phase = .here
@@ -179,7 +197,7 @@ extension GameCare {
     }
 
     /// Free floor near the Jelbies for a guest who is already inside.
-    private func guestSpotNear(_ actors: [JellyActor]) -> SIMD2<Float> {
+    func guestSpotNear(_ actors: [JellyActor]) -> SIMD2<Float> {
         guard let b0 = actors.first?.brain else { return GuestTuning.door }
         let c = actors.reduce(SIMD2<Float>.zero) { $0 + $1.floor } / Float(max(actors.count, 1))
         for off in [SIMD2<Float>(1.6, 0.3), SIMD2(-1.6, 0.3), SIMD2(0, -1.5), SIMD2(0, 1.5), SIMD2(2.2, -0.8), SIMD2(-2.2, -0.8)] {
