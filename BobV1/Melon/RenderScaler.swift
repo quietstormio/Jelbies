@@ -13,6 +13,9 @@ import Foundation
 struct RenderScaler {
     /// Scales tried below native, highest first. Native itself (3x on iPhone Pro) is always level 0.
     static let ladder: [Double] = [3, 2.5, 2, 1.67, 1.5, 1.33]
+    /// The `-MetalFX 1` ladder (native multiples; 3x = 1206 px wide on the Pro): native with no upscale, then 1005 / 880 / 603 px wide rendered and upscaled by MetalFX
+    /// (a 603 px MetalFX picture looks about as crisp as a raw 880 one, so it replaces the raw 585 rung). Off = the raw ladder above.
+    static let metalFXLadder: [Double] = [2.5, 2.19, 1.5]
     static let thermalCap = 2.0
     static let downAfter = 0.5          // s over budget before a step down
     static let upAfter = 3.0            // s comfortably under budget before a step up
@@ -33,9 +36,9 @@ struct RenderScaler {
     private var lastStepUpAt = -1000.0, clock = 0.0
     private var cap = 0                 // lowest allowed level index (thermal)
 
-    init(native: Double, targetInterval: Double = 1.0 / 60) {
+    init(native: Double, targetInterval: Double = 1.0 / 60, metalFX: Bool = false) {
         var l = [max(native, 1)]
-        for s in Self.ladder where s < l[0] - 0.01 { l.append(s) }
+        for s in (metalFX ? Self.metalFXLadder : Self.ladder) where s < l[0] - 0.01 { l.append(s) }
         levels = l
         self.targetInterval = targetInterval
     }
@@ -90,6 +93,8 @@ struct RenderScaler {
 struct RateGovernor {
     static let upBelowMs = 5.0          // 120 only if the smoothed GPU time is this low at the current scale
     static let downAboveMs = 7.0        // 8.33 ms x 0.85
+    static let cpuUpBelowMs = 5.0       // 120 also needs the main thread under this (a 120 Hz frame is 8.33 ms of CPU too)
+    static let cpuDownAboveMs = 7.0
     static let upAfter = 3.0, downAfter = 0.5, retryAfterDrop = 30.0
 
     let maxFPS: Int
@@ -100,7 +105,7 @@ struct RateGovernor {
     init(maxFPS: Int) { self.maxFPS = maxFPS }
 
     /// Returns the new preferred fps if it changed.
-    mutating func update(dt: Double, gpuMs: Double?, thermal: ProcessInfo.ThermalState, lowPower: Bool, atNative: Bool = true) -> Int? {
+    mutating func update(dt: Double, gpuMs: Double?, thermal: ProcessInfo.ThermalState, lowPower: Bool, atNative: Bool = true, cpuMs: Double = 0) -> Int? {
         guard dt > 0, dt < 0.1 else { return nil }
         let hot = thermal == .serious || thermal == .critical
         if hold > 0 { hold -= dt }
@@ -110,9 +115,9 @@ struct RateGovernor {
         let ms = smoothed!
         if fps == 120 {
             overT = ms > Self.downAboveMs ? overT + dt : 0
-            if overT >= Self.downAfter { return set(60, hold: Self.retryAfterDrop) }
+            if overT >= Self.downAfter || cpuMs > Self.cpuDownAboveMs { return set(60, hold: Self.retryAfterDrop) }
         } else if !hot, !lowPower, atNative, hold <= 0, thermal != .fair {   // only at full resolution: never trade resolution for Hz
-            underT = ms < Self.upBelowMs ? underT + dt : 0
+            underT = (ms < Self.upBelowMs && cpuMs < Self.cpuUpBelowMs) ? underT + dt : 0          // CPU headroom too: cpuMs is the main thread's frame time (0 = not measured, tests)
             if underT >= Self.upAfter { return set(120, hold: 0) }
         }
         return nil

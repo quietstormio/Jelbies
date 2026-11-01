@@ -579,9 +579,9 @@ nonisolated final class Skinner {
             let x = simd_normalize(b - a), z = simd_normalize(simd_cross(x, c - a)), y = simd_cross(z, x)
             return simd_float3x3(columns: (x, y, z))
         }
-        let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
-        let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
-        let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
+        let rr = tailLMRest, s0 = lm(0), s1 = lm(1), s2 = lm(2)
+        let Rot = frame(s0, s1, s2) * frame(rr[0], rr[1], rr[2]).transpose
+        let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (s0 + s1 + s2) / 3
         tailRotLast = Rot
         // The long tail lies on the floor: its high part (the root) follows the body's tilt rigidly, but the low part only follows the body's heading and position
         // (a long lever would otherwise swing it through the floor whenever the egg sags or leans); the blend is by rest height.

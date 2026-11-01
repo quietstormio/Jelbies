@@ -717,7 +717,7 @@ final class BlobBrain {
 
     func pickAutonomous(_ sim: SoftBody) {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickAutonomous", probe) }
-        planBudget = 12; defer { planBudget = 99 }
+        planBudget = 2; defer { planBudget = 99 }          // (was 12: a pick tried dozens of candidates and up to 12 full route searches in ONE step = a 40-60 ms stall in the park)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
@@ -1015,9 +1015,26 @@ final class BlobBrain {
     var planBudget = 99
     /// Seconds until the walker may run the route planner again after it found no way round (it re-planned every frame while blocked).
     var planCool: Float = 0
+    /// Consecutive searches that found no way round: the back-off grows (1 s, then 2 s) so a walker boxed in does not search all the time.
+    var planFails = 0
+    /// Floor probes (`intrusion` calls) so far; a route search stops at `planLimit` (the search budget) and keeps the best route found so far, if any.
+    var probeCount = 0
+    var planLimit = Int.max
+    /// Probes one search may spend, and all searches of the room together per fixed step (the stage refills `stepProbeBudget` before every step; unlimited when nothing does, e.g. unit rigs).
+    /// At ~1.5-2 us a probe, 3000 per step is about 5-6 ms of planning at most (a typical search needs 1500-2500, the old worst case 14500), however many Jelbies are blocked at once.
+    nonisolated(unsafe) static var probesPerSearch = 3000          // (a search may use a whole step's budget when it is alone)
+    static let probesPerStep = 3000
+    nonisolated(unsafe) static var stepProbeBudget = Int.max / 2
+    /// Diagnostics for the `[melon] planner` line: searches run, probes spent, searches cut short by their budget, searches skipped for the step's budget, most probes in one search.
+    nonisolated(unsafe) static var planStats = (searches: 0, probes: 0, cut: 0, skipped: 0, maxProbes: 0)
+    static func takePlanStats() -> String {
+        let p = planStats; planStats = (0, 0, 0, 0, 0)
+        return "\(p.searches) searches, \(p.probes) probes (max \(p.maxProbes) in one), \(p.cut) cut short, \(p.skipped) skipped by the step budget"
+    }
 
     /// How deep (u) a floor point is inside something he must not stand in, with `margin` extra clearance (0 = free).
     func intrusion(_ p: SIMD2<Float>, margin: Float) -> Float {
+        probeCount &+= 1
         let r = resolve(SIMD3(p.x, 0, p.y), footprint + margin)
         var d = simd_length(SIMD2(r.x, r.z) - p)
         for o in steerPeers() where o.id > steerID { d = max(d, socialGap(at: o.pos) + margin * 0.5 - simd_distance(o.pos, p)) }
@@ -1025,11 +1042,11 @@ final class BlobBrain {
     }
 
     /// The straight leg a -> b keeps its clearance (it may start inside the margin as long as it only leaves it, and end in it).
-    func legClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, margin: Float) -> Bool {
+    func legClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, margin: Float, spacing: Float = 0.07) -> Bool {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("legClear", probe) }
         let d = b - a, L = simd_length(d)
         if L < 1e-3 { return true }
-        let n = max(2, Int(L / 0.07)), a0 = intrusion(a, margin: margin)
+        let n = max(2, Int(L / spacing)), a0 = intrusion(a, margin: margin)
         for i in 1...n {
             let t = Float(i) / Float(n), p = a + d * t
             if simd_length(b - p) < 0.3 { break }              // the end of the leg may sit in the margin (a stand next to the tray)
@@ -1042,29 +1059,50 @@ final class BlobBrain {
     func planRoute(_ a: SIMD2<Float>, _ b: SIMD2<Float>, depth: Int) -> [SIMD2<Float>]? {
         let probe = depth == 2 ? PerfProbe.begin() : 0; defer { PerfProbe.end("planRoute", probe) }
         let m = steerMargin
-        if legClear(a, b, margin: m) { return [] }
+        if depth == 2 {          // a new search: its own probe budget, and the room's per-step budget
+            let start = probeCount
+            planLimit = probeCount + min(Self.probesPerSearch, Self.stepProbeBudget)
+            defer {
+                let used = probeCount - start
+                Self.stepProbeBudget -= used
+                Self.planStats.searches += 1; Self.planStats.probes += used; Self.planStats.maxProbes = max(Self.planStats.maxProbes, used)
+                if probeCount >= planLimit { Self.planStats.cut += 1 }
+                planLimit = .max
+            }
+            return planRouteBody(a, b, depth: depth, m: m)
+        }
+        return planRouteBody(a, b, depth: depth, m: m)
+    }
+
+    private func planRouteBody(_ a: SIMD2<Float>, _ b: SIMD2<Float>, depth: Int, m: Float) -> [SIMD2<Float>]? {
+        let sp: Float = 0.07
+        if legClear(a, b, margin: m, spacing: sp) { return [] }
         guard depth > 0 else { return nil }
         let d = b - a, L = simd_length(d)
         let dir = d / max(L, 1e-4), perp = SIMD2(-dir.y, dir.x)
         // first blocked point along the line
         var pb = a + d * 0.5
-        let n = max(2, Int(L / 0.07)), a0 = intrusion(a, margin: m)
+        let n = max(2, Int(L / sp)), a0 = intrusion(a, margin: m)
         for i in 1...n { let p = a + d * (Float(i) / Float(n)); if intrusion(p, margin: m) > max(0.012, a0 + 0.004) { pb = p; break } }
         var best: (len: Float, pts: [SIMD2<Float>])?
         for side in [Float(1), -1] {
+            if probeCount >= planLimit { break }
             // the nearest point sideways of the block that is free (a corner just clear of the obstacle), then a few wider ones
             var off0: Float = 0.02
-            while off0 < 3.0 && intrusion(pb + perp * (off0 * side), margin: m) > 0.004 { off0 += 0.02 }
-            guard off0 < 3.0 else { continue }
+            while off0 < 3.0 && probeCount < planLimit && intrusion(pb + perp * (off0 * side), margin: m) > 0.004 { off0 += 0.06 }          // (0.06 steps, was 0.02: the sideways scan was the bulk of the probes)
+            guard off0 < 3.0, probeCount < planLimit else { continue }
             // (a fine set: beside the tray the floor he can use is a ~0.25 wide lane, and a coarse set can miss it from one start point while finding it from the next)
             for extra: Float in [0.015, 0.03, 0.05, 0.075, 0.1, 0.12, 0.15, 0.2, 0.25, 0.35, 0.5] {
                 let c = pb + perp * ((off0 + extra) * side)
-                guard intrusion(c, margin: m) < 0.01, legClear(a, c, margin: m) else { continue }
-                guard let rest = planRoute(c, b, depth: depth - 1) else { continue }
+                if probeCount >= planLimit { break }
+                if let bl = best?.len, simd_distance(a, c) + simd_distance(c, b) >= bl { continue }          // cannot beat the route already found: no probes spent on it
+                guard intrusion(c, margin: m) < 0.01, legClear(a, c, margin: m, spacing: 0.1) else { continue }
+                guard let rest = planRouteBody(c, b, depth: depth - 1, m: m) else { continue }
                 var len = simd_distance(a, c), prev = c
                 for q in rest { len += simd_distance(prev, q); prev = q }
                 len += simd_distance(prev, b)
                 if best == nil || len < best!.len { best = (len, [c] + rest) }
+                break          // the nearest corner that works is the shortest way round on this side: no need to try the wider ones
             }
         }
         return best?.pts
@@ -1083,8 +1121,10 @@ final class BlobBrain {
         if let w = lookAheadSidestep(root, target) { route = [w]; return w }          // (curve round a Jelly early: BlobBrain+Contact.swift)
         if legClear(root, target, margin: steerMargin) { return target }
         if planCool <= 0 {
-            if let r = planRoute(root, target, depth: 2) { route = r; return r.first ?? target }
-            planCool = 0.3          // (no way round: ask again in a moment, not every frame)
+            if Self.stepProbeBudget <= 0 { Self.planStats.skipped += 1; return nil }          // the room's planning budget for this step is spent: stand a step, search next step
+            if let r = planRoute(root, target, depth: 2) { route = r; planFails = 0; return r.first ?? target }
+            planCool = planFails == 0 ? 1.0 : 2.0          // (no way round: ask again in a while, not every frame; a walker boxed in backs off further)
+            planFails += 1
         }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
@@ -1118,7 +1158,7 @@ final class BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("reachable", probe) }
         if steerPeers().isEmpty { return true }
         if legClear(a, b, margin: steerMargin) { return true }
-        guard planBudget > 0 else { return false }
+        guard planBudget > 0, Self.stepProbeBudget > 0 else { return false }
         planBudget -= 1
         return planRoute(a, b, depth: 2) != nil
     }

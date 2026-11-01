@@ -726,17 +726,23 @@ final class GameCare {
     }
 
     func tick(brain: BlobBrain, renderer: MelonRenderer?, dt: Float, sim: SoftBody? = nil) {
+        var ht = CACurrentMediaTime()
         driveFocus(id: 0, brain: brain, sim: sim, dt: dt)
         tickFocus(brain: brain, sim: sim, dt: dt)
+        HopDiag.lap(.careFocus, &ht)
         tickNeeds(brain: brain, sim: sim, dt: dt)
+        HopDiag.lap(.careNeeds, &ht)
         widget.tick(dt: dt) { widgetInputs() }
+        HopDiag.lap(.careWidget, &ht)
         // selecting / highlighting never wakes a sleeper (a poke does: `pokeSleeper`); the night-rest rules decide who goes to bed
         for a in raceBook.actors { a.brain?.selectedNow = (a.id == select.selectedID) }
         selectWokeFor = select.selectedID
         tickNightRest(dt: dt)
         tickNightSkip(dt: dt)
+        HopDiag.lap(.careNight, &ht)
         LaunchTiming.mark("first stage tick"); LaunchGate.shared.stageTicked()
         select.tick(dt: dt)
+        HopDiag.lap(.careSelect, &ht)
         if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive, !brain.isSleeping { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)
         if !hooked {
             hooked = true
