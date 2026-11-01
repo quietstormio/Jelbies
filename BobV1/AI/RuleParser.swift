@@ -7,7 +7,7 @@
 //
 //  Order of the verb tables matters: a question ("who's hungry") is checked before the feed words it contains; "put on" before the generic verbs;
 //  sleep before sit ("lie down"); feed / drink before come ("everyone come eat" is a meal); "play with Moss" before plain play. The store's trick
-//  pages (spin, hop, roll) parse as tricks like the starters; the legacy decision then checks the page is bought and the word learned.
+//  pages (spin, hop) parse as tricks like the starters; the legacy decision then checks the page is bought and the word learned.
 //
 
 import Foundation
@@ -51,8 +51,6 @@ enum RuleParser {
     private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout"]
     private static let hopPhrases = ["hop hop", "do a hop", "hop up", "hop up and down", "bounce around"]
     private static let hopWords: Set<String> = ["hop", "hops", "hopping", "bounce", "bouncy", "boing"]
-    private static let rollPhrases = ["roll over", "do a roll", "roly poly", "roll around", "rolly polly"]
-    private static let rollWords: Set<String> = ["roll", "rolls", "rolling", "rollover"]
     private static let flipPhrases = ["do a flip", "back flip", "do a backflip"]
     private static let flipWords: Set<String> = ["flip", "backflip", "somersault", "flips"]
     private static let runPhrases = ["go for a run", "run around", "run run", "do a lap", "go run"]
@@ -191,8 +189,6 @@ enum RuleParser {
         if hasWord(toks, jacksWords) { return finish(.trick(.jacks), words: jacksWords) }
         if let p = has(toks, hopPhrases) { return finish(.trick(.hop), strip: p, words: hopWords) }
         if hasWord(toks, hopWords) { return finish(.trick(.hop), words: hopWords) }
-        if let p = has(toks, rollPhrases) { return finish(.trick(.roll), strip: p, words: rollWords) }
-        if hasWord(toks, rollWords) { return finish(.trick(.roll), words: rollWords) }
         if let p = has(toks, runPhrases) { return finish(.trick(.run), strip: p, words: runWords) }
         if hasWord(toks, runWords) { return finish(.trick(.run), words: runWords) }
         if let p = has(toks, lookPhrases) { return finish(.trick(.look), strip: p, words: lookWords) }

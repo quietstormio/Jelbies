@@ -135,7 +135,6 @@ extension FeatureCaptureTests {
         let scenarios: [(String, Float, Start)] = [
             ("hop", 1.6, { r in r.brain.startHopPlay(sim: r.sim) }),
             ("flop", 2.5, { r in r.brain.idleForced = true; _ = r.brain.idleStart(.flop, r.sim) }),
-            ("roll", 2.4, { r in r.brain.startRollPlay(sim: r.sim) }),
             ("spin", 2.4, { r in r.brain.startSpin(sim: r.sim) }),
             ("backflip", 2.4, { r in r.brain.startFlip(sim: r.sim) }),
         ]
@@ -232,7 +231,6 @@ extension FeatureCaptureTests {
             ("run", 0.6, 1.8, walk(-4, 0.3, hurry: true)),
             ("hop", 0.0, 1.6, { r in r.brain.startHopPlay(sim: r.sim) }),
             ("flop", 0.0, 3.0, idle(.flop)),
-            ("roll", 0.0, 2.4, { r in r.brain.startRollPlay(sim: r.sim) }),
             ("backflip", 0.0, 2.4, { r in r.brain.startFlip(sim: r.sim) }),
             ("spin", 0.0, 3.0, { r in r.brain.startSpin(sim: r.sim) }),
             ("liedown", 0.0, 4.0, idle(.lieDown)),

@@ -626,7 +626,6 @@ final class VoiceCoordinator {
         case .look: return .look
         case .tail: return .spin
         case .bounce: return .hop
-        case .roll: return .roll
         default: return nil
         }
     }
@@ -638,7 +637,6 @@ final class VoiceCoordinator {
         case .look: return .look
         case .spin: return .tail
         case .hop: return .bounce
-        case .roll: return .roll
         case .flip, .come: return nil
         }
     }

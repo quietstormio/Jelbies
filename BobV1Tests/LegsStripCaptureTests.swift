@@ -80,7 +80,6 @@ final class LegsStripCaptureTests: XCTestCase {
         }
         switch move {
         case "flip": r.brain.startFlip(sim: r.sim, compact: false)
-        case "roll": XCTAssertTrue(r.brain.idleStart(.roll, r.sim))
         default: XCTFail("unknown LEGS_MOVE")
         }
         // collect every tick while the body is meaningfully tilted or airborne, then thin to nFrames

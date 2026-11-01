@@ -189,7 +189,7 @@ struct VoiceIntentOut {
         case everyone
     }
     @Generable
-    enum Act { case come, stop, stopFighting, praise, scold, play, goodnight, wakeUp, sit, jumpingJacks, run, flip, look, spin, hop, roll, none }
+    enum Act { case come, stop, stopFighting, praise, scold, play, goodnight, wakeUp, sit, jumpingJacks, run, flip, look, spin, hop, none }
 
     @Guide(description: "selected when no pet is addressed, named(name) when a pet name or nickname is said, everyone when all pets are addressed")
     var target: Target
@@ -215,7 +215,7 @@ final class SystemIntentModel: VoiceIntentModel {
         Map what a pet owner said to their jelly pets onto ONE command. Never reply with words.
         Commands: come (call over, "come see me", "over here"), stop (stop, stay, wait), stopFighting (break up a fight, be nice, quit it), \
         praise (compliments, "I love you", "good boy"), scold (no, bad, don't), play, goodnight (goodnight, bedtime, time to sleep), wakeUp (wake up, rise and shine, good morning), sit, jumpingJacks (jump, exercise), run, flip (backflip, somersault), \
-        look (look around), spin (spin around), hop (hop, bounce), roll (roll over), none (anything else).
+        look (look around), spin (spin around), hop (hop, bounce), none (anything else).
         target: everyone if all the pets are addressed, named(name) if one of [\(names.joined(separator: ", "))] or a nickname is said, otherwise selected.
         """
     }
@@ -255,7 +255,6 @@ final class SystemIntentModel: VoiceIntentModel {
         case .look: out.action = .trick(.look)
         case .spin: out.action = .trick(.spin)
         case .hop: out.action = .trick(.hop)
-        case .roll: out.action = .trick(.roll)
         case .none: out.action = .none
         }
         return out

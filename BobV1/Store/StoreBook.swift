@@ -58,7 +58,9 @@ final class StoreBook {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
         if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn)
             let (kept, refund) = Self.dropUnlisted(saved)
-            if kept.unlistedRefunded != saved.unlistedRefunded { saved = kept; if refund > 0 { wallet.add(refund, silent: true) }; save() } }
+            if kept.unlistedRefunded != saved.unlistedRefunded { saved = kept; if refund > 0 { wallet.add(refund, silent: true) }; save() }
+            // 2026-11-01: the Roll trick is gone from the game; a bought Roll page is dropped silently and its 55 JellyCoins go back to the wallet
+            if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
         if persists { defaults.removeObject(forKey: "Garden.v1") }          // the removed Garden's plots
     }

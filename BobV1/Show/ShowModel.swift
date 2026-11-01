@@ -176,7 +176,6 @@ nonisolated enum ShowTrickInfo {
         switch t {
         case .spin: return [.sparkly]
         case .hop: return [.sporty]
-        case .roll: return [.cute]
         case .flip: return [.cool, .sparkly]
         case .jacks: return [.sporty]
         case .sit: return [.sweet]
@@ -189,7 +188,7 @@ nonisolated enum ShowTrickInfo {
     static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come && $0 != .run }
     static func symbol(_ t: VoiceTrick) -> String {
         switch t {
-        case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"; case .roll: return "circle.dotted.circle"
+        case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"
         case .flip: return "arrow.uturn.up"; case .jacks: return "figure.jumprope"; case .sit: return "chair.fill"; case .look: return "eye.fill"
         case .come: return "figure.walk"; case .run: return "figure.run"
         }

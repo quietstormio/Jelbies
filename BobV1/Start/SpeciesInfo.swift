@@ -49,8 +49,7 @@ struct SpeciesInfo {
                     lore: "Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [50, 45, 30, 85, 55],
                     moves: [SpeciesMoveInfo(title: "Side-eye", subtitle: "Signature move", icon: "eye.fill", move: .idle(.look)),
-                            SpeciesMoveInfo(title: "Shrug-hop", subtitle: "A lazy little hop", icon: "arrow.up", move: .hop),
-                            SpeciesMoveInfo(title: "Roll over", subtitle: "Knows it already", icon: "arrow.left.arrow.right", move: .idle(.roll))],
+                            SpeciesMoveInfo(title: "Shrug-hop", subtitle: "A lazy little hop", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.look), .blink, .hop, .face(.focused), .blink]),
         SpeciesInfo(character: 1, name: "Lemon Drop", epithet: "The sunny one",
                     about: "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone.",
@@ -75,8 +74,7 @@ struct SpeciesInfo {
                     lore: "Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Onigiri", traits: [62, 82, 40, 50, 30],
                     moves: [SpeciesMoveInfo(title: "Big stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
-                            SpeciesMoveInfo(title: "Sleepy sway", subtitle: "When it's nap time", icon: "moon.zzz.fill", move: .idle(.sway)),
-                            SpeciesMoveInfo(title: "Roll over", subtitle: "Knows it already", icon: "arrow.left.arrow.right", move: .idle(.roll))],
+                            SpeciesMoveInfo(title: "Sleepy sway", subtitle: "When it's nap time", icon: "moon.zzz.fill", move: .idle(.sway))],
                     emotes: [.idle(.stretch), .face(.sleepy), .blink, .idle(.sway), .blink]),
     ]
 
