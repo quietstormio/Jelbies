@@ -4,10 +4,10 @@
 # Needs only git, xcrun, du, awk (bash 3.2 compatible).
 #
 # Usage: scripts/cleanup-safe.sh [--apply] [--yes] [--keep-dev-hours N] [--all-sims]
-#                                [--protect NAME]... [--min-free-gb N] [--only TEXT]
+#                                [--protect NAME]... [--min-free-gb N] [--only TEXT] [--older-than-days N]
 set -u
 
-ONLY=""; APPLY=0; YES=0; KEEP_DEV_HOURS=6; ALL_SIMS=0; MIN_FREE_GB=20
+ONLY=""; OLDER_DAYS=""; APPLY=0; YES=0; KEEP_DEV_HOURS=6; ALL_SIMS=0; MIN_FREE_GB=20
 PROTECT_LIST=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -18,6 +18,7 @@ while [ $# -gt 0 ]; do
     --protect) PROTECT_LIST="$PROTECT_LIST
 $2"; shift ;;
     --min-free-gb) MIN_FREE_GB="$2"; shift ;;
+    --older-than-days) OLDER_DAYS="$2"; shift ;;
     --only) ONLY="$2"; shift ;;   # restrict report/apply to items whose label contains this text (testing)
     -h|--help) sed -n '2,8p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
@@ -189,6 +190,7 @@ done < "$ITEMS.wt"
 rm -f "$ITEMS.wt"
 
 # ---- e. scratchpad ----
+KEEP_FILE="$THIS_TOP/.claude/cleanup-keep.txt"; [ -f "$KEEP_FILE" ] || KEEP_FILE="$MAIN_WT/.claude/cleanup-keep.txt"
 for sp in $SCRATCH_GLOB; do
   [ -d "$sp" ] || continue
   for d in "$sp"/* "$sp"/*/*; do
@@ -197,19 +199,41 @@ for sp in $SCRATCH_GLOB; do
     rel="${d#$sp/}"; base="$(basename "$d")"
     # skip children of something already listed
     case "$rel" in */*) parent="$sp/${rel%%/*}"
-      if grep -qF "|$parent|" "$ITEMS" 2>/dev/null; then continue; fi ;; esac
+      if grep -qF "SAFE|scratch|$parent|" "$ITEMS" 2>/dev/null; then continue; fi ;; esac
     why=""
     case "$base" in
-      src|hoptick|dd_*|*.trace) why="scratch build/trace folder ($base)" ;;
+      src|hoptick|dd|dd*|*_dd_*|*.trace) why="scratch build/trace folder ($base)" ;;
     esac
+    # derived data nested in a capture folder: delete only its Build/ dir, keep the captures
+    if [ -z "$why" ] && { [ -d "$d/Build/Intermediates.noindex" ] || [ -d "$d/Build/Products" ]; }; then
+      add SAFE scratch "$d/Build" "$(kb_of "$d/Build")" "scratch/$rel/Build" "derived data inside folder (captures beside it kept)"
+    fi
     if [ -z "$why" ] && [ -e "$d/BobV1.xcodeproj" ]; then
       k="$(kb_of "$d")"
       [ "$k" -gt 512000 ] && why="repo copy over 500 MB"
     fi
+    case "$base" in *.xcresult)
+      if [ -z "$(find "$d" -mtime -1 -print -quit 2>/dev/null)" ]; then why="xcresult bundle older than 1 day"; fi ;;
+    esac
+    note_override=""
+    # age-based sweep of capture folders (depth 1 only), unless on the KEEP list
+    if [ -z "$why" ] && [ -n "$OLDER_DAYS" ]; then
+      case "$rel" in */*) ;; *)
+        if grep -qxF "$base" "$KEEP_FILE" 2>/dev/null; then
+          note_override="on KEEP list (.claude/cleanup-keep.txt)"
+        elif [ -n "$(find "$d" -type f -mtime -"$OLDER_DAYS" -print -quit 2>/dev/null)" ]; then
+          note_override="has files newer than ${OLDER_DAYS} days"
+        else
+          nm="$(find "$d" -type f -print0 2>/dev/null | xargs -0 stat -f %m 2>/dev/null | sort -n | tail -1)"
+          nd="never"; [ -n "$nm" ] && nd="$(date -r "$nm" '+%Y-%m-%d')"
+          why="capture folder, newest file $nd (older than ${OLDER_DAYS}d), not on KEEP list"
+        fi ;;
+      esac
+    fi
     case "$rel" in */*) [ -z "$why" ] && continue ;; esac   # only list depth-2 when deletable
     k="$(kb_of "$d")"
     if [ -n "$why" ]; then add SAFE scratch "$d" "$k" "scratch/$rel" "$why"
-    else add PROTECTED scratch "$d" "$k" "scratch/$rel" "may hold captures/boards the user is shown"; fi
+    else add PROTECTED scratch "$d" "$k" "scratch/$rel" "${note_override:-may hold captures/boards the user is shown}"; fi
   done
 done
 
