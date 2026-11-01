@@ -51,7 +51,7 @@ struct ParkGiftCard: View {
     private struct Rays: View {
         let born: Date
         var body: some View {
-            TimelineView(.animation) { t in
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { t in
                 let a = t.date.timeIntervalSince(born) * 25
                 ZStack {
                     ForEach(0..<10, id: \.self) { k in
@@ -66,7 +66,7 @@ struct ParkGiftCard: View {
     private struct Confetti: View {
         let born: Date
         var body: some View {
-            TimelineView(.animation) { t in
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { t in
                 Canvas { ctx, size in
                     let age = t.date.timeIntervalSince(born)
                     guard age < 2.2 else { return }

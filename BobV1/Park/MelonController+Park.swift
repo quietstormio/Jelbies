@@ -36,6 +36,7 @@ extension MelonController {
             a.care = model.care
             let palette = JellyPalettes.park(v.colour)
             a.appearance = palette
+            a.sim.substeps = ParkTuning.visitorSubsteps
             a.sim.arenaCenter = GameCamera.arenaCenter
             a.sim.arenaRadius = GameCamera.arenaRadius
             let b = BlobBrain.forGame()
