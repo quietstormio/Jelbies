@@ -35,6 +35,8 @@ struct GameScreen: View {
     @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
     @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
     private var focus: BlobFocus { model.care.focus }
+    /// Town / Shop / Track, the gear's Settings and the Studio cover the whole game (the sheets leave part of it visible, so they do not count).
+    private var covered: Bool { town != nil || settingsOpen || showStudio }
     /// Tells the close-up camera which part of the screen the Train card leaves free (GameCamera.trainFrame), as fractions of the whole screen.
     private func frameTrainCamera(card: CGRect, g: GeometryProxy) {
         guard card.height > 1 else { return }
@@ -340,6 +342,8 @@ struct GameScreen: View {
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: covered) { _, c in model.coverUp = c }          // a full-screen screen hides the room: the stage renders at 5 fps until it closes (MelonController.applyFrameRate)
+        .onAppear { model.coverUp = covered }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
