@@ -574,7 +574,6 @@ final class BlobBrain {
         guard enabled else { return }
         runDt = dt
         stepCounter &+= 1
-        sim.separates = !socialBook.passThrough          // (a leapfrog hop / a group's ring: the bodies pass through each other on purpose; every other time they are two bodies)
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
         defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
@@ -964,7 +963,6 @@ final class BlobBrain {
             let u = feet.stepU
             px = stepRoot0.x + stepRootD.x * u; pz = stepRoot0.y + stepRootD.y * u
             yaw = wrapAngle(stepYaw0 + stepYawD * u)
-            keepRootClear()
             if !feet.active { stepLive = false }
         }
     }

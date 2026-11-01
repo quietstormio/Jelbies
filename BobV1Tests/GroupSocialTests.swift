@@ -14,7 +14,7 @@ final class GroupSocialTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
     override func tearDown() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
-    static let five: [SIMD2<Float>] = [SIMD2(-1.6, 0.5), SIMD2(1.2, 0.6), SIMD2(0.0, 2.3), SIMD2(-1.5, 2.15), SIMD2(1.6, 2.2)]          // (the Jellies keep the full gap 1.4 from each other now: 1.24 apart was inside it)
+    static let five: [SIMD2<Float>] = [SIMD2(-1.6, 0.5), SIMD2(1.2, 0.6), SIMD2(0.0, 2.3), SIMD2(-1.2, 2.0), SIMD2(1.6, 2.2)]
 
     private func run(_ kind: SocialKind, n: Int, seed: UInt64 = 31, maxSeconds: Float = 60, reduce: Bool = false) -> (lab: SocialTests.Lab, seconds: Float, ok: Bool, minGap: Float) {
         let lab = SocialTests.Lab(n: n, positions: n == 3 ? SocialTests.starts : Self.five, seed: seed)
