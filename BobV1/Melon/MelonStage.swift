@@ -446,7 +446,10 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Two Jellies that stand closer than the gap (one walked up and stopped, or an idle move carried him over): the free one with the higher id
     /// walks to a spot a little over the gap away. Never a Jelly that is walking, commanded, blocked by a meal / close-up / bath, or busy with a move.
     /// Call a few times a second; `cooldown` holds one timer per Jelly.
-    static func makeRoom(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains: [BlobBrain?], cooldown: inout [Float], dt: Float) {
+    static func makeRoom(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains inBrains: [BlobBrain?], cooldown: inout [Float], dt: Float) {
+        // a guest / park visitor makes the snapshot longer than the roster-sized arrays (2026-10-31 crash: cooldown[3] with 4 bodies): pad, never trap
+        if cooldown.count < snapshot.count { cooldown.append(contentsOf: [Float](repeating: 0, count: snapshot.count - cooldown.count)) }
+        let brains: [BlobBrain?] = inBrains.count >= snapshot.count ? inBrains : inBrains + [BlobBrain?](repeating: nil, count: snapshot.count - inBrains.count)
         for i in cooldown.indices { cooldown[i] = max(0, cooldown[i] - dt) }
         // a Jelly held still only by another Jelly's close-up (`focusPaused`) is free to step aside too: frozen in the called one's path he blocked it (2026-10-21)
         let freeBrain: (Int) -> Bool = { i in
@@ -484,6 +487,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Jelly steps out of the lane, sideways, to a spot over the gap from the lane and from everybody else (and off the walker's goal). Standing Jellies
     /// used to be waited for (6 s) and then walked into, and the paused ones of a close-up never moved (2026-10-21: "they are stuck blocking him").
     static func clearWay(snapshot: [(pos: SIMD2<Float>, walking: Bool)], brains: [BlobBrain?], cooldown: inout [Float], free: (Int) -> Bool) {
+        if cooldown.count < snapshot.count { cooldown.append(contentsOf: [Float](repeating: 0, count: snapshot.count - cooldown.count)) }
+        let brains: [BlobBrain?] = brains.count >= snapshot.count ? brains : brains + [BlobBrain?](repeating: nil, count: snapshot.count - brains.count)
         for w in 0..<snapshot.count {
             guard let wb = brains[w], wb.enabled, wb.job != nil, case .walk(let scriptGoal, _) = wb.script else { continue }
             // the goal he was ASKED for: the walk's own target is the spot after the floor rules, and keepApart drags it over the gap away from a Jelly who stands
@@ -561,7 +566,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let racing = game && model.care.tripActive
         if actors.count > 1, !racing {
             asideClock += sim.stepDt
-            if asideClock >= 0.25 { Self.makeRoom(snapshot: peerSnapshot, brains: actors.map(\.brain), cooldown: &asideCooldown, dt: asideClock); asideClock = 0 }
+            if asideClock >= 0.25 { Self.makeRoom(snapshot: peerSnapshot, brains: actors.map(\.brain) + parkActors.map(\.brain), cooldown: &asideCooldown, dt: asideClock); asideClock = 0 }
         }
         if !racing, peerSnapshot.count > 1 {          // the no-getting-stuck guarantee (StuckWatchdog): home, park, guests
             watchBrains.removeAll(keepingCapacity: true)

@@ -54,9 +54,26 @@ final class StartFlow {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
+        applyClearGuest(arg: UserDefaults.standard.object(forKey: clearGuestKey) != nil ? UserDefaults.standard.integer(forKey: clearGuestKey) : nil)
         // Not simulator-gated: a device Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
         applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
                      coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
+    }
+
+    static let clearGuestKey = "ClearGuest", clearGuestAppliedKey = "ClearGuest.applied"
+
+    /// `-ClearGuest 1` (device-safe, one-shot): drops a stuck guest visit (`GuestBook.key`, the ONLY thing the invite / visit flow persists) and nothing else:
+    /// the park visitors, their friendship and the ledger are the Park's own and stay. The marker is stored in the app domain so a relaunch without the
+    /// argument does nothing; `-ClearGuest 0` clears the marker (so a later `-ClearGuest 1` applies again). GuestBook reads its key in init, after this runs,
+    /// so there is no in-memory cache to reload. Returns true when it removed the key.
+    @discardableResult
+    static func applyClearGuest(arg: Int?, defaults d: UserDefaults = .standard) -> Bool {
+        guard let arg else { return false }
+        if arg == 0 { d.removeObject(forKey: clearGuestAppliedKey); return false }
+        guard d.string(forKey: clearGuestAppliedKey) != "1" else { return false }
+        d.removeObject(forKey: GuestBook.key)
+        d.set("1", forKey: clearGuestAppliedKey)
+        return true
     }
 
     static let newGameKey = "NewGame", newGameCoinsKey = "NewGameCoins", newGameAppliedKey = "NewGame.applied"
