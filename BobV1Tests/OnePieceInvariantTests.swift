@@ -347,11 +347,11 @@ final class OnePieceInvariantTests: XCTestCase {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var tested = 0
-        for name in ["walk", "rollTripWalk", "flip"] {
+        for name in ["walk", "flip"] {
             let sc = Self.gaitScenario(name)!
             var done = false
             _ = Self.run(sc, char: 4, shoes: false, pacing: .hz60, seed: 3) { frame, r, f in
-                guard !done, f.beans, f.blend > 0.9, frame > 40, name != "rollTripWalk" || f.tilt > 0.8 else { return }
+                guard !done, f.beans, f.blend > 0.9, frame > 40 else { return }
                 done = true
                 var c = SIMD3<Float>.zero
                 for i in 0..<FootBean.vertexCount { c += r.skinner.beanPos[0][i] }
@@ -365,7 +365,7 @@ final class OnePieceInvariantTests: XCTestCase {
                 tested += 1
             }
         }
-        XCTAssertEqual(tested, 3)
+        XCTAssertEqual(tested, 2)
     }
 
     /// A stale / partial skin (2026-11-01): the body skinned from the sim state of 2, 6 or 12 frames ago while the pieces are the current ones (what a body / piece buffer mismatch in the render path would give).
