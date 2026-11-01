@@ -39,6 +39,12 @@ static float teddyPomMask(float3 Q) {
 // TEDDYEAR-END
 
 constant int fastTier [[function_constant(0)]];
+// Species specialisation (tier 0 and up): a body without the lighter-front marking compiles the whole belly block out; one that is not Teddy
+// compiles the ear / pom masks out. MelonRenderer picks the pipeline from the body's shape.w (= BlueBelly.mode) each frame.
+constant bool hasBelly [[function_constant(1)]];
+constant bool hasTeddy [[function_constant(2)]];
+// Measurement probe (GpuBodyCostTests only; 0 in the app): 1 = flat colour, 2 = no fibre, 3 = no crinkle/fibre bump, 4 = no colour-noise terms.
+constant int probeMode [[function_constant(3)]];
 
 struct FastUniforms {
     float4x4 viewProj; float4x4 view; float4x4 invViewProj; float4x4 lightVP; float4x4 topVP;
@@ -86,6 +92,23 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
+    if (probeMode == 1) { return float4(0.5, 0.5, 0.5, 0.0); }
+    float fb;
+    if (fastTier == 0) {
+        // exactly the locked fsSoftMatte
+        float e = 0.012;
+        float c0 = fCrinkle(Q);
+        float3 g = float3(fCrinkle(Q + float3(e, 0, 0)) - c0, fCrinkle(Q + float3(0, e, 0)) - c0, fCrinkle(Q + float3(0, 0, e)) - c0) / e;
+        g -= N * dot(g, N);
+        if (probeMode != 3) { N = normalize(N - g * 0.0022); }
+        float ef = 0.0018;
+        fb = probeMode == 2 || probeMode == 3 ? 0.0 : fFibre(Q);
+        if (probeMode == 0 || probeMode == 4) {
+            float3 gf = float3(fFibre(Q + float3(ef, 0, 0)) - fb, fFibre(Q + float3(0, ef, 0)) - fb, fFibre(Q + float3(0, 0, ef)) - fb) / ef;
+            gf -= N * dot(gf, N);
+            N = normalize(N - gf * 0.0003);
+        }
+    } else {
     // surface tangent frame for the directional differences
     float3 T = normalize(cross(abs(N.y) < 0.9 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0), N));
     float3 B = cross(N, T);
@@ -95,12 +118,13 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
         float3 g = (T * (fCrinkle(Q + T * e) - c0) + B * (fCrinkle(Q + B * e) - c0)) / e;
         N = normalize(N - g * 0.0022);
     }
-    float fb = fFibre(Q);
+    fb = fFibre(Q);
     if (fastTier <= 1) {
         float ef = 0.0018;
         float3 gf = (T * (fFibre(Q + T * ef) - fb) + B * (fFibre(Q + B * ef) - fb)) / ef;
         gf -= N * dot(gf, N);
         N = normalize(N - gf * 0.0003);
+    }
     }
 
     float3 L = normalize(u.keyDir.xyz);
@@ -112,13 +136,13 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
     float3 t = pow(float3(s), float3(0.55, 1.0, 1.25));
     float3 col = mix(u.fleshDeep.rgb, u.flesh.rgb, t);
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
-    col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
+    if (probeMode != 4) { col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045; }
     col *= 1.0 + 0.04 * fb;
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
-    if (bb > 0.5) {
+    if (hasBelly && bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
         if (bm < 1.5) {
@@ -146,8 +170,8 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
-        float ek = tn > 3.5 ? teddyEarMask(Q) : 0.0;
-        float pk = tn > 3.5 ? teddyPomMask(Q) : 0.0;
+        float ek = hasTeddy && tn > 3.5 ? teddyEarMask(Q) : 0.0;
+        float pk = hasTeddy && tn > 3.5 ? teddyPomMask(Q) : 0.0;
         col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), max(max(bk, ek), pk));          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
     }
     // mouth: same block as the locked shader
