@@ -136,6 +136,9 @@ final class FeatureSet {
         s.fit = FeatureCompat.solve(feature, worn: worn, spec: spec)
         s.folded = s.fit.folded
         stepDrive(&s, dt: dt)
+        // Teddy's ears + pom are part of his body mesh: the wash (hideAll) and the other scene-wide hides never take them (one solid piece, always)
+        let solidEars = feature == .ears && TeddyEarsVariant.active.inBody
+        let hideAll = hideAll && !solidEars
         let hide = hideAll || (!ignoreHide && (Self.hidden(feature, brain) || s.fit.hidden))
         let desired = feature != .none && !hide
         if hideAll || !s.primed {
