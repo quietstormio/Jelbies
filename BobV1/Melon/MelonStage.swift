@@ -206,6 +206,24 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
 
 private enum DragMode { case none, grab, orbit, pet, pending, cheeks }
 
+/// Sub-part timers inside hopTick's big callees (brain / jelly / care sections): mean and LONGEST single call per window, printed on `[melon] hop parts`.
+/// One array write per section (no allocation); the main thread only.
+@MainActor enum HopDiag {
+    enum Part: Int, CaseIterable { case bobBrain, bobJelly, bobCare, careFocus, careNeeds, careWidget, careNight, careSelect, otherBrain, otherJelly
+        var label: String { ["bob brain.tick", "bob jelly.tick", "care.tick total", "care focus", "care needs", "care widget", "care nightrest+skip", "care select", "other brain.tick", "other jelly.tick"][rawValue] } }
+    static var sum = [Double](repeating: 0, count: Part.allCases.count)
+    static var mx = [Double](repeating: 0, count: Part.allCases.count)
+    @inline(__always) static func lap(_ p: Part, _ t0: inout Double) {
+        let t = CACurrentMediaTime(), d = t - t0; sum[p.rawValue] += d; if d > mx[p.rawValue] { mx[p.rawValue] = d }; t0 = t
+    }
+    static func take(steps: Int) -> String {
+        let n = Double(max(steps, 1))
+        let out = Part.allCases.map { String(format: "%@ %.2f/%.1f", $0.label, sum[$0.rawValue] / n * 1000, mx[$0.rawValue] * 1000) }.joined(separator: ", ")
+        for i in sum.indices { sum[i] = 0; mx[i] = 0 }
+        return out
+    }
+}
+
 final class MelonController: NSObject, MTKViewDelegate {
     let model: MelonModel
     let device: MTLDevice?
@@ -303,6 +321,12 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var dbgSim: Double = 0
     private var dbgSteps = 0
     private var dbgSkin: Double = 0
+    /// Main-thread time per part of the frame, summed over the last second (printed as ms per frame on the `[melon] parts:` line).
+    private enum Lap: Int, CaseIterable { case peers, makeRoom, watchdog, bob, audio, ears, others, careOthers, race, cafe, volley, park, groom, show, masks, decor, sleep, step, refit, skin, shoes, wear, mat, camera, encode
+        var label: String { ["peers", "makeRoom", "watchdog", "bob brain", "audio", "ears", "other brains", "tickOthers", "race", "cafe", "volley", "park", "groom", "show", "masks+wear", "decor", "sleep check", "bodies step", "refit+held", "skin", "shoes", "wear", "mat writes", "camera+light", "encode"][rawValue] } }
+    private var lap = [Double](repeating: 0, count: Lap.allCases.count)
+    private var lapMax = [Double](repeating: 0, count: Lap.allCases.count)          // the longest single call of each part in the window: a stall shows here, not in the mean
+    @inline(__always) private func lapEnd(_ l: Lap, _ t0: inout Double) { let t = CACurrentMediaTime(), d = t - t0; lap[l.rawValue] += d; if d > lapMax[l.rawValue] { lapMax[l.rawValue] = d }; t0 = t }
     private var dbgBrain: Double = 0, dbgStepOnly: Double = 0, dbgTouch: Double = 0, dbgHaptic: Double = 0
     // touch play (focus mode): the pet finger
     private var petPoint = CGPoint.zero
@@ -544,7 +568,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if (stageView?.activeTouches ?? 0) > 0 || touchHolds(a.id) || mode != .none { return true }
         if game {
             let c = model.care
-            if c.focus.isActive || c.trayOut || c.bath.active || (c.tripActive && !c.parkHides(a.id)) || c.select.isSelecting || c.select.confirmed == a.id { return true }
+            if c.focus.isActive || c.trayOut || (c.bath.active && a.id == c.bath.targetID) || (c.tripActive && !c.parkHides(a.id)) || c.select.isSelecting || c.select.confirmed == a.id { return true }
         }
         return false
     }
@@ -558,34 +582,53 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Called once before each fixed sim step.
     private func hopTick(reduce: Bool) {
+        BlobBrain.stepProbeBudget = BlobBrain.probesPerStep          // all the brains' route searches together stay within this many floor probes per fixed step
+        var lt = CACurrentMediaTime()
         publishPeers()
+        lapEnd(.peers, &lt)
         let racing = game && model.care.tripActive
         if actors.count > 1, !racing {
             asideClock += sim.stepDt
             if asideClock >= 0.25 { Self.makeRoom(snapshot: peerSnapshot, brains: actors.map(\.brain), cooldown: &asideCooldown, dt: asideClock); asideClock = 0 }
         }
+        lapEnd(.makeRoom, &lt)
         if !racing, peerSnapshot.count > 1 {          // the no-getting-stuck guarantee (StuckWatchdog): home, park, guests
             watchBrains.removeAll(keepingCapacity: true)
             for a in actors { watchBrains.append(a.brain) }
             for a in parkActors { watchBrains.append(a.brain) }
             if watchBrains.count == peerSnapshot.count { watchdog.tick(pos: peerSnapshot, brains: watchBrains, dt: sim.stepDt) }
         }
+        lapEnd(.watchdog, &lt)
         bobTick(reduce: reduce)
+        lapEnd(.bob, &lt)
         audioSituation()
+        lapEnd(.audio, &lt)
         if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }      // sound reactions (Audio/EarsListener.swift)
+        lapEnd(.ears, &lt)
         if actors.count > 1 {
             for a in actors.dropFirst() { otherTick(a, reduce: reduce) }
+            lapEnd(.others, &lt)
             if game { model.care.tickOthers(actors, dt: sim.stepDt) }
+            lapEnd(.careOthers, &lt)
         }
         for a in parkActors { otherTick(a, reduce: reduce) }          // the park's visitors (their looks and friendships: tickPark)
+        lapEnd(.others, &lt)
         if game { model.care.tickRace(actors, dt: sim.stepDt) }          // Jelly Circuit: the trip to the track and the race (every Jelly is ticked by now)
+        lapEnd(.race, &lt)
         if game { model.care.tickCafe(actors, dt: sim.stepDt) }          // the café outing: the fade, the swaps, the serving, the cheer
+        lapEnd(.cafe, &lt)
         if game { model.care.tickVolley(actors, dt: sim.stepDt) }          // Jelly Volleyball: the trip to the beach, the match or drill (Volley/GameCare+Volley.swift)
+        lapEnd(.volley, &lt)
         if game { model.care.tickPark(actors, dt: sim.stepDt) }          // the park outing: the picker, the fade, the swaps, the visitors, friendships and love
+        lapEnd(.park, &lt)
         if game { model.care.tickGroom(actors, dt: sim.stepDt) }          // the Groomer: the fade, the swap, the reveal line-up and cheer
+        lapEnd(.groom, &lt)
         if game { model.care.tickShow(actors, dt: sim.stepDt) }          // Jelly Show: the trip to the stage, the rounds, the Studio's dance drill
+        lapEnd(.show, &lt)
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
+        lapEnd(.masks, &lt)
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball
+        lapEnd(.decor, &lt)
     }
 
     /// Tucked in: everybody is asleep and at least one was put to bed by voice ("goodnight"): the lamp dims and a quilt lies over the pile.
@@ -645,8 +688,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
         brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
         if let o = Self.idleMoodOverride { brain.idleMood = o }
+        var ht = CACurrentMediaTime()
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
+        HopDiag.lap(.otherBrain, &ht)
         a.skinner.jelly.tick(brain: brain, sim: a.sim, dt: a.sim.stepDt)
+        HopDiag.lap(.otherJelly, &ht)
         renderer?.setMouth(brain.mouthOpen, body: a.id)
         renderer?.setBlush(brain.blushNow, body: a.id)
     }
@@ -667,13 +713,17 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
             let b0 = CACurrentMediaTime()
+            var ht = b0
             throwHold = max(0, throwHold - sim.stepDt)
             brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: touchHolds(0))
             dbgBrain += CACurrentMediaTime() - b0
+            HopDiag.lap(.bobBrain, &ht)
             skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt)   // jelly follow-through (JellyJiggle.swift)
+            HopDiag.lap(.bobJelly, &ht)
             renderer?.mouthOpen = brain.mouthOpen
             renderer?.setBlush(brain.blushNow, body: 0)
             if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt, sim: sim) }
+            HopDiag.lap(.bobCare, &ht)
             return
         }
         renderer?.mouthOpen = 0
@@ -833,7 +883,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if scaler == nil {
             let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
             // with MetalFX the ladder starts at the MetalFX render scale (never above native); without it, at native
-            scaler = RenderScaler(native: Self.metalFXFlag ? min(GfxFlags.metalFXScale, native) : native)
+            scaler = RenderScaler(native: native, metalFX: Self.metalFXFlag)          // -MetalFX: native, then 2.5 / 2.19 / 1.5 upscaled; otherwise the raw ladder
             rateGov = RateGovernor(maxFPS: stage.window?.screen.maximumFramesPerSecond ?? 60)
         }
         let gpu = renderer?.lastGPUMs
@@ -971,16 +1021,23 @@ final class MelonController: NSObject, MTKViewDelegate {
             while acc >= sim.stepDt - 1e-6 && steps < maxSteps {          // (1e-6: a snapped 1/60 frame is exactly one step)
                 hopTick(reduce: reduce)
                 let st0 = CACurrentMediaTime()
+                var lt = st0
                 stepSims.removeAll(keepingCapacity: true)
-                for a in actors where !(game && model.care.volley.inScene && model.care.volleyHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (volleyball: the Jelbies at home are not stepped, drawn or worn; at most 4 bodies play)
-                for a in parkActors where a.updateSleep(forceAwake: !(a.brain?.isNapping ?? false)) { stepSims.append(a.sim) }          // (a guest asleep at home skips his step like the Jelbies)
+                let awayOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene)
+                for a in actors where !(awayOn && model.care.parkHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (park / volleyball / groomer: the Jelbies at home are far away: not stepped, drawn or worn; at most 4 bodies play)
+                let touching = (stageView?.activeTouches ?? 0) > 0
+                for a in parkActors where a.updateSleep(forceAwake: touching || touchHolds(a.id)) { stepSims.append(a.sim) }          // (a visitor who stands still sleeps like the Jelbies do; a touch wakes him)          // (a guest asleep at home skips his step like the Jelbies)
+                lapEnd(.sleep, &lt)
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
+                lapEnd(.step, &lt)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
             steppedThisFrame = steps > 0
+            var rt = CACurrentMediaTime()
             if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
             if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
+            lapEnd(.refit, &rt)
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
             dbgSteps += steps
         }
@@ -992,15 +1049,22 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
         let parkOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene)
+        let bathHides = game && (model.care.bath.look.visible || model.care.bath.cameraBlend > 0)
+        let washedID = bathHides ? min(model.care.bath.targetID, actors.count - 1) : 0
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
+            if bathHides, a.id != washedID { continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
         }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         dbgSkin += CACurrentMediaTime() - sk0
-        if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
+        lap[Lap.skin.rawValue] += CACurrentMediaTime() - sk0
+        var wt = CACurrentMediaTime()
+        if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }
+        lapEnd(.shoes, &wt)          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
+        lapEnd(.wear, &wt)
         for a in actors.dropFirst() {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
         }
@@ -1015,6 +1079,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             NSLog("%@", String(format: "[melon] wave arm mat writes: %.1f us per frame (%d frames)", matCost / Double(matN) * 1e6, matN))
             matCost = 0; matN = 0
         }
+        lapEnd(.mat, &wt)
         let c = sim.centroid()
         if !game { rig.follow(centroid: c, dt: dt, grabbing: mode == .grab) }
 
@@ -1068,7 +1133,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.metalFXEnabled = Self.metalFXFlag
         if Self.metalFXFlag {
             let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
-            if fxScale == 0 { fxScale = min(GfxFlags.metalFXScale, native) }
+            if fxScale == 0 { fxScale = native }          // (the scaler's top rung; it steps down from there)
             let k = min(1, fxScale / max(native, 1))
             rw = max(2, Int((Double(rw) * k).rounded())); rh = max(2, Int((Double(rh) * k).rounded()))
         }
@@ -1102,7 +1167,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.setUniforms(camera: cam, light: light, palette: m.palette.palette, params: fp,
                              viewSize: SIMD2<Float>(Float(rw), Float(rh)))
         if m.showMesh { sim.x.withUnsafeBufferPointer { renderer.uploadParticles($0.baseAddress!) } }
+        lapEnd(.camera, &wt)
         renderer.draw(drawable: drawable, showMesh: m.showMesh)
+        lapEnd(.encode, &wt)
 
         if !firstFrameDone {
             firstFrameDone = true
@@ -1136,6 +1203,12 @@ final class MelonController: NSObject, MTKViewDelegate {
             let slept = actors.reduce(0) { $0 + $1.sleptSteps }, wakes = actors.reduce(0) { $0 + $1.wakeCount }
             NSLog("[melon] sleep: %d of %d Jelly-steps skipped, %d wakes, asleep now: %@", slept - lastSlept, dbgSteps * actors.count, wakes - lastWakes, actors.map { $0.asleep ? "z" : "-" }.joined())
             lastSlept = slept; lastWakes = wakes
+            NSLog("%@", "[melon] parts (mean ms per frame / longest single call, main thread): " + Lap.allCases.map { String(format: "%@ %.2f/%.1f", $0.label, lap[$0.rawValue] / f * 1000, lapMax[$0.rawValue] * 1000) }.joined(separator: ", "))
+            NSLog("%@", "[melon] hop parts (mean ms per step / longest single call): " + HopDiag.take(steps: dbgSteps))
+            NSLog("[melon] planner: %@", BlobBrain.takePlanStats())
+            let bodies = JellyParallel.takeBodyTimes()
+            NSLog("%@", String(format: "[melon] bodies: %d steps, per-body step mean %.2f ms, slowest body mean %.2f ms / max %.2f ms (slowest = body %d), step wall (dispatch + wait) mean %.2f ms", bodies.steps, bodies.mean * 1000, bodies.slowestMean * 1000, bodies.max * 1000, bodies.maxIndex, bodies.wallMean * 1000))
+            for i in lap.indices { lap[i] = 0; lapMax[i] = 0 }
             if actors.count > 1 {
                 NSLog("[melon] jellies: %@", actors.map { let c = $0.sim.centroid(); return String(format: "%d(%.2f,%.2f)%@", $0.id, c.x, c.z, $0.isWalking ? "w" : "") }.joined(separator: " "))
             }

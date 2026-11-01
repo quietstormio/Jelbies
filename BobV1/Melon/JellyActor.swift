@@ -7,6 +7,7 @@
 
 import Foundation
 import simd
+import QuartzCore
 
 @MainActor
 final class JellyActor {
@@ -100,11 +101,34 @@ nonisolated enum JellyParallel {
     /// Below this many bodies the work runs inline on the calling thread (a single Jelly pays nothing for the dispatch).
     static let minForThreads = 2
 
+    /// Per-body step timing (diagnostics for the `[melon] bodies` line): each body writes only its own slot, the main thread reads them after the join.
+    nonisolated(unsafe) private static let bodyMs = UnsafeMutablePointer<Double>.allocate(capacity: 16)
+    nonisolated(unsafe) private static var acc = (steps: 0, sum: 0.0, n: 0, slowSum: 0.0, max: 0.0, maxIndex: 0, wall: 0.0)
+    static func takeBodyTimes() -> (steps: Int, mean: Double, slowestMean: Double, max: Double, maxIndex: Int, wallMean: Double) {
+        let a = acc; acc = (0, 0, 0, 0, 0, 0, 0)
+        let st = Double(max(a.steps, 1))
+        return (a.steps, a.sum / Double(max(a.n, 1)), a.slowSum / st, a.max, a.maxIndex, a.wall / st)
+    }
+
     static func step(_ sims: [SoftBody]) {
-        if sims.count < minForThreads { for s in sims { s.step() }; return }
+        let w0 = CACurrentMediaTime()
+        if sims.count < minForThreads { for s in sims { s.step() }; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0; return }
+        let times = bodyMs
         sims.withUnsafeBufferPointer { b in
-            DispatchQueue.concurrentPerform(iterations: b.count) { b[$0].step() }
+            DispatchQueue.concurrentPerform(iterations: min(b.count, 16)) { i in
+                let t0 = CACurrentMediaTime()
+                b[i].step()
+                times[i] = CACurrentMediaTime() - t0
+            }
+            for i in 16..<max(b.count, 16) { b[i].step() }          // (never more than 16 bodies; defensive)
         }
+        var slow = 0.0
+        for i in 0..<min(sims.count, 16) {
+            let t = times[i]; acc.sum += t; acc.n += 1
+            if t > slow { slow = t }
+            if t > acc.max { acc.max = t; acc.maxIndex = i }
+        }
+        acc.slowSum += slow; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0
     }
 
     struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float> }

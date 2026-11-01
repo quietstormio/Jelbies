@@ -105,7 +105,8 @@ extension GameCare {
         if !ff.vertices.isEmpty {
             let base = UInt32(f.opaque.vertices.count)
             f.opaque.vertices += ff.vertices
-            f.opaque.indices += ff.indices.map { $0 + base }
+            f.opaque.indices.reserveCapacity(f.opaque.indices.count + ff.indices.count)
+            for i in ff.indices { f.opaque.indices.append(i + base) }          // in place: no temporary array per frame
             boxes += features.lastBounds
         }
         room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: boxes)
