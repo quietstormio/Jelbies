@@ -173,7 +173,7 @@ final class MusicSkipTests: XCTestCase {
         }
         let pools = [BobV1.MusicTrack.dayPool, BobV1.MusicTrack.eveningPool, BobV1.MusicTrack.lofiPool]
         XCTAssertEqual(Set(pools.flatMap { $0 }).count, pools.map(\.count).reduce(0, +), "pools are disjoint")
-        XCTAssertEqual(pools.map(\.count), [9, 3, 5])
+        XCTAssertEqual(pools.map(\.count), [12, 6, 8])
         for t in BobV1.MusicTrack.allCases where t != .lofiPlay { XCTAssertEqual(pools.filter { $0.contains(t) }.count, 1, t.rawValue) }
         let titles = BobV1.MusicTrack.allCases.map(\.title)
         XCTAssertTrue(titles.allSatisfy { !$0.isEmpty })

@@ -63,6 +63,8 @@ final class AudioHub {
     @ObservationIgnored private var ambDay: (player: AVAudioPlayer, fader: Fader)?
     @ObservationIgnored private var ambEve: (player: AVAudioPlayer, fader: Fader)?
     @ObservationIgnored private var lengths: [MusicTrack: Double] = [:]
+    /// The main music's level, slewed between the director's targets (mode changes ramp; the play-layer duck falls in 1 s and lifts in ~3 s).
+    @ObservationIgnored private var mainSlew = MainGainSlew()
     // effects
     @ObservationIgnored private var pool: [String: [AVAudioPlayer]] = [:]
     @ObservationIgnored private var variantCount: [String: Int] = [:]
@@ -177,7 +179,8 @@ final class AudioHub {
     func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on; applyLevels(); refreshNowPlaying() }
     var _sceneEngine: SceneMusicEngine? { scene }
     /// Test seam: each live deck's effective volume (fader x main gain).
-    var _deckEffective: [Float] { decks.map { $0.fader.level * Float(director.mainGain(playing: input.playing)) } }
+    var _deckEffective: [Float] { decks.map { equalPower($0.fader.level) * Float(mainSlew.gain) } }
+    var _mainGain: Double { mainSlew.gain }
     func _tick(_ dt: Double) { _ = dt; tick() }
 
     /// Foreground / background (scenePhase).
@@ -709,7 +712,10 @@ final class AudioHub {
         }
         var inp = input
         inp.phase = DayPhase.of(hour: DayClock.shared.hour)
+        // the crossfade into the next song is timed from the player that really plays the current one (a frame hitch must not outrun the file)
+        if let cur = director.current, let d = decks.last(where: { $0.track == cur && $0.fader.target > 0 && $0.player.isPlaying }) { director.syncElapsed(d.player.currentTime) }
         perform(director.update(dt: dt, input: inp))
+        mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
         for i in decks.indices { decks[i].fader.update(dt: dt) }
         scene?.update(dt: dt)
         layer?.fader.update(dt: dt); ambDay?.fader.update(dt: dt); ambEve?.fader.update(dt: dt)
@@ -725,9 +731,9 @@ final class AudioHub {
     private func applyLevels() {
         guard started else { return }
         let m = musicLevelNow * duck.gain * AudioMix.music * danceGain
-        let main = Float(director.mainGain(playing: input.playing))
+        let main = Float(mainSlew.gain)
         var loud: Float = 0
-        for d in decks { d.player.volume = d.fader.level * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }
+        for d in decks { d.player.volume = equalPower(d.fader.level) * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }
         layer?.player.volume = (layer?.fader.level ?? 0) * m * 1.1
         scene?.setLevel(m)
         if let l = layer, l.player.isPlaying { loud = max(loud, l.player.volume) }
