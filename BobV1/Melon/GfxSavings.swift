@@ -21,8 +21,9 @@ nonisolated enum GfxFlags {
         return defaultOn
     }
     static var roomCache: Bool { flag("RoomCache", defaultOn: true) }
-    /// MetalFX defaults OFF everywhere: spatial upscaling is a visible (softer) trade, not an identical one; the user opts in.
-    static var metalFX: Bool { flag("MetalFX", defaultOn: false) }
+    /// MetalFX defaults ON for device builds (user-approved 2026-10-31: native, then 1005 / 880 / 603 px wide upscaled, instead of the raw soft 585 rung);
+    /// `-MetalFX 0` turns it off. XCTest and the simulator (no MetalFX) keep the raw ladder unless the flag is set.
+    static var metalFX: Bool { flag("MetalFX", defaultOn: true) }
     static var idleRest: Bool { flag("IdleRest", defaultOn: true) }
     /// Render scale (in native-pixel multiples) MetalFX renders at when the adaptive scaler is not driving it. -MetalFXScale 1.5.
     static var metalFXScale: Double { let v = UserDefaults.standard.double(forKey: "MetalFXScale"); return v >= 1 ? v : 1.5 }

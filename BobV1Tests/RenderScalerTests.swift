@@ -178,3 +178,11 @@ final class FramePacingTests: XCTestCase {
         XCTAssertNotNil((0..<(60 * 4)).compactMap { _ in g.update(dt: 1.0 / 60, gpuMs: 3, thermal: .nominal, lowPower: false, cpuMs: 3) }.first)
     }
 }
+
+final class MetalFXLadderTests: XCTestCase {
+    func testLadders() {
+        XCTAssertEqual(RenderScaler(native: 3, metalFX: true).levels, [3, 2.5, 2.19, 1.5])
+        XCTAssertEqual(RenderScaler(native: 3).levels, [3, 2.5, 2, 1.67, 1.5, 1.33])
+        XCTAssertEqual(RenderScaler(native: 2, metalFX: true).levels, [2, 1.5])
+    }
+}

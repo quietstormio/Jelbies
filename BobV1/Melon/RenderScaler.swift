@@ -13,6 +13,9 @@ import Foundation
 struct RenderScaler {
     /// Scales tried below native, highest first. Native itself (3x on iPhone Pro) is always level 0.
     static let ladder: [Double] = [3, 2.5, 2, 1.67, 1.5, 1.33]
+    /// The `-MetalFX 1` ladder (native multiples; 3x = 1206 px wide on the Pro): native with no upscale, then 1005 / 880 / 603 px wide rendered and upscaled by MetalFX
+    /// (a 603 px MetalFX picture looks about as crisp as a raw 880 one, so it replaces the raw 585 rung). Off = the raw ladder above.
+    static let metalFXLadder: [Double] = [2.5, 2.19, 1.5]
     static let thermalCap = 2.0
     static let downAfter = 0.5          // s over budget before a step down
     static let upAfter = 3.0            // s comfortably under budget before a step up
@@ -33,9 +36,9 @@ struct RenderScaler {
     private var lastStepUpAt = -1000.0, clock = 0.0
     private var cap = 0                 // lowest allowed level index (thermal)
 
-    init(native: Double, targetInterval: Double = 1.0 / 60) {
+    init(native: Double, targetInterval: Double = 1.0 / 60, metalFX: Bool = false) {
         var l = [max(native, 1)]
-        for s in Self.ladder where s < l[0] - 0.01 { l.append(s) }
+        for s in (metalFX ? Self.metalFXLadder : Self.ladder) where s < l[0] - 0.01 { l.append(s) }
         levels = l
         self.targetInterval = targetInterval
     }
