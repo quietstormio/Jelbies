@@ -387,6 +387,9 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Centre distance the Jellies keep from each other in the room (a body is ~1.4 wide; they may touch a little, never sit inside each other).
     static let jellyGap: Float = 1.4
+    /// Two standing bodies (measured 2026-11-01: ~0.5 each side of the root, arms and wobble excluded) touch skin to skin at this centre distance: no gap is steered below it
+    /// (the cosy close-up, the huddle, the diners' tight ring), or the body-vs-body collision (SoftBody+Separation) would squash the pair against its own steering.
+    static let bodyDiameter: Float = 1.0
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
     var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
 
@@ -449,7 +452,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     /// How much of the overlap a pressed Jelly gives back (a spring, not a wall), and how deep two bodies may squash into each other at the most (a fraction of the gap).
-    static let softPush: Float = 0.6, softFloor: Float = 0.78
+    static let softPush: Float = 0.6, softFloor: Float = 1.0
 
     /// The rule under the steering: a root position is pushed out of the circle (the gap) around every other Jelly, softly. The push returns `softPush` of the
     /// overlap (a continuous map: no pop at the edge of the circle, no flip-flopping when two stand close), down to a floor (`softFloor` of the gap) where two
@@ -457,7 +460,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// do not collide: the contact squish is BlobBrain+Contact).
     static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil) -> SIMD3<Float> {
         var q = p
-        let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
+        let g = max(bodyDiameter, gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap))        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
             if L < g {
@@ -570,6 +573,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Reused each fixed step (no per-step array).
     private var stepSims: [SoftBody] = []
     private var skinJobs: [JellyParallel.SkinJob] = []
+    private var allSims: [SoftBody] = []
     private var lastSlept = 0, lastWakes = 0
 
     /// Things that keep a Jelly awake besides his own brain and body: a finger on the screen, a hold, and the close-ups (focus, meal, Clean, selection).
@@ -1100,7 +1104,10 @@ final class MelonController: NSObject, MTKViewDelegate {
                 for a in parkActors where a.updateSleep(forceAwake: touching || touchHolds(a.id)) { stepSims.append(a.sim) }          // (a visitor who stands still sleeps like the Jelbies do; a touch wakes him)          // (a guest asleep at home skips his step like the Jelbies)
                 lapEnd(.sleep, &lt)
                 let pmS = PerfMeter.begin()
-                JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
+                allSims.removeAll(keepingCapacity: true)
+                for a in actors where !(awayOn && model.care.parkHides(a.id)) { allSims.append(a.sim) }
+                for a in parkActors { allSims.append(a.sim) }
+                JellyParallel.step(stepSims, all: allSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 PerfMeter.end(.sim, pmS)
                 lapEnd(.step, &lt)
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
