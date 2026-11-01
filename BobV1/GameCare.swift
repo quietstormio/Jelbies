@@ -155,6 +155,7 @@ final class GameCare {
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
     let select = BlobSelect()
     @ObservationIgnored var approachIdle: Float = 0
+    @ObservationIgnored var lineupDemoClock: Float = 0
     @ObservationIgnored var approachRetries = 0
     @ObservationIgnored var approachShort = 0
     @ObservationIgnored private var savedAutonomy = true
@@ -760,6 +761,7 @@ final class GameCare {
             wireWorld(brain, isBob: true)
         }
         lastBrain = brain; lastSim = sim
+        lineupDemoTick(dt: dt)
         syncPerks(id: 0, brain: brain)
         let act = brain.activity
         busy = (act != .idle && act != .lookingAround && act != .steppingInPlace) || bath.active

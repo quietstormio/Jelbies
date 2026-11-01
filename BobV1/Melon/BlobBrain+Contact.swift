@@ -82,15 +82,22 @@ extension BlobBrain {
         let side = simd_dot(q - m, right)
         let first: Float = side > 0.12 ? -1 : (side < -0.12 ? 1 : 1)          // away from him; dead ahead: my right
         // the floor is narrow (a phone in portrait): a waypoint past the wall is pulled back onto the floor, and the swing may shrink, as long as it still clears him by most of the gap
-        for sgn in [first, -first] {
-            for k: Float in [1.0, 1.15, 0.85, 0.7] {
-                let w0 = q + right * (sgn * clear * share * k)
-                let w = fixed(w0)
-                guard abs(simd_dot(w - q, right)) >= clear * share * 0.62, simd_distance(w, q) >= clear * share * 0.8, intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue }
-                yieldT = max(0, yieldT - runDt)
-                return .via(w)
+        // (a narrow floor: when no waypoint clears him by the whole gap, one that clears him by 0.8 of it - the steering floor of `keepApart` - is taken)
+        let gap0 = peerGap
+        defer { peerGap = gap0 }
+        for scale: Float in [1.0, 0.8] {
+            peerGap = gap0 * scale
+            for sgn in [first, -first] {
+                for k: Float in [1.0, 1.15, 0.85, 0.7] {
+                    let w0 = q + right * (sgn * clear * share * k)
+                    let w = fixed(w0)
+                    guard abs(simd_dot(w - q, right)) >= clear * share * 0.62 * scale, simd_distance(w, q) >= clear * share * 0.8 * scale, intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue }
+                    yieldT = max(0, yieldT - runDt)
+                    return .via(w)
+                }
             }
         }
+        peerGap = gap0
         // no room to swing out: give way for a moment (the other walks on), then carry on
         if h.walking, yieldT < ContactTuning.yieldMax { yieldT += runDt; return .wait }
         return .clear

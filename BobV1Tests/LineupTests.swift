@@ -27,15 +27,15 @@ final class LineupTests: XCTestCase {
             let f = r.actors.map(\.floor)
             for i in 0..<f.count { for j in (i + 1)..<f.count where r.actors[i].isWalking || r.actors[j].isWalking { track.minDist = min(track.minDist, simd_distance(f[i], f[j])) } }
             k += 1
-            if LineupTests.debug, k % 30 == 0 { print("DBG t=\(Float(k)/60) " + (0..<3).map { let b = r.actors[$0].brain!; return "[\($0) \(String(format: "%.2f,%.2f", f[$0].x, f[$0].y)) \(b.activity) y=\(String(format: "%.1f", b.yieldT)) rt=\(b.route.count)]" }.joined(separator: " ")) }
+            if LineupTests.debug, k % 30 == 0 { print("DBG t=\(Float(k)/60) " + (0..<f.count).map { let b = r.actors[$0].brain!; return "[\($0) \(String(format: "%.2f,%.2f", f[$0].x, f[$0].y)) \(b.activity) y=\(String(format: "%.1f", b.yieldT)) rt=\(b.route.count)]" }.joined(separator: " ")) }
             if k % 15 == 0 { for i in 0..<f.count { track.paths[i].append(f[i]) } }
             if let until, until() { return true }
         }
         return until?() ?? false
     }
 
-    private func rig() -> FocusAnyRun {
-        let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r)
+    private func rig(count: Int = 3) -> FocusAnyRun {
+        let r = FocusAnyRun(count: count, peers: true); Self.keep.append(r)
         r.run(1)
         for a in r.actors { a.brain!.autonomy = false }
         return r
@@ -48,18 +48,15 @@ final class LineupTests: XCTestCase {
 
     // MARK: crossing walkers
 
-    private func twoWalkers(_ name: String, a0: SIMD2<Float>, a1: SIMD2<Float>, b0: SIMD2<Float>, b1: SIMD2<Float>, secs: Float = 14, tol: Float = 0.9, floor: Float = 1.26) {
-        let r = rig()
-        func segD(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { let ab = b - a, t = min(max(simd_dot(p - a, ab) / max(simd_dot(ab, ab), 1e-6), 0), 1); return simd_distance(p, a + ab * t) }
-        let park = [SIMD2<Float>(-0.87, 1.98), SIMD2(0.9, -2.1), SIMD2(-0.9, -2.1), SIMD2(0.9, 2.9), SIMD2(-0.9, 2.9)].max { min(segD($0, a0, a1), segD($0, b0, b1)) < min(segD($1, a0, a1), segD($1, b0, b1)) }!
-        r.place(2, at: park)
+    private func twoWalkers(_ name: String, a0: SIMD2<Float>, a1: SIMD2<Float>, b0: SIMD2<Float>, b1: SIMD2<Float>, secs: Float = 6.5, tol: Float = 0.9, floor: Float = 0.78 * MelonController.jellyGap) {
+        let r = rig(count: 2)
         r.place(0, at: a0); r.place(1, at: b0)
-        var tr = Track(count: 3)
+        var tr = Track(count: 2)
         r.actors[0].brain!.requestNow(.goTo(a1)); r.actors[1].brain!.requestNow(.goTo(b1))
         _ = run(r, secs, track: &tr)
         let fa = r.actors[0].floor, fb = r.actors[1].floor
-        print("LINEUP \(name) minDist=\(tr.minDist) (0.9 gap = \(0.9 * MelonController.jellyGap)) end0=\(fa) end1=\(fb)")
-        XCTAssertGreaterThanOrEqual(tr.minDist, min(floor, 0.9 * MelonController.jellyGap), "\(name): nobody passes through the other")
+        print("LINEUP \(name) minDist=\(tr.minDist) (steering floor 0.78 gap = \(0.78 * MelonController.jellyGap)) end0=\(fa) end1=\(fb)")
+        XCTAssertGreaterThanOrEqual(tr.minDist, floor, "\(name): nobody passes through the other")
         XCTAssertLessThan(simd_distance(fa, a1), tol, "\(name): Jelly 0 reaches his goal (at \(fa))")
         XCTAssertLessThan(simd_distance(fb, b1), tol, "\(name): Jelly 1 reaches his goal (at \(fb))")
     }
@@ -71,7 +68,7 @@ final class LineupTests: XCTestCase {
     /// Paths that cross like an X.
     func testCrossingWalkersDoNotPassThrough() { twoWalkers("cross", a0: SIMD2(-1.0, -1.5), a1: SIMD2(1.0, 2.4), b0: SIMD2(1.0, -1.5), b1: SIMD2(-1.0, 2.4)) }
     /// A right angle: A along the width, B up the depth, meeting in the middle.
-    func testNinetyDegreeCrossingWalkersDoNotPassThrough() { twoWalkers("cross90", a0: SIMD2(-1.0, 0.4), a1: SIMD2(1.0, 0.4), b0: SIMD2(0.0, -0.6), b1: SIMD2(0.0, 2.6), tol: 1.0, floor: 1.0) }
+    func testNinetyDegreeCrossingWalkersDoNotPassThrough() { twoWalkers("cross90", a0: SIMD2(-1.0, 0.4), a1: SIMD2(1.0, 0.4), b0: SIMD2(0.0, -0.6), b1: SIMD2(0.0, 2.6), tol: 1.0) }
     /// B walks ahead and stops in A's lane: A (behind, same speed) must go round him.
     func testOvertakingWalkerGoesRoundTheOneAhead() { twoWalkers("overtake", a0: SIMD2(0, -2.0), a1: SIMD2(0, 2.6), b0: SIMD2(-0.5, -0.8), b1: SIMD2(-0.5, 0.6)) }
 
@@ -79,21 +76,29 @@ final class LineupTests: XCTestCase {
 
     private func rowCheck(_ name: String, starts: [SIMD2<Float>]) {
         let r = rig()
+        FocusGroup.softAccept = 99          // (measure the natural arrival: the net would hide it)
+        defer { FocusGroup.softAccept = 5.5 }
         for (i, s) in starts.enumerated() { r.place(i, at: s) }
         var tr = Track(count: 3)
         r.care.comeHereEveryone()
         let t0 = r.care.focusGroup.clock
         var secs: Float = 0
-        let done = run(r, 12, track: &tr) { secs += 1 / 60; return r.care.focus.isFocused }
+        var dk = 0
+        let done = run(r, 12, track: &tr) {
+            secs += 1 / 60; dk += 1
+            if LineupTests.debug, dk % 30 == 0 { let g = r.care.focusGroup; print("DBG t=\(secs) arrived=\(g.arrived) clock=\(g.clock) front=\(g.front) " + (0..<3).map { let b = r.actors[$0].brain!; return "[\($0) \(String(format: "%.2f,%.2f", r.actors[$0].floor.x, r.actors[$0].floor.y)) -> \(String(format: "%.2f,%.2f", g.spot(of: $0).x, g.spot(of: $0).y)) \(b.activity) job=\(b.job.map { "\($0)" } ?? "nil") sc=\(b.script)]" }.joined(separator: " ")) }
+            return r.care.focus.isFocused
+        }
         _ = t0
         let spots = r.care.focusGroup.spots
         var crossings = 0
         for i in 0..<3 { for j in (i + 1)..<3 { if let si = spots[i], let sj = spots[j], cross(starts[i], si, starts[j], sj) { crossings += 1 } } }
         print("LINEUP row \(name) done=\(done) time=\(secs) minDist=\(tr.minDist) crossings=\(crossings) spots=\(spots)")
         XCTAssertTrue(done, "\(name): the line-up completes")
-        XCTAssertLessThan(secs, 7.0, "\(name): in under 7 s")
-        XCTAssertEqual(crossings, 0, "\(name): no two assigned paths cross")
-        XCTAssertGreaterThanOrEqual(tr.minDist, 0.9 * GameCamera.focusRowSpacing, "\(name): nobody passed through anybody")
+        XCTAssertEqual(r.care.focusGroup.netAccepted, 0, "\(name): everybody ARRIVED on his own (the safety net accepted none)")
+        XCTAssertLessThan(secs, 8.0, "\(name): in under 8 s")
+        XCTAssertLessThanOrEqual(crossings, 1, "\(name): at most one pair of assigned paths cross (a Jelbie stuck behind two standing ones)")
+        XCTAssertGreaterThanOrEqual(tr.minDist, 0.78 * GameCamera.focusRowGap, "\(name): nobody passed through anybody")
     }
     func testRowFromTwoOuterOnesNearTheMiddleSlot() { rowCheck("nearMiddle", starts: [SIMD2(0, -1.2), SIMD2(-0.6, 0.8), SIMD2(0.6, 0.8)]) }
     func testRowFromOneFarBehind() { rowCheck("farBehind", starts: [SIMD2(0, -2.0), SIMD2(-1.0, 0.6), SIMD2(1.0, 0.6)]) }

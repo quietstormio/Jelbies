@@ -19,6 +19,9 @@ final class FocusGroup {
     private(set) var arrived: Set<Int> = []
     /// Autonomy to hand back (Jellies whose wandering the focus paused), by id.
     var saved: [Int: Bool] = [:]
+    /// The steering gap each row member had before the line-up (he keeps only the row's gap from the others while it is on: the slots are 1.15 apart, the room's gap is 1.4).
+    var gapSaved: [Int: Float] = [:]
+    static let rowSteerGap: Float = 1.05
     struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false }
     /// A come walk that ended SHORT of the spot (someone stood on it and the floor rules dragged the target over the gap: he turned to wave 1.4 u early) is
     /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
@@ -60,14 +63,17 @@ final class FocusGroup {
     private var replanClock: Float = 0
     private(set) var replans = 0
     /// The line-up is never stuck: after `softAccept` seconds a Jelly within `nearEnough` of his spot is taken as arrived where he stands, after `hardAccept` anyone is.
-    static let softAccept: Float = 5.5, hardAccept: Float = 8, nearEnough: Float = 1.5, sidesWait: Float = 1.5
+    nonisolated(unsafe) static var softAccept: Float = 5.5, hardAccept: Float = 8
+    static let nearEnough: Float = 1.5, sidesWait: Float = 1.5
+    /// Members the safety net had to accept where they stood (tests: a line-up that works needs none).
+    var netAccepted = 0
     /// A side Jelly may set off once the middle one is (nearly) there, or after `sidesWait` seconds.
     func mayGo(_ id: Int, frontDistance: Float?) -> Bool {
         id == front || ids.count < 3 || arrived.contains(front) || clock > Self.sidesWait || (frontDistance ?? 99) < 2.4
     }
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
-        ids = new; arrived = []; clock = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]
         if new.count > 1 {
             let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
@@ -149,6 +155,7 @@ extension GameCare {
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
         for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
         focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }))
+        if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0; approachShort = 0
         if ids.contains(0) {
@@ -191,13 +198,13 @@ extension GameCare {
         let g = focusGroup
         guard focus.phase == .approaching, !g.ids.isEmpty else { return }
         g.clock += dt
-        guard g.clock > FocusGroup.softAccept else { return }
+        guard g.clock > min(FocusGroup.softAccept, FocusGroup.hardAccept) else { return }
         for id in g.ids where !g.arrived.contains(id) {
             guard let b = brainFor(id) else { if g.markArrived(id) { focus.arrive() }; continue }
             let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim
             let d = simd_length(Self.floorPos(b, sim) - g.spot(of: id))
             guard d < FocusGroup.nearEnough || g.clock > FocusGroup.hardAccept else { continue }
-            b.pending = nil; b.interruptScript = true
+            b.pending = nil; b.interruptScript = true; g.netAccepted += 1
             if id == 0 {
                 queued.removeAll { if case .come = $0 { return true }; return false }; callRunning = false
                 g.zeroPending = false
@@ -218,6 +225,7 @@ extension GameCare {
         let phase = focus.phase
         if phase == .roaming {                     // over: hand the wandering back, then forget the group once everybody has
             if let a = g.saved.removeValue(forKey: id) { brain.autonomy = a }
+            if let gp = g.gapSaved.removeValue(forKey: id) { brain.peerGap = gp }
             if id != 0 { brain.onFinished = nil }
             if g.saved.isEmpty { g.clear() }
             return
