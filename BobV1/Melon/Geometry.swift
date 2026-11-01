@@ -1012,7 +1012,8 @@ private func buildRenderMeshBob() -> RenderMesh {
         // the foot bean of the same side, in the same block: [arm capsule, bean] (hidden deep inside the belly until he moves his feet)
         let beanFirst = pos.count / 3
         let hidden = FootBean.inactive(sigma: sigma)
-        for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], FootBean.mat[i]) }
+        let footMat = FootBean.matValues()
+        for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], footMat[i]) }
         idx += FootBean.triangles(firstVertex: beanFirst)
     }
     // Pip's tail (TailBean): after the foot beans, still in the body index range; skinned like the body, collapsed for every Jelly but Pip (Skinner)

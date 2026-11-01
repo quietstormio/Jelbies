@@ -117,12 +117,24 @@ nonisolated enum FootBean {
 
     /// Static `mat` (baked crease occlusion 0...0.4): the same occlusion the rest skin bakes, read at the bean's rest pose against the whole body
     /// (vertices inside the belly are projected onto its surface first, so the crown, which only shows once the foot is lifted, is crease-dark).
-    static let mat: [Float] = local.pos.map { p in
+    /// 2026-10-31 (one piece): the crease dark fades out over the top rings (full below ring 6, 15% from ring 11 up with the default amount): the visible top of the foot reads as the fur
+    /// continuing from the body, not as a dark ring where a separate piece was pushed in.
+    static let creaseFade: [Float] = (0..<vertexCount).map { i in
+        if i == 0 { return 1 }
+        let r = i == vertexCount - 1 ? rings : (i - 1) / around
+        let t = min(1, max(0, Float(r - 6) / 5))
+        return t * t * (3 - 2 * t)
+    }
+    /// How much of the crease dark the top rings lose (0.85 = the one-piece look; 0 = the old baked values, for before / after captures).
+    nonisolated(unsafe) static var creaseFadeAmount: Float = 0.85
+    private static let matRaw: [Float] = local.pos.map { p in
         let w = SIMD3(BobForm.footX + p.x, p.y, BobForm.footZ + p.z)
         let s = BobForm.project(w, steps: 3)
         let n = BobForm.normal(s)
         return Float(0.4 * BobForm.occlusion(s, n))
     }
+    /// The baked `mat` per bean vertex (computed per call: call it once per mesh build).
+    static func matValues() -> [Float] { (0..<vertexCount).map { matRaw[$0] * (1 - creaseFadeAmount * creaseFade[$0]) } }
 
     /// The crinkle-texture coordinate stream: the working-size bean at the rest foot, so the texture density matches the body skin.
     static func restStream(sigma: Double) -> [SIMD3<Double>] {

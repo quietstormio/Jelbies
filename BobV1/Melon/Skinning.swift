@@ -169,6 +169,13 @@ nonisolated final class Skinner {
                 t += 3
             }
             guardTris[s] = list
+            // the collar set: egg skin vertices within reach of the foot's rest place (one-piece join, see applyBeanCollar)
+            var ids = Set<Int32>()
+            for v in list {
+                let o = 3 * Int(v)
+                if simd_distance(SIMD3(rest[o], rest[o + 1], rest[o + 2]), c) < Self.collarReach { ids.insert(v) }
+            }
+            collarIds[s] = ids.sorted()
         }
         guardCand = [Int32](repeating: 0, count: max(guardTris[0].count, guardTris[1].count) / 3 + 8)
     }
@@ -207,7 +214,9 @@ nonisolated final class Skinner {
                 }
                 // the pole: no triangle within 12 cm = buried by more than that
                 let pole = P(f + crown[0])
-                let n0 = gather(pole, 0.12)
+                // (2026-10-31 one-piece: "no triangle within 12 cm" used to return = treated as buried; it can equally mean the bean is far OUTSIDE a squashed / flipped body: widen first)
+                var n0 = gather(pole, 0.12)
+                if n0 == 0 { n0 = gather(pole, 0.35) }
                 if n0 == 0 { return }
                 var deepest = -Float.infinity, inward = SIMD3<Float>(0, 1, 0)
                 if let r = burial(pole, n0) { deepest = r.0; inward = r.1 }
@@ -227,6 +236,178 @@ nonisolated final class Skinner {
                 let sh = inward * min(Self.guardBury + guardExtra - deepest, Self.guardMaxShift)
                 guardShift[s] = sh
                 for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); dyn[o] += sh.x; dyn[o + 1] += sh.y; dyn[o + 2] += sh.z }
+            }
+        }
+    }
+
+
+    // MARK: one-piece foot join (2026-10-31)
+    // The user's rule is "one solid piece": a foot piece pushed into the body met it at a hard line (a peg with a dark ring) whenever he tipped over. Three parts,
+    // all on the DRAWN surface (after every other deformation), so every placement path of the brain (walk, spread, excited, flap-hop, flips, dives ...) is covered at once:
+    //  1. applyBeanJoin   the NECK ring of each foot piece is measured against the drawn body triangles; a neck vertex less than `joinMinDepth` inside is pulled inward, the
+    //                     rings below it follow with a falling weight: the foot bends at the neck instead of sliding off.
+    //  2. applyBeanCollar the body skin around each foot rises along the foot's axis in a rounded fillet (the same first-order smooth-union bump as the arms' collar), so
+    //                     the skin flows up into the foot instead of meeting it in a dent ring.
+    //  3. (FootBean.mat) the baked crease dark fades out on the foot's top rings, so the visible top reads as the fur continuing from the body.
+    /// The neck of the foot piece: its top rings (the two just under the crown pole). The guarantee is per MERIDIAN (a line of ring vertices from the sole to the top): the deepest of
+    /// its neck vertices must lie `joinMinDepth` inside the drawn body, so the closed curve where the piece enters the body goes all the way round it (no part of the piece's
+    /// outline floats on the surface and slides).
+    static let joinNeckRings = [FootBean.rings - 2, FootBean.rings - 1]
+    nonisolated(unsafe) static var collarRing = 9
+    static let joinMinDepth: Float = 0.015, joinMaxPull: Float = 0.06
+    static let collarReach: Float = 0.34
+    /// Fillet radius of the quarter-circle collar (the skin rises along the foot axis by `r` at the foot's outline and meets the flat skin tangentially `r` away).
+    nonisolated(unsafe) static var collarK: Float = 0.07
+    var joinEnabled = true, collarEnabled = true
+    /// Body tilt (rad, set by the brain each frame): the neck guarantee fades in between 0.3 and 0.6 rad, so the upright walk / run (the locked gait, whose toes legitimately stand out of the skin) is never touched; it is the tipped-over body (side roll, flips, dives, faceplants, held, thrown) whose feet must not slide.
+    var joinTilt: Float = 0
+    /// Per foot: the deepest pull the neck guarantee applied last frame (m), the foot axis (out of the body), for tests and captures.
+    private(set) var joinPull: [Float] = [0, 0]
+    private(set) var collarAxis: [SIMD3<Float>] = [SIMD3(0, -1, 0), SIMD3(0, -1, 0)]
+    private var collarIds: [[Int32]] = [[], []]
+    /// The egg triangles near each foot WITHOUT the embedded foot's own retracted skin (a folded, inside-out sheet under the piece whose normals say nothing about inside / outside): the surface the neck
+    /// guarantee and the tests measure against. Rebuilt when the retract set changes.
+    private(set) var joinTris: [[Int32]] = [[], []]
+    private var joinBuiltFor = -1
+    /// The dent the skin keeps around each foot piece (m): the largest inward pull of the retract on a belly skin vertex near the foot that the collar does not give back (the dent ring of the old join). Diagnostic, every frame the pieces are out.
+    private(set) var joinDent: [Float] = [0, 0]
+    private var retractK: [Int32] = []
+    private var joinDef = [Float](repeating: 0, count: FootBean.around)
+    private var joinDir = [SIMD3<Float>](repeating: .zero, count: FootBean.around)
+
+    func ensureJoinTris() { if joinBuiltFor != retractVertices.count { rebuildJoinTris() } }
+    private func rebuildJoinTris() {
+        var junk = [Bool](repeating: false, count: vertexCount)
+        for (k, v) in retractVertices.enumerated() where retractWeight[k] > 0.5 { junk[Int(v)] = true }
+        for s in 0..<2 {
+            var out: [Int32] = []
+            var t = 0
+            let g = guardTris[s]
+            while t + 2 < g.count {
+                if !junk[Int(g[t])] && !junk[Int(g[t + 1])] && !junk[Int(g[t + 2])] { out.append(g[t]); out.append(g[t + 1]); out.append(g[t + 2]) }
+                t += 3
+            }
+            joinTris[s] = out
+        }
+        retractK = [Int32](repeating: -1, count: vertexCount)
+        for (k, v) in retractVertices.enumerated() { retractK[Int(v)] = Int32(k) }
+        joinBuiltFor = retractVertices.count
+    }
+
+    private func applyBeanJoin(_ dyn: UnsafeMutablePointer<Float>) {
+        joinPull = [0, 0]
+        let gate = max(0, min(1, (joinTilt - 0.3) / 0.3)), gateW = gate * gate * (3 - 2 * gate)
+        guard joinEnabled, gateW > 0.001, guardReady, beansActive, beanBlend > 0.05 else { return }
+        ensureJoinTris()
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        let A = FootBean.around, rings = Self.joinNeckRings
+        for s in 0..<2 {
+            let f = beanFirst[s]
+            var c = SIMD3<Float>.zero
+            for j in 0..<A { c += P(f + 1 + A * rings[0] + j) }
+            c /= Float(A)
+            var rho: Float = 0
+            for j in 0..<A { rho = max(rho, simd_distance(P(f + 1 + A * rings[0] + j), c)) }
+            let R2 = (rho + 0.12) * (rho + 0.12)
+            var n = 0
+            joinTris[s].withUnsafeBufferPointer { tb in
+                var t = 0
+                while t < tb.count { if simd_distance_squared(P(Int(tb[t])), c) < R2 { guardCand[n] = Int32(t); n += 1 }; t += 3 }
+                if n == 0 { return }
+                var any = false
+                for j in 0..<A {
+                    var best = -Float.infinity, dir = SIMD3<Float>(0, 1, 0)
+                    for r in rings {
+                        let p = P(f + 1 + A * r + j)
+                        var bd = Float.infinity, sgn: Float = 1, nn = SIMD3<Float>(0, 1, 0)
+                        for k in 0..<n {
+                            let t = Int(guardCand[k])
+                            let a = P(Int(tb[t])), b = P(Int(tb[t + 1])), cc = P(Int(tb[t + 2]))
+                            let q = DrawnGeom.closest(p, a, b, cc).0
+                            let dd = simd_distance_squared(p, q)
+                            if dd < bd { bd = dd; let fn = simd_cross(b - a, cc - a); nn = fn; sgn = simd_dot(p - q, fn) >= 0 ? 1 : -1 }
+                        }
+                        let l = simd_length(nn)
+                        let depth = -sgn * bd.squareRoot()
+                        if depth > best { best = depth; dir = l > 1e-12 ? -nn / l : SIMD3(0, 1, 0) }
+                    }
+                    joinDef[j] = max(0, Self.joinMinDepth - best)
+                    joinDir[j] = dir
+                    if joinDef[j] > 0 { any = true }
+                }
+                if !any { return }
+                var dd = [SIMD3<Float>](repeating: .zero, count: A)
+                var mean = SIMD3<Float>.zero
+                for j in 0..<A {
+                    let nb = max(joinDef[(j + 1) % A], joinDef[(j + A - 1) % A])
+                    let d = min(max(joinDef[j], 0.6 * nb), Self.joinMaxPull) * gateW
+                    dd[j] = joinDir[j] * d; mean += dd[j]
+                    joinPull[s] = max(joinPull[s], d)
+                }
+                mean /= Float(A)
+                let top = rings[0]
+                for r in 0..<FootBean.rings {
+                    let w: Float = r >= top ? 1 : (r == top - 1 ? 0.67 : r == top - 2 ? 0.33 : r == top - 3 ? 0.1 : 0)
+                    if w == 0 { continue }
+                    for j in 0..<A { let o = 6 * (f + 1 + A * r + j); let d = dd[j] * w; dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z }
+                }
+                let o = 6 * (f + FootBean.vertexCount - 1); dyn[o] += mean.x; dyn[o + 1] += mean.y; dyn[o + 2] += mean.z
+            }
+        }
+    }
+
+    private func applyBeanCollar(_ dyn: UnsafeMutablePointer<Float>) {
+        joinDent = [0, 0]
+        guard guardReady, beansActive, beanBlend > 0.05 else { return }
+        ensureJoinTris()
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        let A = FootBean.around, cr = Self.collarRing
+        let kk = Self.collarK
+        for s in 0..<2 {
+            let f = beanFirst[s]
+            let sole = P(f), top = P(f + FootBean.vertexCount - 1)
+            let al = simd_length(sole - top); if al < 1e-4 { continue }
+            let a = (sole - top) / al
+            collarAxis[s] = a
+            let tmp: SIMD3<Float> = abs(a.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
+            let e1 = simd_normalize(simd_cross(a, tmp)), e2 = simd_cross(a, e1)
+            var c = SIMD3<Float>.zero
+            for j in 0..<A { c += P(f + 1 + A * cr + j) }
+            c /= Float(A)
+            var ang = [Float](repeating: 0, count: A), rad = [Float](repeating: 0, count: A)
+            for j in 0..<A {
+                let u = P(f + 1 + A * cr + j) - c
+                let x = simd_dot(u, e1), y = simd_dot(u, e2)
+                ang[j] = atan2f(y, x); rad[j] = (x * x + y * y).squareRoot()
+            }
+            func wrap(_ x: Float) -> Float { var v = x; while v > .pi { v -= 2 * .pi }; while v < -.pi { v += 2 * .pi }; return v }
+            for vi in collarIds[s] {
+                let v = Int(vi), p = P(v), u = p - c
+                let h = simd_dot(u, a)
+                if abs(h) > 0.22 { continue }
+                let x = simd_dot(u, e1), y = simd_dot(u, e2)
+                let rr = (x * x + y * y).squareRoot()
+                let th = atan2f(y, x)
+                var R = rad[0]
+                for j in 0..<A {
+                    let j1 = (j + 1) % A
+                    let da = wrap(ang[j1] - ang[j]); if abs(da) < 1e-5 { continue }
+                    let t = wrap(th - ang[j]) / da
+                    if t >= 0 && t <= 1 { R = rad[j] + (rad[j1] - rad[j]) * t; break }
+                }
+                let dd = rr - R
+                var inward: Float = 0
+                let rk = Int(retractK[v])
+                if rk >= 0, retractSide[rk] < 0 { inward = max(0, -simd_dot(retractMatrix * retractRest[rk] * (retractWeight[rk] * beanBlend), a)) }
+                if dd >= kk { joinDent[s] = max(joinDent[s], inward); continue }
+                // quarter-circle fillet: height kk at the outline (the wall), 0 and tangent to the skin kk away; a little further inside the outline it fades out (the skin is under the foot there)
+                var bump: Float
+                if dd <= 0 { bump = kk * max(0, 1 + dd / 0.03) }
+                else { let q = kk - dd; bump = kk - (kk * kk - q * q).squareRoot() }
+                bump *= collarEnabled ? beanBlend : 0
+                joinDent[s] = max(joinDent[s], inward - bump)
+                let o = 6 * v
+                dyn[o] += a.x * bump; dyn[o + 1] += a.y * bump; dyn[o + 2] += a.z * bump
             }
         }
     }
@@ -555,6 +736,8 @@ nonisolated final class Skinner {
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
         applyBeanGuard(dyn)
+        applyBeanJoin(dyn)
+        applyBeanCollar(dyn)
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }

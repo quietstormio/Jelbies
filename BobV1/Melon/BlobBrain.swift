@@ -122,6 +122,15 @@ final class BlobBrain {
         case idle                      // an idle behaviour (BlobBrain+Idle.swift): sit, look, yawn, stumble
         case race                      // Jelly Circuit: one committed gait step at a time (BlobBrain+Race.swift)
     }
+    /// Names of every Script case (OnePieceInvariantTests: a new move must be added to its list). The switch is exhaustive: a new case does not compile until it is named here.
+    static let scriptKindNames = ["none", "walk", "turn", "look", "stepInPlace", "wave", "spin", "hopPlay", "rollPlay", "flipPlay", "eat", "dine", "idle", "race"]
+    var scriptKindName: String {
+        switch script {
+        case .none: return "none"; case .walk: return "walk"; case .turn: return "turn"; case .look: return "look"; case .stepInPlace: return "stepInPlace"
+        case .wave: return "wave"; case .spin: return "spin"; case .hopPlay: return "hopPlay"; case .rollPlay: return "rollPlay"; case .flipPlay: return "flipPlay"
+        case .eat: return "eat"; case .dine: return "dine"; case .idle: return "idle"; case .race: return "race"
+        }
+    }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
     var script: Script = .none
@@ -620,7 +629,9 @@ final class BlobBrain {
             pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
             gait.basePitch = pitchBase
             gait.tick(sim, held: false, reduce: amplitude < 0.7)
-            driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
+            // 2026-10-31 (one piece): in the side roll the feet are pieces (round nubs off the floor, the collared join, the neck guarantee) all the way: the built-in pads of a rolled body stood out
+            // of the side as flat-ended pegs with a hard edge
+            driveBeansRigid(sim, skinner, dt, tuck: gait.tuck, hold: gait.isRollMove)
             if !gait.isBusy { currentPose(sim); gait.basePitch = 0; finishScript(sim, after: false) }
             return
         default: break
@@ -1447,7 +1458,8 @@ final class BlobBrain {
             retractReady = true
         }
     }
-    static let retractBand: Float = 0.10
+    /// 2026-10-31 (one piece): the belly skin under the foot retracted over a 10 cm band = a dent ring around every foot; now full weight only in / at the foot outline, fading over 3 cm (the collar fills the rest).
+    nonisolated(unsafe) static var retractBand: Float = 0.03
     static let retractSink: Double = 0.025
 
     /// Body-rigid world position of rest point `r` (the attractor's pose: the position an undisturbed embedded foot would have).
@@ -1495,6 +1507,7 @@ final class BlobBrain {
         guard skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { beanCorr = [.zero, .zero]; return }
         if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
+        skinner.joinTilt = now.tilt
         // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
         // not moved with the body, but the always-attached clamp runs again against the pose the body has NOW (it ran before the step against the pose before it).
         let dq: simd_quatf? = beanFitUsed.map { now.rotation * $0.rotation.inverse }
@@ -1641,6 +1654,7 @@ final class BlobBrain {
     static let splayAngle: Float = 1.15, splayStretch: Float = 0.25, splayIn: Float = 0.17, splayOut: Float = 0.11
     /// The top of the leg (the buried crown) in bean-local coordinates: the hip the V pivots about.
     static let splayHip = SIMD3<Float>(0, FootBean.localF[FootBean.vertexCount - 1].y, 0)
+    nonisolated(unsafe) static var onePieceRoll = true          // (false = pads in the side roll: the e4062d6 behaviour, for before / after captures)
     nonisolated(unsafe) static var forceLegsFix = true          // (false = the behaviour before 2026-10-28: tests / before-after captures)
     /// Moves the whole bean up so that none of it is below the floor (its shape is kept).
     static func liftOntoFloor(_ v: inout [SIMD3<Float>], floorY: Float) {
@@ -1649,7 +1663,7 @@ final class BlobBrain {
         if lo < floorY { let d = floorY - lo; for i in v.indices { v[i].y += d } }
     }
 
-    func driveBeansRigid(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, tuck: Float = 0, force: Bool = false) {
+    func driveBeansRigid(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float, tuck: Float = 0, force: Bool = false, hold: Bool = false) {
         // (shoes / the hands-off path drive the beans again in the same tick without `force`: a flip in flight stays forced)
         let force = force || (gait.isSpinMove && (gait.phase == .air || gait.phase == .land))
         beanForce = force; beanForceLast = force
@@ -1660,7 +1674,7 @@ final class BlobBrain {
         if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
         footShift = [.zero, .zero]
         fillBeansRigid(sim, into: &beanScratch, tuck: tuck)
-        commitBeans(sim, skinner, dt, want: tuck > 0.002 || force)
+        commitBeans(sim, skinner, dt, want: tuck > 0.002 || force || (hold && Self.onePieceRoll))
     }
 
     /// Test / tool access: the embedded foot's render vertices (the beans' sole contacts come from `Skinner.beanFirst`).
