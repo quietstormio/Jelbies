@@ -46,8 +46,12 @@ extension GameCare {
             let sig = worn.map { $0.key.rawValue.hashValue ^ $0.value.rawValue.hashValue }.reduce(0, ^) &+ worn.count
             if let was = outfitSeen[a.id], was != sig, !worn.isEmpty, !hide { b.postEvent(.newOutfit); b.blushBump(hold: 2.4, peak: 0.55) }          // a new outfit: the others admire it
             outfitSeen[a.id] = sig
+            let pw = PerfProbe.begin()
             wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: worn, role: role, hideAll: hide, dt: dt)
+            PerfProbe.end("wardrobe.tick", pw)
+            let pf = PerfProbe.begin()
             tickFeature(a, brain: b, hideAll: hide, dt: dt)
+            PerfProbe.end("tickFeature", pf)
         }
         wardrobe.stepPuffs(dt: dt)
     }

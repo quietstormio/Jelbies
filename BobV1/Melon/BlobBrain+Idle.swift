@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import QuartzCore
 import simd
 
 typealias IdleMood = BlobMood
@@ -638,7 +639,9 @@ extension BlobBrain {
     /// A random spot inside the roaming area `minD...maxD` from `here` that is reachable in a straight line (nil = no room).
     func pickRunGoal(from here: SIMD2<Float>, minD: Float, maxD: Float) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRunGoal", probe) }
-        for _ in 0..<160 {
+        let deadline = CACurrentMediaTime() + Self.pickBudgetSeconds * 2          // (out of time = "no room" this step; the caller tries again later)
+        for k in 0..<160 {
+            if k & 7 == 7, CACurrentMediaTime() > deadline { break }
             var cand: SIMD2<Float>
             if let rf = roamProvider?() { cand = rf.sampleArea(rand(), rand(), rand()) }
             else if let r = wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
