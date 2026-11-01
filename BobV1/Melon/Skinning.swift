@@ -261,6 +261,8 @@ nonisolated final class Skinner {
     /// Fillet radius of the quarter-circle collar (the skin rises along the foot axis by `r` at the foot's outline and meets the flat skin tangentially `r` away).
     nonisolated(unsafe) static var collarK: Float = 0.07
     var joinEnabled = true, collarEnabled = true
+    /// The brain's roll tuck (0...1): the foot pieces are tucked into the belly, so the collar (which lifts the skin round the piece's outline) fades out with it.
+    var tuckW: Float = 0
     static let leashDepth: Float = 0.02, leashMax: Float = 0.6
     /// How far the leash moved each piece last frame (m): 0 = the piece was where the brain put it.
     private(set) var joinLeash: [Float] = [0, 0]
@@ -465,7 +467,7 @@ nonisolated final class Skinner {
                 var bump: Float
                 if dd <= 0 { bump = kk * max(0, 1 + dd / 0.03) }
                 else { let q = kk - dd; bump = kk - (kk * kk - q * q).squareRoot() }
-                bump *= collarEnabled ? beanBlend : 0
+                bump *= collarEnabled ? beanBlend * (1 - tuckW) : 0
                 joinDent[s] = max(joinDent[s], inward - bump)
                 let o = 6 * v
                 dyn[o] += a.x * bump; dyn[o + 1] += a.y * bump; dyn[o + 2] += a.z * bump

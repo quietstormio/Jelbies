@@ -31,6 +31,7 @@ final class AnticsLabTests: XCTestCase {
         switch b.script {
         case .hopPlay: return "play:hop"
         case .spin: return "play:spin"
+        case .rollPlay: return "play:roll"
         case .flipPlay: return "play:flip"
         case .wave: return "wave"
         default: return nil

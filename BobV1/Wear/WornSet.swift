@@ -111,7 +111,8 @@ final class WornSet {
     }
     static func flipping(_ b: BlobBrain) -> Bool {
         if b.isFlipping { return true }
-        return false
+        if case .rollPlay = b.script { return true }
+        return b.idleState.kind == .roll
     }
     /// Does a hide rule hide `look` for this Jelly right now (the wash is handled by `hideAll`)?
     static func hidden(_ look: WearLook, _ b: BlobBrain) -> Bool {
