@@ -54,7 +54,7 @@ nonisolated enum MusicTrack: String, CaseIterable, Sendable {
         case .night3: return "Sleepy Lamp"
         case .night4: return "Rain Hush"
         case .night5: return "Night Drift"
-        case .night6: return "Drizzle Dreams"
+        case .night6: return "Lullaby Lantern"
         case .night7: return "Moonlit Hush"
         case .night8: return "Blanket Fort"
         case .lofiPlay: return "Zoomies"
