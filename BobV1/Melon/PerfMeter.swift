@@ -113,6 +113,7 @@ nonisolated final class PerfMeter: @unchecked Sendable {
         var iv = lastBegin == 0 ? 0 : Double(frameStart &- lastBegin) * PerfMeter.tb
         if iv > 1000 { iv = 0; windowStart = frameStart }          // a pause / backgrounding gap is not a frame interval
         if iv == 0 { return }
+        if FootLog.on { FootLog.lastIntervalMs = iv }
         let k = n % PerfMeter.cap
         interval[k] = iv; cpu[k] = cpuMs
         for i in 0..<PerfMeter.nStages { stages[k * PerfMeter.nStages + i] = cur[i] }
