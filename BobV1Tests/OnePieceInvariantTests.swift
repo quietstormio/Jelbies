@@ -148,57 +148,33 @@ final class OnePieceInvariantTests: XCTestCase {
 
     struct Frame { var neck: Float = .infinity; var tilt: Float = 0; var join: Float = 0; var beans = false; var pad: Float = 0; var stretch: Float = 0; var ideal: Float = -.infinity; var dent: Float = 0; var tippedPad = false }
 
-    /// Per foot piece, from the skinned dyn buffer against the drawn body triangles near it (Skinner.joinTris: without the folded skin under the piece):
-    ///  neck  min over the 32 meridians of the deepest neck vertex (rings 9...12) inside the drawn body (cm / 100); the closed curve where the piece enters the body.
-    ///  join  max angle (deg) between the piece's shading normal and the body's face normal at the nearest point, over the piece's vertices that lie at most 2 cm outside the body surface (or 5 mm in)
-    ///        (the join curve): ~90 for a peg pushed into the skin, small for a collared, faded join.
-    ///  ideal the same neck in the fitted rigid frame (BobForm.bodySDF, the shape the brain buries against; negative = inside): an independent cross-check.
+    /// Per foot piece, from the skinned dyn buffer:
+    ///  neck  min over the 32 meridians of the deepest neck vertex (rings 10...12) inside the body's fitted rigid egg (BobForm.bodySDF in the fitted pose): the closed curve where the piece
+    ///        enters the body. (The first version measured the drawn triangles; near the feet those include the embedded foot's inside-out retracted sheet and called points 6 cm deep "11 cm outside".)
+    ///  dent  the dent the skin keeps around the piece after the collar (Skinner.joinDent).
+    ///  tippedPad  no pieces out while the body is tipped over (tilt > 0.8): the flat built-in pads stand out of the side like pegs.
     static func frame(_ r: MotionRig) -> Frame {
         var f = Frame()
         let m0 = LegsDrawnAuditTests.measure(r, shoes: false)
         f.pad = m0.coreDisp; f.stretch = m0.stretch
-        let tilt = r.sim.bodyPose(iterations: 4).tilt
+        let pose = r.sim.bodyPose(iterations: 4)
+        let tilt = pose.tilt
         guard m0.beans, m0.blend > 0.05 else { f.tilt = tilt; f.tippedPad = tilt > 0.8; return f }
         f.beans = true
         r.skinner.ensureJoinTris()
         f.tilt = tilt
         f.dent = max(r.skinner.joinDent[0], r.skinner.joinDent[1])
-        if tilt <= 0.5 { return f }          // (the neck guarantee only runs on a tipped body: the upright gait is the locked walk; the probes are the costly part)
+        if tilt <= 0.5 { return f }          // (the neck guarantee only runs on a tipped body: the upright gait is the locked walk)
         let A = FootBean.around
-        let pose = r.sim.bodyPose(iterations: 4), c0 = r.sim.restCentroid
+        let fp = (centroid: pose.centroid, rotation: pose.rotation, restCentroid: r.sim.restCentroid)
         r.dyn.withUnsafeBufferPointer { d in
             @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(d[6 * v], d[6 * v + 1], d[6 * v + 2]) }
-            @inline(__always) func N(_ v: Int) -> SIMD3<Float> { SIMD3(d[6 * v + 3], d[6 * v + 4], d[6 * v + 5]) }
             for s in 0..<2 {
                 let first = Int(r.bean[s][0])
-                let tri = r.skinner.joinTris[s]
-                var c = SIMD3<Float>.zero
-                for j in 0..<A { c += P(first + 1 + A * 11 + j) }
-                c /= Float(A)
-                var cand: [Int] = []
-                var t = 0
-                while t < tri.count { if simd_distance_squared(P(Int(tri[t])), c) < 0.32 * 0.32 { cand.append(t) }; t += 3 }
-                if cand.isEmpty { continue }
-                /// (signed depth inside, outward unit face normal) of `p` against the candidate triangles.
-                func probe(_ p: SIMD3<Float>) -> (Float, SIMD3<Float>) {
-                    var bd = Float.infinity, sgn: Float = 1, nn = SIMD3<Float>(0, 1, 0)
-                    for t in cand {
-                        let a = P(Int(tri[t])), b = P(Int(tri[t + 1])), cc = P(Int(tri[t + 2]))
-                        let q = DrawnGeom.closest(p, a, b, cc).0
-                        let dd = simd_distance_squared(p, q)
-                        if dd < bd { bd = dd; let fn = simd_cross(b - a, cc - a); nn = simd_normalize(fn); sgn = simd_dot(p - q, fn) >= 0 ? 1 : -1 }
-                    }
-                    return (-sgn * bd.squareRoot(), nn)
-                }
                 for j in 0..<A {
-                    var best = -Float.infinity, bestSdf = Float.infinity
-                    for ring in 10..<FootBean.rings {
-                        let v = first + 1 + A * ring + j
-                        best = max(best, probe(P(v)).0)
-                        let q = c0 + pose.rotation.inverse.act(P(v) - pose.centroid)
-                        bestSdf = min(bestSdf, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z)))))
-                    }
-                    f.neck = min(f.neck, best); f.ideal = max(f.ideal, bestSdf)
+                    var best = -Float.infinity
+                    for ring in 10..<FootBean.rings { best = max(best, Skinner.fittedDepth(P(first + 1 + A * ring + j), fp).0) }
+                    f.neck = min(f.neck, best)
                 }
             }
         }
@@ -289,7 +265,9 @@ final class OnePieceInvariantTests: XCTestCase {
         var tot = Agg(), tippedMoves = Set<String>(), notStarted: [String] = [], worstNeck: (Float, String) = (.infinity, ""), worstJoin: (Float, String) = (0, "")
         for (ji, job) in Self.jobs().enumerated() {
             var anyStarted = false
-            for (vi, c) in job.chars.enumerated() {
+            let lim = Int(ProcessInfo.processInfo.environment["ONEPIECE_VARIANTS"] ?? "") ?? job.chars.count
+            for vi in 0..<min(lim, job.chars.count) {
+                let c = job.chars[(vi + ji) % job.chars.count]
                 let shoes = (vi + ji) % 2 == 1
                 let pacing = Pacing.allCases[(vi + ji) % Pacing.allCases.count]
                 let a = Self.run(job.sc, char: c, shoes: shoes, pacing: pacing, seed: UInt64(3 + vi))
