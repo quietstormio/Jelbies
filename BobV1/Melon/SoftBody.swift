@@ -134,14 +134,6 @@ nonisolated final class SoftBody {
     /// Per-particle animation targets (see `ParticleTarget`); the caller refreshes them every fixed step.
     var targets: [ParticleTarget] = []
 
-    /// Body-vs-body separation (SoftBody+Separation.swift): the other bodies' proxies as they were at the start of this step (set on the main thread
-    /// before the parallel step, read-only while it runs), this body's own proxy at that moment, and whether it takes part.
-    var peerProxies: [BodyProxy] = []
-    var peerMine = BodyProxy()
-    var separates = true
-    /// Particles that belong to arm / foot chains (they are pushed like the rest but do not widen the body's proxy).
-    lazy var appendageMask: [Bool] = { var m = [Bool](repeating: false, count: n); for a in appendages { for i in a.particles where i < n { m[i] = true } }; return m }()
-
     // rigid-pose attractor
     var attractor = Attractor()
     private var attPrev = Attractor()
@@ -642,7 +634,6 @@ nonisolated final class SoftBody {
         if attOn { solveAttractor(dt, x, att) }
         if !targets.isEmpty { solveTargets(dt, x) }
         if pressing { solvePress(x) }
-        if !peerProxies.isEmpty { solvePeers(x) }
         solveFloor(x)
         if arenaRadius.isFinite, !arenaSuspended { solveArena(x) }
         let inv = 1 / dt, vmax = maxSpeed

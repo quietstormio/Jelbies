@@ -110,10 +110,8 @@ nonisolated enum JellyParallel {
         return (a.steps, a.sum / Double(max(a.n, 1)), a.slowSum / st, a.max, a.maxIndex, a.wall / st)
     }
 
-    /// `all`: every body in the scene (sleeping ones too), for the body-vs-body separation; nil = just the stepped ones.
-    static func step(_ sims: [SoftBody], all: [SoftBody]? = nil) {
+    static func step(_ sims: [SoftBody]) {
         let w0 = CACurrentMediaTime()
-        BodySeparation.prepare(awake: sims, all: all ?? sims)
         if sims.count < minForThreads { for s in sims { s.step() }; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0; return }
         let times = bodyMs
         sims.withUnsafeBufferPointer { b in
