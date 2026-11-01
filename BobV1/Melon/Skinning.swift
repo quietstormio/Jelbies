@@ -264,6 +264,14 @@ nonisolated final class Skinner {
     static let leashDepth: Float = 0.02, leashMax: Float = 0.6
     /// How far the leash moved each piece last frame (m): 0 = the piece was where the brain put it.
     private(set) var joinLeash: [Float] = [0, 0]
+    /// The body-embedded hip of each foot (world, this frame's skin), how far the piece's top pole is from it, and how far the tether pulled the piece.
+    private(set) var hipAnchor: [SIMD3<Float>] = [.zero, .zero]
+    private(set) var weldDist: [Float] = [0, 0]
+    private(set) var weldPull: [Float] = [0, 0]
+    /// FootLog: the deepest of the piece's top vertices inside the fitted egg BEFORE the leash moved it (m, + inside; < 0 = the piece's top was outside the body), each foot. 1 = not measured.
+    private(set) var leashPre: [Float] = [1, 1]
+    /// The longest a leg may be (pole to hip, m). Set from the longest the walk, run, hop, flip ... ever reach (OnePieceInvariantTests prints the measured maximum per move).
+    nonisolated(unsafe) static var weldReach: Float = 0.55
     /// Body tilt (rad, set by the brain each frame): the neck guarantee fades in between 0.3 and 0.6 rad, so the upright walk / run (the locked gait, whose toes legitimately stand out of the skin) is never touched; it is the tipped-over body (side roll, flips, dives, faceplants, held, thrown) whose feet must not slide.
     var joinTilt: Float = 0
     /// The fitted rigid pose of the body this frame (set by the brain with `joinTilt`): centroid, rotation, rest centroid.
@@ -301,15 +309,54 @@ nonisolated final class Skinner {
         return (d, pose.rotation.act(dirR))
     }
 
+    /// The body's rigid frame from THIS pass's skin: the three back landmark vertices (the tail's anchors) skinned with the body. `joinPose` (the brain's fit, set after each sim step) is used while it agrees with it;
+    /// if a stale or missing fit disagrees (a body re-skinned from another sim state than the one the brain last fitted: centroid > 6 cm or rotation > 0.2 rad apart), this frame's own wins.
+    private func bodyFrame(_ dyn: UnsafeMutablePointer<Float>) -> (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)? {
+        guard let jp = joinPose else { return nil }
+        guard tailLM.count == 3 else { return jp }
+        func lm(_ k: Int) -> SIMD3<Float> { let o = 6 * tailLM[k]; return SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
+        func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
+            let x = simd_normalize(b - a), z = simd_normalize(simd_cross(x, c - a)), y = simd_cross(z, x)
+            return simd_float3x3(columns: (x, y, z))
+        }
+        let rr = tailLMRest, ss = [lm(0), lm(1), lm(2)]
+        let Rot = frame(ss[0], ss[1], ss[2]) * frame(rr[0], rr[1], rr[2]).transpose
+        let q = simd_quatf(Rot)
+        guard q.vector.x.isFinite && q.vector.w.isFinite else { return jp }
+        let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (ss[0] + ss[1] + ss[2]) / 3
+        let own = (centroid: Cs + Rot * (jp.restCentroid - Cr), rotation: q, restCentroid: jp.restCentroid)
+        let dc = simd_distance(own.centroid, jp.centroid)
+        let ang = 2 * acosf(min(1, abs(simd_dot(own.rotation.vector, jp.rotation.vector))))
+        return (dc > 0.06 || ang > 0.2) ? own : jp
+    }
+
     private func applyBeanJoin(_ dyn: UnsafeMutablePointer<Float>) {
         joinPull = [0, 0]
         joinLeash = [0, 0]
+        leashPre = [1, 1]
+        weldPull = [0, 0]
+        // THE TETHER: the piece's top pole may be at most `weldReach` from the body-embedded hip; farther, the whole piece is brought back along the line to the hip. No brain pose, no timing, no stale
+        // fitted pose enters this: the hip is skinned from the same sim state in the same pass.
+        if joinEnabled, beansActive, beanBlend > 0.05 {
+            for s in 0..<2 {
+                let f = beanFirst[s], o = 6 * (f + FootBean.vertexCount - 1)
+                let d = SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) - hipAnchor[s]
+                let L = simd_length(d)
+                weldDist[s] = L
+                if L > Self.weldReach && L.isFinite {
+                    let sh = -d / L * (L - Self.weldReach)
+                    weldPull[s] = L - Self.weldReach
+                    for i in 0..<FootBean.vertexCount { let q = 6 * (f + i); dyn[q] += sh.x; dyn[q + 1] += sh.y; dyn[q + 2] += sh.z }
+                }
+            }
+        }
         // THE LEASH (2026-10-31, user's phone: a foot lying on the floor 15 cm from a rolling Teddy during a frame-hitch burst): whatever put a foot piece away from the body, the last step of the skin
         // brings it back. Ungated: the deepest of the piece's top vertices (rings 11, 12, the pole) must lie `leashDepth` inside the fitted egg; the brain's own clamp keeps >= 4 cm there in every
         // move, so this never touches a piece that is where the brain put it (the locked walk).
-        if joinEnabled, beansActive, beanBlend > 0.05, let pose = joinPose {
+        if joinEnabled, beansActive, beanBlend > 0.05, let pose = bodyFrame(dyn) {
             for s in 0..<2 {
                 let f = beanFirst[s], A = FootBean.around
+                var first = true
                 for _ in 0..<3 {          // (the egg's gradient points straight in only near the surface: a piece far away comes in over a few passes)
                     var best = -Float.infinity, dir = SIMD3<Float>(0, 1, 0)
                     func probe(_ v: Int) {
@@ -318,6 +365,7 @@ nonisolated final class Skinner {
                     }
                     probe(f + FootBean.vertexCount - 1)
                     for r in Self.joinNeckRings { for j in stride(from: 0, to: A, by: 2) { probe(f + 1 + A * r + j) } }
+                    if first { leashPre[s] = best; first = false }
                     if best >= Self.leashDepth { break }
                     let pull = min(Self.leashDepth - best, Self.leashMax)
                     joinLeash[s] += pull
@@ -327,7 +375,7 @@ nonisolated final class Skinner {
             }
         }
         let gate = max(0, min(1, (joinTilt - 0.3) / 0.3)), gateW = gate * gate * (3 - 2 * gate)
-        guard joinEnabled, gateW > 0.001, beansActive, beanBlend > 0.05, let pose = joinPose else { return }
+        guard joinEnabled, gateW > 0.001, beansActive, beanBlend > 0.05, let pose = bodyFrame(dyn) else { return }
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
         let A = FootBean.around, rings = Self.joinNeckRings
         for s in 0..<2 {
@@ -694,6 +742,16 @@ nonisolated final class Skinner {
         }
         if beansActive {
             let bl = beanBlend
+            // THE HIP (2026-11-01): until this loop overwrites them, the foot block's vertices are the hidden resting ball deep in the belly above the foot, skinned with the body (embedded in the sim's tets,
+            // same x, same pass). Its centre is a point that is part of the body whatever the brain did: `applyBeanJoin` tethers the piece to it.
+            for s in 0..<2 {
+                let f = beanFirst[s]
+                var h = SIMD3<Float>.zero
+                var n: Float = 0
+                var i = 0
+                while i < FootBean.vertexCount { let o = 6 * (f + i); h += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]); n += 1; i += 8 }
+                hipAnchor[s] = h / n
+            }
             for s in 0..<2 {
                 let f = beanFirst[s]
                 for i in 0..<FootBean.vertexCount {

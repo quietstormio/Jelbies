@@ -986,6 +986,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift)
+            let scene = !game ? "studio" : model.care.park.inScene ? "park" : model.care.volley.inScene ? "volley" : model.care.groom.inScene ? "groom" : (model.care.bath.look.visible || model.care.bath.cameraBlend > 0) ? "bath" : "room"
+            FootLog.shared.record(actors: actors + parkActors, dt: dt, scene: scene)
+        }
         dbgSkin += CACurrentMediaTime() - sk0
         if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
         if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
