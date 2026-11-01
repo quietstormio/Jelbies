@@ -41,6 +41,45 @@ extension FeatureCaptureTests {
         }
     }
 
+    /// The user's photo: Teddy in the bath with no ears. His ears + pom are body vertices, so they are on whenever he is character 4 - with no feature tick at all,
+    /// and with the wash's hideAll - and the pom alone leaves when he sleeps on his back.
+    func testTeddyEarsAlwaysOnWithoutFeatureTickAndInTheWash() throws {
+        DayClock.shared.forcedHour = 12
+        variant(.cream)
+        for (mode, name) in [(0, "no feature tick"), (1, "hideAll (the wash)")] {
+            W = 200; H = 200
+            let c = Char(id: 4)
+            let lab = setUpLab([SIMD2(0.2, 0.6)], chars: [c], seed: 3)
+            let d = dress(lab, [c]); let r = lab.rigs[0]
+            for _ in 0..<60 {
+                lab.tick(watching: false)
+                if mode == 1 { d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .ears, worn: [], hideAll: true, dt: 1.0 / 60) }
+            }
+            XCTAssertTrue(r.skinner.teddyOn, "\(name): Teddy's ears are on")
+            XCTAssertEqual(r.skinner.teddyEarScale, 1, accuracy: 1e-4, "\(name): ear scale 1")
+            XCTAssertEqual(r.skinner.teddyPomScale, 1, accuracy: 1e-4, "\(name): pom scale 1")
+            let blk = teddyBlock(skin(r))
+            for (pi, part) in blk.enumerated() {
+                var far: Float = 0
+                for v in part.dropFirst() { far = max(far, simd_distance(v, part[0])) }
+                XCTAssertGreaterThan(far, 0.02, "\(name): part \(pi) is standing out of the body")
+            }
+        }
+        for id in [0, 1, 2, 3, 5] {
+            W = 200; H = 200
+            let c = Char(id: id)
+            let lab = setUpLab([SIMD2(0.2, 0.6)], chars: [c], seed: 3)
+            let d = dress(lab, [c]); let r = lab.rigs[0]
+            for _ in 0..<40 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(id), worn: [], hideAll: true, dt: 1.0 / 60) }
+            XCTAssertFalse(r.skinner.teddyOn, "character \(id) is not a Teddy")
+            for (pi, part) in teddyBlock(skin(r)).enumerated() {
+                var far: Float = 0
+                for v in part.dropFirst() { far = max(far, simd_distance(v, part[0])) }
+                XCTAssertLessThan(far, 1e-4, "character \(id): part \(pi) stays collapsed")
+            }
+        }
+    }
+
     func testBeanTuckedUnderBeanieIsBobsHeadExactly() throws {
         DayClock.shared.forcedHour = 12
         variant(.cream)
