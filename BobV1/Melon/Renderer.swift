@@ -390,7 +390,7 @@ final class MelonRenderer {
 
     /// Memoryless MSAA / depth targets are possible: game pass (the studio path stores and reloads msDepth), no PerfPasses (stores / reloads
     /// the MSAA colour and depth), and an Apple-family GPU.
-    private var wantMemoryless: Bool { gfxOpt.memorylessMSAA && room != nil && !perfPasses && device.supportsFamily(.apple2) }
+    private var wantMemoryless: Bool { gfxOpt.memorylessMSAA && room != nil && !splitPasses && device.supportsFamily(.apple2) }
 
     /// (Re)creates the screen-sized targets. No-op when the size (and the memoryless choice) is unchanged.
     func resize(width w: Int, height h: Int) {
@@ -423,10 +423,16 @@ final class MelonRenderer {
         } else {
             targetsMemoryless = memoryless
         }
-        sceneTex = tex(Self.hdrFormat, samples: 1, usage: rtr, "sceneTex")
-        backTex = tex(.r32Float, samples: 1, usage: rtr, "backTex")
-        backDepth = tex(Self.depthFormat, samples: 1, usage: rt, "backDepth")
-        msHdr = tex(Self.hdrFormat, samples: ms, usage: rt, "msHdr")
+        // The studio (no room) path is the only user of the scene copy / back-face targets and its own 4x MSAA HDR target: not allocated in the game
+        // (msHdr alone is ~101 MB at native 3x). `-StudioTargetsAlways 1` restores the old allocation for A/B memory measurements.
+        if room == nil || UserDefaults.standard.bool(forKey: "StudioTargetsAlways") {
+            sceneTex = tex(Self.hdrFormat, samples: 1, usage: rtr, "sceneTex")
+            backTex = tex(.r32Float, samples: 1, usage: rtr, "backTex")
+            backDepth = tex(Self.depthFormat, samples: 1, usage: rt, "backDepth")
+            msHdr = tex(Self.hdrFormat, samples: ms, usage: rt, "msHdr")
+        } else {
+            sceneTex = nil; backTex = nil; backDepth = nil; msHdr = nil
+        }
         hdrTex = tex(Self.hdrFormat, samples: 1, usage: rtr, "hdrTex")
     }
 
@@ -648,9 +654,13 @@ final class MelonRenderer {
         let gt = gpuTimes
         let box = frameBox, pt = passTimes
         frameBox = nil
-        cmd.addCompletedHandler { c in
+        let encL = encLabels, encRing = ring; encLabels = []
+        let slowCtx: String? = perfPasses ? "\(lastCacheAction) fp\(Int(lastFootprintShare * 100))% \(width)x\(height) bodies\(slots.filter { !$0.hidden }.count) bath\(bathLook.visible ? 1 : 0)" : nil
+        cmd.addCompletedHandler { [weak self] c in
+            self?.resolveEncoderSamples(encL, ring: encRing)
             let t = c.gpuEndTime - c.gpuStartTime
             if let box { pt.add("post", t); gt.add(box.add(t)) } else { gt.add(t) }
+            if let slowCtx, t > 0.024 { pt.addSlow(String(format: "%.0fms ", t * 1000) + slowCtx) }
             sem.signal()
         }
         frameOwned = false
@@ -660,11 +670,53 @@ final class MelonRenderer {
     // MARK: per-pass GPU timing (launch argument -PerfPasses 1; separate command buffers per pass, same pixels)
 
     /// Diagnostics only: shadow / height / room / Bob / post are committed as separate command buffers so each gets its own gpuStart/EndTime.
-    let perfPasses = UserDefaults.standard.bool(forKey: "PerfPasses")
+    let splitPasses = UserDefaults.standard.bool(forKey: "PerfPasses")
+    /// Gate for the stage's `passes ms:` log line: -PerfPasses (split command buffers) or -PerfEncoders (timestamps, one command buffer).
+    var perfPasses: Bool { splitPasses || perfEncoders }
     private let passTimes = PassTimeAccumulator()
     private var frameBox: FrameTimeBox?
     /// "label=ms ..." for the passes since the last call (empty unless -PerfPasses 1).
     func takePassStats() -> String { passTimes.takeDescription() }
+    /// Test aid (ablation timing): passes named here are not encoded ("shadow", "height", "post", "blended"). Never set in the app.
+    var debugSkip: Set<String> = []
+
+    // MARK: per-encoder GPU timestamps (launch argument -PerfEncoders 1; one frame in flight at a time, i.e. a draining test / capture loop)
+
+    /// Diagnostics only: every render encoder of the frame gets stage-boundary timestamps (vertex start .. fragment end), so each encoder's own
+    /// execution span is reported ("E:label") without the dependency waits that per-command-buffer gpuStart/EndTime (-PerfPasses) include.
+    let perfEncoders = UserDefaults.standard.bool(forKey: "PerfEncoders")
+    private var counterBufs: [MTLCounterSampleBuffer?] = Array(repeating: nil, count: BodySlot.ring)
+    private var encLabels: [String] = []
+    private let tickClock = GPUTickClock()
+    private func instrument(_ rp: MTLRenderPassDescriptor, _ label: String) {
+        guard perfEncoders else { return }
+        if counterBufs[ring] == nil, let set = device.counterSets?.first(where: { $0.name == MTLCommonCounterSet.timestamp.rawValue }) {
+            let d = MTLCounterSampleBufferDescriptor()
+            d.counterSet = set; d.storageMode = .shared; d.sampleCount = 64; d.label = "encoder timestamps"
+            counterBufs[ring] = try? device.makeCounterSampleBuffer(descriptor: d)
+            tickClock.start(device)
+        }
+        guard let sb = counterBufs[ring], encLabels.count * 2 + 2 <= sb.sampleCount, let a = rp.sampleBufferAttachments[0] else { return }
+        a.sampleBuffer = sb
+        a.startOfVertexSampleIndex = encLabels.count * 2
+        a.endOfVertexSampleIndex = MTLCounterDontSample
+        a.startOfFragmentSampleIndex = MTLCounterDontSample
+        a.endOfFragmentSampleIndex = encLabels.count * 2 + 1
+        encLabels.append(label)
+    }
+    /// Runs when the frame's last command buffer completes: turns the timestamp pairs into per-label ms.
+    private func resolveEncoderSamples(_ labels: [String], ring r: Int) {
+        guard perfEncoders, let sb = counterBufs[r], !labels.isEmpty else { return }
+        guard let data = try? sb.resolveCounterRange(0..<(labels.count * 2)) else { return }
+        let scale = tickClock.secondsPerTick(device)
+        data.withUnsafeBytes { raw in
+            let ts = raw.bindMemory(to: MTLCounterResultTimestamp.self)
+            for (i, l) in labels.enumerated() where ts.count > 2 * i + 1 {
+                let a = ts[2 * i].timestamp, b = ts[2 * i + 1].timestamp
+                if a != MTLCounterErrorValue, b != MTLCounterErrorValue, b >= a { passTimes.add("E:" + l, Double(b - a) * scale) }
+            }
+        }
+    }
     // MARK: static-room cache (GfxSavings.swift)
 
     /// Cache the static room's resolved colour and re-shade only the footprint of Bob / his shadow / the tray. The stage sets this from
@@ -864,9 +916,9 @@ final class MelonRenderer {
     /// Render-target (re)creations since launch: a steady value while idle / entering focus means no per-frame target churn.
     private(set) var targetRebuilds = 0
 
-    /// Ends the current command buffer (recording `label`'s GPU time) and continues in a fresh one. No-op unless perfPasses.
+    /// Ends the current command buffer (recording `label`'s GPU time) and continues in a fresh one. No-op unless splitPasses.
     private func split(_ cmd: inout MTLCommandBuffer, _ label: String) {
-        guard perfPasses, let next = queue.makeCommandBuffer() else { return }
+        guard splitPasses, let next = queue.makeCommandBuffer() else { return }
         let box = frameBox ?? FrameTimeBox()
         frameBox = box
         let pt = passTimes
@@ -880,8 +932,9 @@ final class MelonRenderer {
 
     private func encodeFrame(_ cmd: inout MTLCommandBuffer, target: MTLTexture, showMesh: Bool) -> Bool {
         if width > 0 && wantMemoryless != targetsMemoryless { resize(width: width, height: height) }     // gfxOpt changed since the targets were made
-        guard let msScene, let msDepth, let sceneTex, let backTex, let backDepth, let msHdr, let hdrTex else { return false }
+        guard let msScene, let msDepth, let hdrTex else { return false }
         waitIfNeeded()
+        encLabels = []
         // mouthOpen rides in `stripe.w` (byte 460 of MelonUniforms); written here so it is always current for this frame.
         for (i, slot) in slots.enumerated() {
             slot.uboBuf.contents().storeBytes(of: min(max(forcedMouth ?? slot.mouthOpen, 0), 1), toByteOffset: 460, as: Float.self)
@@ -898,11 +951,12 @@ final class MelonRenderer {
         // shadow map + top-down height map (32-bit, or 16-bit with gfxOpt.shadowDepth16; the locals shadow the stored 32-bit maps below)
         let (shadowTex, topTex, pDepthNow, shadowFormat) = shadowMaps()
         lastShadowFormat = shadowFormat
-        for (tex, mbuf, label) in [(shadowTex, lightBuf, "shadow"), (topTex, topBuf, "height")] {
+        for (tex, mbuf, label) in [(shadowTex, lightBuf, "shadow"), (topTex, topBuf, "height")] where !debugSkip.contains(label) {
             let rp = MTLRenderPassDescriptor()
             rp.depthAttachment.texture = tex
             rp.depthAttachment.loadAction = .clear; rp.depthAttachment.clearDepth = 1
             rp.depthAttachment.storeAction = .store
+            instrument(rp, label)
             guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
             e.label = label
             e.setRenderPipelineState(pDepthNow)
@@ -999,6 +1053,7 @@ final class MelonRenderer {
                         crp.depthAttachment.texture = msDepth
                         crp.depthAttachment.loadAction = .clear; crp.depthAttachment.clearDepth = 1
                         crp.depthAttachment.storeAction = .dontCare
+                        instrument(crp, "roomcache")
                         guard let ce = cmd.makeRenderCommandEncoder(descriptor: crp) else { return false }
                         ce.label = "room cache build"
                         room.encode(ce, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: nil, shadowTex: nil, parts: .staticOnly)
@@ -1023,12 +1078,13 @@ final class MelonRenderer {
             let ca = rp.colorAttachments[0]!
             ca.texture = msScene; ca.resolveTexture = hdrTex
             ca.loadAction = .clear; ca.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: cutout ? 8 : 0)
-            ca.storeAction = perfPasses ? .storeAndMultisampleResolve : .multisampleResolve
+            ca.storeAction = splitPasses ? .storeAndMultisampleResolve : .multisampleResolve
             rp.depthAttachment.texture = msDepth
             rp.depthAttachment.loadAction = .clear; rp.depthAttachment.clearDepth = 1
-            rp.depthAttachment.storeAction = perfPasses ? .store : .dontCare
+            rp.depthAttachment.storeAction = splitPasses ? .store : .dontCare
+            instrument(rp, splitPasses ? "room" : "room+bob")
             guard var e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
-            e.label = perfPasses ? "room" : "room + bob"
+            e.label = splitPasses ? "room" : "room + bob"
             if let sc = scissor, let cacheTex = roomCacheTex {
                 roomPixelsShaded += Double(scissors.reduce(0) { $0 + $1.width * $1.height })
                 // Cached colour only OUTSIDE the footprint (four scissored strips), so the pixels inside see exactly the old draw sequence
@@ -1066,11 +1122,12 @@ final class MelonRenderer {
                 room.encode(e, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: uniforms.lightVP, shadowTex: shadowTex,
                             topViewProj: uniforms.topVP, heightTex: topTex)
             }
-            if perfPasses {      // diagnostics: Bob in his own pass / command buffer (load the room's MSAA colour + depth back)
+            if splitPasses {      // diagnostics: Bob in his own pass / command buffer (load the room's MSAA colour + depth back)
                 e.endEncoding()
                 split(&cmd, "room")
                 ca.loadAction = .load; ca.storeAction = .multisampleResolve
                 rp.depthAttachment.loadAction = .load; rp.depthAttachment.storeAction = .dontCare
+                instrument(rp, "bob")
                 guard let e2 = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
                 e2.label = "bob"
                 if let sc = scissor { e2.setScissorRect(sc) }
@@ -1107,14 +1164,15 @@ final class MelonRenderer {
                 }
             }
             // translucent room pieces (dining puffs, contact shadows) blend over Bob; sets its own state (not part of the body path)
-            room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,
-                               shadowTex: shadowTex, topViewProj: uniforms.topVP, heightTex: topTex)
+            if !debugSkip.contains("blended") { room.encodeBlended(e, viewProj: uniforms.viewProj, camPos: SIMD3(uniforms.camPos.x, uniforms.camPos.y, uniforms.camPos.z), lightViewProj: uniforms.lightVP,
+                               shadowTex: shadowTex, topViewProj: uniforms.topVP, heightTex: topTex) }
             e.endEncoding()
             split(&cmd, "bob")
             encodePostOrUpscale(cmd, target: target, hdrTex: hdrTex)
             return true
         }
 
+        guard let sceneTex, let backTex, let backDepth, let msHdr else { return false }      // studio targets (never made for the game path)
         // scene: floor + seeds + bubbles (MSAA, resolved to sceneTex)
         do {
             let rp = MTLRenderPassDescriptor()
@@ -1227,6 +1285,7 @@ final class MelonRenderer {
         up.encode(cmd)
         let rp = MTLRenderPassDescriptor()
         rp.colorAttachments[0].texture = target; rp.colorAttachments[0].loadAction = .dontCare; rp.colorAttachments[0].storeAction = .store
+        instrument(rp, "metalfxpresent")
         guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
         e.label = "metalfx present"
         e.setRenderPipelineState(pPresent)
@@ -1237,12 +1296,14 @@ final class MelonRenderer {
     }
 
     private func encodePost(_ cmd: MTLCommandBuffer, target: MTLTexture, hdrTex: MTLTexture) {
+        if debugSkip.contains("post") { return }
         // tone map
         do {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
             ca.texture = target; ca.loadAction = .clear; ca.clearColor = cutout ? MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0) : MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
             ca.storeAction = .store
+            instrument(rp, "post")
             guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
             e.label = "post"
             e.setRenderPipelineState(pPost)
@@ -1251,6 +1312,20 @@ final class MelonRenderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             e.endEncoding()
         }
+    }
+}
+
+/// GPU timestamp ticks -> seconds, calibrated against the CPU clock (MTLDevice.sampleTimestamps) since the sample buffer was made.
+nonisolated final class GPUTickClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cpu0: MTLTimestamp = 0, gpu0: MTLTimestamp = 0
+    private var scale = 1e-9
+    func start(_ d: MTLDevice) { lock.lock(); let t = d.sampleTimestamps(); cpu0 = t.cpu; gpu0 = t.gpu; lock.unlock() }
+    func secondsPerTick(_ d: MTLDevice) -> Double {
+        lock.lock(); defer { lock.unlock() }
+        let t = d.sampleTimestamps(); let c = t.cpu, g = t.gpu
+        if g > gpu0 + 50_000_000, c > cpu0 { scale = Double(c - cpu0) * 1e-9 / Double(g - gpu0) }
+        return scale
     }
 }
 
@@ -1265,15 +1340,23 @@ nonisolated final class FrameTimeBox: @unchecked Sendable {
 nonisolated final class PassTimeAccumulator: @unchecked Sendable {
     private let lock = NSLock()
     private var sums: [String: (Double, Int)] = [:]
+    private var slow: [String] = []
+    /// Context of a frame whose GPU time passed 24 ms (cache action, footprint, size, visible Jellies, bath).
+    func addSlow(_ c: String) { lock.lock(); if slow.count < 6 { slow.append(c) }; slowCount += 1; lock.unlock() }
+    private var slowCount = 0
     func add(_ label: String, _ seconds: Double) {
         lock.lock(); let s = sums[label] ?? (0, 0); sums[label] = (s.0 + seconds, s.1 + 1); lock.unlock()
     }
     func takeDescription() -> String {
         lock.lock(); defer { lock.unlock() }
         let order = ["shadow", "height", "roomcache", "room", "bob", "post"]
-        let out = order.compactMap { k in sums[k].map { String(format: "%@ %.2f", k, $0.0 / Double(max($0.1, 1)) * 1000) } }
+        let known = order + sums.keys.filter { !order.contains($0) }.sorted()
+        let out = known.compactMap { k in sums[k].map { String(format: "%@ %.2f", k, $0.0 / Double(max($0.1, 1)) * 1000) } }
         sums = [:]
-        return out.joined(separator: ", ")
+        var line = out.joined(separator: ", ")
+        if slowCount > 0 { line += " | slow(>24ms) x\(slowCount): " + slow.joined(separator: "; ") }
+        slow = []; slowCount = 0
+        return line
     }
 }
 
