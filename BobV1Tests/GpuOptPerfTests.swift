@@ -23,7 +23,7 @@ final class GpuOptPerfTests: XCTestCase {
         let W: Int, H: Int, n: Int
         let actors: [JellyActor]
         let ren: MelonRenderer
-        let target: MTLTexture
+        var target: MTLTexture
         let cam: CameraState
         var time: Float = 3.7
 
@@ -97,6 +97,7 @@ final class GpuOptPerfTests: XCTestCase {
         }
 
         func image() -> LockImage {
+            let W = target.width, H = target.height      // (a MetalFX test swaps in a bigger target)
             var px = [UInt8](repeating: 0, count: W * H * 4)
             px.withUnsafeMutableBytes { target.getBytes($0.baseAddress!, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0) }
             return LockImage(w: W, h: H, bgra: px)
