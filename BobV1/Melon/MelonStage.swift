@@ -835,19 +835,23 @@ final class MelonController: NSObject, MTKViewDelegate {
         #endif
     }
 
+    /// What the stage is showing (PerfMeter's `scene`, FootLog's `scene`).
+    private var sceneName: String {
+        guard game else { return "studio" }
+        let k = model.care
+        return k.race.active ? "race" : k.show.active ? "show" : k.cafe.active ? "cafe" : k.park.active ? "park" : k.groom.active ? "groom" : k.volley.active ? "volley" : k.bath.active ? "bath" : k.focus.isActive ? "focus" : "room"
+    }
+
     /// PerfMeter's per-line context (read every 5 s only).
     private func perfContext(_ view: MelonStageView?) -> PerfContext {
         var c = PerfContext()
-        if game {
-            let k = model.care
-            c.scene = k.race.active ? "race" : k.show.active ? "show" : k.cafe.active ? "cafe" : k.park.active ? "park" : k.groom.active ? "groom" : k.volley.active ? "volley" : k.bath.active ? "bath" : k.focus.isActive ? "focus" : "room"
-        } else { c.scene = "studio" }
+        c.scene = sceneName
         c.jelbies = actors.count + parkActors.count
         c.preferredFPS = view?.preferredFramesPerSecond ?? 0
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
         if Self.metalFXFlag { c.renderScale = fxScale }
-        c.ctx = [renderer?.takePerfContext() ?? "", brainTop()].filter { !$0.isEmpty }.joined(separator: " ")
+        c.ctx = [renderer?.takePerfContext() ?? "", brainTop(), FootLog.on ? FootLog.shared.summary : ""].filter { !$0.isEmpty }.joined(separator: " ")
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
         return c
@@ -1131,9 +1135,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         PerfMeter.end(.skin, pmK)
-        if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift)
-            let scene = !game ? "studio" : model.care.park.inScene ? "park" : model.care.volley.inScene ? "volley" : model.care.groom.inScene ? "groom" : (model.care.bath.look.visible || model.care.bath.cameraBlend > 0) ? "bath" : "room"
-            FootLog.shared.record(actors: actors + parkActors, dt: dt, scene: scene)
+        if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).
+            let skinned = actors.filter { !(parkOn && model.care.parkHides($0.id)) && !(bathHides && $0.id != washedID) }
+            FootLog.shared.record(actors: skinned + parkActors, dt: dt, scene: sceneName)
+            FootLog.shared.recordMoves(actors: actors, parkActors: parkActors, scene: sceneName)
         }
         dbgSkin += CACurrentMediaTime() - sk0
         lap[Lap.skin.rawValue] += CACurrentMediaTime() - sk0
