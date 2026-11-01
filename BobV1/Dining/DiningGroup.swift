@@ -49,6 +49,11 @@ final class DiningGroup {
     private var origin = DiningSpot.preferred
     /// place index of Blob i
     private(set) var placeOf: [Int] = []
+    /// Smart line-up: a diner within `Lineup.commitDistance` of his approach point keeps his place for good; the others are re-planned every `Lineup.period` s (`replan`).
+    private var committed: [Bool] = []
+    private var replanClock: Float = 0
+    /// How many times a place changed hands after the first plan (tests / diagnostics).
+    private(set) var replans = 0
     /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
     private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
@@ -105,6 +110,27 @@ final class DiningGroup {
         return out
     }
 
+    /// The approach points of all places, by place index.
+    private var approachPoints: [SIMD2<Float>] { stands.map { SIMD2($0.x, $0.y - GameCare.approachBack) } }
+
+    /// Smart line-up: re-read who should take which place while the diners come (the nearest to the middle takes it, the others the free slot on their side, no walk
+    /// across another, none through a standing diner). A diner within 1 u of his approach point is settled for good.
+    private func replan(dt: Float) {
+        replanClock += dt
+        guard replanClock >= Lineup.period, n > 1 else { return }
+        replanClock = 0
+        for i in brains.indices where !committed[i] && (started[i] || (released.indices.contains(i) && released[i]) || simd_distance(floor(i), approachPoint(blob: i)) < Lineup.commitDistance) { committed[i] = true }
+        guard committed.contains(false) else { return }
+        let from = brains.indices.map { floor($0) }
+        let locked: [Int?] = brains.indices.map { committed[$0] ? placeOf[$0] : nil }
+        let plan = Lineup.best(from: from, slots: approachPoints, locked: locked, centre: n == 3 ? 0 : nil, current: placeOf)
+        guard plan != placeOf else { return }
+        for i in brains.indices where plan[i] != placeOf[i] && !committed[i] {
+            placeOf[i] = plan[i]; replans += 1
+            brains[i].requestNow(.goTo(approachPoint(blob: i)))
+        }
+    }
+
     func start(_ c: Consumable, brains bs: [BlobBrain], floor f: @escaping (Int) -> SIMD2<Float>, ids: [Int]? = nil) {
         guard state == .idle, dining.phase == .absent, !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
@@ -116,7 +142,8 @@ final class DiningGroup {
             s.y += c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
             return SIMD2(s.x, s.y - GameCare.approachBack)
         }
-        placeOf = Self.nearestSpots(floors: brains.indices.map { f($0) }, spots: spots)
+        committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0
+        placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -130,9 +157,8 @@ final class DiningGroup {
             }
             if tierOf != nil {
                 b.peerGap = min(b.peerGap, Self.diningGap)
-                // every Jelly in the room is a diner with his OWN place (assigned once, 1.1 apart): nobody steers round, waits for or re-routes past another diner,
-                // each walks straight to his place; MelonStage.keepApart (0.7) stays as the hard "never inside each other" rule
-                b.peers = { [] }
+                // the diners keep their real peers (2026-11-01): each walks AROUND the others (standing and walking), whose places are re-planned while they come
+                // (`replan`); MelonStage.keepApart (0.7) stays as the last-resort spring
             }
             if !shared, !hooked {
                 let base = b.resolve
@@ -238,6 +264,7 @@ final class DiningGroup {
         switch state {
         case .approaching:
             if !trayOut { spawnTray() }
+            replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up

@@ -16,33 +16,108 @@ enum ContactTuning {
     static let lookDistance: Float = 2.4          // how far ahead along the leg a Jelly counts
     static let contactFrac: Float = 0.97          // closer than this fraction of the gap = the bodies touch
     static let cooldown: Float = 1.6
+    static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
+    static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
+    static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
 }
 
+/// What the look-ahead says about the next leg: nobody in the way, give way for a moment (a crossing walker with the right of way), or curve round via a waypoint.
+enum LookAhead { case clear, wait, via(SIMD2<Float>) }
+
 extension BlobBrain {
-    /// A waypoint beside the leg root -> target that clears a Jelly in the way by the gap, or nil (nobody in the way, or no free spot).
+    /// Kept for the callers that only want a waypoint.
     func lookAheadSidestep(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> SIMD2<Float>? {
+        if case .via(let w) = lookAhead(root, target) { return w }
+        return nil
+    }
+
+    /// Every other Jelbie - standing AND walking - is a moving obstacle (2026-11-01: "one will walk right through another"). For the leg root -> target, each peer's
+    /// position now and where he will be when I am closest to him (his velocity over the last 0.3 s) is compared with the gap:
+    ///  - a standing Jelbie in the way: curve round him early, to the side away from him (his right if he is dead ahead);
+    ///  - a walker coming head on: both curve to their own right, the lower id (who gives way) by more;
+    ///  - a walker crossing my path: the lower id waits a beat (at most `yieldMax` s, then goes round), the higher id walks on - unless it is about to touch;
+    ///  - a faster walker coming up behind a slower one: goes round.
+    /// This is steering only: the bodies are never pushed apart (`MelonStage.keepApart` stays the last-resort spring).
+    func lookAhead(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> LookAhead {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("lookAheadSidestep", probe) }
-        guard ContactTuning.lookAhead, job == nil, !commanded, pending == nil else { return nil }
+        guard ContactTuning.lookAhead, !race.active else { yieldT = max(0, yieldT - runDt); return .clear }
         let d = target - root, L = simd_length(d)
-        guard L > 1.0 else { return nil }
+        guard L > 0.8 else { return .clear }
         let dir = d / L, right = SIMD2(dir.y, -dir.x)
         let clear = peerGap * 0.97
-        var hit: (t: Float, side: Float, pos: SIMD2<Float>)?
+        let vSelf = ContactTuning.walkerSpeed
+        let horizon = min(L / vSelf, ContactTuning.lookTime)
+        struct Hit { var tc: Float; var pos: SIMD2<Float>; var vel: SIMD2<Float>; var id: Int; var walking: Bool; var dmin: Float }
+        var hit: Hit?
         for p in steerPeers() {
-            if simd_distance(p.pos, target) < clear * 1.3 { continue }          // (he is where I am going: a social walk-up, a meal)
+            let walking = p.id < Int.max / 4
+            let vel = walking ? (peerVel[p.id] ?? .zero) : .zero
+            let moving = simd_length(vel) > 0.18
+            if !moving, simd_distance(p.pos, target) < clear * 1.3 { continue }          // (he stands where I am going: a social walk-up, a meal)
             let rel = p.pos - root
-            let t = simd_dot(rel, dir), side = simd_dot(rel, right)
-            guard t > 0.15, t < min(L, ContactTuning.lookDistance), abs(side) < clear * 0.85 else { continue }
-            if hit == nil || t < hit!.t { hit = (t, side, p.pos) }
+            let vrel = dir * vSelf - (moving ? vel : .zero)
+            let vv = simd_dot(vrel, vrel)
+            guard vv > 1e-3 else { continue }
+            let closing = simd_dot(rel, vrel)
+            guard closing > 0.05 else { continue }          // (not closing in: behind me, or walking off faster than I come)
+            let tc = min(max(closing / vv, 0), horizon)
+            let dmin = simd_length(rel - vrel * tc)
+            guard dmin < clear * 0.85 else { continue }
+            if !moving { guard simd_dot(rel, dir) < min(L, ContactTuning.lookDistance) else { continue } }
+            if hit == nil || tc < hit!.tc { hit = Hit(tc: tc, pos: p.pos, vel: moving ? vel : .zero, id: p.id, walking: moving, dmin: dmin) }
         }
-        guard let h = hit else { return nil }
-        let sgn: Float = h.side > 0.12 ? -1 : (h.side < -0.12 ? 1 : 1)          // away from him; dead ahead: my right
-        for k: Float in [1.0, 1.15, 1.35] {
-            let w = h.pos + right * (sgn * clear * k)
-            guard simd_distance(fixed(w), w) < 0.03, intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue }
-            return w
+        guard let h = hit else { yieldT = max(0, yieldT - runDt); return .clear }
+        let speed = simd_length(h.vel)
+        var share: Float = 1.0          // how much of the gap I swing out by
+        if h.walking {
+            let cosA = simd_dot(dir, h.vel / speed)
+            let iYield = steerID < h.id
+            if abs(cosA) < 0.6 {          // crossing: the lower id swings out well, the other only when it is about to touch
+                if !iYield { if h.tc < 1.2 && h.dmin < clear * 0.75 { share = 0.6 } else { return .clear } }
+            } else if cosA < 0 { share = iYield ? 0.85 : 0.55 }          // head on
+            else if !iYield || h.dmin > clear * 0.6 { share = 0.8 }          // overtaking
         }
-        return nil
+        let q = h.pos + h.vel * h.tc          // where he is when we are closest
+        let m = root + dir * (vSelf * h.tc)
+        let side = simd_dot(q - m, right)
+        let first: Float = side > 0.12 ? -1 : (side < -0.12 ? 1 : 1)          // away from him; dead ahead: my right
+        // the floor is narrow (a phone in portrait): a waypoint past the wall is pulled back onto the floor, and the swing may shrink, as long as it still clears him by most of the gap
+        // (a narrow floor: when no waypoint clears him by the whole gap, one that clears him by 0.8 of it - the steering floor of `keepApart` - is taken)
+        let gap0 = peerGap
+        defer { peerGap = gap0 }
+        for scale: Float in [1.0, 0.8] {
+            peerGap = gap0 * scale
+            for sgn in [first, -first] {
+                for k: Float in [1.0, 1.15, 0.85, 0.7] {
+                    let w0 = q + right * (sgn * clear * share * k)
+                    let w = fixed(w0)
+                    guard abs(simd_dot(w - q, right)) >= clear * share * 0.62 * scale, simd_distance(w, q) >= clear * share * 0.8 * scale else { continue }
+                    if scale >= 1 { guard intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue } }
+                    else { guard simd_distance(w, w0) < 0.2, softLegClear(root, w, r: gap0 * scale) else { continue } }
+                    yieldT = max(0, yieldT - runDt)
+                    return .via(w)
+                }
+            }
+        }
+        peerGap = gap0
+        // no room to swing out: give way for a moment (the other walks on), then carry on
+        if h.walking, yieldT < ContactTuning.yieldMax { yieldT += runDt; return .wait }
+        return .clear
+    }
+
+    /// A leg that keeps `r` from every other Jelbie (a Jelbie already closer than that only has to not get closer), whose floor points need at most the soft push of
+    /// `keepApart` (< 0.2) - the passing leg of a narrow floor, where the full-gap checks (`legClear`) refuse every way past.
+    func softLegClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, r: Float) -> Bool {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        for p in steerPeers() {
+            if simd_distance(p.pos, b) < r { continue }          // (he is at my destination)
+            let t = min(max(simd_dot(p.pos - a, ab) / l2, 0), 1)
+            let d = simd_distance(p.pos, a + ab * t), d0 = simd_distance(p.pos, a)
+            if d < r && !(d0 < r && d >= d0 - 0.02) { return false }
+        }
+        let n = max(2, Int(sqrtf(l2) / 0.2))
+        for i in 1...n { let p = a + ab * (Float(i) / Float(n)); if simd_distance(fixed(p), p) > 0.2 { return false } }
+        return true
     }
 
     /// A soft meeting: the bodies press, a small squish + wobble (once per contact, with a cooldown), nothing while a social drives the pair.

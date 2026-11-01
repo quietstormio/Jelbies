@@ -42,7 +42,8 @@ final class DiningLineupTests: XCTestCase {
 
     private func check(_ name: String, _ l: Result, limit: Float) {
         print("LINEUP \(name) time=\(l.time) detour=\(l.detour) places=\(l.places)")
-        XCTAssertEqual(l.places.count, 1, "\(name): nobody is reassigned after the first assignment: \(l.places)")
+        // (smart line-up, 2026-11-01: places are re-planned while the diners come, until each is within 1 u of his point - a few changes at most, never a shuffle)
+        XCTAssertLessThanOrEqual(l.places.count, 4, "\(name): places settle: \(l.places)")
         XCTAssertLessThan(l.time, limit, "\(name): lineup took \(l.time)s")
         XCTAssertLessThan(l.detour, 3.0, "\(name): walked \(l.detour)x the straight way")
     }

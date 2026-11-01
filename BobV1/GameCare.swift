@@ -155,6 +155,8 @@ final class GameCare {
     /// Multi-Blob select (outline highlight, confirm chip). One Blob in the game for now: the action button is then always visible.
     let select = BlobSelect()
     @ObservationIgnored var approachIdle: Float = 0
+    @ObservationIgnored var lineupDemoClock: Float = 0
+    @ObservationIgnored var zeroOnSlot: Float = 0
     @ObservationIgnored var approachRetries = 0
     @ObservationIgnored var approachShort = 0
     @ObservationIgnored private var savedAutonomy = true
@@ -572,6 +574,9 @@ final class GameCare {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
+            focusReplan(dt: dt)
+            if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
+            if zeroOnSlot > 0.3, !focusGroup.arrived.contains(0) { zeroOnSlot = 0; enterFocus(brain: brain) }          // (on his slot and still: arrived; the wave plays after)
             focusSafetyNet(dt: dt)
         }
         switch focus.phase {
@@ -759,6 +764,7 @@ final class GameCare {
             wireWorld(brain, isBob: true)
         }
         lastBrain = brain; lastSim = sim
+        lineupDemoTick(dt: dt)
         syncPerks(id: 0, brain: brain)
         let act = brain.activity
         busy = (act != .idle && act != .lookingAround && act != .steppingInPlace) || bath.active

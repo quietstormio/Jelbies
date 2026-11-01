@@ -265,8 +265,10 @@ final class FocusAnyJellyTests: XCTestCase {
         r.care.select.doubleTap(2)
         XCTAssertEqual(r.care.targetJelly, 2)
         r.care.comeHereEveryone()
-        XCTAssertEqual(r.care.focusSpot(for: 2), GameCamera.callSpot, "the selected Jelly is front and centre")
-        XCTAssertLessThan(r.care.focusSpot(for: 0).y, GameCamera.callSpot.y)
+        // smart line-up (2026-11-01): the middle slot goes to whoever is best placed for it, the others take the free sides - not a fixed spot for the selected one
+        let spots = (0..<3).map { r.care.focusSpot(for: $0) }
+        XCTAssertEqual(spots.filter { $0 == GameCamera.callSpot }.count, 1, "exactly one Jelly takes the middle slot")
+        XCTAssertEqual(Set(spots.map { "\($0)" }).count, 3, "three different slots")
         r.care.release()
     }
 

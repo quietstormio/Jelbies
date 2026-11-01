@@ -573,7 +573,7 @@ final class BlobBrain {
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
         runDt = dt
-        stepCounter &+= 1
+        stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
         defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
@@ -1021,7 +1021,23 @@ final class BlobBrain {
         let perched = socialOthers().filter { $0 !== self && $0.isPerched }.map(\.position)
         let r = perched.isEmpty ? all : all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
         peerCache = r; peerCacheStep = stepCounter
+        trackPeerVelocities(r)
         return r
+    }
+    /// The clock of this brain's own steps (s), the last sampled position of each WALKING peer, and his velocity (u/s) over the last ~0.3 s. A standing peer has none.
+    /// The steering predicts where a walker will be (BlobBrain+Contact.swift: `lookAhead`) so two walkers curve round each other early instead of meeting.
+    var peerClock: Float = 0
+    var peerSample: [Int: (pos: SIMD2<Float>, t: Float)] = [:]
+    var peerVel: [Int: SIMD2<Float>] = [:]
+    private func trackPeerVelocities(_ all: [(id: Int, pos: SIMD2<Float>)]) {
+        for p in all where p.id < Int.max / 4 {
+            guard let s = peerSample[p.id] else { peerSample[p.id] = (p.pos, peerClock); peerVel[p.id] = .zero; continue }
+            let el = peerClock - s.t
+            if el >= 0.3 {
+                peerVel[p.id] = el < 1.2 ? (p.pos - s.pos) / el : .zero          // (a stale sample - he was not looked at for a while - says nothing)
+                peerSample[p.id] = (p.pos, peerClock)
+            }
+        }
     }
     /// The step counter (bumped at the top of every tick) and the peers cached for it.
     var stepCounter = 0
@@ -1133,13 +1149,21 @@ final class BlobBrain {
             else { route = [] }
         }
         if let w = route.first { return w }
-        if let w = lookAheadSidestep(root, target) { route = [w]; return w }          // (curve round a Jelly early: BlobBrain+Contact.swift)
+        switch lookAhead(root, target) {          // (curve round a Jelly early, give way to a crossing one: BlobBrain+Contact.swift)
+        case .via(let w): route = [w]; return w
+        case .wait: return nil
+        case .clear: break
+        }
         if legClear(root, target, margin: steerMargin) { return target }
         if planCool <= 0 {
             if Self.stepProbeBudget <= 0 { Self.planStats.skipped += 1; return nil }          // the room's planning budget for this step is spent: stand a step, search next step
             if let r = planRoute(root, target, depth: 2) { route = r; planFails = 0; return r.first ?? target }
             planCool = planFails == 0 ? 0.3 : 0.6          // (no way round: ask again soon, backing off once; the probe budget bounds the cost, a longer back-off left Jellies short of the front in testRoomCoveragePortrait)
             planFails += 1
+        }
+        // a narrow floor (a phone in portrait): no route clears everybody by the whole gap, but the leg may pass them by 0.8 of it (the steering floor of keepApart): go
+        do {
+            if softLegClear(root, target, r: peerGap * 0.8) { return target }
         }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)
@@ -1154,6 +1178,8 @@ final class BlobBrain {
     }
 
     var steerWait: Float = 0
+    /// Seconds this walker has given way to a crossing walker (reset when nobody is in the way); at `ContactTuning.yieldMax` he goes round instead.
+    var yieldT: Float = 0
     /// An autonomous walk found its way blocked for good (see `steerTarget`): the walk ends and a new goal is picked.
     var steerGiveUp = false
     /// Seconds an autonomous walk has made no root progress (turning on the spot included, up to a half turn): the stuck detector.
