@@ -22,7 +22,7 @@ final class FocusGroup {
     /// The steering gap each row member had before the line-up (he keeps only the row's gap from the others while it is on: the slots are 1.15 apart, the room's gap is 1.4).
     var gapSaved: [Int: Float] = [:]
     static let rowSteerGap: Float = 1.05
-    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false }
+    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false; var onSlot: Float = 0 }
     /// A come walk that ended SHORT of the spot (someone stood on it and the floor rules dragged the target over the gap: he turned to wave 1.4 u early) is
     /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
     static let shortRetries = 6
@@ -249,6 +249,13 @@ extension GameCare {
                 return
             }
             s.age += dt
+            // standing on his slot and still = arrived (the turn and the wave play AFTER arrival, they do not gate it)
+            if simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) < 0.25 { s.onSlot += dt } else { s.onSlot = 0 }
+            if s.onSlot > 0.3 {
+                g.saved[id] = brain.autonomy; brain.autonomy = false; brain.onFinished = nil
+                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
+                return
+            }
             let act = brain.activity
             let calm = act == .idle || act == .lookingAround || act == .steppingInPlace
             s.calm = (calm && s.age > 0.5) ? s.calm + dt : 0

@@ -156,6 +156,7 @@ final class GameCare {
     let select = BlobSelect()
     @ObservationIgnored var approachIdle: Float = 0
     @ObservationIgnored var lineupDemoClock: Float = 0
+    @ObservationIgnored var zeroOnSlot: Float = 0
     @ObservationIgnored var approachRetries = 0
     @ObservationIgnored var approachShort = 0
     @ObservationIgnored private var savedAutonomy = true
@@ -574,6 +575,8 @@ final class GameCare {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
             focusReplan(dt: dt)
+            if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
+            if zeroOnSlot > 0.3, !focusGroup.arrived.contains(0) { zeroOnSlot = 0; enterFocus(brain: brain) }          // (on his slot and still: arrived; the wave plays after)
             focusSafetyNet(dt: dt)
         }
         switch focus.phase {

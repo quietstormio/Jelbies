@@ -1163,8 +1163,7 @@ final class BlobBrain {
         }
         // a narrow floor (a phone in portrait): no route clears everybody by the whole gap, but the leg may pass them by 0.8 of it (the steering floor of keepApart): go
         do {
-            let g0 = peerGap; peerGap = g0 * 0.8; defer { peerGap = g0 }
-            if legClear(root, target, margin: steerMargin) { return target }
+            if softLegClear(root, target, r: peerGap * 0.8) { return target }
         }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
         // (a Blob that stands still in the way - the game marks those with a huge id - is waited for longer: it is asked to step aside)

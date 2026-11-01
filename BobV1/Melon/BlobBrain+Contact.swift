@@ -91,7 +91,9 @@ extension BlobBrain {
                 for k: Float in [1.0, 1.15, 0.85, 0.7] {
                     let w0 = q + right * (sgn * clear * share * k)
                     let w = fixed(w0)
-                    guard abs(simd_dot(w - q, right)) >= clear * share * 0.62 * scale, simd_distance(w, q) >= clear * share * 0.8 * scale, intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue }
+                    guard abs(simd_dot(w - q, right)) >= clear * share * 0.62 * scale, simd_distance(w, q) >= clear * share * 0.8 * scale else { continue }
+                    if scale >= 1 { guard intrusion(w, margin: steerMargin) < 0.01, legClear(root, w, margin: steerMargin) else { continue } }
+                    else { guard simd_distance(w, w0) < 0.2, softLegClear(root, w, r: gap0 * scale) else { continue } }
                     yieldT = max(0, yieldT - runDt)
                     return .via(w)
                 }
@@ -101,6 +103,21 @@ extension BlobBrain {
         // no room to swing out: give way for a moment (the other walks on), then carry on
         if h.walking, yieldT < ContactTuning.yieldMax { yieldT += runDt; return .wait }
         return .clear
+    }
+
+    /// A leg that keeps `r` from every other Jelbie (a Jelbie already closer than that only has to not get closer), whose floor points need at most the soft push of
+    /// `keepApart` (< 0.2) - the passing leg of a narrow floor, where the full-gap checks (`legClear`) refuse every way past.
+    func softLegClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, r: Float) -> Bool {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        for p in steerPeers() {
+            if simd_distance(p.pos, b) < r { continue }          // (he is at my destination)
+            let t = min(max(simd_dot(p.pos - a, ab) / l2, 0), 1)
+            let d = simd_distance(p.pos, a + ab * t), d0 = simd_distance(p.pos, a)
+            if d < r && !(d0 < r && d >= d0 - 0.02) { return false }
+        }
+        let n = max(2, Int(sqrtf(l2) / 0.2))
+        for i in 1...n { let p = a + ab * (Float(i) / Float(n)); if simd_distance(fixed(p), p) > 0.2 { return false } }
+        return true
     }
 
     /// A soft meeting: the bodies press, a small squish + wobble (once per contact, with a cooldown), nothing while a social drives the pair.
