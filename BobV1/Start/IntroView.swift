@@ -1,9 +1,9 @@
 //
 //  IntroView.swift
-//  The launch intro (Cloud Jelly): one finished white, square clip (logo, squish, sparkles and its own sound) plays once it is ready,
+//  The launch intro (Cloud Jelly): one finished full-screen paper-coloured clip (the full-screen logo animation with its own music) plays once it is ready,
 //  holds its last frame, "Tap to start" fades in, and a tap (or 2 s) fades through white to the menu. A tap during the clip jumps to the last frame.
 //  Shown before the main menu on every cold launch (ContentView reads the gate once per process, so resuming from the background never replays it); -Intro 1 is accepted and changes nothing.
-//  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource`).
+//  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource(landscape:)`).
 //
 
 import SwiftUI
@@ -11,8 +11,9 @@ import AVFoundation
 import QuartzCore
 
 enum IntroClip {
-    /// The clip recoloured for the current theme (one pre-rendered file per preset).
-    @MainActor static var resource: String { ThemeStore.shared.currentPreset.introResource }
+    /// The full-screen logo animation (stars, the word puffing up, the little jelly on the "i", its own music), 5 s at 60 fps, Blue theme.
+    /// Two renders of the same animation: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
+    static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
     static let fileExtension = "mp4"
     /// Seconds after the clip ends before it moves on by itself.
     static let autoAdvance: Double = 2.0
@@ -20,7 +21,8 @@ enum IntroClip {
 
 enum IntroGate {
     static let seenKey = "IntroSeen.v1"
-    static let background = Color.white
+    /// The animation's own paper (#F0EFF0), so any letterbox edge is seamless.
+    static let background = Color(red: 240 / 255, green: 239 / 255, blue: 240 / 255)
     static func shouldShow(_ d: UserDefaults = .standard) -> Bool {
         true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
     }
@@ -45,16 +47,15 @@ struct IntroView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
             ZStack {
                 IntroGate.background
                 if let player {
-                    IntroPlayerView(player: player).frame(width: side, height: side)
+                    IntroPlayerView(player: player).frame(width: geo.size.width, height: geo.size.height)
                         .opacity(shown ? 1 : 0)
                         .animation(.easeInOut(duration: 0.5), value: shown)
                 }
                 if A11ySettings.shared.captions, !settled, shown {
-                    Text("Piano and strings, sparkles and pops")          // caption for the intro clip's sound
+                    Text("Soft music and sparkles")          // caption for the intro clip's sound
                         .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(Capsule().fill(CloudTheme.mist))
@@ -74,10 +75,10 @@ struct IntroView: View {
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { tapped() }
-        .onAppear { start(); A11yAnnounce.say("Jelbies. Double tap to start.", priority: .low) }
+        .onAppear { start(UIScreen.main.bounds.width > UIScreen.main.bounds.height); A11yAnnounce.say("Jelbies. Double tap to start.", priority: .low) }
         .onDisappear { teardown() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jelbies. Intro animation: the logo squishes and sparkles with a soft chime.")
+        .accessibilityLabel("Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Starts the game")
         .accessibilityIdentifier("intro")
@@ -85,10 +86,10 @@ struct IntroView: View {
 
     // MARK: flow
 
-    private func start() {
+    private func start(_ landscape: Bool) {
         guard player == nil else { return }
         IntroWarmup.begin()          // quiet start-up work runs while the clip plays
-        guard let url = Bundle.main.url(forResource: IntroClip.resource, withExtension: IntroClip.fileExtension) else { settle(); return }
+        guard let url = Bundle.main.url(forResource: IntroClip.resource(landscape: landscape), withExtension: IntroClip.fileExtension) else { settle(); return }
         let item = AVPlayerItem(url: url)
         let p = AVPlayer(playerItem: item)
         p.actionAtItemEnd = .pause
