@@ -146,7 +146,7 @@ struct BlobCard: View {
                 meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }          // the three bars only; no word rows
                     .frame(maxWidth: .infinity)
                 if perks.isEmpty {
-                    Text("no boosts").jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.75))
+                    Text("No Boosts").jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.75))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {          // wraps instead of clipping
                         ForEach(perks, id: \.kind.rawValue) { p in PerkChip(kind: p.kind, left: p.left) }
