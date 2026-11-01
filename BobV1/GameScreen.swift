@@ -233,6 +233,13 @@ struct GameScreen: View {
             .animation(.easeInOut(duration: 0.6), value: model.care.nightSkip.active)
             .animation(.easeInOut(duration: 0.2), value: model.care.arranging)
 
+            if model.care.cancelPill, !PhotoMode.shared.active {          // every group action: Cancel from its first second (GameCare+FocusCancel.swift)
+                CancelPill { withAnimation(CareMenu.spring) { model.care.cancelGroupAction() } }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 30)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             BathChrome(care: model.care)
 
             RaceChrome(care: model.care)          // Jelly Circuit: numerals, foot buttons, placings card, the white fade
@@ -1157,6 +1164,30 @@ struct ReleaseButton: View {
         .accessibilityIdentifier("focus-release")
         .accessibilityLabel(title)
         .accessibilityHint("Goes back to the room")
+        .keyboardShortcut(.escape, modifiers: [])
+    }
+}
+
+/// "Cancel": calls a running group action off (walking to the spots, a group serving, a group bedtime walk). Same cream pill as "Let them go", bottom centre.
+struct CancelPill: View {
+    let action: () -> Void
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            action()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                Text("Cancel").jFont(16, .semibold)
+            }
+            .foregroundStyle(FocusStyle.brown)
+            .padding(.horizontal, 18).padding(.vertical, 10).frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .hudFrost(in: .capsule)
+        .accessibilityIdentifier("cancel-action")
+        .accessibilityLabel("Cancel")
+        .accessibilityHint("Stops this and lets everyone roam")
         .keyboardShortcut(.escape, modifiers: [])
     }
 }
