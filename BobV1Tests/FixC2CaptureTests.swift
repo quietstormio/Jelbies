@@ -180,8 +180,6 @@ final class FixC2CaptureTests: XCTestCase {
         rows.append(("bounce-trot: the run blend at 0.4 for 2 s, no stop", tr))
         let jy = try frames(.joy, seconds: 1.2, every: 8)
         rows.append(("jump for joy: 0.12 u hop, arms up, excited brows, blush", jy))
-        let rl = try frames(.rollTrip, seconds: 3.2, every: 20)
-        rows.append(("roll along the leg: tips over, rolls 1...2.5 u, pops up with a squish", rl))
         let sg = try frames(.sigh, seconds: 4.4, every: 26, mood: .okay)
         rows.append(("big sigh: slow inhale (+4 %), long exhale and slump, sleepy brows and droopy eyes", sg))
         let hm = try frames(.hmph, seconds: 1.5, every: 9, mood: .grumpy)

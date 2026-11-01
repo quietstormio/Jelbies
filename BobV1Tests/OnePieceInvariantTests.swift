@@ -28,7 +28,7 @@ final class OnePieceInvariantTests: XCTestCase {
         let e = ProcessInfo.processInfo.environment
         if let v = e["ONEPIECE_COLLAR_R"], let f = Float(v) { Skinner.collarK = f }
         if let v = e["ONEPIECE_COLLAR_RING"], let n = Int(v) { Skinner.collarRing = n }
-        if before { BlobBrain.retractBand = 0.10; BlobBrain.retractSink = 0.025; FootBean.creaseFadeAmount = 0; BlobBrain.onePieceRoll = false; GaitDriver.rollYawFix = false }
+        if before { BlobBrain.retractBand = 0.10; BlobBrain.retractSink = 0.025; FootBean.creaseFadeAmount = 0; BlobBrain.onePieceVolley = false }
     }()
 
     /// Moves that still show the built-in pads while the body is tipped over, and why (none yet: filled from the first full run).
@@ -70,7 +70,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .decorHop: Entry(via: "decor: hop on the mat"), .decorPeek: Entry(via: "decor: peek in the toy box"), .decorSlide: Entry(via: "decor2: climb the slide, sit, ride, exit"),
         .skipHop: Entry(seconds: 4), .hopscotch: Entry(seconds: 5), .legSpin: Entry(seconds: 4), .trot: Entry(seconds: 6), .stopLook: Entry(seconds: 6), .joy: Entry(seconds: 3),
         .giggle: Entry(seconds: 3), .startle: Entry(via: "reaction: startle hop"),
-        .rollTrip: Entry(seconds: 5), .sigh: Entry(seconds: 6), .hmph: Entry(seconds: 3),
+        .sigh: Entry(seconds: 6), .hmph: Entry(seconds: 3),
         .flapHop: Entry(seconds: 6, chars: [3, 5]),
         .tailThump: Entry(seconds: 5, chars: [1]), .tailHug: Entry(seconds: 6, chars: [1]),
         .shake: Entry(seconds: 3), .lieDown: Entry(seconds: 9), .chirp: Entry(seconds: 3),
@@ -78,10 +78,10 @@ final class OnePieceInvariantTests: XCTestCase {
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.
-    static let gaitNames = ["flip", "faceplant", "hop", "rollPlay", "spin", "turn", "walk", "march", "wave", "rollTripWalk", "volleyDive", "volleySpike", "volleyBlock", "volleyCheer", "toy: scooter", "toy: rocket", "toy: rocking horse"]
+    static let gaitNames = ["flip", "faceplant", "hop", "spin", "turn", "walk", "march", "wave", "volleyDive", "volleySpike", "volleyBlock", "volleyCheer", "toy: scooter", "toy: rocket", "toy: rocking horse"]
     /// Script cases that no scenario of the list starts, and why.
     static let scriptNotRun: [String: String] = ["none": "no script", "look": "head turn only (the idle table's look)", "eat": "dining (DiningFlowTests); standing feet", "dine": "dining table (DiningFlowTests)", "race": "Jelly Circuit (RaceTests); the gait is the walk"]
-    static let scriptCovered: [String: String] = ["walk": "walk", "turn": "turn", "stepInPlace": "march", "wave": "wave", "spin": "spin", "hopPlay": "hop", "rollPlay": "rollPlay", "flipPlay": "flip / faceplant", "idle": "idleTable"]
+    static let scriptCovered: [String: String] = ["walk": "walk", "turn": "turn", "stepInPlace": "march", "wave": "wave", "spin": "spin", "hopPlay": "hop", "flipPlay": "flip / faceplant", "idle": "idleTable"]
 
     static func gaitScenario(_ name: String) -> SC? {
         var vt = 0
@@ -89,22 +89,9 @@ final class OnePieceInvariantTests: XCTestCase {
         case "flip": return SC(name: name, game: true, seconds: 3, setup: { r, _ in r.brain.startFlip(sim: r.sim); return true })
         case "faceplant": return SC(name: name, game: true, seconds: 4, setup: { r, _ in r.brain.startFlip(sim: r.sim, fail: true); return true })
         case "hop": return SC(name: name, game: true, seconds: 3, setup: { r, _ in r.brain.startHopPlay(sim: r.sim); return true })
-        case "rollPlay": return SC(name: name, game: true, seconds: 3, setup: { r, _ in r.brain.startRollPlay(sim: r.sim); return true })
         case "spin": return SC(name: name, game: true, seconds: 3, setup: { r, _ in r.brain.startSpin(sim: r.sim); return true })
         case "turn": return SC(name: name, game: false, seconds: 3.5, setup: { r, _ in r.brain.startTurn(to: r.poseYaw + 2.4, sim: r.sim); return true })
         case "walk": return SC(name: name, game: true, seconds: 7, setup: { r, _ in r.brain.request(.goTo(SIMD2(1.6, 0.4))); return true })
-        case "rollTripWalk":
-            // the mid-walk side roll of the phone photo (the leg's flourish hook armed a few steps after the walk starts, as RollFeetCaptureTests does)
-            var steps = 0
-            return SC(name: name, game: true, seconds: 6, setup: { r, _ in
-                steps = 0
-                r.brain.idleMood = .happy; r.brain.anticsEnabled = true; r.brain.autonomy = true
-                r.brain.restTimer = 1e6; r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6; r.brain.expr.pickTimer = 1e6
-                let g = r.root + SIMD2(r.root.x > 0 ? -3.4 : 3.4, 0)
-                r.brain.script = .walk(target: g, then: .none); r.brain.activity = .walking
-                r.brain.scriptT = 0; r.brain.leg = LegState()
-                return true
-            }, each: { r in steps += 1; if steps == 8 { r.brain.leg.kind = .rollTrip; r.brain.leg.wants = true; r.brain.leg.rolled = false; r.brain.leg.trigger = 0.5; r.brain.leg.from = r.brain.position } })
         case "march": return SC(name: name, game: false, seconds: 5, setup: { r, _ in r.brain.startStepping(seconds: 3, sim: r.sim); return true })
         case "wave": return SC(name: name, game: true, seconds: 4, setup: { r, _ in r.brain.request(.wave); return true })
         case "volleyDive", "volleySpike", "volleyBlock", "volleyCheer":
@@ -295,7 +282,7 @@ final class OnePieceInvariantTests: XCTestCase {
         print(report)
         if ProcessInfo.processInfo.environment["ONEPIECE_ONLY"] == nil {
             XCTAssertTrue(notStarted.isEmpty, "moves that did not start: \(notStarted)")
-            for p in GaitDriver.Phase.allCases where p != .thrown { XCTAssertTrue(Self.phasesSeen.contains(p), "no scenario reached gait phase \(p)") }
+            for p in GaitDriver.Phase.allCases where p != .thrown && p != .glide && p != .slide && p != .recover { XCTAssertTrue(Self.phasesSeen.contains(p), "no scenario reached gait phase \(p)") }
         }
         guard !Self.before else { return }
         XCTAssertEqual(tot.neckBad, 0, "frames where a neck-ring point is less than \(Self.minNeck) inside the drawn body: worst \(worstNeck)")
@@ -316,7 +303,7 @@ final class OnePieceInvariantTests: XCTestCase {
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var report = "HITCH BURST (60 Hz x 2 s, then 80/120/240 ms frames, 2-step cap)\nmove | char shoes | frames bean | worstLegSdf(cm) detachedFrames\n"
         var bad = 0, worst: Float = -.infinity
-        for name in ["rollTripWalk", "flip", "faceplant", "hop", "walk", "rollPlay"] {
+        for name in ["flip", "faceplant", "hop", "walk", "spin"] {
             guard let sc = Self.gaitScenario(name) else { XCTFail("no scenario \(name)"); continue }
             var sc2 = sc
             sc2 = SC(name: sc.name, game: sc.game, seconds: max(sc.seconds, 8), setup: sc.setup, each: sc.each)
@@ -340,11 +327,11 @@ final class OnePieceInvariantTests: XCTestCase {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var tested = 0
-        for name in ["walk", "rollTripWalk", "flip"] {
+        for name in ["walk", "flip"] {
             let sc = Self.gaitScenario(name)!
             var done = false
             _ = Self.run(sc, char: 4, shoes: false, pacing: .hz60, seed: 3) { frame, r, f in
-                guard !done, f.beans, f.blend > 0.9, frame > 40, name != "rollTripWalk" || f.tilt > 0.8 else { return }
+                guard !done, f.beans, f.blend > 0.9, frame > 40, true else { return }
                 done = true
                 var c = SIMD3<Float>.zero
                 for i in 0..<FootBean.vertexCount { c += r.skinner.beanPos[0][i] }
@@ -358,7 +345,7 @@ final class OnePieceInvariantTests: XCTestCase {
                 tested += 1
             }
         }
-        XCTAssertEqual(tested, 3)
+        XCTAssertEqual(tested, 2)
     }
 
     /// Picked up, dangling, thrown, dropped (the touch rig): the same neck guarantee.
