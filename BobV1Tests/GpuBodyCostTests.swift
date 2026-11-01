@@ -111,6 +111,12 @@ final class GpuBodyCostTests: XCTestCase {
     }
 
     /// Cost of the body draws for each shader variant (interleaved), plus the pixel diff of each against the locked shader.
+    func testFibreDefaults() {
+        // XCTest keeps the exact noise (goldens); the app default (no flag, not under XCTest) is the lattice texture
+        XCTAssertEqual(GfxOpt().fibreMode, 0)
+        XCTAssertEqual(GfxFlags.gfxOpt.fibreMode, 0)
+    }
+
     func testShaderCost() throws {
         UserDefaults.standard.removeObject(forKey: "PerfPasses")
         var out: [String] = []
@@ -145,6 +151,8 @@ final class GpuBodyCostTests: XCTestCase {
                 ren.matteSpec = spec; var o2 = ren.gfxOpt; o2.fastMatteTier = tier; o2.fibreMode = fibre; ren.gfxOpt = o2
                 s.frame(advance: false); let img = s.image()
                 let d = bodyDiff(locked, img, mask: locked, background: bg)
+                if name == "spec0" { XCTAssertEqual(d.max, 0, "-FibreLUT 0 (exact noise) must stay bit-identical to the locked shader") }
+                if name == "fibreLUT1" { XCTAssertLessThan(d.mean, 2.5, "the default fibre LUT look drifted"); XCTAssertLessThanOrEqual(d.max, 40) }
                 diffs.append(String(format: "%@ mean %.4f max %d (>4: %d of %d body px)", name, d.mean, d.max, d.over4, d.n))
                 if tag == "3x" { img.png(to: URL(fileURLWithPath: Self.outDir + "/trio_3x_\(name).png")) }
             }

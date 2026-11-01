@@ -378,6 +378,7 @@ final class MelonRenderer {
         pCacheBlit = pl.cacheBlit; pPresent = pl.present
         pMatteBath = pl.matteBath
         pMatteFast = pl.matteSpec
+        _ = MelonPipelines.fibreNoise(device)
         pDepth = pl.depth; pBackground = pl.background; pProps = pl.props; pBack = pl.back; pCopy = pl.copy; pJelly = pl.jelly; pMatte = pl.matte; pEyes = pl.eyes; pLines = pl.lines; pPost = pl.post
 
         func ds(_ fn: MTLCompareFunction, _ write: Bool) -> MTLDepthStencilState? {
@@ -804,29 +805,8 @@ final class MelonRenderer {
         return p
     }
 
-    /// 64^3 tiling lattice of the body shader's hash (r16Float), the source of -FibreLUT's noise; made on first use (also bound, unused, by the exact pipelines).
-    private var fibreNoiseTex: MTLTexture?
-    private func fibreNoiseTexture() -> MTLTexture? {
-        if let t = fibreNoiseTex { return t }
-        let n = 64
-        let d = MTLTextureDescriptor()
-        d.textureType = .type3D; d.pixelFormat = .r16Float; d.width = n; d.height = n; d.depth = n
-        d.usage = .shaderRead; d.storageMode = .shared
-        guard let t = device.makeTexture(descriptor: d) else { return nil }
-        t.label = "fibre noise lattice"
-        func fract(_ x: Float) -> Float { x - x.rounded(.down) }
-        var px = [Float16](repeating: 0, count: n * n * n)
-        for z in 0..<n { for y in 0..<n { for x in 0..<n {
-            // the shader's hash3 (Shaders.metal) at the lattice point
-            var q = SIMD3<Float>(fract(Float(x) * 0.1031), fract(Float(y) * 0.1031), fract(Float(z) * 0.1031))
-            let dd = q.x * (q.y + 33.33) + q.y * (q.z + 33.33) + q.z * (q.x + 33.33)
-            q += SIMD3<Float>(repeating: dd)
-            px[(z * n + y) * n + x] = Float16(fract((q.x + q.y) * q.z))
-        } } }
-        px.withUnsafeBytes { t.replace(region: MTLRegionMake3D(0, 0, 0, n, n, n), mipmapLevel: 0, slice: 0, withBytes: $0.baseAddress!, bytesPerRow: n * 2, bytesPerImage: n * n * 2) }
-        fibreNoiseTex = t
-        return t
-    }
+    /// The 64^3 lattice texture behind -FibreLUT (MelonPipelines.fibreNoise: built during the launch warm-up; also bound, unused, by the exact pipelines).
+    private func fibreNoiseTexture() -> MTLTexture? { MelonPipelines.fibreNoise(device) }
 
     // MARK: jersey (Wear/GfxJersey.metal)
 
