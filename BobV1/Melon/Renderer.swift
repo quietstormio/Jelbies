@@ -690,7 +690,7 @@ final class MelonRenderer {
     private let tickClock = GPUTickClock()
     private func instrument(_ rp: MTLRenderPassDescriptor, _ label: String) {
         guard perfEncoders else { return }
-        if counterBufs[ring] == nil, let set = device.counterSets?.first(where: { $0.name == MTLCommonCounterSet.timestamp.rawValue }) {
+        if counterBufs[ring] == nil, device.supportsCounterSampling(.atStageBoundary), let set = device.counterSets?.first(where: { $0.name == MTLCommonCounterSet.timestamp.rawValue }) {
             let d = MTLCounterSampleBufferDescriptor()
             d.counterSet = set; d.storageMode = .shared; d.sampleCount = 64; d.label = "encoder timestamps"
             counterBufs[ring] = try? device.makeCounterSampleBuffer(descriptor: d)
@@ -903,6 +903,9 @@ final class MelonRenderer {
     /// Transparent cut-out (the species picker): the room is not drawn, the colour target clears to a sentinel alpha that `postFS` turns into coverage.
     var cutout = false
     private var upscaler: GfxUpscaler?
+    /// One MTLFXSpatialScaler (+ its in/out textures) per ladder rung, kept: creation is expensive, so a RenderScaler step between rungs it has
+    /// already visited only swaps which one is encoded. Small cap: a rung is ~(in + out) bgra8 textures.
+    private var upscalerCache: [String: GfxUpscaler] = [:]
     private(set) var upscaledFrames = 0
     /// "off" / "on 804x1748->1206x2622" / "unavailable (simulator)" for the env log.
     var metalFXState: String {
@@ -1271,14 +1274,26 @@ final class MelonRenderer {
         return true
     }
 
+    /// MetalFX notes (audited against the current Apple docs): classic `MTLFXSpatialScaler` in a classic command buffer on purpose; the Metal 4
+    /// variant (`MTL4FXSpatialScaler`, iOS 26+) is optional and not needed yet. The temporal scaler and frame interpolation (iOS 26+) need motion
+    /// vectors / depth history that this renderer does not produce (no TAA), so they are not used. The spatial scaler runs AFTER the tone map
+    /// (`.perceptual`, display-encoded [0,1] input, single-sample), and the SwiftUI HUD is composited after it. Render + target keep one aspect ratio
+    /// (the RenderScaler scales both axes together); no mipmapped textures are sampled at render resolution, so no mip bias applies.
     /// Post (tone map) straight into `target`, or - with MetalFX on and a bigger target - into a render-size texture that is upscaled and presented.
     private func encodePostOrUpscale(_ cmd: MTLCommandBuffer, target: MTLTexture, hdrTex: MTLTexture) {
         guard metalFXEnabled, !cutout, GfxUpscaler.compiledIn, target.width > width || target.height > height else {
             encodePost(cmd, target: target, hdrTex: hdrTex); return
         }
         if upscaler == nil || upscaler!.inW != width || upscaler!.inH != height || upscaler!.outW != target.width || upscaler!.outH != target.height {
-            upscaler = GfxUpscaler.make(device: device, format: target.pixelFormat, inW: width, inH: height, outW: target.width, outH: target.height)
-            targetRebuilds += 1
+            let key = "\(width)x\(height)>\(target.width)x\(target.height)@\(target.pixelFormat.rawValue)"
+            if let hit = upscalerCache[key] {
+                upscaler = hit
+            } else {
+                if upscalerCache.count >= 6 { upscalerCache.removeAll() }
+                upscaler = GfxUpscaler.make(device: device, format: target.pixelFormat, inW: width, inH: height, outW: target.width, outH: target.height)
+                upscaler.map { upscalerCache[key] = $0 }
+                targetRebuilds += 1
+            }
         }
         guard let up = upscaler else { encodePost(cmd, target: target, hdrTex: hdrTex); return }
         encodePost(cmd, target: up.input, hdrTex: hdrTex)
@@ -1301,7 +1316,7 @@ final class MelonRenderer {
         do {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
-            ca.texture = target; ca.loadAction = .clear; ca.clearColor = cutout ? MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0) : MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
+            ca.texture = target; ca.loadAction = .dontCare      // the full-screen triangle writes every pixel (cut-out included: it returns 0 where nothing was drawn)
             ca.storeAction = .store
             instrument(rp, "post")
             guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
