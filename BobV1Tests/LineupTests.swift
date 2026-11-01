@@ -34,7 +34,10 @@ final class LineupTests: XCTestCase {
         return until?() ?? false
     }
 
-    private func rig(count: Int = 3) -> FocusAnyRun {
+    /// The meal tests leave their tray (a global `RoomLayout.dynamicBoxes` obstacle in the middle of the floor, z ~ 1.1) standing, which blocked every later walker /
+    /// Come here test at z ~ 1.1 (the "shared obstacle"): those start on an empty floor. (The meal tests keep the stage as they have always run: see `mealCheck`.)
+    private func rig(count: Int = 3, clearTray: Bool = true) -> FocusAnyRun {
+        if clearTray { RoomLayout.dynamicBoxes = [] }
         let r = FocusAnyRun(count: count, peers: true); Self.keep.append(r)
         r.run(1)
         for a in r.actors { a.brain!.autonomy = false }
@@ -107,7 +110,7 @@ final class LineupTests: XCTestCase {
     // MARK: the group meal
 
     private func mealCheck(_ name: String, starts: [SIMD2<Float>]) {
-        let r = rig()
+        let r = rig(clearTray: false)
         for (i, s) in starts.enumerated() { r.place(i, at: s) }
         for i in 0..<3 { r.care.needs(for: i).set(.thirst, 0.1) }
         r.run(0.5)
