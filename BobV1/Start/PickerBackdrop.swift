@@ -16,7 +16,7 @@ struct PickerBackdrop: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
-            if calm { scene(t: 0) } else { TimelineView(.animation) { tl in scene(t: tl.date.timeIntervalSinceReferenceDate) } }
+            if calm { scene(t: 0) } else { TimelineView(.animation(minimumInterval: 1.0 / 24)) { tl in scene(t: tl.date.timeIntervalSinceReferenceDate) } }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
