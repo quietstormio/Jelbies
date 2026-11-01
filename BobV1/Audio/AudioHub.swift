@@ -424,8 +424,39 @@ final class AudioHub {
             for v in 1...max(variants(s), 1) {
                 let name = "\(s.rawValue)_\(v)"
                 guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
+                if s == .squeakPolish { p.enableRate = true }
                 p.prepareToPlay()
                 pool[name] = [p]
+            }
+        }
+        if scrubPlayer == nil, let u = url("scrub_loop_1"), let p = try? AVAudioPlayer(contentsOf: u) {
+            p.numberOfLoops = -1; p.volume = 0; p.prepareToPlay(); scrubPlayer = p
+        }
+    }
+
+    // MARK: the bath's scrub loop (a looping layer while the finger scrubs; 150 ms fades)
+
+    @ObservationIgnored private var scrubPlayer: AVAudioPlayer?
+    @ObservationIgnored private(set) var scrubWanted = false
+    /// Test seam: every effect that got past the guards, in order (muted hubs record nothing).
+    @ObservationIgnored private(set) var _playLog: [String] = []
+
+    /// True while the finger scrubs the soap: the loop fades in; false: it fades out and stops. Idempotent per frame.
+    func scrubLoop(_ on: Bool) {
+        let level = settings.sfxLevel * duck.gain
+        let want = on && !muted && started && active && level > 0.01
+        guard want != scrubWanted else { return }
+        scrubWanted = want
+        guard let p = scrubPlayer else { return }
+        if want {
+            p.volume = 0
+            if !p.isPlaying { p.currentTime = 0; p.play() }
+            p.setVolume(min(1, SFX.scrubLoop.gain * level * AudioMix.sfxMaster), fadeDuration: BathSFX.scrubFade)
+            Ears.shared.noteAppSound()
+        } else {
+            p.setVolume(0, fadeDuration: BathSFX.scrubFade)
+            DispatchQueue.main.asyncAfter(deadline: .now() + BathSFX.scrubFade + 0.05) { [weak self] in
+                if self?.scrubWanted == false { p.stop() }
             }
         }
     }
@@ -459,6 +490,7 @@ final class AudioHub {
         lastPlay[key] = now
         let n = variants(sfx)
         guard n > 0 else { return }
+        _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
         let v = picker.pick(sfx.rawValue, count: n) + 1
         fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
     }

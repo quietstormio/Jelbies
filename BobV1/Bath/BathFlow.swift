@@ -108,6 +108,10 @@ final class BathFlow {
     @ObservationIgnored private var heartT: Float = 0
     @ObservationIgnored private var bubbleAge: [Float] = []
     @ObservationIgnored private var bubbleT: Float = 0
+    @ObservationIgnored private var splashGate = SoundGate(gap: BathSFX.splashGap)
+    @ObservationIgnored private var squeakGate = SoundGate(gap: BathSFX.squeakGap)
+    @ObservationIgnored private var soapGate = SoundGate(gap: BathSFX.soapGap)
+    @ObservationIgnored private var popGate = SoundGate(gap: BathSFX.popGap)
     @ObservationIgnored private var touching = false
     @ObservationIgnored private var demoT: Float = 0
     @ObservationIgnored private var wetFading = false
@@ -203,6 +207,7 @@ final class BathFlow {
     // MARK: world swaps (only ever called while the white overlay is fully opaque)
 
     private func swapToBath(brain: BlobBrain, sim: SoftBody?) {
+        AudioHub.shared.scrubLoop(false)
         liftFence(false, sim: sim)
         fenceLifted = false
         brain.hurry = false; brain.runW = 0; brain.zoomW = 0
@@ -225,6 +230,7 @@ final class BathFlow {
 
     /// Idempotent: fence, autonomy, hurry, camera, look.
     private func restoreAll(brain: BlobBrain, sim: SoftBody?, place: Bool = false) {
+        AudioHub.shared.scrubLoop(false)
         liftFence(false, sim: sim)
         fenceLifted = false
         brain.hurry = false
@@ -373,6 +379,7 @@ final class BathFlow {
 
     private func enter(_ p: BathPhase) {
         phase = p
+        AudioHub.shared.scrubLoop(false)
         stageComplete = false; demoWait = 0; assistScrub = false
         if let t = Self.workPrompt(p) { A11yEvents.say(t, .normal) }
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
@@ -388,7 +395,7 @@ final class BathFlow {
             look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
             finishT = 0; heartsLeft = 3; heartT = 0
             prompt = Self.workPrompt(.finish)
-            AudioHub.shared.play(.sparkle)
+            AudioHub.shared.play(.shineFinish)       // sparkle + squeak in one clip (replaces the plain sparkle)
             success()
         default: break
         }
@@ -452,7 +459,7 @@ final class BathFlow {
     func touch(contact: Bool, hitLocal: SIMD3<Float>?, world: SIMD3<Float>?, speed: Float, dt: Float) {
         guard acceptsTouch else { return }
         touching = contact && hitLocal != nil
-        guard touching, let l = hitLocal else { look.toolAt = nil; look.spray = nil; return }
+        guard touching, let l = hitLocal else { look.toolAt = nil; look.spray = nil; AudioHub.shared.scrubLoop(false); return }
         let w = world ?? l
         let v = min(speed, 4)
         look.toolAt = w
@@ -460,13 +467,18 @@ final class BathFlow {
         case .soap:
             look.paint(local: l, radius: BathTuning.brushRadius, amount: BathTuning.soapGain * v * dt)
             if v > 0.3 { spawnBubbles(at: w, dt: dt) }
+            AudioHub.shared.scrubLoop(v > 0.3)
         case .rinse:
+            AudioHub.shared.scrubLoop(false)
             look.spray = w + BathLook.sprayOffset
             look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * v) * dt)
             look.wet = min(1, look.wet + BathTuning.wetRise * dt)
-            if v > 0.3 { AudioHub.shared.play(.splash, volume: 0.6) }
+            if v > 0.3, splashGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.splash, volume: BathSFX.splashVolume) }
         case .shine:
-            if v > 0.3 { AudioHub.shared.play(.lintroller) }
+            AudioHub.shared.scrubLoop(false)
+            if v > 0.3, squeakGate.allow(now: CACurrentMediaTime()) {
+                AudioHub.shared.play(.squeakPolish, volume: BathSFX.squeakVolume, rate: 1 + (rand() * 2 - 1) * BathSFX.squeakRateSpread)
+            }
             let before = polish
             polish = min(1, polish + BathTuning.polishGain * v * dt)
             look.wet = wetStart * (1 - polish)
@@ -482,7 +494,7 @@ final class BathFlow {
         bubbleT -= dt
         guard bubbleT <= 0 else { return }
         bubbleT = 0.09
-        AudioHub.shared.play(.soapbubbles, volume: 0.8)
+        if soapGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.soapbubbles, volume: BathSFX.soapVolume) }
         let p = w + SIMD3(rand() - 0.5, rand() * 0.3, rand() * 0.3) * 0.3
         look.bubbles.append(SIMD4(p.x, p.y, p.z, 0.03 + 0.05 * rand()))
         bubbleAge.append(BathTuning.bubbleLife.lowerBound + (BathTuning.bubbleLife.upperBound - BathTuning.bubbleLife.lowerBound) * rand())
@@ -493,7 +505,7 @@ final class BathFlow {
         guard !look.bubbles.isEmpty else { return }
         for i in look.bubbles.indices { look.bubbles[i].y += 0.35 * dt; bubbleAge[i] -= dt }
         var k = 0
-        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); AudioHub.shared.play(.bubblepop, volume: 0.6) } else { k += 1 } }
+        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); if popGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.bubblepop, volume: BathSFX.popVolume) } } else { k += 1 } }
     }
 
     // MARK: scripted fake scrubs (capture aid)

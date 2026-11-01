@@ -7,6 +7,8 @@ import Foundation
 
 nonisolated enum SFX: String, CaseIterable, Sendable {
     case squish, boop, wobble, letgo, footstep, zoomies, jump, chomp, slurp, setdown, splash, soapbubbles, bubblepop
+    /// Clean flow (files scrub_loop_N looping scrub bed, squeak_polish_N window-squeak per shine stroke, shine_finish_N sparkle + squeak).
+    case scrubLoop = "scrub_loop", squeakPolish = "squeak_polish", shineFinish = "shine_finish"
     case lintroller, sparkle, snore, uitap, uiconfirm, coin, select
     /// Spending JellyCoins (purchase_1: a toy register bell with a tiny coin jingle; coin_1...3 are the lighter earn clinks).
     case purchase
@@ -51,6 +53,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .letgo: return 0.7
         case .uitap: return 0.6
         case .soapbubbles, .lintroller: return 0.7
+        case .scrubLoop: return 0.5
+        case .squeakPolish: return 0.6
+        case .shineFinish: return 0.7
         default: return 0.85
         }
     }
@@ -68,6 +73,27 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .tick, .goodStep: return 0.05
         default: return 0.1
         }
+    }
+}
+
+/// The Clean flow's per-sound rate limits (seconds between two plays) and levels: the old bubble-pop / soap-bubble / splash spam read as a clown horn.
+nonisolated enum BathSFX {
+    static let popGap: Double = 0.6, popVolume: Float = 0.35
+    static let soapGap: Double = 1.5, soapVolume: Float = 0.6
+    static let splashGap: Double = 0.4, splashVolume: Float = 0.6
+    static let squeakGap: Double = 0.35, squeakVolume: Float = 1, squeakRateSpread: Float = 0.08
+    static let scrubFade: TimeInterval = 0.15
+}
+
+/// Lets a sound through at most once per `gap` seconds (pure: the caller supplies the clock).
+nonisolated struct SoundGate: Sendable {
+    let gap: Double
+    private var last: Double = -.infinity
+    init(gap: Double) { self.gap = gap }
+    mutating func allow(now: Double) -> Bool {
+        guard now - last >= gap else { return false }
+        last = now
+        return true
     }
 }
 
