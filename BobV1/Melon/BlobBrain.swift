@@ -729,7 +729,7 @@ final class BlobBrain {
 
     func pickAutonomous(_ sim: SoftBody) {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickAutonomous", probe) }
-        planBudget = 2; defer { planBudget = 99 }          // (was 12: a pick tried dozens of candidates and up to 12 full route searches in ONE step = a 40-60 ms stall in the park)
+        planBudget = 12; defer { planBudget = 99 }          // (the per-step probe budget, not this count, now bounds the cost; 2 left Jelly 0 short of the front in testRoomCoveragePortrait)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
@@ -1118,7 +1118,6 @@ final class BlobBrain {
                 for q in rest { len += simd_distance(prev, q); prev = q }
                 len += simd_distance(prev, b)
                 if best == nil || len < best!.len { best = (len, [c] + rest) }
-                break          // the nearest corner that works is the shortest way round on this side: no need to try the wider ones
             }
         }
         return best?.pts
@@ -1139,7 +1138,7 @@ final class BlobBrain {
         if planCool <= 0 {
             if Self.stepProbeBudget <= 0 { Self.planStats.skipped += 1; return nil }          // the room's planning budget for this step is spent: stand a step, search next step
             if let r = planRoute(root, target, depth: 2) { route = r; planFails = 0; return r.first ?? target }
-            planCool = planFails == 0 ? 1.0 : 2.0          // (no way round: ask again in a while, not every frame; a walker boxed in backs off further)
+            planCool = planFails == 0 ? 0.3 : 0.6          // (no way round: ask again soon, backing off once; the probe budget bounds the cost, a longer back-off left Jellies short of the front in testRoomCoveragePortrait)
             planFails += 1
         }
         // no way around: if a Blob with a higher id is what is in the way, give way for a moment (the other one walks on), then carry on regardless
