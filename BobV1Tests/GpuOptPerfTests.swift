@@ -60,7 +60,7 @@ final class GpuOptPerfTests: XCTestCase {
 
         /// One frame; GPU drained unless `wait` is false (then the ring lets up to BodySlot.ring frames overlap). Returns the wall time (s).
         @discardableResult
-        func frame(advance: Bool = true, wait: Bool = true) -> Double {
+        func frame(advance: Bool = true, wait: Bool = true, drawable: CAMetalDrawable? = nil) -> Double {
             ren.beginFrame()
             for a in actors { a.skinner.update(x: a.sim.x, index: MotionRig.renderMesh.index, into: ren.dynPointer(body: a.id)) }
             var fp = FrameParams()
@@ -70,8 +70,9 @@ final class GpuOptPerfTests: XCTestCase {
             let pal = PaletteKey.blue.palette
             fp.bg = pal.matte ? melonCreamLinear : melonBackgroundLinear
             ren.setUniforms(camera: cam, light: GameCamera.light(centroids: actors.map { $0.sim.centroid() }), palette: pal, params: fp, viewSize: SIMD2<Float>(Float(W), Float(H)))
-            let cmd = ren.queue.makeCommandBuffer()!
             let t0 = CACurrentMediaTime()
+            if let drawable { ren.draw(drawable: drawable, showMesh: false); return CACurrentMediaTime() - t0 }      // presents; GPU ms via ren.lastGPUMs
+            let cmd = ren.queue.makeCommandBuffer()!
             ren.draw(to: target, commandBuffer: cmd, showMesh: false)
             if wait { cmd.waitUntilCompleted() } else { lastCmd = cmd }
             return CACurrentMediaTime() - t0
