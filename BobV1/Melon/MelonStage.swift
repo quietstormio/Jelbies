@@ -786,6 +786,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
         if Self.metalFXFlag { c.renderScale = fxScale }
+        c.ctx = renderer?.takePerfContext() ?? ""
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
         return c
@@ -1074,6 +1075,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
+        renderer.perfFocus = game && model.care.focus.blend > 0.001      // PerfMeter ctx: GPU time in the close-up
+        renderer.perfNote = !game ? "" : model.paused ? "paused" : model.care.select.isSelecting ? "select" : model.care.trayOut ? "tray" : ""
         if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
         // Outlines (a projection of every skinned vertex + a hull, per Jelly) are only needed while a highlight is up; a double tap / touch-down
         // refreshes them on demand (`refreshOutlines`), so a roster of three no longer pays for them every frame.

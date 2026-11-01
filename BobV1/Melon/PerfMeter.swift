@@ -26,6 +26,7 @@ nonisolated struct PerfContext {
     var maxFPS = 0
     var renderScale = 0.0
     var tier = ""
+    var ctx = ""            // Renderer.takePerfContext(): cache action / camera moving / focus GPU split, taken once per window
 }
 
 nonisolated final class PerfMeter: @unchecked Sendable {
@@ -152,7 +153,7 @@ nonisolated final class PerfMeter: @unchecked Sendable {
         switch ProcessInfo.processInfo.thermalState { case .nominal: th = "nominal"; case .fair: th = "fair"; case .serious: th = "serious"; case .critical: th = "critical"; @unknown default: th = "unknown" }
         return ["t": ISO8601DateFormatter().string(from: Date()), "scene": c.scene, "jelbies": c.jelbies, "device": model, "ios": ProcessInfo.processInfo.operatingSystemVersionString,
                 "thermal": th, "low_power": ProcessInfo.processInfo.isLowPowerModeEnabled, "preferred_fps": c.preferredFPS, "max_fps": c.maxFPS,
-                "render_scale": c.renderScale, "tier": c.tier]
+                "render_scale": c.renderScale, "tier": c.tier, "ctx": c.ctx]
     }
 
     /// Writes the current window as one JSON line and starts a new window. Returns the object (tests read it).
