@@ -42,8 +42,23 @@ final class OnePieceBoardTests: XCTestCase {
             for _ in 0..<30 { r.brain.tick(sim: r.sim, skinner: r.skinner, dt: r.sim.stepDt, touched: false); r.sim.step() }
             if dive { r.brain.volleyDive(sim: r.sim, dir: -1) } else { r.brain.volleyJump(sim: r.sim, dx: 0.3, apex: 0.45) }
             return true } }
+        /// The mid-walk side roll of the phone photo: a walk along the screen's x axis; the leg's flourish hook (rolled 0.5 u in) is armed a few steps after the walk starts.
+        var rollSteps = 0
+        func rollWalk() -> (MotionRig) -> Bool { { r in
+            rollSteps = 0
+            r.brain.idleMood = .happy; r.brain.anticsEnabled = true; r.brain.autonomy = true
+            r.brain.restTimer = 1e6; r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6; r.brain.expr.pickTimer = 1e6
+            let g = r.root + SIMD2(r.root.x > 0 ? -3.4 : 3.4, 0)
+            r.brain.script = .walk(target: g, then: .none); r.brain.activity = .walking
+            r.brain.scriptT = 0; r.brain.leg = LegState()
+            return true } }
+        func rollEach(_ r: MotionRig) {
+            rollSteps += 1
+            if rollSteps == 8 { r.brain.leg.kind = .rollTrip; r.brain.leg.wants = true; r.brain.leg.rolled = false; r.brain.leg.trigger = 0.5; r.brain.leg.from = r.brain.position }
+        }
         var out: [Spec] = []
         for (cn, c) in [("Bob", 0), ("Teddy", 4)] {
+            out.append(Spec(name: "01_rollTrip_\(cn)", char: c, start: rollWalk(), pick: .tilted(8), seconds: 5, each: rollEach))
             out.append(Spec(name: "01_flip_\(cn)", char: c, start: { $0.brain.startFlip(sim: $0.sim); return true }, pick: .tilted(8), seconds: 3))
             out.append(Spec(name: "01_faceplant_\(cn)", char: c, start: { $0.brain.startFlip(sim: $0.sim, fail: true); return true }, pick: .tilted(8), seconds: 4))
             out.append(Spec(name: "01_volleyDive_\(cn)", char: c, start: volley(true), pick: .tilted(8), seconds: 2.5))
@@ -51,17 +66,19 @@ final class OnePieceBoardTests: XCTestCase {
             out.append(Spec(name: "01_walk_\(cn)", char: c, start: { $0.brain.request(.goTo(SIMD2(1.6, 0.4))); return true }, pick: .beans(8), seconds: 6))
             // 02 close-ups of a foot root: standing, mid-roll, mid-flip (one row each: standing + the tilted frames)
             out.append(Spec(name: "02_close_standing_\(cn)", char: c, start: { _ in true }, pick: .standing, seconds: 0.3, cams: [.side, .front], dist: 3.2, closeUp: true))
+            out.append(Spec(name: "02_close_roll_\(cn)", char: c, start: rollWalk(), pick: .tilted(6), seconds: 5, cams: [.side, .front], dist: 3.2, closeUp: true, each: rollEach))
             out.append(Spec(name: "02_close_flip_\(cn)", char: c, start: { $0.brain.startFlip(sim: $0.sim); return true }, pick: .tilted(6), seconds: 3, cams: [.side, .front], dist: 3.2, closeUp: true))
             // 03 shoes in walk / roll / flip
             out.append(Spec(name: "03_shoes_walk_\(cn)", char: c, shoes: true, start: { $0.brain.request(.goTo(SIMD2(1.6, 0.4))); return true }, pick: .beans(6), seconds: 6))
+            out.append(Spec(name: "03_shoes_rollTrip_\(cn)", char: c, shoes: true, start: rollWalk(), pick: .tilted(8), seconds: 5, each: rollEach))
             out.append(Spec(name: "03_shoes_flip_\(cn)", char: c, shoes: true, start: { $0.brain.startFlip(sim: $0.sim); return true }, pick: .tilted(8), seconds: 3))
         }
         // 04 hitch pacing: consecutive frames around the roll's peak tilt
         for p in [Pacing.alt12, .burst30] {
-            out.append(Spec(name: "04_hitch_\(p.name)_flip_Teddy", char: 4, pacing: p, start: { $0.brain.startFlip(sim: $0.sim); return true }, pick: .consecutive(8, around: 0), seconds: 4))
+            out.append(Spec(name: "04_hitch_\(p.name)_rollTrip_Teddy", char: 4, pacing: p, start: rollWalk(), pick: .consecutive(8, around: 0), seconds: 5, each: rollEach))
         }
         // 05 the user's phone frame: Teddy mid side-roll in the room, game camera at the photo's framing, full-resolution crop
-        out.append(Spec(name: "05_phoneframe_flip_Teddy", char: 4, start: { $0.brain.startFlip(sim: $0.sim); return true }, pick: .tilted(6), seconds: 3, cams: [.game], dist: 0))
+        out.append(Spec(name: "05_phoneframe_rollTrip_Teddy", char: 4, start: rollWalk(), pick: .tilted(6), seconds: 5, cams: [.game], dist: 0, each: rollEach))
         return out
     }
 

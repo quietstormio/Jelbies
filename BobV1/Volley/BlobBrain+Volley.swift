@@ -395,7 +395,7 @@ extension BlobBrain {
         // 2026-10-31 (one piece): the built-in pads followed the squashed / tipped volley body up to 0.23 u away (a stretched lump 27%) whenever the tuck was ~0: the pieces are out for every airborne or
         // tipped phase (jump, spike, block, dive, slide, peel, cheer), forced (the flip's foot rules) while he is tipped over
         let tipped = volley.phase == .dive || volley.phase == .slide || volley.phase == .peel
-        driveBeansRigid(sim, skinner, dt, tuck: volley.tuck, force: tipped && Self.onePieceVolley, hold: volley.phase != .ground && Self.onePieceVolley)
+        driveBeansRigid(sim, skinner, dt, tuck: volley.tuck, force: tipped && Self.onePieceRoll, hold: volley.phase != .ground)
     }
 
     static let volleyFlipGrip: Float = 0.15

@@ -45,6 +45,7 @@ final class LivelyLabTests: XCTestCase {
         switch b.script {
         case .hopPlay: return "play:hop"
         case .spin: return "play:spin"
+        case .rollPlay: return "play:roll"
         case .flipPlay: return "play:flip"
         case .wave: return "wave"
         default: return nil
@@ -155,6 +156,7 @@ final class LivelyLabTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(rk.count, 6, "distinct reaction kinds \(rk.map(\.rawValue).sorted())")
             XCTAssertEqual(r.violations, 0, "no reaction while reserved, asleep or racing")
         }
+        XCTAssertTrue(seenKinds.contains("idle:rollTrip"), "the roll along a leg shows up in 2 x 300 s (\(mood))")
     }
 
     func testLivelyOkay300() { runMood(.okay, maxPlain: 0.55) }
@@ -192,7 +194,7 @@ final class LivelyLabTests: XCTestCase {
 
     /// Every flourish inserted between two steps of a walk: stubby arms and attached feet in every frame of it and of the steps after, and the walk resumes to its goal.
     func testEachFlourishMidWalkKeepsTheCapsAndResumesTheWalk() {
-        for kind in [IdleKind.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .joy, .giggle, .startle] {
+        for kind in [IdleKind.skipHop, .hopscotch, .legSpin, .trot, .stopLook, .rollTrip, .joy, .giggle, .startle] {
             let r = MotionRig(game: true)
             SocialTests.keep.append(r)
             r.renderSamples = false
