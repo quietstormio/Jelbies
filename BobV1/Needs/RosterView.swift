@@ -106,6 +106,7 @@ struct RosterPanel: View {
 }
 
 struct BlobCard: View {
+    @Environment(\.dynamicTypeSize) private var dts
     let blob: SelectBlob
     let needs: BlobNeeds
     var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
@@ -140,6 +141,10 @@ struct BlobCard: View {
                         .padding(.horizontal, 9).padding(.vertical, 3)
                         .background(Capsule().fill(Self.moodColor(needs.mood)))
                 }
+                let meters = dts.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
+                meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }          // the three bars only; no word rows
+                    .frame(maxWidth: .infinity)
                 if perks.isEmpty {
                     Text("no boosts").jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.75))
                 } else {
@@ -157,5 +162,27 @@ struct BlobCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("roster-card-\(blob.id)")
+    }
+
+    private func meter(_ k: NeedKind) -> some View {
+        let v = CGFloat(needs.levels[k.rawValue])
+        let want = needs.wantedNeed == k || v < CGFloat(NeedsTuning.wanting)
+        return HStack(spacing: 3) {
+            NeedGlyph(kind: k, size: 16)
+            Capsule().fill(FocusStyle.brown.opacity(0.12))
+                .overlay(alignment: .leading) {
+                    GeometryReader { bar in
+                        Capsule().fill(want ? SK.pinkStrong : Color(red: 0.62, green: 0.82, blue: 0.62))
+                            .overlay { if want { StripePattern(color: .white.opacity(0.7)).clipShape(Capsule()) } }          // wanting = stripes + "!", not only pink vs green
+                            .frame(width: max(5, bar.size.width * v))
+                    }
+                }
+                .frame(minWidth: 12, maxWidth: .infinity).frame(height: 10)
+            if want { Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(SK.pinkStrong) }
+        }
+        .padding(.horizontal, 4).padding(.vertical, 2)
+        .frame(maxWidth: .infinity)
+        .background(Capsule().fill(want ? FocusStyle.pink.opacity(0.16) : Color.clear))
+        .overlay(Capsule().strokeBorder(want ? FocusStyle.pink.opacity(0.7) : Color.clear, lineWidth: 1.2))
     }
 }
