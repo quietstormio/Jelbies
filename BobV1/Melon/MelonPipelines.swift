@@ -123,13 +123,15 @@ nonisolated enum MelonPipelines {
 
     /// The matte body pipeline of fsSoftMatteFast: `tier` 0 = the locked maths (pixel-identical), 1...3 = the opt-in cheaper tiers; `belly` / `teddy`
     /// compile the lighter-front and Teddy ear / pom blocks in or out (a body whose BlueBelly mode is 0 needs neither); `probe` is the measurement mode.
-    static func makeMatteSpec(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, tier: Int, belly: Bool, teddy: Bool, probe: Int) -> MTLRenderPipelineState? {
+    static func makeMatteSpec(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, tier: Int, belly: Bool, teddy: Bool, probe: Int, fibre: Int = 0) -> MTLRenderPipelineState? {
         let cv = MTLFunctionConstantValues()
         var t = Int32(tier), bl = belly, td = teddy, pr = Int32(probe)
         cv.setConstantValue(&t, type: .int, index: 0)
         cv.setConstantValue(&bl, type: .bool, index: 1)
         cv.setConstantValue(&td, type: .bool, index: 2)
         cv.setConstantValue(&pr, type: .int, index: 3)
+        var fm = Int32(fibre)
+        cv.setConstantValue(&fm, type: .int, index: 4)
         guard let fs = try? library.makeFunction(name: "fsSoftMatteFast", constantValues: cv), let vs = library.makeFunction(name: "vsJelly") else {
             print("MelonRenderer: fsSoftMatteFast tier \(tier) unavailable"); return nil
         }

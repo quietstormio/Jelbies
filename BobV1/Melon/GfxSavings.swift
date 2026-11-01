@@ -34,6 +34,7 @@ nonisolated enum GfxFlags {
         o.frontToBack = flag("FrontToBack", defaultOn: false)
         let t = UserDefaults.standard.integer(forKey: "FastMatte")
         o.fastMatteTier = Swift.max(0, Swift.min(t, 3))
+        o.fibreMode = Swift.max(0, Swift.min(UserDefaults.standard.integer(forKey: "FibreLUT"), 3))
         o.bathVariants = flag("BathVariants", defaultOn: false)
         o.shadowDepth16 = flag("ShadowDepth16", defaultOn: false)
         return o
@@ -50,6 +51,8 @@ nonisolated struct GfxOpt: Equatable {
     var frontToBack = false
     /// 0 = the locked fsSoftMatte; 1...3 = fsSoftMatteFast tiers (GfxBodyFast.metal), each cheaper and each a (small) visible change.
     var fastMatteTier = 0
+    /// -FibreLUT 1...3 (GfxBodyFast.metal `fibreMode`, pixel-changing, opt-in): 1 = value noise from a tiling 64^3 texture, 2 = one fibre-ridge octave, 3 = both. 0 = exact.
+    var fibreMode = 0
     /// Bath body shader specialised per body with function constants (soot / foam / wet / sparkle blocks compiled out when unused). Same maths,
     /// but a specialised build is not bit-identical to the plain one (a few ulps on some frames: BathSootSeedZeroTests): opt-in, -BathVariants 1.
     var bathVariants = false

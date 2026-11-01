@@ -797,11 +797,35 @@ final class MelonRenderer {
 
     /// The opt-in cheaper matte body pipeline for `tier` (1...3), built once (function constant `fastTier`). nil -> the locked shader is used.
     private func fastMattePipeline(tier: Int, belly: Bool = true, teddy: Bool = true) -> MTLRenderPipelineState? {
-        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe
+        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe + 1000 * gfxOpt.fibreMode
         if let p = pMatteFast[key] { return p }
-        guard let p = MelonPipelines.makeMatteSpec(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe) else { return nil }
+        guard let p = MelonPipelines.makeMatteSpec(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe, fibre: gfxOpt.fibreMode) else { return nil }
         pMatteFast[key] = p
         return p
+    }
+
+    /// 64^3 tiling lattice of the body shader's hash (r16Float), the source of -FibreLUT's noise; made on first use (also bound, unused, by the exact pipelines).
+    private var fibreNoiseTex: MTLTexture?
+    private func fibreNoiseTexture() -> MTLTexture? {
+        if let t = fibreNoiseTex { return t }
+        let n = 64
+        let d = MTLTextureDescriptor()
+        d.textureType = .type3D; d.pixelFormat = .r16Float; d.width = n; d.height = n; d.depth = n
+        d.usage = .shaderRead; d.storageMode = .shared
+        guard let t = device.makeTexture(descriptor: d) else { return nil }
+        t.label = "fibre noise lattice"
+        func fract(_ x: Float) -> Float { x - x.rounded(.down) }
+        var px = [Float16](repeating: 0, count: n * n * n)
+        for z in 0..<n { for y in 0..<n { for x in 0..<n {
+            // the shader's hash3 (Shaders.metal) at the lattice point
+            var q = SIMD3<Float>(fract(Float(x) * 0.1031), fract(Float(y) * 0.1031), fract(Float(z) * 0.1031))
+            let dd = q.x * (q.y + 33.33) + q.y * (q.z + 33.33) + q.z * (q.x + 33.33)
+            q += SIMD3<Float>(repeating: dd)
+            px[(z * n + y) * n + x] = Float16(fract((q.x + q.y) * q.z))
+        } } }
+        px.withUnsafeBytes { t.replace(region: MTLRegionMake3D(0, 0, 0, n, n, n), mipmapLevel: 0, slice: 0, withBytes: $0.baseAddress!, bytesPerRow: n * 2, bytesPerImage: n * n * 2) }
+        fibreNoiseTex = t
+        return t
     }
 
     // MARK: jersey (Wear/GfxJersey.metal)
@@ -1100,7 +1124,8 @@ final class MelonRenderer {
                 } else {
                     // shape.w (BlueBelly.mode) says whether the belly / Teddy blocks can run at all for this body
                     let bellyMode = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                    let sp = (tierNow > 0 || matteSpec) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    let sp = (tierNow > 0 || matteSpec || gfxOpt.fibreMode > 0) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    if sp != nil { e.setFragmentTexture(fibreNoiseTexture(), index: 0) }
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 if !bodyProbe.contains(.skipBody) { e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4) }
