@@ -149,7 +149,7 @@ final class FocusAnyJellyTests: XCTestCase {
         XCTAssertEqual(care.focusedJellies, [1])
         XCTAssertEqual(care.focus.phase, .approaching)
         XCTAssertEqual(care.focusGroup.touchID, 1, "the touch goes to the focused Jelly")
-        XCTAssertTrue(GameCamera.focusSpots.isEmpty, "one Jelly: the ordinary close-up on the call spot")
+        XCTAssertEqual(GameCamera.focusSpots.count, 1, "one Jelly: a single free-spot close-up")
         XCTAssertTrue(r.run(30) { care.focus.isFocused }, "Pip runs up and the close-up starts: phase \(care.focus.phase) pip \(r.centroid(1)) act \(String(describing: r.actors[1].brain?.activity)) arrived \(care.focusGroup.arrived)")
         let c = r.centroid(1)
         XCTAssertLessThan(simd_length(SIMD2(c.x, c.z) - GameCamera.callSpot), 0.7, "Pip is on the front spot: \(c)")
@@ -290,7 +290,7 @@ final class FocusAnyJellyTests: XCTestCase {
         r.run(1)
         r.care.comeHere()
         XCTAssertEqual(r.care.focusedJellies, [0])
-        XCTAssertTrue(GameCamera.focusSpots.isEmpty)
+        XCTAssertEqual(GameCamera.focusSpots.count, 1, "one Jelly: a single free-spot close-up")
         XCTAssertFalse(r.care.focusGroup.rowOpen)
         XCTAssertTrue(r.run(30) { r.care.focus.isFocused })
         let aspect: Float = 440.0 / 956.0
