@@ -91,6 +91,15 @@ final class GuestBook {
     private(set) var visit: GuestVisit?
     /// The guest's card is open.
     var card = false
+    /// The arrival moment (Park/GuestArrival.swift): the card on screen, the dim under it, the name on it, when "Welcome!" showed (CACurrentMediaTime).
+    var arrivalCard: ArrivalCardStage = .hidden
+    var arrivalDim = false
+    var arrivalName = ""
+    var welcomeAt: Double = 0
+    @ObservationIgnored var arrival = ArrivalClock()
+    @ObservationIgnored var arrivalTarget: SIMD2<Float>?
+    /// The hug waits this long (seconds) for a guest still running.
+    @ObservationIgnored var hugWait: Float?
     @ObservationIgnored private let defaults: UserDefaults
 
     // the body and the run (GameCare+Guest.swift); none of it is saved
@@ -154,6 +163,6 @@ final class GuestBook {
     }
     /// The visit is over (he has gone).
     func finish() {
-        visit = nil; card = false; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
+        visit = nil; card = false; arrival.cancel(); arrivalCard = .hidden; arrivalDim = false; hugWait = nil; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
     }
 }
