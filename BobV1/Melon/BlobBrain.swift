@@ -1533,20 +1533,40 @@ final class BlobBrain {
     /// ALWAYS ATTACHED: the bean point nearest the body centre must stay inside the body (sdf < -attachDepth in the body frame). If the swing
     /// path would let the bean leave him, the whole bean is moved along the egg's inward gradient (up / in toward the belly) just enough.
     static let attachDepth: Float = 0.04
+    /// 2026-11-01 (feet at the source): the skin's LEASH (Skinner.applyBeanJoin) judges the piece by its TOP (the pole and the two neck rings), not by its vertex nearest the body centre. A foot planted well in front of / beside a low or tilted
+    /// body (sit, sway, a decor seat, the slide) has that nearest vertex 4 cm inside while the top is 7-12 cm OUTSIDE, so the leash yanked it 5-15 cm every frame. The brain now asks for the same thing: the deepest of the top points
+    /// at least `topDepthWant` (4.5 cm) inside the fitted egg whenever it is under `topDepthTrigger` (3 cm) - leash 2 cm + the margin the drawn (soft) body's own frame can differ by. The walk's feet are already deeper than that.
+    nonisolated(unsafe) static var topDepthFix = true          // (false = the placement before 2026-11-01: before / after captures)
+    static let topDepthTrigger: Float = 0.03, topDepthWant: Float = 0.045
+    /// Deepest (+ inside) of the piece's top points (pole, neck rings 11 and 12, every 4th meridian) shifted by `off`, and the world direction that moves it deeper.
+    @inline(__always) static func topDepth(_ v: [SIMD3<Float>], off: SIMD3<Float> = .zero, pose: (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)) -> (Float, SIMD3<Float>) {
+        var best = -Float.infinity, dir = SIMD3<Float>(0, 1, 0)
+        func probe(_ i: Int) { let (d, g) = Skinner.fittedDepth(v[i] + off, pose); if d > best { best = d; dir = g } }
+        probe(FootBean.vertexCount - 1)
+        for r in Skinner.joinNeckRings { for j in Swift.stride(from: 0, to: FootBean.around, by: 4) { probe(1 + FootBean.around * r + j) } }
+        return (best, dir)
+    }
     func attachBean(_ sim: SoftBody, _ pose: BodyPose, lifted: Bool, _ v: inout [SIMD3<Float>]) {
         let c0 = sim.restCentroid
-        for _ in 0..<4 {
+        let fp = (centroid: pose.centroid, rotation: pose.rotation, restCentroid: c0)
+        for _ in 0..<6 {
             var best = 0, bd = Float.infinity
             for i in v.indices { let d = simd_length_squared(v[i] - pose.centroid); if d < bd { bd = d; best = i } }
             let r = c0 + pose.rotation.inverse.act(v[best] - pose.centroid)
             let q = SIMD3<Double>(Double(abs(r.x)), Double(r.y), Double(r.z))
             let f = Float(BobForm.bodySDF(q))
-            if f < -Self.attachDepth { return }
-            let g = BobForm.eggGradient(q)
-            let l2 = Float(simd_dot(g, g)); if l2 < 1e-9 { return }
-            let sx: Float = r.x < 0 ? -1 : 1
-            let k = (f + Self.attachDepth + 0.002) / l2
-            var dW = pose.rotation.act(SIMD3(sx * Float(g.x), Float(g.y), Float(g.z)) * (-k))
+            var dW = SIMD3<Float>.zero
+            if f >= -Self.attachDepth {
+                let g = BobForm.eggGradient(q)
+                let l2 = Float(simd_dot(g, g)); if l2 < 1e-9 { return }
+                let sx: Float = r.x < 0 ? -1 : 1
+                let k = (f + Self.attachDepth + 0.002) / l2
+                dW = pose.rotation.act(SIMD3(sx * Float(g.x), Float(g.y), Float(g.z)) * (-k))
+            } else if v.count == FootBean.vertexCount && Self.topDepthFix {
+                let (td, dir) = Self.topDepth(v, pose: fp)
+                if td >= Self.topDepthTrigger { return }
+                dW = dir * (Self.topDepthWant - td)
+            } else { return }
             if !lifted { dW.y = min(dW.y, 0) }        // a planted foot stays on the floor (it only slides toward the belly)
             for i in v.indices { v[i] += dW }
         }
@@ -1589,6 +1609,7 @@ final class BlobBrain {
             func depth(_ off: SIMD3<Float>) -> Float {
                 var d = Float.infinity
                 for p in orig { let q = c0 + inv.act(p + off - now.centroid); d = min(d, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z))))) }
+                if orig.count == FootBean.vertexCount && Self.topDepthFix { d = max(d, -Self.topDepth(orig, off: off, pose: (now.centroid, now.rotation, c0)).0) }          // (the skin's leash judges the top of the piece: that must be inside too)
                 return d
             }
             var off = cur + (full - cur) * Self.refitEase
@@ -1742,7 +1763,19 @@ final class BlobBrain {
 
     /// Fade of the rigid render foot over a swing: in over the first 20 % (squared, so the first frame is < 2 mm), out over the last 20 % (no pop at lift-off / touch-down).
 
+    /// A teleport (scene change, tub, stage spot, rehome...) moves the body root; the planted feet, their eased corrections and the pieces are where he WAS. Whatever path moved him, the feet restart at rest under him
+    /// on the very next tick (`Skinner.update` carries a piece that is still at the old spot over by the same jump in the same frame).
+    var lastRootXZ: SIMD2<Float>? = nil
+    func noticeTeleport(_ sim: SoftBody) {
+        guard sim.x.count >= 3 else { return }
+        let p = SIMD2(sim.x[0], sim.x[2])
+        defer { lastRootXZ = p }
+        guard let q = lastRootXZ, simd_length(p - q) > Skinner.teleportJump else { return }
+        feetInit = false; feet.reset(); beanCorr = [.zero, .zero]; beanFitUsed = nil
+    }
+
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        noticeTeleport(sim)
         skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
         skinner.teddyOn = feature == .ears && TeddyEarsVariant.active.inBody          // (from the character alone: a scene that never ticks the feature layer still shows his ears; the scales default to 1)
         skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
