@@ -51,11 +51,6 @@ struct GameScreen: View {
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive }
-    /// The "Come here" (everyone) pill: nobody highlighted, roaming at home, and no menu / sheet / tray over it.
-    private var callAllShown: Bool {
-        HUDMenu.callAllAvailable(model.care) && !menuOpen && openPicker == nil && !bookOpen && !bagOpen && !settingsOpen && !soundOpen && !extrasOpen
-            && !rosterOpen && town == nil && !a11yOpen && !model.care.select.sheetOpen
-    }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -212,13 +207,6 @@ struct GameScreen: View {
                             }
                         }
                         .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
-                        .overlay(alignment: .bottom) {          // bottom-centre, between the rail and the paw: "Come here" for everyone (nobody highlighted)
-                            if callAllShown {
-                                CallEveryoneButton { withAnimation(CareMenu.spring) { model.care.comeHereEveryone() } }
-                                    .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.8, anchor: .bottom).combined(with: .opacity))
-                                    .accessibilitySortPriority(2)
-                            }
-                        }
                     }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
@@ -860,7 +848,7 @@ struct CareMenu: View {
 
     var body: some View {
         // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
-        let all = HUDMenu.items(mode)
+        let all = HUDMenu.visibleItems(mode, care: care)
         let items = tight && picker != nil ? all.filter { $0 == .feed || $0 == .drink } : all
         CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
             VStack(alignment: .trailing, spacing: rowGap) {
@@ -879,7 +867,7 @@ struct CareMenu: View {
         }
         .onChange(of: open) { _, isOpen in
             if !isOpen { picker = nil; competeRow = false }
-            else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.items(mode).first } }      // focus moves into the opened rows
+            else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
         .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false } }
         .onChange(of: openPicker) { _, k in

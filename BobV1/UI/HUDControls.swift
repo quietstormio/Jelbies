@@ -1,7 +1,7 @@
 //
 //  HUDControls.swift
 //  The one main HUD control (the paw, side of the screen) as a pure model: with nobody highlighted it serves the GROUP
-//  (Feed, Drink, Play, Decor, Bedtime); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
+//  (Feed, Drink, Play, Decor, Bedtime / Naptime, Come here for everyone); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
 //  CareMenu draws it; the tests drive it headless.
 //
 
@@ -10,7 +10,7 @@ import SwiftUI
 enum HUDMode: Equatable { case group, individual(Int) }
 
 enum HUDItem: String, CaseIterable {           // the raw value is the accessibility identifier
-    case feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
+    case callAll = "hud-call-all", feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
     case come = "hud-come", dress = "hud-dress", clean = "care-clean", train = "hud-train", compete = "hud-compete"
 }
 
@@ -32,10 +32,15 @@ enum HUDMenu {
             && !care.cafe.active && !care.arranging
     }
 
+    /// The rows to draw: `items`, without the group's Come here row unless it is available (nobody highlighted, roaming, nothing else going on).
+    static func visibleItems(_ mode: HUDMode, care: GameCare) -> [HUDItem] {
+        items(mode).filter { $0 != .callAll || callAllAvailable(care) }
+    }
+
     /// Top to bottom. Six rows in the group menu, five in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
-        case .group: return [.feed, .drink, .play, .decor, .bedtime]
+        case .group: return [.feed, .drink, .play, .decor, .bedtime, .callAll]
         case .individual: return [.dress, .clean, .train, .compete, .come]
         }
     }
@@ -44,12 +49,13 @@ enum HUDMenu {
         var name: String?
         if case .individual(let id) = mode { name = care.jelly(id)?.name }
         switch i {
+        case .callAll: return "Come here"
         case .feed: return name.map { "Feed \($0)" } ?? "Feed"
         case .come: return "Come here"
         case .drink: return name.map { "Water \($0)" } ?? "Drink"
         case .play: return "Play"
         case .decor: return "Decor"
-        case .bedtime: return "Bedtime"
+        case .bedtime: return bedtimeTitle(phase: DayClock.shared.phase)
         case .dress: return "Dress"
         case .clean: return "Clean"
         case .train: return "Train"
@@ -57,8 +63,12 @@ enum HUDMenu {
         }
     }
 
+    /// The sleep button reads Naptime by day (morning, day) and Bedtime in the evening and at night; same icon and action.
+    static func bedtimeTitle(phase: DayPhase) -> String { phase == .morning || phase == .day ? "Naptime" : "Bedtime" }
+
     /// What VoiceOver reads: the visible title, except Come here and Train name who they are for.
     static func spokenLabel(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> String {
+        if i == .callAll { return "Call everyone" }
         if case .individual(let id) = mode, let name = care.jelly(id)?.name {
             if i == .come { return "Call \(name) over" }
             if i == .train { return "Train \(name)" }
@@ -69,6 +79,7 @@ enum HUDMenu {
     private static func sym(_ name: String, _ fallback: String) -> String { UIImage(systemName: name) != nil ? name : fallback }
     static func symbol(_ i: HUDItem) -> String {
         switch i {
+        case .callAll: return sym("hand.wave.fill", "hand.raised.fill")
         case .feed: return "fork.knife"
         case .come: return sym("hand.wave.fill", "hand.raised.fill")
         case .drink: return CareMenu.waterSymbol
@@ -88,6 +99,7 @@ enum HUDMenu {
         case .feed, .drink: return !care.trayOut && !care.bath.active
         case .clean: return care.canClean(jelly: id)
         case .train: return !care.focus.isActive && !care.bath.active && !care.tripActive
+        case .callAll: return callAllAvailable(care)
         case .come: return care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy
         case .compete: return care.canRace(jelly: id) || care.canShow(jelly: id)
         case .bedtime: return !care.raceBusy && !care.trayOut && !care.bath.active
@@ -107,6 +119,7 @@ enum HUDMenu {
             if care.tripActive { return "Not while racing" }
             if care.focus.isActive { return "Not in the close-up" }
             return "Not available right now"
+        case .callAll: return "Not right now"
         case .come:
             if care.focus.isActive { return "Already in the close-up" }
             if care.bath.active { return "Not while cleaning" }
@@ -129,6 +142,7 @@ enum HUDMenu {
     static func perform(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> HUDRoute {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
+        case .callAll: care.comeHereEveryone(); return .none
         case .feed: return .picker(.food)
         case .drink: return .picker(.drink)
         case .play: return .bag(.toys, who: id)
@@ -145,25 +159,3 @@ enum HUDMenu {
     static func compete(_ dest: TownScreen, id: Int) -> HUDRoute { .town(dest, who: id) }
 }
 
-/// "Come here" for everyone: a frosted capsule like the other HUD pills (Let them go, the gear / sound pill), 44 pt tall, bottom-centre.
-struct CallEveryoneButton: View {
-    let action: () -> Void
-    var body: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-            action()
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: HUDMenu.symbol(.come)).font(.system(size: 15, weight: .semibold))
-                Text("Come here").jFont(16, .semibold).lineLimit(1).fixedSize()
-            }
-            .foregroundStyle(FocusStyle.brown)
-            .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
-        }
-        .buttonStyle(.plain)
-        .hudFrost(in: .capsule)
-        .accessibilityIdentifier("hud-call-all")
-        .accessibilityLabel("Call everyone")
-        .accessibilityHint("All your Jelbies walk over and line up")
-    }
-}

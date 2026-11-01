@@ -307,15 +307,15 @@ final class FocusAnyJellyTests: XCTestCase {
     // MARK: the HUD's "Come here" (everyone) pill
 
     /// The pill calls all three into the come / line-up state with autonomy off; "Let them go" gives every brain its autonomy back.
-    func testCallEveryoneButtonLinesAllUpAndReleaseRestoresAutonomy() {
+    func testCallEveryoneRowLinesAllUpAndReleaseRestoresAutonomy() {
         let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r); r.run(1.5)
-        XCTAssertTrue(HUDMenu.callAllAvailable(r.care), "nobody highlighted, roaming: the pill is there")
+        XCTAssertTrue(HUDMenu.callAllAvailable(r.care), "nobody highlighted, roaming: the heart menu's row is there")
         XCTAssertTrue(r.actors.allSatisfy { $0.brain!.autonomy })
-        r.care.comeHereEveryone()                                  // what the pill does
-        XCTAssertFalse(HUDMenu.callAllAvailable(r.care), "the pill is away once they are called")
+        XCTAssertEqual(HUDMenu.perform(.callAll, .group, care: r.care), .none)          // what the heart menu's Come here row does
+        XCTAssertFalse(HUDMenu.callAllAvailable(r.care), "the row is away once they are called")
         XCTAssertEqual(r.care.focusedJellies, [0, 1, 2])
         XCTAssertTrue(r.run(40) { r.care.focus.isFocused }, "all three line up")
-        XCTAssertTrue(r.care.focus.showsRelease, "the Let them go pill is up")
+        XCTAssertTrue(r.care.focus.showsRelease, "the Let them go button is up")
         XCTAssertTrue(r.actors.allSatisfy { !$0.brain!.autonomy }, "autonomy is off while they stand in the line")
         r.care.release()
         XCTAssertTrue(r.run(10) { r.care.focus.phase == .roaming })
@@ -325,7 +325,7 @@ final class FocusAnyJellyTests: XCTestCase {
         XCTAssertTrue(HUDMenu.callAllAvailable(r.care))
     }
 
-    func testCallEveryonePillIsHiddenWithAJelbieHighlighted() {
+    func testCallEveryoneRowIsHiddenWithAJelbieHighlighted() {
         let r = FocusAnyRun(); Self.keep.append(r); r.run(1)
         r.care.select.setBlobs(JellyRoster.selectBlobs(count: 3))
         r.care.select.doubleTap(1)

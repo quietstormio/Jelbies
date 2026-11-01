@@ -26,13 +26,13 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(BagSheet.BagTab.rooms.rawValue, "Rooms")
         let care = care3()
         XCTAssertTrue(care.store.ownsRoom(.home), "the home room is always in the Bag's Rooms")
-        XCTAssertEqual(HUDMenu.items(.group).count, 5)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
+        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
     }
 
     func testGroupModeWhenNothingHighlighted() {
         let care = care3()
         XCTAssertEqual(HUDMenu.mode(care), .group)
-        XCTAssertEqual(HUDMenu.items(.group), [.feed, .drink, .play, .decor, .bedtime])
+        XCTAssertEqual(HUDMenu.items(.group), [.feed, .drink, .play, .decor, .bedtime, .callAll])
     }
 
     func testOneJelbieCanBeHighlightedForTheIndividualMenu() {
@@ -56,6 +56,35 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(care.targetJelly, 1); XCTAssertEqual(care.singledOutJelly, 1)
         XCTAssertEqual(HUDMenu.title(.train, .individual(1), care: care), "Train")
         XCTAssertEqual(HUDMenu.spokenLabel(.train, .individual(1), care: care), "Train \(care.jelly(1)!.name)")
+    }
+
+    func testGroupMenuHasACallEveryoneRowAtTheEndOnlyWhenNobodyIsHighlighted() {
+        let care = care3()
+        XCTAssertEqual(HUDMenu.items(.group).last, .callAll, "Come here is the last option, after Bedtime")
+        XCTAssertEqual(HUDMenu.visibleItems(.group, care: care).last, .callAll)
+        XCTAssertEqual(HUDMenu.title(.callAll, .group, care: care), "Come here")
+        XCTAssertEqual(HUDMenu.spokenLabel(.callAll, .group, care: care), "Call everyone")
+        XCTAssertEqual(HUDItem.callAll.rawValue, "hud-call-all")
+        XCTAssertEqual(HUDMenu.perform(.callAll, .group, care: care), .none)
+        XCTAssertEqual(care.focusedJellies, [0, 1, 2], "tapping it calls all three")
+        XCTAssertFalse(HUDMenu.visibleItems(.group, care: care).contains(.callAll), "hidden once they are called")
+        care.release()
+        let c2 = care3()
+        c2.tapJelly(1); tickSelect(c2, 2.5)
+        XCTAssertFalse(HUDMenu.items(.individual(1)).contains(.callAll))
+        XCTAssertFalse(HUDMenu.visibleItems(.group, care: c2).contains(.callAll), "not while a Jelbie is highlighted")
+    }
+
+    func testSleepButtonReadsNaptimeByDayAndBedtimeInTheEvening() {
+        let care = care3()
+        let clock = DayClock.shared, saved = clock.forcedHour
+        defer { clock.forcedHour = saved }
+        for (hour, want) in [(8.0, "Naptime"), (12.0, "Naptime"), (15.0, "Naptime"), (18.0, "Bedtime"), (20.5, "Bedtime"), (23.0, "Bedtime"), (3.0, "Bedtime")] {
+            clock.forcedHour = hour
+            XCTAssertEqual(HUDMenu.title(.bedtime, .group, care: care), want, "at \(hour):00")
+            XCTAssertEqual(HUDMenu.spokenLabel(.bedtime, .group, care: care), want)
+            XCTAssertEqual(HUDMenu.symbol(.bedtime), "moon.zzz.fill")
+        }
     }
 
     func testComeHereRowCallsHimAndDisablesInTheCloseUp() {
