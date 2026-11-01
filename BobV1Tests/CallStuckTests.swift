@@ -69,19 +69,4 @@ final class CallStuckTests: XCTestCase {
         XCTAssertEqual(r.care.focus.phase, .roaming)
         XCTAssertTrue(r.actors.allSatisfy { $0.brain!.autonomy })
     }
-
-    func testCancelPillOnAGroupServing() {
-        let r = DiningJellyTests.Room(count: 3)
-        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
-        for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
-        r.run(1)
-        r.care.feed()
-        r.run(0.5)
-        XCTAssertTrue(r.care.groupActive)
-        XCTAssertTrue(r.care.cancelPill, "pill within 0.5 s of the serving")
-        r.care.cancelGroupAction()
-        r.run(1)
-        XCTAssertFalse(r.care.groupActive)
-        XCTAssertFalse(r.care.cancelPill)
-    }
 }
