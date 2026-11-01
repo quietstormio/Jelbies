@@ -178,7 +178,7 @@ final class OnePieceInvariantTests: XCTestCase {
     struct Agg {
         var frames = 0, beanFrames = 0, padFrames = 0, started = true
         var neckMin: Float = .infinity, neckFrame = -1, joinMax: Float = 0, joinFrame = -1, padMax: Float = 0, stretchMax: Float = 0
-        var neckBad = 0, joinBad = 0, idealMax: Float = -.infinity, dentMax: Float = 0, tippedPad = 0, detached = 0, leashed = 0, weldMax: Float = 0, worstLeg: Float = -.infinity
+        var neckBad = 0, joinBad = 0, idealMax: Float = -.infinity, dentMax: Float = 0, tippedPad = 0, detached = 0, leashed = 0, weldMax: Float = 0, worstLeg: Float = -.infinity, leashMax: Float = 0
         mutating func add(_ f: Frame, frame k: Int) {
             frames += 1
             if f.beans {
@@ -186,6 +186,7 @@ final class OnePieceInvariantTests: XCTestCase {
                 if f.neck < neckMin { neckMin = f.neck; neckFrame = k }
                 if f.join > joinMax { joinMax = f.join; joinFrame = k }
                 if f.leash > 0.002 || f.weldPull > 0.002 { leashed += 1 }
+                leashMax = max(leashMax, f.leash, f.weldPull)
                 weldMax = max(weldMax, f.weld)
                 idealMax = max(idealMax, f.ideal); dentMax = max(dentMax, f.dent)
                 if f.blend > 0.5 { worstLeg = max(worstLeg, f.leg); if f.leg > OnePieceInvariantTests.maxLegSdf || f.burial <= 0 { detached += 1 } }
@@ -272,7 +273,7 @@ final class OnePieceInvariantTests: XCTestCase {
                 anyStarted = true
                 let tag = "\(job.name) | \(Self.characters[c].0) \(shoes ? "shoes" : "bare") \(pacing.name)"
                 func f1(_ x: Float) -> String { String(format: "%.1f", x.isFinite ? x : 99) }
-                report += "\(tag) | \(a.frames) \(a.beanFrames) \(a.padFrames) | \(f1(a.neckMin * 100))@\(a.neckFrame) | pad \(String(format: "%.3f", a.padMax)) str \(String(format: "%.2f", a.stretchMax)) | neckBad \(a.neckBad) | ideal \(f1(a.idealMax * 100)) | dent \(f1(a.dentMax * 100)) tipped \(a.tippedPad) | hip \(f1(a.weldMax * 100)) | leashed \(a.leashed)\n"
+                report += "\(tag) | \(a.frames) \(a.beanFrames) \(a.padFrames) | \(f1(a.neckMin * 100))@\(a.neckFrame) | pad \(String(format: "%.3f", a.padMax)) str \(String(format: "%.2f", a.stretchMax)) | neckBad \(a.neckBad) | ideal \(f1(a.idealMax * 100)) | dent \(f1(a.dentMax * 100)) tipped \(a.tippedPad) | hip \(f1(a.weldMax * 100)) | leashed \(a.leashed) maxpull \(f1(a.leashMax * 100))cm\n"
                 tot.frames += a.frames; tot.beanFrames += a.beanFrames; tot.padFrames += a.padFrames; tot.neckBad += a.neckBad; tot.joinBad += a.joinBad
                 tot.padMax = max(tot.padMax, a.padMax); tot.stretchMax = max(tot.stretchMax, a.stretchMax); tot.dentMax = max(tot.dentMax, a.dentMax); tot.tippedPad += a.tippedPad; tot.detached += a.detached; tot.leashed += a.leashed; tot.weldMax = max(tot.weldMax, a.weldMax); tot.worstLeg = max(tot.worstLeg, a.worstLeg)
                 if a.detached > 0 { report += "  DETACHED \(tag): \(a.detached) frames, worst leg sdf \(a.worstLeg)\n" }
@@ -288,7 +289,8 @@ final class OnePieceInvariantTests: XCTestCase {
         try report.write(toFile: Self.out + (Self.before ? "invariants_before.txt" : "invariants_after.txt"), atomically: true, encoding: .utf8)
         print(report)
         if ProcessInfo.processInfo.environment["ONEPIECE_ONLY"] == nil {
-            XCTAssertTrue(notStarted.isEmpty, "moves that did not start: \(notStarted)")
+            // wander and stumble are never started by idleStart (it returns false for them: the walk and the run's stumble reach them); the walk / run scenarios cover them
+            XCTAssertEqual(notStarted.filter { $0 != "idle wander" && $0 != "idle stumble" }, [], "moves that did not start")
             for p in GaitDriver.Phase.allCases where p != .thrown && p != .glide && p != .slide && p != .recover { XCTAssertTrue(Self.phasesSeen.contains(p), "no scenario reached gait phase \(p)") }
         }
         guard !Self.before else { return }
