@@ -110,6 +110,8 @@ nonisolated enum ParkTuning {
     static let toastSeconds: Float = 3.2
     // The cast: at most five Jelbies in the park, the player's plus 1...4 visitors (ParkVisit.visitorCount)
     static let maxTotal = 5, minVisitors = 1, maxVisitors = 4
+    /// A visitor's body solves with fewer substeps than a Jelbie's 10 (the same XPBD, a touch softer): the park runs up to 5 soft bodies, and the solver is ~all of its CPU.
+    nonisolated(unsafe) static var visitorSubsteps: Int = { let k = UserDefaults.standard.integer(forKey: "ParkVisitorSubsteps"); return k > 0 ? k : 6 }()
     static let poolSize = 16
     static let poolSeed: UInt64 = 0x9A2B_17C3_5D41
     // Friendship (points per second near each other; a social together is faster). Doubled on 2026-10-25 (friends come in a couple of visits, not ages):
