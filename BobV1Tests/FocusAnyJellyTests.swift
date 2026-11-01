@@ -303,4 +303,32 @@ final class FocusAnyJellyTests: XCTestCase {
         XCTAssertTrue(r.run(10) { r.care.focus.phase == .roaming })
         XCTAssertEqual(r.care.focusedJellies, [])
     }
+
+    // MARK: the HUD's "Come here" (everyone) pill
+
+    /// The pill calls all three into the come / line-up state with autonomy off; "Let them go" gives every brain its autonomy back.
+    func testCallEveryoneButtonLinesAllUpAndReleaseRestoresAutonomy() {
+        let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r); r.run(1.5)
+        XCTAssertTrue(HUDMenu.callAllAvailable(r.care), "nobody highlighted, roaming: the pill is there")
+        XCTAssertTrue(r.actors.allSatisfy { $0.brain!.autonomy })
+        r.care.comeHereEveryone()                                  // what the pill does
+        XCTAssertFalse(HUDMenu.callAllAvailable(r.care), "the pill is away once they are called")
+        XCTAssertEqual(r.care.focusedJellies, [0, 1, 2])
+        XCTAssertTrue(r.run(40) { r.care.focus.isFocused }, "all three line up")
+        XCTAssertTrue(r.care.focus.showsRelease, "the Let them go pill is up")
+        XCTAssertTrue(r.actors.allSatisfy { !$0.brain!.autonomy }, "autonomy is off while they stand in the line")
+        r.care.release()
+        XCTAssertTrue(r.run(10) { r.care.focus.phase == .roaming })
+        r.run(2)
+        XCTAssertTrue(r.actors.allSatisfy { $0.brain!.autonomy }, "released: every brain wanders again")
+        XCTAssertEqual(r.care.focusedJellies, [])
+        XCTAssertTrue(HUDMenu.callAllAvailable(r.care))
+    }
+
+    func testCallEveryonePillIsHiddenWithAJelbieHighlighted() {
+        let r = FocusAnyRun(); Self.keep.append(r); r.run(1)
+        r.care.select.setBlobs(JellyRoster.selectBlobs(count: 3))
+        r.care.select.doubleTap(1)
+        XCTAssertFalse(HUDMenu.callAllAvailable(r.care))
+    }
 }

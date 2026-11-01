@@ -51,6 +51,11 @@ struct GameScreen: View {
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive }
+    /// The "Come here" (everyone) pill: nobody highlighted, roaming at home, and no menu / sheet / tray over it.
+    private var callAllShown: Bool {
+        HUDMenu.callAllAvailable(model.care) && !menuOpen && openPicker == nil && !bookOpen && !bagOpen && !settingsOpen && !soundOpen && !extrasOpen
+            && !rosterOpen && town == nil && !a11yOpen && !model.care.select.sheetOpen
+    }
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -207,6 +212,13 @@ struct GameScreen: View {
                             }
                         }
                         .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
+                        .overlay(alignment: .bottom) {          // bottom-centre, between the rail and the paw: "Come here" for everyone (nobody highlighted)
+                            if callAllShown {
+                                CallEveryoneButton { withAnimation(CareMenu.spring) { model.care.comeHereEveryone() } }
+                                    .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.8, anchor: .bottom).combined(with: .opacity))
+                                    .accessibilitySortPriority(2)
+                            }
+                        }
                     }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
