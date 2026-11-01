@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import QuartzCore
 import simd
 
 enum BlobRequest {
@@ -567,11 +568,14 @@ final class BlobBrain {
         runDt = dt
         stepCounter &+= 1
         planCool = max(0, planCool - dt)
-        defer { expressionTick(sim, skinner, dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        var ht = CACurrentMediaTime()
+        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt)
+        HopDiag.lap(.tkPre, &ht)
         reactTick(sim, skinner, dt)
+        HopDiag.lap(.tkReact, &ht)
         snuggleCool = max(0, snuggleCool - dt)
         awakeMin = max(0, awakeMin - dt); sleepTryCool = max(0, sleepTryCool - dt)
         // a finger on a sleeper: a tap wakes him gently (he rolls back over and stretches, groggy); a long hold is a real pick up (below)
@@ -595,6 +599,7 @@ final class BlobBrain {
         if activity == .touched { activity = .recovering; gaitRecover = false; calmT = 0; recoverT = 0 }
         if activity == .recovering { recover(sim, skinner, dt); return }
 
+        HopDiag.lap(.tkCommands, &ht)
         if volley.active { volleyTick(sim, skinner, dt); return }          // Jelly Volleyball owns the body
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
@@ -609,7 +614,9 @@ final class BlobBrain {
         if flapHopTick(sim, skinner, dt) { return }
         if idleBodyMoveTick(sim, skinner, dt) { return }
         if sleepBodyTick(sim, skinner, dt) { return }
+        HopDiag.lap(.tkIdle, &ht)
         socialTick(sim, skinner, dt)
+        HopDiag.lap(.tkSocial, &ht)
 
         // gait-driven tricks (hop / roll) own the attractor while they run
         switch script {
@@ -631,16 +638,21 @@ final class BlobBrain {
             if let r = pending { pending = nil; start(request: r, sim) }
             else if autonomy && social == nil {
                 restTimer -= dt
-                if restTimer <= 0 { pickAutonomous(sim) }
+                if restTimer <= 0 { HopDiag.lap(.tkIdle, &ht); pickAutonomous(sim); HopDiag.lap(.tkPick, &ht) }
             }
         }
 
         poseOn = false
+        HopDiag.lap(.tkIdle, &ht)
         runScript(sim, skinner, dt)
+        HopDiag.lap(.tkScript, &ht)
         toyPoseTick()
+        HopDiag.lap(.tkToy, &ht)
         drivePose(sim, dt)
+        HopDiag.lap(.tkDrivePose, &ht)
         driveLimbs(sim, skinner, dt)
         updateActivity()
+        HopDiag.lap(.tkDrive, &ht)
     }
 
     func updateActivity() {
@@ -721,8 +733,12 @@ final class BlobBrain {
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
+        var pt = CACurrentMediaTime()
         if socialMaybeStart(sim) { return }
+        HopDiag.lap(.tkPickSocial, &pt)
         if idleMaybeStart(sim) { return }
+        HopDiag.lap(.tkPickIdle, &pt)
+        defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
         if sinceWave > 18 { w.append((3, 2)) }
         if sincePlay > 10, !(anticsEnabled && fastOthers() >= 2) { w.append((4, 2)) }
@@ -1488,6 +1504,15 @@ final class BlobBrain {
         }
     }
     static let retractBand: Float = 0.10
+    /// The one-time foot set-up (FootGeom, FootSkin, the retract table with its 28-step bisections, the bean guard) that the first walking tick used to do in the middle of play:
+    /// 5-6 ms on the Mac, 30-50 ms on the phone, once per Jelbie. The stage calls this for one brain per fixed step from the moment its mesh is attached.
+    var feetWarm = false
+    func warmFeet(_ sim: SoftBody, _ skinner: Skinner) {
+        guard !feetWarm, hasRenderMesh, !renderRest.isEmpty else { return }
+        feetWarm = true
+        prepareBeans(sim, skinner)
+        prepareArms(skinner)          // the arm retract table (a Newton solve per nub vertex) + collar: also built at the first walk otherwise
+    }
     static let retractSink: Double = 0.025
 
     /// Body-rigid world position of rest point `r` (the attractor's pose: the position an undisturbed embedded foot would have).
