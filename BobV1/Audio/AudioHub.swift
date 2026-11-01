@@ -373,7 +373,14 @@ final class AudioHub {
 
     // MARK: effects
 
-    private func url(_ name: String) -> URL? { Bundle.main.url(forResource: name, withExtension: "m4a") }
+    /// Bundle lookups cached by name (a miss too): `fire` asked the bundle for the file on EVERY play, a directory search on the main thread.
+    @ObservationIgnored private var urlCache: [String: URL?] = [:]
+    private func url(_ name: String) -> URL? {
+        if let hit = urlCache[name] { return hit }
+        let u = Bundle.main.url(forResource: name, withExtension: "m4a")
+        urlCache[name] = .some(u)
+        return u
+    }
 
     // MARK: one-off clips (the Groomer's bell / ambience / reveal: no variants, follow the sound-effects setting)
 
