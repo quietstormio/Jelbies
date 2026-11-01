@@ -41,9 +41,9 @@ nonisolated enum TeddyBean {
     // MARK: the design numbers
 
     /// The right ear's root on the egg: polar angle from straight up (deg) and azimuth from the front (deg).
-    nonisolated(unsafe) static var earPolar = 40.0, earAzimuth = 78.0
+    nonisolated(unsafe) static var earPolar = 43.0, earAzimuth = 84.0
     /// The plate: half width, half height above / below its centre, outline exponent (2 = ellipse, a bit more = slightly squarish), splay of the face outward (deg).
-    nonisolated(unsafe) static var earA = 0.20, earTopB = 0.275, earLowB = 0.22, earN = 2.3, earSplay = 22.0, earPitch = 9.0
+    nonisolated(unsafe) static var earA = 0.185, earTopB = 0.275, earLowB = 0.22, earN = 2.3, earSplay = 22.0, earPitch = 9.0
     /// How far the plate's centre is sunk below the head surface along the ear's up axis (covers the head's curve under the base corners).
     nonisolated(unsafe) static var earSink = 0.04
     /// Half thickness at the root and at the rim, and the rim's round radius.
@@ -53,7 +53,7 @@ nonisolated enum TeddyBean {
     nonisolated(unsafe) static var earHollowAxes = SIMD3<Double>(0.162, 0.150, 0.075)
     nonisolated(unsafe) static var earHollowV = 0.045          // the hollow's centre, above the surface line (the plate centre is `earSink` below it)
     /// The fillets (rolling-ball radius, rest units).
-    nonisolated(unsafe) static var earFilletR = 0.05, pomFilletR = 0.07
+    nonisolated(unsafe) static var earFilletR = 0.02, pomFilletR = 0.07
     /// The pom: the old feature's size and spot.
     static let pomRadius = Double(TeddyMesh.pomRadius), pomY = Double(TeddyMesh.pomY), pomEmbed = Double(TeddyMesh.pomEmbed)
     static let pomGrid = 10, earAround = 36
