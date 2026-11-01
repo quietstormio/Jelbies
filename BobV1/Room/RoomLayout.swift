@@ -58,6 +58,8 @@ enum RoomLayout {
     nonisolated(unsafe) static var dynamicBoxes: [FlatBox] = []
     /// Decor (Room/DecorModel.swift): the placed pieces. Solid ones are walking obstacles in `resolve`; every one is kept clear of by sleep spots.
     nonisolated(unsafe) static var decorFeet: [DecorFoot] = []
+    /// The balls on the floor right now (solid to bodies: DecorField+BallContact.swift).
+    nonisolated(unsafe) static var ballSpheres: [BallSphere] = []
     /// The meal tray is only 0.3 high: his round belly goes over it, so only his base (about 0.6 of his footprint radius) has to keep off its box. Without this
     /// the visible floor beside the tray (|x| <= ~1.0 there) is too narrow to pass it, and he was stuck in front of it.
     static let lowPropRadiusScale: Float = 0.5
@@ -138,6 +140,7 @@ enum RoomLayout {
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach, box: f.box) }
+            if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }
         }
         return p
     }
