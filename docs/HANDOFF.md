@@ -1,5 +1,9 @@
 # Handoff
 
+## Disk hygiene
+
+Run `/cleanup` (`scripts/cleanup-safe.sh`, dry run first) before big multi-agent rounds. Every agent must build with `-derivedDataPath .claude/worktrees/dd_<name>` and delete its own simulators (`xcrun simctl delete <udid>`) when done.
+
 ## START HERE (2026-10-25): Jelbies 1.0, feature lock
 
 - **Species signature rule (2026-10-26):** signatures belong to a colour species and never appear on another colour; see [Species.md](Species.md).
