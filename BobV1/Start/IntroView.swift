@@ -20,7 +20,7 @@ enum IntroClip {
     enum Variant { case hold, pop }
     /// A (.hold, the default): plays once and holds the finished logo, "Tap to start". B (.pop): the stomp and the letters pop, then a 0.4 s beat on the empty paper and straight to the game.
     /// Flip the default here; `-IntroVariant B` (or A) on the launch line overrides it.
-    static let defaultVariant: Variant = .pop
+    static let defaultVariant: Variant = .hold
     static let variant: Variant = {
         let a = ProcessInfo.processInfo.arguments
         if let i = a.firstIndex(of: "-IntroVariant"), i + 1 < a.count { return a[i + 1].uppercased() == "B" ? .pop : .hold }
