@@ -1500,7 +1500,8 @@ final class BlobBrain {
     }
     /// 2026-10-31 (one piece): the belly skin under the foot retracted over a 10 cm band = a dent ring around every foot; now full weight only in / at the foot outline, fading over 3 cm (the collar fills the rest).
     nonisolated(unsafe) static var retractBand: Float = 0.03
-    static let retractSink: Double = 0.025
+    /// Sunk 2.5 cm under the footless egg (a 6 mm trial made the skin and the hidden sheet fight: a saw-toothed edge round the foot in the proof captures). The pit this leaves where a lifted foot is not (hop, toe end) is the pre-existing look; OnePieceInvariantTests reports it as `dent`.
+    nonisolated(unsafe) static var retractSink: Double = 0.025
 
     /// Body-rigid world position of rest point `r` (the attractor's pose: the position an undisturbed embedded foot would have).
     @inline(__always) private func bodyRigid(_ sim: SoftBody, _ r: SIMD3<Float>) -> SIMD3<Float> {
@@ -1548,6 +1549,7 @@ final class BlobBrain {
         if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
         skinner.joinTilt = now.tilt
+        skinner.joinPose = (now.centroid, now.rotation, sim.restCentroid)
         // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
         // not moved with the body, but the always-attached clamp runs again against the pose the body has NOW (it ran before the step against the pose before it).
         let dq: simd_quatf? = beanFitUsed.map { now.rotation * $0.rotation.inverse }
