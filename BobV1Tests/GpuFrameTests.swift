@@ -184,4 +184,46 @@ final class GpuFrameTests: XCTestCase {
             row(String(format: "MetalFX %dx%d -> %dx%d: gpu %.2f ms (upscale+present +%.2f), PSNR vs native %.2f dB", w, h, NW, NH, fms, fms - rms, Self.psnr(native, fx)))
         }
     }
+
+    /// Room cache on/off x camera still / drifting x focus 0 / 0.5 / 1 / drifting, at the scaler rungs, 3 Jellies. GPU ms per frame.
+    func testFocusAndMotion() throws {
+        UserDefaults.standard.removeObject(forKey: "PerfPasses"); UserDefaults.standard.removeObject(forKey: "PerfEncoders")
+        func row(_ s: String) { print("GPUFRAME " + s); NSLog("GPUFRAME %@", s) }
+        struct Sc { var name: String; var cache: Bool; var focus: (Int) -> Float; var drift: Bool; var hide = false }
+        let scs: [Sc] = [
+            Sc(name: "room still, cache on", cache: true, focus: { _ in 0 }, drift: false),
+            Sc(name: "room still, cache off", cache: false, focus: { _ in 0 }, drift: false),
+            Sc(name: "room camera drifting, cache on", cache: true, focus: { _ in 0 }, drift: true),
+            Sc(name: "focus 0.5 still, cache on", cache: true, focus: { _ in 0.5 }, drift: false),
+            Sc(name: "focus 1 still, cache on", cache: true, focus: { _ in 1 }, drift: false),
+            Sc(name: "focus 1 still, cache off", cache: false, focus: { _ in 1 }, drift: false),
+            Sc(name: "focus drifting 0..1, cache on", cache: true, focus: { 0.5 + 0.5 * sinf(Float($0) * 0.05) }, drift: false),
+            Sc(name: "focus 1 still, bodies hidden (room only)", cache: false, focus: { _ in 1 }, drift: false, hide: true),
+            Sc(name: "room still, bodies hidden (room only)", cache: false, focus: { _ in 0 }, drift: false, hide: true),
+        ]
+        for (W, H) in [(585, 1271), (880, 1912), (1206, 2622)] {
+            let s = try XCTUnwrap(GpuOptPerfTests.Scene(n: 3, W: W, H: H))
+            Self.keep.append(s)
+            var o = GfxOpt(); o.memorylessMSAA = true; s.ren.gfxOpt = o
+            for sc in scs {
+                s.ren.roomCacheEnabled = sc.cache
+                for k in 0..<3 { s.ren.setHidden(sc.hide, body: k) }
+                s.ren.invalidateRoomCache(); s.ren.resetRoomCacheCounters(); s.ren.perfFocus = sc.focus(0) > 0.9; _ = s.ren.takePerfContext()
+                var gpu = 0.0, mx = 0.0, shaded = 0.0, base = 0.0
+                let frames = 90
+                for f in 0..<(frames + 10) {
+                    var c = GameCamera.camera(aspect: Float(W) / Float(H), focus: sc.focus(f))
+                    if sc.drift { c.pos.x += 0.0005 * Float(f) }
+                    s.cam = c
+                    s.frame(wait: false); s.lastCmd?.waitUntilCompleted()
+                    if f == 9 { s.ren.resetRoomCacheCounters() }
+                    if f >= 10, let cb = s.lastCmd { let t = (cb.gpuEndTime - cb.gpuStartTime) * 1000; gpu += t; mx = max(mx, t) }
+                }
+                shaded = s.ren.roomPixelsShaded; base = s.ren.roomPixelsBaseline
+                row(String(format: "%dx%d %@: gpu mean %.2f max %.2f ms, cache hit %.0f%%, room px shaded %.0f%%, last %@ fp %.0f%%", W, H, sc.name, gpu / Double(frames), mx, s.ren.roomCacheHitRate * 100, base > 0 ? shaded / base * 100 : 0, "\(s.ren.lastCacheAction)", s.ren.lastFootprintShare * 100))
+                usleep(100_000); row("    " + s.ren.takePerfContext())
+            }
+            for k in 0..<3 { s.ren.setHidden(false, body: k) }
+        }
+    }
 }

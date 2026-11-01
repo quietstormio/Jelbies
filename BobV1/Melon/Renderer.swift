@@ -655,11 +655,20 @@ final class MelonRenderer {
         let box = frameBox, pt = passTimes
         frameBox = nil
         let encL = encLabels, encRing = ring; encLabels = []
+        // per-frame context for the PerfMeter window line (cache action, camera moving, room pixels shaded, footprint, focus flag)
+        let moving = !(prevViewProj.map { $0 == uniforms.viewProj } ?? true)
+        prevViewProj = uniforms.viewProj
+        let dShaded = roomPixelsShaded - ctxShaded, dBase = roomPixelsBaseline - ctxBase
+        ctxShaded = roomPixelsShaded; ctxBase = roomPixelsBaseline
+        let frameCtx = FrameContextStats.Frame(action: Self.actionLabel(lastCacheAction), moving: moving, shadedShare: dBase > 0 ? dShaded / dBase : 1,
+                                               footprint: Double(lastFootprintShare), focus: perfFocus, note: perfNote)
+        let ctxS = ctxStats
         let slowCtx: String? = perfPasses ? "\(lastCacheAction) fp\(Int(lastFootprintShare * 100))% \(width)x\(height) bodies\(slots.filter { !$0.hidden }.count) bath\(bathLook.visible ? 1 : 0)" : nil
         cmd.addCompletedHandler { [weak self] c in
             self?.resolveEncoderSamples(encL, ring: encRing)
             let t = c.gpuEndTime - c.gpuStartTime
             if let box { pt.add("post", t); gt.add(box.add(t)) } else { gt.add(t) }
+            ctxS.add(frameCtx, gpu: t)
             if let slowCtx, t > 0.024 { pt.addSlow(String(format: "%.0fms ", t * 1000) + slowCtx) }
             sem.signal()
         }
@@ -677,6 +686,20 @@ final class MelonRenderer {
     private var frameBox: FrameTimeBox?
     /// "label=ms ..." for the passes since the last call (empty unless -PerfPasses 1).
     func takePassStats() -> String { passTimes.takeDescription() }
+    // MARK: PerfMeter context (room-cache hit %, room px shaded %, camera moving, focus)
+
+    private let ctxStats = FrameContextStats()
+    private var prevViewProj: simd_float4x4?
+    private var ctxShaded = 0.0, ctxBase = 0.0
+    /// The stage sets these (cheap, any time): the focus close-up is up / a free-text note (e.g. which overlay is open) echoed in the window line.
+    var perfFocus = false
+    var perfNote = ""
+    /// One line since the last call: frames by cache action with their mean GPU ms, camera moving vs still (mean GPU ms), mean room pixels shaded
+    /// and footprint, focus frames. Empty when no frame completed. PerfMeter appends it to each window line.
+    func takePerfContext() -> String { ctxStats.take() }
+    private static func actionLabel(_ a: RoomCacheAction) -> String {
+        switch a { case .use: return "use"; case .build: return "build"; case .bypass(let m): return "bypass-" + m.rawValue }
+    }
     /// Test aid (ablation timing): passes named here are not encoded ("shadow", "height", "post", "blended"). Never set in the app.
     var debugSkip: Set<String> = []
 
@@ -1327,6 +1350,36 @@ final class MelonRenderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             e.endEncoding()
         }
+    }
+}
+
+/// Per-window frame context for the PerfMeter line: how GPU time splits by room-cache action, camera moving / still and focus.
+nonisolated final class FrameContextStats: @unchecked Sendable {
+    struct Frame { var action: String; var moving: Bool; var shadedShare: Double; var footprint: Double; var focus: Bool; var note: String }
+    private let lock = NSLock()
+    private var byAction: [String: (n: Int, gpu: Double)] = [:]
+    private var moving = (n: 0, gpu: 0.0), still = (n: 0, gpu: 0.0), focus = (n: 0, gpu: 0.0)
+    private var shaded = 0.0, foot = 0.0, frames = 0
+    private var notes: [String: Int] = [:]
+    func add(_ f: Frame, gpu t: Double) {
+        lock.lock(); defer { lock.unlock() }
+        let g = t * 1000
+        let a = byAction[f.action] ?? (0, 0); byAction[f.action] = (a.n + 1, a.gpu + g)
+        if f.moving { moving = (moving.n + 1, moving.gpu + g) } else { still = (still.n + 1, still.gpu + g) }
+        if f.focus { focus = (focus.n + 1, focus.gpu + g) }
+        shaded += f.shadedShare; foot += f.footprint; frames += 1
+        if !f.note.isEmpty { notes[f.note, default: 0] += 1 }
+    }
+    func take() -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard frames > 0 else { return "" }
+        let n = Double(frames)
+        func m(_ x: (n: Int, gpu: Double)) -> String { x.n > 0 ? String(format: "%d%% %.1fms", Int((Double(x.n) / n * 100).rounded()), x.gpu / Double(x.n)) : "0%" }
+        let acts = byAction.keys.sorted().map { "\($0) " + m(byAction[$0]!) }.joined(separator: ", ")
+        var s = String(format: "ctx: cache[%@] camMoving %@ still %@ roomPxShaded %.0f%% footprint %.0f%% focus %@", acts, m(moving), m(still), shaded / n * 100, foot / n * 100, m(focus))
+        if !notes.isEmpty { s += " notes[" + notes.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + "]" }
+        byAction = [:]; moving = (0, 0); still = (0, 0); focus = (0, 0); shaded = 0; foot = 0; frames = 0; notes = [:]
+        return s
     }
 }
 
