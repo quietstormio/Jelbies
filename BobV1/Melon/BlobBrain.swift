@@ -1460,8 +1460,8 @@ final class BlobBrain {
     }
     /// 2026-10-31 (one piece): the belly skin under the foot retracted over a 10 cm band = a dent ring around every foot; now full weight only in / at the foot outline, fading over 3 cm (the collar fills the rest).
     nonisolated(unsafe) static var retractBand: Float = 0.03
-    /// 2026-10-31 (one piece): the footless egg's skin under a foot piece was sunk 2.5 cm (a pit the shape of the foot wherever the piece was not: a lifted foot, a hop, the toe end); 6 mm hides the same sheet under the piece's own volume.
-    nonisolated(unsafe) static var retractSink: Double = 0.006
+    /// Sunk 2.5 cm under the footless egg (a 6 mm trial made the skin and the hidden sheet fight: a saw-toothed edge round the foot in the proof captures). The pit this leaves where a lifted foot is not (hop, toe end) is the pre-existing look; OnePieceInvariantTests reports it as `dent`.
+    nonisolated(unsafe) static var retractSink: Double = 0.025
 
     /// Body-rigid world position of rest point `r` (the attractor's pose: the position an undisturbed embedded foot would have).
     @inline(__always) private func bodyRigid(_ sim: SoftBody, _ r: SIMD3<Float>) -> SIMD3<Float> {
