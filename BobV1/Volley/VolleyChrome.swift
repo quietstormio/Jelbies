@@ -39,7 +39,7 @@ struct VolleyChrome: View {
                 if volley.live, volley.ui.phase == .intro { banner(volley.isDrill ? "Ready?" : "Beach volley!") }
                 Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .heavy, design: .rounded))
                     .foregroundStyle(fxTone == 1 || fxTone == 3 ? Color(red: 1.0, green: 0.85, blue: 0.25) : fxTone == 2 ? Color.white.opacity(0.85) : .white)
-                    .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 4)
+                    .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 3)
                     .opacity(fxOpacity).offset(y: -120 + fxY).allowsHitTesting(false).accessibilityHidden(true)
                     .onChange(of: volley.ui.fxSerial) { _, _ in
                         fxText = volley.ui.fxText; fxTone = volley.ui.fxTone
@@ -156,7 +156,7 @@ struct VolleyChrome: View {
 
     private func banner(_ s: String) -> some View {
         Text(s).font(.system(size: 64, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-            .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 4).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 8, y: 5)
+            .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 3)
             .allowsHitTesting(false).offset(y: -40).transition(.opacity)
     }
 
@@ -255,7 +255,7 @@ struct VolleyChrome: View {
             if volley.ui.serveMeter >= 0 { serveArc.frame(width: size + 10, height: 46) }
             ZStack {
                 Circle().fill(hitDown ? FocusStyle.pink.opacity(0.6) : CareMenu.cream)
-                    .shadow(color: FocusStyle.shadow.opacity(hitDown ? 0.12 : 0.28), radius: hitDown ? 4 : 9, y: hitDown ? 1 : 4)
+                    .shadow(color: FocusStyle.shadow.opacity(hitDown ? 0.12 : 0.28), radius: hitDown ? 4 : 6, y: hitDown ? 1 : 3)
                 Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 2)
                 VStack(spacing: 2) {
                     Image(systemName: serving ? "figure.volleyball" : "hand.tap.fill").font(.system(size: compact ? 26 : 34, weight: .bold))
@@ -334,7 +334,7 @@ struct HoldButton: View {
         Image(systemName: symbol).font(.system(size: 34, weight: .black)).foregroundStyle(CareMenu.brown)
             .frame(width: size, height: size * 0.95)
             .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(down ? FocusStyle.pink.opacity(0.55) : CareMenu.cream)
-                .shadow(color: FocusStyle.shadow.opacity(down ? 0.12 : 0.28), radius: down ? 4 : 9, y: down ? 1 : 4))
+                .shadow(color: FocusStyle.shadow.opacity(down ? 0.12 : 0.28), radius: down ? 4 : 6, y: down ? 1 : 3))
             .overlay(RoundedRectangle(cornerRadius: 30, style: .continuous).strokeBorder(Color.white.opacity(0.55), lineWidth: 1.5))
             .scaleEffect(down ? 0.96 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
@@ -393,7 +393,7 @@ struct VolleyResultsCard: View {
             }.buttonStyle(.plain).accessibilityIdentifier("volley-home")
         }
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-card")
     }

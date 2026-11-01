@@ -53,7 +53,7 @@ struct AppleExtrasPanel: View {
         }
         .padding(16)
         .frame(width: 300)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(red: 0.97, green: 0.94, blue: 0.88)).shadow(color: .black.opacity(0.2), radius: 10, y: 4))
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(red: 0.97, green: 0.94, blue: 0.88)).shadow(color: .black.opacity(0.2), radius: 6, y: 3))
         .accessibilityIdentifier("extras-panel")
     }
 }

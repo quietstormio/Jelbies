@@ -257,7 +257,7 @@ private struct PhotoPreview: View {
         Image(uiImage: image).resizable().scaledToFit()
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .padding(8).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
-            .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+            .shadow(color: .black.opacity(0.4), radius: 6, y: 3)
             .rotationEffect(.degrees(landscape ? 0 : -1.5))
             .accessibilityLabel("Your photo")
     }

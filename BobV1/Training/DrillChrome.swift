@@ -233,8 +233,8 @@ struct DrillChrome: View {
         Text(s)
             .font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded))
             .foregroundStyle(.white)
-            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 5)
-            .shadow(color: SK.shadow.opacity(0.35), radius: 10, y: 6)
+            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3)
+            .shadow(color: SK.shadow.opacity(0.35), radius: 6, y: 3)
             .id(race.cueSerial)
             .transition(.scale(scale: 1.6).combined(with: .opacity))
             .allowsHitTesting(false)
@@ -280,7 +280,7 @@ struct DrillResultCard: View {
             .buttonStyle(.plain).accessibilityIdentifier("drill-home")
         }
         .padding(.horizontal, 20).padding(.vertical, vsc == .compact ? 10 : 18)
-        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 6, y: 3))
         .accessibilityElement(children: .contain).accessibilityIdentifier("drill-card")
         .onAppear { withAnimation(.easeOut(duration: 1.3).delay(0.35)) { shown = true } }
     }

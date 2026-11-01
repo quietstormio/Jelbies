@@ -80,8 +80,8 @@ struct RaceChrome: View {
         Text(s)
             .font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded))
             .foregroundStyle(.white)
-            .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 5)
-            .shadow(color: FocusStyle.shadow.opacity(0.35), radius: 10, y: 6)
+            .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3)
+            .shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 3)
             .id(race.cueSerial)
             .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 1.6).combined(with: .opacity))
             .allowsHitTesting(false)
@@ -182,7 +182,7 @@ struct FootButton: View {
         .background(
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .fill(down ? FocusStyle.pink.opacity(0.55) : CareMenu.cream)
-                .shadow(color: FocusStyle.shadow.opacity(down ? 0.12 : 0.28), radius: down ? 4 : 10, y: down ? 1 : 5)
+                .shadow(color: FocusStyle.shadow.opacity(down ? 0.12 : 0.28), radius: down ? 4 : 6, y: down ? 1 : 3)
         )
         .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(Color.white.opacity(0.55), lineWidth: 1.5))
         .scaleEffect(down ? 0.96 : 1)
@@ -300,7 +300,7 @@ struct RacePlacingsCard: View {
             .accessibilityIdentifier("race-home")
         }
         .padding(.horizontal, 22).padding(.vertical, tight ? 10 : 20)
-        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 16, y: 8))
+        .background(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")

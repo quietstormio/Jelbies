@@ -31,7 +31,7 @@ struct ParkGiftCard: View {
                     .font(SK.font(14, .bold)).foregroundStyle(SK.ink.opacity(0.7))
             }
             .padding(.horizontal, 26).padding(.vertical, 18)
-            .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 12, y: 5))
+            .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.3), radius: 6, y: 3))
             .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
             .scaleEffect(calm ? 1 : (shown ? 1 : 0.4)).opacity(shown ? 1 : 0)
             .onTapGesture { close() }

@@ -23,8 +23,9 @@ nonisolated enum GfxFlags {
     static var roomCache: Bool { flag("RoomCache", defaultOn: true) }
     /// MetalFX defaults OFF everywhere: spatial upscaling is a visible (softer) trade, not an identical one; the user opts in.
     static var metalFX: Bool { flag("MetalFX", defaultOn: false) }
-    /// -NoMaterials 1: the HUD's Liquid Glass / material effects are swapped for opaque tints (A/B for GPU contention from the compositor, default off).
-    static var noMaterials: Bool { flag("NoMaterials", defaultOn: false) }
+    /// The HUD's Liquid Glass is swapped for opaque tints: Liquid Glass over the live Metal view made the GPU run 12x slower in the compositor-contention
+    /// surges measured on the phone (cal kernels 0.6 -> 7 ms), and the opaque HUD removed them. Default ON; `-NoMaterials 0` brings the glass back for comparison.
+    static var noMaterials: Bool { flag("NoMaterials", defaultOn: true) }
     static var idleRest: Bool { flag("IdleRest", defaultOn: true) }
     /// Render scale (in native-pixel multiples) MetalFX renders at when the adaptive scaler is not driving it. -MetalFXScale 1.5.
     static var metalFXScale: Double { let v = UserDefaults.standard.double(forKey: "MetalFXScale"); return v >= 1 ? v : 1.5 }

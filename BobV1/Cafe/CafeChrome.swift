@@ -54,7 +54,7 @@ struct CafeChrome: View {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Go home") }
                                 .font(SK.font(19, .black)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
-                                .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
+                                .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         }
                         .buttonStyle(.plain).accessibilityLabel("Go home").accessibilityIdentifier("cafe-go-home")
                     }
@@ -185,7 +185,7 @@ struct CafeMenuCard: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 14, y: 4))
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
         .onAppear { who = ids.first ?? 0 }
         .accessibilityIdentifier("cafe-menu")

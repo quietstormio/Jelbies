@@ -58,7 +58,7 @@ struct ParkChrome: View {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Go home") }
                                 .font(SK.font(19, .black)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
-                                .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 7, y: 3))
+                                .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("park-home")
                     }
@@ -170,7 +170,7 @@ struct ParkChrome: View {
                 }
             }
             .padding(16).frame(maxWidth: 440)
-            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 10, y: 4))
+            .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("park-picker")
         }
@@ -235,7 +235,7 @@ struct VisitorCard: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
         .accessibilityElement(children: .contain).accessibilityIdentifier("park-card")
     }
 }
