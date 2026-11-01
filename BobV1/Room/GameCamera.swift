@@ -336,7 +336,7 @@ enum GameCamera {
     // MARK: Visible floor
 
     /// Walkable depth range (z) and the circular safety arena used by the sim.
-    static let walkMinZ: Float = -2.6
+    nonisolated(unsafe) static var walkMinZ: Float = -2.6          // (the Jelly Spa street lowers it to the shop door; `endGroom` restores it)
     nonisolated(unsafe) static var walkMaxZ: Float = 3.0
     nonisolated(unsafe) static var arenaCenter = SIMD2<Float>(0, 0.5), arenaRadius: Float = 3.3
     /// Bob's half width (rest) ~0.8.

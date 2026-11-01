@@ -43,12 +43,12 @@ extension GameCamera {
     static func configureGroom() {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)
         roomWideScale = 1; roomWideLift = 0
-        walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
+        walkMinZ = GroomScenery.doorStep.y - 0.2; walkMaxZ = GroomScenery.curbZ - 0.8; arenaCenter = SIMD2(0, 0); arenaRadius = 80
         roamRect = (SIMD2(-4.0, -4.9), SIMD2(4.0, GroomScenery.curbZ - 0.8)); roamRectWide = roamRect
         groomOn = true
     }
     static func endGroom(count: Int) {
-        groomOn = false
+        groomOn = false; walkMinZ = -2.6
         configureRoom(count: count)
     }
 }

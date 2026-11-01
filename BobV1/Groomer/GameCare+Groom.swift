@@ -120,9 +120,15 @@ extension GameCare {
                 AudioHub.shared.play(.cheerSmall, volume: k == 0 ? 0.7 : 0.4)
             }
         }
-        for a in mine {
+        for (k, a) in mine.enumerated() {
             guard let b = a.brain, let outAt = book.outAt[a.id] else { continue }
-            let t = groom.cheerT - outAt - GroomTuning.walkOut
+            // the cheer starts when he has ARRIVED at his spot (a cheer's abort must not stop the walk-out half way and leave him in the next one's way)
+            if book.arrivedAt[a.id] == nil {
+                let spot = b.fixed(GroomScenery.lineUp(index: k, of: mine.count))
+                if simd_length(GameCare.floorPos(b, a.sim) - spot) < 0.4 || groom.cheerT - outAt > GroomTuning.walkOut + 2.6 { book.arrivedAt[a.id] = groom.cheerT }
+            }
+            guard let arrived = book.arrivedAt[a.id] else { continue }
+            let t = groom.cheerT - arrived
             let idle = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
             if t >= 0, !book.emoted.contains(a.id) {
                 book.emoted.insert(a.id)
@@ -158,7 +164,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]
+        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -181,6 +187,9 @@ extension GameCare {
         }
         RoomLayout.apply(RoomCatalog.groom)
         GameCamera.configureGroom()
+        for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
+        // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
+        for (i, a) in book.actors.enumerated() { if let b = a.brain { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
         syncDecor()
         if select.phase != .none { select.cancel() }
         return true
@@ -188,7 +197,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []; book.outAt = [:]
+        book.out = []; book.outAt = [:]; book.arrivedAt = [:]
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
         if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -228,7 +237,7 @@ extension GameCare {
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits
