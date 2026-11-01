@@ -1,9 +1,9 @@
 //
 //  IntroView.swift
-//  The launch intro (Cloud Jelly): one finished full-screen paper-coloured clip (the full-screen logo animation with its own music) plays once it is ready,
-//  holds its last frame, "Tap to start" fades in, and a tap (or 2 s) fades through white to the menu. A tap during the clip jumps to the last frame.
+//  The launch intro: the full-screen Jelbies logo animation (paper background, its own sting) plays to its end, then fades to white (0.5 s) and the menu fades in from white (0.5 s).
+//  A tap during the clip jumps to the fade. Reduce Motion shows the last frame, then the same fades.
 //  Shown before the main menu on every cold launch (ContentView reads the gate once per process, so resuming from the background never replays it); -Intro 1 is accepted and changes nothing.
-//  Swapping the clip: replace the file in Start/Resources (or change `IntroClip.resource(landscape:)`).
+//  Swapping the clip: replace the files in Start/Resources (or change `IntroClip.resource(landscape:)`).
 //
 
 import SwiftUI
@@ -11,26 +11,12 @@ import AVFoundation
 import QuartzCore
 
 enum IntroClip {
-    /// The full-screen logo animation (stars, the word puffing up, the little jelly on the "i", its own music), 5 s at 60 fps, Blue theme.
-    /// Two renders of the same animation: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
-    static func resource(landscape: Bool) -> String {
-        let o = landscape ? "landscape" : "portrait"
-        return variant == .pop ? "jelbies_logo_intro_pop_" + o : "jelbies_logo_intro_" + o
-    }
-    enum Variant { case hold, pop }
-    /// A (.hold, the default): plays once and holds the finished logo, "Tap to start". B (.pop): the stomp and the letters pop, then a 0.4 s beat on the empty paper and straight to the game.
-    /// Flip the default here; `-IntroVariant B` (or A) on the launch line overrides it.
-    static let defaultVariant: Variant = .hold
-    static let variant: Variant = {
-        let a = ProcessInfo.processInfo.arguments
-        if let i = a.firstIndex(of: "-IntroVariant"), i + 1 < a.count { return a[i + 1].uppercased() == "B" ? .pop : .hold }
-        return defaultVariant
-    }()
-    /// Variant B: seconds to rest on the popped frame before the fade.
-    static let popBeat: Double = 0.4
+    /// The full-screen logo animation (stars, the word puffing up, the jelly on the "i", the stomp, the letters pop, the jelly falls away; the old intro sting),
+    /// about 7.9 s at 60 fps, Blue theme, ending on empty paper. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
+    static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
     static let fileExtension = "mp4"
-    /// Seconds after the clip ends before it moves on by itself.
-    static let autoAdvance: Double = 2.0
+    /// Seconds to fade to white after the clip (and the menu then fades in from white over the same time, see ContentView).
+    static let fadeToWhite: Double = 0.5
 }
 
 enum IntroGate {
@@ -48,8 +34,7 @@ struct IntroView: View {
     @State private var player: AVPlayer?
     @State private var ready = false          // the item can play
     @State private var shown = false          // the clip is visible: playback has really advanced (or the last frame is up)
-    @State private var settled = false
-    @State private var settledAny = false
+        @State private var settledAny = false
     @State private var leaving = false
     @State private var finished = false
     @State private var volume: Float = 0
@@ -77,25 +62,21 @@ struct IntroView: View {
                         .frame(maxHeight: .infinity, alignment: .top).padding(.top, max(48, geo.size.height * 0.08))
                         .accessibilityHidden(true)
                 }
-                Text("Tap to start").font(CloudTheme.font(18, .semibold)).foregroundStyle(CloudTheme.caption)
-                    .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, max(28, geo.size.height * 0.08))
-                    .opacity(settled ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4), value: settled)
+                Color.white.opacity(leaving ? 1 : 0)          // the clip ends (or is skipped): fade to white, then the menu fades in from white
+                    .animation(.easeInOut(duration: IntroClip.fadeToWhite), value: leaving)
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .opacity(leaving ? 0 : 1)
-            .animation(.easeInOut(duration: 0.4), value: leaving)
         }
         .background(IntroGate.background)
         .ignoresSafeArea()
         .contentShape(Rectangle())
         .onTapGesture { tapped() }
-        .onAppear { start(UIScreen.main.bounds.width > UIScreen.main.bounds.height); A11yAnnounce.say("Jelbies. Double tap to start.", priority: .low) }
+        .onAppear { start(UIScreen.main.bounds.width > UIScreen.main.bounds.height); A11yAnnounce.say("Jelbies. Double tap to skip.", priority: .low) }
         .onDisappear { teardown() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Starts the game")
+        .accessibilityHint("Skips the intro")
         .accessibilityIdentifier("intro")
     }
 
@@ -162,15 +143,12 @@ struct IntroView: View {
         LaunchTiming.mark("intro: clip shown")
     }
 
+    /// A tap during the clip skips to the fade (audio ramps out).
     private func tapped() {
-        if settledAny { finish(); return }
-        guard let p = player, ready else { settle(); return }
-        fadeOutAudio(p)
-        p.pause()
-        let end = p.currentItem?.duration ?? .zero
-        p.seek(to: end, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-            Task { @MainActor in settle() }
-        }
+        guard !settledAny else { return }
+        settledAny = true
+        if let p = player, ready { fadeOutAudio(p) }
+        finish()
     }
 
     /// Ramps the clip's audio to silence over 0.25 s.
@@ -182,18 +160,13 @@ struct IntroView: View {
         }
     }
 
-    /// The clip is on its last frame: "Tap to start" fades in and the auto-advance starts.
+    /// The clip is on its last frame (empty paper), or there is no clip: straight to the fade.
     private func settle() {
         guard !settledAny else { return }
         player?.pause()
-        shown = true          // the last frame (or nothing, if there is no clip) fades in with "Tap to start"
-        let pop = IntroClip.variant == .pop && ready
-        settled = !pop          // variant B: no "Tap to start", just the beat on the empty paper
+        shown = true
         settledAny = true
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64((pop ? IntroClip.popBeat : IntroClip.autoAdvance) * 1_000_000_000))
-            finish()
-        }
+        finish()
     }
 
     private func finish() {
@@ -202,7 +175,7 @@ struct IntroView: View {
         IntroGate.markSeen()
         leaving = true                                    // fade through white, then the menu
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(IntroClip.fadeToWhite * 1_000_000_000))
             teardown()
             done()
         }
