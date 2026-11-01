@@ -482,7 +482,10 @@ final class AudioHub {
 
     /// Plays a random variant of `sfx` (never the same twice in a row). `x`: the Jelly's floor x for a gentle pan.
     /// `rate`: playback speed (1 = as recorded; a squeak is a boop at 1.7, a drum thump a boop at 0.55).
+    /// Test seam: every request (before the mute / rate guards), e.g. "jump", "chirp:happy". nil in the app.
+    nonisolated(unsafe) static var requestTap: ((String) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
+        Self.requestTap?(sfx.rawValue)
         if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
@@ -589,6 +592,7 @@ final class AudioHub {
 
     /// A quiet foot plant (rate limited per Jelly; louder on a run).
     func footstep(jelly: Int, x: Float, running: Bool) {
+        Self.requestTap?("step")
         guard !muted, started else { return }
         let i = min(max(jelly, 0), 2)
         let now = CACurrentMediaTime()
@@ -602,6 +606,7 @@ final class AudioHub {
 
     /// The Jelly's own voice (by slot -> character): happy / sad / babble.
     func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
+        Self.requestTap?("chirp:\(v)")
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
