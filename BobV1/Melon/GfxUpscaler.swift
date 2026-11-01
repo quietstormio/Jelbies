@@ -26,10 +26,11 @@ nonisolated final class GfxUpscaler {
         d.colorTextureFormat = format; d.outputTextureFormat = format
         d.colorProcessingMode = .perceptual            // post writes display-encoded (sRGB OETF) values
         guard let s = d.makeSpatialScaler(device: device) else { return nil }
+        // the scaler states which usage bits its textures need (colorTextureUsage / outputTextureUsage); we add what the passes around it need
         let a = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: inW, height: inH, mipmapped: false)
-        a.usage = [.renderTarget, .shaderRead]; a.storageMode = .private
+        a.usage = s.colorTextureUsage.union([.renderTarget, .shaderRead]); a.storageMode = .private
         let b = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format, width: outW, height: outH, mipmapped: false)
-        b.usage = [.shaderWrite, .shaderRead, .renderTarget]; b.storageMode = .private
+        b.usage = s.outputTextureUsage.union([.shaderWrite, .shaderRead, .renderTarget]); b.storageMode = .private
         guard let i = device.makeTexture(descriptor: a), let o = device.makeTexture(descriptor: b) else { return nil }
         i.label = "metalfx in"; o.label = "metalfx out"
         return GfxUpscaler(inW, inH, outW, outH, s, i, o)

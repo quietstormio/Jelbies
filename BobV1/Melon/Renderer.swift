@@ -667,12 +667,21 @@ final class MelonRenderer {
         let box = frameBox, pt = passTimes
         frameBox = nil
         let encL = encLabels, encRing = ring; encLabels = []
+        // per-frame context for the PerfMeter window line (cache action, camera moving, room pixels shaded, footprint, focus flag)
+        let moving = !(prevViewProj.map { $0 == uniforms.viewProj } ?? true)
+        prevViewProj = uniforms.viewProj
+        let dShaded = roomPixelsShaded - ctxShaded, dBase = roomPixelsBaseline - ctxBase
+        ctxShaded = roomPixelsShaded; ctxBase = roomPixelsBaseline
+        let frameCtx = FrameContextStats.Frame(action: Self.actionLabel(lastCacheAction), moving: moving, shadedShare: dBase > 0 ? dShaded / dBase : 1,
+                                               footprint: Double(lastFootprintShare), focus: perfFocus, note: perfNote)
+        let ctxS = ctxStats
         let slowCtx: String? = perfPasses ? "\(lastCacheAction) fp\(Int(lastFootprintShare * 100))% \(width)x\(height) bodies\(slots.filter { !$0.hidden }.count) bath\(bathLook.visible ? 1 : 0)" : nil
         cmd.addCompletedHandler { [weak self] c in
             self?.resolveEncoderSamples(encL, ring: encRing)
             let t = c.gpuEndTime - c.gpuStartTime
             PerfMeter.gpuDone(ms: t * 1000)
             if let box { pt.add("post", t); gt.add(box.add(t)) } else { gt.add(t) }
+            ctxS.add(frameCtx, gpu: t)
             if let slowCtx, t > 0.024 { pt.addSlow(String(format: "%.0fms ", t * 1000) + slowCtx) }
             sem.signal()
         }
@@ -690,6 +699,20 @@ final class MelonRenderer {
     private var frameBox: FrameTimeBox?
     /// "label=ms ..." for the passes since the last call (empty unless -PerfPasses 1).
     func takePassStats() -> String { passTimes.takeDescription() }
+    // MARK: PerfMeter context (room-cache hit %, room px shaded %, camera moving, focus)
+
+    private let ctxStats = FrameContextStats()
+    private var prevViewProj: simd_float4x4?
+    private var ctxShaded = 0.0, ctxBase = 0.0
+    /// The stage sets these (cheap, any time): the focus close-up is up / a free-text note (e.g. which overlay is open) echoed in the window line.
+    var perfFocus = false
+    var perfNote = ""
+    /// One line since the last call: frames by cache action with their mean GPU ms, camera moving vs still (mean GPU ms), mean room pixels shaded
+    /// and footprint, focus frames. Empty when no frame completed. PerfMeter appends it to each window line.
+    func takePerfContext() -> String { ctxStats.take() }
+    private static func actionLabel(_ a: RoomCacheAction) -> String {
+        switch a { case .use: return "use"; case .build: return "build"; case .bypass(let m): return "bypass-" + m.rawValue }
+    }
     /// Test aid (ablation timing): passes named here are not encoded ("shadow", "height", "post", "blended"). Never set in the app.
     var debugSkip: Set<String> = []
 
@@ -703,7 +726,7 @@ final class MelonRenderer {
     private let tickClock = GPUTickClock()
     private func instrument(_ rp: MTLRenderPassDescriptor, _ label: String) {
         guard perfEncoders else { return }
-        if counterBufs[ring] == nil, let set = device.counterSets?.first(where: { $0.name == MTLCommonCounterSet.timestamp.rawValue }) {
+        if counterBufs[ring] == nil, device.supportsCounterSampling(.atStageBoundary), let set = device.counterSets?.first(where: { $0.name == MTLCommonCounterSet.timestamp.rawValue }) {
             let d = MTLCounterSampleBufferDescriptor()
             d.counterSet = set; d.storageMode = .shared; d.sampleCount = 64; d.label = "encoder timestamps"
             counterBufs[ring] = try? device.makeCounterSampleBuffer(descriptor: d)
@@ -907,6 +930,9 @@ final class MelonRenderer {
     /// Transparent cut-out (the species picker): the room is not drawn, the colour target clears to a sentinel alpha that `postFS` turns into coverage.
     var cutout = false
     private var upscaler: GfxUpscaler?
+    /// One MTLFXSpatialScaler (+ its in/out textures) per ladder rung, kept: creation is expensive, so a RenderScaler step between rungs it has
+    /// already visited only swaps which one is encoded. Small cap: a rung is ~(in + out) bgra8 textures.
+    private var upscalerCache: [String: GfxUpscaler] = [:]
     private(set) var upscaledFrames = 0
     /// "off" / "on 804x1748->1206x2622" / "unavailable (simulator)" for the env log.
     var metalFXState: String {
@@ -1282,14 +1308,26 @@ final class MelonRenderer {
         return true
     }
 
+    /// MetalFX notes (audited against the current Apple docs): classic `MTLFXSpatialScaler` in a classic command buffer on purpose; the Metal 4
+    /// variant (`MTL4FXSpatialScaler`, iOS 26+) is optional and not needed yet. The temporal scaler and frame interpolation (iOS 26+) need motion
+    /// vectors / depth history that this renderer does not produce (no TAA), so they are not used. The spatial scaler runs AFTER the tone map
+    /// (`.perceptual`, display-encoded [0,1] input, single-sample), and the SwiftUI HUD is composited after it. Render + target keep one aspect ratio
+    /// (the RenderScaler scales both axes together); no mipmapped textures are sampled at render resolution, so no mip bias applies.
     /// Post (tone map) straight into `target`, or - with MetalFX on and a bigger target - into a render-size texture that is upscaled and presented.
     private func encodePostOrUpscale(_ cmd: MTLCommandBuffer, target: MTLTexture, hdrTex: MTLTexture) {
         guard metalFXEnabled, !cutout, GfxUpscaler.compiledIn, target.width > width || target.height > height else {
             encodePost(cmd, target: target, hdrTex: hdrTex); return
         }
         if upscaler == nil || upscaler!.inW != width || upscaler!.inH != height || upscaler!.outW != target.width || upscaler!.outH != target.height {
-            upscaler = GfxUpscaler.make(device: device, format: target.pixelFormat, inW: width, inH: height, outW: target.width, outH: target.height)
-            targetRebuilds += 1
+            let key = "\(width)x\(height)>\(target.width)x\(target.height)@\(target.pixelFormat.rawValue)"
+            if let hit = upscalerCache[key] {
+                upscaler = hit
+            } else {
+                if upscalerCache.count >= 6 { upscalerCache.removeAll() }
+                upscaler = GfxUpscaler.make(device: device, format: target.pixelFormat, inW: width, inH: height, outW: target.width, outH: target.height)
+                upscaler.map { upscalerCache[key] = $0 }
+                targetRebuilds += 1
+            }
         }
         guard let up = upscaler else { encodePost(cmd, target: target, hdrTex: hdrTex); return }
         encodePost(cmd, target: up.input, hdrTex: hdrTex)
@@ -1312,7 +1350,7 @@ final class MelonRenderer {
         do {
             let rp = MTLRenderPassDescriptor()
             let ca = rp.colorAttachments[0]!
-            ca.texture = target; ca.loadAction = .clear; ca.clearColor = cutout ? MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0) : MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1)
+            ca.texture = target; ca.loadAction = .dontCare      // the full-screen triangle writes every pixel (cut-out included: it returns 0 where nothing was drawn)
             ca.storeAction = .store
             instrument(rp, "post")
             guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
@@ -1323,6 +1361,36 @@ final class MelonRenderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             e.endEncoding()
         }
+    }
+}
+
+/// Per-window frame context for the PerfMeter line: how GPU time splits by room-cache action, camera moving / still and focus.
+nonisolated final class FrameContextStats: @unchecked Sendable {
+    struct Frame { var action: String; var moving: Bool; var shadedShare: Double; var footprint: Double; var focus: Bool; var note: String }
+    private let lock = NSLock()
+    private var byAction: [String: (n: Int, gpu: Double)] = [:]
+    private var moving = (n: 0, gpu: 0.0), still = (n: 0, gpu: 0.0), focus = (n: 0, gpu: 0.0)
+    private var shaded = 0.0, foot = 0.0, frames = 0
+    private var notes: [String: Int] = [:]
+    func add(_ f: Frame, gpu t: Double) {
+        lock.lock(); defer { lock.unlock() }
+        let g = t * 1000
+        let a = byAction[f.action] ?? (0, 0); byAction[f.action] = (a.n + 1, a.gpu + g)
+        if f.moving { moving = (moving.n + 1, moving.gpu + g) } else { still = (still.n + 1, still.gpu + g) }
+        if f.focus { focus = (focus.n + 1, focus.gpu + g) }
+        shaded += f.shadedShare; foot += f.footprint; frames += 1
+        if !f.note.isEmpty { notes[f.note, default: 0] += 1 }
+    }
+    func take() -> String {
+        lock.lock(); defer { lock.unlock() }
+        guard frames > 0 else { return "" }
+        let n = Double(frames)
+        func m(_ x: (n: Int, gpu: Double)) -> String { x.n > 0 ? String(format: "%d%% %.1fms", Int((Double(x.n) / n * 100).rounded()), x.gpu / Double(x.n)) : "0%" }
+        let acts = byAction.keys.sorted().map { "\($0) " + m(byAction[$0]!) }.joined(separator: ", ")
+        var s = String(format: "ctx: cache[%@] camMoving %@ still %@ roomPxShaded %.0f%% footprint %.0f%% focus %@", acts, m(moving), m(still), shaded / n * 100, foot / n * 100, m(focus))
+        if !notes.isEmpty { s += " notes[" + notes.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + "]" }
+        byAction = [:]; moving = (0, 0); still = (0, 0); focus = (0, 0); shaded = 0; foot = 0; frames = 0; notes = [:]
+        return s
     }
 }
 

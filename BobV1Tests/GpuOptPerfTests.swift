@@ -24,7 +24,7 @@ final class GpuOptPerfTests: XCTestCase {
         let actors: [JellyActor]
         let ren: MelonRenderer
         var target: MTLTexture
-        let cam: CameraState
+        var cam: CameraState
         var time: Float = 3.7
 
         init?(n: Int, W: Int, H: Int, shadow: Int? = nil) {
