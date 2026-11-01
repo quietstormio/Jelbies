@@ -125,7 +125,6 @@ nonisolated enum StoreCatalog {
         // trick pages
         StoreItem(id: "page-spin", name: "Spin page", kind: .trickPage, price: 45, perk: nil, description: "Teach a spin on the spot with your own word.", symbol: "arrow.triangle.2.circlepath", trick: .spin),
         StoreItem(id: "page-hop", name: "Hop page", kind: .trickPage, price: 45, perk: nil, description: "Teach happy hops with your own word.", symbol: "arrow.up.circle.fill", trick: .hop),
-        StoreItem(id: "page-roll", name: "Roll page", kind: .trickPage, price: 55, perk: nil, description: "Teach a sideways roll with your own word.", symbol: "arrow.left.arrow.right.circle.fill", trick: .roll),
         // decor (placed in the room; Jellies play with it; a big piece takes 2 of the 10 spots)
         StoreItem(id: "decor-cushion", name: "Floor cushion", kind: .decor, price: 25, perk: nil, description: DecorKind.cushion.use, symbol: "square.fill", roomUnits: 1),
         StoreItem(id: "decor-ball", name: "Bouncy ball", kind: .decor, price: 30, perk: nil, description: DecorKind.ball.use, symbol: "circle.fill", roomUnits: 1),

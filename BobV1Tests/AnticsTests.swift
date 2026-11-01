@@ -18,7 +18,7 @@ final class AnticsTests: XCTestCase {
     // MARK: solo antics
 
     func testEverySoloAnticRunsToItsEndWithFeetAttachedAndArmsStubby() {
-        let kinds: [IdleKind] = [.tail, .flop, .window, .peek, .stretch, .bounce, .roll, .sway]
+        let kinds: [IdleKind] = [.tail, .flop, .window, .peek, .stretch, .bounce, .sway]
         for kind in kinds {
             let r = MotionRig(game: true)
             Self.keep.append(r)

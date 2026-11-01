@@ -59,7 +59,6 @@ final class AITierBTests: XCTestCase {
             ("spin around", .selected, .trick(.spin), nil, nil),
             ("Pippy twirl", .jellies([1]), .trick(.spin), nil, nil),
             ("hop hop Moss", .jellies([2]), .trick(.hop), nil, nil),
-            ("roll over", .selected, .trick(.roll), nil, nil),
             ("go play with the ball", .selected, .playWith, "ball", nil),
             ("go to the ball", .selected, .playWith, "ball", nil),              // a toy is played with (the same kick as "go to")
             ("put on the pirate hat", .selected, .wear, "pirate_hat", nil),

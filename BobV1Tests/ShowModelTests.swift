@@ -51,7 +51,7 @@ final class ShowModelTests: XCTestCase {
         XCTAssertTrue(ShowScoring.burstReady(cheer: 0.75, glow: 0.5)); XCTAssertFalse(ShowScoring.burstReady(cheer: 0.74, glow: 1)); XCTAssertFalse(ShowScoring.burstReady(cheer: 1, glow: 0.49))
         // the flip, a starter, counts as Sparkly too; spin is Sparkly; hop Sporty; roll Cute
         XCTAssertTrue(ShowTrickInfo.tags(.flip).contains(.sparkly)); XCTAssertEqual(ShowTrickInfo.tags(.spin), [.sparkly])
-        XCTAssertEqual(ShowTrickInfo.tags(.hop), [.sporty]); XCTAssertEqual(ShowTrickInfo.tags(.roll), [.cute])
+        XCTAssertEqual(ShowTrickInfo.tags(.hop), [.sporty])
         XCTAssertEqual(ConditionKey.sparkle.title, "Sparkly"); XCTAssertEqual(ConditionKey.sparkle.tag, .sparkly); XCTAssertEqual(WearTag.sparkly.condition, .sparkle)
     }
 

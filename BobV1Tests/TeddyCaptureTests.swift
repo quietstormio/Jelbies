@@ -226,7 +226,6 @@ extension FeatureCaptureTests {
             ("sleep", 0.0, 6.0, { r in r.brain.idleForced = true; XCTAssertTrue(r.brain.idleStart(.sleep, r.sim)); r.brain.sleep.hold = 500 }),
             ("eat", 0.0, 3.0, { r in r.brain.script = .eat(t: 0, bowl: SIMD2(0, 2), dur: 3.0, drink: false); r.brain.activity = .eating }),
             ("spin", 0.0, 3.0, { r in r.brain.startSpin(sim: r.sim) }),
-            ("roll", 0.0, 2.4, { r in r.brain.startRollPlay(sim: r.sim) }),
             ("backflip", 0.0, 2.4, { r in r.brain.startFlip(sim: r.sim) }),
             ("tailspin", 0.0, 4.0, idle(.tail)),
             ("bounce", 0.0, 3.0, idle(.bounce)),

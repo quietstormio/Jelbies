@@ -15,9 +15,9 @@ import Observation
 nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
     case sit, jacks, run, flip, look, come
     /// Store trick pages: locked until the page is bought (StoreBook), then taught like the others.
-    case spin, hop, roll
+    case spin, hop
 
-    var isStarter: Bool { switch self { case .spin, .hop, .roll: return false; default: return true } }
+    var isStarter: Bool { switch self { case .spin, .hop: return false; default: return true } }
     static var starters: [VoiceTrick] { allCases.filter(\.isStarter) }
 
     /// Our UI name (the trick book), never the player's word.
@@ -25,7 +25,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         switch self {
         case .sit: return "Sit"; case .jacks: return "Jumping jacks"; case .run: return "Run"
         case .flip: return "Flip"; case .look: return "Look"; case .come: return "Come"
-        case .spin: return "Spin"; case .hop: return "Hop"; case .roll: return "Roll"
+        case .spin: return "Spin"; case .hop: return "Hop"
         }
     }
     /// A word to suggest, in the tip text only.
@@ -33,7 +33,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         switch self {
         case .sit: return "sit"; case .jacks: return "jump"; case .run: return "run"
         case .flip: return "flip"; case .look: return "look"; case .come: return "come"
-        case .spin: return "spin"; case .hop: return "hop"; case .roll: return "roll"
+        case .spin: return "spin"; case .hop: return "hop"
         }
     }
 }

@@ -50,7 +50,6 @@ enum IdleKind: String, CaseIterable, Sendable {
     case peek          // goes to the end of the sofa, ducks and peeks out
     case stretch       // the yawn's stretch without the yawn
     case bounce        // 3...5 happy hops on the spot
-    case roll          // the existing roll, a short way sideways
     case sway          // sits and sways to the music
     // decor (2026-10-19): things he does with the store's decor, built from the existing moves: BlobBrain+Decor.swift
     case decorSit      // walks onto a beanbag / cushion and settles into it (the sit, a little lower), then gets up
@@ -61,7 +60,6 @@ enum IdleKind: String, CaseIterable, Sendable {
     case decorSlide    // (batch 2) climbs the slide's steps, sits on the platform, rides down and exits with a squash
     // mid-walk flourishes + the jump for joy + two reaction moves (2026-10-20): BlobBrain+Flourish.swift
     case skipHop, hopscotch, legSpin, trot, stopLook, joy, giggle, startle
-    case rollTrip      // rolls a short way along the leg (1...2.5 u) and pops up with a squish; a mid-walk flourish and an idle moment
     case sigh          // a slow inhale, a long exhale and a slump, sleepy / worried face
     case hmph          // grumpy puff: squash widens, angry brows, a quick turn-away and a small stomp
     // characters (2026-10-20): Lavender's chicken-like flap-hop (BlobBrain+FlapHop.swift); the others' features only move with the body
@@ -108,11 +106,11 @@ enum IdleTable {
         var w = base
         let extra: [(IdleKind, Float)]
         switch m {
-        case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.roll, 1.2), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
-                              (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2), (.rollTrip, 0.8),
+        case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
+                              (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2),
                               (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
-                             (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.rollTrip, 0.5), (.sigh, 0.8),
+                             (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.sigh, 0.8),
                              (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
         case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
         }
@@ -251,7 +249,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .roll, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .rollTrip, .flapHop, .tailThump: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -342,7 +340,6 @@ extension BlobBrain {
         switch script {
         case .idle: mine = true
         case .spin: mine = kind == .tail || kind == .legSpin
-        case .hopPlay, .rollPlay: mine = kind == .roll || kind == .rollTrip
         case .walk: mine = (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .window && idleState.windowGo)
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
@@ -358,8 +355,6 @@ extension BlobBrain {
             else if Self.decorKinds.contains(kind) && idleState.decorGo { mine = true; decorArrived(sim, skinner); return }
             else if kind == .tail { mine = true; tailNext(skinner) ; return }
             else if kind == .legSpin { mine = true; mouthOpen = 0; flourishEnd(skinner); return }
-            else if kind == .roll && idleState.t > 0.15 { idleFinish(skinner); return }
-            else if kind == .rollTrip && idleState.t > 0.15 { mine = true; jellyKick = max(jellyKick, 2.0); AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.6); mouthOpen = 0; flourishEnd(skinner); return }          // (the pop-up squish)
         default: mine = false
         }
         if !mine { idleReset(skinner); return }
@@ -429,7 +424,6 @@ extension BlobBrain {
             idleState.counts[k, default: 0] += 1
             if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
-        if idleState.kind == .rollTrip { gait.rollTravel = 1.1 }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
         napping = false
         zoomW = 0
@@ -573,10 +567,6 @@ extension BlobBrain {
             idleState.reps = Int(rand() * 3)          // 0...2 more turns after the first
             startSpin(sim: sim)
             AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5)
-        case .roll:
-            idleBegin(.roll)
-            startRoll(sim)
-            AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
         case .bounce:
             idleBegin(.bounce)
             postEvent(.joyJump)          // a happy bounce
@@ -610,8 +600,6 @@ extension BlobBrain {
             return decorStart(kind, sim)
         case .skipHop, .hopscotch, .legSpin, .trot, .stopLook:
             return flourishStart(kind, resume: nil, sim, nil)
-        case .rollTrip:
-            return flourishStart(.rollTrip, resume: nil, sim, nil)
         case .shake, .lieDown, .chirp:
             return livelyStart(kind, sim, resume: nil)
         case .sigh, .hmph:

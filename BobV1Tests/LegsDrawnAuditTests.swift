@@ -281,7 +281,7 @@ final class LegsDrawnAuditTests: XCTestCase {
     }
 
     static func allScenarios() -> [Scenario] {
-        let names = ["hop", "antic: spin after his tail", "flip", "faceplant", "run", "zoomies", "walk (game)", "antic: roll", "flourish: roll along the leg",
+        let names = ["hop", "antic: spin after his tail", "flip", "faceplant", "run", "zoomies", "walk (game)", 
                      "sleep: roll onto the back and up again", "sit", "jumping jacks", "belly slide", "antic: flop", "Lavender: flap-hop", "flourish: skip-hop",
                      "flourish: mid-leg spin", "jump for joy", "decor2: climb the slide, sit, ride, exit", "decor: hop on the mat", "ears dance"]
         var list = names.compactMap { fromMove($0) }
