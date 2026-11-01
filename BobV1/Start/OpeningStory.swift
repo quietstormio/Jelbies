@@ -461,7 +461,7 @@ struct OpeningStoryView: View {
         st.leaving = true
         st.beatTask?.cancel(); st.stageTask?.cancel()
         st.token += 1
-        AudioHub.shared.stopOpening(fade: 0.8)
+        AudioHub.shared.stopOpening(fade: 1.6)          // >= 1.5 s: the room theme fades in over 3 s underneath (AudioHub.start)
         let r = replay
         cameraRig.release()          // before the picker (or the room) engages its own
         if r { AudioHub.shared.earsDancing(false); Self.restoreSnapshot(st.snapshot); st.snapshot = [:] }          // before the room reads its save again
@@ -474,7 +474,7 @@ struct OpeningStoryView: View {
     private func teardown() {
         st.beatTask?.cancel(); st.stageTask?.cancel()
         st.token += 1
-        AudioHub.shared.stopOpening(fade: 0.4)
+        AudioHub.shared.stopOpening(fade: 1.0)
         if replay { AudioHub.shared.earsDancing(false); Self.restoreSnapshot(st.snapshot); st.snapshot = [:] }
     }
 

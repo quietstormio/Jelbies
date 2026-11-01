@@ -17,13 +17,16 @@ import Foundation
 nonisolated enum MusicTrack: String, CaseIterable, Sendable {
     case day1 = "day_1", day2 = "day_2", day3 = "day_3", day4 = "day_4", day5 = "day_5"
     case day6 = "day_6", day7 = "day_7", day8 = "day_8", day9 = "day_9"          // new 2026-10-23 (isNew)
+    case day10 = "day_10", day11 = "day_11", day12 = "day_12"                    // new 2026-11-01 (isNew)
     case evening1 = "evening_1", evening2 = "evening_2", evening3 = "evening_3"
+    case evening4 = "evening_4", evening5 = "evening_5", evening6 = "evening_6"  // new 2026-11-01
     case night1 = "night_1", night2 = "night_2", night3 = "night_3", night4 = "night_4", night5 = "night_5"
+    case night6 = "night_6", night7 = "night_7", night8 = "night_8"              // new 2026-11-01
     case lofiPlay = "lofi_play"
 
-    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5, .day6, .day7, .day8, .day9]
-    static let eveningPool: [MusicTrack] = [.evening1, .evening2, .evening3]
-    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3, .night4, .night5]
+    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5, .day6, .day7, .day8, .day9, .day10, .day11, .day12]
+    static let eveningPool: [MusicTrack] = [.evening1, .evening2, .evening3, .evening4, .evening5, .evening6]
+    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3, .night4, .night5, .night6, .night7, .night8]
 
     /// Display name (the sound panel's now-playing row).
     var title: String {
@@ -37,20 +40,30 @@ nonisolated enum MusicTrack: String, CaseIterable, Sendable {
         case .day7: return "Sunny Chorus"
         case .day8: return "Bubble Pop"
         case .day9: return "Daydream Pads"
+        case .day10: return "Sunbeam Keys"
+        case .day11: return "Harp Hammock"
+        case .day12: return "Skippy Strings"
         case .evening1: return "Golden Hour"
         case .evening2: return "Lamp Glow"
         case .evening3: return "Dusk Steps"
+        case .evening4: return "Lamp Lighters"
+        case .evening5: return "Violet Sky"
+        case .evening6: return "Supper Glow"
         case .night1: return "Moon Nap"
         case .night2: return "Rainy Glass"
         case .night3: return "Sleepy Lamp"
         case .night4: return "Rain Hush"
         case .night5: return "Night Drift"
+        case .night6: return "Drizzle Dreams"
+        case .night7: return "Moonlit Hush"
+        case .night8: return "Blanket Fort"
         case .lofiPlay: return "Zoomies"
         }
     }
     /// Added 2026-10-23 (the user can veto any: remove the case, its pool entry and the m4a).
     var isNew: Bool {
-        switch self { case .day6, .day7, .day8, .day9, .evening2, .evening3, .night4, .night5: return true; default: return false }
+        switch self { case .day6, .day7, .day8, .day9, .day10, .day11, .day12, .evening2, .evening3, .evening4, .evening5, .evening6,
+             .night4, .night5, .night6, .night7, .night8: return true; default: return false }
     }
 }
 
@@ -125,13 +138,16 @@ nonisolated struct MusicDirector {
 
     /// Volume of the main music for the situation (evening is quieter, the nap lo-fi is quiet, play at night lifts a little).
     static let layerDuck = 0.12
-    func mainGain(playing: Bool = false) -> Double {
+    /// The mode's own level (no play-layer duck): what the hub slews towards slowly, so a day -> evening -> night change is a ramp, never a step.
+    func modeGain(playing: Bool = false) -> Double {
         var g: Double
         switch mode { case .day: g = 1; case .evening: g = 0.7; case .night: g = 0.75; case .nap: g = 0.5 }
         if mode == .night, playing { g *= 1.18 }
-        if layerOn { g *= Self.layerDuck }          // the play layer takes over; the playlist waits underneath
         return g
     }
+    /// The play layer takes over (the playlist waits underneath at `layerDuck`).
+    var duckGain: Double { layerOn ? Self.layerDuck : 1 }
+    func mainGain(playing: Bool = false) -> Double { modeGain(playing: playing) * duckGain }
     var layerGain: Double { layerOn ? 1 : 0 }
 
     private mutating func nextTrack() -> MusicTrack {
@@ -180,6 +196,13 @@ nonisolated struct MusicDirector {
         tracksSincePause = 0
         startNext(&ev, fade: f)
         return ev
+    }
+
+    /// The hub reports the real playback position of the deck that plays `current` (a hitch in the frame clock must not let the file end before the
+    /// next track has started: the crossfade is timed from the player, not from the sum of dt).
+    mutating func syncElapsed(_ t: Double) {
+        guard current != nil, gapLeft == nil, t.isFinite, t >= 0 else { return }
+        elapsed = max(elapsed, t)
     }
 
     static let skipFade = 1.5          // crossfade on Skip
@@ -296,3 +319,23 @@ nonisolated struct MusicDirector {
         return ev
     }
 }
+
+
+/// Smooths the main music's level between the director's targets so no mode change (day -> evening -> night -> nap) and no play-layer duck is a step
+/// in the middle of a song: the mode level ramps at `modeRate` (full scale per second, 0.12 = a 0.3 change takes 2.5 s, inside the 3 s crossfade),
+/// the duck falls fast (the play layer fades in over 1 s) and is released slowly (the layer fades out over 3 s). Pure; the hub calls `update` per tick.
+nonisolated struct MainGainSlew: Equatable, Sendable {
+    static let modeRate = 0.12, duckFall = 0.9, duckRise = 0.35
+    private(set) var mode = 1.0, duck = 1.0
+    private var primed = false
+    var gain: Double { mode * duck }
+    mutating func update(mode m: Double, duck d: Double, dt: Double) {
+        guard primed else { mode = m; duck = d; primed = true; return }
+        mode += min(max(m - mode, -Self.modeRate * dt), Self.modeRate * dt)
+        let r = (d < duck ? Self.duckFall : Self.duckRise) * dt
+        duck += min(max(d - duck, -r), r)
+    }
+}
+
+/// Equal-power crossfade curve for a deck fader level 0...1 (a linear pair dips 3 dB in the middle of a crossfade): sin(level x pi/2).
+nonisolated func equalPower(_ level: Float) -> Float { sinf(min(max(level, 0), 1) * .pi / 2) }
