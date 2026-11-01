@@ -213,8 +213,9 @@ private enum DragMode { case none, grab, orbit, pet, pending, cheeks }
         var label: String { ["bob brain.tick", "bob jelly.tick", "care.tick total", "care focus", "care needs", "care widget", "care nightrest+skip", "care select", "other brain.tick", "other jelly.tick", "tick: bag+timers", "tick: reactTick", "tick: commanded starts", "tick: idle gates+bodyMove+sleep", "tick: socialTick", "pick: socialMaybeStart", "pick: idleMaybeStart", "pick: wander goal", "tick: pickAutonomous total", "tick: runScript", "tick: toyPoseTick", "tick: drivePose", "tick: driveLimbs+activity", "tick: expression"][rawValue] } }
     static var sum = [Double](repeating: 0, count: Part.allCases.count)
     static var mx = [Double](repeating: 0, count: Part.allCases.count)
+    static var wmx = [Double](repeating: 0, count: Part.allCases.count)          // longest call per PerfMeter window (brainTop)
     @inline(__always) static func lap(_ p: Part, _ t0: inout Double) {
-        let t = CACurrentMediaTime(), d = t - t0; sum[p.rawValue] += d; if d > mx[p.rawValue] { mx[p.rawValue] = d }; t0 = t
+        let t = CACurrentMediaTime(), d = t - t0; sum[p.rawValue] += d; if d > mx[p.rawValue] { mx[p.rawValue] = d }; if d > wmx[p.rawValue] { wmx[p.rawValue] = d }; t0 = t
     }
     static func take(steps: Int) -> String {
         let n = Double(max(steps, 1))
@@ -327,8 +328,9 @@ final class MelonController: NSObject, MTKViewDelegate {
     private enum Lap: Int, CaseIterable { case peers, makeRoom, watchdog, bob, audio, ears, others, careOthers, race, cafe, volley, park, groom, show, masks, decor, sleep, step, refit, skin, shoes, wear, mat, camera, encode
         var label: String { ["peers", "makeRoom", "watchdog", "bob brain", "audio", "ears", "other brains", "tickOthers", "race", "cafe", "volley", "park", "groom", "show", "masks+wear", "decor", "sleep check", "bodies step", "refit+held", "skin", "shoes", "wear", "mat writes", "camera+light", "encode"][rawValue] } }
     private var lap = [Double](repeating: 0, count: Lap.allCases.count)
+    private var lapWinMax = [Double](repeating: 0, count: Lap.allCases.count)          // per PerfMeter window (brainTop)
     private var lapMax = [Double](repeating: 0, count: Lap.allCases.count)          // the longest single call of each part in the window: a stall shows here, not in the mean
-    @inline(__always) private func lapEnd(_ l: Lap, _ t0: inout Double) { let t = CACurrentMediaTime(), d = t - t0; lap[l.rawValue] += d; if d > lapMax[l.rawValue] { lapMax[l.rawValue] = d }; t0 = t }
+    @inline(__always) private func lapEnd(_ l: Lap, _ t0: inout Double) { let t = CACurrentMediaTime(), d = t - t0; lap[l.rawValue] += d; if d > lapMax[l.rawValue] { lapMax[l.rawValue] = d }; if d > lapWinMax[l.rawValue] { lapWinMax[l.rawValue] = d }; t0 = t }
     private var dbgBrain: Double = 0, dbgStepOnly: Double = 0, dbgTouch: Double = 0, dbgHaptic: Double = 0
     // touch play (focus mode): the pet finger
     private var petPoint = CGPoint.zero
@@ -610,9 +612,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         lapEnd(.watchdog, &lt)
         bobTick(reduce: reduce)
         lapEnd(.bob, &lt)
+        let pa = PerfProbe.begin()
         audioSituation()
+        PerfProbe.end("audioSituation", pa)
         lapEnd(.audio, &lt)
-        if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }      // sound reactions (Audio/EarsListener.swift)
+        let pe = PerfProbe.begin()
+        if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }
+        PerfProbe.end("ears.tick", pe)      // sound reactions (Audio/EarsListener.swift)
         lapEnd(.ears, &lt)
         if actors.count > 1 {
             for a in actors.dropFirst() { otherTick(a, reduce: reduce) }
@@ -841,16 +847,29 @@ final class MelonController: NSObject, MTKViewDelegate {
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
         if Self.metalFXFlag { c.renderScale = fxScale }
-        c.ctx = renderer?.takePerfContext() ?? ""
+        c.ctx = [renderer?.takePerfContext() ?? "", brainTop()].filter { !$0.isEmpty }.joined(separator: " ")
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
         return c
     }
 
+    /// PerfMeter ctx: the three worst single calls inside the brain stage this window (hop parts, stage laps, PerfProbe sub-timers), then reset.
+    private func brainTop() -> String {
+        var all: [(String, Double)] = []
+        for p in HopDiag.Part.allCases { all.append((p.label, HopDiag.wmx[p.rawValue] * 1000)) }
+        for l in Lap.allCases where l.rawValue <= Lap.decor.rawValue { all.append((l.label, lapWinMax[l.rawValue] * 1000)) }
+        for (k, v) in PerfProbe.table { all.append((k, v.max)) }
+        for i in HopDiag.wmx.indices { HopDiag.wmx[i] = 0 }
+        for i in lapWinMax.indices { lapWinMax[i] = 0 }
+        PerfProbe.reset()
+        let top = all.sorted { $0.1 > $1.1 }.prefix(3).filter { $0.1 >= 0.2 }
+        return top.isEmpty ? "" : "brainTop[" + top.map { String(format: "%@ %.1f", $0.0, $0.1) }.joined(separator: ", ") + "]"
+    }
+
     func attach(to view: MelonStageView) {
         stageView = view
         if game { MelonStageView.gameStage = view }
-        if PerfMeter.on { PerfMeter.context = { [weak self, weak view] in self?.perfContext(view) ?? PerfContext() } }
+        if PerfMeter.on { PerfProbe.on = true; PerfMeter.context = { [weak self, weak view] in self?.perfContext(view) ?? PerfContext() } }
         view.controller = self
         a11y.controller = self; a11y.view = view
         guard let device else { fail("This device has no Metal GPU, so there is nothing to render with."); return }

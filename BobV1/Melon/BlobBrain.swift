@@ -738,8 +738,17 @@ final class BlobBrain {
         return bowl + SIMD2(0, -0.66)
     }
 
+    /// A goal search stops at this time and tries again a frame or two later (a stall of 5-20 ms in one fixed step showed as brain-stage p95 on the phone): the
+    /// 48 + 40 candidates, each a floor-rules `resolve` and a reachability check, no longer have to fit one step. Infinity outside a pick.
+    var pickDeadline: CFTimeInterval = .infinity
+    var pickTimedOut = false
+    static let pickBudgetSeconds: CFTimeInterval = 0.0015
+    @inline(__always) var pickOver: Bool { if CACurrentMediaTime() > pickDeadline { pickTimedOut = true; return true }; return false }
+
     func pickAutonomous(_ sim: SoftBody) {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickAutonomous", probe) }
+        pickDeadline = CACurrentMediaTime() + Self.pickBudgetSeconds; pickTimedOut = false
+        defer { pickDeadline = .infinity; pickTimedOut = false }
         planBudget = 12; defer { planBudget = 99 }          // (the per-step probe budget, not this count, now bounds the cost; 2 left Jelly 0 short of the front in testRoomCoveragePortrait)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
@@ -772,6 +781,7 @@ final class BlobBrain {
                 else if let g = pickRoamGoal(rf, from: here, zone: nil) { target = g; roamed = true }
             }
             for _ in 0..<(roamed ? 0 : 40) {
+                if pickOver { break }
                 var cand: SIMD2<Float>
                 if let r = wanderRectWide ?? wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }
                 else {
@@ -787,7 +797,7 @@ final class BlobBrain {
                 target = cand; fallback = nil; break
             }
             if simd_length(target - here) < 0.3, let f = fallback { target = f }
-            if simd_length(target - here) < 0.3 { restTimer = 0.6; return }
+            if simd_length(target - here) < 0.3 { restTimer = pickTimedOut ? 0.03 : 0.6; return }          // (out of time: look again in two frames, not after a rest)
             script = .walk(target: target, then: .none); activity = .walking
         case 1: script = .look(index: 0, t: 0, base: yaw)
         case 2: script = .stepInPlace(t: 0, dur: rand(1.8, 3.0)); activity = .steppingInPlace
@@ -823,6 +833,7 @@ final class BlobBrain {
     /// at least 1.2 u). Of up to six valid candidates the best wins: far from the other Jellies (and from where they are heading), from the cells he picked
     /// before, a long leg, and away from the rug centre the longer he has just spent there (`centreDwell`; 2026-10-21 "they stay in the centre too much").
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
+        let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
         let maxL = idleLegMax(maxWanderLeg)
         let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
@@ -831,6 +842,7 @@ final class BlobBrain {
         var best: (SIMD2<Float>, Float)?
         var valid = 0
         for _ in 0..<48 {
+            if pickOver { break }
             let raw = zone.map { rf.sampleZone($0, rand(), rand(), rand()) } ?? rf.sampleArea(rand(), rand(), rand())
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             let d = simd_length(cand - here)
