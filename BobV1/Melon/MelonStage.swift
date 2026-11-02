@@ -411,6 +411,14 @@ final class MelonController: NSObject, MTKViewDelegate {
             default: break
             }
         }
+        b.onEmoteHaptic = { [weak self] i, s in
+            guard let self else { return }
+            let now = CACurrentMediaTime()
+            let care = self.model.care
+            guard now - EmoteHaptic.last >= EmoteHaptic.minGap, !care.race.active, !care.volley.active, !care.bath.active else { return }          // (~2 per second at most; never over the games' own haptics)
+            EmoteHaptic.last = now
+            self.model.touch.haptics.transient(now: now, intensity: i, sharpness: s)
+        }
         b.peers = { [weak self] in
             guard let self else { return [] }
             return self.peerSnapshot.enumerated().filter { $0.offset != id }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) }

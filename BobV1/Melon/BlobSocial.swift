@@ -54,6 +54,8 @@ enum SocialKind: String, CaseIterable, Sendable {
     case swayHug, danceOff, whisperGiggle, shyWave
     /// Groups of 3...5 (BlobSocial+Group): one session, every free Jelly nearby
     case groupHug, groupCheer, conga, circleDance
+    /// Rare group treats (2026-11-02, BlobSocial+Emotes.swift): a curved follow-the-leader waddle line, and a round dance on a ring with real steps
+    case congaLine, ringDance
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -132,6 +134,11 @@ struct SocialBook {
     /// Group socials: cooldown, the seconds a crowd of free Jelbies has been together, the wait before one asks for a group move, the last group kind.
     var groupCool: Float = 12, groupIdle: Float = 0, groupLimit: Float = 25, groupBusy: Float = 0
     var lastGroup: SocialKind?
+    /// Rare group treats (congaLine / ringDance): this Jelbie's wait before the next one, the seconds spent with company, the wait before he asks, the seconds a busy housemate has been waited for.
+    var treatCool: Float = 100, treatIdle: Float = 0, treatLimit: Float = 60, treatBusy: Float = 0
+    var lastTreat: SocialKind?
+    /// A high five: seconds before this pair may do one again (per partner).
+    var fiveCool: [Int: Float] = [:]
 }
 
 struct CrewBox { weak var b: BlobBrain? }
@@ -156,8 +163,10 @@ final class SocialSession {
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo }
     var round = 0, roles = 0, fastMoves = 0
+    /// Group treats: the leader's planned path (waypoints), whether the crew are choreographed (they do not steer round each other), the time the line started moving.
+    var path: [SIMD2<Float>] = [], choreo = false, moveT: Float = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
     var goal = SIMD2<Float>.zero
@@ -185,6 +194,7 @@ final class SocialRoster {
         r.boxes = list.map { Box(b: $0) }
         for (i, b) in list.enumerated() {
             b.steerID = i
+            b.socialBook.treatCool = EmoteTuning.treatFirst + 25 * Float(i % 4); b.socialBook.treatLimit = EmoteTuning.treatWait.0 + 20 * Float(i % 4)          // (the first treat: not in the first minute and a half)
             b.socialBook.groupLimit = 12 + 8 * Float(i % 4); b.socialBook.groupCool = 8 + 5 * Float(i % 4)          // (the first group move: staggered)
             b.zoomUrge = IdleTuning.zoomUrgeFirst + 12 * Float(i)          // (the first zoomies urge: staggered, so they do not all go at once)
             b.socialOthers = { [weak r] in r.map { $0.brains.filter { $0 !== b } } ?? [] }
@@ -343,7 +353,7 @@ extension BlobBrain {
             return socialStartMore(kind, with: o, sim)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave:
             return socialStartFriends3(kind, with: o, sim)
-        case .groupHug, .groupCheer, .conga, .circleDance:
+        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance:
             return socialStartGroup(kind, with: [o], sim)          // (the others near by join; a pair is not enough)
         case .zoomies:
             guard d < 6 else { return false }
@@ -505,7 +515,8 @@ extension BlobBrain {
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         let blocked = held || !autonomy
         contactTick(dt)          // (the soft meeting: BlobBrain+Contact.swift)
-        if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt }
+        if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt; socialBook.treatCool -= dt }
+        if !socialBook.fiveCool.isEmpty { for k in socialBook.fiveCool.keys { socialBook.fiveCool[k]! -= dt } }
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
@@ -522,6 +533,7 @@ extension BlobBrain {
             if social == nil { socialWakeGreetTick(sim, dt) }
             if social == nil { socialWatch(sim, dt) }
             if social == nil { socialGroupWatch(sim, dt) }
+            if social == nil { socialTreatWatch(sim, dt) }
         }
         // ease the overlays (exactly neutral when nothing asks for them)
         let k = min(1, 16 * dt), b = socialBook
@@ -545,7 +557,7 @@ extension BlobBrain {
 
     private func socialRelease(_ skinner: Skinner?, hard: Bool) {
         let s = social
-        socialBook.hold = false; socialBook.faceYaw = nil; socialBook.passThrough = false; leapGaitOff()
+        socialBook.hold = false; socialBook.faceYaw = nil; socialBook.passThrough = false; leapGaitOff(); waveFootOff = false
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
         if hard { socialBook.pitch = 0; socialBook.roll = 0; socialBook.squash = 1 }
         if socialBook.squinting { socialBook.squinting = false; skinner?.setEyeOpenness(1) }
@@ -566,7 +578,9 @@ extension BlobBrain {
             if s.kind.isGroup {
                 for id in s.crewIDs where id != steerID { socialBook.pair[id] = socialBook.pair[pid] }
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1); socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
+                if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
+            if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble
@@ -663,7 +677,7 @@ extension BlobBrain {
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)
-        case .groupHug, .groupCheer, .conga, .circleDance: break          // (handled above)
+        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance: break          // (handled above)
         }
         if let e = s.end, isA { _ = e }
     }
