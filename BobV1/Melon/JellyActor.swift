@@ -37,6 +37,10 @@ final class JellyActor {
     init(id: Int, name: String, simMesh sm: SimMesh, renderMesh rm: RenderMesh, embedding emb: (tetOf: [UInt32], w: [Float]),
          appearance ap: BlobAppearance, firmness: Float, damping: Float, spawn: SIMD2<Float>) {
         self.id = id; self.name = name; self.spawn = spawn
+        if ap.breed == .berry, let pre = ActorPrebuild.take(firmness: firmness, damping: damping) {          // built during the launch intro (IntroWarmup)
+            sim = pre.sim; skinner = pre.skinner
+            return
+        }
         sim = SoftBody(mesh: sm, firmness: firmness, damping: damping)
         skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount,
                           eyes: buildEyeRig(render: rm, sim: sm, appearance: ap),

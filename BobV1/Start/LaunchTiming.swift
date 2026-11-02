@@ -11,6 +11,12 @@ nonisolated enum LaunchTiming {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var t0: CFTimeInterval = 0
     nonisolated(unsafe) private static var seen = Set<String>()
+    nonisolated(unsafe) private static var times: [String: CFTimeInterval] = [:]
+
+    /// Seconds-since-first-mark at which `what` was first marked (nil = not yet). Test / timing seam.
+    static func time(of what: String) -> CFTimeInterval? { lock.lock(); defer { lock.unlock() }; return times[what] }
+    /// Forgets all marks (tests only).
+    static func _reset() { lock.lock(); t0 = 0; seen = []; times = [:]; lock.unlock() }
 
     /// Logs `what` once, with the time since the first mark.
     static func mark(_ what: String) {
@@ -18,6 +24,7 @@ nonisolated enum LaunchTiming {
         lock.lock()
         if t0 == 0 { t0 = now }
         let first = seen.insert(what).inserted, t = now - t0
+        if first { times[what] = t }
         lock.unlock()
         if first { NSLog("%@", String(format: "[melon] launch: %@ at +%.3f s", what, t)) }
     }

@@ -49,7 +49,16 @@ struct MainMenuView: View {
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
         .animation(.easeInOut(duration: 0.5), value: theme.selection)
-        .onAppear { visible = true }
+        .onAppear {
+            visible = true
+            LaunchTiming.mark("menu shown")
+            #if targetEnvironment(simulator)
+            if hasSave, UserDefaults.standard.object(forKey: "AutoContinue") != nil {          // timing aid: taps Continue after N seconds
+                let after = UserDefaults.standard.double(forKey: "AutoContinue")
+                Task { @MainActor in try? await Task.sleep(nanoseconds: UInt64(after * 1e9)); flow.continueGame() }
+            }
+            #endif
+        }
         .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }

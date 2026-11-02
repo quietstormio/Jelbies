@@ -107,7 +107,7 @@ final class StartFlow {
     // MARK: moves
 
     /// Menu: Continue. The roster is the saved one.
-    func continueGame() { enterGame() }
+    func continueGame() { LaunchTiming.mark("continue tapped"); enterGame() }
 
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
     func returnToMenu() { if phase == .game { phase = .menu } }
