@@ -71,6 +71,8 @@ final class FeatureSet {
         /// Wings: the current flap / spread (deg) as drawn; `flapBase` / `spreadBase` = the chased flutter / flap-hop under the burst.
         var flap: Float = 0, spread: Float = 0, flapBase: Float = 0, spreadBase: Float = 0
         var folded = false
+        /// The species flourish's drive (BlobBrain.sig, BlobBrain+Emotes.swift): wing flap (deg), the daisy head's spin / cone (deg), Teddy's extra ear + pom follow-through (deg).
+        var sigFlap: Float = 0, sigSpin: Float = 0, sigCone: Float = 0, sigEars = SIMD2<Float>.zero
         /// Wings: a re-tint of the art's colours (the white candidate species); nil = the art as drawn.
         var wingTint: WingTint?
         /// Wings: the flap burst. `burstWait` = seconds until the next may start; while one runs `burstT` counts up to `burstN / burstHz`.
@@ -136,6 +138,7 @@ final class FeatureSet {
         s.fit = FeatureCompat.solve(feature, worn: worn, spec: spec)
         s.folded = s.fit.folded
         stepDrive(&s, dt: dt)
+        s.sigFlap = brain.sig.wingFlap; s.sigSpin = brain.sig.spin; s.sigCone = brain.sig.cone; s.sigEars = brain.sig.ears
         // Teddy's ears + pom are part of his body mesh: the wash (hideAll) and the other scene-wide hides never take them (one solid piece, always)
         let solidEars = feature == .ears && TeddyEarsVariant.active.inBody
         let hideAll = hideAll && !solidEars
@@ -172,7 +175,7 @@ final class FeatureSet {
         brain.teddyBody = feature == .ears && TeddyEarsVariant.active.inBody          // (BlobBrain.driveLimbs copies these onto the skinner every tick)
         brain.teddyEarScale = s.scale * (s.partScale["ear_r"] ?? 1)
         brain.teddyPomScale = s.scale * (s.partScale["pom"] ?? 1)
-        brain.teddySway = s.sway * (4 / FeatureTuning.earMax)
+        brain.teddySway = s.sway * (4 / FeatureTuning.earMax) + s.sigEars          // (+ the flourish's wiggle)
         slots[id] = s
     }
 
@@ -300,7 +303,7 @@ final class FeatureSet {
 
     /// No flap burst now: asleep (any sleep stage), at a meal (reserved / dining), in the wash, folded, mid pop, or while the flap-hop owns the wings.
     static func burstBlocked(_ s: Slot, _ b: BlobBrain) -> Bool {
-        if s.folded || s.hideAll || s.scale < 0.999 || b.flapHop.active { return true }
+        if s.folded || s.hideAll || s.scale < 0.999 || b.flapHop.active || b.sig.active { return true }
         if b.idleState.kind == .sleep || b.reserved { return true }
         switch b.script { case .dine, .eat: return true; default: return false }
     }
@@ -362,8 +365,8 @@ final class FeatureSet {
         if !s.primed { s.flapBase = flap; s.spreadBase = spread }
         // the burst rides on top of the chased flutter (too quick for the chase), clamped last so the worn items' clearance holds
         stepBurst(&s, brain: brain, dt: dt)
-        s.flap = min(max(s.flapBase + s.burstDeg, s.fit.flapMin), s.fit.flapMax)
-        s.spread = min(max(s.burstDeg != 0 ? max(0.4 * max(s.flap, 0), s.spreadBase) : s.spreadBase, 0), s.fit.spreadMax)
+        s.flap = min(max(s.flapBase + s.burstDeg + s.sigFlap, s.fit.flapMin), s.fit.flapMax)
+        s.spread = min(max(s.burstDeg != 0 || s.sigFlap != 0 ? max(0.4 * max(s.flap, 0), s.spreadBase) : s.spreadBase, 0), s.fit.spreadMax)
     }
 
     // MARK: frame
@@ -434,9 +437,19 @@ final class FeatureSet {
                 // the flower head: only its own lag behind the stem (it is carried by the stem's rotation at emission)
                 let lag = (s.headSway - s.sway) * 0.7
                 let q = simd_quatf(angle: lag.x * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: lag.y * .pi / 180, axis: SIMD3(0, 0, 1))
+                if s.sigSpin != 0 || s.sigCone != 0 {
+                    // the species flourish: the head spins about its own axis and tips round a small cone as it turns
+                    let n = simd_normalize(d.flowerNormal.v3)
+                    var u = simd_cross(n, SIMD3<Float>(1, 0, 0)); if simd_length(u) < 0.1 { u = simd_cross(n, SIMD3<Float>(0, 0, 1)) }
+                    u = simd_normalize(u)
+                    let v = simd_cross(n, u), ph = s.sigSpin * .pi / 180
+                    let tip = simd_quatf(angle: s.sigCone * .pi / 180, axis: cosf(ph) * u + sinf(ph) * v)
+                    return simd_float3x3(tip * simd_quatf(angle: ph, axis: n) * q)
+                }
                 return simd_float3x3(q)
             }
-            let sw = s.sway + idle
+            var sw = s.sway + idle
+            if s.sigCone != 0 { let ph = s.sigSpin * .pi / 180; sw += SIMD2(cosf(ph), sinf(ph)) * (s.sigCone * 0.45) }          // (the flourish: the whole stem circles with the spinning head)
             let droop = d.droopDeg * s.close
             let q = simd_quatf(angle: (sw.x + droop) * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: sw.y * .pi / 180, axis: SIMD3(0, 0, 1))
             return simd_float3x3(q)
@@ -444,7 +457,8 @@ final class FeatureSet {
             // the ears flop a little about their bases (nod about x, side about z, the two mirrored), the pom wobbles a bit more on its short stalk
             let k: Float = part.name == "pom" ? 1.7 : 1
             let sgn: Float = part.side == 1 ? -1 : 1
-            let q = simd_quatf(angle: s.sway.x * k * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: sgn * s.sway.y * k * .pi / 180, axis: SIMD3(0, 0, 1))
+            let sw = s.sway + s.sigEars          // (the species flourish wiggles the ears + pom on top of the follow-through)
+            let q = simd_quatf(angle: sw.x * k * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: sgn * sw.y * k * .pi / 180, axis: SIMD3(0, 0, 1))
             return simd_float3x3(q)
         case .wings:
             guard let side = spec.wings.sides[part.side == 1 ? "l" : "r"] else { return matrix_identity_float3x3 }

@@ -45,6 +45,15 @@ nonisolated enum SoundCaptions {
         case .placeItem: return "Thunk"
         case .beanbagSit: return "Plop"
         case .unwrap: return "Unwrap"
+        case .emoteHic: return "Hic!"
+        case .emoteAchoo: return "Achoo!"
+        case .emoteWoozy: return "Woozy wobble"
+        case .emoteBow: return "Little chime"
+        case .emotePat: return "Pat pat"
+        case .emoteTail: return "Tail swish"
+        case .emoteFlutter: return "Wing flutter"
+        case .emoteSpin: return "Twirl"
+        case .emoteWiggle: return "Wiggle boing"
         // quiet or constant: no caption
         case .wobble, .footstep, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
         }

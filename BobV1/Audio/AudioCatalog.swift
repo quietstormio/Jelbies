@@ -24,6 +24,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     /// Training cues (files whistle_N, tick_N, good_step_N, perfect_streak_N, stat_up_N, tired_N, cheer_small_N).
     /// Volleyball cues (volley_bonk_N, volley_spike_N, volley_land_N, volley_point_N).
     case volleyBonk = "volley_bonk", volleySpike = "volley_spike", volleyLand = "volley_land", volleyPoint = "volley_point"
+    /// Solo emote cues (files emote_hic_1 ... : one soft clip each, 2026-11-02; BlobBrain+Emotes.swift). Each plays at most once per 10 s.
+    case emoteHic = "emote_hic", emoteAchoo = "emote_achoo", emoteWoozy = "emote_woozy", emoteBow = "emote_bow", emotePat = "emote_pat"
+    case emoteTail = "emote_tail", emoteFlutter = "emote_flutter", emoteSpin = "emote_spin", emoteWiggle = "emote_wiggle"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
@@ -50,6 +53,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .tired: return 0.5
         case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
+        case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 0.5          // (soft: the user once complained of too many clown sounds)
         case .volleyBonk, .volleySpike, .volleyLand: return 0.8
         case .volleyPoint: return 0.6
         case .letgo: return 0.7
@@ -66,6 +70,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         switch self {
         case .footstep: return 0.2
         case .squish, .boop, .wobble: return 0.16
+        case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 10          // never twice within 10 s
         case .letgo: return 0.25
         case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45

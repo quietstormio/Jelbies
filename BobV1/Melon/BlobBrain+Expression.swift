@@ -28,6 +28,7 @@ enum FaceKind: String, CaseIterable, Sendable {
     case excited      // brows bounce twice, a wiggle
     case focused      // brows level and a touch down, eyes narrowed
     case hopeful      // brows up and in, wide eyes
+    case dazed        // woozy: the two eyes swell and shrink in turn, inner brow ends up, a tiny "o" (dizzyWobble)
     /// Kinds whose brows leave the rest pose.
     var usesBrows: Bool { self != .neutral && self != .joyArc }
 }
@@ -60,6 +61,9 @@ extension FaceKind {
             p.roll = t < 0.5 ? 0.09 * sinf(2 * .pi * 4 * t) : 0
         case .focused: p.raiseL = -0.35 * r; p.raiseR = -0.35 * r; p.tiltL = -0.12; p.tiltR = -0.12; p.eyeL = 0.78; p.eyeR = 0.78
         case .hopeful: p.raiseL = 0.8 * r; p.raiseR = 0.8 * r; p.tiltL = 0.22; p.tiltR = 0.22
+        case .dazed:
+            let s = sinf(2 * .pi * 0.9 * t)
+            p.eyeL = 0.62 + 0.28 * s; p.eyeR = 0.62 - 0.28 * s; p.raiseL = 0.3 * r; p.raiseR = 0.3 * r; p.tiltL = 0.24; p.tiltR = 0.24; p.mouth = 0.12
         }
         return p
     }
@@ -143,7 +147,7 @@ extension BlobBrain {
         }
         if let k = idleState.kind {
             switch k {
-            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail, .tailHug: return true
+            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail, .tailHug, .sneeze: return true
             default: break
             }
         }
@@ -297,6 +301,7 @@ extension BlobBrain {
         case .excited: dur = 0.9
         case .focused: dur = 2.5
         case .hopeful: dur = 2.0
+        case .dazed: dur = 2.0
         }
         return (pick, dur)
     }

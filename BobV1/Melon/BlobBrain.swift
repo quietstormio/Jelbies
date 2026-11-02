@@ -233,6 +233,8 @@ final class BlobBrain {
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
     var trainingLock = false
     var flapHop = FlapHopState()
+    /// The species flourish's drive of the feature layer (wings / daisy / Teddy's ears; Pip's tail goes through `tailDrive`): BlobBrain+Emotes.swift.
+    var sig = SignatureDrive()
     var nameHopping = false
     var flipArmA: Float = 0
     /// The flip's smoothed arm angles (rad). `commandedFlipFail` = the queued commanded flip is the funny faceplant.

@@ -1754,6 +1754,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         model.care.focusGroup.touchAnchor = (f.isFocused && touchID != 0) ? tSim.centroid() : nil
         let bathLive = model.care.bath.acceptsTouch
         play.haptics.setWarm(f.phase == .approaching || f.phase == .focused || bathLive)
+        RoomHaptics.shared.externalBusy = play.haptics.warm          // (focus mode / the wash give their own haptics: the room's emote taps stay out)
         let tn = model.care.needs(for: touchID)
         play.mood = tn.mood; play.attentionWanted = tn.wantedNeed == .attention      // a grumpy Blob is touched with an annoyed reaction
         // getting back up: after a throw (or if he is left lying) he rights himself and walks back to the spot

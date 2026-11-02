@@ -73,6 +73,13 @@ enum IdleKind: String, CaseIterable, Sendable {
     case lieDown       // flops flat on the floor, lies there a few seconds, pushes back up
     case chirp         // a little perk-up and a chirp
     case soccerKick    // (soccer) walks up behind the soccer ball and stomp-kicks it; dribbles it; shoots at the mini goal and celebrates: BlobBrain+Soccer.swift
+    // solo emotes (2026-11-02, g-emotes1): standing pose emotes, feet planted, stubby arms: BlobBrain+Emotes.swift
+    case hiccup        // a surprised "hic!" squash-bounce straight up, then an embarrassed look around (a second tiny hic)
+    case sneeze        // a wind-up (eyes closing, "ah... ah..."), one quick achoo squish forward, a blink
+    case dizzyWobble   // a woozy circular sway with dazed eyes, then a shake-off wiggle (also follows the spin antic now and then)
+    case politeBow     // a sweet bow: forward ~0.35 rad, a slight head dip, a hold, then up
+    case bellyDrum     // pats the belly with both stubby arms alternately, the body jiggling with each pat
+    case signatureFlourish   // the species' own: Pip wags the tail, wings flutter, Moss spins the daisy, Teddy wiggles ears + pom, Bob a proud jiggle
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -109,11 +116,13 @@ enum IdleTable {
         switch m {
         case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
                               (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2),
-                              (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
+                              (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4),
+                              (.hiccup, 0.6), (.sneeze, 0.5), (.dizzyWobble, 0.35), (.politeBow, 0.7), (.bellyDrum, 0.8), (.signatureFlourish, 1.1)]          // (2026-11-02: the solo emotes are occasional treats, rarer than bounce / tail; 2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
                              (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.sigh, 0.8),
-                             (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
-        case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
+                             (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3),
+                             (.hiccup, 0.6), (.sneeze, 0.6), (.dizzyWobble, 0.3), (.politeBow, 0.5), (.bellyDrum, 0.4), (.signatureFlourish, 0.6)]
+        case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8), (.sneeze, 0.4)]
         }
         for (k, x) in extra where x > 0 { w.append((k, x * mul)) }
         if let i = w.firstIndex(where: { $0.kind == .wander }) { w[i].weight = 0.6 }
@@ -250,7 +259,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -354,7 +363,7 @@ extension BlobBrain {
             else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
             else if kind == .window && idleState.windowGo { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
             else if Self.decorKinds.contains(kind) && idleState.decorGo { mine = true; decorArrived(sim, skinner); return }
-            else if kind == .tail { mine = true; tailNext(skinner) ; return }
+            else if kind == .tail { mine = true; tailNext(sim, skinner); return }
             else if kind == .legSpin { mine = true; mouthOpen = 0; flourishEnd(skinner); return }
         default: mine = false
         }
@@ -426,6 +435,7 @@ extension BlobBrain {
             if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
+        sig = SignatureDrive(); runAir = 0          // (an emote's feature drive and its hop go with it)
         napping = false
         zoomW = 0
         gait.basePitch = 0
@@ -606,6 +616,8 @@ extension BlobBrain {
         case .sigh, .hmph:
             idleBegin(kind)
             script = .idle; activity = .lookingAround
+        case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish:
+            return emoteBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -674,6 +686,7 @@ extension BlobBrain {
         case .hmph: runHmph(sim, skinner, dt)
         case .tailThump: runTailThump(sim, skinner, dt)
         case .tailHug: runTailHug(sim, skinner, dt)
+        case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)

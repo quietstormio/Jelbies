@@ -32,6 +32,12 @@ extension BlobBrain {
         case .jacks, .tail, .flop, .peek: return 30
         case .tailThump: return 28
         case .tailHug: return 40
+        case .hiccup: return 30
+        case .sneeze: return 40
+        case .dizzyWobble: return 35
+        case .politeBow: return 40
+        case .bellyDrum: return 35
+        case .signatureFlourish: return 30
         case .sit, .look, .wander: return 8
         case .skipHop: return 12
         case .hopscotch: return 25
@@ -89,7 +95,7 @@ extension BlobBrain {
     // MARK: tail
 
     /// The spin ended: another turn, or the dizzy wobble and done.
-    func tailNext(_ skinner: Skinner) {
+    func tailNext(_ sim: SoftBody, _ skinner: Skinner) {
         if idleState.reps > 0 {
             idleState.reps -= 1
             script = .spin(t: 0); activity = .playing
@@ -97,6 +103,7 @@ extension BlobBrain {
             jellyKick = max(jellyKick, 2.6)
             if feature == .spines { tailPlay.dizzy = 1 }          // the tail wobbles dizzily after the chase (BlobBrain+TailPlay)
             AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
+            if dizzyFollowOn(sim) { return }          // (sometimes the chase ends in a woozy wobble: BlobBrain+Emotes.swift)
             idleFinish(skinner)
         }
     }

@@ -75,6 +75,8 @@ extension BlobBrain {
         case .hmph:                              // two slow annoyed swishes
             let t = idleState.phaseT
             d.wagDeg = max(d.wagDeg, 24 * smooth01(t / 0.2) * (1 - smooth01((t - 1.15) / 0.3))); d.wagHz = 1.5
+        case .signatureFlourish:                 // Pip's flourish: a big happy wag with the tail lifted a little (BlobBrain+Emotes.swift)
+            if idleState.reps == SignatureKind.tail.rawValue { d.wagDeg = max(d.wagDeg, 55 * sig.env); d.wagHz = 4.6; d.mood = 1 }
         default: break
         }
         // the emotes' shaped values; with no emote they ease back to rest

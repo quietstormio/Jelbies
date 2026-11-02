@@ -81,6 +81,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .tailThump: Entry(seconds: 5, chars: [1]), .tailHug: Entry(seconds: 6, chars: [1]),
         .shake: Entry(seconds: 3), .lieDown: Entry(seconds: 9), .chirp: Entry(seconds: 3),
         .soccerKick: Entry(via: "soccer: dribble the ball to the goal and shoot"),
+        .hiccup: Entry(seconds: 4), .sneeze: Entry(seconds: 4), .dizzyWobble: Entry(seconds: 4.5), .politeBow: Entry(seconds: 7), .bellyDrum: Entry(seconds: 7), .signatureFlourish: Entry(seconds: 8),
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.
