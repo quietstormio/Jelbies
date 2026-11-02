@@ -146,6 +146,10 @@ nonisolated enum AudioMix {
     static let crowdCrossfade: Double = 1.0
     /// The app's own music while the Jellies dance to music from outside (Ears): down to this, so the mic stops hearing it.
     static let danceDuck: Float = 0.15
+    /// The storm (Melon/Weather.swift): clip volumes as passed to `playClip` (which scales by 1.5), so a thunder peaks at 0.21 of the sound-effects level - under the
+    /// race crowd's 0.22 - a far rumble and the sigh softer, the rain on the glass a quiet bed; the music dips to `stormDuck` at a rumble and returns over `stormDuckBack` s.
+    static let stormThunder: Float = 0.14, stormRumble: Float = 0.10, stormSigh: Float = 0.10, stormRain: Float = 0.07
+    static let stormDuckClose: Float = 0.7, stormDuckFar: Float = 0.85, stormDuckBack: Double = 3.0
 }
 
 /// Music and Sound Effects, separately on/off with a volume each. Persisted in UserDefaults; `-Mute 1` (and the test host) silences everything.

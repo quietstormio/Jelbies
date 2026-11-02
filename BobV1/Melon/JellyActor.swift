@@ -60,7 +60,7 @@ final class JellyActor {
         // asleep on his back (the hold stage): the attractor is constant and nothing else is going on, so his sim may sleep too
         if b.isNapping { return b.social == nil && b.pending == nil && !b.commanded && b.commandedIdle == nil && !b.interruptScript && !b.commandedFlip && !b.commandedNameHop }
         if case .none = b.script {} else { return false }
-        return b.social == nil && b.activity == .idle && !b.commanded && b.pending == nil && b.idleState.kind == nil && b.commandedIdle == nil && !b.isExerting && !b.earsActive
+        return b.social == nil && b.activity == .idle && !b.commanded && b.pending == nil && b.idleState.kind == nil && b.commandedIdle == nil && !b.isExerting && !b.earsActive && !b.storm.isActive
     }
 
     /// Call once per fixed step, after the brain / care ticks and before the sim step. Returns true if his sim should step.

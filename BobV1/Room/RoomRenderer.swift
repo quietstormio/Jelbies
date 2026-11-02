@@ -37,6 +37,9 @@ struct RoomUniforms {
     // appended for the bought rooms (RoomDef): style x floor, y wall, z rug (0 = the living room's); win x = window bottom, y = window height
     var style = SIMD4<Float>(repeating: 0)
     var win = SIMD4<Float>(1.5, 2.8, 0, 0)
+    // the storm on the window glass (Room/RoomWeather.swift)
+    var weather = SIMD4<Float>(repeating: 0)
+    var weather2 = SIMD4<Float>(repeating: 0)
 }
 
 nonisolated final class RoomRenderer {
@@ -60,6 +63,10 @@ nonisolated final class RoomRenderer {
     var fog = SIMD3<Float>(3, 9, 0.35)
     /// Time of day (DayLight.swift): the window sky, key colour, ambient tint and lamp glow. `DayLight.day` = the room as it was before.
     var daylight = DayLight.day
+    /// The storm on the window glass (rain, flash, gloom): per frame, never part of the room-cache key (the cache build marks the glass, the blit adds the storm).
+    var weatherGPU = WeatherGPU()
+    /// True while the room cache is being built: the glass is written as a mark (alpha 2), not shaded with the storm.
+    var weatherMarkPane = false
 
     private let device: MTLDevice
     private let pipeline: MTLRenderPipelineState
@@ -447,6 +454,8 @@ nonisolated final class RoomRenderer {
             u.style = SIMD4(Float(d.floor.rawValue), Float(d.wall.rawValue), Float(d.rug.rawValue), 0)
             u.win = SIMD4(d.windows.y0, d.windows.y1 - d.windows.y0, 0, 0)
         }
+        u.weather = weatherGPU.w; u.weather2 = weatherGPU.w2
+        if weatherMarkPane { u.weather2.y = 1 }
         u.pal0 = SIMD4(sw[0], 1); u.pal1 = SIMD4(sw[1], 1); u.pal2 = SIMD4(sw[2], 1); u.pal3 = SIMD4(sw[3], 1); u.pal4 = SIMD4(sw[4], 1)
         return u
     }
