@@ -11,7 +11,8 @@
 
 - A storm rolls in every 2-5 hours of play (`WeatherBook`, persisted: relaunch neither rerolls nor repeats), lasts 2-4 min: build-up (sky darkens, rain, far rumbles, one Jelbie peers out of a window), peak (gentle two-pulse lightning + soft thunder every 7-15 s; the huddle), clearing (shake-off, scatter). `-Storm 1` forces one 5 s after the room is up (`-Storm 2` at the peak, `-Storm 3` at the clearing, `-StormDelay s`).
 - Window: rain, gloom and flash are applied per frame at the room-cache blit (the cache build marks the glass with alpha 2) and in the window shader; the room dims / lifts through the post exposure. No cache rebuild, no extra pass (`WeatherPerfTests`).
-- Jelbies: `StormReactor` (BlobBrain+Weather.swift) on the storm pose channel `BlobBrain.storm`; feet suite `StormFeetTests`. Sounds `storm_*.m4a` are SYNTHESIZED PLACEHOLDERS (the ElevenLabs key was rejected 2026-11-02); regenerate soft thunder / rain / sigh when the key is renewed.
+- Jelbies: `StormReactor` (BlobBrain+Weather.swift) on the storm pose channel `BlobBrain.storm`; feet suite `StormFeetTests`. Sounds `storm_*.m4a` are real ElevenLabs sounds (2026-11-02); the sigh is a Jelbie-voice coo.
+- Sound style: see docs/SOUND_STYLE.md (the Jelbie voice band, the vocal prompt template, SFX rules, loudness targets, which voice each character uses; Teddy and Pearl share Lavender's).
 
 ## Disk hygiene
 
