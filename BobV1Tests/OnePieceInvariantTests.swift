@@ -36,6 +36,8 @@ final class OnePieceInvariantTests: XCTestCase {
 
     /// Moves where the leash is seen to act: none (2026-11-01: the brain now places the top of the piece inside the egg itself; the scooter entry was fixed by the same change).
     static let leashAllowed: Set<String> = []
+    /// The runtime guard in `run` is armed for every feet test; the one test that forces a detached foot on purpose turns it off.
+    nonisolated(unsafe) static var guardArmed = true
 
     typealias SC = LegsDrawnAuditTests.Scenario
 
@@ -212,10 +214,18 @@ final class OnePieceInvariantTests: XCTestCase {
         r.brain.shoesWorn = shoes
         r.brain.seed = 5 + seed
         if before { r.skinner.joinEnabled = false; r.skinner.collarEnabled = false }
+        // RUNTIME GUARD (Skinner.leashObserver): any frame in which the skin's leash / tether had to move a foot piece fails the test that is running, naming the emote, the character and the frame.
+        var hits = 0, firstHit = -1, maxPull: Float = 0, hitFrame = 0
+        if Self.guardArmed { Skinner.leashObserver = { _, pull, _ in hits += 1; if firstHit < 0 { firstHit = hitFrame }; maxPull = max(maxPull, pull) } }
+        defer {
+            Skinner.leashObserver = nil
+            if hits > 0 { XCTFail("FEET GUARD: emote '\(sc.name)', \(characters[char].0) \(shoes ? "with shoes" : "bare"): the leash / tether moved a foot piece in \(hits) frames, first at frame \(firstHit), max pull \(String(format: "%.1f", maxPull * 100)) cm: the brain placed the feet away from the body") }
+        }
         guard sc.setup(r, seed) else { out.started = false; return out }
         let stepDt = r.sim.stepDt
         var acc: Float = 0, t: Float = 0, frame = 0
         while t < sc.seconds && frame < Int(sc.seconds * 130) + 600 {
+            hitFrame = frame
             let dt = pacing.dt(frame: frame, step: stepDt)
             acc += dt
             var steps = 0
@@ -333,6 +343,7 @@ final class OnePieceInvariantTests: XCTestCase {
     /// The leash: a foot piece thrown 30 cm away from the body (what the phone showed) is pulled back to the body by the last step of the skin, in a walk, a roll and a flip.
     func testLeashBringsADetachedFootBack() throws {
         _ = Self.configured
+        Self.guardArmed = false; defer { Self.guardArmed = true }
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var tested = 0
@@ -361,6 +372,7 @@ final class OnePieceInvariantTests: XCTestCase {
     /// The data the renderer would read (`r.dyn`): every piece must still lie inside the body as THAT skin draws it (deepest vertex inside the stale fit by 1 cm), and the tether bound must hold.
     func testStaleSkinCannotDetachAPiece() throws {
         _ = Self.configured
+        Self.guardArmed = false; defer { Self.guardArmed = true }          // (the body is skinned from an old sim state on purpose: the leash / tether acting is the point)
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var report = "STALE SKIN\nmove | lag frames | frames tested | worst leg sdf (cm, must be <= -1) | max pole-to-hip (cm)\n"

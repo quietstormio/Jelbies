@@ -261,6 +261,10 @@ nonisolated final class Skinner {
     /// Fillet radius of the quarter-circle collar (the skin rises along the foot axis by `r` at the foot's outline and meets the flat skin tangentially `r` away).
     nonisolated(unsafe) static var collarK: Float = 0.07
     var joinEnabled = true, collarEnabled = true
+    /// 2026-11-01: 1 = the collar fillet at full height; the brain lowers it while BOTH feet are off the floor (jacks, hops, flips, the run's flight): the fillet pushes skin 7 cm along the foot axis in a polar frame about the piece,
+    /// and with a lifted, rounded piece that came out as a saw-toothed rim and a pit round the leg root (the user's 'foot comes off when Teddy jumps'). One foot lifted (the walk's swing) leaves it untouched.
+    nonisolated(unsafe) static var collarAirFade = true          // (false = the old collar in the air: before / after captures)
+    var collarFade: Float = 1
     static let leashDepth: Float = 0.02, leashMax: Float = 0.6
     /// How far the leash moved each piece last frame (m): 0 = the piece was where the brain put it.
     private(set) var joinLeash: [Float] = [0, 0]
@@ -270,6 +274,9 @@ nonisolated final class Skinner {
     private(set) var frameDisagree: (Float, Float) = (0, 0)          // (diagnostic) this pass's tail-landmark frame vs the brain's fit: centroid distance, angle
     /// The hip moving farther than this between two skinned frames is a teleport, not motion (a throw covers < 0.3 m a frame).
     nonisolated(unsafe) static var teleportJump: Float = 1.0
+    /// Runtime guard: called (foot, pull in m, true = tether / false = leash) for every skinned frame in which the leash or the tether had to move a foot piece, i.e. the brain placed it away from the body. nil in the game;
+    /// the feet tests (OnePieceInvariantTests.run) install it so an emote that places feet badly fails in every run, naming itself. `-FootLog 1` records the same frames on the phone.
+    nonisolated(unsafe) static var leashObserver: ((Int, Float, Bool) -> Void)? = nil
     private(set) var weldDist: [Float] = [0, 0]
     private(set) var weldPull: [Float] = [0, 0]
     /// FootLog: the deepest of the piece's top vertices inside the fitted egg BEFORE the leash moved it (m, + inside; < 0 = the piece's top was outside the body), each foot. 1 = not measured.
@@ -382,6 +389,9 @@ nonisolated final class Skinner {
                 }
             }
         }
+        if let obs = Self.leashObserver {          // (the runtime guard: only when someone listens, and only on the rare frame the leash / tether had to act)
+            for s in 0..<2 where joinLeash[s] > 0.002 || weldPull[s] > 0.002 { obs(s, max(joinLeash[s], weldPull[s]), weldPull[s] > 0.002) }
+        }
         let gate = max(0, min(1, (joinTilt - 0.3) / 0.3)), gateW = gate * gate * (3 - 2 * gate)
         guard joinEnabled, gateW > 0.001, beansActive, beanBlend > 0.05, let pose = bodyFrame(dyn) else { return }
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
@@ -473,7 +483,7 @@ nonisolated final class Skinner {
                 var bump: Float
                 if dd <= 0 { bump = kk * max(0, 1 + dd / 0.03) }
                 else { let q = kk - dd; bump = kk - (kk * kk - q * q).squareRoot() }
-                bump *= collarEnabled ? beanBlend : 0
+                bump *= collarEnabled ? beanBlend * (Self.collarAirFade ? collarFade : 1) : 0
                 joinDent[s] = max(joinDent[s], inward - bump)
                 let o = 6 * v
                 dyn[o] += a.x * bump; dyn[o + 1] += a.y * bump; dyn[o + 2] += a.z * bump

@@ -1572,6 +1572,20 @@ final class BlobBrain {
         for r in Skinner.joinNeckRings { for j in Swift.stride(from: 0, to: FootBean.around, by: 4) { probe(1 + FootBean.around * r + j) } }
         return (best, dir)
     }
+    /// Both feet off the floor (set by commitBeans from the lower foot's clearance): the pieces are tucked INTO the body, the whole closed neck (rings 11 and 12, every other meridian) at least `airNeckDepth` inside the egg,
+    /// so no part of the crown stands out of the belly as a flat plate (the run / zoomies flight and the volley block showed 5-8 cm of it).
+    var airBothFeet = false
+    nonisolated(unsafe) static var airTuck = true          // (false = before the air tuck: before / after captures)
+    static let airNeckDepth: Float = 0.04
+    /// Shallowest (+ inside) of the piece's neck points (rings 11, 12, every other meridian) shifted by nothing, and the world direction that moves it deeper.
+    @inline(__always) static func shallowestNeck(_ v: [SIMD3<Float>], off: SIMD3<Float> = .zero, pose: (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)) -> (Float, SIMD3<Float>) {
+        var worst = Float.infinity, dir = SIMD3<Float>(0, 1, 0)
+        for r in Skinner.joinNeckRings { for j in Swift.stride(from: 0, to: FootBean.around, by: 2) {
+            let (d, g) = Skinner.fittedDepth(v[1 + FootBean.around * r + j] + off, pose)
+            if d < worst { worst = d; dir = g }
+        } }
+        return (worst, dir)
+    }
     func attachBean(_ sim: SoftBody, _ pose: BodyPose, lifted: Bool, _ v: inout [SIMD3<Float>]) {
         let c0 = sim.restCentroid
         let fp = (centroid: pose.centroid, rotation: pose.rotation, restCentroid: c0)
@@ -1590,8 +1604,13 @@ final class BlobBrain {
                 dW = pose.rotation.act(SIMD3(sx * Float(g.x), Float(g.y), Float(g.z)) * (-k))
             } else if v.count == FootBean.vertexCount && Self.topDepthFix {
                 let (td, dir) = Self.topDepth(v, pose: fp)
-                if td >= Self.topDepthTrigger { return }
-                dW = dir * (Self.topDepthWant - td)
+                if td < Self.topDepthTrigger {
+                    dW = dir * (Self.topDepthWant - td)
+                } else if airBothFeet && Self.airTuck {
+                    let (sd, sdir) = Self.shallowestNeck(v, pose: fp)
+                    if sd >= Self.airNeckDepth { return }
+                    dW = sdir * min(Self.airNeckDepth + 0.01 - sd, 0.04)
+                } else { return }
             } else { return }
             if !lifted { dW.y = min(dW.y, 0) }        // a planted foot stays on the floor (it only slides toward the belly)
             for i in v.indices { v[i] += dW }
@@ -1607,6 +1626,7 @@ final class BlobBrain {
         guard skinner.beansActive, skinner.beanPos[0].count == FootBean.vertexCount, skinner.beanPos[1].count == FootBean.vertexCount else { beanCorr = [.zero, .zero]; return }
         if beanFitUsed == nil && !Self.refitWorldPlaced { return }
         let now = sim.bodyPose(iterations: 3)
+        do { var lo = Float.infinity; for s in 0..<2 { for p in skinner.beanPos[s] { lo = min(lo, p.y) } }; airBothFeet = lo - sim.floorY > 0.01 }          // (decided before this step's attach, so the very first airborne frame is tucked too)
         skinner.joinTilt = now.tilt
         skinner.joinPose = (now.centroid, now.rotation, sim.restCentroid)
         // Placed on the fitted pose: carried rigidly with the body. Placed on the attractor / a world foot path (walk, run, zoomies, toy play: a planted foot must not skate):
@@ -1636,6 +1656,7 @@ final class BlobBrain {
                 var d = Float.infinity
                 for p in orig { let q = c0 + inv.act(p + off - now.centroid); d = min(d, Float(BobForm.bodySDF(SIMD3(Double(abs(q.x)), Double(q.y), Double(q.z))))) }
                 if orig.count == FootBean.vertexCount && Self.topDepthFix { d = max(d, -Self.topDepth(orig, off: off, pose: (now.centroid, now.rotation, c0)).0) }          // (the skin's leash judges the top of the piece: that must be inside too)
+                if orig.count == FootBean.vertexCount && Self.topDepthFix && airBothFeet && Self.airTuck { d = max(d, -Self.shallowestNeck(orig, off: off, pose: (now.centroid, now.rotation, c0)).0 - 0.02) }          // (both feet up: the whole closed neck >= 5 mm inside before the eased step may stop short)
                 return d
             }
             var off = cur + (full - cur) * Self.refitEase
@@ -1649,6 +1670,10 @@ final class BlobBrain {
             beanCorr[s] = off
             for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i] = orig[i] + off; skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) }
         }
+        // the final (post-step) clearance decides the air state the skin and the next placement use
+        var lowest = Float.infinity
+        for s in 0..<2 { for p in skinner.beanPos[s] { lowest = min(lowest, p.y) } }
+        skinner.collarFade = 1 - smooth01((lowest - sim.floorY - 0.004) / 0.02)
         if beanFitUsed != nil {
             skinner.retractMatrix = simd_float3x3(now.rotation) * simd_float3x3(diagonal: SIMD3(1 / sim.attractor.squash.squareRoot(), sim.attractor.squash, 1 / sim.attractor.squash.squareRoot()))
             beanFitUsed = now
@@ -1670,6 +1695,11 @@ final class BlobBrain {
         skinner.beanPos = beanScratch
         skinner.beanStart = beanStartScratch
         skinner.beanBlend = beanBlend
+        // both feet off the floor: the collar fillet would tear into a saw-toothed rim round the leg roots. By the real clearance of the lower foot (a flip caps the ball morph at 0.25, so the morph is no measure of it)
+        var lowest = Float.infinity
+        for s in 0..<2 { for p in beanScratch[s] { lowest = min(lowest, p.y) } }
+        skinner.collarFade = 1 - smooth01((lowest - sim.floorY - 0.004) / 0.02)
+        airBothFeet = lowest - sim.floorY > 0.01
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot()
         // (on the FITTED pose when the beans follow it: the attractor's rotation is tens of degrees ahead of the real body in a flip and would push the sunk foot slab the wrong way)
         let RS = simd_float3x3(beanFitUsed?.rotation ?? att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
