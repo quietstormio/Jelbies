@@ -1,5 +1,12 @@
 # Handoff
 
+## Feet stay attached (2026-11-02: read before adding or changing any emote)
+
+- **How the feet attach.** Each foot is a separate closed piece (`FootBean`, `Skinner.beanPos`) that the brain places every tick (`BlobBrain.driveLimbs` / `fillBeansRigid` / `refitBeans`). The skin then enforces two last lines (`Skinner.applyBeanJoin`): the LEASH (the piece's top, i.e. pole + neck rings 11 and 12, must lie >= 2 cm inside the fitted egg) and the TETHER (pole <= 0.55 m from the hip, a point skinned with the body). They are safety nets: if either has to move a piece, the brain placed it wrong.
+- **The invariant (every emote, every character, bare and with shoes).** No frame in which the leash or tether acts; with both pieces off the floor the neck ring is >= 70 % of the standing boot's, every neck meridian has a point inside the drawn body by >= 1 cm (closed join), and the collar fillet moves no skin more than 2 cm. The brain keeps the top of every piece >= 4.5 cm inside (`BlobBrain.attachBean`), tucks both pieces into the body in the air (`airBothFeet`), and `Skinner.collarFade` removes the collar fillet while both feet are up. A teleport carries the pieces along (`Skinner.teleportJump`, `BlobBrain.noticeTeleport`).
+- **Adding an emote safely.** 1) Add the case (IdleKind / Script / gait name). 2) Give it a scenario in `OnePieceInvariantTests.idleTable` (or `gaitScenario`): `testEveryMoveIsListed` and `EmoteFeetTests.testEveryEmoteKeepsItsFeet` fail until you do, and the same test then covers the new emote for all 6 characters x bare / shoes automatically. 3) Run `EmoteFeetTests` (named tests for the emotes that broke on the phone + the auto-coverage; the only exemptions are in `EmoteFeetTests.exempt`, each with its reason). 4) The runtime guard (`Skinner.leashObserver`, armed in `OnePieceInvariantTests.run`) fails ANY feet test, naming the emote, if the leash or tether moved a piece. If it fires, fix the placement (the move's foot targets), never the leash.
+- **Phone check.** Launch with `-FootLog 1`; the app writes a JSON line for every frame the leash / tether acts (pole_hip, pull, script, idle kind, tilt). After the new emote: play it, then look for `pull` lines in the log. None = fine.
+
 ## Disk hygiene
 
 Run `/cleanup` (`scripts/cleanup-safe.sh`, dry run first) before big multi-agent rounds. Every agent must build with `-derivedDataPath .claude/worktrees/dd_<name>` and delete its own simulators (`xcrun simctl delete <udid>`) when done.

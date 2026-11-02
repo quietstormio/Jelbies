@@ -274,6 +274,9 @@ nonisolated final class Skinner {
     private(set) var frameDisagree: (Float, Float) = (0, 0)          // (diagnostic) this pass's tail-landmark frame vs the brain's fit: centroid distance, angle
     /// The hip moving farther than this between two skinned frames is a teleport, not motion (a throw covers < 0.3 m a frame).
     nonisolated(unsafe) static var teleportJump: Float = 1.0
+    /// Runtime guard: called (foot, pull in m, true = tether / false = leash) for every skinned frame in which the leash or the tether had to move a foot piece, i.e. the brain placed it away from the body. nil in the game;
+    /// the feet tests (OnePieceInvariantTests.run) install it so an emote that places feet badly fails in every run, naming itself. `-FootLog 1` records the same frames on the phone.
+    nonisolated(unsafe) static var leashObserver: ((Int, Float, Bool) -> Void)? = nil
     private(set) var weldDist: [Float] = [0, 0]
     private(set) var weldPull: [Float] = [0, 0]
     /// FootLog: the deepest of the piece's top vertices inside the fitted egg BEFORE the leash moved it (m, + inside; < 0 = the piece's top was outside the body), each foot. 1 = not measured.
@@ -385,6 +388,9 @@ nonisolated final class Skinner {
                     for i in 0..<FootBean.vertexCount { let o = 6 * (f + i); dyn[o] += sh.x; dyn[o + 1] += sh.y; dyn[o + 2] += sh.z }
                 }
             }
+        }
+        if let obs = Self.leashObserver {          // (the runtime guard: only when someone listens, and only on the rare frame the leash / tether had to act)
+            for s in 0..<2 where joinLeash[s] > 0.002 || weldPull[s] > 0.002 { obs(s, max(joinLeash[s], weldPull[s]), weldPull[s] > 0.002) }
         }
         let gate = max(0, min(1, (joinTilt - 0.3) / 0.3)), gateW = gate * gate * (3 - 2 * gate)
         guard joinEnabled, gateW > 0.001, beansActive, beanBlend > 0.05, let pose = bodyFrame(dyn) else { return }

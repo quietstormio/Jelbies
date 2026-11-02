@@ -143,6 +143,7 @@ final class FeetSourceTests: XCTestCase {
     /// (what `SoftBody.teleport` does for every scene entry path) and the very next skinned frame must have both pieces within the tether bound of the hip, with or without a brain tick in between.
     func testTeleportCarriesTheFeet() throws {
         _ = OnePieceInvariantTests.configured
+        OnePieceInvariantTests.guardArmed = false; defer { OnePieceInvariantTests.guardArmed = true }          // (this test makes the tether act on purpose; EmoteFeetTests.testSceneTeleportRoomToPark is the guarded one)
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var report = "TELEPORT 5 m: scenario | char | pole-to-hip right after the jump (render only) / after one more tick (cm)\n"
