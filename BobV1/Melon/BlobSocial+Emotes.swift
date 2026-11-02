@@ -20,8 +20,8 @@ enum EmoteTuning {
     /// A high five: the pair's cooldown (s), a crossing (the partner is out on a wander leg) makes it likelier.
     static let fiveCooldown: (Float, Float) = (60, 90)
     static let fiveCrossingBoost: Float = 1.8, fiveWeight: Float = 1.2
-    /// The two stand side by side this far apart (x the room gap) so the inner little arm nubs reach nub to nub.
-    static let highFiveGap: Float = 0.97
+    /// The two stand side by side this far apart (x the room gap); they lean in until the cheeks meet (the roots never get closer than the contact distance 0.97 x gap).
+    static let highFiveGap: Float = 1.05
     /// Per Jelbie after any treat (s); the first one is not before `treatFirst` s; the wait with company before one asks for a treat.
     static let treatCooldown: (Float, Float) = (240, 420)
     static let treatFirst: Float = 90
@@ -38,7 +38,7 @@ enum EmoteTuning {
 
 /// Haptics of the group emotes (2026-11-02, "subtle, soft, never buzzy"): single soft transients, requested through the brain's hook (the stage forwards them to the touch haptics, which
 /// no-op until the engine is warm and honour the Settings toggle; the stage also gates them to ~2 per second and skips them while a race, volley or bath runs).
-///   highFive   one light tap exactly at the nub bump, with the boop
+///   highFive   one light tap exactly at the cheek bump, with the boop
 ///   congaLine  one gentle pulse when the line forms (it sets off) and one when they scatter - no rhythm haptic
 ///   ringDance  one pulse when the ring forms and one when they let go
 enum EmoteHaptic {
@@ -138,7 +138,8 @@ extension BlobBrain {
                 for leg in 0..<want {
                     let turns: [Float] = leg == 0 ? [0] : [sgn * 0.4, 0, -sgn * 0.4, sgn * 0.8, -sgn * 0.8]
                     var next: (SIMD2<Float>, Float)?
-                    for dh in turns {
+                    // (2026-11-02: of the turns that fit, the one whose heading runs most across the camera view comes first: the line crosses the screen instead of bunching into the back corner)
+                    for dh in (leg == 0 ? turns : turns.sorted { abs(sinf(h + $0 - cam)) > abs(sinf(h + $1 - cam)) }) {
                         let h1 = h + dh
                         let a = pts.last!, w = a + SIMD2(sinf(h1), cosf(h1)) * EmoteTuning.congaLeg
                         guard floorSpotOK(w), floorLegOK(a, w), !strangers.contains(where: { segDist($0, a, w) < peerGap * 0.97 }) else { continue }
@@ -152,7 +153,11 @@ extension BlobBrain {
                 let legs = pts.count - 1
                 guard legs >= EmoteTuning.minLegs else { continue }
                 let sideways = abs(sinf(h0 - cam))          // (prefers a line that crosses the screen)
-                let score = min(Float(legs), 6) + 3.0 * sideways - (li == 0 ? 0 : 0.3)
+                let lat = SIMD2(cosf(cam), -sinf(cam)), depth = SIMD2(sinf(cam), cosf(cam))          // (the camera's screen-x and depth directions on the floor)
+                var across: Float = 0, along: Float = 0
+                for q in 1..<pts.count { let d = pts[q] - pts[q - 1]; across += abs(simd_dot(d, lat)); along += abs(simd_dot(d, depth)) }
+                let crossing = across / max(across + along, 1e-3)          // (1 = the whole route runs across the view)
+                let score = min(Float(legs), 6) + 3.0 * sideways + 4.0 * crossing - (li == 0 ? 0 : 0.3)
                 if best == nil || score > best!.score { best = (score, li, h0, pts, slots) }
             }
         }

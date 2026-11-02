@@ -28,7 +28,7 @@ final class GroupEmoteFeetTests: XCTestCase {
     static let casts: [[Int]] = [[0, 1, 2], [3, 4, 5], [5, 2, 4]]
 
     struct Result { var frames = 0, completed = false, seconds: Float = 0, minGap: Float = .infinity, minGapTag = "", leashFrames = 0, airFrames = 0
-        var ratio: Float = .infinity, join: Float = .infinity, collar: Float = 0, bad = "" }
+        var bumpMinGap: Float = .infinity, maxLean: Float = 0, ratio: Float = .infinity, join: Float = .infinity, collar: Float = 0, bad = "" }
 
     /// Runs `kind` (started by rig 0 with rig 1) to its end; every frame checked.
     func run(_ kind: SocialKind, cast: [Int], shoes: Bool, n: Int = 3, seed: UInt64 = 31, maxSeconds: Float = 70) -> Result {
@@ -60,6 +60,11 @@ final class GroupEmoteFeetTests: XCTestCase {
                 let g = lab.centreGap(i, j)
                 if g < res.minGap { res.minGap = g; res.minGapTag = "t \(Float(frame) / 60) \(i)-\(j) social \(String(describing: lab.rigs[i].brain.socialKind)) phase \(lab.rigs[i].brain.social?.phase ?? -1)" }
             } }
+            // the jelly bump (highFive): the lean of both and the root gap while the act runs (phase 2 and on)
+            if kind == .highFive, lab.rigs[0].brain.social?.phase ?? 0 >= 2 {
+                res.maxLean = max(res.maxLean, abs(lab.rigs[0].brain.socialBook.roll), abs(lab.rigs[1].brain.socialBook.roll))
+                res.bumpMinGap = min(res.bumpMinGap, lab.centreGap(0, 1))
+            }
             frame += 1
             if !lab.anySocial && frame > 10 { res.completed = true; break }
         }
@@ -88,7 +93,15 @@ final class GroupEmoteFeetTests: XCTestCase {
         } }
     }
 
-    func testHighFiveKeepsFeetAndArms() { all(.highFive, minSeconds: 3, minGapFactor: 0.62) }
+    /// The jelly bump (2026-11-02): lean in <= 0.35 rad, planted feet (no leash frame: asserted in run), never interpenetrating: the roots stay >= 0.9 x the gap during the bump
+    /// (the contact distance 0.97 x the gap is the floor of the brief contact moment), and the old nub-reach is gone (no wave arm).
+    func testHighFiveKeepsFeetAndArms() {
+        all(.highFive, minSeconds: 3, minGapFactor: 0.62)
+        let r = run(.highFive, cast: Self.casts[0], shoes: false)
+        XCTAssertLessThanOrEqual(r.maxLean, 0.35, "the lean in stays within 0.35 rad")
+        XCTAssertGreaterThan(r.maxLean, 0.15, "they do lean in")
+        XCTAssertGreaterThanOrEqual(r.bumpMinGap, MelonController.jellyGap * 0.9, "during the bump the bodies stay >= 0.9 x the gap (\(r.bumpMinGap))")
+    }
     func testCongaLineKeepsFeetAndArms() { all(.congaLine, minSeconds: 8) }
     func testRingDanceKeepsFeetAndArms() { all(.ringDance, minSeconds: 8) }
     func testCongaLineOfTwo() { _ = run(.congaLine, cast: [0, 3], shoes: false, n: 2); _ = run(.congaLine, cast: [4, 1], shoes: true, n: 2) }

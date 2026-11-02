@@ -3,7 +3,7 @@
 //  Six ways for two Jelbies to show they like each other (2026-10-25), at home and most of all at the Park. Each is a sequencer over the existing locked moves
 //  (the walk, the in-place hop, the spin, the wave arm, the pose overlays and jelly kicks of the other socials), so the arms stay stubby and the feet attached:
 //    chestBump    face to face, a small crouch, both hop and the bellies meet at the top (a big jelly squish, a bounce back), twice, a happy hop
-//    highFive     face to face, one raises his little arm nub (the wave arm), the other mirrors one swing later, they lean in and the nubs bump: boop, double jiggle, happy look (2026-11-02)
+//    highFive     the JELLY BUMP: side by side angled ~30 deg inward, both lean in and bump cheeks / upper sides: squish, boop, double jiggle, happy look; no arm raise (2026-11-02)
 //    hum          face to face, heads lean in, eyes close, a soft chirp each and a heart: a happy purr together
 //    cheekSquish  side by side, leaning together, two gentle presses (squash + a soft squish each) and a giggle
 //    twirl        face to face, each spins once (the second a beat after the first), twice, then a small bow and a heart
@@ -194,72 +194,56 @@ extension BlobBrain {
         }
     }
 
-    // MARK: high five
+    // MARK: high five (the "jelly bump")
 
-    /// 2026-11-02 (user-approved group-emote round), "high fives that make sense with their little arms": the two stand SIDE BY SIDE, close (`highFiveGap` x the gap: the little nubs reach nub to nub),
-    /// facing the room, so each one's inner arm points at the other. The first raises his nub out toward the other (the locked wave arm swung out sideways, held, nothing longer), the second mirrors it half a second later, they lean in and the nubs bump: a soft boop, a double jiggle (two jelly kicks 0.4 s apart, the arms nudge), hearts and a happy look;
-    /// then the nubs go down and they part. The wave script runs as is for the arm (its own lean-away and foot lift are held off: the script clock is pinned before them, `nubPin`), so the arms
-    /// and feet are the locked ones. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown).
+    /// 2026-11-02, reworked after the user saw the nub version (the reaching nub poked into the partner): the JELLY BUMP. The two walk up and stand side by side at `highFiveGap` x the gap, each turned ~30 deg toward the other,
+    /// then lean IN together (tilt <= 0.35 rad, from the body: feet planted, the roots do not move) until the cheeks / upper sides meet: a squish (squash + a jelly kick, the contact wobble), the boop, the one haptic tap, happy eyes and hearts;
+    /// both spring back with a second jiggle and part. No arm raise at all: the arms just jiggle with the body. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown).
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if openSideBySide(s, o, isA, settle: 0.5) { return }
         let t = s.phaseT
+        let cam = faceCameraYaw()
+        let turn: Float = wrapAngle(yawTo(o.position) - cam) >= 0 ? 0.52 : -0.52          // ~30 deg toward the partner
+        let aim = smooth01(t / 0.4)
+        holdFacing(cam + turn * aim)
+        let g = socialGentle
         switch s.phase {
         case 2:
-            let delay: Float = isA ? 0.04 : 0.54
-            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, t >= delay {
-                socialBook.hopStarted = true
-                currentPose(sim)
-                armSide = -Int(leanSign(toward: o.position))          // the inner arm: the side the partner is on (a positive lean tips the crown to his -x side, so the partner is on +x)
-                scriptT = 0
-                script = .wave(t: 0, side: armSide, then: .none); activity = .waving
-            }
-            if !socialBook.hopStarted { holdFacing(faceCameraYaw()) }
             let sinceBump = s.impacted ? t - s.bumpT : -1
-            let pump = s.impacted ? pulse(sinceBump, up: 0.08, down: 0.22) : 0
-            nubPin(release: s.passes >= 2, pump: 0.03 * pump)
-            // the lean in, toward the other: grows as the nubs rise, a little more at the bump, lets go at the release
-            let lean = smooth01((t - 0.3) / 0.8) * (s.passes >= 2 ? 0 : 1)
-            socialBook.wantRoll = leanSign(toward: o.position) * (0.07 * lean + 0.03 * pump) * socialGentle
+            let press = s.impacted ? pulse(sinceBump, up: 0.07, down: 0.35) : 0
+            // the lean in grows over ~0.9 s to 0.30 rad, the press adds 0.05; after the bump he springs back with a small overshoot the other way
+            let leanIn = smooth01((t - 0.35) / 0.55) * (s.impacted ? 1 - smooth01(sinceBump / 0.3) : 1)
+            let recoil: Float = s.impacted ? -0.05 * sinf(min(max(sinceBump - 0.1, 0), 0.9) * 2 * .pi / 0.45) * (1 - smooth01((sinceBump - 0.1) / 0.9)) : 0
+            // (he is turned ~30 deg toward the partner, so the lean toward him is split between the roll (sideways) and the pitch (forward) by where the partner is in his own frame)
+            let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
+            let amp = (0.30 * leanIn + 0.05 * press + recoil) * g
+            socialBook.wantRoll = -local.x / ln * amp
+            socialBook.wantPitch = local.y / ln * amp
+            socialBook.wantSquash = 1 - 0.07 * press * g
+            socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.3) / 0.5) * (s.impacted ? 0 : 1)
             if isA {
-                if !s.impacted, socialBook.hopStarted, o.socialBook.hopStarted, armActive, o.armActive, armT >= nubHoldT - 0.02, o.armT >= nubHoldT - 0.02 {          // both nubs are out and meet: the bump
+                if !s.impacted, t >= 0.95 {          // the cheeks meet
                     s.impacted = true; s.bumpT = t
-                    jellyKick = max(jellyKick, 2.6); o.jellyKick = max(o.jellyKick, 2.6)
+                    jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
                     AudioHub.shared.play(.highFiveBoop, jelly: steerID, x: px, volume: 0.85)
                     emoteHaptic("highFive.bump", EmoteHaptic.tap)          // (one soft tap, with the boop)
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
-                }
+                } else if !s.impacted, t > 9 { s.finish(.aborted) }
                 if s.impacted {
-                    if s.passes == 0, t - s.bumpT >= 0.4 {          // the second jiggle
+                    if s.passes == 0, t - s.bumpT >= 0.42 {          // the second jiggle
                         s.passes = 1
                         jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
                         AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                     }
-                    if s.passes == 1, t - s.bumpT >= 1.0 { s.passes = 2 }          // the nubs go down
-                    if s.passes >= 2, scriptIsNone, o.scriptIsNone, t - s.bumpT > 1.3 { s.setPhase(3) }
-                } else if t > 9 { s.finish(.aborted) }
+                    if s.passes == 1, t - s.bumpT > 1.2 { s.setPhase(3) }
+                }
             }
         default:   // the happy look, then they part
-            holdFacing(faceCameraYaw())
-            if isA, s.phaseT > 0.7 { finishHappy(s, o) }
+            socialBook.wantEyes = 1
+            if isA, s.phaseT > 0.6 { finishHappy(s, o) }
         }
-    }
-
-    /// Holds the wave arm sticking out sideways (`WaveScript` arm clock 0.36, path parameter ~0.5: the little thumb out from the shoulder, tip a hair above level; the up pose cannot touch the partner's: the nubs reach nub to nub only out sideways) while the high five is on: the script's own clock stays at 0.19
-    /// (no lean-away, no eye shut), the arm clock stops at 0.68 (+ `pump` for the nudge), the arm-side foot stays planted (`waveFootOff`); `release` winds the arm clock back to 0 (the arm lowers
-    /// over ~0.5 s along the path it came up) and then ends the wave. The arm is the locked wave arm: same path, same cap.
-    var nubHoldT: Float { 0.36 }
-    func nubPin(release: Bool, pump: Float) {
-        guard armActive, case .wave(let wt, let sd, let th) = script else { if !armActive { waveFootOff = false }; return }
-        waveFootOff = true
-        if release {
-            armT = max(0, armT - 2.4 * (1.0 / 60))          // (driveLimbs adds one step after this: net -1.4 s of arm clock per second)
-            if armT <= 0.03 { script = .wave(t: WaveScript.duration, side: sd, then: th); waveFootOff = false }
-            return
-        }
-        if wt > 0.19 { script = .wave(t: 0.19, side: sd, then: th) }
-        if armT >= nubHoldT { armT = nubHoldT + pump }
     }
 
     // MARK: happy hum

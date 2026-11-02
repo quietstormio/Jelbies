@@ -32,6 +32,23 @@ final class GroupEmoteTests: XCTestCase {
         }
     }
 
+    /// The jelly bump: no arm raise at all (no wave script on either), the one haptic tap, and both end upright.
+    func testHighFiveIsABumpNotAnArmRaise() {
+        var got: [String] = []
+        EmoteHaptic.requestTap = { got.append($0) }
+        let l = lab()
+        XCTAssertTrue(l.rigs[0].brain.socialStart(.highFive, with: l.rigs[1].brain, l.rigs[0].sim))
+        var f = 0, wave = 0
+        while f < 60 * 40 {
+            l.tick(); f += 1
+            for r in l.rigs[0...1] { if case .wave = r.brain.script { wave += 1 } }
+            if !l.anySocial && f > 10 { break }
+        }
+        XCTAssertEqual(wave, 0, "no arm raise during the high five")
+        XCTAssertEqual(got, ["highFive.bump"])
+        for r in l.rigs { XCTAssertEqual(r.brain.socialBook.roll, 0, accuracy: 0.05, "upright again") }
+    }
+
     /// A touch on any member, a voice "stop" and a request each end the session at once and release everybody (nobody keeps walking the line, no overlay is left).
     func testInterruptionReleasesEveryone() {
         for kind in [SocialKind.highFive, .congaLine, .ringDance] {
