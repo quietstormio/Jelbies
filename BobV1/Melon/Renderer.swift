@@ -776,6 +776,8 @@ final class MelonRenderer {
     /// The quilt RoomProp is parked (tuck-in stays as lamp dim + room darken). Flip to bring it back.
     static let showQuilt = false
     var tuckAmount: Float = 0
+    /// The storm at the windows (Melon/Weather.swift), set by the stage each frame; clear everywhere but the living room.
+    var weatherLook = WeatherLook()
     /// Where the quilt lies (centre x, z; half size x, z): the sleepers' pile. Set by the stage.
     var quiltSpot: (centre: SIMD2<Float>, half: SIMD2<Float>)?
     private func quiltProps(_ t: Float) -> [RoomProp] {
@@ -1023,6 +1025,7 @@ final class MelonRenderer {
             room.fog = raceVisible ? SIMD3(45, 150, 0.5) : parkVisible ? SIMD3(34, 90, 0.3) : SIMD3(14, 32, 0.3)
             let tuckQ = (tuckAmount * 10).rounded() / 10          // quantised: the room cache is rebuilt per step of the dim, not per frame
             room.daylight = (dayHourOverride.map { DayLight.at(hour: $0) } ?? DayLight.at(hour: DayClock.shared.displayHour)).tucked(tuckQ)
+            room.weatherGPU = WeatherGPU(look: weatherLook, time: uniforms.camPos.w, width: width, height: height)
             room.props = ((Self.showQuilt && tuckQ > 0.05) ? quiltProps(tuckQ) : []) + (trophyShelf.isEmpty ? [] : [RoomProp(kind: .shelf, pos: .zero, level: Float(RoomLayout.revision & 0xFFFF), shelf: trophyShelf)])          // (level = the room's layout revision: the shelf hangs between THIS room's windows)
             // ---- bath: bathroom on/off, props over Bob, body shader parameters ----
             room.bathVisible = bathLook.visible
@@ -1098,7 +1101,9 @@ final class MelonRenderer {
                         instrument(crp, "roomcache")
                         guard let ce = cmd.makeRenderCommandEncoder(descriptor: crp) else { return false }
                         ce.label = "room cache build"
+                        room.weatherMarkPane = true
                         room.encode(ce, viewProj: uniforms.viewProj, camPos: camPos3, lightViewProj: nil, shadowTex: nil, parts: .staticOnly)
+                        room.weatherMarkPane = false
                         ce.endEncoding()
                         split(&cmd, "roomcache")
                         roomPixelsShaded += fullPx      // the one-off build cost
@@ -1136,6 +1141,8 @@ final class MelonRenderer {
                 e.setDepthStencilState(dsAlwaysNoWrite)
                 e.setCullMode(.none)
                 e.setFragmentTexture(cacheTex, index: 0)
+                var weatherBytes = room.weatherGPU
+                e.setFragmentBytes(&weatherBytes, length: MemoryLayout<WeatherGPU>.stride, index: 0)          // (the storm on the glass the cache build marked; clear = a plain copy)
                 let strips: [MTLScissorRect]
                 if scissors.count == 1 {
                     strips = [MTLScissorRect(x: 0, y: 0, width: width, height: sc.y),

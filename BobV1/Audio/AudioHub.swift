@@ -49,6 +49,12 @@ final class AudioHub {
     @ObservationIgnored private(set) var otherAudioPlaying = false
     @ObservationIgnored private var danceGain: Float = 1
     @ObservationIgnored private var danceTarget: Float = 1
+    // weather (the storm's sounds): the rain bed, and the music dip at a thunder
+    @ObservationIgnored private var rainPlayer: AVAudioPlayer?
+    @ObservationIgnored private var rainLevel: Float = 0
+    @ObservationIgnored private var stormDuck: Float = 1
+    @ObservationIgnored private var stormDuckLow: Float = 1
+    @ObservationIgnored private var stormDuckClock: Double = 0
     /// How loud the app's own music is on the speaker right now (0...1; the ear's music exclusion reads it).
     @ObservationIgnored private(set) var speakerMusicLevel: Float = 0
     // music
@@ -587,6 +593,39 @@ final class AudioHub {
         } else if let p = beachPlayer, p.isPlaying { p.setVolume(0, fadeDuration: 0.5); DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { p.stop() } }
     }
 
+    // MARK: weather (Melon/Weather.swift): thunder and rumbles under the music, the rain on the glass, a relieved sigh
+
+    /// The storm's events of this step. Clips are the app's own (storm_*.m4a); captions and the request tap fire even when muted.
+    func storm(_ events: [StormEvent], plan: StormPlan?) {
+        for e in events {
+            switch e.kind {
+            case .rumble: stormSound("storm_rumble_1", volume: AudioMix.stormRumble, caption: "Distant thunder", duck: AudioMix.stormDuckFar)
+            case .thunder(let i):
+                if let s = plan?.strikes[safe: i], s.close { stormSound("storm_thunder_\(s.variant)", volume: AudioMix.stormThunder, caption: "Thunder", duck: AudioMix.stormDuckClose) }
+                else { stormSound("storm_rumble_1", volume: AudioMix.stormRumble, caption: "Distant thunder", duck: AudioMix.stormDuckFar) }
+            case .phase(.clearing):
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in self?.stormSound("storm_relief_sigh", volume: AudioMix.stormSigh, caption: "Relieved sighs", duck: 1) }
+            default: break
+            }
+        }
+    }
+    private func stormSound(_ name: String, volume: Float, caption: String, duck low: Float) {
+        Self.requestTap?("storm:\(name)")
+        CaptionCenter.shared.post(caption)
+        if low < 1 { stormDuckLow = min(stormDuckLow, low); stormDuckClock = 0; stormDuck = min(stormDuck, low) }
+        playClip(name, volume: volume)
+    }
+    /// The rain on the glass: a quiet loop that follows the storm's rain amount (0 = off).
+    func stormBed(rain: Float) {
+        rainLevel += max(-1.0 / 120, min(1.0 / 180, rain - rainLevel))
+        guard !muted, started else { return }
+        if rainLevel > 0.002 {
+            if rainPlayer == nil, let u = url("storm_rain_loop") { rainPlayer = try? AVAudioPlayer(contentsOf: u); rainPlayer?.numberOfLoops = -1; rainPlayer?.prepareToPlay() }
+            rainPlayer?.volume = min(1, settings.sfxLevel * duck.gain * AudioMix.stormRain * rainLevel)
+            if let p = rainPlayer, !p.isPlaying, active, settings.sfxLevel > 0.01 { p.play() }
+        } else if let p = rainPlayer, p.isPlaying { p.stop() }
+    }
+
     func uiTap() { play(.uitap) }
     func uiConfirm() { play(.uiconfirm) }
 
@@ -711,6 +750,11 @@ final class AudioHub {
         guard active else { return }
         DayClock.shared.refresh()
         duck.update(dt: dt)
+        if stormDuck < 1 {          // the music dips at a rumble and comes back over a few seconds
+            stormDuckClock += dt
+            stormDuck = min(1, stormDuckLow + (1 - stormDuckLow) * Float(max(0, stormDuckClock - 0.4) / AudioMix.stormDuckBack))
+            if stormDuck >= 1 { stormDuckLow = 1 }
+        }
         if danceGain != danceTarget {
             let step = Float(dt) / (danceTarget < danceGain ? 1.0 : 2.0)
             danceGain = danceTarget < danceGain ? max(danceTarget, danceGain - step) : min(danceTarget, danceGain + step)
@@ -735,7 +779,7 @@ final class AudioHub {
 
     private func applyLevels() {
         guard started else { return }
-        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain
+        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain * stormDuck
         let main = Float(mainSlew.gain)
         var loud: Float = 0
         for d in decks { d.player.volume = equalPower(d.fader.level) * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }

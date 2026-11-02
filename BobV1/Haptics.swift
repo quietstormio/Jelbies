@@ -433,6 +433,17 @@ final class HapticDriver {
         for k in sinks { k.wobble(peak: peak, sharpness: 0.2, tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }
     }
 
+    /// Ambient cues (the storm, Melon/Weather.swift): a very soft, low, long pulse and one soft tick. They pair NO sound (the storm has its own) and no-op when the
+    /// engine is not warm or Haptics is off in Settings.
+    func ambient(peak: Float, duration: Float) {
+        guard warm, enabled else { return }
+        for k in sinks { k.wobble(peak: peak, sharpness: 0.05, tau: duration * 0.55, duration: duration) }
+    }
+    func ambientTick(intensity: Float) {
+        guard warm, enabled else { return }
+        for k in sinks { k.transient(intensity: intensity, sharpness: 0.15) }
+    }
+
     func takeCost() -> (ms: Double, n: Int) {
         let r = (costN > 0 ? costSum / Double(costN) * 1000 : 0, costN); costSum = 0; costN = 0; return r
     }

@@ -620,6 +620,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }
         PerfProbe.end("ears.tick", pe)      // sound reactions (Audio/EarsListener.swift)
         lapEnd(.ears, &lt)
+        stormTick(reduce: reduce)          // the weather: a storm's clock, thunder, the huddle (Melon/Weather.swift, BlobBrain+Weather.swift)
         if actors.count > 1 {
             for a in actors.dropFirst() { otherTick(a, reduce: reduce) }
             lapEnd(.others, &lt)
@@ -648,6 +649,8 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// Tucked in: everybody is asleep and at least one was put to bed by voice ("goodnight"): the lamp dims and a quilt lies over the pile.
     private var tuckAmount: Float = 0
+    /// The storm's post exposure for this frame (MelonStage+Weather.swift).
+    private var weatherExposure: Float = 1
     private func updateTuck(_ renderer: MelonRenderer, dt: Float) {
         let brains = actors.compactMap(\.brain)
         let down = !brains.isEmpty && brains.allSatisfy { $0.isNapping } && brains.contains { $0.sleep.tucked }
@@ -1238,6 +1241,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
             renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene
+            let weather = weatherFrame(reduce: m.reduceMotion)
+            renderer.weatherLook = weather.look
+            weatherExposure = weather.exposure
             for a in actors {
                 renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
                 renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id) || model.care.parkHides(a.id), body: a.id)
@@ -1249,7 +1255,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         var fp = FrameParams()
         fp.time = simTime
         fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
-        fp.exposure = 1
+        fp.exposure = game ? weatherExposure : 1          // (a storm dims the room and a flash lifts it: Melon/Weather.swift)
         fp.meshAlpha = m.showMesh ? 0.32 : 0
         fp.bg = m.palette.palette.matte ? melonCreamLinear : melonBackgroundLinear
         renderer.setUniforms(camera: cam, light: light, palette: m.palette.palette, params: fp,

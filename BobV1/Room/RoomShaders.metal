@@ -28,6 +28,8 @@ struct RoomUniforms {
     float4 lampPos;     // xyz lamp position, w = pool radius
     float4 style;       // x floor, y wall, z rug style (0 = the living room's)
     float4 win;         // x = window bottom, y = window height (the pane gradient)
+    float4 weather;     // storm (Melon/Weather.swift): x rain, y flash, z time, w gloom
+    float4 weather2;    // x flash spot across the screen, y 1 = this is the room-cache build (mark the pane, the blit adds the weather), zw render size in px
 };
 
 struct RoomVertexIn {
@@ -64,6 +66,42 @@ static float roomHash(float2 p) {
     float3 p3 = fract(float3(p.xyx) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
+}
+
+
+/// The storm on a window pane (the same function is in GfxShaders.metal, where the room-cache blit applies it to the pixels the cache build marked): the sky
+/// darkens toward a storm grey-blue, rain streaks and drops run down the glass, and a lightning flash lights the sky. All in screen pixels, no texture.
+static float3 roomWeatherPane(float3 pane, float2 px, float4 w, float4 w2) {
+    float lum = dot(pane, float3(0.3, 0.59, 0.11));
+    float3 c = pane;
+    if (w.w > 0.001) {
+        float3 storm = float3(0.44, 0.50, 0.62) * (0.10 + 0.46 * lum);
+        c = mix(c, storm, w.w * 0.88);
+    }
+    float unit = min(w2.z, w2.w);
+    float2 s = px / unit;
+    float flash = w.y;
+    if (w.x > 0.001) {
+        float sl = s.x * 92.0 + s.y * 14.0;
+        float cell = floor(sl);
+        float h = roomHash(float2(cell, 3.0));
+        float on = step(1.0 - 0.5 * w.x, roomHash(float2(cell, 9.0)));
+        float y = fract(s.y * (0.9 + h) - w.z * (0.55 + h * 0.6) + h * 7.0);
+        float across = abs(fract(sl) - 0.5);
+        float streak = smoothstep(0.17, 0.02, across) * smoothstep(0.0, 0.05, y) * smoothstep(0.30, 0.05, y) * on;
+        float2 g = s * float2(30.0, 24.0);
+        float2 id = floor(g);
+        float2 jit = float2(roomHash(id + 1.3), roomHash(id + 5.1)) - 0.5;
+        float drop = smoothstep(0.20, 0.04, length(fract(g) - 0.5 - jit * 0.5)) * step(0.80 - 0.1 * w.x, roomHash(id + 9.7));
+        float glint = (streak * 0.20 + drop * 0.13) * w.x;
+        c += float3(0.70, 0.82, 1.0) * glint * (0.35 + lum) * (1.0 + 2.5 * flash);
+    }
+    if (flash > 0.001) {
+        float gx = (px.x / w2.z - (0.1 + 0.8 * w2.x)) * 2.6;
+        float glow = 0.6 + 0.4 * exp(-gx * gx);
+        c += float3(0.74, 0.82, 1.0) * flash * 0.95 * glow;
+    }
+    return c;
 }
 
 constexpr sampler roomCmp(coord::normalized, address::clamp_to_edge, filter::linear, compare_func::less_equal);
@@ -365,6 +403,8 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
                 pane += star * u.sky0.w * smoothstep(0.15, 0.6, t) * float3(1.0, 0.96, 0.85) * 1.7;
             }
         }
+        if (u.weather2.y > 0.5) { return float4(pane, 2.0); }          // the room-cache build: alpha 2 marks the glass (resolved edges keep their coverage), the blit adds the storm
+        if (u.weather.x + u.weather.y + u.weather.w > 0.001) { pane = roomWeatherPane(pane, in.position.xy, u.weather, u.weather2); }
         return float4(pane, 1.0);
     } else if (m == 1) {
         float seam;

@@ -7,6 +7,12 @@
 - **Adding an emote safely.** 1) Add the case (IdleKind / Script / gait name). 2) Give it a scenario in `OnePieceInvariantTests.idleTable` (or `gaitScenario`): `testEveryMoveIsListed` and `EmoteFeetTests.testEveryEmoteKeepsItsFeet` fail until you do, and the same test then covers the new emote for all 6 characters x bare / shoes automatically. 3) Run `EmoteFeetTests` (named tests for the emotes that broke on the phone + the auto-coverage; the only exemptions are in `EmoteFeetTests.exempt`, each with its reason). 4) The runtime guard (`Skinner.leashObserver`, armed in `OnePieceInvariantTests.run`) fails ANY feet test, naming the emote, if the leash or tether moved a piece. If it fires, fix the placement (the move's foot targets), never the leash.
 - **Phone check.** Launch with `-FootLog 1`; the app writes a JSON line for every frame the leash / tether acts (pole_hip, pull, script, idle kind, tilt). After the new emote: play it, then look for `pull` lines in the log. None = fine.
 
+## Weather (2026-11-02)
+
+- A storm rolls in every 2-5 hours of play (`WeatherBook`, persisted: relaunch neither rerolls nor repeats), lasts 2-4 min: build-up (sky darkens, rain, far rumbles, one Jelbie peers out of a window), peak (gentle two-pulse lightning + soft thunder every 7-15 s; the huddle), clearing (shake-off, scatter). `-Storm 1` forces one 5 s after the room is up (`-Storm 2` at the peak, `-Storm 3` at the clearing, `-StormDelay s`).
+- Window: rain, gloom and flash are applied per frame at the room-cache blit (the cache build marks the glass with alpha 2) and in the window shader; the room dims / lifts through the post exposure. No cache rebuild, no extra pass (`WeatherPerfTests`).
+- Jelbies: `StormReactor` (BlobBrain+Weather.swift) on the storm pose channel `BlobBrain.storm`; feet suite `StormFeetTests`. Sounds `storm_*.m4a` are SYNTHESIZED PLACEHOLDERS (the ElevenLabs key was rejected 2026-11-02); regenerate soft thunder / rain / sigh when the key is renewed.
+
 ## Disk hygiene
 
 Run `/cleanup` (`scripts/cleanup-safe.sh`, dry run first) before big multi-agent rounds. Every agent must build with `-derivedDataPath .claude/worktrees/dd_<name>` and delete its own simulators (`xcrun simctl delete <udid>`) when done.
