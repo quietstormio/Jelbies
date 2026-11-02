@@ -86,7 +86,7 @@ final class A11yMotionTests: XCTestCase {
         for s in SFX.allCases {
             let t = SoundCaptions.text(s)
             switch s {
-            case .uitap, .uiconfirm, .select, .footstep, .tick, .goodStep, .pageTurn, .shoeOn, .wobble, .zoomies, .setdown, .bubblepop:
+            case .uitap, .uiconfirm, .select, .footstep, .congaTick, .tick, .goodStep, .pageTurn, .shoeOn, .wobble, .zoomies, .setdown, .bubblepop:
                 XCTAssertNil(t, "\(s) is not captioned")
             default: XCTAssertNotNil(t, "\(s) has a caption")
             }

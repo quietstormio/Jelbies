@@ -402,6 +402,10 @@ final class BlobBrain {
     var armPathName = ArmPath.wave.name      // the keyframe path the active arm override plays (wave, or the dining nubToMouth)
     var armS: Float = 0                      // path parameter for the non-wave paths (set by the dining timeline)
     var armT: Float = 0
+    /// The wave's arm-side foot lift is off while a social holds the arm up (the high five).
+    var waveFootOff = false
+    /// A group emote asks for a soft haptic (intensity, sharpness): the stage forwards it (BlobSocial+Emotes `EmoteHaptic`).
+    var onEmoteHaptic: ((Float, Float) -> Void)?
     var armBlend: Float = 0
     var rng: UInt64 = 0xA24BAED4963EE407
 
@@ -923,7 +927,7 @@ final class BlobBrain {
         dineAbort()
         socialAbort(skinner)
         idleReset(skinner)
-        armActive = false; armBlend = 0; armPathName = ArmPath.wave.name
+        armActive = false; armBlend = 0; armPathName = ArmPath.wave.name; waveFootOff = false
         armWalkWant = 0
         feet.reset(); feetInit = false; stepLive = false; walkFinal = false; pivotSide = nil; nubOverride = false; beanHold = 0; nubEnv = 0; nubTarget = 0; nubPhi = [0, 0]
         poseW = 0; poseOn = false
@@ -1023,7 +1027,12 @@ final class BlobBrain {
         if peerCacheStep == stepCounter { return peerCache }
         let all = peers()
         let perched = socialOthers().filter { $0 !== self && $0.isPerched }.map(\.position)
-        let r = perched.isEmpty ? all : all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
+        var r = perched.isEmpty ? all : all.filter { p in !perched.contains { simd_distance($0, p.pos) < 0.5 } }
+        // a choreographed group treat (conga line, ring dance): the crew keep their spacing by the choreography, they do not steer round each other
+        if let s = social, s.choreo, s.end == nil {
+            let mates = s.members.filter { $0 !== self }.map(\.position)
+            if !mates.isEmpty { r = r.filter { p in !mates.contains { simd_distance($0, p.pos) < 0.45 } } }
+        }
         peerCache = r; peerCacheStep = stepCounter
         trackPeerVelocities(r)
         return r
@@ -1476,7 +1485,7 @@ final class BlobBrain {
             NSLog("%@", String(format: "[melon] wave arm runtime: %.1f us per sim step (evaluate + hand-off), %d steps", armCostSum / Double(armCostN) * 1e6, armCostN))
             armCostSum = 0; armCostN = 0
         }
-        armActive = false
+        armActive = false; waveFootOff = false
         sim.targets.removeAll()
         sim.restoreStiffness()
         clearSkinOverride()
@@ -1880,7 +1889,7 @@ final class BlobBrain {
                 if out != 0 || fwd != 0 { outV = rotXZ(SIMD2((s == 1 ? 1 : -1) * out, fwd), fyaw) }
                 var waveLift: Float = 0
                 if waving && s == (armSide > 0 ? 1 : 0) {
-                    let e = WaveScript.footLift(at: armT)
+                    let e = waveFootOff ? 0 : WaveScript.footLift(at: armT)          // (the high five holds the arm up with the foot planted: BlobSocial+Friends nubPin)
                     outV += rotXZ(SIMD2(Float(armSide) * waveFootOut, waveFootFwd), yaw) * (e * amplitude)
                     h += waveFootLift * e * amplitude
                     tilt = waveFootTilt * e

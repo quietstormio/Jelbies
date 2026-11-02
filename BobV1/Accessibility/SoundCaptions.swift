@@ -12,7 +12,8 @@ nonisolated enum SoundCaptions {
     static func text(_ sfx: SFX, jelly name: String? = nil) -> String? {
         switch sfx {
         case .squish: return "Squish"
-        case .boop: return "Boop"
+        case .boop, .highFiveBoop: return "Boop"
+        case .ringChime: return "Soft chime"
         case .letgo: return "Boing"
         case .jump: return "Hop"
         case .chomp: return "Chomp"
@@ -55,7 +56,7 @@ nonisolated enum SoundCaptions {
         case .emoteSpin: return "Twirl"
         case .emoteWiggle: return "Wiggle boing"
         // quiet or constant: no caption
-        case .wobble, .footstep, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
+        case .wobble, .footstep, .congaTick, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
         }
     }
 

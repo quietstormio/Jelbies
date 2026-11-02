@@ -27,6 +27,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     /// Solo emote cues (files emote_hic_1 ... : one soft clip each, 2026-11-02; BlobBrain+Emotes.swift). Each plays at most once per 10 s.
     case emoteHic = "emote_hic", emoteAchoo = "emote_achoo", emoteWoozy = "emote_woozy", emoteBow = "emote_bow", emotePat = "emote_pat"
     case emoteTail = "emote_tail", emoteFlutter = "emote_flutter", emoteSpin = "emote_spin", emoteWiggle = "emote_wiggle"
+    /// Group emotes (2026-11-02): the high five's soft bump boop (highfive_boop_N), the conga line's waddle tick (conga_tick_N), the ring dance's chimes (ring_chime_N).
+    case highFiveBoop = "highfive_boop", congaTick = "conga_tick", ringChime = "ring_chime"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
@@ -54,6 +56,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 0.5          // (soft: the user once complained of too many clown sounds)
+        case .highFiveBoop: return 0.8
+        case .congaTick: return 0.45
+        case .ringChime: return 0.6
         case .volleyBonk, .volleySpike, .volleyLand: return 0.8
         case .volleyPoint: return 0.6
         case .letgo: return 0.7
@@ -71,6 +76,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .footstep: return 0.2
         case .squish, .boop, .wobble: return 0.16
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 10          // never twice within 10 s
+        case .highFiveBoop: return 0.3
+        case .congaTick: return 0.2
+        case .ringChime: return 0.25
         case .letgo: return 0.25
         case .chomp, .slurp, .crunchNugget, .crunchFries: return 0.25
         case .soapbubbles, .lintroller, .splash: return 0.45

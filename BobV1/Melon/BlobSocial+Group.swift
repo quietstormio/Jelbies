@@ -36,7 +36,9 @@ enum GroupTuning {
 }
 
 extension SocialKind {
-    var isGroup: Bool { self == .groupHug || self == .groupCheer || self == .conga || self == .circleDance }
+    var isGroup: Bool { self == .groupHug || self == .groupCheer || self == .conga || self == .circleDance || isTreat }
+    /// The rare treats (congaLine, ringDance): own cooldowns, see EmoteTuning.
+    var isTreat: Bool { self == .congaLine || self == .ringDance }
 }
 
 extension BlobBrain {
@@ -127,8 +129,10 @@ extension BlobBrain {
         guard socialFree else { return false }
         var crew: [BlobBrain] = [self]
         for o in others where o !== self && (o.socialFree || o.socialWandering) && !crew.contains(where: { $0 === o }) { crew.append(o) }
-        for o in groupCandidates() where crew.count < GroupTuning.maxCrew && !crew.contains(where: { $0 === o }) { crew.append(o) }
-        guard crew.count >= 3, crew.count <= GroupTuning.maxCrew else { return false }
+        let cap = kind.isTreat ? EmoteTuning.treatCrew : GroupTuning.maxCrew          // (the treats are for the three housemates: a visitor beyond them watches)
+        for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
+        crew = Array(crew.prefix(cap))
+        guard crew.count >= (kind == .congaLine ? 2 : 3), crew.count <= cap else { return false }
         if kind.isFast, fastOthers(except: crew) > 0 { return false }
         currentPose(sim)
         for m in crew where !m.socialFree { guard m.socialBeckonStop() else { return false } }          // (out on a wander leg: it ends a few steps on, then he joins)
@@ -143,6 +147,9 @@ extension BlobBrain {
         case .conga:
             s = newGroupSession(kind, crew: crew, duration: vDur(8.5))
             s.leaderWait = 0.2; s.home0 = position
+        case .congaLine, .ringDance:
+            guard let st = emoteSetup(kind, crew: crew) else { return false }
+            s = st
         default: return false
         }
         for m in crew { m.socialBook.passThrough = (kind == .groupHug || kind == .circleDance); m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }
@@ -150,7 +157,7 @@ extension BlobBrain {
         return true
     }
 
-    private func newGroupSession(_ kind: SocialKind, crew: [BlobBrain], duration: Float) -> SocialSession {
+    func newGroupSession(_ kind: SocialKind, crew: [BlobBrain], duration: Float) -> SocialSession {
         let s = SocialSession(kind: kind, a: crew[0], b: crew[1])
         s.duration = duration
         s.crew = crew.map { CrewBox(b: $0) }; s.crewIDs = crew.map { $0.steerID }
@@ -177,17 +184,19 @@ extension BlobBrain {
         case .groupCheer: driveCheer(s, mem, isA, sim)
         case .conga: driveConga(s, mem, isA, sim, dt)
         case .circleDance: driveCircle(s, mem, isA, sim)
+        case .congaLine: driveCongaLine(s, mem, isA, sim, dt)
+        case .ringDance: driveRingDance(s, mem, isA, sim, dt)
         default: break
         }
     }
 
-    private var myIndex: Int { social?.crewIDs.firstIndex(of: steerID) ?? 0 }
-    private func slot(_ s: SocialSession) -> SIMD2<Float> { s.slotSpot[steerID] ?? position }
-    private func faceCentre(_ s: SocialSession) { holdFacing(yawTo(s.home0)) }
-    private func everyone(_ mem: [BlobBrain], _ f: (BlobBrain) -> Bool) -> Bool { mem.allSatisfy(f) }
+    var myIndex: Int { social?.crewIDs.firstIndex(of: steerID) ?? 0 }
+    func slot(_ s: SocialSession) -> SIMD2<Float> { s.slotSpot[steerID] ?? position }
+    func faceCentre(_ s: SocialSession) { holdFacing(yawTo(s.home0)) }
+    func everyone(_ mem: [BlobBrain], _ f: (BlobBrain) -> Bool) -> Bool { mem.allSatisfy(f) }
 
     /// Phase 0 (all kinds with a ring): walk to my place. Phase 1: turn to the centre and settle. Returns true while still gathering.
-    private func gather(_ s: SocialSession, _ mem: [BlobBrain], _ isA: Bool, _ sim: SoftBody, settle: Float) -> Bool {
+    func gather(_ s: SocialSession, _ mem: [BlobBrain], _ isA: Bool, _ sim: SoftBody, settle: Float) -> Bool {
         switch s.phase {
         case 0:
             let spot = slot(s)
@@ -217,7 +226,7 @@ extension BlobBrain {
     }
 
     /// A joy hop for each member at its own beat (`stagger` seconds apart); true when everyone has hopped and landed.
-    private func joyHop(_ s: SocialSession, _ mem: [BlobBrain], _ sim: SoftBody, key: Int, stagger: Float, face f: Bool = true) -> Bool {
+    func joyHop(_ s: SocialSession, _ mem: [BlobBrain], _ sim: SoftBody, key: Int, stagger: Float, face f: Bool = true) -> Bool {
         stepKey(key)
         if !socialBook.apartStarted, fxFree, s.phaseT >= Float(myIndex) * stagger {
             socialBook.apartStarted = true
@@ -228,7 +237,7 @@ extension BlobBrain {
         return everyone(mem) { $0.socialBook.apartStarted && $0.fxFree } && s.phaseT > 0.5
     }
 
-    private func endGroup(_ s: SocialSession, _ mem: [BlobBrain]) {
+    func endGroup(_ s: SocialSession, _ mem: [BlobBrain]) {
         s.finish(.done)
         for m in mem { for x in mem where x !== m { m.onSocial?(.makeUp(partner: x.steerID)); break } }
     }
