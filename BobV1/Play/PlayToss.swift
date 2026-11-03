@@ -44,12 +44,14 @@ enum PlayEvent: Equatable {
 @MainActor
 @Observable
 final class PlayToss {
-    enum Phase: Equatable { case off, inHand, flying, loose, catching }
+    enum Phase: Equatable { case off, inHand, flying, loose, catching, toy }
     enum Quality: Equatable { case good, short, weak }
 
     // MARK: observed state (the UI)
     private(set) var phase: Phase = .off
     var active: Bool { phase != .off }
+    /// The ball game is on (the Jelbies are held to their play line); a non-ball toy (the bubble wand, `.toy`) leaves them free.
+    var ballGame: Bool { active && phase != .toy }
     private(set) var ballKind: DecorKind = .ball
     private(set) var toyTitle = ""
     /// Rally of the last throw (hand-offs between a Jelbie and the ball), shown as a small "x3" for a moment after a catch.
@@ -125,6 +127,15 @@ final class PlayToss {
         camGoal = 1
         if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
         placeJellies()
+    }
+
+    /// Play mode on with a toy that is not the ball (the bubble wand): the camera eases to the play view, HUD hidden, Done shown; the Jelbies stay free.
+    func beginToy(title: String, snapCamera: Bool = false) {
+        guard phase == .off else { return }
+        toyTitle = title; jellies = []
+        phase = .toy
+        camGoal = 1
+        if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
     }
 
     /// Done: the Jelbies go back to roaming, the camera eases home.
@@ -239,7 +250,7 @@ final class PlayToss {
             if k >= 1 { phase = .inHand; finger = nil }
         case .flying, .loose:
             live(dt: dt, world: world)
-        case .off: break
+        case .off, .toy: break
         }
         // the ball is a soft obstacle for the walkers (nobody walks through it)
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }

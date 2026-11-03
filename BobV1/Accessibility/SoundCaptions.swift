@@ -64,7 +64,7 @@ nonisolated enum SoundCaptions {
         case .emoteStrut: return "Proud marching"
         case .emoteSploot: return "Soft flop"
         // quiet or constant: no caption
-        case .wobble, .footstep, .congaTick, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
+        case .bubbleBloop, .bubblePop, .bubbleChirp, .wobble, .footstep, .congaTick, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
         }
     }
 
