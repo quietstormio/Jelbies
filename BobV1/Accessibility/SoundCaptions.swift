@@ -56,7 +56,7 @@ nonisolated enum SoundCaptions {
         case .emoteSpin: return "Twirl"
         case .emoteWiggle: return "Wiggle boing"
         // quiet or constant: no caption
-        case .wobble, .footstep, .congaTick, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
+        case .bubbleBloop, .bubblePop, .bubbleChirp, .wobble, .footstep, .congaTick, .zoomies, .setdown, .bubblepop, .uitap, .uiconfirm, .select, .pageTurn, .shoeOn, .tick, .goodStep: return nil
         }
     }
 

@@ -29,6 +29,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case emoteTail = "emote_tail", emoteFlutter = "emote_flutter", emoteSpin = "emote_spin", emoteWiggle = "emote_wiggle"
     /// Group emotes (2026-11-02): the high five's soft bump boop (highfive_boop_N), the conga line's waddle tick (conga_tick_N), the ring dance's chimes (ring_chime_N).
     case highFiveBoop = "highfive_boop", congaTick = "conga_tick", ringChime = "ring_chime"
+    /// Bubble wand (2026-11-02, ElevenLabs, soft): the stream's bloop, a Jelbie's pop, a happy giggle after it (bubblewand_bloop_N / _pop_N / _chirp_N).
+    case bubbleBloop = "bubblewand_bloop", bubblePop = "bubblewand_pop", bubbleChirp = "bubblewand_chirp"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
@@ -57,6 +59,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .squish, .boop, .wobble: return 0.8
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 0.5          // (soft: the user once complained of too many clown sounds)
         case .highFiveBoop: return 0.8
+        case .bubbleBloop: return 0.3          // (very soft: a stream of them)
+        case .bubblePop: return 0.4
+        case .bubbleChirp: return 0.4
         case .congaTick: return 0.45
         case .ringChime: return 0.6
         case .volleyBonk, .volleySpike, .volleyLand: return 0.8
@@ -77,6 +82,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .squish, .boop, .wobble: return 0.16
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 10          // never twice within 10 s
         case .highFiveBoop: return 0.3
+        case .bubbleBloop: return 0.5
+        case .bubblePop: return 0.12
+        case .bubbleChirp: return 1.5
         case .congaTick: return 0.2
         case .ringChime: return 0.25
         case .letgo: return 0.25

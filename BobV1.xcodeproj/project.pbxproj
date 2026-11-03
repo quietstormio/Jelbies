@@ -501,7 +501,7 @@
 				INFOPLIST_FILE = "BobV1-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, and with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, with Ears on they listen for claps, whistles, laughter and music while the app is open, and you can blow bubbles with the bubble wand. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -540,7 +540,7 @@
 				INFOPLIST_FILE = "BobV1-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, and with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, with Ears on they listen for claps, whistles, laughter and music while the app is open, and you can blow bubbles with the bubble wand. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

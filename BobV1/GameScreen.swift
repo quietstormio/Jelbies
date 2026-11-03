@@ -293,6 +293,7 @@ struct GameScreen: View {
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(GameScreen.townMusic(town))
             Ears.shared.launch(care: model.care)
+            PlayToyRegistry.registerBuiltIns()
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
             let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
@@ -373,6 +374,7 @@ struct GameScreen: View {
         .overlay { RoomSwitchVeil(care: model.care) }
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
+        .overlay { if BubbleWand.shared.active { BubbleWandOverlay() } }          // the bubble wand toy (Toys/)
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
@@ -487,6 +489,11 @@ struct GameScreen: View {
             for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             if let p = d.string(forKey: "PracticeStart") { care.startDancePractice(jelly: who, dance: DanceID(rawValue: p) ?? .sway) } else { care.startShow(jelly: who) }
+        }
+        // capture aid: -BubbleDemo 1 takes the bubble wand out and plays a simulated blow (pulses); 2 blows without pause (Toys/BubbleWand.swift)
+        if d.integer(forKey: "BubbleDemo") != 0 {
+            await sleep(d.double(forKey: "BubbleDelay") > 0 ? d.double(forKey: "BubbleDelay") : 3)
+            BubbleWand.shared.startDemo(mode: d.integer(forKey: "BubbleDemo"), care: care)
         }
         // capture aid: -EarsDemo on|hearing:<kind>|denied|paused shows the ear button's state (no engine), and after -EarsDelay s (default 4) plays
         // the reaction: -EarsEvent clap|double|dance|whistle|bark|laugh|meow|bang (dance = 110 BPM from then on)

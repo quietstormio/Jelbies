@@ -627,6 +627,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         let pe = PerfProbe.begin()
         if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }
         PerfProbe.end("ears.tick", pe)      // sound reactions (Audio/EarsListener.swift)
+        if game, BubbleWand.shared.active {          // the bubble wand toy (Toys/BubbleWand.swift): bubbles float, the Jelbies watch / chase / pop them
+            let pb = PerfProbe.begin()
+            let js = actors.compactMap { a in a.brain.map { BubbleJelly(id: a.id, brain: $0, sim: a.sim) } }
+            BubbleWand.shared.tick(jellies: js, dt: sim.stepDt, haptics: model.touch.haptics)
+            PerfProbe.end("bubbleWand", pb)
+        }
         lapEnd(.ears, &lt)
         stormTick(reduce: reduce)          // the weather: a storm's clock, thunder, the huddle (Melon/Weather.swift, BlobBrain+Weather.swift)
         if actors.count > 1 {
@@ -1767,7 +1773,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let play = model.touch
         model.care.focusGroup.touchAnchor = (f.isFocused && touchID != 0) ? tSim.centroid() : nil
         let bathLive = model.care.bath.acceptsTouch
-        play.haptics.setWarm(f.phase == .approaching || f.phase == .focused || bathLive)
+        play.haptics.setWarm(f.phase == .approaching || f.phase == .focused || bathLive || BubbleWand.shared.hapticsWanted)
         RoomHaptics.shared.externalBusy = play.haptics.warm          // (focus mode / the wash give their own haptics: the room's emote taps stay out)
         let tn = model.care.needs(for: touchID)
         play.mood = tn.mood; play.attentionWanted = tn.wantedNeed == .attention      // a grumpy Blob is touched with an annoyed reaction

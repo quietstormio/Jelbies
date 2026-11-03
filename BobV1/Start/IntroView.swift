@@ -27,7 +27,10 @@ enum IntroGate {
     /// The animation's own paper (#F0EFF0), so any letterbox edge is seamless.
     static let background = Color(red: 240 / 255, green: 239 / 255, blue: 240 / 255)
     static func shouldShow(_ d: UserDefaults = .standard) -> Bool {
-        true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
+        #if targetEnvironment(simulator)
+        if d.integer(forKey: "SkipIntro") != 0 { return false }          // capture aid (simulator only): -SkipIntro 1
+        #endif
+        return true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
     }
     static func markSeen(_ d: UserDefaults = .standard) { d.set(true, forKey: seenKey) }
 }
