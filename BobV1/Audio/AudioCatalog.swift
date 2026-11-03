@@ -28,6 +28,9 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case emoteHic = "emote_hic", emoteAchoo = "emote_achoo", emoteWoozy = "emote_woozy", emoteBow = "emote_bow", emotePat = "emote_pat"
     case emoteTail = "emote_tail", emoteFlutter = "emote_flutter", emoteSpin = "emote_spin", emoteWiggle = "emote_wiggle"
     /// Group emotes (2026-11-02): the high five's soft bump boop (highfive_boop_N), the conga line's waddle tick (conga_tick_N), the ring dance's chimes (ring_chime_N).
+    /// Batch-2 emotes (2026-11-02, g-emotes3): vocals in the Jelbie voice band (spinhug, starsigh, tilt, welcome, checkin) and soft non-vocal clips (twinkle, strut, sploot).
+    case emoteSpinHug = "emote_spinhug", emoteStarSigh = "emote_starsigh", emoteTilt = "emote_tilt", emoteWelcome = "emote_welcome", emoteCheckIn = "emote_checkin"
+    case emoteTwinkle = "emote_twinkle", emoteStrut = "emote_strut", emoteSploot = "emote_sploot"
     case highFiveBoop = "highfive_boop", congaTick = "conga_tick", ringChime = "ring_chime"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
@@ -56,6 +59,8 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .crunchNugget, .crunchFries: return 0.5
         case .squish, .boop, .wobble: return 0.8
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 0.5          // (soft: the user once complained of too many clown sounds)
+        case .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn: return 0.5
+        case .emoteTwinkle, .emoteStrut, .emoteSploot: return 0.55
         case .highFiveBoop: return 0.8
         case .congaTick: return 0.45
         case .ringChime: return 0.6
@@ -76,6 +81,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
         case .footstep: return 0.2
         case .squish, .boop, .wobble: return 0.16
         case .emoteHic, .emoteAchoo, .emoteWoozy, .emoteBow, .emotePat, .emoteTail, .emoteFlutter, .emoteSpin, .emoteWiggle: return 10          // never twice within 10 s
+        case .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn, .emoteTwinkle, .emoteStrut, .emoteSploot: return 8          // never twice within 8 s
         case .highFiveBoop: return 0.3
         case .congaTick: return 0.2
         case .ringChime: return 0.25

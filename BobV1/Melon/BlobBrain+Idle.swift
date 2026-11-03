@@ -80,6 +80,13 @@ enum IdleKind: String, CaseIterable, Sendable {
     case politeBow     // a sweet bow: forward ~0.35 rad, a slight head dip, a hold, then up
     case bellyDrum     // pats the belly with both stubby arms alternately, the body jiggling with each pat
     case signatureFlourish   // the species' own: Pip wags the tail, wings flutter, Moss spins the daisy, Teddy wiggles ears + pom, Bob a proud jiggle
+    // batch 2 (2026-11-02, g-emotes3): BlobBrain+Emotes2.swift. Treats registered in EmoteTreats.batch2 (NOT in the idle weight tables); the last three answer the player.
+    case stargazing    // NIGHT: waddles to a window, looks up with starry eyes, a slow happy sway, a little sigh
+    case proudStrut    // chest-out high-knee march on the spot with a head-high bounce, then a happy hop (after a win, or rarely when very happy)
+    case floorNapFlop  // really sleepy: flops flat on his belly (sploot), eyes closed for 3...6 s, then up (or straight into bed at bedtime)
+    case tapTilt       // (player) a tap on the glass near him: he turns and tilts his head toward it with a curious "hm?"
+    case welcomeWiggle // (player) the app is opened again after a short break: an excited welcome wiggle
+    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"; a touch makes him light up
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -272,6 +279,7 @@ extension BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("idleMaybeStart", probe) }
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
+        if treat2MaybeStart(sim) { return true }          // (batch-2 treats: BlobBrain+Emotes2.swift; EmoteTreats.selfSchedule = false hands them to the treat slot)
         if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
         guard idleState.kind == nil, !held, attached else { return false }
         // (W2: a due urge does not wait out the cooldown of the special before it: measured at 13 solo dashes per 10 min in the okay room with the cooldown in the way)
@@ -350,7 +358,7 @@ extension BlobBrain {
         switch script {
         case .idle: mine = true
         case .spin: mine = kind == .tail || kind == .legSpin
-        case .walk: mine = (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .window && idleState.windowGo)
+        case .walk: mine = (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || ((kind == .window || kind == .stargazing) && idleState.windowGo)
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
             if kind == .zoomies && idleState.phase == 0 {
@@ -361,7 +369,7 @@ extension BlobBrain {
             }
             else if kind == .sleep && sleep.stage == 0 { mine = true; sleepArrived(sim, skinner) }
             else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
-            else if kind == .window && idleState.windowGo { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
+            else if (kind == .window || kind == .stargazing) && idleState.windowGo { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
             else if Self.decorKinds.contains(kind) && idleState.decorGo { mine = true; decorArrived(sim, skinner); return }
             else if kind == .tail { mine = true; tailNext(sim, skinner); return }
             else if kind == .legSpin { mine = true; mouthOpen = 0; flourishEnd(skinner); return }
@@ -377,7 +385,7 @@ extension BlobBrain {
             if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true) }
         } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
-            case .window where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
+            case .window where idleState.windowGo, .stargazing where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway, .stopLook, .lieDown: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:
                 // on the bag he hops off (the hold ends now); a turn on the floor just stops; a hop in progress is finished first
@@ -618,6 +626,8 @@ extension BlobBrain {
             script = .idle; activity = .lookingAround
         case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish:
             return emoteBegin(kind, sim)
+        case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
+            return emote2Begin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -687,6 +697,7 @@ extension BlobBrain {
         case .tailThump: runTailThump(sim, skinner, dt)
         case .tailHug: runTailHug(sim, skinner, dt)
         case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
+        case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)

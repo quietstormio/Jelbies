@@ -1008,6 +1008,7 @@ struct CareMenu: View {
     }
 
     private func tap(_ item: HUDItem) {
+        PlayerPresence.touch()
         frozenMode = mode
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { frozenMode = nil }
         let route = HUDMenu.perform(item, mode, care: care)

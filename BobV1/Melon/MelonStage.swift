@@ -147,6 +147,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         controller?.gfxWake()          // leave the 30 fps idle rest at once (the next draw may be 33 ms away)
         controller?.noteUserTouch()          // any finger restarts the night-idle bedtime clock
+        PlayerPresence.touch()
         claim()
         activeTouches += touches.count
         if PhotoCam.active { return }          // Photo mode: fingers move the camera, they never touch a Jelbie
@@ -178,6 +179,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     // MARK: Gestures
 
     @objc private func pinched(_ g: UIPinchGestureRecognizer) {
+        PlayerPresence.touch()
         guard g.state == .changed, g.scale > 0 else { return }
         if PhotoCam.active { PhotoCam.zoom(by: Float(g.scale)); g.scale = 1; return }
         controller?.pinch(scale: Float(g.scale))
@@ -185,12 +187,14 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     }
 
     @objc private func doubleTapped(_ g: UITapGestureRecognizer) {
+        PlayerPresence.touch()
         guard g.state == .ended else { return }
         if controller?.game == true { controller?.gameDoubleTap(g.location(in: self)) }     // game: a double tap on a Blob selects it (no camera reset)
         else { controller?.resetCamera() }
     }
 
     @objc private func tapped(_ g: UITapGestureRecognizer) {
+        PlayerPresence.touch()
         if g.state == .ended, controller?.game == true { controller?.gameSingleTap(g.location(in: self)) }
     }
 
@@ -389,6 +393,19 @@ final class MelonController: NSObject, MTKViewDelegate {
     static let jellyGap: Float = 1.4
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
     var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
+    /// When each Jelbie last got a social heart (`socialHeart`).
+    var socialHeartAt: [Int: Double] = [:]
+
+    /// A heart over a Jelbie after a warm moment with another one (hug, bump, spin-hug, play, greeting ...): the selected one's through the touch hearts (his anchor), every other one's over his own head
+    /// (the greeting hearts' layer). Subtle: at most one per Jelbie every 2.2 s, none in the close-up / a game.
+    func socialHeart(_ id: Int, now: Double) {
+        guard id < actors.count, now - (socialHeartAt[id] ?? -10) > 2.2 else { return }
+        let care = model.care
+        guard !care.race.active, !care.volley.active, !care.bath.active else { return }
+        socialHeartAt[id] = now
+        if actors[id].selected { model.touch.spawnHeart(now: now) }
+        else if !care.focus.isActive { care.bubbleHub.spawnHeart(for: id, now: now) }
+    }
 
     /// Wires one brain into the room: it steers around the other Jellies (a standing Jelly is an obstacle to everybody; between two walkers the
     /// lower id gives way) and walks by the room's floor rules.
@@ -402,12 +419,16 @@ final class MelonController: NSObject, MTKViewDelegate {
         // Jellies interacting (BlobSocial.swift): the other brains, and what a social does outside the brain (a heart, a light haptic for the one the player has)
         b.socialOthers = { [weak self, weak b] in self?.socialBrains().filter { $0 !== b } ?? [] }
         b.onSocial = { [weak self] e in
-            guard let self, id < self.actors.count, self.actors[id].selected else { return }
+            guard let self, id < self.actors.count else { return }
             let now = CACurrentMediaTime()
+            let selected = self.actors[id].selected
             switch e {
-            case .boop: self.model.touch.spawnHeart(now: now); if self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.3, sharpness: 0.25) }
-            case .makeUp: self.model.touch.spawnHeart(now: now)
-            case .shove: if self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.22, sharpness: 0.3) }
+            case .boop:
+                self.socialHeart(id, now: now)
+                if selected, self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.3, sharpness: 0.25) }
+            case .makeUp: self.socialHeart(id, now: now)
+            case .ended(let kind, _, let how): if how == .done, kind.isWarm { self.socialHeart(id, now: now) }          // (every warm session ends with a heart for each of them, even one that had no bump)
+            case .shove: if selected, self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.22, sharpness: 0.3) }
             default: break
             }
         }
@@ -1526,6 +1547,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()
+        } else if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1, pickJelly(p, touchSize) == nil {
+            // a tap on the empty floor / glass: the nearest free Jelbie may tilt his head toward it (batch-2 emote, BlobBrain+Emotes2.swift)
+            let ray = unproject(ndc: ndc(p, touchSize), invViewProj: lastCam.invViewProj)
+            if abs(ray.d.y) > 1e-4 {
+                let t = (0 - ray.o.y) / ray.d.y
+                if t > 0 { let q = ray.o + ray.d * t; _ = BlobBrain.tapCue(at: SIMD2(q.x, q.z), brains: actors.compactMap(\.brain)) }
+            }
         }
     }
 
