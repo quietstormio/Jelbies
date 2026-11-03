@@ -472,18 +472,43 @@ final class AudioHub {
 
     private func panFor(x: Float?) -> Float { x.map { min(max($0 / 5, -1), 1) * 0.5 } ?? 0 }
 
+    /// `AVAudioPlayer.play()` + the setters are synchronous round trips to the audio server: 25-40 ms each on the phone's main thread (a footstep every
+    /// 0.26 s per Jelly was the whole "brain stall"). They go to this serial queue instead; the main thread only picks the player.
+    private static let playQueue = DispatchQueue(label: "io.mgsllc.BobV1.sfx", qos: .userInitiated)
+    /// Players handed to the queue and not yet started (main thread only): a second `fire` in the same instant takes another one.
+    @ObservationIgnored private var queuedPlayers = Set<ObjectIdentifier>()
+    @ObservationIgnored private var creating: [String: Int] = [:]
+
     private func fire(_ name: String, volume: Float, pan: Float, rate: Float = 1) {
         guard let u = url(name) else { return }
-        var ps = pool[name] ?? []
-        var p = ps.first(where: { !$0.isPlaying })
-        if p == nil, ps.count < 3, let np = try? AVAudioPlayer(contentsOf: u) { np.enableRate = true; np.prepareToPlay(); ps.append(np); pool[name] = ps; p = np }
+        let q0 = PerfProbe.begin()
+        let ps = pool[name] ?? []
+        var p = ps.first(where: { !queuedPlayers.contains(ObjectIdentifier($0)) && !$0.isPlaying })
+        PerfProbe.end("au.pick", q0)
+        if p == nil, ps.count + (creating[name] ?? 0) < 3 {          // a fourth overlapping voice is not made: a first overlap builds the player on the queue too (file read + prepare)
+            creating[name, default: 0] += 1
+            Self.playQueue.async { [weak self] in
+                guard let np = try? AVAudioPlayer(contentsOf: u) else { DispatchQueue.main.async { self?.creating[name, default: 1] -= 1 }; return }
+                np.enableRate = true; np.prepareToPlay()
+                np.volume = volume; np.pan = pan; np.rate = rate; np.currentTime = 0; np.play()
+                DispatchQueue.main.async { guard let self else { return }; self.creating[name, default: 1] -= 1; self.pool[name, default: []].append(np) }
+            }
+            Ears.shared.noteAppSound()
+        }
         guard let p else { return }
-        p.volume = volume
-        p.pan = pan
-        p.rate = rate
-        p.currentTime = 0
-        p.play()
+        let id = ObjectIdentifier(p)
+        queuedPlayers.insert(id)
+        Self.playQueue.async { [weak self] in
+            p.volume = volume
+            p.pan = pan
+            p.rate = rate
+            p.currentTime = 0
+            p.play()
+            DispatchQueue.main.async { self?.queuedPlayers.remove(id) }
+        }
+        let q4 = PerfProbe.begin()
         Ears.shared.noteAppSound()
+        PerfProbe.end("au.ears", q4)
     }
 
     /// Plays a random variant of `sfx` (never the same twice in a row). `x`: the Jelly's floor x for a gentle pan.
