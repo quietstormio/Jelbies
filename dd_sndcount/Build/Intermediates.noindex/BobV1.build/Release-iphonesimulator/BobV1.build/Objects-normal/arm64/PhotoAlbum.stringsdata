@@ -1,0 +1,88 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Photo/PhotoAlbum.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Photos",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 79
+        }
+      },
+      {
+        "comment": "",
+        "key": "No photos yet",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 88
+        }
+      },
+      {
+        "comment": "",
+        "key": "Use the camera button in the room to take one.",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 89
+        }
+      },
+      {
+        "comment": "",
+        "key": "Photo",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 104
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete this photo?",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 146
+        }
+      },
+      {
+        "comment": "",
+        "key": "Photo",
+        "location": {
+          "startingColumn": 127,
+          "startingLine": 131
+        }
+      },
+      {
+        "comment": "",
+        "key": "Allow Photos access in Settings to save.",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 142
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies photo",
+        "location": {
+          "startingColumn": 93,
+          "startingLine": 139
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 147
+        }
+      },
+      {
+        "comment": "",
+        "key": "Keep",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 148
+        }
+      }
+    ]
+  },
+  "version": 1
+}

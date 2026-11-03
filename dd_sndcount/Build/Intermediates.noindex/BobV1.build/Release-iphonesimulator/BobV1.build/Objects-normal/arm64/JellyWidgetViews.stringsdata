@@ -1,0 +1,48 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/Shared/JellyWidgetViews.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Jelbies",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 215
+        }
+      },
+      {
+        "comment": "",
+        "key": "Open the game to meet your Jelbie",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 216
+        }
+      },
+      {
+        "comment": "",
+        "key": "Open Jelbies",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 241
+        }
+      },
+      {
+        "comment": "",
+        "key": "Needs you",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 238
+        }
+      },
+      {
+        "comment": "",
+        "key": "All good",
+        "location": {
+          "startingColumn": 59,
+          "startingLine": 238
+        }
+      }
+    ]
+  },
+  "version": 1
+}

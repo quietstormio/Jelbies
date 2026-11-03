@@ -411,8 +411,6 @@ final class BlobBrain {
     var armT: Float = 0
     /// The wave's arm-side foot lift is off while a social holds the arm up (the high five).
     var waveFootOff = false
-    /// A group emote asks for a soft haptic (intensity, sharpness): the stage forwards it (BlobSocial+Emotes `EmoteHaptic`).
-    var onEmoteHaptic: ((Float, Float) -> Void)?
     var armBlend: Float = 0
     var rng: UInt64 = 0xA24BAED4963EE407
 

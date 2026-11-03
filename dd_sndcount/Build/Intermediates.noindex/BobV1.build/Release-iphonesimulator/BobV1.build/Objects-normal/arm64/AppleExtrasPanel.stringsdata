@@ -1,0 +1,80 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Intents/AppleExtrasPanel.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Live Activities",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 29
+        }
+      },
+      {
+        "comment": "",
+        "key": "When the Jelbies sleep (after 9 pm, or “goodnight”), a quiet card on the Lock Screen says when they are up.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 35
+        }
+      },
+      {
+        "comment": "",
+        "key": "When training Pep runs out, a countdown to the midnight refill.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 42
+        }
+      },
+      {
+        "comment": "",
+        "key": "Siri & Shortcuts",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 47
+        }
+      },
+      {
+        "comment": "",
+        "key": "Feed, water, goodnight, race and train work too.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 50
+        }
+      },
+      {
+        "comment": "",
+        "key": "Siri & Lock Screen",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 21
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close Siri and Lock Screen settings",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 26
+        }
+      },
+      {
+        "comment": "",
+        "key": "Nap card at bedtime",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 31
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pep refill countdown",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 38
+        }
+      }
+    ]
+  },
+  "version": 1
+}

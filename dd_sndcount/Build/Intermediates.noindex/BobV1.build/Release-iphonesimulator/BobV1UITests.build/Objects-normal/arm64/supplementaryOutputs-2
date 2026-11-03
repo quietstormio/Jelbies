@@ -1,0 +1,12 @@
+{
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/A11yUITests.swift" : {
+    "abi-baseline-json" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.abi.json",
+    "const-values" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.swiftconstvalues",
+    "dependencies" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.d",
+    "diagnostics" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.dia",
+    "objc-header" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-Swift.h",
+    "swiftdoc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.swiftdoc",
+    "swiftmodule" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.swiftmodule",
+    "swiftsourceinfo" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.swiftsourceinfo"
+  }
+}

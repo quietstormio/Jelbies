@@ -1,0 +1,184 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Intents/JelbiesIntents.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Check on the Jelbies",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 35
+        }
+      },
+      {
+        "comment": "",
+        "key": "How your Jelbies are doing right now, without opening the game.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "Feed a Jelbie",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 51
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the game and serves a snack (everyone when no Jelbie is named).",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 52
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Give a Jelbie water",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 71
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the game and pours a drink of water (everyone when no Jelbie is named).",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 72
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Put the Jelbies to bed",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 91
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the game, draws the curtains to night and tucks everyone in (the nap card on the Lock Screen).",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start a race",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 105
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the game on the Jelly Circuit with that Jelbie picked.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 106
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Train a Jelbie",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 125
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the game on training for that Jelbie.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 126
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Check on the Jelbies",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 160
+        }
+      },
+      {
+        "comment": "",
+        "key": "Feed",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 171
+        }
+      },
+      {
+        "comment": "",
+        "key": "Water",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 182
+        }
+      },
+      {
+        "comment": "",
+        "key": "Goodnight",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 193
+        }
+      },
+      {
+        "comment": "",
+        "key": "Race",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 203
+        }
+      },
+      {
+        "comment": "",
+        "key": "Train",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 213
+        }
+      }
+    ]
+  },
+  "version": 1
+}

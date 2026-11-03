@@ -1,0 +1,64 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Photo/PhotoMode.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Drag to look around, pinch to zoom, tap a Jelbie",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 146
+        }
+      },
+      {
+        "comment": "",
+        "key": "Photo album",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 160
+        }
+      },
+      {
+        "comment": "",
+        "key": "Shutter",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 211
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your photo",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 262
+        }
+      },
+      {
+        "comment": "",
+        "key": "Kept in your album",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 267
+        }
+      },
+      {
+        "comment": "",
+        "key": "Allow Photos access in Settings to save.",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 275
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies photo",
+        "location": {
+          "startingColumn": 78,
+          "startingLine": 272
+        }
+      }
+    ]
+  },
+  "version": 1
+}

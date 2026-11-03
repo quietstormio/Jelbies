@@ -1,0 +1,120 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/UI/KennelView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Close",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 64
+        }
+      },
+      {
+        "comment": "",
+        "key": "Blob Kennel",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pick a breed, then meet the litter.",
+        "location": {
+          "startingColumn": 39,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your home is full",
+        "location": {
+          "startingColumn": 79,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your home is full",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 100
+        }
+      },
+      {
+        "comment": "",
+        "key": "Meet the %@ litter",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 84
+        }
+      },
+      {
+        "comment": "",
+        "key": "Show me others",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 88
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose %@",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 150
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 148
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name your %@ %@",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 197
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld/12",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 223
+        }
+      },
+      {
+        "comment": "",
+        "key": "Take %@ home",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 226
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 200
+        }
+      },
+      {
+        "comment": "",
+        "key": "Suggest a name",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 214
+        }
+      }
+    ]
+  },
+  "version": 1
+}

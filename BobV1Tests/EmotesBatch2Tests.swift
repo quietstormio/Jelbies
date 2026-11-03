@@ -147,8 +147,11 @@ final class EmotesBatch2Tests: XCTestCase {
         let l = lab(n: 1)
         let b = l.rigs[0].brain
         var got: [Float] = []
-        b.onEmoteHaptic = { i, _ in got.append(i) }
-        for _ in 0..<60 { b.treatHaptic("proudStrut.hop") }
+        let rec = RecordingHapticSink(); let drv = HapticDriver(sinks: [rec])
+        var now = 500.0
+        HapticDriver.room = drv; HapticDriver.clock = { now }; HapticDriver.after = { _, f in f() }; HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) }
+        defer { HapticDriver.room = nil; HapticDriver.clock = { CACurrentMediaTime() }; HapticDriver.after = { d, f in DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } } }
+        for _ in 0..<60 { now += 1; rec.clear(); b.treatHaptic("proudStrut.hop"); if let t = rec.events.first(where: { $0.kind == .transient }) { got.append(t.intensity) } }
         let base = EmoteTreats.haptics["proudStrut.hop"]![0].i
         XCTAssertEqual(got.count, 60)
         XCTAssertGreaterThanOrEqual(got.min()!, base * 0.85 - 1e-4); XCTAssertLessThanOrEqual(got.max()!, base * 1.15 + 1e-4)
@@ -185,20 +188,40 @@ final class EmotesBatch2Tests: XCTestCase {
         XCTAssertFalse(b0.treat2Free, "a sleeper does not react")
     }
 
-    func testCheckInIsAnsweredByATouch() {
+    func testCheckInIgnoresTouchAndEndsByItself() {
         let l = lab(n: 1)
         let r = l.rigs[0]; r.brain.idleForced = true
         XCTAssertTrue(r.brain.idleStart(.checkIn, r.sim))
-        var f = 0, answered = false
+        var f = 0
         while f < 60 * 12 {
             l.tick(); f += 1
-            if f == 150 { PlayerPresence.touch(); answered = true }
+            if f == 150 { PlayerPresence.touch() }
             if r.brain.idleState.kind == nil && f > 20 { break }
         }
-        XCTAssertTrue(answered)
-        XCTAssertTrue(r.brain.idleState.steps & (1 << 3) != 0 || r.brain.idleState.kind == nil)
+        XCTAssertEqual(r.brain.idleState.steps & (1 << 3), 0, "no touch response bit is ever set")
         XCTAssertNil(r.brain.idleState.kind, "he is done")
     }
+
+    /// The double-tap highlight is untouched with a check-in running and a tap-tilt eligible; a tap on a Jelbie never starts a tilt.
+    func testDoubleTapHighlightUnaffectedAndTapOnJelbieNeverTilts() {
+        let care = GameCare(jellyCount: 2, persistent: false, defaults: UserDefaults(suiteName: "Emotes2.dbl")!)
+        Self.keepCare.append(care)
+        let l = lab(n: 2)
+        let b0 = l.rigs[0].brain, b1 = l.rigs[1].brain
+        b0.idleForced = true
+        XCTAssertTrue(b0.idleStart(.checkIn, l.rigs[0].sim))
+        XCTAssertNil(b1.kindCool[.tapTilt], "tap-tilt is eligible for the other one")
+        care.tapJelly(1)
+        for _ in 0..<150 { care.select.tick(dt: 1.0 / 60) }
+        XCTAssertEqual(care.select.highlighted, 1, "the Jelbie is highlighted")
+        // a tap that lands on a Jelbie's body (within 0.9 of his floor spot) never starts a tilt
+        for _ in 0..<40 {
+            XCTAssertFalse(BlobBrain.tapCue(at: b1.position + SIMD2(0.3, 0.2), brains: [b1]))
+            XCTAssertNil(b1.commandedIdle)
+        }
+        XCTAssertEqual(care.select.highlighted, 1, "still highlighted: nothing consumed the tap")
+    }
+    nonisolated(unsafe) static var keepCare: [GameCare] = []
 
     func testWinCueMakesHimStrutWhenFree() {
         let l = lab(n: 1)
@@ -213,7 +236,7 @@ final class EmotesBatch2Tests: XCTestCase {
     func testSelfScheduleSwitchHandsTheTreatsOver() {
         let l = lab(n: 1)
         let r = l.rigs[0]; r.brain.idleForced = true; r.brain.idleNight = 1; r.brain.watching = false
-        EmoteTreats.selfSchedule = false; defer { EmoteTreats.selfSchedule = true }
+        let prevSelf = EmoteTreats.selfSchedule; EmoteTreats.selfSchedule = false; defer { EmoteTreats.selfSchedule = prevSelf }
         for _ in 0..<50 { r.brain.variety.now += 400; XCTAssertFalse(r.brain.treat2MaybeStart(r.sim)) }
     }
 }

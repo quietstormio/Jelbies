@@ -1,0 +1,72 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/UI/NightSkipUI.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Sleep until morning",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 28
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sleep until morning",
+        "location": {
+          "startingColumn": 39,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day %lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 41
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day %lld",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "Sleeping until morning. Tap to skip.",
+        "location": {
+          "startingColumn": 40,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Zz",
+        "location": {
+          "startingColumn": 39,
+          "startingLine": 95
+        }
+      },
+      {
+        "comment": "",
+        "key": "Z",
+        "location": {
+          "startingColumn": 46,
+          "startingLine": 95
+        }
+      }
+    ]
+  },
+  "version": 1
+}

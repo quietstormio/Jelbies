@@ -1,0 +1,24 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Melon/MelonTheme.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "On",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 105
+        }
+      },
+      {
+        "comment": "",
+        "key": "Off",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 105
+        }
+      }
+    ]
+  },
+  "version": 1
+}

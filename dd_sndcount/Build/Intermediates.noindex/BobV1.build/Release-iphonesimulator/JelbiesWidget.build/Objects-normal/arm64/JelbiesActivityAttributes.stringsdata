@@ -1,0 +1,16 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/Shared/JelbiesActivityAttributes.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 112
+        }
+      }
+    ]
+  },
+  "version": 1
+}

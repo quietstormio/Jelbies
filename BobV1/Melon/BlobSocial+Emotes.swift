@@ -54,7 +54,7 @@ enum EmoteHaptic {
 extension BlobBrain {
     func emoteHaptic(_ tag: String, _ level: (i: Float, s: Float)) {
         EmoteHaptic.requestTap?(tag)
-        onEmoteHaptic?(level.i, level.s)
+        if let c = GroupCue(rawValue: tag) { roomCue(.group(c), energy: level.i / 0.3) }
     }
 
     // MARK: the scheduler

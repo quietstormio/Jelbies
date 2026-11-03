@@ -1,0 +1,80 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Room/RoomPicker.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Rooms",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close",
+        "location": {
+          "startingColumn": 58,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "Home now",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 90
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ is your home now",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move in to %@",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 102
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ is locked, costs %lld JellyCoins in the Shop",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 113
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move in",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "In the Shop",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 110
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 107
+        }
+      }
+    ]
+  },
+  "version": 1
+}

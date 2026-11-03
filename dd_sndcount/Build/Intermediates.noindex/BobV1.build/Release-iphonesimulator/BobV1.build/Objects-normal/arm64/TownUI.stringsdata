@@ -1,0 +1,288 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Store/TownUI.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Go out",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "Opens the Town: Track, Store, Jelly Show",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "Go out",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "Bag, %lld new",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 46
+        }
+      },
+      {
+        "comment": "",
+        "key": "Bag",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 46
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 39
+        }
+      },
+      {
+        "comment": "",
+        "key": "Bag",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 47
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ %@ left",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 64
+        }
+      },
+      {
+        "comment": "",
+        "key": "Where to?",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 210
+        }
+      },
+      {
+        "comment": "",
+        "key": "Home",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 205
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, %@",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 282
+        }
+      },
+      {
+        "comment": "",
+        "key": "Runner",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 390
+        }
+      },
+      {
+        "comment": "",
+        "key": "for the next race",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 403
+        }
+      },
+      {
+        "comment": "",
+        "key": "No food yet. The Shop has plenty.",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 477
+        }
+      },
+      {
+        "comment": "",
+        "key": "No furniture yet. Beanbags, sofas and more are in the Shop.",
+        "location": {
+          "startingColumn": 99,
+          "startingLine": 477
+        }
+      },
+      {
+        "comment": "",
+        "key": "No toys yet. Balls, ducks and more are in the Shop.",
+        "location": {
+          "startingColumn": 178,
+          "startingLine": 477
+        }
+      },
+      {
+        "comment": "",
+        "key": "Nothing here yet.",
+        "location": {
+          "startingColumn": 234,
+          "startingLine": 477
+        }
+      },
+      {
+        "comment": "",
+        "key": "Bag",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 451
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close bag",
+        "location": {
+          "startingColumn": 62,
+          "startingLine": 456
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ %lld",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 463
+        }
+      },
+      {
+        "comment": "",
+        "key": "Arrange the room",
+        "location": {
+          "startingColumn": 156,
+          "startingLine": 472
+        }
+      },
+      {
+        "comment": "",
+        "key": "Home now",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 514
+        }
+      },
+      {
+        "comment": "",
+        "key": "Move in to %@",
+        "location": {
+          "startingColumn": 46,
+          "startingLine": 519
+        }
+      },
+      {
+        "comment": "",
+        "key": "Boosts on now",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 531
+        }
+      },
+      {
+        "comment": "",
+        "key": "None. A snack can give one.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 534
+        }
+      },
+      {
+        "comment": "",
+        "key": "x%lld",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 559
+        }
+      },
+      {
+        "comment": "",
+        "key": "Wearing",
+        "location": {
+          "startingColumn": 75,
+          "startingLine": 553
+        }
+      },
+      {
+        "comment": "",
+        "key": "Worn by %@",
+        "location": {
+          "startingColumn": 186,
+          "startingLine": 553
+        }
+      },
+      {
+        "comment": "",
+        "key": "Owned",
+        "location": {
+          "startingColumn": 207,
+          "startingLine": 553
+        }
+      },
+      {
+        "comment": "",
+        "key": "Put away %@",
+        "location": {
+          "startingColumn": 62,
+          "startingLine": 596
+        }
+      },
+      {
+        "comment": "",
+        "key": "Put away",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 594
+        }
+      },
+      {
+        "comment": "",
+        "key": "Big things take 2 spots. Beanbag on: love drains 15% slower.",
+        "location": {
+          "startingColumn": 39,
+          "startingLine": 635
+        }
+      },
+      {
+        "comment": "",
+        "key": "Big things take 2 spots",
+        "location": {
+          "startingColumn": 104,
+          "startingLine": 635
+        }
+      },
+      {
+        "comment": "",
+        "key": "Room space",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 626
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld of %lld spots",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 628
+        }
+      }
+    ]
+  },
+  "version": 1
+}

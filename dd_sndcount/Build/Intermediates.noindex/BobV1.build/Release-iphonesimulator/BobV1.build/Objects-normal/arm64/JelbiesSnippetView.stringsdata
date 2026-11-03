@@ -1,0 +1,16 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Intents/JelbiesSnippetView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Open the game to meet your Jelbies.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 23
+        }
+      }
+    ]
+  },
+  "version": 1
+}

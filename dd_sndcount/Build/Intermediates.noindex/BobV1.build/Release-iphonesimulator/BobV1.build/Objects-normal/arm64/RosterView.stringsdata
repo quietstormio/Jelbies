@@ -1,0 +1,72 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Needs/RosterView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "All Jelbies, %lld need%@ you",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "All Jelbies",
+        "location": {
+          "startingColumn": 106,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "expanded",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 41
+        }
+      },
+      {
+        "comment": "",
+        "key": "collapsed",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 41
+        }
+      },
+      {
+        "comment": "",
+        "key": "All Jelbies",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 43
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your Jelbies",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, %@, boosts: %@",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 157
+        }
+      },
+      {
+        "comment": "",
+        "key": "No Boosts",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 149
+        }
+      }
+    ]
+  },
+  "version": 1
+}

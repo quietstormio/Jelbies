@@ -30,6 +30,8 @@ enum IdleTuning {
     static let okayZoomies: Float = 2.8, okayRun: Float = 3.4          // (2026-10-20, "too bland": was 0.8 / 0.6)
     /// Seconds between forced zoomies / runs while awake in the daytime and not grumpy (a visible burst every few minutes). Vars so the suites can shorten it.
     nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 30...55
+    /// Seconds between the solo emotes (the treat slot, 2026-11-02): about one per 3 minutes per Jelbie.
+    nonisolated(unsafe) static var treatGap: ClosedRange<Float> = 200...380
     /// The first urge, seconds after he starts roaming (a Jelly that is not first waits longer: `zoomUrge` = this + 35 s per Jelly id once he is wired).
     nonisolated(unsafe) static var zoomUrgeFirst: Float = 10
     /// Room coverage (2026-10-21, "they stay in the centre too much"): the rug-centre circle counted as "the centre", the seconds near it after which the
@@ -89,7 +91,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case floorNapFlop  // really sleepy: flops flat on his belly (sploot), eyes closed for 3...6 s, then up (or straight into bed at bedtime)
     case tapTilt       // (player) a tap on the glass near him: he turns and tilts his head toward it with a curious "hm?"
     case welcomeWiggle // (player) the app is opened again after a short break: an excited welcome wiggle
-    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"; a touch makes him light up
+    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -126,17 +128,24 @@ enum IdleTable {
         switch m {
         case .happy: extra = [(.bounce, 2.6), (.tail, 1.8), (.stretch, 1.0), (.window, 1.4), (.flop, 1.2), (.peek, 0.9), (.sway, music ? 2.0 : 0),
                               (.skipHop, 1.6), (.hopscotch, 0.9), (.legSpin, 1.0), (.trot, 1.2),
-                              (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4),
-                              (.hiccup, 0.6), (.sneeze, 0.5), (.dizzyWobble, 0.35), (.politeBow, 0.7), (.bellyDrum, 0.8), (.signatureFlourish, 1.1)]          // (2026-11-02: the solo emotes are occasional treats, rarer than bounce / tail; 2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing)
+                              (.shake, 1.2), (.lieDown, 0.9), (.chirp, 1.6), (.tailThump, 1.4), (.tailHug, 0.4)]          // (2026-10-20: the skip / hopscotch / spin / trot flourishes also start from standing; the 2026-11-02 solo emotes are NOT in this table: `treatWeights`, their own slot)
         case .okay: extra = [(.window, 1.8), (.stretch, 1.6), (.tail, 0.8), (.peek, 0.8), (.flop, 0.6), (.bounce, 0.8), (.sway, music ? 2.0 : 0),
                              (.skipHop, 1.0), (.hopscotch, 0.5), (.legSpin, 0.6), (.trot, 0.8), (.sigh, 0.8),
-                             (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3),
-                             (.hiccup, 0.6), (.sneeze, 0.6), (.dizzyWobble, 0.3), (.politeBow, 0.5), (.bellyDrum, 0.4), (.signatureFlourish, 0.6)]
-        case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8), (.sneeze, 0.4)]
+                             (.shake, 1.2), (.lieDown, 1.4), (.chirp, 1.2), (.tailThump, 0.5), (.tailHug, 1.3)]
+        case .grumpy: extra = [(.window, 1.0), (.stretch, 0.6), (.hmph, 2.4), (.sigh, 1.2), (.shake, 0.6), (.lieDown, 0.8)]
         }
         for (k, x) in extra where x > 0 { w.append((k, x * mul)) }
         if let i = w.firstIndex(where: { $0.kind == .wander }) { w[i].weight = 0.6 }
         return w
+    }
+    /// The solo emotes (2026-11-02) are ADDITIONS on top of the r1053 table, never part of it: a separate slot (`IdleState.treat` clock, BlobBrain+Idle `idleMaybeStart`) so the
+    /// old moves keep every pick they had (r1053 -> r1055 had folded them into the weighted table and every old kind lost ~10-15 % of its picks).
+    static func treatWeights(_ m: IdleMood) -> [(kind: IdleKind, weight: Float)] {
+        switch m {
+        case .happy: return [(.hiccup, 0.6), (.sneeze, 0.5), (.dizzyWobble, 0.35), (.politeBow, 0.7), (.bellyDrum, 0.8), (.signatureFlourish, 1.1)]
+        case .okay: return [(.hiccup, 0.6), (.sneeze, 0.6), (.dizzyWobble, 0.3), (.politeBow, 0.5), (.bellyDrum, 0.4), (.signatureFlourish, 0.6)]
+        case .grumpy: return [(.sneeze, 0.4)]
+        }
     }
     /// The special (non-wander) behaviours of a mood.
     static func set(_ m: IdleMood) -> Set<IdleKind> { Set(weights(m).map { $0.kind }.filter { $0 != .wander }) }
@@ -160,6 +169,7 @@ struct IdleState {
     var kind: IdleKind?                         // the running behaviour (nil = none)
     var last: IdleKind?
     var cooldown: Float = 9                     // seconds until the next special may start
+    var treat: Float = 90                       // seconds until the next solo emote may start (its own clock: they come on top of the cooldown cycle, they do not take its picks)
     var t: Float = 0                            // seconds since the behaviour began
     var phase = 0
     var phaseT: Float = 0
@@ -306,6 +316,7 @@ extension BlobBrain {
             }
         }
         guard idleState.cooldown <= 0 else { return false }
+        if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
         let decorOffers: Set<IdleKind> = anticsEnabled && !sleepLocked ? Self.decorOffers() : []
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
         if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= ToyTuning.directGap, rand() < ToyTuning.directChance {
@@ -338,6 +349,29 @@ extension BlobBrain {
         return started
     }
 
+    /// The solo emote slot: when its own clock is due (and it is a quiet moment), one emote by the mood's treat table. It leaves the cooldown cycle alone (see `idleEnd`).
+    func treatMaybeStart(_ sim: SoftBody) -> Bool {
+        let cooling = kindCooling
+        var w = IdleTable.treatWeights(idleMood).filter { !cooling.contains($0.kind) && !varietyPeerJustStarted($0.kind) }
+        for i in w.indices { w[i].weight *= varietyScale(w[i].kind) }
+        let total = w.reduce(0) { $0 + $1.weight }
+        guard total > 0, idleNight < 0.6 else { idleState.treat = rand(8, 15); return false }
+        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
+        let t2 = treat2Free ? treat2Pool.reduce(0) { $0 + $1.weight } : 0
+        var x = rand() * (total + t2)
+        if x >= total {
+            let started = treat2Pick(sim)
+            idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
+            return started
+        }
+        var kind = w.last!.kind
+        for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
+        let started = idleStart(kind, sim)
+        idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
+        if started { kindCooldownStart(kind) }
+        return started
+    }
+
     /// Mood shapes the ordinary wander table too: grumpy skips waves and play, and idles longer.
     func idleShapeWander(_ w: inout [(Int, Float)]) {
         if idleMood == .grumpy { w.removeAll { $0.0 == 3 || $0.0 == 4 } }
@@ -357,7 +391,7 @@ extension BlobBrain {
             commanded = false
             if decorIgnore != nil || !DecorField.shared.feet.isEmpty { decorExitCheck(dt: dt) }
             toyTick(sim)
-            if autonomy && !held { idleState.cooldown -= dt; zoomUrge -= dt }
+            if autonomy && !held { idleState.cooldown -= dt; zoomUrge -= dt; idleState.treat -= dt }
             return
         }
         idleState.t += dt
@@ -446,9 +480,11 @@ extension BlobBrain {
         decorRelease()
         if let k = idleState.kind {
             if k == .sleep { awakeMin = rand(SleepTuning.awakeMin.lowerBound, SleepTuning.awakeMin.upperBound) }          // he stays up a while after any wake (no sleep / wake / sleep loop)
-            let flourish = Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
+            let treat = Self.emoteKinds.contains(k) && idleState.resume == nil && idleState.reaction == nil && social == nil          // (a solo emote from the treat slot: not his pick, no last / recent, no cooldown of its own - the old cycle goes on as if he had only paused)
+            let flourish = (Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)) || treat          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
+            if treat { idleState.cooldown = max(idleState.cooldown, 0.5) }
             if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
         }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
@@ -502,6 +538,7 @@ extension BlobBrain {
 
     func idleBegin(_ kind: IdleKind) {
         varietyNote(kind)
+        if kind != .wander { roomCue(.idle(kind)) }          // (its own haptic: Haptics+Emotes.swift)
         idleState.kind = kind; walkBoostK = 1
         idleState.t = 0; idleState.phase = 0; idleState.phaseT = 0; idleState.k = 0; idleState.yielding = false; idleState.yieldT = 0
         idleState.steps = 0; idleState.stumbleAt = 0; flopKicks = 0; idleState.resume = nil; idleState.reaction = nil

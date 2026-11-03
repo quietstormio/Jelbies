@@ -1,0 +1,24 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Store/StoreTheme.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "%lld JellyCoins",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 62
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 57
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,126 @@
+{
+  "" : {
+    "const-values" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.swiftconstvalues",
+    "dependencies" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.d",
+    "diagnostics" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.dia",
+    "emit-module-dependencies" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary-emit-module.dia",
+    "pch" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests-primary.swiftdeps"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/A11yUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/A11yUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/A11yUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/A11yUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/BobV1UITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/BobV1UITestsLaunchTests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITestsLaunchTests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITestsLaunchTests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BobV1UITestsLaunchTests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/BubbleCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BubbleCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BubbleCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/BubbleCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/CafeHomeUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CafeHomeUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CafeHomeUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CafeHomeUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/CallAllCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CallAllCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CallAllCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/CallAllCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/FeedCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/FeedCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/FeedCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/FeedCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/GlassCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/GlassCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/GlassCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/GlassCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/HUDUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/HUDUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/HUDUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/HUDUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/IntroCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/IntroCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/IntroCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/IntroCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/JelbieA11yUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/JelbieA11yUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/JelbieA11yUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/JelbieA11yUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/LobbyStatesUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/LobbyStatesUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/LobbyStatesUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/LobbyStatesUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/MainMenuLayoutUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MainMenuLayoutUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MainMenuLayoutUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MainMenuLayoutUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/MenuCloseWatchUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MenuCloseWatchUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MenuCloseWatchUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/MenuCloseWatchUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/PetFixWatchUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PetFixWatchUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PetFixWatchUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PetFixWatchUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/PipWatchUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PipWatchUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PipWatchUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/PipWatchUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/RoomCheckUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RoomCheckUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RoomCheckUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RoomCheckUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/RosterCaptureUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RosterCaptureUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RosterCaptureUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/RosterCaptureUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/ShowLobbyUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/ShowLobbyUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/ShowLobbyUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/ShowLobbyUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/TeddyAlwaysOnAppUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyAlwaysOnAppUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyAlwaysOnAppUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyAlwaysOnAppUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/TeddyEarsAppUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyEarsAppUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyEarsAppUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TeddyEarsAppUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/TrainFlowUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TrainFlowUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TrainFlowUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/TrainFlowUITests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1UITests/WhiteWingUITests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/WhiteWingUITests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/WhiteWingUITests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1UITests.build/Objects-normal/arm64/WhiteWingUITests.o"
+  }
+}

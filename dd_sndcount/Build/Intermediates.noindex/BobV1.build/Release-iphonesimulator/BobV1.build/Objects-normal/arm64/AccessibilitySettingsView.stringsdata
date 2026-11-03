@@ -1,0 +1,104 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Accessibility/AccessibilitySettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Accessibility",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "Seeing",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "Camera moves become fades. Jelly wobble stays. Hints stay until you use them.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 20
+        }
+      },
+      {
+        "comment": "",
+        "key": "Hearing",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "Captions show sounds like \"Pip chirps\" under the top bar.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 26
+        }
+      },
+      {
+        "comment": "",
+        "key": "Race controls",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 29
+        }
+      },
+      {
+        "comment": "",
+        "key": "Playing",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 35
+        }
+      },
+      {
+        "comment": "",
+        "key": "Talking",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap the mic once to start and once to stop.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 41
+        }
+      },
+      {
+        "comment": "",
+        "key": "System accessibility settings",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 44
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies also follows VoiceOver, Voice Control, Switch Control, Larger Text, Bold Text, Increase Contrast, Reduce Transparency and Reduce Motion.",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 49
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 77,
+          "startingLine": 56
+        }
+      }
+    ]
+  },
+  "version": 1
+}

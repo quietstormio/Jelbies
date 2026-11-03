@@ -1,0 +1,176 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/GameScreen.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "expanded",
+        "location": {
+          "startingColumn": 72,
+          "startingLine": 143
+        }
+      },
+      {
+        "comment": "",
+        "key": "collapsed",
+        "location": {
+          "startingColumn": 85,
+          "startingLine": 143
+        }
+      },
+      {
+        "comment": "",
+        "key": "No food yet. Buy some in the Shop (Go out).",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1029
+        }
+      },
+      {
+        "comment": "",
+        "key": "No toys yet. Open the Shop's toys",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 1026
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 988
+        }
+      },
+      {
+        "comment": "",
+        "key": "No toys yet. Get a ball in the Shop",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 1017
+        }
+      },
+      {
+        "comment": "",
+        "key": "Let go of %@",
+        "location": {
+          "startingColumn": 94,
+          "startingLine": 1141
+        }
+      },
+      {
+        "comment": "",
+        "key": "expanded",
+        "location": {
+          "startingColumn": 40,
+          "startingLine": 1184
+        }
+      },
+      {
+        "comment": "",
+        "key": "collapsed",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 1184
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close %@'s menu",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 1183
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'s menu",
+        "location": {
+          "startingColumn": 73,
+          "startingLine": 1183
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close care menu",
+        "location": {
+          "startingColumn": 101,
+          "startingLine": 1183
+        }
+      },
+      {
+        "comment": "",
+        "key": "Care menu",
+        "location": {
+          "startingColumn": 121,
+          "startingLine": 1183
+        }
+      },
+      {
+        "comment": "",
+        "key": "Shows care actions for %@",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 1185
+        }
+      },
+      {
+        "comment": "",
+        "key": "Shows care actions for everyone",
+        "location": {
+          "startingColumn": 78,
+          "startingLine": 1185
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'s menu",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 1187
+        }
+      },
+      {
+        "comment": "",
+        "key": "Care menu",
+        "location": {
+          "startingColumn": 89,
+          "startingLine": 1187
+        }
+      },
+      {
+        "comment": "",
+        "key": "Goes back to the room",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 1227
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 1250
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stops this and lets everyone roam",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 1251
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 1242
+        }
+      }
+    ]
+  },
+  "version": 1
+}
