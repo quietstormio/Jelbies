@@ -200,6 +200,9 @@ final class BlobBrain {
     var reserved = false
     /// Where the waiting Jelly looks first (the tray); nil = at the nearest neighbour or just stays.
     var waitFocus: SIMD2<Float>?
+    /// Play mode: the floor point a waiting Jelly keeps turning to (the ball); nil = none. And the controller's hook for the moment a bump's foot lands (BlobBrain+PlayToss.swift).
+    var trackPoint: SIMD2<Float>?
+    var tossFire: ((BlobBrain) -> Void)?
     var waitBounceT: Float = 0
     var held: Bool { idleBlocked || reserved }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
@@ -818,7 +821,8 @@ final class BlobBrain {
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         let r = rand()
         var aim: Float?
-        if r < 0.35 {
+        if let tp = trackPoint, r < 0.8 { aim = yawTo(tp) }
+        else if r < 0.35 {
             if let o = socialOthers().filter({ $0 !== self }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) { aim = yawTo(o.position) }
         } else if r < 0.6, let f = waitFocus { aim = yawTo(f) }
         if let aim, abs(wrapAngle(aim - yaw)) > 0.12 {
@@ -958,7 +962,7 @@ final class BlobBrain {
                    rate: rate ?? stepRate * runRateMul * locoRateMul, swingFrac: swingFrac, out: stepOut * amplitude * outScale, tilt: stepTilt * amplitude, fwd: stepFwd * amplitude)
         nextSwing = 1 - s
         stepLive = true
-        AudioHub.shared.footstep(jelly: steerID, x: px, running: runW > 0.5)
+        let pFS = PerfProbe.begin(); AudioHub.shared.footstep(jelly: steerID, x: px, running: runW > 0.5); PerfProbe.end("rs.footstep", pFS)
     }
 
     /// Advance the feet and the root / heading interpolation of the running step (called first thing each tick).
@@ -1252,7 +1256,7 @@ final class BlobBrain {
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
         var rootD = u * a
         let cand = root + rootD
-        let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
+        let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         let got = SIMD2(rv.x, rv.z) - root
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
@@ -1262,15 +1266,16 @@ final class BlobBrain {
     }
 
     func runScript(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        let rs0 = PerfProbe.begin(); let rsKind = rs0 != 0 ? scriptKindName : ""; defer { if rs0 != 0 { PerfProbe.end("rs.kind." + rsKind, rs0) } }
         scriptT += dt
-        idleUpdateRun(dt)
+        let pIU = PerfProbe.begin(); idleUpdateRun(dt); PerfProbe.end("rs.idleUpdateRun", pIU)
         switch job { case .some(.dine), .some(.sip): skinner.browCounterOn = true; default: break }        // the brows are ready before he leans
         mouthOpen = 0
         roll = 0; pitch = 0; squash = 1; lift = 0; twist = 0
         armWalkWant = 0
         pivotSide = nil; pivotNominal = false; nubTarget = 0
         feetDrive = true
-        advanceGait(dt)
+        let pAG = PerfProbe.begin(); advanceGait(dt); PerfProbe.end("rs.advanceGait", pAG)
         var goal: Float = -attentionPitch * amplitude
         switch script {
         case .walk: goal = facePlayerWhenIdle ? -1.0 * attentionPitch * amplitude : 0      // keep the tip-back toward the camera
@@ -1292,7 +1297,7 @@ final class BlobBrain {
             }
 
         case .walk(let target, let then):
-            poseOn = true; ensureFeet(sim)
+            poseOn = true; let pE = PerfProbe.begin(); ensureFeet(sim); PerfProbe.end("rs.ensureFeet", pE)
             if simd_distance(SIMD2(px, pz), stallRoot) > 0.04 || abs(wrapAngle(yaw - stallYaw)) > 0.05 { stallRoot = SIMD2(px, pz); stallYaw = yaw; steerStall = 0 } else { steerStall += dt }
             if scriptT <= dt * 1.5 { walkStallRoot = SIMD2(px, pz); walkStallT = 0; steerWait = 0; steerGiveUp = false; flourishLegStart(target: target) }       // a new leg starts clean (and rolls its flourish)
             // stuck detector: an autonomous walk whose root has not moved 0.12 u in 3 s (a half turn on the spot takes ~1.7 s) is dropped and re-picked
@@ -1306,15 +1311,18 @@ final class BlobBrain {
             if walkStallT > 3.0, job != nil || commanded { walkStallT = 0; route = []; steerWait = 0; steerGiveUp = false; stuckT = 0; stuckRepicks += 1 }
             if !feet.active {
                 if walkFinal { walkFinal = false; step(after: then, sim); return }
-                if flourishMaybe(sim, skinner, target: target) { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)
-                guard let eff = steerTarget(to: target) else {
+                let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
+                if fl { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)
+                let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
+                guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
                     return
                 }
                 steerWait = max(0, steerWait - dt)
                 let inter = eff != target
-                switch planWalkStep(to: eff, intermediate: inter) {
+                let pW = PerfProbe.begin(); let pw = planWalkStep(to: eff, intermediate: inter); PerfProbe.end("rs.planWalkStep", pW)
+                switch pw {
                 case 1: if inter { route.removeFirst() } else { step(after: then, sim); return }
                 case 2: step(after: .none, sim, giveUp: true); return
                 default: break
@@ -1384,12 +1392,15 @@ final class BlobBrain {
             }
 
         case .dine:
+            let p = PerfProbe.begin(); defer { PerfProbe.end("rs.runDine", p) }
             runDine(sim, skinner, dt)
 
         case .idle:
+            let p = PerfProbe.begin(); defer { PerfProbe.end("rs.runIdle", p) }
             runIdle(sim, skinner, dt)
 
         case .race:
+            let p = PerfProbe.begin(); defer { PerfProbe.end("rs.raceRun", p) }
             raceRun(sim, dt)
 
         case .eat(let t, let bowl, let dur, let drink):

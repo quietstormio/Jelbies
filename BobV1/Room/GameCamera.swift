@@ -99,6 +99,11 @@ enum GameCamera {
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
         }
+        if playBlend != 0 {                                 // Play mode (Play/PlayToss.swift): a lower, nearer view facing the Jelbies, the front of the floor left free for the ball's return
+            let p = playPose(eye: e, target: t, aspect: aspect)
+            e += (p.eye - e) * playBlend
+            t += (p.target - t) * playBlend
+        }
         if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
             let p = bathPose(aspect: aspect)
             e += (p.eye - e) * bath
@@ -127,6 +132,20 @@ enum GameCamera {
         c.pos = e
         c.fwd = simd_normalize(t - e)
         return c
+    }
+
+    // MARK: Play mode
+
+    /// 0 = the room camera, 1 = the play view (eased by `PlayToss`; global like `focusSpots`, so the hearts and the floor<->screen maths follow it).
+    nonisolated(unsafe) static var playBlend: Float = 0
+    /// The play view from the room pose: the target moves forward and a touch up, the eye comes in and down, so the Jelbies stand in the upper-middle of the
+    /// screen and the near floor (where the ball comes back) fills the lower third. A phone on its side keeps the portrait framing height.
+    static func playPose(eye e: SIMD3<Float>, target t: SIMD3<Float>, aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        let wide = aspect >= 1.2       // landscape
+        let elev: Float = (wide ? 30 : 35) * .pi / 180
+        let dist: Float = wide ? 8.5 : 13.5
+        let tt = SIMD3<Float>(0, 0.6, wide ? 1.2 : 1.1)
+        return (tt + SIMD3<Float>(0, sinf(elev), cosf(elev)) * dist, tt)
     }
 
     // MARK: Screen <-> floor (arrange mode, tests)

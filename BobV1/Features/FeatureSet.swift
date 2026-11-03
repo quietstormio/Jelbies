@@ -405,6 +405,7 @@ final class FeatureSet {
                 Self.emit(p, into: &m, slot: s, skin: skin(id), spec: spec)
             }
             if m.vertices.count > first {
+                FeatureClip.clip(&m, range: first..<m.vertices.count, own: id)          // nothing of the feature is drawn inside ANOTHER Jelbie's body (FeatureClip.swift)
                 var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
                 for v in m.vertices[first...] { let q = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, q); hi = simd_max(hi, q) }
                 lastBounds.append((lo, hi))

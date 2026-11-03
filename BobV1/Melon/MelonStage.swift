@@ -644,6 +644,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
         lapEnd(.masks, &lt)
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball
+        if game { model.care.tickPlay(actors, dt: sim.stepDt) }          // Play mode: the thrown ball, the headers and bumps (Play/PlayToss.swift)
         lapEnd(.decor, &lt)
     }
 
@@ -726,7 +727,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
-                brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
+                brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.active) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
                 brain.focusPaused = false
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }
@@ -869,7 +870,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for i in HopDiag.wmx.indices { HopDiag.wmx[i] = 0 }
         for i in lapWinMax.indices { lapWinMax[i] = 0 }
         PerfProbe.reset()
-        let top = all.sorted { $0.1 > $1.1 }.prefix(3).filter { $0.1 >= 0.2 }
+        let top = all.sorted { $0.1 > $1.1 }.prefix(7).filter { $0.1 >= 0.2 }
         return top.isEmpty ? "" : "brainTop[" + top.map { String(format: "%@ %.1f", $0.0, $0.1) }.joined(separator: ", ") + "]"
     }
 
@@ -1132,11 +1133,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
-            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id)))
+            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id))
         }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id))) }
+        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read
         PerfMeter.end(.skin, pmK)
         if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).
             let skinned = actors.filter { !(parkOn && model.care.parkHides($0.id)) && !(bathHides && $0.id != washedID) }

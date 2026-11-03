@@ -37,6 +37,10 @@ final class JellyActor {
     init(id: Int, name: String, simMesh sm: SimMesh, renderMesh rm: RenderMesh, embedding emb: (tetOf: [UInt32], w: [Float]),
          appearance ap: BlobAppearance, firmness: Float, damping: Float, spawn: SIMD2<Float>) {
         self.id = id; self.name = name; self.spawn = spawn
+        if ap.breed == .berry, let pre = ActorPrebuild.take(firmness: firmness, damping: damping) {          // built during the launch intro (IntroWarmup)
+            sim = pre.sim; skinner = pre.skinner
+            return
+        }
         sim = SoftBody(mesh: sm, firmness: firmness, damping: damping)
         skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount,
                           eyes: buildEyeRig(render: rm, sim: sm, appearance: ap),
@@ -131,7 +135,7 @@ nonisolated enum JellyParallel {
         acc.slowSum += slow; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0
     }
 
-    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float> }
+    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float>; var id: Int = 0 }
 
     static func skin(_ jobs: [SkinJob], index: [UInt32]) {
         if jobs.count < minForThreads { for j in jobs { j.skinner.update(x: j.sim.x, index: index, into: j.dst) }; return }

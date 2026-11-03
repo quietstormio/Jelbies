@@ -17,7 +17,7 @@ import simd
 
 extension BlobBrain {
     /// Behaviours that move him fast (or off the floor). At most two Jellies do one at a time.
-    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .flapHop, .soccerKick]
+    static let fastKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .slide, .scoot, .jacks, .bounce, .tail, .decorKick, .decorHop, .skipHop, .hopscotch, .legSpin, .trot, .joy, .startle, .flapHop, .soccerKick, .tossHeader, .tossBump]
     /// How long a behaviour stays out of the pick after it ran.
     static func kindCooldown(_ k: IdleKind) -> Float { baseKindCooldown(k) * 0.6 }          // (2026-10-27 more going on: 40 % shorter, same order between kinds)
     static func baseKindCooldown(_ k: IdleKind) -> Float {
@@ -73,7 +73,7 @@ extension BlobBrain {
     /// The dashes look alike from the sofa: a run next to a zoomies is "the same thing".
     static let dashKinds: Set<IdleKind> = [.run, .stumble, .zoomies, .trot, .slide]
     /// The hops look alike too: a bounce next to a scoot is "the same thing".
-    static let hopKinds: Set<IdleKind> = [.bounce, .scoot, .joy, .skipHop, .hopscotch, .startle, .flapHop]
+    static let hopKinds: Set<IdleKind> = [.bounce, .scoot, .joy, .skipHop, .hopscotch, .startle, .flapHop, .tossHeader]
     static func family(_ k: IdleKind) -> Set<IdleKind> { dashKinds.contains(k) ? dashKinds : (hopKinds.contains(k) ? hopKinds : [k]) }
     /// Another Jelly is in `k` (or, for a dash, in any dash) right now. The flourishes, the reactions and the event-driven jumps wait on this, so two Jellies never
     /// start the same move at the same moment (the scheduler's own picks go through `kindCooling`); a copycat waits for the friend to finish before doing the same.

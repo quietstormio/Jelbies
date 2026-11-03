@@ -34,6 +34,11 @@ extension BlobBrain {
 
     /// Shake / lie down / chirp, from standing (`resume` nil) or in the middle of a walk. False = not possible now.
     func livelyStart(_ kind: IdleKind, _ sim: SoftBody, resume: SIMD2<Float>?) -> Bool {
+        var lieAt: SIMD2<Float>?
+        if kind == .lieDown {          // a flat body is wider: not next to a friend (BlobBrain+LieClear)
+            guard let spot = lieSpot(from: SIMD2(px, pz)) else { return false }
+            lieAt = spot
+        }
         idleBegin(kind)
         idleState.resume = resume
         script = .idle
@@ -44,6 +49,7 @@ extension BlobBrain {
             idleState.goalYaw = faceCameraYaw() + idleState.sign * rand(0.5, 0.9)
             idleState.hold = rand(3, 5.5)
             activity = .lookingAround
+            if let spot = lieAt { lieWalk(to: spot, from: SIMD2(px, pz)); lieTipToward(spot, lieYaw: idleState.goalYaw) }
         default:       // chirp: turns toward a friend within 4 u first
             activity = .lookingAround
             idleState.goalYaw = yaw

@@ -112,6 +112,10 @@ final class GameCare {
     @ObservationIgnored var groupWaitSaved: [Int: GroupWaiter] = [:]
     /// Focus mode (Come here): phase, dock selection and the camera spring. See TouchMode.swift.
     let focus = BlobFocus()
+    /// Play mode (the Play row -> a toy): the ball game with the Jelbies (Play/PlayToss.swift, Play/GameCare+Play.swift).
+    let play = PlayToss()
+    @ObservationIgnored var playActors: [JellyActor] = []
+    @ObservationIgnored var playShown = false
     /// Which Jellies the close-up is on, where they stand, and their approach / touch bookkeeping (GameCare+Focus.swift).
     let focusGroup = FocusGroup()
     /// Clean: soap, rinse, shine (Bath/BathFlow.swift). Also owns the dirt that builds up in the room.
@@ -714,7 +718,7 @@ final class GameCare {
             if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale) }
             brain.idleMood = profile.needs.mood
             syncPerks(id: a.id, brain: brain)
-            brain.idleBlocked = bath.active && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
+            brain.idleBlocked = (bath.active || play.active) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
