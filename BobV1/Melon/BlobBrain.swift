@@ -188,6 +188,8 @@ final class BlobBrain {
     var zoomUrge: Float = IdleTuning.zoomUrgeFirst
     /// The current sit is a night nap (long hold, eyes closed). Set when the sit starts, cleared when the behaviour ends.
     var napping = false
+    /// Batch-2 treats and player cues (BlobBrain+Emotes2.swift).
+    var treat2 = Treat2State()
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
     /// Held still only because ANOTHER Jelly's close-up is on (GameCare / the stage set it every frame, with `idleBlocked`). He is free to step aside for the
@@ -581,7 +583,7 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
-        runDt = dt
+        runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
@@ -1504,6 +1506,8 @@ final class BlobBrain {
         skinnerRef?.clearOverride()
     }
     weak var skinnerRef: Skinner?
+    /// The body this brain drives (set each tick): a lying neighbour's fitted egg for the snuggle (BlobBrain+LieClear).
+    weak var simRef: SoftBody?
     /// Teddy's ears + pom as body vertices (TeddyBean): what the feature layer (hat rule, pop, follow-through) wants; driveLimbs hands it to the skinner.
     var teddyBody = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1, teddySway = SIMD2<Float>.zero
 

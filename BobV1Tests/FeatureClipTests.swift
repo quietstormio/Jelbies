@@ -131,7 +131,7 @@ final class FeatureClipTests: XCTestCase {
     }
     enum FeatureSetKeep { static func keep(_ d: Duo) { FeatureClipTests.keep.append(d); FeatureClipTests.keep.append(d.lab) } }
 
-    struct Stats { var body: Float = -1, feature: Float = -1, limb: Float = -1, minDist = Float.infinity }
+    struct Stats { var lo = Float.infinity, worst: Float = -1, body: Float = -1, feature: Float = -1, limb: Float = -1, minDist = Float.infinity }
 
     /// Run `frames` ticks of a Duo; sample the metrics each `every` frames from `from`.
     private func run(_ d: Duo, frames: Int, from: Int = 0, every: Int = 3) -> Stats {
@@ -174,27 +174,56 @@ final class FeatureClipTests: XCTestCase {
                     guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
                     both += 1
                     guard f % 3 == 0 else { continue }
+                    if after, gap == 1.2, f % 15 == 0 { let g = BlobBrain.eggGap(ClipEgg(sim: ra.sim), ClipEgg(sim: rb.sim)); MotionLog.write("   f\(f) eggGap \(g.gap) bodyGap \(d.bodyGap(0, 1)) roots \(simd_distance(ra.brain.position, rb.brain.position)) goals \(String(describing: ra.brain.idleState.snugGoal)) \(String(describing: rb.brain.idleState.snugGoal)) runs \(ra.brain.idleState.snugRuns) \(rb.brain.idleState.snugRuns) phT \(ra.brain.idleState.phaseT) \(rb.brain.idleState.phaseT)") }
                     let on = FeatureClip.enabled
                     FeatureClip.enabled = false
                     let rawF = d.skinAll(), rawL = (0..<2).map { d.limbPoints($0) }
                     FeatureClip.enabled = on
                     let feat = d.skinAll()
                     for i in 0..<2 { s.feature = max(s.feature, d.penetration(feat[i], owner: i, raw: rawF[i])); s.limb = max(s.limb, d.penetration(d.limbPoints(i), owner: i, raw: rawL[i])) }
-                    s.body = max(s.body, d.bodyGap(0, 1))
+                    if both > 100 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
+                    s.worst = max(s.worst, d.bodyGap(0, 1))
                 }
-                let line = "FEATCLIP lie \(after ? "AFTER" : "BEFORE") roots \(gap) signs \(signs) started \(a)/\(b) lying frames \(both) body pen \(s.body) feature pen \(s.feature) limb pen \(s.limb) roots now \(simd_distance(ra.brain.position, rb.brain.position))"
+                let line = "FEATCLIP lie \(after ? "AFTER" : "BEFORE") roots \(gap) signs \(signs) started \(a)/\(b) lying frames \(both) body pen settled \(s.body) ever \(s.worst) feature pen \(s.feature) limb pen \(s.limb) roots now \(simd_distance(ra.brain.position, rb.brain.position))"
                 report.append(line); MotionLog.write(line)
                 if after {
                     XCTAssertTrue(a && b); XCTAssertGreaterThan(both, 60, "both lie down")
-                    XCTAssertLessThanOrEqual(s.body, Self.tol, "the lying bodies do not sink into each other: \(line)")
+                    XCTAssertLessThanOrEqual(s.worst, 0.05, "never sunk in"); XCTAssertLessThanOrEqual(s.body, Self.tol, "the lying bodies do not sink into each other: \(line)")
                     XCTAssertLessThanOrEqual(s.feature, Self.tol, "no wing vertex inside the other body: \(line)")
                     XCTAssertLessThanOrEqual(s.limb, Self.tol, "no arm / ear vertex inside the other body: \(line)")
-                    if gap >= 1.4 { XCTAssertGreaterThan(s.body, -0.12, "they still touch (snuggle contact): \(line)") }
+                    XCTAssertGreaterThan(s.lo, -0.055, "they snuggle: surfaces touch (gap 0-5 cm): \(line)")
                 }
             }
           }
         }
         XCTAssertTrue(report.contains { $0.contains("BEFORE") && ($0.contains("body pen 0.") || $0.contains("limb pen 0.")) }, "the rig reproduces the photo (before the fix a pair sinks in)")
+    }
+
+    /// From far apart: one lies down, then the other lies down 2.0 away - he scoots over to just touch (surface gap 0-5 cm, never inside).
+    func testSnuggleFromFar() {
+        for dist: Float in [1.8, 2.2] {
+            let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
+            d.place([SIMD2(-dist / 2, 0.6), SIMD2(dist / 2, 0.6)])
+            let a = d.lab.rigs[0], b = d.lab.rigs[1]
+            a.brain.idleForced = true; b.brain.idleForced = true
+            XCTAssertTrue(a.brain.idleStart(.lieDown, a.sim)); a.brain.idleState.hold = 60
+            for _ in 0..<120 { d.tick() }
+            d.lab.snapshot = d.lab.rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
+            XCTAssertTrue(b.brain.idleStart(.lieDown, b.sim)); b.brain.idleState.hold = 60
+            var s = Stats(), both = 0
+            for f in 0..<(60 * 7) {
+                d.tick()
+                guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
+                both += 1
+                guard f % 3 == 0 else { continue }
+                if both > 120 { _ = d.skinAll(); let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }
+            }
+            let line = "FEATCLIP snuggle from \(dist): lying frames \(both) settled body pen max \(s.body) min \(s.lo) roots \(simd_distance(a.brain.position, b.brain.position))"
+            MotionLog.write(line)
+            XCTAssertGreaterThan(both, 30, line)
+            XCTAssertLessThanOrEqual(s.body, Self.tol, line)
+            XCTAssertGreaterThan(s.lo, -0.055, "snug: \(line)")
+        }
     }
 
     // MARK: every feature against a neighbour
@@ -268,7 +297,7 @@ final class FeatureClipTests: XCTestCase {
         tight.place([SIMD2(0, 0.6), SIMD2(0.35, 0.6), SIMD2(-0.35, 0.6)])
         let t = tight.lab.rigs[0]
         t.brain.idleForced = true
-        let tightSpot = t.brain.lieSpot(from: t.brain.position)
+        let tightSpot = t.brain.lieSpot(from: t.brain.position, yaw: 0)
         XCTAssertTrue(tightSpot == nil || simd_distance(tightSpot!, t.brain.position) > 0.1, "boxed in: he walks out or stays up (never lies down in place)")
     }
 

@@ -29,6 +29,7 @@ enum FaceKind: String, CaseIterable, Sendable {
     case focused      // brows level and a touch down, eyes narrowed
     case hopeful      // brows up and in, wide eyes
     case dazed        // woozy: the two eyes swell and shrink in turn, inner brow ends up, a tiny "o" (dizzyWobble)
+    case starry       // awed: brows up and in, eyes wide and TWINKLING (each eye dips to a glint in turn), a tiny "o" (stargazing)
     /// Kinds whose brows leave the rest pose.
     var usesBrows: Bool { self != .neutral && self != .joyArc }
 }
@@ -64,6 +65,11 @@ extension FaceKind {
         case .dazed:
             let s = sinf(2 * .pi * 0.9 * t)
             p.eyeL = 0.62 + 0.28 * s; p.eyeR = 0.62 - 0.28 * s; p.raiseL = 0.3 * r; p.raiseR = 0.3 * r; p.tiltL = 0.24; p.tiltR = 0.24; p.mouth = 0.12
+        case .starry:
+            // a glint: each eye quickly dips to ~55 % and back (the left at 0 s of a 1.3 s cycle, the right 0.65 s later), like a twinkle in the eye
+            func glint(_ u: Float) -> Float { let x = u.truncatingRemainder(dividingBy: 1.3); return x < 0.28 ? 0.45 * sinf(.pi * x / 0.28) : 0 }
+            p.eyeL = 1 - glint(t); p.eyeR = 1 - glint(t + 0.65)
+            p.raiseL = 0.85 * r; p.raiseR = 0.85 * r; p.tiltL = 0.20; p.tiltR = 0.20; p.mouth = 0.10
         }
         return p
     }
@@ -147,7 +153,7 @@ extension BlobBrain {
         }
         if let k = idleState.kind {
             switch k {
-            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail, .tailHug, .sneeze: return true
+            case .sleep, .sit, .slump, .sway, .yawn, .stretch, .flop, .peek, .stumble, .decorSit, .decorBoop, .decorPeek, .decorSlide, .tail, .tailHug, .sneeze, .floorNapFlop: return true
             default: break
             }
         }
@@ -302,6 +308,7 @@ extension BlobBrain {
         case .focused: dur = 2.5
         case .hopeful: dur = 2.0
         case .dazed: dur = 2.0
+        case .starry: dur = 2.0
         }
         return (pick, dur)
     }

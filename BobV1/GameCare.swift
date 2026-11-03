@@ -411,6 +411,7 @@ final class GameCare {
         var away: TimeInterval = 0
         for j in jellies { away = max(away, j.returnedActive(at: t)) }
         greetIfAway(away)
+        welcomeWiggleIfAway(away)
         return away
     }
     /// Cold launch: the away time was applied when the models loaded; greet if it was long. Once.

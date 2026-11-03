@@ -18,3 +18,11 @@ extension GameCare {
     /// The highlighted Jelbie (a settled pick, or the one whose outline is drawing).
     var highlightedJelly: Int? { select.highlighted ?? select.selectedID }
 }
+
+extension GameCare {
+    /// Back after a SHORT break (the long-absence greeting handles the rest): every awake, free Jelbie does an excited welcome wiggle, staggered (batch-2 emote, BlobBrain+Emotes2.swift).
+    func welcomeWiggleIfAway(_ away: TimeInterval) {
+        guard EmoteTreats.welcomeAway.contains(away), away < TimeAway.greetAfter, !greetBlocked, !greeting else { return }
+        for j in 0..<max(jellies.count, 1) { selectBrain(j)?.treatCue(.welcomeWiggle, delay: 0.35 * Float(j)) }
+    }
+}

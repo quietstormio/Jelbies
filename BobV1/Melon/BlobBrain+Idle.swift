@@ -85,6 +85,13 @@ enum IdleKind: String, CaseIterable, Sendable {
     // Play mode (2026-11-02, g-playtoss): BlobBrain+PlayToss.swift
     case tossHeader    // a hop on the spot, the ball meets the crown at the top
     case tossBump      // walks round behind the ball, turns onto the line and stomp-bumps it toward the player
+    // batch 2 (2026-11-02, g-emotes3): BlobBrain+Emotes2.swift. Treats registered in EmoteTreats.batch2 (NOT in the idle weight tables); the last three answer the player.
+    case stargazing    // NIGHT: waddles to a window, looks up with starry eyes, a slow happy sway, a little sigh
+    case proudStrut    // chest-out high-knee march on the spot with a head-high bounce, then a happy hop (after a win, or rarely when very happy)
+    case floorNapFlop  // really sleepy: flops flat on his belly (sploot), eyes closed for 3...6 s, then up (or straight into bed at bedtime)
+    case tapTilt       // (player) a tap on the glass near him: he turns and tilts his head toward it with a curious "hm?"
+    case welcomeWiggle // (player) the app is opened again after a short break: an excited welcome wiggle
+    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"; a touch makes him light up
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -205,6 +212,9 @@ struct IdleState {
     var soccer = SoccerIdle()
     /// Play mode's bump (BlobBrain+PlayToss.swift).
     var toss = TossIdle()
+    /// The lie-down's snuggle: where he eases to (the last measured gap to a lying neighbour) and the seconds to the next measurement (BlobBrain+LieClear).
+    var snugGoal: SIMD2<Float>?
+    var snugNext: Float = 0, snugRuns = 0
     /// The window antic: walking to the window (true) before the look (W2).
     var windowGo = false
     /// Moves begun by this Jelly lately (seconds left): a friend may not echo them (kindCooling).
@@ -287,6 +297,7 @@ extension BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("idleMaybeStart", probe) }
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
+        if treat2MaybeStart(sim) { return true }          // (batch-2 treats: BlobBrain+Emotes2.swift; EmoteTreats.selfSchedule = false hands them to the treat slot)
         if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
         guard idleState.kind == nil, !held, attached else { return false }
         // (W2: a due urge does not wait out the cooldown of the special before it: measured at 13 solo dashes per 10 min in the okay room with the cooldown in the way)
@@ -410,7 +421,7 @@ extension BlobBrain {
             if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true) }
         } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
-            case .window where idleState.windowGo, .lieDown where idleState.windowGo, .flop where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
+            case .window where idleState.windowGo, .lieDown where idleState.windowGo, .flop where idleState.windowGo, .stargazing where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway, .stopLook, .lieDown: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:
                 // on the bag he hops off (the hold ends now); a turn on the floor just stops; a hop in progress is finished first
@@ -634,7 +645,7 @@ extension BlobBrain {
             }
             return flapHopBegin(sim)
         case .flop:
-            guard let spot = lieSpot(from: here) else { return false }          // (BlobBrain+LieClear: a flat body is wider; not next to a friend)
+            guard let spot = lieSpot(from: here, yaw: yaw) else { return false }          // (BlobBrain+LieClear: a flat body is wider; not next to a friend)
             idleBegin(.flop)
             script = .idle; activity = .playing
             lieWalk(to: spot, from: here); lieTipToward(spot, lieYaw: yaw)
@@ -658,6 +669,8 @@ extension BlobBrain {
             return emoteBegin(kind, sim)
         case .tossHeader: return tossHeaderStart(sim)
         case .tossBump: return tossBumpStart(sim, stand: here, dir: SIMD2(0, 1))
+        case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
+            return emote2Begin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -727,6 +740,7 @@ extension BlobBrain {
         case .tailThump: runTailThump(sim, skinner, dt)
         case .tailHug: runTailHug(sim, skinner, dt)
         case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
+        case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)

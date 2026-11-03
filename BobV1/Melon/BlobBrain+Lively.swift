@@ -35,18 +35,20 @@ extension BlobBrain {
     /// Shake / lie down / chirp, from standing (`resume` nil) or in the middle of a walk. False = not possible now.
     func livelyStart(_ kind: IdleKind, _ sim: SoftBody, resume: SIMD2<Float>?) -> Bool {
         var lieAt: SIMD2<Float>?
-        if kind == .lieDown {          // a flat body is wider: not next to a friend (BlobBrain+LieClear)
-            guard let spot = lieSpot(from: SIMD2(px, pz)) else { return false }
+        let lieSign: Float = rand() < 0.5 ? -1 : 1, lieYaw = faceCameraYaw() + lieSign * rand(0.5, 0.9)
+        if kind == .lieDown {          // a flat body is wider: just touching a friend, never inside him (BlobBrain+LieClear)
+            guard let spot = lieSpot(from: SIMD2(px, pz), yaw: lieYaw) else { return false }
             lieAt = spot
         }
         idleBegin(kind)
+        idleState.snugGoal = nil; idleState.snugRuns = 0; idleState.snugNext = 0.3
         idleState.resume = resume
         script = .idle
         switch kind {
         case .shake:
             activity = .playing
         case .lieDown:
-            idleState.goalYaw = faceCameraYaw() + idleState.sign * rand(0.5, 0.9)
+            idleState.sign = lieSign; idleState.goalYaw = lieYaw
             idleState.hold = rand(3, 5.5)
             activity = .lookingAround
             if let spot = lieAt { lieWalk(to: spot, from: SIMD2(px, pz)); lieTipToward(spot, lieYaw: idleState.goalYaw) }
@@ -126,6 +128,7 @@ extension BlobBrain {
                 if phT >= 0.35 { idleState.phase = 2; idleState.phaseT = 0; face(idleMood == .okay ? .sleepy : .happy, hold: idleState.hold + 0.4) }
             case 2:     // lie there
                 k = 1
+                snuggleTick(sim, dt)
                 if phT >= idleState.hold { idleState.phase = 3; idleState.phaseT = 0 }
             default:    // the push-up, an ease-out with a little stretch overshoot
                 let u = min(1, phT / 0.6)
