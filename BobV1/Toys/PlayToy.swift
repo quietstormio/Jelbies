@@ -3,7 +3,7 @@
 //  The play mode's toy registry (Play row -> the toy picker). A toy is ONE registry entry: an id, a title, its picture (the store item), and what happens when it
 //  comes out. The picker lists a toy only once it is OWNED (bought with JellyCoins): `PlayToyRegistry.offered`.
 //    balls   the bouncy / soccer / beach ball (the store's decor toys): `BallToy` -> `PlayToss` (Play/PlayToss.swift): flick it, the Jelbies header / bump it back.
-//    wand    the bubble wand (g-bubbleblow): its own entry, `register` line below. (Until it lands, `BubbleWandStub` holds the place.)
+//    wand    the bubble wand (Toys/BubbleWand.swift): its own entry, the `register` line below.
 //  (Shared with g-bubbleblow: the protocol and the registry keep the shape it first wrote; `isOwned` / `storeID` are added with defaults so its wand compiles unchanged.)
 //
 
@@ -49,7 +49,7 @@ enum PlayToyRegistry {
         guard !registered else { return }
         registered = true
         for k in BallToy.kinds { register(BallToy(kind: k)) }
-        register(BubbleWandStub.shared)
+        register(BubbleWand.shared)
     }
 }
 

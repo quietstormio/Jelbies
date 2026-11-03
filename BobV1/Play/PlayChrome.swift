@@ -20,7 +20,7 @@ struct PlayChrome: View {
 
     var body: some View {
         ZStack {
-            if play.active { surface }
+            if play.phase == .toy { toySurface } else if play.active { surface }
             if let note = play.stubNotice {
                 Text(note).jFont(14, .semibold).foregroundStyle(FocusStyle.brown)
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -39,6 +39,14 @@ struct PlayChrome: View {
         ZStack {
             surfaceLayer
             // the Done pill respects the safe area (the status bar is above it)
+            VStack { HStack { DonePill { withAnimation(CareMenu.spring) { care.endPlay() } }; Spacer() }.padding(.horizontal, 16).padding(.top, 8); Spacer() }
+        }
+    }
+
+    /// A non-ball toy (the bubble wand): its own controls at the bottom and the same Done pill.
+    private var toySurface: some View {
+        ZStack {
+            if BubbleWand.shared.active { BubbleWandControls() }
             VStack { HStack { DonePill { withAnimation(CareMenu.spring) { care.endPlay() } }; Spacer() }.padding(.horizontal, 16).padding(.top, 8); Spacer() }
         }
     }

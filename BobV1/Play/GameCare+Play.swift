@@ -44,9 +44,21 @@ extension GameCare {
         AudioHub.shared.play(.uiconfirm)
     }
 
+    /// The bubble wand was picked (Toys/BubbleWand.swift): Play mode on with the wand's controls, the Jelbies free to watch and chase the bubbles.
+    func beginPlay(wand: BubbleWand) {
+        guard canPlay else { AudioHub.shared.play(.notEnough); return }
+        select.cancel()
+        clearHighlight()
+        play.onEvent = nil
+        play.beginToy(title: wand.title)
+        wand.begin(care: self)
+        AudioHub.shared.play(.uiconfirm)
+    }
+
     func endPlay() {
         play.end()
         play.onEvent = nil
+        BubbleWand.shared.deactivate()          // (no-op unless the wand was out)
     }
 
     /// Once per fixed step (after the Jellies and the decor): the ball's physics, the Jelbies' parts in the game.
