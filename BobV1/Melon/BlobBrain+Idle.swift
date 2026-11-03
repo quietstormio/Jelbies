@@ -91,7 +91,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case floorNapFlop  // really sleepy: flops flat on his belly (sploot), eyes closed for 3...6 s, then up (or straight into bed at bedtime)
     case tapTilt       // (player) a tap on the glass near him: he turns and tilts his head toward it with a curious "hm?"
     case welcomeWiggle // (player) the app is opened again after a short break: an excited welcome wiggle
-    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"; a touch makes him light up
+    case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).

@@ -10,7 +10,7 @@
 //    floorNapFlop  really sleepy (evening, before bed): flops flat on his belly (pitch +0.30, squash 0.60), feet kept under / a touch behind him, eyes shut 3...6 s, then up - or straight into bed at bedtime
 //    tapTilt       PLAYER: a tap on the glass near him: he turns toward it (stepping, if it is far round) and tilts his head with a curious "hm?"
 //    welcomeWiggle PLAYER: the app is opened again after a short break (25 s ... the long-absence greeting): an excited shimmy, staggered per Jelbie
-//    checkIn       PLAYER: nobody has touched the screen for ~75 s: he turns to you, leans in and asks "hello?"; if you touch the screen he lights up (happy hop-bounce)
+//    checkIn       PLAYER: nobody has touched the screen for ~75 s: he turns to you, leans in and asks "hello?"; then back to what he was doing
 //
 
 import Foundation
@@ -28,10 +28,9 @@ import simd
 struct Treat2State {
     /// `variety.now` at which the next random treat may be rolled.
     var next: Float = -1
-    /// Where the tap was (floor xz), the delay before a welcome wiggle starts, and what the check-in waits for.
+    /// Where the tap was (floor xz), the delay before a welcome wiggle starts.
     var tapPoint = SIMD2<Float>.zero
     var delay: Float = 0
-    var presenceAtStart: Double = 0
     /// A win to celebrate: wanted, and how long ago it was asked (dropped after 40 s).
     var strutWanted = false, strutAsked: Float = 0
     var lastWelcome: Double = -1000
@@ -88,8 +87,7 @@ enum EmoteTreats {
         "floorNapFlop.settle": [Pulse(delay: 0, i: 0.12, s: 0.08)],
         "tapTilt.tilt": [Pulse(delay: 0, i: 0.18, s: 0.20)],
         "welcomeWiggle.wiggle": [Pulse(delay: 0, i: 0.26, s: 0.20), Pulse(delay: 0.16, i: 0.20, s: 0.20), Pulse(delay: 0.32, i: 0.14, s: 0.20)],
-        "checkIn.hello": [Pulse(delay: 0, i: 0.19, s: 0.21)],
-        "checkIn.answer": [Pulse(delay: 0, i: 0.30, s: 0.20), Pulse(delay: 0.15, i: 0.20, s: 0.15)],
+        "checkIn.hello": [Pulse(delay: 0, i: 0.18, s: 0.20)],
         "hearts.pop": [Pulse(delay: 0, i: 0.10, s: 0.20)],
     ]
     /// Test seam: every request ("floorNapFlop.flop" ...), before the stage's rate limit.
@@ -234,7 +232,7 @@ extension BlobBrain {
             if kind == .floorNapFlop { idleState.goalYaw += idleState.sign * 0.35 }          // (a little turned: the flat body shows its side as well as its face)
         default: idleState.goalYaw = yaw
         }
-        if kind == .checkIn { treat2.presenceAtStart = PlayerPresence.last; PlayerPresence.lastCheckIn = CACurrentMediaTime() }
+        if kind == .checkIn { PlayerPresence.lastCheckIn = CACurrentMediaTime() }
         treat2.plays[kind, default: 0] += 1
         return true
     }
@@ -487,33 +485,15 @@ extension BlobBrain {
         if e2Opening(tol: 0.1) { return }
         let a = amplitude
         let t = idleState.phaseT
-        // an answer: the screen was touched after he began asking
-        let answered = PlayerPresence.last > treat2.presenceAtStart + 0.05
-        if answered, idleState.steps & (1 << 3) == 0 {
-            idleState.steps |= 1 << 3
-            idleState.jackA = t          // (the moment of the answer)
-            face(.joyArc, hold: 1.2); blushBump(hold: 2.6, peak: 0.6)
-            jellyKick = max(jellyKick, 2.2)
-            AudioHub.shared.chirp(jelly: steerID, .happy, x: px)
-            treatHaptic("checkIn.answer")
-        }
-        let tAns = idleState.steps & (1 << 3) != 0 ? t - idleState.jackA : -1
         let ask: Float = 3.2
-        // the ask: lean in toward the player, hopeful brows, two small expectant bobs
-        var lean = smooth01(t / 0.5) * (1 - smooth01((t - (ask - 0.5)) / 0.5))
-        if tAns >= 0 { lean *= 1 - smooth01(tAns / 0.25) }
+        // the ask: lean in toward the player, hopeful brows, two small expectant bobs; then back to what he was doing (no touch handling)
+        let lean = smooth01(t / 0.5) * (1 - smooth01((t - (ask - 0.5)) / 0.5))
         pitch += 0.16 * lean * a
         roll += 0.07 * lean * sinf(2 * Float.pi * t / 1.9) * a          // (a questioning sway)
         let bob = (t > 0.9 && t < 1.25 ? sinf(.pi * (t - 0.9) / 0.35) : 0) + (t > 1.7 && t < 2.05 ? sinf(.pi * (t - 1.7) / 0.35) : 0)
         squash *= 1 + 0.06 * bob * lean * a
         if e2Once(0, t, at: 0.15) { face(.hopeful, hold: ask); }
         if e2Once(1, t, at: 0.4) { AudioHub.shared.play(.emoteCheckIn, jelly: steerID, x: px, volume: 1); treatHaptic("checkIn.hello") }
-        if tAns >= 0 {
-            // lit up: a happy shimmy of squash pulses for ~1 s
-            let e = max(0, 1 - tAns / 1.1)
-            squash *= 1 - 0.06 * e * (0.5 - 0.5 * cosf(2 * Float.pi * 5 * tAns)) * a
-            roll += 0.04 * e * sinf(2 * Float.pi * 5 * tAns) * a
-            if tAns > 1.2 && !feet.active { e2Done(skinner) }
-        } else if t > ask && !feet.active { e2Done(skinner) }
+        if t > ask + 0.3 && !feet.active { e2Done(skinner) }
     }
 }
