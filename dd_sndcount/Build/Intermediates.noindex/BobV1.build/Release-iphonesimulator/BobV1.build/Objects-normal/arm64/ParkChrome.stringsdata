@@ -1,0 +1,136 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Park/ParkChrome.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Park",
+        "location": {
+          "startingColumn": 89,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "Park",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 31
+        }
+      },
+      {
+        "comment": "",
+        "key": "Go home",
+        "location": {
+          "startingColumn": 88,
+          "startingLine": 58
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, %@",
+        "location": {
+          "startingColumn": 65,
+          "startingLine": 118
+        }
+      },
+      {
+        "comment": "",
+        "key": "Friend",
+        "location": {
+          "startingColumn": 177,
+          "startingLine": 113
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pick one to three. Visitors are there to meet.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 137
+        }
+      },
+      {
+        "comment": "",
+        "key": "Who comes to the park?",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 134
+        }
+      },
+      {
+        "comment": "",
+        "key": "Not now",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 160
+        }
+      },
+      {
+        "comment": "",
+        "key": "Go to the park",
+        "location": {
+          "startingColumn": 85,
+          "startingLine": 165
+        }
+      },
+      {
+        "comment": "",
+        "key": "“%@”",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 222
+        }
+      },
+      {
+        "comment": "",
+        "key": "Visiting now",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 234
+        }
+      },
+      {
+        "comment": "",
+        "key": "Coming over when you get home",
+        "location": {
+          "startingColumn": 53,
+          "startingLine": 234
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 203
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 197
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@: %@",
+        "location": {
+          "startingColumn": 82,
+          "startingLine": 219
+        }
+      },
+      {
+        "comment": "",
+        "key": "Say goodbye",
+        "location": {
+          "startingColumn": 84,
+          "startingLine": 227
+        }
+      }
+    ]
+  },
+  "version": 1
+}

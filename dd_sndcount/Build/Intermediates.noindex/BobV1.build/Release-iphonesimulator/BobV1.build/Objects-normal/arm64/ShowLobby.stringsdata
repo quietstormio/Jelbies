@@ -1,0 +1,144 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Show/ShowLobby.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "%@'s theme: %@. %@, and %@ helps a little. Tomorrow: %@.",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 172
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, %@",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 210
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, locked. Win at %@",
+        "location": {
+          "startingColumn": 110,
+          "startingLine": 210
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'S THEME",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 157
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@%@",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 177
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tomorrow",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 183
+        }
+      },
+      {
+        "comment": "",
+        "key": "Entrant",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 250
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'s card",
+        "location": {
+          "startingColumn": 82,
+          "startingLine": 254
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'s card ›",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 253
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ %lld out of 100",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 287
+        }
+      },
+      {
+        "comment": "",
+        "key": " about %lld ",
+        "location": {
+          "startingColumn": 91,
+          "startingLine": 293
+        }
+      },
+      {
+        "comment": "",
+        "key": "of 300",
+        "location": {
+          "startingColumn": 172,
+          "startingLine": 293
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ about %lld out of 300. Rivals about %lld.",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 319
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 285
+        }
+      },
+      {
+        "comment": "",
+        "key": "Rivals about %lld",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 302
+        }
+      },
+      {
+        "comment": "",
+        "key": "Dress up",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 332
+        }
+      },
+      {
+        "comment": "",
+        "key": "Start show",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 342
+        }
+      }
+    ]
+  },
+  "version": 1
+}

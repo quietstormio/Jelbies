@@ -1,0 +1,192 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Settings/SettingsScreen.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 68
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 73
+        }
+      },
+      {
+        "comment": "",
+        "key": "Theme colour",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "App icon preview",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 103
+        }
+      },
+      {
+        "comment": "",
+        "key": "Match app icon to theme",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 109
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie voices follow the sound effects volume.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 148
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip song",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 145
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 141
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ volume",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 157
+        }
+      },
+      {
+        "comment": "",
+        "key": "Accessibility settings",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 164
+        }
+      },
+      {
+        "comment": "",
+        "key": "Replay intro next launch",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 182
+        }
+      },
+      {
+        "comment": "",
+        "key": "Follow real clock",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 186
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day and night follow your phone's clock.",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 189
+        }
+      },
+      {
+        "comment": "",
+        "key": "One game hour is one real minute. Day %lld so far. You can also skip the night with the moon button.",
+        "location": {
+          "startingColumn": 76,
+          "startingLine": 189
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reset save",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 192
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 212
+        }
+      },
+      {
+        "comment": "",
+        "key": "Version %@ (%@)",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 213
+        }
+      },
+      {
+        "comment": "",
+        "key": "Day %lld",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 214
+        }
+      },
+      {
+        "comment": "",
+        "key": "Made with love.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 215
+        }
+      },
+      {
+        "comment": "",
+        "key": "Everything stays on this phone. No accounts, no internet.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 216
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reset your save?",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 225
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your Jelbies, JellyCoins and items will be gone for good. Press and hold the red button to confirm.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 226
+        }
+      },
+      {
+        "comment": "",
+        "key": "Keep my save",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 230
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,48 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Audio/SoundSettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Sound",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close sound settings",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 29
+        }
+      },
+      {
+        "comment": "",
+        "key": "Siri and Lock Screen",
+        "location": {
+          "startingColumn": 31,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip song",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 89
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 80
+        }
+      }
+    ]
+  },
+  "version": 1
+}

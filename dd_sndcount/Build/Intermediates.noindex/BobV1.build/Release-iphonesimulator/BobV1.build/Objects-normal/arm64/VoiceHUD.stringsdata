@@ -1,0 +1,304 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Voice/VoiceHUD.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Hold to talk",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 106
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ is listening",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 152
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tricks",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 175
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tricks",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 176
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 231
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@'s tricks",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 207
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close tricks",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 215
+        }
+      },
+      {
+        "comment": "",
+        "key": "Smart voice: %@",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 254
+        }
+      },
+      {
+        "comment": "",
+        "key": "Smart voice: %@",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 242
+        }
+      },
+      {
+        "comment": "",
+        "key": "Hold the mic and say the nickname (%lld of %lld)",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 322
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name: %@. He knows it",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 284
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name: %@",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 275
+        }
+      },
+      {
+        "comment": "",
+        "key": "He knows it",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 276
+        }
+      },
+      {
+        "comment": "",
+        "key": "Nickname %@. Remove",
+        "location": {
+          "startingColumn": 92,
+          "startingLine": 298
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add nickname",
+        "location": {
+          "startingColumn": 27,
+          "startingLine": 303
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add nickname",
+        "location": {
+          "startingColumn": 83,
+          "startingLine": 314
+        }
+      },
+      {
+        "comment": "",
+        "key": "Teach a nickname by saying it %lld times",
+        "location": {
+          "startingColumn": 83,
+          "startingLine": 319
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@. %@ %lld of %lld lessons.%@",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 366
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ does it now.",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 367
+        }
+      },
+      {
+        "comment": "",
+        "key": "Starts a lesson with %@.",
+        "location": {
+          "startingColumn": 108,
+          "startingLine": 367
+        }
+      },
+      {
+        "comment": "",
+        "key": "Forget the word for %@",
+        "location": {
+          "startingColumn": 37,
+          "startingLine": 376
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld%%",
+        "location": {
+          "startingColumn": 44,
+          "startingLine": 359
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 56,
+          "startingLine": 359
+        }
+      },
+      {
+        "comment": "",
+        "key": "Forget",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 370
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type the word instead of saying it. He may obey, and obeying makes him more reliable.",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 416
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type a word instead of saying it. Each time counts as one lesson.",
+        "location": {
+          "startingColumn": 140,
+          "startingLine": 416
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type a command for %@",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 390
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type a word for %@",
+        "location": {
+          "startingColumn": 79,
+          "startingLine": 390
+        }
+      },
+      {
+        "comment": "",
+        "key": "Send this command",
+        "location": {
+          "startingColumn": 113,
+          "startingLine": 402
+        }
+      },
+      {
+        "comment": "",
+        "key": "Teach this word",
+        "location": {
+          "startingColumn": 135,
+          "startingLine": 402
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type a command",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 410
+        }
+      },
+      {
+        "comment": "",
+        "key": "Teach with typing",
+        "location": {
+          "startingColumn": 60,
+          "startingLine": 410
+        }
+      },
+      {
+        "comment": "",
+        "key": "listening",
+        "location": {
+          "startingColumn": 45,
+          "startingLine": 463
+        }
+      },
+      {
+        "comment": "",
+        "key": "ready",
+        "location": {
+          "startingColumn": 59,
+          "startingLine": 463
+        }
+      },
+      {
+        "comment": "",
+        "key": "Open trick book",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 467
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 458
+        }
+      },
+      {
+        "comment": "",
+        "key": "Talk",
+        "location": {
+          "startingColumn": 59,
+          "startingLine": 468
+        }
+      }
+    ]
+  },
+  "version": 1
+}

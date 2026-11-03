@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>FormatVersion</key>
+	<integer>1</integer>
+	<key>Store</key>
+	<dict>
+		<key>BobV1Tests</key>
+		<dict>
+			<key>HapticCueTests</key>
+			<dict>
+				<key>testBrainMovesAskForTheirCue</key>
+				<dict>
+					<key>mrnet</key>
+					<real>2.558925986289978</real>
+				</dict>
+				<key>testCueReachesTheSinkWithItsPulsesAndRateCapIsTwoPerSecond</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.00093603134155273438</real>
+				</dict>
+				<key>testDefaultIsOnForAnOldSave</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.00052607059478759766</real>
+				</dict>
+				<key>testEveryMoveHasItsOwnSoftPattern</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.0033560991287231445</real>
+				</dict>
+				<key>testIntensityScalesWithEnergyAndJitterStaysWithin15Percent</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.0014319419860839844</real>
+				</dict>
+				<key>testSettingsOffWarmAndBusyStayOut</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.0020929574966430664</real>
+				</dict>
+				<key>testStormCuesPlayOutsideFocusThroughTheSameDriver</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.00042104721069335938</real>
+				</dict>
+				<key>testTouchHapticsWorkAfterRoomCuesOnTheSameEngine</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.00070703029632568359</real>
+				</dict>
+			</dict>
+			<key>HapticSinkRegressionTests</key>
+			<dict>
+				<key>testTouchAndCuddleHapticsReachTheSink</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.0018559694290161133</real>
+				</dict>
+			</dict>
+		</dict>
+	</dict>
+</dict>
+</plist>

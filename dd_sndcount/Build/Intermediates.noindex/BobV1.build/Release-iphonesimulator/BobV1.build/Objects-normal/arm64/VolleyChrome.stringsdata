@@ -1,0 +1,248 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Volley/VolleyChrome.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Leave the beach",
+        "location": {
+          "startingColumn": 58,
+          "startingLine": 72
+        }
+      },
+      {
+        "comment": "",
+        "key": "Score. You %lld, them %lld. First to %lld, win by 2. Controlling %@.",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 127
+        }
+      },
+      {
+        "comment": "",
+        "key": "Touch %lld of 3",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld hits",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 109
+        }
+      },
+      {
+        "comment": "",
+        "key": "Ball %lld/%lld · %lld blocked",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 110
+        }
+      },
+      {
+        "comment": "",
+        "key": "Ball %lld/%lld · %lld hit",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 111
+        }
+      },
+      {
+        "comment": "",
+        "key": "Flags %lld/%lld",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 112
+        }
+      },
+      {
+        "comment": "",
+        "key": ":",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 121
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 136
+        }
+      },
+      {
+        "comment": "",
+        "key": "!",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 207
+        }
+      },
+      {
+        "comment": "",
+        "key": "The Jelbie walks for you",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 239
+        }
+      },
+      {
+        "comment": "",
+        "key": "Hold the left side to move",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 242
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap to hit. The move depends on the touch: bump, set, spike, dig or block. Swipe the button to aim: up deep, down short, left or right to the sides.",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 289
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 287
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 47,
+          "startingLine": 344
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ done!",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 368
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld  :  %lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 376
+        }
+      },
+      {
+        "comment": "",
+        "key": "Auto play pays half",
+        "location": {
+          "startingColumn": 51,
+          "startingLine": 381
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ unlocked!",
+        "location": {
+          "startingColumn": 54,
+          "startingLine": 388
+        }
+      },
+      {
+        "comment": "",
+        "key": "You won!",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 375
+        }
+      },
+      {
+        "comment": "",
+        "key": "Good game!",
+        "location": {
+          "startingColumn": 61,
+          "startingLine": 375
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tired legs: a rest helps. Pep comes back tomorrow.",
+        "location": {
+          "startingColumn": 118,
+          "startingLine": 372
+        }
+      },
+      {
+        "comment": "",
+        "key": "+%lld JellyCoins",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 379
+        }
+      },
+      {
+        "comment": "",
+        "key": "Back home",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 391
+        }
+      },
+      {
+        "comment": "",
+        "key": "+%lld",
+        "location": {
+          "startingColumn": 73,
+          "startingLine": 414
+        }
+      },
+      {
+        "comment": "",
+        "key": "Beach volleyball",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 427
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ volleyball ribbon: %lld win%@",
+        "location": {
+          "startingColumn": 81,
+          "startingLine": 437
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ ×%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 433
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, earned",
+        "location": {
+          "startingColumn": 87,
+          "startingLine": 447
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, not yet",
+        "location": {
+          "startingColumn": 110,
+          "startingLine": 447
+        }
+      }
+    ]
+  },
+  "version": 1
+}

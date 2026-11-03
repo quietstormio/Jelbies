@@ -1,0 +1,40 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/JelbiesWidget/JelbiesWidgetBundle.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Jelbies",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "See how your Jelbies are doing, and when they need you.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "Water coming",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 81
+        }
+      },
+      {
+        "comment": "",
+        "key": "Water %@",
+        "location": {
+          "startingColumn": 52,
+          "startingLine": 81
+        }
+      }
+    ]
+  },
+  "version": 1
+}

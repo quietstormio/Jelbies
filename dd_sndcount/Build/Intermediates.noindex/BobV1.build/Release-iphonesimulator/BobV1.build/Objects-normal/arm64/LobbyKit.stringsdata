@@ -1,0 +1,128 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Lobby/LobbyKit.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Back",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 89
+        }
+      },
+      {
+        "comment": "",
+        "key": "How to play",
+        "location": {
+          "startingColumn": 62,
+          "startingLine": 95
+        }
+      },
+      {
+        "comment": "",
+        "key": "?",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 93
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, %lld JellyCoins",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 206
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 201
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ %lld out of 100",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 274
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 99,
+          "startingLine": 269
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pep: %lld of %lld full practices left today",
+        "location": {
+          "startingColumn": 69,
+          "startingLine": 326
+        }
+      },
+      {
+        "comment": "",
+        "key": "Train",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 383
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pep: %lld of %lld full practices left",
+        "location": {
+          "startingColumn": 61,
+          "startingLine": 383
+        }
+      },
+      {
+        "comment": "",
+        "key": "Train",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 399
+        }
+      },
+      {
+        "comment": "",
+        "key": "On",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 419
+        }
+      },
+      {
+        "comment": "",
+        "key": "Off",
+        "location": {
+          "startingColumn": 57,
+          "startingLine": 419
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 432
+        }
+      },
+      {
+        "comment": "",
+        "key": "Close",
+        "location": {
+          "startingColumn": 82,
+          "startingLine": 463
+        }
+      }
+    ]
+  },
+  "version": 1
+}

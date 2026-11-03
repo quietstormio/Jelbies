@@ -1,0 +1,80 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Play/PlayChrome.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "The %@, in your hand",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 69
+        }
+      },
+      {
+        "comment": "",
+        "key": "Swipe up to throw it to a Jelbie",
+        "location": {
+          "startingColumn": 40,
+          "startingLine": 70
+        }
+      },
+      {
+        "comment": "",
+        "key": "Throw to a Jelbie",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 72
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld in a row",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 117
+        }
+      },
+      {
+        "comment": "",
+        "key": "Flick the ball to a Jelbie",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 77
+        }
+      },
+      {
+        "comment": "",
+        "key": "×%lld",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 109
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 165
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stops playing and lets everyone roam",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 166
+        }
+      },
+      {
+        "comment": "",
+        "key": "Done",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 156
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,48 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Start/IntroView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Skip intro",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.",
+        "location": {
+          "startingColumn": 63,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jumps to the end of the intro",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "Soft music and sparkles",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 64
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 73
+        }
+      }
+    ]
+  },
+  "version": 1
+}

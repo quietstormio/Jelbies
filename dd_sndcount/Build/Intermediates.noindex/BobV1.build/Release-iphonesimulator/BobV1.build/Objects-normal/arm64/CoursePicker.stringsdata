@@ -1,0 +1,40 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Race/CoursePicker.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "%@, %@",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@, locked. Win at %@",
+        "location": {
+          "startingColumn": 110,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "picked",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 99
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,48 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/Shared/JellyActivityViews.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Race progress",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 38
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ of %lld, %lld percent",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 39
+        }
+      },
+      {
+        "comment": "",
+        "key": "to refill",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 78
+        }
+      },
+      {
+        "comment": "",
+        "key": "of %lld",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 125
+        }
+      },
+      {
+        "comment": "",
+        "key": "zZ",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 163
+        }
+      }
+    ]
+  },
+  "version": 1
+}

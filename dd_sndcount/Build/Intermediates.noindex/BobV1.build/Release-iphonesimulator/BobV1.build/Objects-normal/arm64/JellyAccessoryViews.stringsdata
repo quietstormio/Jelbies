@@ -1,0 +1,40 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/Shared/JellyAccessoryViews.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "z",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 145
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 191
+        }
+      },
+      {
+        "comment": "",
+        "key": "z",
+        "location": {
+          "startingColumn": 59,
+          "startingLine": 205
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbies",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 245
+        }
+      }
+    ]
+  },
+  "version": 1
+}

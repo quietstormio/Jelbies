@@ -1,0 +1,105 @@
+apiVersion: ssu/v1
+nlu:
+  shortcuts:
+    bundleIdentifier: io.mgsllc.BobV1
+    intents:
+    - metadata:
+        name: CheckOnJelbiesIntent_0
+        title: Check on the Jelbies
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Check on the Jelbies in ${+applicationName}'
+          - '{${+prefix} }Check on my Jelbies in ${+applicationName}'
+          - '{${+prefix} }How are the Jelbies in ${+applicationName}'
+          - '{${+prefix} }How are my Jelbies in ${+applicationName}'
+          - '{${+prefix} }How is everyone in ${+applicationName}'
+          - '{${+prefix} }Check on ${+applicationName}'
+    - metadata:
+        name: FeedJelbieIntent_1
+        title: Feed a Jelbie
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Feed the Jelbies in ${+applicationName}'
+          - '{${+prefix} }Feed my Jelbies in ${+applicationName}'
+          - '{${+prefix} }Feed ${JelbieEntity} in ${+applicationName}'
+          - '{${+prefix} }Give ${JelbieEntity} a snack in ${+applicationName}'
+    - metadata:
+        name: GiveWaterIntent_2
+        title: Give a Jelbie water
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Give the Jelbies water in ${+applicationName}'
+          - '{${+prefix} }Water my Jelbies in ${+applicationName}'
+          - '{${+prefix} }Give ${JelbieEntity} water in ${+applicationName}'
+          - '{${+prefix} }Give ${JelbieEntity} a drink in ${+applicationName}'
+    - metadata:
+        name: GoodnightJelbiesIntent_3
+        title: Put the Jelbies to bed
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Put my Jelbies to bed in ${+applicationName}'
+          - '{${+prefix} }Put the Jelbies to bed in ${+applicationName}'
+          - '{${+prefix} }Goodnight Jelbies in ${+applicationName}'
+          - '{${+prefix} }Say goodnight in ${+applicationName}'
+    - metadata:
+        name: StartRaceIntent_4
+        title: Start a race
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Start a race in ${+applicationName}'
+          - '{${+prefix} }Race ${JelbieEntity} in ${+applicationName}'
+          - '{${+prefix} }Take ${JelbieEntity} to the Jelly Circuit in ${+applicationName}'
+    - metadata:
+        name: TrainJelbieIntent_5
+        title: Train a Jelbie
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }Train ${JelbieEntity} in ${+applicationName}'
+          - '{${+prefix} }Teach ${JelbieEntity} a trick in ${+applicationName}'
+          - '{${+prefix} }Start training in ${+applicationName}'
+    - metadata:
+        name: +negative
+      corpuses:
+        training:
+        - locale: en
+          utterances:
+          - '{${+prefix} }${+standardAppShortcutNegatives}'
+variables:
+- name: +applicationName
+  type: ssu/expansion
+  definitions:
+  - locale: en
+    synomyms:
+    - Jelbies
+    - My Jelbies
+    - Bob
+- name: JelbieEntity
+  type: ssu/parameter
+  definitions:
+  - locale: en
+    synomyms:
+    - Jelbie
+- name: +prefix
+  type: ssu/expansion
+  definitions:
+  - locale: en
+    synomyms:
+      $ref: ssu://Resources/prefix/en.yaml
+- name: +standardAppShortcutNegatives
+  type: ssu/expansion
+  definitions:
+  - locale: en
+    synomyms:
+      $ref: ssu://Resources/standardAppShortcutNegatives/en.yaml

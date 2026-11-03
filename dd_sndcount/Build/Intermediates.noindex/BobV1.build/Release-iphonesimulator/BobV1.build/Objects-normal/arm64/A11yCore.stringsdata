@@ -1,0 +1,48 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Accessibility/A11yCore.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 126
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 4
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 29
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 37
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 126
+        }
+      }
+    ]
+  },
+  "version": 1
+}

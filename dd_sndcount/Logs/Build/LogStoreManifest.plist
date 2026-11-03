@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>13</integer>
+	<key>logs</key>
+	<dict>
+		<key>A6B31CC7-857B-437F-8BAD-91BAE79C51BD</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>A6B31CC7-857B-437F-8BAD-91BAE79C51BD.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>W</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>506</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>BobV1 project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>BobV1</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>timeStartedRecording</key>
+			<real>815370157.77137303</real>
+			<key>timeStoppedRecording</key>
+			<real>815370465.47950399</real>
+			<key>title</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>uniqueIdentifier</key>
+			<string>A6B31CC7-857B-437F-8BAD-91BAE79C51BD</string>
+		</dict>
+		<key>F9C68278-2610-4A11-B791-9E6828E2FD72</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>F9C68278-2610-4A11-B791-9E6828E2FD72.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>E</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>1</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>355</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>BobV1 project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>BobV1</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>timeStartedRecording</key>
+			<real>815370109.21439803</real>
+			<key>timeStoppedRecording</key>
+			<real>815370150.54672205</real>
+			<key>title</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>uniqueIdentifier</key>
+			<string>F9C68278-2610-4A11-B791-9E6828E2FD72</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

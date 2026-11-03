@@ -1,0 +1,24 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/UI/LaunchCurtain.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Jelbies is loading",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 86
+        }
+      },
+      {
+        "comment": "",
+        "key": "Waking up your Jelbies",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 112
+        }
+      }
+    ]
+  },
+  "version": 1
+}

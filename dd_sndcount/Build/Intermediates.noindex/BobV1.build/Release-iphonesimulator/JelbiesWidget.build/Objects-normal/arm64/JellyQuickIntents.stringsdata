@@ -1,0 +1,32 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/Shared/JellyQuickIntents.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Water a Jelbie",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 13
+        }
+      },
+      {
+        "comment": "",
+        "key": "Queues a drink of water; it is poured when the game opens.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 14
+        }
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      },
+      {
+        "comment": "",
+        "key": "Jelbie"
+      }
+    ]
+  },
+  "version": 1
+}

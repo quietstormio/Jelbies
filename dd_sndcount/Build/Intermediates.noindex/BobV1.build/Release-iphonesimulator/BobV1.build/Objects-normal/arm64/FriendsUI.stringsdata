@@ -1,0 +1,96 @@
+{
+  "source": "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Park/FriendsUI.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Invite over",
+        "location": {
+          "startingColumn": 76,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "Not now",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 31
+        }
+      },
+      {
+        "comment": "",
+        "key": "10 to 15 minutes",
+        "location": {
+          "startingColumn": 42,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "Until morning",
+        "location": {
+          "startingColumn": 63,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "Friends",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "Back",
+        "location": {
+          "startingColumn": 58,
+          "startingLine": 96
+        }
+      },
+      {
+        "comment": "",
+        "key": "Make friends with the visitors at the Park. When one reaches Friend, you can ask them over here.",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 105
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ is visiting",
+        "location": {
+          "startingColumn": 40,
+          "startingLine": 127
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ is on the way",
+        "location": {
+          "startingColumn": 66,
+          "startingLine": 127
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "%@ with %@",
+        "location": {
+          "startingColumn": 77,
+          "startingLine": 172
+        }
+      }
+    ]
+  },
+  "version": 1
+}
