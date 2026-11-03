@@ -6,34 +6,47 @@
 
 import SwiftUI
 
+enum MenuLayout {
+    /// Portrait design unit: 440x956 is 1.0 (iPhone). min() keeps a wide, short screen from scaling by its width.
+    static func portraitScale(w: CGFloat, h: CGFloat) -> CGFloat { min(w / 440, h / 956) }
+    /// Scale of the peeking face (1.0 = the 102-unit-wide Jelbie body drawn at this many points per unit).
+    static func faceScale(w: CGFloat, h: CGFloat) -> CGFloat {
+        w > h ? min(h, 430) * 0.0072 : 4.8 * portraitScale(w: w, h: h)
+    }
+    /// Top edge of the face's rim (points from the top), at rest.
+    static func faceTop(w: CGFloat, h: CGFloat) -> CGFloat {
+        let sc = faceScale(w: w, h: h)
+        return 0.91 * h + 14 * sc - (59 + 6.5) * sc
+    }
+}
+
 struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
     @State private var visible = true
     private var theme = ThemeStore.shared
-    @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var landscape: Bool { vsc == .compact }
     private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
             let bottom = geo.safeAreaInsets.bottom
+            let landscape = w > h          // by shape, not size class: an iPad is regular/regular in both orientations
             ZStack {
                 TitleBackdrop(still: still, size: geo.size, landscape: landscape, palette: theme.palette)
                     .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
                 if landscape {
-                    let k = min(1, h / 393)
-                    let btnW = min(300, w * 0.32)
+                    let k = min(1.3, max(0.7, h / 393))
+                    let btnW = min(300 * k, w * 0.28)
                     HStack(spacing: 0) {
-                        VStack { Spacer(minLength: 0); title(width: min(w * 0.46, 380)); Spacer(minLength: 0) }.frame(width: w * 0.5)
-                        VStack { Spacer(minLength: 0); buttons(k: max(0.7, k)).frame(width: btnW); Spacer(minLength: 0) }.frame(width: w * 0.5)
+                        VStack { Spacer(minLength: 0); title(width: min(w * 0.40, 380 * k)); Spacer(minLength: 0) }.frame(width: w * 0.5)
+                        VStack { Spacer(minLength: 0); buttons(k: k).frame(width: btnW); Spacer(minLength: 0) }.frame(width: w * 0.5)
                     }
                     .padding(.vertical, 8)
                 } else {
-                    let s = w / 440
+                    let s = MenuLayout.portraitScale(w: w, h: h)          // 1 on the 440x956 design; an iPad is limited by its height, not its width
                     VStack(spacing: 0) {
                         title(width: 364 * s)
                             .padding(.top, max(156 * s, 12))
@@ -283,9 +296,9 @@ struct TitleBackdrop: View {
                     sc.fill(Self.sparkle(x * sx, y * sy, r * sk * (landscape ? 1.2 : 1), t), with: .color(.white))
                 }
                 // Peeking Jelbie
-                let scale: Double = landscape ? h * 0.0087 : 4.8 * w / 440      // zoomed in: just the head dome, brows and eyes
+                let scale = Double(MenuLayout.faceScale(w: w, h: h))      // zoomed in: just the head dome, brows and eyes
                 let cx = landscape ? w * 0.5 : w / 2
-                let bob = still ? 0 : -10 * (w / 440) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
+                let bob = still ? 0 : -10 * Double(MenuLayout.portraitScale(w: w, h: h)) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
                 let cy = 0.91 * h + 14 * scale + bob                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
