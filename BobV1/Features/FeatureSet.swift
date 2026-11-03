@@ -34,6 +34,8 @@ nonisolated enum FeatureTuning {
     static let burstWait: ClosedRange<Float> = 4...9, burstFlaps: ClosedRange<Int> = 2...4, burstHz: ClosedRange<Float> = 6...8, burstAmp: ClosedRange<Float> = 35...50
     static let burstHappyRate: Float = 1.5, burstCalmScale: Float = 0.5
     static let accelHistory = 30
+    /// The wings' contact fold: seconds to fold / unfold.
+    static let foldTime: Float = 0.16
     /// Teddy's ears / pom: spring (Hz), damping, acceleration push (deg per u/s^2) and the largest flop (deg).
     static let earHz: Float = 3.0, earZeta: Float = 0.30, earGain: Float = 9, earSquash: Float = 0.9, earMax: Float = 11
 }
@@ -71,6 +73,8 @@ final class FeatureSet {
         /// Wings: the current flap / spread (deg) as drawn; `flapBase` / `spreadBase` = the chased flutter / flap-hop under the burst.
         var flap: Float = 0, spread: Float = 0, flapBase: Float = 0, spreadBase: Float = 0
         var folded = false
+        /// Wings: the fold toward the owner's back (0 open ... 1 folded) when a neighbour's skin is within the wings' reach, its spring target, and the wings' points (relative to the owner's root) as they were last seen open.
+        var fold: Float = 0, openPts: [SIMD2<Float>] = []
         /// The species flourish's drive (BlobBrain.sig, BlobBrain+Emotes.swift): wing flap (deg), the daisy head's spin / cone (deg), Teddy's extra ear + pom follow-through (deg).
         var sigFlap: Float = 0, sigSpin: Float = 0, sigCone: Float = 0, sigEars = SIMD2<Float>.zero
         /// Wings: a re-tint of the art's colours (the white candidate species); nil = the art as drawn.
@@ -167,7 +171,7 @@ final class FeatureSet {
         switch feature {
         case .spines: stepSpines(&s, spec: spec, dt: dt); stepTail(&s, brain: brain, dt: dt)
         case .daisy: stepDaisy(&s, brain: brain, spec: spec, dt: dt)
-        case .wings: stepWings(&s, brain: brain, dt: dt)
+        case .wings: stepWings(&s, brain: brain, id: id, dt: dt)
         case .ears: stepEars(&s, dt: dt)
         case .none: break
         }
@@ -303,7 +307,7 @@ final class FeatureSet {
 
     /// No flap burst now: asleep (any sleep stage), at a meal (reserved / dining), in the wash, folded, mid pop, or while the flap-hop owns the wings.
     static func burstBlocked(_ s: Slot, _ b: BlobBrain) -> Bool {
-        if s.folded || s.hideAll || s.scale < 0.999 || b.flapHop.active || b.sig.active { return true }
+        if s.folded || s.hideAll || s.scale < 0.999 || b.flapHop.active || b.sig.active || s.fold > 0.15 { return true }
         if b.idleState.kind == .sleep || b.reserved { return true }
         switch b.script { case .dine, .eat: return true; default: return false }
     }
@@ -347,7 +351,7 @@ final class FeatureSet {
         }
     }
 
-    private func stepWings(_ s: inout Slot, brain: BlobBrain, dt: Float) {
+    private func stepWings(_ s: inout Slot, brain: BlobBrain, id: Int, dt: Float) {
         s.clock += dt
         var flap: Float, spread: Float
         if brain.flapHop.active, !s.folded {
@@ -367,6 +371,29 @@ final class FeatureSet {
         stepBurst(&s, brain: brain, dt: dt)
         s.flap = min(max(s.flapBase + s.burstDeg + s.sigFlap, s.fit.flapMin), s.fit.flapMax)
         s.spread = min(max(s.burstDeg != 0 || s.sigFlap != 0 ? max(0.4 * max(s.flap, 0), s.spreadBase) : s.spreadBase, 0), s.fit.spreadMax)
+        // the contact fold: a neighbour's skin within the wings' reach (ContactProfile.swift) folds them up against the owner's back; spring back when clear (hysteresis 6 cm)
+        let want = wingFoldWant(&s, id: id)
+        s.fold += (want - s.fold) * min(1, dt / FeatureTuning.foldTime)
+        if abs(want - s.fold) < 0.002 { s.fold = want }
+        if s.fold > 0.001 {
+            s.flap += (s.fit.flapMax - s.flap) * s.fold
+            s.spread *= (1 - s.fold)
+        }
+    }
+
+    /// 1 when a neighbour's body skin is within 2 cm of my OPEN wings (their points as the contact profile saw them while they were open), else 0 (with a 6 cm hysteresis once folded).
+    private func wingFoldWant(_ s: inout Slot, id: Int) -> Float {
+        guard ContactField.enabled, ContactField.isValid(id), !s.folded else { return 0 }
+        if s.fold < 0.05 { s.openPts = ContactField.featurePoints(id) }          // (measured while open; kept while folded)
+        guard !s.openPts.isEmpty else { return 0 }
+        var want: Float = 0
+        let me = ContactField.root(id)
+        for j in 0..<ContactField.capacity where j != id && ContactField.isValid(j) {
+            let d = ContactField.root(j) - me
+            guard simd_length(d) < 3, let c = ContactField.clearance(of: s.openPts, ownerRoot: me, against: j) else { continue }
+            if c < (s.fold > 0.5 ? 0.06 : 0.02) { want = 1 }
+        }
+        return want
     }
 
     // MARK: frame
@@ -375,7 +402,7 @@ final class FeatureSet {
     func frame(hidden: Bool = false, skin: (Int) -> UnsafePointer<Float>?, spec: FeatureSpec = .shared) -> RoomMesh {
         var m = RoomMesh()
         lastBounds = []
-        for i in slots.indices { ContactField.clearFeature(id: i) }          // (re-filled below for the features drawn now)
+        for i in slots.indices where slots[i].feature != .none { ContactField.clearFeature(id: i) }          // (re-filled below for the features drawn now)
         guard !hidden, let body else { return m }
         for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none && !(s.feature == .ears && TeddyEarsVariant.active.inBody) {
             var pl = FeatureMeshes.Placement()

@@ -133,7 +133,10 @@ struct SocialBook {
     var closePending = false
     var contactCool: Float = 0
     var contactPrev: [Int: Float] = [:]
+    var settleEMA: [Int: Float] = [:]          // per other body: the slow average of the gap (ContactSettle's fine trim)
+    var settleGap: [Int: Float] = [:]          // per other body: the error ContactSettle measured last
     var settleStamp: [Int: Int] = [:]          // per other body: the profile stamps ContactSettle last acted on
+    var contactCoolPer: [Int: Float] = [:]          // per other body: seconds before another contact event with him
     var contactArmed: [Int: Bool] = [:]          // per other body: the next touch may fire (the skins were > 3 cm apart since the last one)
     /// Group socials: cooldown, the seconds a crowd of free Jelbies has been together, the wait before one asks for a group move, the last group kind.
     var groupCool: Float = 12, groupIdle: Float = 0, groupLimit: Float = 25, groupBusy: Float = 0
@@ -521,7 +524,6 @@ extension BlobBrain {
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         let blocked = held || !autonomy
-        contactTick(dt)          // (the soft meeting: BlobBrain+Contact.swift)
         if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt; socialBook.treatCool -= dt }
         if !socialBook.fiveCool.isEmpty { for k in socialBook.fiveCool.keys { socialBook.fiveCool[k]! -= dt } }
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }

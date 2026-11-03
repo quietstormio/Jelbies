@@ -33,7 +33,9 @@ nonisolated enum ContactField {
     nonisolated(unsafe) static var enabled = true
     /// Vertex count of the egg proper (the limb / ear / tail blocks come after it): the egg is sampled more sparsely than the limbs.
     nonisolated(unsafe) static var eggLimit = Int.max
-    static func configure(eggLimit n: Int) { eggLimit = n }
+    /// Pip's tail block: NOT part of the body profile (a tail that holds two bodies a hand apart is not what "touching" means; it is a feature: FeatureClip pushes it out of the neighbour).
+    nonisolated(unsafe) static var tailLo = Int.max, tailHi = Int.max
+    static func configure(eggLimit n: Int, tail: Range<Int>? = nil) { eggLimit = n; tailLo = tail?.lowerBound ?? Int.max; tailHi = tail?.upperBound ?? Int.max }
     static let eggStride = 3, limbStride = 2
 
     // MARK: layout
@@ -101,7 +103,10 @@ nonisolated enum ContactField {
             var i = 0
             while i < lim { add(i); i += eggStride }
             i = lim
-            while i < count { add(i); i += limbStride }
+            while i < count {
+                if i >= tailLo, i < tailHi { i = tailHi; continue }          // (the tail is a feature)
+                add(i); i += limbStride
+            }
         }
         castTable(r2, px, pz, into: b + oRho, fallback: true)
         b[oMeta] = root.x; b[oMeta + 1] = root.y
@@ -125,7 +130,6 @@ nonisolated enum ContactField {
             let k = Int(binOfSlot[min(max(slot, 0), tableN)])
             if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z }
         }
-        castTable(r2, px, pz, into: b + oFRho, fallback: false)
         b[oMeta + 3] = 1
     }
     static func clearFeature(id: Int) {
@@ -176,13 +180,43 @@ nonisolated enum ContactField {
         let b = base(id)
         let e = sample(b + oRho, dir)
         guard features, b[oMeta + 3] > 0.5 else { return e }
-        return max(e, sample(b + oFRho, dir))
+        return max(e, featureExt(id, dir))
     }
-    /// Only the features' reach (0 where there are none).
+    /// How far the FEATURES (wings, spikes, daisy) reach from the root along the unit `dir`: the farthest feature point within a corridor of +-10 cm of the ray (a wing is thin: the radial
+    /// ray cast would miss it). 0 where there is none.
     static func featureExt(_ id: Int, _ dir: SIMD2<Float>) -> Float {
         guard enabled, isValid(id), base(id)[oMeta + 3] > 0.5 else { return 0 }
-        return sample(base(id) + oFRho, dir)
+        let b = base(id)
+        var best: Float = 0
+        for k in 0..<K where b[oFR + k] > 0 {
+            let x = b[oFX + k], z = b[oFZ + k]
+            let along = x * dir.x + z * dir.y
+            if along > best, abs(x * dir.y - z * dir.x) <= 0.10 { best = along }
+        }
+        return best
     }
+    /// The feature points (wings, spikes, daisy: the farthest vertex of each direction bin) relative to the owner's root.
+    static func featurePoints(_ id: Int) -> [SIMD2<Float>] {
+        guard enabled, isValid(id), base(id)[oMeta + 3] > 0.5 else { return [] }
+        let b = base(id)
+        var r: [SIMD2<Float>] = []
+        for k in 0..<K where b[oFR + k] > 0 { r.append(SIMD2(b[oFX + k], b[oFZ + k])) }
+        return r
+    }
+    /// How far (u, + clear, - inside) the nearest of `points` (relative to `ownerRoot`) is from body `j`'s skin footprint (the radial table: a few mm). nil = no profile.
+    static func clearance(of points: [SIMD2<Float>], ownerRoot: SIMD2<Float>, against j: Int) -> Float? {
+        guard enabled, isValid(j) else { return nil }
+        let rj = root(j)
+        var best = Float.infinity
+        for p in points {
+            let q = ownerRoot + p - rj, L = simd_length(q)
+            if L < 1e-4 { return -1 }
+            guard let e = ext(j, q / L) else { return nil }
+            best = min(best, L - e)
+        }
+        return best.isFinite ? best : nil
+    }
+
     /// The estimate for hot paths: the roots' rays only, ext(a, dir) + ext(b, -dir) (`dir` unit, from a to b).
     static func touch(_ a: Int, _ b: Int, dir: SIMD2<Float>, features: Bool = false) -> Float? {
         guard let ea = ext(a, dir, features: features), let eb = ext(b, -dir, features: features) else { return nil }
@@ -215,6 +249,15 @@ nonisolated enum ContactField {
         let v: Float = best.isFinite ? best : .nan
         gapStamp[key] = st; gapValue[key] = v
         return best.isFinite ? best : nil
+    }
+
+    /// The pair gap for hypothetical roots (a candidate position, a steering probe): body `a` with its root at `pa`, body `b` at `pb`. Not cached (~3 us): call it only for a pair that is near.
+    static func gap(_ a: Int, at pa: SIMD2<Float>, _ b: Int, at pb: SIMD2<Float>) -> Float? {
+        guard enabled, isValid(a), isValid(b), a != b else { return nil }
+        let d = pb - pa, L = simd_length(d)
+        guard L > 1e-4 else { return nil }
+        let g = polyGap(a, b, L, d / L, bodyA: true, bodyB: true)
+        return g.isFinite ? g : nil
     }
 
     /// The translation gap of polygon A (body `a`, at the origin) and polygon B (body `b`, `L` along `u`) along `u`: the smallest, over the lateral positions where both exist, of

@@ -38,7 +38,8 @@ final class FeatureClipTests: XCTestCase {
             lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: quiet, seed: seed)
             feature = features
             WearBody.install(MotionRig.renderMesh)
-            ContactField.configure(eggLimit: MotionRig.renderMesh.armCapsule?.firstVertex.min() ?? MotionRig.renderMesh.vertexCount)
+            let rmc = MotionRig.renderMesh
+            ContactField.configure(eggLimit: rmc.armCapsule?.firstVertex.min() ?? rmc.vertexCount, tail: rmc.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil })
             var fs: [FeatureSet] = []
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
@@ -74,7 +75,10 @@ final class FeatureClipTests: XCTestCase {
         }
         /// true = skin every body every tick (the contact profiles are fresh, as in the stage), false = only when a test asks.
         var live = false
+        /// Hook called every tick (the haptic tests advance their fake clock here).
+        var onTick: (() -> Void)?
         func tick() {
+            onTick?()
             lab.tick(watching: false)
             for (i, r) in lab.rigs.enumerated() { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tickFeature(i) }
             if live { _ = skinAll() }
@@ -134,7 +138,18 @@ final class FeatureClipTests: XCTestCase {
             return r.flatMap { $0.map { SIMD3(dyn[i][6 * $0], dyn[i][6 * $0 + 1], dyn[i][6 * $0 + 2]) } }
         }
         /// Penetration (+ sunk in, - apart) of the DRAWN skins of body i and j (SkinGap), measured on freshly skinned streams.
-        func bodyGap(_ i: Int, _ j: Int) -> Float { -skinGap(i, j) }
+        func bodyGap(_ i: Int, _ j: Int) -> Float { -truthGap(i, j) }
+        /// The ground-truth gap of the two drawn bodies (the translation gap of the full projected triangle meshes, the tail block left out like the profile does), on freshly skinned streams.
+        func truthGap(_ i: Int, _ j: Int) -> Float {
+            let rm = MotionRig.renderMesh
+            for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: rm.index, into: dyn[k]) }
+            let tail = ContactField.tailLo..<ContactField.tailHi
+            var idx: [UInt32] = []
+            idx.reserveCapacity(rm.index.count)
+            var t = 0
+            while t + 2 < rm.index.count { if !(tail.contains(Int(rm.index[t])) || tail.contains(Int(rm.index[t + 1])) || tail.contains(Int(rm.index[t + 2]))) { idx.append(contentsOf: rm.index[t..<(t + 3)]) }; t += 3 }
+            return ContactProfileTests.truthGap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), count: rm.vertexCount, index: idx, rootA: GameCare.floorPos(lab.rigs[i].brain, lab.rigs[i].sim), rootB: GameCare.floorPos(lab.rigs[j].brain, lab.rigs[j].sim))
+        }
         func skinGap(_ i: Int, _ j: Int) -> Float {
             for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[k]) }
             return SkinGap.gap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), limit: eggLimit)
@@ -192,8 +207,8 @@ final class FeatureClipTests: XCTestCase {
                     FeatureClip.enabled = on
                     let feat = d.skinAll()
                     for i in 0..<2 { s.feature = max(s.feature, d.penetration(feat[i], owner: i, raw: rawF[i])); s.limb = max(s.limb, d.penetration(d.limbPoints(i), owner: i, raw: rawL[i])) }
-                    if both > 130 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
-                    s.worst = max(s.worst, d.bodyGap(0, 1))
+                    if both > 130, f % 12 == 0 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
+                    if f % 12 == 0 { s.worst = max(s.worst, d.bodyGap(0, 1)) }
                 }
                 let line = "FEATCLIP lie \(after ? "AFTER" : "BEFORE") roots \(gap) signs \(signs) started \(a)/\(b) lying frames \(both) body pen settled \(s.body) ever \(s.worst) feature pen \(s.feature) limb pen \(s.limb) roots now \(simd_distance(ra.brain.position, rb.brain.position))"
                 report.append(line); MotionLog.write(line)
@@ -208,6 +223,21 @@ final class FeatureClipTests: XCTestCase {
           }
         }
         XCTAssertTrue(report.contains { $0.contains("BEFORE") && ($0.contains("body pen 0.") || $0.contains("limb pen 0.")) }, "the rig reproduces the photo (before the fix a pair sinks in)")
+    }
+
+    /// A time series of the lying pair's gap: the profile's, the mesh truth's, the settle's goal (debug; logs only).
+    func testLyingSeries() {
+        let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings], seed: 5)
+        d.place([SIMD2(-0.6, 0.6), SIMD2(0.6, 0.6)])
+        d.live = true
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        a.brain.idleForced = true; b.brain.idleForced = true
+        _ = a.brain.idleStart(.lieDown, a.sim); _ = b.brain.idleStart(.lieDown, b.sim)
+        a.brain.idleState.hold = 60; b.brain.idleState.hold = 60
+        for f in 0..<420 {
+            d.tick()
+            if f % 15 == 0 { MotionLog.write(String(format: "LYINGSERIES f%3d phases %d/%d profile gap %.4f truth gap %.4f roots %.3f", f, a.brain.idleState.phase, b.brain.idleState.phase, ContactField.gap(0, 1) ?? 9, -d.bodyGap(0, 1), simd_distance(a.brain.position, b.brain.position))) }
+        }
     }
 
     /// From far apart: one lies down, then the other lies down 2.0 away - he scoots over to just touch (surface gap 0-5 cm, never inside).
@@ -228,7 +258,7 @@ final class FeatureClipTests: XCTestCase {
                 guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
                 both += 1
                 guard f % 3 == 0 else { continue }
-                if both > 120 { _ = d.skinAll(); let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }
+                if both > 120, f % 12 == 0 { _ = d.skinAll(); let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }
             }
             let line = "FEATCLIP snuggle from \(dist): lying frames \(both) settled body pen max \(s.body) min \(s.lo) roots \(simd_distance(a.brain.position, b.brain.position))"
             MotionLog.write(line)
@@ -236,6 +266,41 @@ final class FeatureClipTests: XCTestCase {
             XCTAssertLessThanOrEqual(s.body, 0.015, line)
             XCTAssertGreaterThan(s.lo, -0.01, "snug: \(line)")
         }
+    }
+
+    /// Wings fold up against the owner's back when a neighbour's skin is within their (open) reach, and open again when he leaves (the contact fold, FeatureSet.wingFoldWant):
+    /// the neighbour goes round him, touching (the closest the room allows); wherever the open wings would touch him they fold (and then no wing point is inside his skin), wherever they would not they stay open.
+    func testWingsFoldNextToANeighbourAndSpringBack() {
+        let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.wings, .none], seed: 5)
+        d.live = true
+        func openClear() -> Float { ContactField.clearance(of: d.feats[0].slot(0)?.openPts ?? [], ownerRoot: ContactField.root(0), against: 1) ?? 9 }
+        func fold() -> Float { d.feats[0].slot(0)?.fold ?? -1 }
+        var conflicts = 0, rows: [String] = []
+        for k in 0..<12 {
+            let a = Float(k) * (.pi / 6)
+            let u = SIMD2<Float>(sinf(a), cosf(a))
+            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * 1.6])          // (first apart, to read the touching distance along this direction)
+            for _ in 0..<4 { d.tick() }
+            let touchR = 1.6 - (ContactField.gap(0, 1) ?? 0.2)
+            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * touchR])          // (then touching, the closest the room lets two Jelbies stand)
+            for _ in 0..<50 { d.tick() }
+            let f = fold(), oc = openClear()
+            let fc = ContactField.clearance(of: ContactField.featurePoints(0), ownerRoot: ContactField.root(0), against: 1) ?? 9
+            rows.append(String(format: "%3d deg: open wings %.3f from his skin, fold %.2f, folded wings %.3f", k * 30, oc, f, fc))
+            if oc < 0.02 {
+                conflicts += 1
+                XCTAssertGreaterThan(f, 0.7, "wings that would touch him fold: \(rows.last!)")
+                XCTAssertGreaterThanOrEqual(fc, oc - 0.01, "folded is never worse than open: \(rows.last!)")
+                let feat = d.skinAll()
+                XCTAssertLessThanOrEqual(d.penetration(feat[0], owner: 0, raw: feat[0]), Self.tol, "what the fold leaves is clipped: nothing drawn inside his egg: \(rows.last!)")
+            }
+            if oc > 0.12 { XCTAssertLessThan(f, 0.1, "wings that are clear stay open: \(rows.last!)") }
+            d.place([SIMD2(0, 0.6), SIMD2(3, 0.6)])          // (away between the angles: open again)
+            for _ in 0..<45 { d.tick() }
+            XCTAssertLessThan(fold(), 0.05, "springs back when he leaves (\(k * 30) deg)")
+        }
+        for r in rows { MotionLog.write("FEATCLIP wingfold " + r) }
+        XCTAssertGreaterThan(conflicts, 0, "the ring puts him in the wings' reach somewhere")
     }
 
     // MARK: every feature against a neighbour

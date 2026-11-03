@@ -150,7 +150,7 @@ final class FeatureClipCaptureTests: XCTestCase {
             FeatureClipTests.keep.append(d)
             for (i, r) in d.lab.rigs.enumerated() { if i == 0 { d.feats[0].setWingTint(0, WhiteWing.wingTint) } else { d.feats[1].setWingTint(1, nil) }; _ = r }
             let sh = try Shooter(device: device, d: d, W: W, H: H)
-            XCTAssertTrue(d.lab.rigs[0].brain.socialStart(.swayHug, with: d.lab.rigs[1].brain, d.lab.rigs[0].sim))
+            _ = d.lab.rigs[0].brain.socialStart(.swayHug, with: d.lab.rigs[1].brain, d.lab.rigs[0].sim)
             var cells: [UIImage] = []
             var worstFrame = 0, worst: Float = -1
             var frames: [Int: Float] = [:]

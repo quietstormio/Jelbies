@@ -484,8 +484,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
             var to = L
             if L < g { to = max(L + (g - L) * softPush, g * softFloor) }
-            // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the pair's `touch` along this axis, lying / leaning / limbs / ears included). A max of two continuous maps: no pop.
-            if ContactField.enabled, let t = ContactField.touch(id, j, dir: -u) { to = max(to, t) }
+            // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the exact footprint gap of the pair along this axis: lying / leaning / limbs / ears / tail included). A max of two continuous maps: no pop.
+            if ContactField.enabled, L > 1e-4, let est = ContactField.touch(id, j, dir: -u), L < est + 0.5,
+               let g = ContactField.gap(id, at: SIMD2(q.x, q.z), j, at: o.pos), g < 0 { to = max(to, L - g) }          // (only a pair that is near: the exact footprint gap, 3 us)
             if to > L { q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to }
         }
         return q
@@ -811,7 +812,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
-        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount)          // the contact profile samples the egg more sparsely than the limb blocks
+        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil })          // the contact profile samples the egg more sparsely than the limb blocks
         embedding = emb
         LaunchTiming.span("WearBody.install") { WearBody.install(rm) }
         actors = LaunchTiming.span("actors") { (0..<count).map {

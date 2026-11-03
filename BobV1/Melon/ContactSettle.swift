@@ -13,7 +13,9 @@ import Foundation
 import simd
 
 nonisolated enum ContactSettleTuning {
-    static let deadband: Float = 0.005, maxStep: Float = 0.015, gain: Float = 0.3
+    nonisolated(unsafe) static var deadband: Float = 0.005, maxStep: Float = 0.015, gain: Float = 0.15, lead: Float = 3          // lead: frames the skin trails the root (the error is judged where it is going)
+    /// Within `fineBand` of the target the gap is trimmed on its slow average (a lying body breathes +-1 cm, a jelly wobbles): 0 = off.
+    nonisolated(unsafe) static var fineBand: Float = 0, fineAlpha: Float = 1.0 / 45, fineGain: Float = 0.12
 }
 
 @MainActor
@@ -27,8 +29,24 @@ enum ContactSettle {
         if a.socialBook.settleStamp[key] == stamp { return (gap, false) }          // (this measurement was acted on)
         a.socialBook.settleStamp[key] = stamp
         let e = gap - target
-        if abs(e) <= ContactSettleTuning.deadband || (onlySeparate && e >= 0) || (anchoredA && anchoredB) { return (gap, false) }
-        let c = max(-ContactSettleTuning.maxStep * 2, min(ContactSettleTuning.maxStep * 2, e * ContactSettleTuning.gain))
+        let prev = a.socialBook.settleGap[key]
+        a.socialBook.settleGap[key] = e
+        if (onlySeparate && e >= 0) || (anchoredA && anchoredB) { return (gap, false) }
+        // the slow average of the gap: a lying body breathes (+-1 cm of skin), a jelly wobbles: the last centimetre is trimmed on the average, not chased
+        var ema = a.socialBook.settleEMA[key] ?? gap
+        if abs(gap - ema) > 0.03 { ema = gap }
+        ema += (gap - ema) * ContactSettleTuning.fineAlpha
+        a.socialBook.settleEMA[key] = ema
+        var c: Float
+        if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
+            let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
+            if abs(ePred) <= ContactSettleTuning.deadband { return (gap, false) }
+            c = max(-ContactSettleTuning.maxStep * 2, min(ContactSettleTuning.maxStep * 2, ePred * ContactSettleTuning.gain))
+        } else {          // near: trim the average
+            let eAvg = ema - target
+            if abs(eAvg) <= ContactSettleTuning.deadband * 0.6 { return (gap, false) }
+            c = max(-ContactSettleTuning.maxStep * 0.3, min(ContactSettleTuning.maxStep * 0.3, eAvg * ContactSettleTuning.fineGain))
+        }
         let axis = simd_normalize(ContactField.root(b.steerID) - ContactField.root(a.steerID) + SIMD2(1e-6, 0))
         let share: Float = (anchoredA || anchoredB) ? 1 : 0.5
         let m = max(-ContactSettleTuning.maxStep, min(ContactSettleTuning.maxStep, c * share))

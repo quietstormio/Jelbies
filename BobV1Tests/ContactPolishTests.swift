@@ -134,8 +134,8 @@ final class ContactPolishTests: XCTestCase {
         FeatureClip.enabled = true; LieClearTuning.enabled = true
     }
     override func tearDown() {
-        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; RoomHaptics.requestTap = nil
-        FeatureClip.enabled = true; FeatureClip.eggs = []
+        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; HapticDriver.cueTap = nil
+        FeatureClip.enabled = true; FeatureClip.eggs = []; ContactField.reset(); ContactField.enabled = true
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         EmoteFeetTests.reset()
         super.tearDown()
@@ -147,6 +147,7 @@ final class ContactPolishTests: XCTestCase {
         let n = cast.count
         let d = Duo(positions: positions ?? Array(SocialTests.starts.prefix(n)), features: cast.map { OnePieceInvariantTests.characters[$0].1 }, seed: seed, quiet: true)
         for r in d.lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true }
+        d.live = ProcessInfo.processInfo.environment["CONTACT_ENGINE"] != "0"          // (the contact engine as in the app: a profile every tick; CONTACT_ENGINE=0 = the BEFORE table)
         return d
     }
 
@@ -174,7 +175,7 @@ final class ContactPolishTests: XCTestCase {
         AudioHub.requestTap = { tap.sounds.append((tap.frame, $0)) }
         EmoteHaptic.requestTap = { tap.haps.append((tap.frame, "emote:" + $0)) }
         EmoteTreats.requestTap = { tap.haps.append((tap.frame, "treat:" + $0)) }
-        RoomHaptics.requestTap = { tap.haps.append((tap.frame, "room:\($0)")) }
+        HapticDriver.cueTap = { tap.haps.append((tap.frame, "room:\($0.name)")) }
         let rigs = d.lab.rigs
         let a = rigs[0], b = rigs[1]
         var ok = false
@@ -296,7 +297,7 @@ final class ContactPolishTests: XCTestCase {
             if res.completed { break }
         }
         res.frames = frame; res.seconds = Float(frame) / 60
-        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; RoomHaptics.requestTap = nil
+        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; HapticDriver.cueTap = nil
         return (res, cells)
     }
 

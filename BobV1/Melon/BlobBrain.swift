@@ -593,6 +593,7 @@ final class BlobBrain {
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt)
+        contactTick(dt)          // (every tick, whatever he is doing: the touch event of the drawn skins, BlobBrain+Contact.swift)
         HopDiag.lap(.tkPre, &ht)
         reactTick(sim, skinner, dt)
         HopDiag.lap(.tkReact, &ht)
