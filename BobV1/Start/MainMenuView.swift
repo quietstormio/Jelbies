@@ -42,7 +42,7 @@ struct MenuMetrics {
             let btnH = btnUnits * k
             let logoH = ft - 4 - pad - 6 - btnH
             let sl = min(logoH / titleUnits, 0.55 * w / 379)
-            s = sl; btnScale = k; btnWidth = 0.58 * w
+            s = sl; btnScale = k; btnWidth = 0.85 * 379 * sl
             titleTop = pad
             buttonsGap = max(4, ft - 4 - pad - titleUnits * sl - btnH)
             faceScale = 4.8 * w / 440

@@ -43,7 +43,7 @@ final class MainMenuLayoutUITests: XCTestCase {
             } else {
                 if win.width / win.height > 1.6 {          // a short, wide screen (iPhone landscape) spans most of the width
                     XCTAssertGreaterThanOrEqual(logoFrac, 0.45, "short landscape logo fraction")
-                    XCTAssertGreaterThanOrEqual(btnFrac, 0.5, "short landscape button fraction")
+                    XCTAssertTrue((0.34...0.48).contains(btnFrac), "short landscape button fraction \(btnFrac)")
                 }
                 XCTAssertTrue((0.28...0.60).contains(logoFrac), "landscape logo is \(logoFrac) of the width")
                 XCTAssertTrue((0.22...0.62).contains(btnFrac), "landscape buttons are \(btnFrac) of the width")
