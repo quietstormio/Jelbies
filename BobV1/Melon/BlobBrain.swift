@@ -188,6 +188,8 @@ final class BlobBrain {
     var zoomUrge: Float = IdleTuning.zoomUrgeFirst
     /// The current sit is a night nap (long hold, eyes closed). Set when the sit starts, cleared when the behaviour ends.
     var napping = false
+    /// Batch-2 treats and player cues (BlobBrain+Emotes2.swift).
+    var treat2 = Treat2State()
     /// True while something else owns him (a meal on the tray, focus mode): no idle behaviour starts, a running one yields.
     var idleBlocked = false
     /// Held still only because ANOTHER Jelly's close-up is on (GameCare / the stage set it every frame, with `idleBlocked`). He is free to step aside for the

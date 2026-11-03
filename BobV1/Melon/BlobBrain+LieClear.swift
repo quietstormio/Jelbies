@@ -121,7 +121,7 @@ extension BlobBrain {
     }
 
     /// The moves that first walk to a spot (the window antic, the lie-down, the flop): `windowGo` while he walks there, then the idle takes over.
-    static func walksFirst(_ k: IdleKind) -> Bool { k == .window || k == .lieDown || k == .flop }
+    static func walksFirst(_ k: IdleKind) -> Bool { k == .window || k == .lieDown || k == .flop || k == .stargazing }
 
     /// After `idleBegin`: walk to `spot` (a lying body's room) before the move starts; no walk when he is already there.
     func lieWalk(to spot: SIMD2<Float>, from here: SIMD2<Float>) {

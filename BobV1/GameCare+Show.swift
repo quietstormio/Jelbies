@@ -280,6 +280,7 @@ extension GameCare {
             b.abortAll(a.sim, a.skinner)
             if k == 0 {
                 b.commandedIdle = .joy
+                if place == 1 { b.proudStrutCue() }          // (batch-2 emote: a chest-out strut when he is next free)
                 b.blushBump(hold: 3.5, peak: place == 1 ? 0.9 : 0.7)
                 b.face(place <= 2 ? .excited : .happy, hold: 2.5)
                 b.postEvent(.joyJump)
