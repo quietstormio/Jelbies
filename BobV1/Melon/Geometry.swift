@@ -628,7 +628,7 @@ struct EyeRig {
     var brow: [[Int32]] = [[], []]   // per side (0 = -x): brow vertices (material 4), for future tilt / gaze
 }
 
-private func buildEyeRigLegacy(render rm: RenderMesh, sim: SimMesh, appearance: BlobAppearance) -> EyeRig {
+nonisolated private func buildEyeRigLegacy(render rm: RenderMesh, sim: SimMesh, appearance: BlobAppearance) -> EyeRig {
     let prof = BlobProfile(appearance.effective)
     var eye: [[Int32]] = [[], []], glint: [[Int32]] = [[], []]
     var sum = [SIMD3<Double>](repeating: .zero, count: 2), cnt = [0, 0]
@@ -665,7 +665,7 @@ struct AntennaRig {
     var restVerts: [Float]      // rest xyz of every render vertex (for local coordinates)
 }
 
-func buildAntennaRig(render rm: RenderMesh, sim: SimMesh) -> AntennaRig? {
+nonisolated func buildAntennaRig(render rm: RenderMesh, sim: SimMesh) -> AntennaRig? {
     guard !rm.antennae.isEmpty else { return nil }
     var pts: [Float] = []
     for a in rm.antennae { pts += a.basePoints }
@@ -695,7 +695,7 @@ nonisolated enum BobMeshCache {
     /// Builds them all (call off the main thread, at low priority).
     static func warm() { _ = sim; _ = render; _ = embedding }
 }
-func buildEyeRig(render rm: RenderMesh, sim: SimMesh, appearance: BlobAppearance = .berry) -> EyeRig {
+nonisolated func buildEyeRig(render rm: RenderMesh, sim: SimMesh, appearance: BlobAppearance = .berry) -> EyeRig {
     appearance.breed == .berry ? buildEyeRigBob(render: rm, sim: sim) : buildEyeRigLegacy(render: rm, sim: sim, appearance: appearance)
 }
 
@@ -1134,7 +1134,7 @@ private func buildRenderMeshBob() -> RenderMesh {
         armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst))
 }
 
-private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {
+nonisolated private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {
     var eye: [[Int32]] = [[], []], glint: [[Int32]] = [[], []], brow: [[Int32]] = [[], []]
     var sum = [SIMD3<Double>](repeating: .zero, count: 2), cnt = [0, 0]
     for v in 0..<rm.vertexCount where rm.mat[v] == 1 || rm.mat[v] == 3 || rm.mat[v] == 4 {

@@ -178,31 +178,19 @@ struct WandShape: SwiftUI.Shape {
     }
 }
 
-struct BubbleWandOverlay: View {
+/// The wand's controls inside Play mode (Play/PlayChrome.swift shows the Done pill and hides the HUD): the hint and the wand at the bottom.
+struct BubbleWandControls: View {
     var wand: BubbleWand = .shared
     @State private var pressing = false
 
     var body: some View {
-        ZStack {
-            BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false)
-            VStack {
-                HStack {
-                    Spacer()
-                    Button { wand.stop() } label: {
-                        Text("Done").font(.system(size: 16, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-                            .padding(.horizontal, 16).padding(.vertical, 8).background(Capsule().fill(Color(red: 0.36, green: 0.55, blue: 0.80)))
-                    }
-                    .accessibilityLabel("Put the bubble wand away")
-                    Spacer()
-                }
-                .padding(.horizontal, 16).padding(.top, 8)
-                Spacer()
-                Text(wand.micUnavailable ? "Hold the wand to blow bubbles" : "Blow on the microphone, or hold the wand")
-                    .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Color(red: 0.25, green: 0.33, blue: 0.5))
-                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.92)))
-                    .accessibilityHidden(true)
-                wandButton.padding(.bottom, 14)
-            }
+        VStack {
+            Spacer()
+            Text(wand.micUnavailable ? "Hold the wand to blow bubbles" : "Blow on the microphone, or hold the wand")
+                .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Color(red: 0.25, green: 0.33, blue: 0.5))
+                .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.92)))
+                .accessibilityHidden(true)
+            wandButton.padding(.bottom, 14)
         }
     }
 

@@ -19,6 +19,12 @@ final class BubbleFeetTests: XCTestCase {
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
     typealias SC = LegsDrawnAuditTests.Scenario
 
+    /// The moves the wand uses: walking / standing, the turn-and-watch, the two hops.
+    static func isWandMove(_ b: BlobBrain) -> Bool {
+        guard let k = b.idleState.kind else { return true }
+        return k == .stopLook || k == .bounce || k == .skipHop
+    }
+
     static func scenario(_ name: String) -> SC {
         var n = 0
         let wand = BubbleWand.shared
@@ -54,14 +60,16 @@ final class BubbleFeetTests: XCTestCase {
         var report = String(format: "BUBBLE %@\nchar shoes | frames | leash frames | airborne frames | min ring ratio | worst join (cm; need >= 1) | max collar (cm; need <= 2) | max tilt (rad; need <= 0.5) | pops\n", name)
         for c in 0..<OnePieceInvariantTests.characters.count {
             for shoes in [false, true] {
-                var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, leashFrame = -1
+                var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
-                    tiltMax = max(tiltMax, f.tilt)
+                    // the stream scenario runs the Jelbie's other autonomous idles too (a belly slide tips him 0.7 rad by design): only the wand's own moves (walk, look, hop) are held to the pose limits
+                    guard Self.isWandMove(r.brain) else { return }
+                    if f.tilt > tiltMax { tiltMax = f.tilt; tiltInfo = "frame \(frame) idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName) wand pops \(BubbleWand.shared.popsByJelly.values.reduce(0, +))" }
                     if leashFrame < 0, f.beans, f.leash > 0.002 || f.weldPull > 0.002 { leashFrame = frame }
                     guard let s = EmoteFeetTests.sample(r, frame: frame) else { return }
                     air += 1
-                    if (s.ratio < EmoteFeetTests.minRatio || s.join < OnePieceInvariantTests.minNeck || s.collar > EmoteFeetTests.maxCollar) && badFrame < 0 { badFrame = frame; badInfo = s.info }
+                    if (s.ratio < EmoteFeetTests.minRatio || s.join < OnePieceInvariantTests.minNeck || s.collar > EmoteFeetTests.maxCollar) && badFrame < 0 { badFrame = frame; badInfo = s.info + " idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName)" }
                     worst = (min(worst.ratio, s.ratio), min(worst.join, s.join), max(worst.collar, s.collar))
                 }
                 let who = "bubble \(name), \(OnePieceInvariantTests.characters[c].0) \(shoes ? "with shoes" : "bare")"
@@ -71,7 +79,7 @@ final class BubbleFeetTests: XCTestCase {
                 XCTAssertEqual(a.leashed, 0, "\(who): the leash / tether moved a foot piece in \(a.leashed) frames, first at frame \(leashFrame), max pull \(String(format: "%.1f", a.leashMax * 100)) cm", file: file, line: line)
                 XCTAssertEqual(a.detached, 0, "\(who): a foot came off the body in \(a.detached) frames (worst leg sdf \(a.worstLeg))", file: file, line: line)
                 XCTAssertEqual(a.neckBad, 0, "\(who): the neck join is open in \(a.neckBad) frames", file: file, line: line)
-                XCTAssertLessThanOrEqual(tiltMax, 0.5, "\(who): the body tipped \(tiltMax) rad (limit 0.5)", file: file, line: line)
+                XCTAssertLessThanOrEqual(tiltMax, 0.5, "\(who): the body tipped \(tiltMax) rad (limit 0.5) at \(tiltInfo)", file: file, line: line)
                 if air > 0 {
                     XCTAssertGreaterThanOrEqual(worst.ratio, EmoteFeetTests.minRatio, "\(who): the neck ring shrank to \(String(format: "%.0f", worst.ratio * 100)) % of standing (first bad frame \(badFrame): \(badInfo))", file: file, line: line)
                     XCTAssertGreaterThanOrEqual(worst.join, OnePieceInvariantTests.minNeck, "\(who): the join is open: \(String(format: "%.1f", -worst.join * 100)) cm outside the body (first bad frame \(badFrame): \(badInfo))", file: file, line: line)

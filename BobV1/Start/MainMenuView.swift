@@ -6,41 +6,74 @@
 
 import SwiftUI
 
+/// One composition for every screen: the iPhone portrait design (logo on top, Continue / New Game stacked, the face peeking from the bottom),
+/// grown to FILL the screen. The element scale `s` (logo, buttons, text, spacing) is limited by the width (logo <= ~83 %) and by the height left above
+/// the face; the face's own scale spans the width but never hides its eyes. At the 440x956 design size every number equals the approved portrait look.
+/// `s` never goes below `minScale` (buttons stay >= 44 pt tall); on a very short screen the face is pushed down (peeks less) instead.
+struct MenuMetrics {
+    static let minScale: CGFloat = 0.72          // 62 * 0.72 = 44.6 pt: the smaller (New Game) button keeps a 44 pt tap height
+    var s: CGFloat, titleTop: CGFloat, buttonsGap: CGFloat, faceScale: CGFloat, faceTop: CGFloat
+    var btnScale: CGFloat, btnWidth: CGFloat          // buttons: tap-height scale, and their width (pills widen on a short, wide screen)
+
+    init(w: CGFloat, h: CGFloat, hasSave: Bool) {
+        let aspect = w / h
+        // Where the rim of the face starts: 65 % of the height on an iPhone portrait, lower on wider screens (more room for the stack).
+        var top = h * (0.6514 + 0.0486 * min(1, max(0, (aspect - 0.46) / 0.29)))
+        let titleUnits = 364 / 0.96 * 307 / 620, btnUnits: CGFloat = hasSave ? 74 + 8 + 20 + 62 + 6 : 74 + 8          // 188, 170 (82 with one button)
+        let content = titleUnits + btnUnits
+        let faceGap = h * 0.015, minGaps = h * 0.07
+        let fitH = (top - faceGap - minGaps) / content
+        var raw = min(w / 440, fitH)
+        if aspect > 1 { raw = min(raw, 0.55 * w / 379, 0.40 * w / 300) }          // landscape: the logo and buttons stay a sensible share of the width
+        let sc = max(raw, Self.minScale)
+        if raw < Self.minScale { top = max(top, content * sc + minGaps + 14 * sc) }          // short screen: the face peeks less
+        let free = max(0, top - faceGap - content * sc)
+        let topShare = 156.0 / 251.0
+        s = sc
+        titleTop = max(8, free * topShare)
+        buttonsGap = max(4, free * (1 - topShare))
+        faceScale = max(1.0, min(4.8 * w / 440, (0.91 * h - top) / 51.5))
+        faceTop = top
+        btnScale = sc; btnWidth = 300 * sc
+        if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen
+            let k: CGFloat = hasSave ? 0.75 : 0.9
+            let sf: CGFloat = 3.6                                                // the Jelbie peeks with brows and eyes: ~49 % of the width incl. its rim
+            let eyesY = h * 0.92                                                 // eyes ~8 % above the bottom edge
+            let ft = eyesY - 51.5 * sf                                           // rim top (the buttons may overlap it, never the brows or eyes)
+            let stackBottom = eyesY - 17 * sf - 4 - 8                            // above the brows (8 pt for the bob)
+            let pad: CGFloat = 6
+            let btnH = btnUnits * k
+            let logoH = stackBottom - pad - 6 - btnH
+            let sl = min(logoH / titleUnits, 0.55 * w / 379)
+            s = sl; btnScale = k; btnWidth = 0.85 * 379 * sl
+            titleTop = pad - h * 0.05          // the swing frame has empty room above the mascot: lift the stack so the pills clear the rim
+            buttonsGap = max(4, stackBottom - pad - titleUnits * sl - btnH)
+            faceScale = sf
+            faceTop = ft
+        }
+    }
+}
+
 struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
     @State private var visible = true
     private var theme = ThemeStore.shared
-    @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var landscape: Bool { vsc == .compact }
     private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let bottom = geo.safeAreaInsets.bottom
+            let m = MenuMetrics(w: w, h: h, hasSave: hasSave)
             ZStack {
-                TitleBackdrop(still: still, size: geo.size, landscape: landscape, palette: theme.palette)
+                TitleBackdrop(still: still, size: geo.size, landscape: w > h, palette: theme.palette, scale: m.s, faceScale: m.faceScale, faceTop: m.faceTop)
                     .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
-                if landscape {
-                    let k = min(1, h / 393)
-                    let btnW = min(300, w * 0.32)
-                    HStack(spacing: 0) {
-                        VStack { Spacer(minLength: 0); title(width: min(w * 0.46, 380)); Spacer(minLength: 0) }.frame(width: w * 0.5)
-                        VStack { Spacer(minLength: 0); buttons(k: max(0.7, k)).frame(width: btnW); Spacer(minLength: 0) }.frame(width: w * 0.5)
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    let s = w / 440
-                    VStack(spacing: 0) {
-                        title(width: 364 * s)
-                            .padding(.top, max(156 * s, 12))
-                        buttons(k: s).frame(width: 300 * s).padding(.top, 95 * s)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.bottom, bottom)
+                VStack(spacing: 0) {
+                    title(width: 364 * m.s).padding(.top, m.titleTop)
+                    buttons(k: m.btnScale).frame(width: m.btnWidth).padding(.top, m.buttonsGap)
+                    Spacer(minLength: 0)
                 }
                 if confirmNew { confirmCard.transition(.opacity) }
             }
@@ -49,7 +82,16 @@ struct MainMenuView: View {
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
         .animation(.easeInOut(duration: 0.5), value: theme.selection)
-        .onAppear { visible = true }
+        .onAppear {
+            visible = true
+            LaunchTiming.mark("menu shown")
+            #if targetEnvironment(simulator)
+            if hasSave, UserDefaults.standard.object(forKey: "AutoContinue") != nil {          // timing aid: taps Continue after N seconds
+                let after = UserDefaults.standard.double(forKey: "AutoContinue")
+                Task { @MainActor in try? await Task.sleep(nanoseconds: UInt64(after * 1e9)); flow.continueGame() }
+            }
+            #endif
+        }
         .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
@@ -231,6 +273,10 @@ struct TitleBackdrop: View {
     let size: CGSize
     let landscape: Bool
     var palette: ThemePalette = ThemeMath.palette(.sky)
+    /// The menu composition scale (nil = w/440, the portrait design) and how far the face is pushed down on a very short screen.
+    var scale: CGFloat? = nil
+    var faceScale: CGFloat? = nil
+    var faceTop: CGFloat? = nil
     /// false = just the colour and the pattern (the loading screen).
     var extras = true
 
@@ -267,17 +313,17 @@ struct TitleBackdrop: View {
                 guard extras else { return }
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
-                let sx = w / 440, sy = h / 956, sk = landscape ? min(w, h) / 440 : sx
+                let ds = Double(scale ?? w / 440)
                 var sc = ctx
                 sc.opacity = tw
                 for (x, y, r) in [(52.0, 157.5, 7.5), (398.0, 337.5, 7.5), (380.0, 133.0, 5.0)] {
-                    sc.fill(Self.sparkle(x * sx, y * sy, r * sk * (landscape ? 1.2 : 1), t), with: .color(.white))
+                    sc.fill(Self.sparkle(w / 2 + (x - 220) * ds, y * ds, r * ds, t), with: .color(.white))
                 }
                 // Peeking Jelbie
-                let scale: Double = landscape ? h * 0.0087 : 4.8 * w / 440      // zoomed in: just the head dome, brows and eyes
-                let cx = landscape ? w * 0.5 : w / 2
-                let bob = still ? 0 : -10 * (w / 440) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
-                let cy = 0.91 * h + 14 * scale + bob                            // eyes sit ~9% of the screen above the bottom
+                let scale = Double(faceScale ?? CGFloat(4.8 * ds))      // zoomed in: just the head dome, brows and eyes
+                let cx = w / 2
+                let bob = still ? 0 : -10 * ds * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
+                let cy = (faceTop.map { Double($0) + 65.5 * scale } ?? 0.91 * h + 14 * scale) + bob                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)

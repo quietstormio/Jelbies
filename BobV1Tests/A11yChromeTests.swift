@@ -48,7 +48,7 @@ final class A11yChromeTests: XCTestCase {
 
     func testGlyphOnlyAndAlwaysOnRowsNeverExplain() {
         let care = care3()
-        for item in [HUDItem.play, .decor, .dress] { XCTAssertNil(HUDMenu.disabledReason(item, .individual(0), care: care)) }
+        for item in [HUDItem.decor, .dress] { XCTAssertNil(HUDMenu.disabledReason(item, .individual(0), care: care)) }
     }
 
     // MARK: settings

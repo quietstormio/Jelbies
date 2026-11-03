@@ -52,7 +52,7 @@ struct GameScreen: View {
     }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
-    private var racing: Bool { model.care.tripActive }
+    private var racing: Bool { model.care.tripActive || model.care.play.active }          // (Play mode hides the HUD like a trip: Done is its way out)
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -114,7 +114,7 @@ struct GameScreen: View {
                 case .drink: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink }
                 case .comeHere, .clean: break            // GameCare.tapBubble already called him / started the clean-up
                 }
-            }.photoHidden()
+            }.photoHidden().opacity(model.care.play.active ? 0 : 1)          // (no needs bubbles over the ball game)
 
             CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
 
@@ -239,6 +239,8 @@ struct GameScreen: View {
                     .padding(.bottom, 30)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+
+            PlayChrome(care: model.care)          // Play mode: the flick surface, Done, hearts (Play/PlayChrome.swift)
 
             BathChrome(care: model.care)
 
@@ -374,7 +376,7 @@ struct GameScreen: View {
         .overlay { RoomSwitchVeil(care: model.care) }
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
-        .overlay { if BubbleWand.shared.active { BubbleWandOverlay() } }          // the bubble wand toy (Toys/)
+        .overlay { if BubbleWand.shared.active { BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true) } }          // the bubble wand's bubbles (Toys/)
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
@@ -425,6 +427,35 @@ struct GameScreen: View {
             await sleep(1.4)
             f()
             withAnimation(CareMenu.spring) { open.wrappedValue = false }
+        }
+        // capture aid: -PlayDemo 1 (grant the balls, open Play mode and flick at the middle Jelbie over and over) | 2 (the toy picker, toys owned) | 3 (the picker, nothing owned) | 4 (Play mode, no auto flick)
+        if d.integer(forKey: "PlayDemo") > 0 {
+            for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
+            await sleep(2.5)
+            let mode = d.integer(forKey: "PlayDemo")
+            if mode != 3 { for k in [DecorKind.ball, .soccerball, .beachball] { care.store.grant(k.storeID) }; if mode == 2 { care.store.grant("toy-bubbleWand") } }
+            if mode >= 2, mode <= 3 {
+                withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
+            } else {
+                let kind: DecorKind = { switch d.string(forKey: "PlayDemoBall") ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; default: return .ball } }()
+                care.beginPlay(ball: kind)
+                for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
+                await sleep(1.5)
+                if mode == 1 {
+                    let speed = d.double(forKey: "PlayDemoSpeed") > 0 ? d.double(forKey: "PlayDemoSpeed") : 1.8
+                    for round in 0..<max(d.integer(forKey: "PlayDemoRounds"), 1) where care.play.active {
+                        let sz = care.play.viewSize
+                        // alternate the aim a little: the middle, then a bit to either side
+                        let dx: CGFloat = [0, -0.18, 0.2, 0.05][round % 4] * sz.width
+                        NSLog("[playtoss] demo throw %d", round)
+                        care.play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: CGVector(dx: dx * 2, dy: -sz.height * speed))
+                        var waited = 0.0
+                        while care.play.phase != .inHand, waited < 25 { await sleep(0.1); waited += 0.1 }
+                        NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
+                        await sleep(1.8)
+                    }
+                }
+            }
         }
         // capture aid: -InviteGuest <n> asks visitor n-1 over (a Friend of everybody) 3 s after the room is on screen: the arrival moment (Park/GuestArrival.swift) follows the knock
         if d.integer(forKey: "InviteGuest") > 0 {
@@ -867,7 +898,7 @@ struct CareMenu: View {
     var body: some View {
         // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
-        let items = tight && picker != nil ? all.filter { $0 == .feed || $0 == .drink } : all
+        let items = tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all
         CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
@@ -875,6 +906,7 @@ struct CareMenu: View {
                         row(item, count: items.count, index: index)
                         if picker == .food, item == .feed { pickerRow(kind: .food) }
                         if picker == .drink, item == .drink { pickerRow(kind: .drink) }
+                        if picker == .toy, item == .play { pickerRow(kind: .toy) }
                         if competeRow, item == .compete { competeChips }
                     }
                 }
@@ -920,6 +952,12 @@ struct CareMenu: View {
     /// Feed: every food in the bag in shop order (foods, then treats), with berries and pizza always shown (dimmed at 0). Drink: water, soda, then the bought drinks.
     private func pickEntries(_ kind: ConsumableKind) -> [PickEntry] {
         let jelly = care.singledOutForFood
+        if kind == .toy {
+            return PlayToyRegistry.offered(book: care.store).compactMap { t in
+                guard let item = StoreCatalog.item(t.storeID) else { return nil }
+                return PickEntry(id: t.toyID, name: t.title, art: AnyView(ItemArt(item: item, size: 50)), count: nil, ident: "play-toy-\(t.toyID)") { t.activate(care: care) }
+            }
+        }
         if kind == .drink {
             return care.drinkChoices.map { c in
                 let item = c.stored ? StoreCatalog.item(forFood: c.id) : nil
@@ -940,6 +978,7 @@ struct CareMenu: View {
         let entries = pickEntries(kind)
         let cap = max(160, UIScreen.main.bounds.width - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
         let noFood = kind == .food && entries.allSatisfy { $0.out }          // an empty bag: say where food comes from
+        let noToys = kind == .toy && entries.isEmpty          // no toy bought yet: the button goes to the Shop's Toys tab
         return VStack(spacing: 2) {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
@@ -973,6 +1012,26 @@ struct CareMenu: View {
         }
         .frame(width: min(max(pickerWidth, 1), cap))
         .padding(.trailing, 0)
+            if noToys {
+                Button {
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                    ShopTab.pending = .toys
+                    withAnimation(Self.spring) { picker = nil; open = false }
+                    openTown(.shop, care.targetJelly)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bag.fill").font(.system(size: 13, weight: .bold))
+                        Text("No toys yet. Get a ball in the Shop").jFont(12, .bold).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Self.brown)
+                    .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44)
+                    .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: cap)
+                .accessibilityIdentifier("play-toys-empty")
+                .accessibilityLabel("No toys yet. Open the Shop's toys")
+            }
             if noFood {
                 Text("No food yet. Buy some in the Shop (Go out).").jFont(12, .bold).foregroundStyle(Self.brown)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -1021,6 +1080,7 @@ struct CareMenu: View {
         switch route {
         case .picker(let k):
             if k == .food { withAnimation(Self.spring) { picker = picker == .food ? nil : .food; competeRow = false }; return }
+            if k == .toy { withAnimation(Self.spring) { picker = picker == .toy ? nil : .toy; competeRow = false }; return }
             if care.drinkChoices.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; competeRow = false }; return }
             care.drink(care.drinkChoices.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
         case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil }; return

@@ -133,7 +133,8 @@ enum HUDMenu {
             if care.raceBusy { return "Already racing" }
             if care.trayOut { return "Food is already out" }
             return "Not while cleaning"
-        case .play, .decor, .dress: return nil
+        case .play: return care.playBlocker
+        case .decor, .dress: return nil
         }
     }
 
@@ -145,7 +146,7 @@ enum HUDMenu {
         case .callAll: care.comeHereEveryone(); return .none
         case .feed: return .picker(.food)
         case .drink: return .picker(.drink)
-        case .play: return .bag(.toys, who: id)
+        case .play: return .picker(.toy)          // the toy picker (the same sliding strip as Feed); the bag's Toys tab is still the place to put toys in the room
         case .decor: return .bag(.furniture, who: id)
         case .dress: return .bag(.wear, who: id)
         case .bedtime: care.bedtimeAll(); care.clearHighlight(); return .none

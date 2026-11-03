@@ -8,7 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var flow = StartFlow.shared
     @State private var studioModel = ContentView.makeStudioModel()
-    @State private var introOn = IntroGate.shouldShow()
+    @State private var introOn = IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // (-SkipIntro 1: capture aid)
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
     var body: some View {
@@ -19,7 +19,7 @@ struct ContentView: View {
         } else {
             ZStack {
                 if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
-                    IntroView { LaunchTiming.mark("intro done"); withAnimation(.easeInOut(duration: IntroClip.fadeToWhite)) { introOn = false } }.transition(.opacity).zIndex(1)
+                    IntroView { LaunchTiming.mark("intro done"); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
             }

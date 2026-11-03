@@ -37,7 +37,7 @@ nonisolated enum BubbleTuning {
     static let streakWindow: Float = 8
     static let streakForHearts = 3
     static let fxLife: Float = 0.5
-    static let price = 35
+    static let price = 40
 }
 
 @MainActor
@@ -48,7 +48,8 @@ final class BubbleWand: PlayToy {
     nonisolated let toyID = "bubbleWand"
     let title = "Bubble wand"
     let symbol = "bubbles.and.sparkles"
-    var price: Int { BubbleTuning.price }
+    var price: Int { StoreCatalog.item(storeID)?.price ?? BubbleTuning.price }
+    var storeID: String { "toy-bubbleWand" }
 
     // MARK: state
 
@@ -75,6 +76,7 @@ final class BubbleWand: PlayToy {
     @ObservationIgnored private var spawnAcc: Float = 0
     @ObservationIgnored private var bloopAt: Float = -9
     @ObservationIgnored private var mouthCache: SIMD3<Float>?
+    @ObservationIgnored private var mouthBlend: Float = -1
     @ObservationIgnored private var states: [Int: JState] = [:]
     @ObservationIgnored private weak var care: GameCare?
     /// Totals (tests, report).
@@ -105,6 +107,11 @@ final class BubbleWand: PlayToy {
 
     // MARK: PlayToy
 
+    /// The picker's call: Play mode on with the wand (GameCare.beginPlay(wand:) -> `begin`).
+    func activate(care: GameCare) { care.beginPlay(wand: self) }
+    /// Play mode is up (or a test): the wand comes out and listens.
+    func begin(care: GameCare) { activate(care: care, listen: !noMic) }
+    @ObservationIgnored private var noMic = false
     func activate(care: GameCare?) { activate(care: care, listen: true) }
     /// `listen: false` = no microphone (the capture demo, so no permission prompt covers the screen).
     func activate(care: GameCare?, listen: Bool) {
@@ -115,6 +122,7 @@ final class BubbleWand: PlayToy {
         if listen { ears.setWandListening(true) }
     }
     func deactivate() {
+        if let c = care, c.play.active { c.endPlay() }          // (Done / the picker's put-away: Play mode goes too; endPlay calls back, then `active` is already false)
         guard active else { return }
         active = false
         holding = false
@@ -125,6 +133,7 @@ final class BubbleWand: PlayToy {
     /// Test seam: back to a fresh, put-away wand (counters too).
     func resetForTests() {
         BubbleTuning.contactPopChance = 0.35
+        noMic = false
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); field = BubbleField()
         popsByJelly = [:]; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
@@ -137,7 +146,8 @@ final class BubbleWand: PlayToy {
 
     /// `-BubbleDemo 1`: the wand comes out by itself and a simulated blow plays (pulses of 2.5 s every 4 s). `2` blows without pause.
     func startDemo(mode: Int, care: GameCare?) {
-        activate(care: care, listen: false)
+        noMic = true          // (the capture demo never asks for the microphone)
+        if let care, care.canPlay { care.beginPlay(wand: self) } else { activate(care: care, listen: false) }
         demoStart = clock
         demo = mode == 2 ? { _ in 0.7 } : { t in t.truncatingRemainder(dividingBy: 4) < 2.5 ? 0.45 + 0.4 * sinf(t * 2.1).magnitude : 0 }
     }
@@ -151,6 +161,7 @@ final class BubbleWand: PlayToy {
 
     /// Where bubbles leave the wand: the floor under the bottom of the screen, low and in front.
     var mouth: SIMD3<Float> {
+        if mouthBlend != GameCamera.playBlend { mouthBlend = GameCamera.playBlend; mouthCache = nil }          // (the play camera is easing in)
         if let m = mouthCache { return m }
         let s = viewSize
         var p = SIMD2<Float>(0, 4.2)

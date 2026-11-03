@@ -22,14 +22,39 @@ final class BubbleWandTests: XCTestCase {
         let book = StoreBook(wallet: wallet, persists: false, defaults: UserDefaults(suiteName: "bw.test.\(UUID())")!)
         XCTAssertNotNil(PlayToyRegistry.toy("bubbleWand"), "the wand is registered with ONE entry")
         XCTAssertFalse(PlayToyRegistry.offered(book: book).contains { $0.toyID == "bubbleWand" })
-        XCTAssertEqual(book.buyToy("bubbleWand", price: BubbleTuning.price), .notEnough)
+        XCTAssertEqual(book.buy("toy-bubbleWand"), .notEnough)
         XCTAssertFalse(PlayToyRegistry.offered(book: book).contains { $0.toyID == "bubbleWand" }, "a failed purchase owns nothing")
-        wallet.add(BubbleTuning.price + 5, silent: true)
-        XCTAssertEqual(book.buyToy("bubbleWand", price: BubbleTuning.price), .bought)
+        wallet.add(wand.price + 5, silent: true)
+        XCTAssertEqual(book.buy("toy-bubbleWand"), .bought)
         XCTAssertEqual(wallet.count, 5)
         XCTAssertTrue(PlayToyRegistry.offered(book: book).contains { $0.toyID == "bubbleWand" })
-        XCTAssertEqual(book.buyToy("bubbleWand", price: BubbleTuning.price), .alreadyOwned)
+        XCTAssertEqual(book.buy("toy-bubbleWand"), .alreadyOwned)
         XCTAssertEqual(wallet.count, 5, "never charged twice")
+    }
+
+    func testWandPlaysInsideThePlayMode() {
+        let c = GameCare(jellyCount: 3, persistent: false, defaults: UserDefaults(suiteName: "BubbleWand.\(UUID())")!)
+        let t = PlayToss()
+        t.beginToy(title: "Bubble wand")
+        XCTAssertTrue(t.active); XCTAssertEqual(t.phase, .toy)
+        XCTAssertFalse(t.ballGame, "the Jelbies are not held to a play line")
+        t.end()
+        XCTAssertFalse(t.active)
+        // the real flow: the care's Play mode with the wand, Done (endPlay) puts the wand away and clears the bubbles
+        c.play.beginToy(title: wand.title)
+        wand.begin(care: c)
+        XCTAssertTrue(wand.active)
+        wand.holding = true
+        for _ in 0..<90 { wand.tick(jellies: [], dt: 1.0 / 60) }
+        XCTAssertFalse(wand.field.bubbles.isEmpty)
+        c.endPlay()
+        XCTAssertFalse(c.play.active)
+        XCTAssertFalse(wand.active, "Done puts the wand away")
+        XCTAssertTrue(wand.field.bubbles.isEmpty)
+        // and putting the wand away from its side ends Play mode too
+        c.play.beginToy(title: wand.title); wand.begin(care: c)
+        wand.deactivate()
+        XCTAssertFalse(c.play.active)
     }
 
     // MARK: the field
