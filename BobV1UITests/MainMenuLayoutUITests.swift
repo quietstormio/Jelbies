@@ -41,11 +41,15 @@ final class MainMenuLayoutUITests: XCTestCase {
                 XCTAssertTrue((0.70...0.92).contains(logoFrac), "portrait logo is \(logoFrac) of the width")
                 XCTAssertTrue((0.55...0.78).contains(btnFrac), "portrait buttons are \(btnFrac) of the width")
             } else {
-                XCTAssertTrue((0.28...0.58).contains(logoFrac), "landscape logo is \(logoFrac) of the width")
-                XCTAssertTrue((0.22...0.42).contains(btnFrac), "landscape buttons are \(btnFrac) of the width")
+                if win.width / win.height > 1.6 {          // a short, wide screen (iPhone landscape) spans most of the width
+                    XCTAssertGreaterThanOrEqual(logoFrac, 0.45, "short landscape logo fraction")
+                    XCTAssertGreaterThanOrEqual(btnFrac, 0.5, "short landscape button fraction")
+                }
+                XCTAssertTrue((0.28...0.60).contains(logoFrac), "landscape logo is \(logoFrac) of the width")
+                XCTAssertTrue((0.22...0.62).contains(btnFrac), "landscape buttons are \(btnFrac) of the width")
             }
             let lastBottom = save ? app.buttons["menu-new"].frame.maxY : primary.frame.maxY
-            XCTAssertLessThanOrEqual(lastBottom, win.height * 0.80, "\(name): buttons leave room for the face")
+            XCTAssertLessThanOrEqual(lastBottom, win.height * (win.width / win.height > 1.6 ? 0.92 : 0.80), "\(name): buttons leave room for the face")
             if name == "landscape" || win.height > 900 { XCTAssertGreaterThan(lastBottom, win.height * 0.45, "\(name): the stack uses the height") }
             if let dir = shotDir {
                 try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)

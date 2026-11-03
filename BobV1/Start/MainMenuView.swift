@@ -13,6 +13,7 @@ import SwiftUI
 struct MenuMetrics {
     static let minScale: CGFloat = 0.72          // 62 * 0.72 = 44.6 pt: the smaller (New Game) button keeps a 44 pt tap height
     var s: CGFloat, titleTop: CGFloat, buttonsGap: CGFloat, faceScale: CGFloat, faceTop: CGFloat
+    var btnScale: CGFloat, btnWidth: CGFloat          // buttons: tap-height scale, and their width (pills widen on a short, wide screen)
 
     init(w: CGFloat, h: CGFloat, hasSave: Bool) {
         let aspect = w / h
@@ -33,6 +34,20 @@ struct MenuMetrics {
         buttonsGap = max(4, free * (1 - topShare))
         faceScale = max(1.0, min(4.8 * w / 440, (0.91 * h - top) / 51.5))
         faceTop = top
+        btnScale = sc; btnWidth = 300 * sc
+        if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen
+            let k: CGFloat = hasSave ? 0.75 : 0.9
+            let ft = h * 0.90                                                    // the face only peeks a thin band
+            let pad: CGFloat = 6
+            let btnH = btnUnits * k
+            let logoH = ft - 4 - pad - 6 - btnH
+            let sl = min(logoH / titleUnits, 0.55 * w / 379)
+            s = sl; btnScale = k; btnWidth = 0.58 * w
+            titleTop = pad
+            buttonsGap = max(4, ft - 4 - pad - titleUnits * sl - btnH)
+            faceScale = 4.8 * w / 440
+            faceTop = ft
+        }
     }
 }
 
@@ -54,7 +69,7 @@ struct MainMenuView: View {
                     .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
                 VStack(spacing: 0) {
                     title(width: 364 * m.s).padding(.top, m.titleTop)
-                    buttons(k: m.s).frame(width: 300 * m.s).padding(.top, m.buttonsGap)
+                    buttons(k: m.btnScale).frame(width: m.btnWidth).padding(.top, m.buttonsGap)
                     Spacer(minLength: 0)
                 }
                 if confirmNew { confirmCard.transition(.opacity) }
