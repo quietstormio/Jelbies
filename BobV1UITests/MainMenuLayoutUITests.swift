@@ -27,7 +27,9 @@ final class MainMenuLayoutUITests: XCTestCase {
             var frames = [("logo", logo.frame), ("primary", primary.frame)]
             if save { frames.append(("new", app.buttons["menu-new"].frame)) }
             for (n, f) in frames {
-                XCTAssertTrue(win.insetBy(dx: -1, dy: -1).contains(f), "\(name) \(n) on screen: \(f) in \(win)")
+                // the logo's frame has transparent room above the mascot, which short-wide mode lets rise a little past the top edge
+                let slack: CGFloat = (n == "logo" && win.width / win.height > 1.6) ? win.height * 0.08 : 1
+                XCTAssertTrue(win.insetBy(dx: -1, dy: -slack).contains(f), "\(name) \(n) on screen: \(f) in \(win)")
                 XCTAssertLessThan(abs(f.midX - win.midX), 3, "\(name) \(n) centred: \(f)")
             }
             // same order, stacked

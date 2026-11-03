@@ -46,7 +46,7 @@ struct MenuMetrics {
             let logoH = stackBottom - pad - 6 - btnH
             let sl = min(logoH / titleUnits, 0.55 * w / 379)
             s = sl; btnScale = k; btnWidth = 0.85 * 379 * sl
-            titleTop = pad
+            titleTop = pad - h * 0.05          // the swing frame has empty room above the mascot: lift the stack so the pills clear the rim
             buttonsGap = max(4, stackBottom - pad - titleUnits * sl - btnH)
             faceScale = sf
             faceTop = ft
