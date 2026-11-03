@@ -54,6 +54,8 @@
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EarsReactorTests.o
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmoteCaptureTests.o
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmoteFeetTests.o
+/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2CaptureTests.o
+/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2Tests.o
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesGroupCaptureTests.o
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/ExpressionTests.o
 /BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/FeatureCaptureTests.o

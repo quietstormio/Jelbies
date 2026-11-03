@@ -149,6 +149,7 @@
 				<string>BobV1/Melon/BlobBrain+DecorPlay.swift</string>
 				<string>BobV1/Melon/BlobBrain+Ears.swift</string>
 				<string>BobV1/Melon/BlobBrain+Emotes.swift</string>
+				<string>BobV1/Melon/BlobBrain+Emotes2.swift</string>
 				<string>BobV1/Melon/BlobBrain+Expression.swift</string>
 				<string>BobV1/Melon/BlobBrain+FlapHop.swift</string>
 				<string>BobV1/Melon/BlobBrain+Flip.swift</string>
@@ -175,6 +176,7 @@
 				<string>BobV1/Melon/BlobDine.swift</string>
 				<string>BobV1/Melon/BlobMotion.swift</string>
 				<string>BobV1/Melon/BlobSocial+Emotes.swift</string>
+				<string>BobV1/Melon/BlobSocial+Emotes2.swift</string>
 				<string>BobV1/Melon/BlobSocial+Friends.swift</string>
 				<string>BobV1/Melon/BlobSocial+Friends2.swift</string>
 				<string>BobV1/Melon/BlobSocial+Friends3.swift</string>
@@ -492,6 +494,8 @@
 				<string>EarsReactorTests.swift</string>
 				<string>EmoteCaptureTests.swift</string>
 				<string>EmoteFeetTests.swift</string>
+				<string>EmotesBatch2CaptureTests.swift</string>
+				<string>EmotesBatch2Tests.swift</string>
 				<string>EmotesGroupCaptureTests.swift</string>
 				<string>ExpressionTests.swift</string>
 				<string>FeatureCaptureTests.swift</string>
@@ -814,119 +818,6 @@
 			<array>
 				<dict>
 					<key>BlueprintName</key>
-					<string>BobV1Tests</string>
-					<key>BlueprintProviderName</key>
-					<string>BobV1</string>
-					<key>BlueprintProviderRelativePath</key>
-					<string>BobV1.xcodeproj</string>
-					<key>BundleIdentifiersForCrashReportEmphasis</key>
-					<array>
-						<string>io.mgsllc.BobV1</string>
-						<string>io.mgsllc.BobV1.JelbiesWidget</string>
-						<string>io.mgsllc.BobV1Tests</string>
-						<string>io.mgsllc.BobV1UITests</string>
-					</array>
-					<key>ClangProfileDataDirectoryPath</key>
-					<string>__DERIVEDDATA__/Build/ProfileData</string>
-					<key>CommandLineArguments</key>
-					<array/>
-					<key>DefaultTestExecutionTimeAllowance</key>
-					<integer>600</integer>
-					<key>DependentProductPaths</key>
-					<array>
-						<string>__TESTROOT__/Release-iphonesimulator/BobV1.app</string>
-						<string>__TESTROOT__/Release-iphonesimulator/BobV1.app/PlugIns/BobV1Tests.xctest</string>
-						<string>__TESTROOT__/Release-iphonesimulator/BobV1UITests-Runner.app</string>
-						<string>__TESTROOT__/Release-iphonesimulator/BobV1UITests-Runner.app/PlugIns/BobV1UITests.xctest</string>
-						<string>__TESTROOT__/Release-iphonesimulator/JelbiesWidget.appex</string>
-					</array>
-					<key>DiagnosticCollectionPolicy</key>
-					<integer>1</integer>
-					<key>EnvironmentVariables</key>
-					<dict>
-						<key>APP_DISTRIBUTOR_ID_OVERRIDE</key>
-						<string>com.apple.AppStore</string>
-						<key>DYLD_INSERT_LIBRARIES</key>
-						<string>/usr/lib/libRPAC.dylib</string>
-						<key>IDE_CHOSEN_LOGGING_METHOD</key>
-						<string>1</string>
-						<key>OS_ACTIVITY_DT_MODE</key>
-						<string>YES</string>
-						<key>PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT</key>
-						<string>1</string>
-						<key>PERFC_ENABLE_PROFILE_MODE</key>
-						<string>1</string>
-						<key>PERFC_RESET_INSERT_LIBRARIES</key>
-						<string>1</string>
-						<key>PERFC_SUPPRESS_SYSTEM_REPORTS</key>
-						<string>1</string>
-						<key>SQLITE_ENABLE_THREAD_ASSERTIONS</key>
-						<string>1</string>
-						<key>TERM</key>
-						<string>dumb</string>
-					</dict>
-					<key>IsAppHostedTestBundle</key>
-					<true/>
-					<key>IsMemoryTaggingAddressSanitizerEnabled</key>
-					<false/>
-					<key>ParallelizationEnabled</key>
-					<true/>
-					<key>PreferredScreenCaptureFormat</key>
-					<string>screenRecording</string>
-					<key>ProcessNamesForCrashReportCollection</key>
-					<array>
-						<string>BobV1</string>
-						<string>BobV1UITests-Runner</string>
-						<string>JelbiesWidget</string>
-					</array>
-					<key>ProductModuleName</key>
-					<string>BobV1Tests</string>
-					<key>SystemAttachmentLifetime</key>
-					<string>deleteOnSuccess</string>
-					<key>TestBundlePath</key>
-					<string>__TESTHOST__/PlugIns/BobV1Tests.xctest</string>
-					<key>TestHostBundleIdentifier</key>
-					<string>io.mgsllc.BobV1</string>
-					<key>TestHostPath</key>
-					<string>__TESTROOT__/Release-iphonesimulator/BobV1.app</string>
-					<key>TestInteropMode</key>
-					<string>complete</string>
-					<key>TestLanguage</key>
-					<string></string>
-					<key>TestRegion</key>
-					<string></string>
-					<key>TestTimeoutsEnabled</key>
-					<false/>
-					<key>TestingEnvironmentVariables</key>
-					<dict>
-						<key>DYLD_FRAMEWORK_PATH</key>
-						<string>__TESTROOT__/Release-iphonesimulator:__PLATFORMS__/iPhoneSimulator.platform/Developer/Library/Frameworks</string>
-						<key>DYLD_INSERT_LIBRARIES</key>
-						<string>__TESTHOST__/Frameworks/libXCTestBundleInject.dylib:__SIMRUNTIMEROOT__/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib</string>
-						<key>DYLD_LIBRARY_PATH</key>
-						<string>__TESTROOT__/Release-iphonesimulator:__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib</string>
-						<key>PERFC_SUPPRESS_SYSTEM_REPORTS</key>
-						<string>1</string>
-						<key>XCInjectBundleInto</key>
-						<string>unused</string>
-						<key>XCODE_SCHEME_NAME</key>
-						<string>BobV1</string>
-						<key>XCODE_TEST_PLAN_NAME</key>
-						<string>BobV1</string>
-						<key>__XCODE_BUILT_PRODUCTS_DIR_PATHS</key>
-						<string>__TESTROOT__/Release-iphonesimulator</string>
-						<key>__XPC_DYLD_FRAMEWORK_PATH</key>
-						<string>__TESTROOT__/Release-iphonesimulator</string>
-						<key>__XPC_DYLD_LIBRARY_PATH</key>
-						<string>__TESTROOT__/Release-iphonesimulator</string>
-					</dict>
-					<key>ToolchainsSettingValue</key>
-					<array/>
-					<key>UserAttachmentLifetime</key>
-					<string>deleteOnSuccess</string>
-				</dict>
-				<dict>
-					<key>BlueprintName</key>
 					<string>BobV1UITests</string>
 					<key>BlueprintProviderName</key>
 					<string>BobV1</string>
@@ -1058,6 +949,119 @@
 					<string>__TESTROOT__/Release-iphonesimulator/BobV1.app</string>
 					<key>UITargetAppPerformanceAntipatternCheckerEnabled</key>
 					<true/>
+					<key>UserAttachmentLifetime</key>
+					<string>deleteOnSuccess</string>
+				</dict>
+				<dict>
+					<key>BlueprintName</key>
+					<string>BobV1Tests</string>
+					<key>BlueprintProviderName</key>
+					<string>BobV1</string>
+					<key>BlueprintProviderRelativePath</key>
+					<string>BobV1.xcodeproj</string>
+					<key>BundleIdentifiersForCrashReportEmphasis</key>
+					<array>
+						<string>io.mgsllc.BobV1</string>
+						<string>io.mgsllc.BobV1.JelbiesWidget</string>
+						<string>io.mgsllc.BobV1Tests</string>
+						<string>io.mgsllc.BobV1UITests</string>
+					</array>
+					<key>ClangProfileDataDirectoryPath</key>
+					<string>__DERIVEDDATA__/Build/ProfileData</string>
+					<key>CommandLineArguments</key>
+					<array/>
+					<key>DefaultTestExecutionTimeAllowance</key>
+					<integer>600</integer>
+					<key>DependentProductPaths</key>
+					<array>
+						<string>__TESTROOT__/Release-iphonesimulator/BobV1.app</string>
+						<string>__TESTROOT__/Release-iphonesimulator/BobV1.app/PlugIns/BobV1Tests.xctest</string>
+						<string>__TESTROOT__/Release-iphonesimulator/BobV1UITests-Runner.app</string>
+						<string>__TESTROOT__/Release-iphonesimulator/BobV1UITests-Runner.app/PlugIns/BobV1UITests.xctest</string>
+						<string>__TESTROOT__/Release-iphonesimulator/JelbiesWidget.appex</string>
+					</array>
+					<key>DiagnosticCollectionPolicy</key>
+					<integer>1</integer>
+					<key>EnvironmentVariables</key>
+					<dict>
+						<key>APP_DISTRIBUTOR_ID_OVERRIDE</key>
+						<string>com.apple.AppStore</string>
+						<key>DYLD_INSERT_LIBRARIES</key>
+						<string>/usr/lib/libRPAC.dylib</string>
+						<key>IDE_CHOSEN_LOGGING_METHOD</key>
+						<string>1</string>
+						<key>OS_ACTIVITY_DT_MODE</key>
+						<string>YES</string>
+						<key>PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT</key>
+						<string>1</string>
+						<key>PERFC_ENABLE_PROFILE_MODE</key>
+						<string>1</string>
+						<key>PERFC_RESET_INSERT_LIBRARIES</key>
+						<string>1</string>
+						<key>PERFC_SUPPRESS_SYSTEM_REPORTS</key>
+						<string>1</string>
+						<key>SQLITE_ENABLE_THREAD_ASSERTIONS</key>
+						<string>1</string>
+						<key>TERM</key>
+						<string>dumb</string>
+					</dict>
+					<key>IsAppHostedTestBundle</key>
+					<true/>
+					<key>IsMemoryTaggingAddressSanitizerEnabled</key>
+					<false/>
+					<key>ParallelizationEnabled</key>
+					<true/>
+					<key>PreferredScreenCaptureFormat</key>
+					<string>screenRecording</string>
+					<key>ProcessNamesForCrashReportCollection</key>
+					<array>
+						<string>BobV1</string>
+						<string>BobV1UITests-Runner</string>
+						<string>JelbiesWidget</string>
+					</array>
+					<key>ProductModuleName</key>
+					<string>BobV1Tests</string>
+					<key>SystemAttachmentLifetime</key>
+					<string>deleteOnSuccess</string>
+					<key>TestBundlePath</key>
+					<string>__TESTHOST__/PlugIns/BobV1Tests.xctest</string>
+					<key>TestHostBundleIdentifier</key>
+					<string>io.mgsllc.BobV1</string>
+					<key>TestHostPath</key>
+					<string>__TESTROOT__/Release-iphonesimulator/BobV1.app</string>
+					<key>TestInteropMode</key>
+					<string>complete</string>
+					<key>TestLanguage</key>
+					<string></string>
+					<key>TestRegion</key>
+					<string></string>
+					<key>TestTimeoutsEnabled</key>
+					<false/>
+					<key>TestingEnvironmentVariables</key>
+					<dict>
+						<key>DYLD_FRAMEWORK_PATH</key>
+						<string>__TESTROOT__/Release-iphonesimulator:__PLATFORMS__/iPhoneSimulator.platform/Developer/Library/Frameworks</string>
+						<key>DYLD_INSERT_LIBRARIES</key>
+						<string>__TESTHOST__/Frameworks/libXCTestBundleInject.dylib:__SIMRUNTIMEROOT__/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib</string>
+						<key>DYLD_LIBRARY_PATH</key>
+						<string>__TESTROOT__/Release-iphonesimulator:__PLATFORMS__/iPhoneSimulator.platform/Developer/usr/lib</string>
+						<key>PERFC_SUPPRESS_SYSTEM_REPORTS</key>
+						<string>1</string>
+						<key>XCInjectBundleInto</key>
+						<string>unused</string>
+						<key>XCODE_SCHEME_NAME</key>
+						<string>BobV1</string>
+						<key>XCODE_TEST_PLAN_NAME</key>
+						<string>BobV1</string>
+						<key>__XCODE_BUILT_PRODUCTS_DIR_PATHS</key>
+						<string>__TESTROOT__/Release-iphonesimulator</string>
+						<key>__XPC_DYLD_FRAMEWORK_PATH</key>
+						<string>__TESTROOT__/Release-iphonesimulator</string>
+						<key>__XPC_DYLD_LIBRARY_PATH</key>
+						<string>__TESTROOT__/Release-iphonesimulator</string>
+					</dict>
+					<key>ToolchainsSettingValue</key>
+					<array/>
 					<key>UserAttachmentLifetime</key>
 					<string>deleteOnSuccess</string>
 				</dict>

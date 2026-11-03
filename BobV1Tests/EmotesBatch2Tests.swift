@@ -147,8 +147,11 @@ final class EmotesBatch2Tests: XCTestCase {
         let l = lab(n: 1)
         let b = l.rigs[0].brain
         var got: [Float] = []
-        b.onEmoteHaptic = { i, _ in got.append(i) }
-        for _ in 0..<60 { b.treatHaptic("proudStrut.hop") }
+        let rec = RecordingHapticSink(); let drv = HapticDriver(sinks: [rec])
+        var now = 500.0
+        HapticDriver.room = drv; HapticDriver.clock = { now }; HapticDriver.after = { _, f in f() }; HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) }
+        defer { HapticDriver.room = nil; HapticDriver.clock = { CACurrentMediaTime() }; HapticDriver.after = { d, f in DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } } }
+        for _ in 0..<60 { now += 1; rec.clear(); b.treatHaptic("proudStrut.hop"); if let t = rec.events.first(where: { $0.kind == .transient }) { got.append(t.intensity) } }
         let base = EmoteTreats.haptics["proudStrut.hop"]![0].i
         XCTAssertEqual(got.count, 60)
         XCTAssertGreaterThanOrEqual(got.min()!, base * 0.85 - 1e-4); XCTAssertLessThanOrEqual(got.max()!, base * 1.15 + 1e-4)
@@ -213,7 +216,7 @@ final class EmotesBatch2Tests: XCTestCase {
     func testSelfScheduleSwitchHandsTheTreatsOver() {
         let l = lab(n: 1)
         let r = l.rigs[0]; r.brain.idleForced = true; r.brain.idleNight = 1; r.brain.watching = false
-        EmoteTreats.selfSchedule = false; defer { EmoteTreats.selfSchedule = true }
+        let prevSelf = EmoteTreats.selfSchedule; EmoteTreats.selfSchedule = false; defer { EmoteTreats.selfSchedule = prevSelf }
         for _ in 0..<50 { r.brain.variety.now += 400; XCTAssertFalse(r.brain.treat2MaybeStart(r.sim)) }
     }
 }

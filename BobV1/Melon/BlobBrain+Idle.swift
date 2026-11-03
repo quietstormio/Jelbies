@@ -356,7 +356,14 @@ extension BlobBrain {
         for i in w.indices { w[i].weight *= varietyScale(w[i].kind) }
         let total = w.reduce(0) { $0 + $1.weight }
         guard total > 0, idleNight < 0.6 else { idleState.treat = rand(8, 15); return false }
-        var x = rand() * total
+        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
+        let t2 = treat2Free ? treat2Pool.reduce(0) { $0 + $1.weight } : 0
+        var x = rand() * (total + t2)
+        if x >= total {
+            let started = treat2Pick(sim)
+            idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
+            return started
+        }
         var kind = w.last!.kind
         for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
         let started = idleStart(kind, sim)

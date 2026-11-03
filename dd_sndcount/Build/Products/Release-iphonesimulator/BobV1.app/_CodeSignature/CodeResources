@@ -22,19 +22,7 @@
 		</data>
 		<key>Metadata.appintents/extract.actionsdata</key>
 		<data>
-		GO2IsV8S6V4o7G285esADDdxnlU=
-		</data>
-		<key>Metadata.appintents/nlu/ed41cc5bec39cbfaca46e3cb6a0241fb.version</key>
-		<data>
-		W6k8nbDP+T9StSHXQg5D9u2ieE8=
-		</data>
-		<key>Metadata.appintents/nlu/nlu.lzfse</key>
-		<data>
-		2DBjsFTCrKpsLrworTG48Y9dVms=
-		</data>
-		<key>Metadata.appintents/root.ssu.yaml</key>
-		<data>
-		4cfq13vjx5MYm0z/RHoa8NR5rA8=
+		8a23SPmoSOuNd5nftu8ucoxf+nE=
 		</data>
 		<key>Metadata.appintents/version.json</key>
 		<data>
@@ -50,15 +38,15 @@
 		</data>
 		<key>PlugIns/BobV1Tests.xctest.dSYM/Contents/Resources/DWARF/BobV1Tests</key>
 		<data>
-		/X8jXB8TALVDizLH2d3uE9SUaSQ=
+		+8cs3NX81iAEYpazpUNAo9VsQMo=
 		</data>
 		<key>PlugIns/BobV1Tests.xctest.dSYM/Contents/Resources/Relocations/aarch64/BobV1Tests.yml</key>
 		<data>
-		EnbfjKQGdKm34fDQvUslwq9bE6Q=
+		/Of4jzuK6ihEnoxadCRJzPYG8ZE=
 		</data>
 		<key>PlugIns/BobV1Tests.xctest/BobV1Tests</key>
 		<data>
-		th/9PYPJEoKDjAmrF4i8O8D7Ycg=
+		4V2m7i00rfJe/MulYcJaQXkfi8o=
 		</data>
 		<key>PlugIns/BobV1Tests.xctest/Info.plist</key>
 		<data>
@@ -604,6 +592,10 @@
 		<data>
 		2ub091p4UM4geMVi40CF010ZWLQ=
 		</data>
+		<key>emote_checkin_1.m4a</key>
+		<data>
+		Fz+w8B0Sm4lXZQ0SY6atsaf2Sb4=
+		</data>
 		<key>emote_flutter_1.m4a</key>
 		<data>
 		kcKOemNocB0X8WJ3iPQLtWsIh6c=
@@ -620,9 +612,37 @@
 		<data>
 		4ZnggNdsaNcLF8bELHxmtl9rD5Y=
 		</data>
+		<key>emote_spinhug_1.m4a</key>
+		<data>
+		BV5nBKqhaWtxm6+GpaehFKi4tWM=
+		</data>
+		<key>emote_sploot_1.m4a</key>
+		<data>
+		qhJYwdEYEuEkIDoitlODmDVPBto=
+		</data>
+		<key>emote_starsigh_1.m4a</key>
+		<data>
+		F9CJs57YkMk1nTCrKVVzp3FsgFw=
+		</data>
+		<key>emote_strut_1.m4a</key>
+		<data>
+		sWQVMLmDGRI/CGKkJo7zV3k3jAs=
+		</data>
 		<key>emote_tail_1.m4a</key>
 		<data>
 		gYs68yuC1xxDiXCqEcw5in0W8Kg=
+		</data>
+		<key>emote_tilt_1.m4a</key>
+		<data>
+		F1eV6erEBPCl8mct45Vfpyul4y0=
+		</data>
+		<key>emote_twinkle_1.m4a</key>
+		<data>
+		POtZ1TN6QdhZjJgcH/VxeaGj6y0=
+		</data>
+		<key>emote_welcome_1.m4a</key>
+		<data>
+		o84tJ5qU3yzEhkuuJTHWvQDEdn8=
 		</data>
 		<key>emote_wiggle_1.m4a</key>
 		<data>
@@ -2588,28 +2608,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			FkzROS5UGFl2y05nElSTd1yL4oBHjyNLVavy4rihn5c=
-			</data>
-		</dict>
-		<key>Metadata.appintents/nlu/ed41cc5bec39cbfaca46e3cb6a0241fb.version</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			bjQLnP+zepicpUTmu3gKLHiQHT+zNzh2hRGjBhevoB0=
-			</data>
-		</dict>
-		<key>Metadata.appintents/nlu/nlu.lzfse</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			q7YTmONWDjlCCm8xWvRiS5+MszFAhriVHL28WPIHPeA=
-			</data>
-		</dict>
-		<key>Metadata.appintents/root.ssu.yaml</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			gGISXtKUENPaCw08YH+ZnHiOCZ+vmxU3DIw+PxXvfD0=
+			bHi3wcSofLwSHttzEq2AEQ3pUSdOzgX8SNpEWtKDojQ=
 			</data>
 		</dict>
 		<key>Metadata.appintents/version.json</key>
@@ -2630,21 +2629,21 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			h6o3nqtCVKytAQY3hyQ/EfWz6/3XVscpXaV4l6oSd0M=
+			VC2PCUeq8cF6qTahCzYNMzAU6k4xdjq3iLi2HtyE/1A=
 			</data>
 		</dict>
 		<key>PlugIns/BobV1Tests.xctest.dSYM/Contents/Resources/Relocations/aarch64/BobV1Tests.yml</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			/Eqg+6ZyvWriWf6MEAZ9WtbTd/0V4uKnW/X5EDaxvsY=
+			llcTNrRXLjAT/J+s2lrGdN/WWuojmYyKchZZDXM3dNk=
 			</data>
 		</dict>
 		<key>PlugIns/BobV1Tests.xctest/BobV1Tests</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			g2+5MovAvTT3IzjTOclBiwVYxikW/SRn2igMv4b/0ek=
+			LVndTtsy0gX2GEBeLX1uL5KDoT0J+YzSJIHjfCOfJTY=
 			</data>
 		</dict>
 		<key>PlugIns/BobV1Tests.xctest/Info.plist</key>
@@ -3599,6 +3598,13 @@
 			KhckVFSzN/oV1oOOpL4xqXw8sHv9ZgJP4eXNToC5vqo=
 			</data>
 		</dict>
+		<key>emote_checkin_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			lrR38eS62I63yAB54k+xBJRDWndv65JO50AZcX9eiL0=
+			</data>
+		</dict>
 		<key>emote_flutter_1.m4a</key>
 		<dict>
 			<key>hash2</key>
@@ -3627,11 +3633,60 @@
 			ov2LKr2vpVNNxAXbZerkVv+xaXVYdHiVXkaGMKE99kc=
 			</data>
 		</dict>
+		<key>emote_spinhug_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			zO27J0cL2pW7PKo9vDMhQNBsOJAhYuolWrqXw2181t4=
+			</data>
+		</dict>
+		<key>emote_sploot_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			fzlfVBQK7xQOsxne3scnS706XYHQUot9p2TTTnhpBqg=
+			</data>
+		</dict>
+		<key>emote_starsigh_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			bnC8k0O6EGfzgfVPNfh8RTc1U/UJzw5us5EH9RsUTY8=
+			</data>
+		</dict>
+		<key>emote_strut_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			CCQkWA1RmMjH7iuFdZgH6A3XYNGqF5SoTIqJNGitn6k=
+			</data>
+		</dict>
 		<key>emote_tail_1.m4a</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			XOULKj12BYoP0dc7I6FhrY6V9NPvVUpXRs54Ub4lmoU=
+			</data>
+		</dict>
+		<key>emote_tilt_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			QZ9bX3TfjM6TawEe9C/HiWpv7XlkT3XI8nYYs+KbC6I=
+			</data>
+		</dict>
+		<key>emote_twinkle_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			+gWusvat6sw2AK/hNo7KW6SQUBqDguVClr8orGD0ZTY=
+			</data>
+		</dict>
+		<key>emote_welcome_1.m4a</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Uv5Q7sAKuFTDwbvTtk3di13YEVScYG8Q4VO/cOWInf0=
 			</data>
 		</dict>
 		<key>emote_wiggle_1.m4a</key>

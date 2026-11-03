@@ -36,7 +36,7 @@ enum GroupCue: String, CaseIterable, Sendable {
 enum SFXCue: String, CaseIterable, Sendable { case setdown, squish, boop, wobble, zoomies }          // (no `jump`: a hop's push-off is the move's own start cue; ~0.4 hops a second would keep the phone buzzing)
 
 enum HapticCue: Hashable, Sendable {
-    case idle(IdleKind), social(SocialKind), emote(EmoteCue), group(GroupCue), sfx(SFXCue)
+    case idle(IdleKind), social(SocialKind), emote(EmoteCue), group(GroupCue), sfx(SFXCue), beat(String)          // beat: a batch-2 move's key frame, EmoteTreats.haptics["move.beat"]
     var name: String {
         switch self {
         case .idle(let k): return "idle.\(k.rawValue)"
@@ -44,6 +44,7 @@ enum HapticCue: Hashable, Sendable {
         case .emote(let c): return "emote.\(c.rawValue)"
         case .group(let c): return "group.\(c.rawValue)"
         case .sfx(let c): return "sfx.\(c.rawValue)"
+        case .beat(let k): return "beat.\(k)"
         }
     }
     var spec: CueSpec {
@@ -53,7 +54,16 @@ enum HapticCue: Hashable, Sendable {
         case .emote(let c): return Self.emoteSpec(c)
         case .group(let c): return Self.groupSpec(c)
         case .sfx(let c): return Self.sfxSpec(c)
+        case .beat: return CueSpec(i: 0.2, s: 0.15)          // (unused: a beat carries its own pulses)
         }
+    }
+    /// The pulses of one play. Beats come from the batch-2 table; every other cue from its `CueSpec`.
+    func pulses(energy: Float, jitter: Float) -> [(delay: Double, i: Float, s: Float)] {
+        if case .beat(let k) = self {
+            let e = min(1.6, max(0.3, energy))
+            return (EmoteTreats.haptics[k] ?? []).map { (delay: $0.delay, i: min(0.85, $0.i * e * jitter), s: min(0.45, $0.s)) }
+        }
+        return spec.pulses(energy: energy, jitter: jitter)
     }
 
     static func sfxSpec(_ c: SFXCue) -> CueSpec {
@@ -136,6 +146,13 @@ enum HapticCue: Hashable, Sendable {
         case .soccerKick: return CueSpec(i: 0.35, s: 0.27, n: 2, gap: 0.07, decay: 0.45)
         case .tossHeader: return CueSpec(i: 0.30, s: 0.22, n: 2, gap: 0.08, decay: 0.5)          // the crown meets the ball
         case .tossBump: return CueSpec(i: 0.33, s: 0.25, n: 2, gap: 0.09, decay: 0.45)          // the stomp-bump
+        // batch 2 (BlobBrain+Emotes2.swift): the move's start; its key frames are the `.beat` cues from EmoteTreats.haptics
+        case .stargazing: return CueSpec(i: 0.07, s: 0.30)
+        case .proudStrut: return CueSpec(i: 0.15, s: 0.14, n: 2, gap: 0.2, decay: 0.9)
+        case .floorNapFlop: return CueSpec(i: 0.10, s: 0.06, n: 2, gap: 0.25, decay: 0.7)
+        case .tapTilt: return CueSpec(i: 0.075, s: 0.20)
+        case .welcomeWiggle: return CueSpec(i: 0.14, s: 0.17, n: 2, gap: 0.13, decay: 0.8)
+        case .checkIn: return CueSpec(i: 0.085, s: 0.19)
         case .hiccup: return CueSpec(i: 0.18, s: 0.22, n: 1)
         case .sneeze: return CueSpec(i: 0.12, s: 0.18, n: 1)
         case .dizzyWobble: return CueSpec(i: 0.11, s: 0.08, n: 2, gap: 0.2, decay: 0.8)
@@ -191,6 +208,7 @@ enum HapticCue: Hashable, Sendable {
         case .circleDance: return CueSpec(i: 0.21, s: 0.14, n: 5, gap: 0.13, decay: 0.9)
         case .congaLine: return CueSpec(i: 0.15, s: 0.11, n: 3, gap: 0.19, decay: 0.95)
         case .ringDance: return CueSpec(i: 0.16, s: 0.10, n: 4, gap: 0.16, decay: 0.95)
+        case .spinHug: return CueSpec(i: 0.12, s: 0.07, n: 3, gap: 0.18, decay: 0.95)
         }
     }
 }
@@ -216,7 +234,7 @@ extension HapticDriver {
         guard now - roomLast >= Self.roomMinGap else { roomDropped += 1; return false }
         roomLast = now; roomRequests += 1
         Self.cueTap?(c)
-        let pulses = c.spec.pulses(energy: energy, jitter: Self.jitter())
+        let pulses = c.pulses(energy: energy, jitter: Self.jitter())
         guard !sinks.isEmpty else { return true }
         holdRoomEngine()
         for p in pulses {

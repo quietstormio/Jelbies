@@ -527,7 +527,7 @@ final class AudioHub {
         guard level > 0.01 else { return }
         let now = CACurrentMediaTime()
         let key = jelly.map { "\(sfx.rawValue)#\($0)" } ?? sfx.rawValue
-        if let j = jelly, sfx == .emoteHic || sfx == .emoteAchoo || sfx == .emoteWoozy { lastEmoteVoice[min(max(j, 0), 2)] = now }
+        if let j = jelly, [.emoteHic, .emoteAchoo, .emoteWoozy, .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn].contains(sfx) { lastEmoteVoice[min(max(j, 0), 2)] = now }
         if let l = lastPlay[key], now - l < sfx.minGap { return }
         lastPlay[key] = now
         let n = variants(sfx)

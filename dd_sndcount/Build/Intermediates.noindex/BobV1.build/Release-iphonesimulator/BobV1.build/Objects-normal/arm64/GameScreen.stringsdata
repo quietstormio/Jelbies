@@ -55,7 +55,7 @@
         "key": "Let go of %@",
         "location": {
           "startingColumn": 94,
-          "startingLine": 1140
+          "startingLine": 1141
         }
       },
       {
@@ -63,7 +63,7 @@
         "key": "expanded",
         "location": {
           "startingColumn": 40,
-          "startingLine": 1183
+          "startingLine": 1184
         }
       },
       {
@@ -71,7 +71,7 @@
         "key": "collapsed",
         "location": {
           "startingColumn": 53,
-          "startingLine": 1183
+          "startingLine": 1184
         }
       },
       {
@@ -79,7 +79,7 @@
         "key": "Close %@'s menu",
         "location": {
           "startingColumn": 50,
-          "startingLine": 1182
+          "startingLine": 1183
         }
       },
       {
@@ -87,7 +87,7 @@
         "key": "%@'s menu",
         "location": {
           "startingColumn": 73,
-          "startingLine": 1182
+          "startingLine": 1183
         }
       },
       {
@@ -95,7 +95,7 @@
         "key": "Close care menu",
         "location": {
           "startingColumn": 101,
-          "startingLine": 1182
+          "startingLine": 1183
         }
       },
       {
@@ -103,7 +103,7 @@
         "key": "Care menu",
         "location": {
           "startingColumn": 121,
-          "startingLine": 1182
+          "startingLine": 1183
         }
       },
       {
@@ -111,7 +111,7 @@
         "key": "Shows care actions for %@",
         "location": {
           "startingColumn": 42,
-          "startingLine": 1184
+          "startingLine": 1185
         }
       },
       {
@@ -119,7 +119,7 @@
         "key": "Shows care actions for everyone",
         "location": {
           "startingColumn": 78,
-          "startingLine": 1184
+          "startingLine": 1185
         }
       },
       {
@@ -127,7 +127,7 @@
         "key": "%@'s menu",
         "location": {
           "startingColumn": 69,
-          "startingLine": 1186
+          "startingLine": 1187
         }
       },
       {
@@ -135,7 +135,7 @@
         "key": "Care menu",
         "location": {
           "startingColumn": 89,
-          "startingLine": 1186
+          "startingLine": 1187
         }
       },
       {
@@ -143,7 +143,7 @@
         "key": "Goes back to the room",
         "location": {
           "startingColumn": 28,
-          "startingLine": 1226
+          "startingLine": 1227
         }
       },
       {
@@ -151,7 +151,7 @@
         "key": "Cancel",
         "location": {
           "startingColumn": 29,
-          "startingLine": 1249
+          "startingLine": 1250
         }
       },
       {
@@ -159,7 +159,7 @@
         "key": "Stops this and lets everyone roam",
         "location": {
           "startingColumn": 28,
-          "startingLine": 1250
+          "startingLine": 1251
         }
       },
       {
@@ -167,7 +167,7 @@
         "key": "Cancel",
         "location": {
           "startingColumn": 22,
-          "startingLine": 1241
+          "startingLine": 1242
         }
       }
     ]

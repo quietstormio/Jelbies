@@ -8,47 +8,115 @@
 	<dict>
 		<key>BobV1Tests</key>
 		<dict>
+			<key>EmotesBatch2Tests</key>
+			<dict>
+				<key>testCheckInIsAnsweredByATouch</key>
+				<dict>
+					<key>mrnet</key>
+					<real>3.1309889554977417</real>
+				</dict>
+				<key>testEveryWarmSocialGivesBothAHeart</key>
+				<dict>
+					<key>mrnet</key>
+					<real>143.72219693660736</real>
+				</dict>
+				<key>testFlopAtBedtimeGoesStraightToSleep</key>
+				<dict>
+					<key>mrnet</key>
+					<real>2.357295036315918</real>
+				</dict>
+				<key>testFlopLiesFlatThreeToSixSeconds</key>
+				<dict>
+					<key>mrnet</key>
+					<real>2.3538169860839844</real>
+				</dict>
+				<key>testHapticJitterIsWithinFifteenPercent</key>
+				<dict>
+					<key>mrnet</key>
+					<real>1.1117479801177979</real>
+				</dict>
+				<key>testSelfScheduleSwitchHandsTheTreatsOver</key>
+				<dict>
+					<key>mrnet</key>
+					<real>1.1017460823059082</real>
+				</dict>
+				<key>testSoloMovesRunAndStayUpright</key>
+				<dict>
+					<key>mrnet</key>
+					<real>11.964177966117859</real>
+				</dict>
+				<key>testSpinHugGoesOnceRoundWithHearts</key>
+				<dict>
+					<key>mrnet</key>
+					<real>6.0373479127883911</real>
+				</dict>
+				<key>testSpinHugKeepsFeetAndTurnsOnce</key>
+				<dict>
+					<key>mrnet</key>
+					<real>42.006811022758484</real>
+				</dict>
+				<key>testSquabbleAndLookGiveNoHeart</key>
+				<dict>
+					<key>mrnet</key>
+					<real>0.00044298171997070312</real>
+				</dict>
+				<key>testStargazingOnlyAtNightAndFlopOnlyWhenSleepy</key>
+				<dict>
+					<key>mrnet</key>
+					<real>1.1130750179290771</real>
+				</dict>
+				<key>testTapCueStartsATiltOnlyWhenFreeAndNear</key>
+				<dict>
+					<key>mrnet</key>
+					<real>2.2260600328445435</real>
+				</dict>
+				<key>testWinCueMakesHimStrutWhenFree</key>
+				<dict>
+					<key>mrnet</key>
+					<real>1.1127231121063232</real>
+				</dict>
+			</dict>
 			<key>HapticCueTests</key>
 			<dict>
 				<key>testBrainMovesAskForTheirCue</key>
 				<dict>
 					<key>mrnet</key>
-					<real>2.558925986289978</real>
+					<real>0.76614701747894287</real>
 				</dict>
 				<key>testCueReachesTheSinkWithItsPulsesAndRateCapIsTwoPerSecond</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.00093603134155273438</real>
+					<real>0.00076210498809814453</real>
 				</dict>
 				<key>testDefaultIsOnForAnOldSave</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.00052607059478759766</real>
+					<real>0.00055789947509765625</real>
 				</dict>
 				<key>testEveryMoveHasItsOwnSoftPattern</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.0033560991287231445</real>
+					<real>0.009860992431640625</real>
 				</dict>
 				<key>testIntensityScalesWithEnergyAndJitterStaysWithin15Percent</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.0014319419860839844</real>
+					<real>0.00087404251098632812</real>
 				</dict>
 				<key>testSettingsOffWarmAndBusyStayOut</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.0020929574966430664</real>
+					<real>0.0025449991226196289</real>
 				</dict>
 				<key>testStormCuesPlayOutsideFocusThroughTheSameDriver</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.00042104721069335938</real>
+					<real>0.00044000148773193359</real>
 				</dict>
 				<key>testTouchHapticsWorkAfterRoomCuesOnTheSameEngine</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.00070703029632568359</real>
+					<real>0.00040805339813232422</real>
 				</dict>
 			</dict>
 			<key>HapticSinkRegressionTests</key>
@@ -56,7 +124,7 @@
 				<key>testTouchAndCuddleHapticsReachTheSink</key>
 				<dict>
 					<key>mrnet</key>
-					<real>0.0018559694290161133</real>
+					<real>0.0017960071563720703</real>
 				</dict>
 			</dict>
 		</dict>

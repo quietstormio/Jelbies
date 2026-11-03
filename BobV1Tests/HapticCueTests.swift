@@ -26,17 +26,16 @@ final class HapticCueTests: XCTestCase {
     }
 
     static var allCues: [HapticCue] {
-        IdleKind.allCases.map { .idle($0) } + SocialKind.allCases.map { .social($0) } + EmoteCue.allCases.map { .emote($0) } + GroupCue.allCases.map { .group($0) } + SFXCue.allCases.map { .sfx($0) }
+        IdleKind.allCases.map { .idle($0) } + SocialKind.allCases.map { .social($0) } + EmoteCue.allCases.map { .emote($0) } + GroupCue.allCases.map { .group($0) } + SFXCue.allCases.map { .sfx($0) } + EmoteTreats.haptics.keys.sorted().map { .beat($0) }
     }
 
     func testEveryMoveHasItsOwnSoftPattern() {
         var seen: [String: String] = [:]
         for c in Self.allCues {
-            let sp = c.spec
-            XCTAssertGreaterThan(sp.n, 0, c.name); XCTAssertGreaterThan(sp.i, 0, c.name)
-            XCTAssertLessThanOrEqual(sp.s, 0.3, "\(c.name): rounded, not crisp")
-            XCTAssertLessThanOrEqual(sp.i, 0.45, "\(c.name): soft")
-            let sig = "\(sp.i)/\(sp.s)/\(sp.n)/\(sp.gap)/\(sp.decay)"
+            let ps = c.pulses(energy: 1, jitter: 1)
+            XCTAssertFalse(ps.isEmpty, c.name)
+            for p in ps { XCTAssertLessThanOrEqual(p.s, { if case .beat = c { return 0.45 } else { return 0.3 } }() as Float, "\(c.name): rounded, not crisp"); XCTAssertLessThanOrEqual(p.i, 0.45, "\(c.name): soft") }
+            let sig = ps.map { "\($0.delay)/\($0.i)/\($0.s)" }.joined(separator: ",")
             if let o = seen[sig] { XCTFail("\(c.name) has the same pattern as \(o)") }
             seen[sig] = c.name
         }

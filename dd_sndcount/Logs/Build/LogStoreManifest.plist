@@ -6,7 +6,7 @@
 	<integer>13</integer>
 	<key>logs</key>
 	<dict>
-		<key>A6B31CC7-857B-437F-8BAD-91BAE79C51BD</key>
+		<key>3D9EA00B-3C10-44A7-ADF2-64EBE2BFEB95</key>
 		<dict>
 			<key>className</key>
 			<string>IDECommandLineBuildLog</string>
@@ -15,7 +15,91 @@
 			<key>domainType</key>
 			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
 			<key>fileName</key>
-			<string>A6B31CC7-857B-437F-8BAD-91BAE79C51BD.xcactivitylog</string>
+			<string>3D9EA00B-3C10-44A7-ADF2-64EBE2BFEB95.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>E</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>2</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>359</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>BobV1 project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>BobV1</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>timeStartedRecording</key>
+			<real>815371415.25722694</real>
+			<key>timeStoppedRecording</key>
+			<real>815371447.86865699</real>
+			<key>title</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>uniqueIdentifier</key>
+			<string>3D9EA00B-3C10-44A7-ADF2-64EBE2BFEB95</string>
+		</dict>
+		<key>65DB1B49-5108-4D12-915F-7E639EA00DBC</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>65DB1B49-5108-4D12-915F-7E639EA00DBC.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>E</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>2</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>509</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>BobV1 project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>BobV1</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>timeStartedRecording</key>
+			<real>815371456.334378</real>
+			<key>timeStoppedRecording</key>
+			<real>815371638.13903701</real>
+			<key>title</key>
+			<string>Building project BobV1 for testing with scheme BobV1</string>
+			<key>uniqueIdentifier</key>
+			<string>65DB1B49-5108-4D12-915F-7E639EA00DBC</string>
+		</dict>
+		<key>ACF421E5-05F9-44C2-905F-04020554B4D7</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>ACF421E5-05F9-44C2-905F-04020554B4D7.xcactivitylog</string>
 			<key>hasPrimaryLog</key>
 			<true/>
 			<key>primaryObservable</key>
@@ -29,7 +113,7 @@
 				<key>totalNumberOfTestFailures</key>
 				<integer>0</integer>
 				<key>totalNumberOfWarnings</key>
-				<integer>506</integer>
+				<integer>147</integer>
 			</dict>
 			<key>schemeIdentifier-containerName</key>
 			<string>BobV1 project</string>
@@ -40,55 +124,13 @@
 			<key>signature</key>
 			<string>Building project BobV1 for testing with scheme BobV1</string>
 			<key>timeStartedRecording</key>
-			<real>815370157.77137303</real>
+			<real>815371664.56634498</real>
 			<key>timeStoppedRecording</key>
-			<real>815370465.47950399</real>
+			<real>815371806.87026298</real>
 			<key>title</key>
 			<string>Building project BobV1 for testing with scheme BobV1</string>
 			<key>uniqueIdentifier</key>
-			<string>A6B31CC7-857B-437F-8BAD-91BAE79C51BD</string>
-		</dict>
-		<key>F9C68278-2610-4A11-B791-9E6828E2FD72</key>
-		<dict>
-			<key>className</key>
-			<string>IDECommandLineBuildLog</string>
-			<key>documentTypeString</key>
-			<string>&lt;nil&gt;</string>
-			<key>domainType</key>
-			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
-			<key>fileName</key>
-			<string>F9C68278-2610-4A11-B791-9E6828E2FD72.xcactivitylog</string>
-			<key>hasPrimaryLog</key>
-			<true/>
-			<key>primaryObservable</key>
-			<dict>
-				<key>highLevelStatus</key>
-				<string>E</string>
-				<key>totalNumberOfAnalyzerIssues</key>
-				<integer>0</integer>
-				<key>totalNumberOfErrors</key>
-				<integer>1</integer>
-				<key>totalNumberOfTestFailures</key>
-				<integer>0</integer>
-				<key>totalNumberOfWarnings</key>
-				<integer>355</integer>
-			</dict>
-			<key>schemeIdentifier-containerName</key>
-			<string>BobV1 project</string>
-			<key>schemeIdentifier-schemeName</key>
-			<string>BobV1</string>
-			<key>schemeIdentifier-sharedScheme</key>
-			<integer>1</integer>
-			<key>signature</key>
-			<string>Building project BobV1 for testing with scheme BobV1</string>
-			<key>timeStartedRecording</key>
-			<real>815370109.21439803</real>
-			<key>timeStoppedRecording</key>
-			<real>815370150.54672205</real>
-			<key>title</key>
-			<string>Building project BobV1 for testing with scheme BobV1</string>
-			<key>uniqueIdentifier</key>
-			<string>F9C68278-2610-4A11-B791-9E6828E2FD72</string>
+			<string>ACF421E5-05F9-44C2-905F-04020554B4D7</string>
 		</dict>
 	</dict>
 </dict>

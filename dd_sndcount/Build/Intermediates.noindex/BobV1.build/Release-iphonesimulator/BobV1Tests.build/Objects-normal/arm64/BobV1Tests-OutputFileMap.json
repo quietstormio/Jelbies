@@ -288,6 +288,16 @@
     "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmoteFeetTests.bc",
     "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmoteFeetTests.o"
   },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1Tests/EmotesBatch2CaptureTests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2CaptureTests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2CaptureTests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2CaptureTests.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1Tests/EmotesBatch2Tests.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2Tests.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2Tests.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesBatch2Tests.o"
+  },
   "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1Tests/EmotesGroupCaptureTests.swift" : {
     "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesGroupCaptureTests.o",
     "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1Tests.build/Objects-normal/arm64/EmotesGroupCaptureTests.bc",

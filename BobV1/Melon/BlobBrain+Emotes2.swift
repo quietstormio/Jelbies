@@ -44,7 +44,7 @@ struct Treat2State {
 
 enum EmoteTreats {
     /// False = the treats are not rolled by `treat2MaybeStart` (another treat slot starts `batch2` entries itself).
-    nonisolated(unsafe) static var selfSchedule = true
+    nonisolated(unsafe) static var selfSchedule = false          // (2026-11-02: the additive treat slot in BlobBrain+Idle.swift rolls the batch-2 treats, on its own clock)
     /// Seconds between two random-treat rolls of one Jelbie, and the lowest wait after one has played.
     static let rollGap: ClosedRange<Float> = 120...240
     /// The player cues.
@@ -88,7 +88,7 @@ enum EmoteTreats {
         "floorNapFlop.settle": [Pulse(delay: 0, i: 0.12, s: 0.08)],
         "tapTilt.tilt": [Pulse(delay: 0, i: 0.18, s: 0.20)],
         "welcomeWiggle.wiggle": [Pulse(delay: 0, i: 0.26, s: 0.20), Pulse(delay: 0.16, i: 0.20, s: 0.20), Pulse(delay: 0.32, i: 0.14, s: 0.20)],
-        "checkIn.hello": [Pulse(delay: 0, i: 0.18, s: 0.20)],
+        "checkIn.hello": [Pulse(delay: 0, i: 0.19, s: 0.21)],
         "checkIn.answer": [Pulse(delay: 0, i: 0.30, s: 0.20), Pulse(delay: 0.15, i: 0.20, s: 0.15)],
         "hearts.pop": [Pulse(delay: 0, i: 0.10, s: 0.20)],
     ]
@@ -135,11 +135,21 @@ extension BlobBrain {
         if treat2.next < 0 { treat2.next = variety.now + treat2.rnd(30, 100) + 25 * Float(steerID % 4); return false }
         guard variety.now >= treat2.next else { return false }
         treat2.next = variety.now + treat2.rnd(EmoteTreats.rollGap.lowerBound, EmoteTreats.rollGap.upperBound)
-        var pool = EmoteTreats.batch2.filter { e in
+        return treat2Pick(sim)
+    }
+
+    /// The batch-2 entries he may take now (eligible, off cooldown, nobody doing the same).
+    var treat2Pool: [EmoteTreats.Entry] {
+        EmoteTreats.batch2.filter { e in
             guard e.eligible(self) else { return false }
             if let k = e.idle { return kindCool[k] == nil && !kindCooling.contains(k) && !othersDoing(k) }
             return true
         }
+    }
+
+    /// Start one of `treat2Pool` by weight (called by the treat slot, `treatMaybeStart` in BlobBrain+Idle.swift, or by `treat2MaybeStart` itself when `selfSchedule`).
+    func treat2Pick(_ sim: SoftBody) -> Bool {
+        var pool = treat2Pool
         guard !pool.isEmpty else { return false }
         var x = treat2.rnd() * pool.reduce(0) { $0 + $1.weight }
         for e in pool { if x < e.weight { pool = [e]; break }; x -= e.weight }
@@ -186,14 +196,9 @@ extension BlobBrain {
 
     /// One soft haptic beat of a batch-2 move. `energy` scales it; every play varies +- 15 %.
     func treatHaptic(_ key: String, energy: Float = 1) {
-        guard !race.active, !volley.active, let pulses = EmoteTreats.haptics[key] else { return }
+        guard !race.active, !volley.active, EmoteTreats.haptics[key] != nil else { return }
         EmoteTreats.requestTap?(key)
-        let j = 1 + (treat2.rnd() * 2 - 1) * 0.15
-        for (n, p) in pulses.enumerated() {
-            let i = min(0.45, p.i * energy * j), s = p.s
-            if n == 0 { onEmoteHaptic?(i, s) }
-            else { DispatchQueue.main.asyncAfter(deadline: .now() + p.delay) { [weak self] in self?.onEmoteHaptic?(i, s) } }
-        }
+        roomCue(.beat(key), energy: energy)          // (the one HapticDriver: Haptics+Emotes.swift; the whole pattern plays, its later pulses are not rate-limited away)
     }
 
     // MARK: start
@@ -310,7 +315,7 @@ extension BlobBrain {
             // the little sigh: a soft coo, the mouth a small "o", a gentle sag
             let s0 = hold - 1.7
             if e2Once(1, t, at: s0) {
-                AudioHub.shared.play(.emoteStarSigh, x: px, volume: 1)
+                AudioHub.shared.play(.emoteStarSigh, jelly: steerID, x: px, volume: 1)
                 treatHaptic("stargazing.sigh")
             }
             if t > s0 {
@@ -448,7 +453,7 @@ extension BlobBrain {
         pitch += 0.05 * k
         if e2Once(0, t, at: 0.05) {
             face(.curious, hold: hold + 0.8)
-            AudioHub.shared.play(.emoteTilt, x: px, volume: 1)
+            AudioHub.shared.play(.emoteTilt, jelly: steerID, x: px, volume: 1)
             treatHaptic("tapTilt.tilt")
         }
         if t > 0.35 + hold + 0.6 && !feet.active { twist = 0; e2Done(skinner) }
@@ -468,7 +473,7 @@ extension BlobBrain {
         squash *= 1 - 0.05 * env * (0.5 - 0.5 * cosf(2 * w)) * a
         if e2Once(0, t, at: 0) {
             face(.excited, hold: 1.2); blushBump(hold: 2.6, peak: 0.6)
-            AudioHub.shared.play(.emoteWelcome, x: px, volume: 1)
+            AudioHub.shared.play(.emoteWelcome, jelly: steerID, x: px, volume: 1)
             treatHaptic("welcomeWiggle.wiggle")
             jellyKick = max(jellyKick, 1.6)
         }
@@ -502,7 +507,7 @@ extension BlobBrain {
         let bob = (t > 0.9 && t < 1.25 ? sinf(.pi * (t - 0.9) / 0.35) : 0) + (t > 1.7 && t < 2.05 ? sinf(.pi * (t - 1.7) / 0.35) : 0)
         squash *= 1 + 0.06 * bob * lean * a
         if e2Once(0, t, at: 0.15) { face(.hopeful, hold: ask); }
-        if e2Once(1, t, at: 0.4) { AudioHub.shared.play(.emoteCheckIn, x: px, volume: 1); treatHaptic("checkIn.hello") }
+        if e2Once(1, t, at: 0.4) { AudioHub.shared.play(.emoteCheckIn, jelly: steerID, x: px, volume: 1); treatHaptic("checkIn.hello") }
         if tAns >= 0 {
             // lit up: a happy shimmy of squash pulses for ~1 s
             let e = max(0, 1 - tAns / 1.1)

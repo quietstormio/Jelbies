@@ -633,6 +633,11 @@
     "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Emotes.bc",
     "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Emotes.o"
   },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Melon/BlobBrain+Emotes2.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Emotes2.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Emotes2.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Emotes2.o"
+  },
   "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Melon/BlobBrain+Expression.swift" : {
     "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Expression.o",
     "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobBrain+Expression.bc",
@@ -762,6 +767,11 @@
     "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes.o",
     "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes.bc",
     "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes.o"
+  },
+  "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Melon/BlobSocial+Emotes2.swift" : {
+    "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes2.o",
+    "llvm-bc" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes2.bc",
+    "object" : "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/dd_sndcount/Build/Intermediates.noindex/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Emotes2.o"
   },
   "/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/g-sndcount/BobV1/Melon/BlobSocial+Friends.swift" : {
     "index-unit-output-path" : "/BobV1.build/Release-iphonesimulator/BobV1.build/Objects-normal/arm64/BlobSocial+Friends.o",
