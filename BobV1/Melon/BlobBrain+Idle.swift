@@ -355,7 +355,7 @@ extension BlobBrain {
         switch script {
         case .idle: mine = true
         case .spin: mine = kind == .tail || kind == .legSpin
-        case .walk: mine = (kind == .tossBump && idleState.toss.walking) || (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .window && idleState.windowGo)
+        case .walk: mine = (kind == .tossBump && idleState.toss.walking) || (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (idleState.windowGo && Self.walksFirst(kind))
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
             if kind == .zoomies && idleState.phase == 0 {
@@ -367,7 +367,7 @@ extension BlobBrain {
             else if kind == .tossBump && idleState.toss.walking { mine = true; tossBumpArrived() }
             else if kind == .sleep && sleep.stage == 0 { mine = true; sleepArrived(sim, skinner) }
             else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
-            else if kind == .window && idleState.windowGo { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
+            else if idleState.windowGo && Self.walksFirst(kind) { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
             else if Self.decorKinds.contains(kind) && idleState.decorGo { mine = true; decorArrived(sim, skinner); return }
             else if kind == .tail { mine = true; tailNext(sim, skinner); return }
             else if kind == .legSpin { mine = true; mouthOpen = 0; flourishEnd(skinner); return }
@@ -383,7 +383,7 @@ extension BlobBrain {
             if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true) }
         } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
-            case .window where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
+            case .window where idleState.windowGo, .lieDown where idleState.windowGo, .flop where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway, .stopLook, .lieDown: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:
                 // on the bag he hops off (the hold ends now); a turn on the floor just stops; a hop in progress is finished first
@@ -604,8 +604,10 @@ extension BlobBrain {
             }
             return flapHopBegin(sim)
         case .flop:
+            guard let spot = lieSpot(from: here) else { return false }          // (BlobBrain+LieClear: a flat body is wider; not next to a friend)
             idleBegin(.flop)
             script = .idle; activity = .playing
+            lieWalk(to: spot, from: here); lieTipToward(spot, lieYaw: yaw)
         case .peek:
             guard let spot = peekSpot(from: here) else { return false }
             idleBegin(.peek)
