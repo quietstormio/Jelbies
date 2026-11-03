@@ -1549,8 +1549,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()
-        } else if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1, pickJelly(p, touchSize) == nil {
-            // a tap on the empty floor / glass: the nearest free Jelbie may tilt his head toward it (batch-2 emote, BlobBrain+Emotes2.swift)
+        } else if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1, pickJelly(p, touchSize) == nil, model.care.select.hit(p) == nil {
+            // a tap on the empty floor (never on a Jelbie) / glass: the nearest free Jelbie may tilt his head toward it (batch-2 emote, BlobBrain+Emotes2.swift)
             let ray = unproject(ndc: ndc(p, touchSize), invViewProj: lastCam.invViewProj)
             if abs(ray.d.y) > 1e-4 {
                 let t = (0 - ray.o.y) / ray.d.y
