@@ -116,7 +116,7 @@ extension BlobBrain {
             let c = cands.first          // (no third: follow the leader with two)
             let s = newSession(.line, with: o, duration: rand(5.5, 7.5), third: c)
             s.leaderWait = 0.2
-            if let c { onSocial?(.began(.line, partner: c.steerID)); c.onSocial?(.began(.line, partner: steerID)) }
+            if let c { onSocial?(.began(.line, partner: c.steerID)); c.onSocial?(.began(.line, partner: steerID)); roomCue(.social(.line)) }
         case .pass, .bagSit, .cuddle:
             return socialStartPass(kind, with: o, sim)
         default: return false

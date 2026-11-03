@@ -80,6 +80,9 @@ final class AudioHub {
     /// Called for the Jelly that snores now (the sleep z's ride it).
     @ObservationIgnored var onSnore: ((Int) -> Void)?
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
+    /// When each Jelbie's own emote voice (hic, achoo, woozy) last played: his ambient chirp / babble waits `emoteVoiceHush` s after it (a nice balance: they do not speak too much).
+    @ObservationIgnored private var lastEmoteVoice: [Double] = [-100, -100, -100]
+    static let emoteVoiceHush: Double = 6
     @ObservationIgnored private var lastMood: [Int: BlobMood] = [:]
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     /// The most recent music events (tests / the debug log).
@@ -492,12 +495,14 @@ final class AudioHub {
     nonisolated(unsafe) static var requestTap: ((String) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         Self.requestTap?(sfx.rawValue)
+        if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
         if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
         let now = CACurrentMediaTime()
         let key = jelly.map { "\(sfx.rawValue)#\($0)" } ?? sfx.rawValue
+        if let j = jelly, sfx == .emoteHic || sfx == .emoteAchoo || sfx == .emoteWoozy { lastEmoteVoice[min(max(j, 0), 2)] = now }
         if let l = lastPlay[key], now - l < sfx.minGap { return }
         lastPlay[key] = now
         let n = variants(sfx)
@@ -652,7 +657,7 @@ final class AudioHub {
         guard level > 0.01 else { return }
         let i = min(max(jelly, 0), 2)
         let now = CACurrentMediaTime()
-        if now - lastVoice[i] < 2.2 { return }
+        if now - lastVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush { return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
         if UserDefaults.standard.bool(forKey: "AudioLog") { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }

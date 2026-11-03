@@ -306,6 +306,7 @@ extension BlobBrain {
         socialBook.sheepishStarted = false; o.socialBook.sheepishStarted = false
         socialBook.hopStarted = false; o.socialBook.hopStarted = false
         onSocial?(.began(kind, partner: o.steerID)); o.onSocial?(.began(kind, partner: steerID))
+        roomCue(.social(kind))
         return s
     }
 

@@ -1,5 +1,14 @@
 # Handoff
 
+## MANDATORY before installing any build on the phone: `scripts/regression-gate.sh` (2026-11-02)
+r1055 regressed what the user had already approved (sounds, chatty idle moves, haptics). `.approved-build` holds the commit of the last build the user approved on the phone (set it
+to the new commit only AFTER they approve one). The gate builds that commit and HEAD in throwaway worktrees, runs the behaviour-count suite (RoomSFXCountTests: per-kind
+idle / antic / social counts, vocal chatter, contact + jump sounds, room-cue haptic sink calls; HapticSinkRegressionTests: the touch / cuddle haptics at the sink) with fixed seeds
+on both, and FAILS if any pre-existing kind (count >= 12) or the vocal / contact / old-idle totals fall below 90 % of the approved build, the touch haptics reach the sink less, a
+move has no haptic pattern (HapticCueTests), or EmoteFeetTests / GroupEmote*Tests / LineupTests fail. ~25 min, one throwaway sim, derived data reused in `.claude/worktrees/dd_gate_*`
+(`--clean` removes it). New things are ADDITIONS on top: they get their own slot (e.g. the solo emotes' treat clock in BlobBrain+Idle `treatMaybeStart`), never a share of an old table.
+Haptics: ONE engine owner, `HapticDriver` (Haptics.swift); the room's per-move cues are in `Haptics+Emotes.swift` (a table per IdleKind / SocialKind / SFX cue; a new kind without a pattern does not compile).
+
 ## Feet stay attached (2026-11-02: read before adding or changing any emote)
 
 - **How the feet attach.** Each foot is a separate closed piece (`FootBean`, `Skinner.beanPos`) that the brain places every tick (`BlobBrain.driveLimbs` / `fillBeansRigid` / `refitBeans`). The skin then enforces two last lines (`Skinner.applyBeanJoin`): the LEASH (the piece's top, i.e. pole + neck rings 11 and 12, must lie >= 2 cm inside the fitted egg) and the TETHER (pole <= 0.55 m from the hip, a point skinned with the body). They are safety nets: if either has to move a piece, the brain placed it wrong.

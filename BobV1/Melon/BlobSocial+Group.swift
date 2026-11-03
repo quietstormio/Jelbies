@@ -172,6 +172,7 @@ extension BlobBrain {
             m.socialBook.roundSeen = -1
             m.socialBook.groupIdle = 0
             if let x = crew.first(where: { $0 !== m }) { m.onSocial?(.began(kind, partner: x.steerID)) }
+            if m === crew.first { m.roomCue(.social(kind)) }
         }
         return s
     }

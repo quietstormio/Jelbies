@@ -381,7 +381,7 @@ final class WeatherTests: XCTestCase {
         let driver = HapticDriver(sinks: [sink])
         let c = StormHaptics()
         c.request(.closeRumble, now: 1, blocked: false, driver: driver)
-        XCTAssertTrue(sink.events.isEmpty, "engine not warm: silently nothing")
+        XCTAssertEqual(sink.events(.wobble).count, 1, "outside focus the storm plays through the room's engine (2026-11-02: it used to be silent)")
         driver.setWarm(true); sink.clear()
         c.request(.farRumble, now: 20, blocked: false, driver: driver)
         c.request(.softTick, now: 21, blocked: false, driver: driver)

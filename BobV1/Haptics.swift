@@ -336,6 +336,11 @@ final class HapticDriver {
     /// Honours the Settings toggle; re-read every half second.
     var enabled = HapticSettings.enabled
     private(set) var warm = false
+    // the room's cues (Haptics+Emotes.swift): the same engine and lifecycle owner as the touch haptics
+    var roomLast: Double = -.infinity
+    var roomShutdown: Task<Void, Never>?
+    var roomEngineHeld = false
+    var roomRequests = 0, roomDropped = 0, roomEngineStarts = 0
     var soundHook: ((_ kind: String, _ intensity: Float) -> Void)?
 
     static let minInterval: Double = 1.0 / 60 - 0.0006
@@ -366,10 +371,11 @@ final class HapticDriver {
     func setWarm(_ on: Bool) {
         guard on != warm else { return }
         warm = on
-        if on { enabled = HapticSettings.enabled }
+        if on { enabled = HapticSettings.enabled; roomShutdown?.cancel() }
         if on, !enabled { return }
-        for s in sinks { on ? s.start() : s.stop() }
-        if !on { level.removeAll() }
+        if on, roomEngineHeld { roomEngineHeld = false }          // (the room's cues had the engine up: focus takes it over, no restart)
+        else { for s in sinks { on ? s.start() : s.stop() } }
+        if !on { level.removeAll(); roomEngineHeld = false }
     }
 
     /// One call per frame with the wanted levels (time `now` in seconds on any monotonic clock).
@@ -436,13 +442,16 @@ final class HapticDriver {
     /// Ambient cues (the storm, Melon/Weather.swift): a very soft, low, long pulse and one soft tick. They pair NO sound (the storm has its own) and no-op when the
     /// engine is not warm or Haptics is off in Settings.
     func ambient(peak: Float, duration: Float) {
-        guard warm, enabled else { return }
+        guard HapticSettings.enabled, warm || roomAmbientUp() else { return }
         for k in sinks { k.wobble(peak: peak, sharpness: 0.05, tau: duration * 0.55, duration: duration) }
     }
     func ambientTick(intensity: Float) {
-        guard warm, enabled else { return }
+        guard HapticSettings.enabled, warm || roomAmbientUp() else { return }
         for k in sinks { k.transient(intensity: intensity, sharpness: 0.15) }
     }
+
+    /// The storm's cues play outside focus too: the same engine, brought up for the room (Haptics+Emotes `holdRoomEngine`).
+    private func roomAmbientUp() -> Bool { guard !sinks.isEmpty else { return false }; holdRoomEngine(); return true }
 
     func takeCost() -> (ms: Double, n: Int) {
         let r = (costN > 0 ? costSum / Double(costN) * 1000 : 0, costN); costSum = 0; costN = 0; return r

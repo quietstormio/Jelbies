@@ -151,7 +151,7 @@ extension BlobBrain {
         pitch += -0.04 * stretch / 0.06
         lift += h * a; runAir = h * a
         if emoteOnce(0, t, at: hic1) {
-            AudioHub.shared.play(.emoteHic, x: px, volume: 1)
+            AudioHub.shared.play(.emoteHic, jelly: steerID, x: px, volume: 1)
             emoteHaptic(.hic)
             jellyKick = max(jellyKick, 1.4)
             face(.surprised, hold: 0.8)
@@ -195,7 +195,7 @@ extension BlobBrain {
         if emoteOnce(5, t, at: 0.12) { emoteHaptic(.sneezeBuild) }          // (tick-tick with the first "ah")
         if emoteOnce(0, t, at: ach - 0.02) {
             emoteHaptic(.sneezeBump)
-            AudioHub.shared.play(.emoteAchoo, x: px, volume: 1)
+            AudioHub.shared.play(.emoteAchoo, jelly: steerID, x: px, volume: 1)
             jellyKick = max(jellyKick, 2.4)
         }
         // the eyes: closing in the wind-up, shut for the sneeze, open again, one blink
@@ -213,7 +213,7 @@ extension BlobBrain {
     private func runDizzy(_ skinner: Skinner, _ t: Float) {
         let a = amplitude
         let wob: Float = 2.25
-        if emoteOnce(0, t, at: 0) { face(.dazed, hold: wob + 0.1); AudioHub.shared.play(.emoteWoozy, x: px, volume: 1) }
+        if emoteOnce(0, t, at: 0) { face(.dazed, hold: wob + 0.1); AudioHub.shared.play(.emoteWoozy, jelly: steerID, x: px, volume: 1) }
         if t < wob + 0.1 {
             let env = smooth01(t / 0.45) * (1 - smooth01((t - (wob - 0.4)) / 0.4))
             let w = 2 * .pi * 0.85 * t
@@ -225,7 +225,7 @@ extension BlobBrain {
         } else {
             // shake it off: a quick decaying wiggle and a squash pulse, then a blink
             let s = t - (wob + 0.1)
-            if emoteOnce(1, t, at: wob + 0.1) { jellyKick = max(jellyKick, 1.8); face(.joyArc, hold: 0.5); emoteHaptic(.wobble) }
+            if emoteOnce(1, t, at: wob + 0.1) { jellyKick = max(jellyKick, 1.8); face(.joyArc, hold: 0.5); emoteHaptic(.dizzyWobble) }
             let e = expf(-s / 0.32)
             twist = 0.30 * e * sinf(2 * .pi * 8 * s) * a
             squash *= 1 - 0.07 * e * (0.5 - 0.5 * cosf(2 * .pi * 8 * s))

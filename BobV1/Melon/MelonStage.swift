@@ -411,14 +411,6 @@ final class MelonController: NSObject, MTKViewDelegate {
             default: break
             }
         }
-        b.onEmoteHaptic = { [weak self] i, s in
-            guard let self else { return }
-            let now = CACurrentMediaTime()
-            let care = self.model.care
-            guard now - EmoteHaptic.last >= EmoteHaptic.minGap, !care.race.active, !care.volley.active, !care.bath.active else { return }          // (~2 per second at most; never over the games' own haptics)
-            EmoteHaptic.last = now
-            self.model.touch.haptics.transient(now: now, intensity: i, sharpness: s)
-        }
         b.peers = { [weak self] in
             guard let self else { return [] }
             return self.peerSnapshot.enumerated().filter { $0.offset != id }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) }
@@ -1768,7 +1760,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         model.care.focusGroup.touchAnchor = (f.isFocused && touchID != 0) ? tSim.centroid() : nil
         let bathLive = model.care.bath.acceptsTouch
         play.haptics.setWarm(f.phase == .approaching || f.phase == .focused || bathLive)
-        RoomHaptics.shared.externalBusy = play.haptics.warm          // (focus mode / the wash give their own haptics: the room's emote taps stay out)
+        HapticDriver.room = play.haptics
+        HapticDriver.roomBusy = { [weak self] in guard let c = self?.model.care else { return false }; return c.race.active || c.volley.active || c.volley.inScene || c.bath.active || c.tripActive }
         let tn = model.care.needs(for: touchID)
         play.mood = tn.mood; play.attentionWanted = tn.wantedNeed == .attention      // a grumpy Blob is touched with an annoyed reaction
         // getting back up: after a throw (or if he is left lying) he rights himself and walks back to the spot
