@@ -6,17 +6,32 @@
 
 import SwiftUI
 
-enum MenuLayout {
-    /// Portrait design unit: 440x956 is 1.0 (iPhone). min() keeps a wide, short screen from scaling by its width.
-    static func portraitScale(w: CGFloat, h: CGFloat) -> CGFloat { min(w / 440, h / 956) }
-    /// Scale of the peeking face (1.0 = the 102-unit-wide Jelbie body drawn at this many points per unit).
-    static func faceScale(w: CGFloat, h: CGFloat) -> CGFloat {
-        w > h ? min(h, 430) * 0.0072 : 4.8 * portraitScale(w: w, h: h)
-    }
-    /// Top edge of the face's rim (points from the top), at rest.
-    static func faceTop(w: CGFloat, h: CGFloat) -> CGFloat {
-        let sc = faceScale(w: w, h: h)
-        return 0.91 * h + 14 * sc - (59 + 6.5) * sc
+/// One composition for every screen: the iPhone portrait design (440x956) scaled by min(w/440, h/956) and centred, so a landscape or iPad
+/// screen shows the same logo / buttons / face, just sized by its height. The scale never goes below `minScale` (buttons stay >= 44 pt tall);
+/// on a very short screen the spacing tightens and the face is pushed down to peek less rather than overlap.
+struct MenuMetrics {
+    var s: CGFloat, titleTop: CGFloat, buttonsGap: CGFloat, contentBottom: CGFloat, faceScale: CGFloat, faceDrop: CGFloat
+    var faceTop: CGFloat { faceTopDefault + faceDrop }
+    var faceTopDefault: CGFloat = 0
+    static let minScale: CGFloat = 0.72          // 62 * 0.72 = 44.6 pt: the smaller (New Game) button keeps a 44 pt tap height
+
+    init(w: CGFloat, h: CGFloat, hasSave: Bool) {
+        s = max(min(w / 440, h / 956), Self.minScale)
+        faceScale = 4.8 * s
+        let titleH = 364 * s / 0.96 * 307 / 620
+        let btnH = (hasSave ? 74 + 8 + 20 + 62 + 6 : 74 + 8) * s
+        faceTopDefault = 0.91 * h + 14 * faceScale - 65.5 * faceScale
+        let avail = faceTopDefault - 14 * s
+        var top = 156 * s, gap = 95 * s
+        let need = top + titleH + gap + btnH
+        if need > avail {
+            let squeeze = min(need - avail, (top - 12) + (gap - 24 * s))
+            let tShare = (top - 12) / max(1, (top - 12) + (gap - 24 * s))
+            top -= squeeze * tShare; gap -= squeeze * (1 - tShare)
+        }
+        titleTop = top; buttonsGap = gap
+        contentBottom = top + titleH + gap + btnH
+        faceDrop = max(0, contentBottom + 14 * s - faceTopDefault)
     }
 }
 
@@ -32,28 +47,14 @@ struct MainMenuView: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let bottom = geo.safeAreaInsets.bottom
-            let landscape = w > h          // by shape, not size class: an iPad is regular/regular in both orientations
+            let m = MenuMetrics(w: w, h: h, hasSave: hasSave)
             ZStack {
-                TitleBackdrop(still: still, size: geo.size, landscape: landscape, palette: theme.palette)
+                TitleBackdrop(still: still, size: geo.size, landscape: w > h, palette: theme.palette, scale: m.s, faceDrop: m.faceDrop)
                     .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
-                if landscape {
-                    let k = min(1.3, max(0.7, h / 393))
-                    let btnW = min(300 * k, w * 0.28)
-                    HStack(spacing: 0) {
-                        VStack { Spacer(minLength: 0); title(width: min(w * 0.40, 380 * k)); Spacer(minLength: 0) }.frame(width: w * 0.5)
-                        VStack { Spacer(minLength: 0); buttons(k: k).frame(width: btnW); Spacer(minLength: 0) }.frame(width: w * 0.5)
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    let s = MenuLayout.portraitScale(w: w, h: h)          // 1 on the 440x956 design; an iPad is limited by its height, not its width
-                    VStack(spacing: 0) {
-                        title(width: 364 * s)
-                            .padding(.top, max(156 * s, 12))
-                        buttons(k: s).frame(width: 300 * s).padding(.top, 95 * s)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.bottom, bottom)
+                VStack(spacing: 0) {
+                    title(width: 364 * m.s).padding(.top, m.titleTop)
+                    buttons(k: m.s).frame(width: 300 * m.s).padding(.top, m.buttonsGap)
+                    Spacer(minLength: 0)
                 }
                 if confirmNew { confirmCard.transition(.opacity) }
             }
@@ -253,6 +254,9 @@ struct TitleBackdrop: View {
     let size: CGSize
     let landscape: Bool
     var palette: ThemePalette = ThemeMath.palette(.sky)
+    /// The menu composition scale (nil = w/440, the portrait design) and how far the face is pushed down on a very short screen.
+    var scale: CGFloat? = nil
+    var faceDrop: CGFloat = 0
     /// false = just the colour and the pattern (the loading screen).
     var extras = true
 
@@ -289,17 +293,17 @@ struct TitleBackdrop: View {
                 guard extras else { return }
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
-                let sx = w / 440, sy = h / 956, sk = landscape ? min(w, h) / 440 : sx
+                let ds = Double(scale ?? w / 440)
                 var sc = ctx
                 sc.opacity = tw
                 for (x, y, r) in [(52.0, 157.5, 7.5), (398.0, 337.5, 7.5), (380.0, 133.0, 5.0)] {
-                    sc.fill(Self.sparkle(x * sx, y * sy, r * sk * (landscape ? 1.2 : 1), t), with: .color(.white))
+                    sc.fill(Self.sparkle(w / 2 + (x - 220) * ds, y * ds, r * ds, t), with: .color(.white))
                 }
                 // Peeking Jelbie
-                let scale = Double(MenuLayout.faceScale(w: w, h: h))      // zoomed in: just the head dome, brows and eyes
-                let cx = landscape ? w * 0.5 : w / 2
-                let bob = still ? 0 : -10 * Double(MenuLayout.portraitScale(w: w, h: h)) * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
-                let cy = 0.91 * h + 14 * scale + bob                            // eyes sit ~9% of the screen above the bottom
+                let scale = 4.8 * ds      // zoomed in: just the head dome, brows and eyes
+                let cx = w / 2
+                let bob = still ? 0 : -10 * ds * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
+                let cy = 0.91 * h + 14 * scale + bob + Double(faceDrop)                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)

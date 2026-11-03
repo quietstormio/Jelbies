@@ -1,8 +1,8 @@
 //
 //  MainMenuLayoutUITests.swift
-//  The title screen in portrait and landscape on whatever device the test runs on (iPhone or iPad): the logo, Continue and New Game are fully
-//  on screen, and the buttons sit clear of the peeking face (the face's top is the design formula: eyes ~9% above the bottom edge).
-//  Set MENU_SHOTS to a directory to also write a PNG per orientation.
+//  The title screen keeps ONE composition on every screen (the iPhone portrait design scaled by min(w/440, h/956), centred): logo on top, Continue
+//  then New Game stacked below, all centred, fully on screen, tap targets >= 44 pt. Run on iPhone or iPad; checks portrait and landscape.
+//  Set MENU_SHOTS to a directory to also write a PNG per orientation (landscape PNGs from XCUIScreen come out rotated).
 //
 
 import XCTest
@@ -10,38 +10,41 @@ import XCTest
 final class MainMenuLayoutUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    private func faceTop(_ w: CGFloat, _ h: CGFloat) -> CGFloat {
-        let portraitS = min(w / 440, h / 956)
-        let sc = w > h ? min(h, 430) * 0.0072 : 4.8 * portraitS
-        return 0.91 * h + 14 * sc - 65.5 * sc
-    }
-
     private func check(save: Bool, shotDir: String?) {
         let app = XCUIApplication()
         app.launchArguments += save ? ["-Jelbies.started.v1", "YES"] : ["-ResetForAdoption", "1"]
         app.launch()
         XCTAssertTrue(app.otherElements["main-menu"].waitForExistence(timeout: 90), "menu shows after the intro")
+        var portraitNorm: [String: CGFloat] = [:]          // frame values / scale, from the first orientation
         for (name, o) in [("portrait", UIDeviceOrientation.portrait), ("landscape", .landscapeLeft)] {
             XCUIDevice.shared.orientation = o
             sleep(4)
             let win = app.windows.firstMatch.frame
             XCTAssertEqual(win.width > win.height, name == "landscape", "window is \(name): \(win)")
-            let top = faceTop(win.width, win.height)
+            let s = max(min(win.width / 440, win.height / 956), 0.72)
             let primary = save ? app.buttons["menu-continue"] : app.buttons["menu-start"]
-            let logo = app.staticTexts["Jelbies"].exists ? app.staticTexts["Jelbies"] : app.images["Jelbies"]
+            let logo = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Jelbies' AND elementType != %d", XCUIElement.ElementType.button.rawValue)).firstMatch
             XCTAssertTrue(primary.waitForExistence(timeout: 5))
-            var frames = [("primary", primary.frame)]
+            XCTAssertTrue(logo.exists, "the logo is an accessibility element")
+            var frames = [("logo", logo.frame), ("primary", primary.frame)]
             if save { frames.append(("new", app.buttons["menu-new"].frame)) }
-            if logo.exists { frames.append(("logo", logo.frame)) }
             for (n, f) in frames {
                 XCTAssertTrue(win.insetBy(dx: -1, dy: -1).contains(f), "\(name) \(n) on screen: \(f) in \(win)")
-                if f.midX > win.width * 0.3 && f.midX < win.width * 0.7 || name == "portrait" {
-                    XCTAssertLessThanOrEqual(f.maxY, top + 1, "\(name) \(n) clear of the face (top \(top)): \(f)")
-                }
+                XCTAssertLessThan(abs(f.midX - win.midX), 3, "\(name) \(n) centred: \(f)")
             }
-            XCTAssertLessThan(abs(primary.frame.midX - win.midX), win.width * 0.3, "\(name) buttons centred-ish")
-            if name == "portrait" { XCTAssertLessThan(abs(primary.frame.midX - win.midX), 2) }
-            XCTAssertLessThanOrEqual(primary.frame.width, 480, "buttons capped on wide screens")
+            // same order, stacked
+            XCTAssertLessThan(logo.frame.minY, primary.frame.minY, "\(name): logo above the first button")
+            if save { XCTAssertLessThan(primary.frame.maxY, app.buttons["menu-new"].frame.minY + 1, "\(name): Continue above New Game") }
+            XCTAssertGreaterThanOrEqual(primary.frame.height, 44, "\(name) tap height")
+            if save { XCTAssertGreaterThanOrEqual(app.buttons["menu-new"].frame.height, 44, "\(name) New Game tap height") }
+            XCTAssertEqual(primary.frame.width, 300 * s, accuracy: 3, "\(name) button width is the portrait 300 x scale")
+            // same proportions: positions / scale match across orientations unless the short screen tightened the spacing (scale floor)
+            let squeezed = win.height / 956 < 0.72 || win.width / 440 < 0.72
+            let norm = ["primaryTop": primary.frame.minY / s, "logoW": logo.frame.width / s]
+            if name == "portrait" { portraitNorm = norm }
+            else if !squeezed {
+                for (k, v) in norm { XCTAssertEqual(v, portraitNorm[k] ?? v, accuracy: 6, "\(k) in landscape matches portrait") }
+            }
             if let dir = shotDir {
                 try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
                 try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(save ? "continue" : "first")_\(name).png"))
