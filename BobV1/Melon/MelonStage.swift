@@ -489,11 +489,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
-            if L < g {
-                let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
-                let to = max(L + (g - L) * softPush, g * softFloor)
-                q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to
-            }
+            let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
+            var to = L
+            if L < g { to = max(L + (g - L) * softPush, g * softFloor) }
+            // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the pair's `touch` along this axis, lying / leaning / limbs / ears included). A max of two continuous maps: no pop.
+            if ContactField.enabled, let t = ContactField.touch(id, j, dir: -u) { to = max(to, t) }
+            if to > L { q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to }
         }
         return q
     }
@@ -818,6 +819,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
+        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount)          // the contact profile samples the egg more sparsely than the limb blocks
         embedding = emb
         LaunchTiming.span("WearBody.install") { WearBody.install(rm) }
         actors = LaunchTiming.span("actors") { (0..<count).map {
@@ -1160,11 +1162,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let bathHides = game && (model.care.bath.look.visible || model.care.bath.cameraBlend > 0)
         let washedID = bathHides ? min(model.care.bath.targetID, actors.count - 1) : 0
         for a in actors {
-            if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
-            if bathHides, a.id != washedID { continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
-            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id))
+            if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
+            if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
+            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id)) }
+        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read

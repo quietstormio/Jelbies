@@ -128,7 +128,6 @@ extension BlobBrain {
                 if phT >= 0.35 { idleState.phase = 2; idleState.phaseT = 0; face(idleMood == .okay ? .sleepy : .happy, hold: idleState.hold + 0.4) }
             case 2:     // lie there
                 k = 1
-                snuggleTick(sim, dt)
                 if phT >= idleState.hold { idleState.phase = 3; idleState.phaseT = 0 }
             default:    // the push-up, an ease-out with a little stretch overshoot
                 let u = min(1, phT / 0.6)
@@ -141,6 +140,7 @@ extension BlobBrain {
             }
         }
         idleState.k = k
+        snuggleTick(sim, dt)          // (BlobBrain+LieClear: the settle controller on the drawn skin gap)
         // the feet stay under him
         if k > 0 || idleState.phase >= 1 {
             for s in 0..<2 {

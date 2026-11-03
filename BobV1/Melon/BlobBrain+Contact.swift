@@ -18,6 +18,7 @@ enum ContactTuning {
     static let cooldown: Float = 1.6
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
+    static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching, the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
 }
 
@@ -120,11 +121,32 @@ extension BlobBrain {
         return true
     }
 
-    /// A soft meeting: the bodies press, a small squish + wobble (once per contact, with a cooldown), nothing while a social drives the pair.
+    /// A soft meeting: the moment the DRAWN skins first meet (the contact profile's skin gap <= +0.5 cm, ContactProfile.swift) the bodies kick a little (a jelly kick each, the squish sound,
+    /// the contact haptic): once per touch (armed again when the skins part by 3 cm), in a stance as in a brush while roaming; the settle controller's last mm of press never fires again.
+    /// Without profiles (a rig that never skins) the old rule stands: closer than 0.97 x the gap and closing, nothing while a social drives the pair.
     func contactTick(_ dt: Float) {
         socialBook.contactCool -= dt
-        guard social == nil, attached, !held else { return }
+        guard attached, !held else { return }
         for o in socialOthers() where o !== self {
+            if let gap = ContactField.gap(steerID, o.steerID) {
+                let prev = socialBook.contactArmed[o.steerID]
+                var armed = prev ?? (gap > ContactTuning.rearmGap)          // (touching when first seen: no event, the touch began before)
+                if gap > ContactTuning.rearmGap { armed = true }
+                if armed, gap <= ContactTuning.touchGap, socialBook.contactCool <= 0 {
+                    armed = false
+                    socialBook.contactCool = ContactTuning.eventGap
+                    let press = min(1, max(0, -gap) / 0.03 + 0.4)
+                    jellyKick = max(jellyKick, 0.9 + 0.9 * press)
+                    if steerID < o.steerID {          // (one sound + one haptic a touch, not one a body)
+                        AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
+                        onEmoteHaptic?(0.3, 0.35)
+                        contactEvents += 1
+                    }
+                }
+                socialBook.contactArmed[o.steerID] = armed
+                continue
+            }
+            guard social == nil else { continue }
             let d = simd_distance(o.position, position)
             let prev = socialBook.contactPrev[o.steerID] ?? d
             socialBook.contactPrev[o.steerID] = d

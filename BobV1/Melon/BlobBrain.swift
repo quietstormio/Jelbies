@@ -250,6 +250,8 @@ final class BlobBrain {
     private(set) var flipFaceplants = 0
     /// One-shot extra landing impulse for the jelly wobble (JellyJiggle.tick consumes it): the faceplant's thud.
     var jellyKick: Float = 0
+    /// Touch events this body announced (sound + haptic, once per touch: BlobBrain+Contact).
+    var contactEvents = 0
     /// True while the flip script owns him (the touch get-up must not treat the faceplant as being knocked over).
     var isFlipping: Bool { if case .flipPlay = script { return true }; return false }
     func noteFaceplant() { flipFaceplants += 1 }

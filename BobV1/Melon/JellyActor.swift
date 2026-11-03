@@ -135,12 +135,16 @@ nonisolated enum JellyParallel {
         acc.slowSum += slow; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0
     }
 
-    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float>; var id: Int = 0 }
+    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float>; var id: Int = 0; var root: SIMD2<Float> = .zero }
 
     static func skin(_ jobs: [SkinJob], index: [UInt32]) {
-        if jobs.count < minForThreads { for j in jobs { j.skinner.update(x: j.sim.x, index: index, into: j.dst) }; return }
+        @inline(__always) func one(_ j: SkinJob) {
+            j.skinner.update(x: j.sim.x, index: index, into: j.dst)
+            if ContactField.enabled { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root) }          // the contact profile of the DRAWN skin (ContactProfile.swift), in the same parallel pass
+        }
+        if jobs.count < minForThreads { for j in jobs { one(j) }; return }
         jobs.withUnsafeBufferPointer { b in
-            DispatchQueue.concurrentPerform(iterations: b.count) { b[$0].skinner.update(x: b[$0].sim.x, index: index, into: b[$0].dst) }
+            DispatchQueue.concurrentPerform(iterations: b.count) { one(b[$0]) }
         }
     }
 }

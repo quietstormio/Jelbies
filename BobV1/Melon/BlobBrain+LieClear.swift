@@ -19,8 +19,6 @@ enum LieClearTuning {
     static let squashLie: Float = 0.62
     /// Touching, a hair apart: the lying bodies' centre distance as a fraction of the sum of their half widths (1 = the surfaces just meet).
     static let touch: Float = 1.0
-    /// The fitted (rigid) egg of a lying body is bigger than the soft body drawn: the fitted eggs' measured gap when the DRAWN surfaces just meet (FeatureClipTests: bodyGap vs eggGap).
-    static let eggBias: Float = -0.07
     /// How far he may walk to find the spot (u).
     static let maxWalk: Float = 1.1
 }
@@ -131,52 +129,19 @@ extension BlobBrain {
         script = .walk(target: spot, then: .none); activity = .walking
     }
 
-    // MARK: the fine snuggle
+    // MARK: the snuggle: ContactSettle on the lying pair
 
-    /// Surface-to-surface gap (u, + apart, - inside) of two fitted eggs, measured the way the drawn surfaces are judged (the deepest sample of either surface inside the other egg; the
-    /// bodies are tipped and squashed, so the line between the centroids is not enough), and the unit xz direction a -> b with its horizontal share.
-    static func eggGap(_ a: ClipEgg, _ b: ClipEgg) -> (gap: Float, dirXZ: SIMD2<Float>, horiz: Float) {
-        let v = b.centroid - a.centroid
-        let L = simd_length(v)
-        guard L > 1e-3 else { return (0, SIMD2(0, 1), 1) }
-        var deepest: Float = -10
-        for k in 1...9 {
-            let t = Double(k) / 10
-            for i in 0..<16 {
-                let ang = Float(i) * (.pi / 8)
-                deepest = max(deepest, b.depthFull(a.surfacePoint(t: t, a: ang)), a.depthFull(b.surfacePoint(t: t, a: ang)))
-            }
-        }
-        let h = SIMD2(v.x, v.z), hl = simd_length(h)
-        return (-deepest, hl > 1e-3 ? h / hl : SIMD2(0, 1), max(0.5, hl / L))
-    }
-
-    /// While he lies (lie-down phase 2) next to a lying neighbour: measure the real gap between the two fitted bodies a few times and ease along the line until they just touch
-    /// (gap 0...2 cm), whichever the pre-walk's estimate left: a little closer when it was too far, away when it was inside. The older one stays; if both are new, the higher id moves.
+    /// While he lies next to a lying neighbour: the settle controller on the DRAWN skin gap (ContactProfile.swift). During the plop (phase 1) it only pushes the bodies out of each other;
+    /// lying (phase 2) it eases them until the skins just touch (band -0.5 ... +0.5 cm). The older one stays, the later one scoots in (or away).
     func snuggleTick(_ sim: SoftBody, _ dt: Float) {
-        guard LieClearTuning.enabled, idleState.kind == .lieDown else { return }
-        if let g = idleState.snugGoal {
-            let d = g - SIMD2(px, pz), L = simd_length(d)
-            if L < 0.004 { px = g.x; pz = g.y; idleState.snugGoal = nil } else { let m = min(L, 0.3 * dt); px += d.x / L * m; pz += d.y / L * m }
-            return
+        guard LieClearTuning.enabled, idleState.kind == .lieDown, !idleState.windowGo, idleState.phase >= 1, idleState.phase <= 2 else { return }
+        var best: (o: BlobBrain, g: Float)?
+        for o in socialOthers() where o !== self && o.enabled && o.idleState.kind == .lieDown && !o.idleState.windowGo && o.idleState.phase >= 1 && o.idleState.phase <= 2 {
+            guard let g = ContactField.gap(steerID, o.steerID), g < 0.7 else { continue }
+            if best == nil || g < best!.g { best = (o, g) }
         }
-        idleState.snugNext -= dt
-        guard idleState.snugNext <= 0, idleState.snugRuns < 4 else { return }
-        idleState.snugNext = 0.35
-        let mine = ClipEgg(sim: sim)
-        var best: (o: BlobBrain, d: Float)?
-        for o in socialOthers() where o !== self && o.enabled && isLying(o) && o.idleState.kind == .lieDown && o.idleState.phase == 2 {
-            let d = simd_distance(o.position, position)
-            if d < 2.6, best == nil || d < best!.d { best = (o, d) }
-        }
-        guard let (o, _) = best, let osim = o.simRef else { return }
-        let older = o.idleState.phaseT > idleState.phaseT + 0.05 || (abs(o.idleState.phaseT - idleState.phaseT) <= 0.05 && steerID > o.steerID)
-        guard older else { return }
-        idleState.snugRuns += 1
-        let m = Self.eggGap(mine, ClipEgg(sim: osim))
-        let gap = m.gap - LieClearTuning.eggBias          // (the drawn lying body is smaller than its fitted egg: measured against the skinned vertices)
-        guard gap > 0.04 || gap < 0.005 else { return }
-        let move = max(-0.5, min(0.7, (gap - 0.025) / m.horiz))
-        idleState.snugGoal = SIMD2(px, pz) + m.dirXZ * move
+        guard let (o, _) = best else { return }
+        let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
+        ContactSettle.step(self, o, target: 0, anchoredA: !older, anchoredB: older, onlySeparate: idleState.phase == 1)
     }
 }

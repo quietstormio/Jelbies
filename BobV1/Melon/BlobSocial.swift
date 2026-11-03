@@ -133,6 +133,8 @@ struct SocialBook {
     var closePending = false
     var contactCool: Float = 0
     var contactPrev: [Int: Float] = [:]
+    var settleStamp: [Int: Int] = [:]          // per other body: the profile stamps ContactSettle last acted on
+    var contactArmed: [Int: Bool] = [:]          // per other body: the next touch may fire (the skins were > 3 cm apart since the last one)
     /// Group socials: cooldown, the seconds a crowd of free Jelbies has been together, the wait before one asks for a group move, the last group kind.
     var groupCool: Float = 12, groupIdle: Float = 0, groupLimit: Float = 25, groupBusy: Float = 0
     var lastGroup: SocialKind?

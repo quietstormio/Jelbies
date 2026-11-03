@@ -18,10 +18,10 @@ final class FeatureClipTests: XCTestCase {
 
     override func setUp() {
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
-        FeatureClip.enabled = true; LieClearTuning.enabled = true
+        FeatureClip.enabled = true; LieClearTuning.enabled = true; ContactField.reset(); ContactField.enabled = true
     }
     override func tearDown() {
-        FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; AudioHub.requestTap = nil
+        FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; AudioHub.requestTap = nil; ContactField.reset(); ContactField.enabled = true
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
@@ -38,6 +38,7 @@ final class FeatureClipTests: XCTestCase {
             lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: quiet, seed: seed)
             feature = features
             WearBody.install(MotionRig.renderMesh)
+            ContactField.configure(eggLimit: MotionRig.renderMesh.armCapsule?.firstVertex.min() ?? MotionRig.renderMesh.vertexCount)
             var fs: [FeatureSet] = []
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
@@ -71,19 +72,24 @@ final class FeatureClipTests: XCTestCase {
             let r = lab.rigs[i]
             feats[i].tick(id: i, brain: r.brain, sim: r.sim, feature: feature[i], worn: [], hideAll: false, dt: dt)
         }
+        /// true = skin every body every tick (the contact profiles are fresh, as in the stage), false = only when a test asks.
+        var live = false
         func tick() {
             lab.tick(watching: false)
             for (i, r) in lab.rigs.enumerated() { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tickFeature(i) }
+            if live { _ = skinAll() }
         }
-        /// Skin every body (+ the stage's clip pass) and build every feature mesh. Returns each body's feature vertices in the world.
+        /// The skin jobs of every rig as the stage builds them (root = the floor position the room steers).
+        func jobs() -> [JellyParallel.SkinJob] {
+            lab.rigs.enumerated().map { JellyParallel.SkinJob(skinner: $1.skinner, sim: $1.sim, dst: dyn[$0], id: $0, root: GameCare.floorPos($1.brain, $1.sim)) }
+        }
+        /// Skin every body in parallel with its contact profile (JellyParallel.skin), the stage's clip pass, then every feature mesh (which fills the feature profiles).
+        /// Returns each body's feature vertices in the world.
         func skinAll() -> [[SIMD3<Float>]] {
-            var jobs: [JellyParallel.SkinJob] = []
-            for (i, r) in lab.rigs.enumerated() {
-                r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[i])
-                jobs.append(JellyParallel.SkinJob(skinner: r.skinner, sim: r.sim, dst: dyn[i], id: i))
-            }
-            FeatureClip.apply(jobs: jobs)
-            if FeatureClip.eggs.count != lab.rigs.count || !FeatureClip.enabled { FeatureClip.eggs = jobs.map { ClipEgg(sim: $0.sim) } }
+            let js = jobs()
+            JellyParallel.skin(js, index: MotionRig.renderMesh.index)
+            FeatureClip.apply(jobs: js)
+            if FeatureClip.eggs.count != lab.rigs.count || !FeatureClip.enabled { FeatureClip.eggs = js.map { ClipEgg(sim: $0.sim) } }
             var out: [[SIMD3<Float>]] = []
             for (i, r) in lab.rigs.enumerated() {
                 feats[i].syncCarry(i, sim: r.sim)
@@ -127,7 +133,12 @@ final class FeatureClipTests: XCTestCase {
             if sk.teddyOn, sk.teddyFirst >= 0 { r.append(sk.teddyFirst..<(sk.teddyFirst + TeddyBean.vertexCount)) }
             return r.flatMap { $0.map { SIMD3(dyn[i][6 * $0], dyn[i][6 * $0 + 1], dyn[i][6 * $0 + 2]) } }
         }
-        func bodyGap(_ i: Int, _ j: Int) -> Float { max(bodyPenetration(i, into: j), bodyPenetration(j, into: i)) }
+        /// Penetration (+ sunk in, - apart) of the DRAWN skins of body i and j (SkinGap), measured on freshly skinned streams.
+        func bodyGap(_ i: Int, _ j: Int) -> Float { -skinGap(i, j) }
+        func skinGap(_ i: Int, _ j: Int) -> Float {
+            for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[k]) }
+            return SkinGap.gap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), limit: eggLimit)
+        }
     }
     enum FeatureSetKeep { static func keep(_ d: Duo) { FeatureClipTests.keep.append(d); FeatureClipTests.keep.append(d.lab) } }
 
@@ -164,6 +175,7 @@ final class FeatureClipTests: XCTestCase {
               for signs in [(-1, 1), (1, -1)] as [(Float, Float)] {
                 let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
                 d.place([SIMD2(-gap / 2, 0.6), SIMD2(gap / 2, 0.6)])
+                d.live = after          // (the contact profiles, fresh every tick, as in the stage)
                 let ra = d.lab.rigs[0], rb = d.lab.rigs[1]
                 ra.brain.idleForced = true; rb.brain.idleForced = true
                 let a = ra.brain.idleStart(.lieDown, ra.sim), b = rb.brain.idleStart(.lieDown, rb.sim)
@@ -174,24 +186,23 @@ final class FeatureClipTests: XCTestCase {
                     guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
                     both += 1
                     guard f % 3 == 0 else { continue }
-                    if after, gap == 1.2, f % 15 == 0 { let g = BlobBrain.eggGap(ClipEgg(sim: ra.sim), ClipEgg(sim: rb.sim)); MotionLog.write("   f\(f) eggGap \(g.gap) bodyGap \(d.bodyGap(0, 1)) roots \(simd_distance(ra.brain.position, rb.brain.position)) goals \(String(describing: ra.brain.idleState.snugGoal)) \(String(describing: rb.brain.idleState.snugGoal)) runs \(ra.brain.idleState.snugRuns) \(rb.brain.idleState.snugRuns) phT \(ra.brain.idleState.phaseT) \(rb.brain.idleState.phaseT)") }
                     let on = FeatureClip.enabled
                     FeatureClip.enabled = false
                     let rawF = d.skinAll(), rawL = (0..<2).map { d.limbPoints($0) }
                     FeatureClip.enabled = on
                     let feat = d.skinAll()
                     for i in 0..<2 { s.feature = max(s.feature, d.penetration(feat[i], owner: i, raw: rawF[i])); s.limb = max(s.limb, d.penetration(d.limbPoints(i), owner: i, raw: rawL[i])) }
-                    if both > 100 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
+                    if both > 130 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
                     s.worst = max(s.worst, d.bodyGap(0, 1))
                 }
                 let line = "FEATCLIP lie \(after ? "AFTER" : "BEFORE") roots \(gap) signs \(signs) started \(a)/\(b) lying frames \(both) body pen settled \(s.body) ever \(s.worst) feature pen \(s.feature) limb pen \(s.limb) roots now \(simd_distance(ra.brain.position, rb.brain.position))"
                 report.append(line); MotionLog.write(line)
                 if after {
                     XCTAssertTrue(a && b); XCTAssertGreaterThan(both, 60, "both lie down")
-                    XCTAssertLessThanOrEqual(s.worst, 0.05, "never sunk in"); XCTAssertLessThanOrEqual(s.body, Self.tol, "the lying bodies do not sink into each other: \(line)")
+                    XCTAssertLessThanOrEqual(s.worst, 0.05, "never sunk in"); XCTAssertLessThanOrEqual(s.body, 0.015, "the lying bodies do not sink into each other: \(line)")
                     XCTAssertLessThanOrEqual(s.feature, Self.tol, "no wing vertex inside the other body: \(line)")
                     XCTAssertLessThanOrEqual(s.limb, Self.tol, "no arm / ear vertex inside the other body: \(line)")
-                    XCTAssertGreaterThan(s.lo, -0.055, "they snuggle: surfaces touch (gap 0-5 cm): \(line)")
+                    XCTAssertGreaterThan(s.lo, -0.01, "they snuggle: drawn skins touch (gap -1.5..+1 cm): \(line)")
                 }
             }
           }
@@ -204,6 +215,7 @@ final class FeatureClipTests: XCTestCase {
         for dist: Float in [1.8, 2.2] {
             let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
             d.place([SIMD2(-dist / 2, 0.6), SIMD2(dist / 2, 0.6)])
+            d.live = true
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             a.brain.idleForced = true; b.brain.idleForced = true
             XCTAssertTrue(a.brain.idleStart(.lieDown, a.sim)); a.brain.idleState.hold = 60
@@ -221,8 +233,8 @@ final class FeatureClipTests: XCTestCase {
             let line = "FEATCLIP snuggle from \(dist): lying frames \(both) settled body pen max \(s.body) min \(s.lo) roots \(simd_distance(a.brain.position, b.brain.position))"
             MotionLog.write(line)
             XCTAssertGreaterThan(both, 30, line)
-            XCTAssertLessThanOrEqual(s.body, Self.tol, line)
-            XCTAssertGreaterThan(s.lo, -0.055, "snug: \(line)")
+            XCTAssertLessThanOrEqual(s.body, 0.015, line)
+            XCTAssertGreaterThan(s.lo, -0.01, "snug: \(line)")
         }
     }
 

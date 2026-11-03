@@ -1,0 +1,275 @@
+//
+//  ContactProfile.swift
+//  TOUCHING WITHOUT OVERLAPPING: the contact profile (2026-11-02, the user: "all touching emotes must look polished: touching, but never overlapping like a buggy game").
+//
+//  One profile per body per skin pass, built from the DRAWN skin (so a lying body that is 1.27 x wider, a lean, a squash, a breath, an arm out, Teddy's ears, Pip's tail are all in it):
+//    polygon  the farthest skinned vertex of each of K = 128 direction bins around the body's ROOT (the floor position the room steers: `JellyActor.floor`), horizontal, relative to the root:
+//             body skin + arms + feet + the blocks that ride the skin (Teddy's ears + pom, Pip's tail). Built inside `JellyParallel.skin` (parallel, one slice of `ContactField.store`
+//             per body) from a sample of the vertices (every 3rd of the egg, every 2nd of the limb blocks: 24 k vertices, ~0.02 ms a body).
+//    rho[k]   the RADIAL table: the ray cast of that polygon from the root along each bin centre: "how far does he reach along this direction" (`ext`), a 0.2 us lookup.
+//    feature  the same polygon / table for FEATURE-only vertices (wings at their CURRENT fold, Moss's daisy, Pip's spikes): `FeatureSet.frame` fills it from the emitted meshes.
+//  The pair metric (THE metric): the SKIN GAP = the distance the two bodies could still translate toward each other along their root axis before the drawn footprints touch
+//  (the exact translation gap of the two polygons: lateral offsets, lying, leaning, arms, ears all in), + apart, - sunk in. `ContactField.gap`. An estimate for hot paths
+//  (the keepApart wall, called hundreds of times a step) is `touch` = ext(a, dir) + ext(b, -dir) (the roots' rays only).
+//  Everything that decides "are they touching" asks `ContactField`: the keepApart wall, the contact boop + haptic, the settle controller, the wing fold.
+//  See docs/HANDOFF.md ("Touching without overlapping: the contact profile").
+//
+
+import Foundation
+import simd
+
+nonisolated enum ContactField {
+    static let K = 128
+    static let capacity = 16
+    /// Per body (floats): rho[K], frho[K], bx[K], bz[K], br2[K] (body polygon; br2 <= 0 = empty bin), fx[K], fz[K], fr2[K] (feature polygon), then rootX, rootZ, valid, featValid, stamp.
+    static let stride = 8 * K + 5
+    private static let oRho = 0, oFRho = K, oBX = 2 * K, oBZ = 3 * K, oBR = 4 * K, oFX = 5 * K, oFZ = 6 * K, oFR = 7 * K, oMeta = 8 * K
+    nonisolated(unsafe) static let store: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * stride)
+        p.initialize(repeating: 0, count: capacity * stride)
+        return p
+    }()
+    /// false = no profile is ever read (the legacy centre-distance rules).
+    nonisolated(unsafe) static var enabled = true
+    /// Vertex count of the egg proper (the limb / ear / tail blocks come after it): the egg is sampled more sparsely than the limbs.
+    nonisolated(unsafe) static var eggLimit = Int.max
+    static func configure(eggLimit n: Int) { eggLimit = n }
+    static let eggStride = 3, limbStride = 2
+
+    // MARK: layout
+    @inline(__always) private static func base(_ id: Int) -> UnsafeMutablePointer<Float> { store + id * stride }
+
+    /// Forget every profile (tests, a scene change).
+    static func reset() { store.initialize(repeating: 0, count: capacity * stride); gapStamp = [Int](repeating: -1, count: capacity * capacity) }
+    static func invalidate(_ id: Int) { if id >= 0, id < capacity { base(id)[oMeta + 2] = 0; base(id)[oMeta + 3] = 0 } }
+    static func isValid(_ id: Int) -> Bool { id >= 0 && id < capacity && base(id)[oMeta + 2] > 0.5 }
+    /// How many times body `id`'s profile was built (a controller acts once per fresh profile).
+    static func stamp(_ id: Int) -> Int { id >= 0 && id < capacity ? Int(base(id)[oMeta + 4]) : 0 }
+    static func root(_ id: Int) -> SIMD2<Float> { let b = base(id); return SIMD2(b[oMeta], b[oMeta + 1]) }
+
+    // MARK: angles
+    /// pseudo-angle 0..4 of (x, z): monotonic in the true angle, no trig.
+    @inline(__always) private static func pseudo(_ x: Float, _ z: Float) -> Float {
+        let p = x / (abs(x) + abs(z))
+        return z < 0 ? 3 + p : 1 - p
+    }
+    private static let tableN = 4096
+    /// pseudo-angle slot -> bin (a slot is 4/4096 of pseudo-angle: <= 0.1 degree).
+    private static let binOfSlot: [UInt8] = {
+        var t = [UInt8](repeating: 0, count: tableN + 1)
+        for s in 0...tableN {
+            let pa = (Float(s) + 0.5) * 4 / Float(tableN)
+            // invert pseudo(): z >= 0: pa = 1 - p, p = x / (|x| + |z|) -> x = p, z = 1 - |p|;  z < 0: pa = 3 + p -> x = p, z = -(1 - |p|)
+            let p: Float, z: Float
+            if pa < 2 { p = 1 - pa; z = 1 - abs(p) } else { p = pa - 3; z = -(1 - abs(p)) }
+            let ang = atan2f(z, p)
+            t[s] = UInt8(min(max(Int((ang + .pi) * (Float(K) / (2 * .pi))), 0), K - 1))          // (K = 128 fits a byte)
+        }
+        return t
+    }()
+    @inline(__always) static func angle(_ z: Float, _ x: Float) -> Float {
+        let ax = abs(x), az = abs(z)
+        let mx = max(ax, az), mn = min(ax, az)
+        guard mx > 0 else { return 0 }
+        let a = mn / mx, s = a * a
+        var r = ((-0.0464964749 * s + 0.15931422) * s - 0.327622764) * s * a + a
+        if az > ax { r = .pi / 2 - r }
+        if x < 0 { r = .pi - r }
+        return z < 0 ? -r : r
+    }
+    private static let cosT: [Float] = (0..<K).map { cosf((Float($0) + 0.5) * 2 * .pi / Float(K) - .pi) }
+    private static let sinT: [Float] = (0..<K).map { sinf((Float($0) + 0.5) * 2 * .pi / Float(K) - .pi) }
+
+    // MARK: build
+    /// The body's profile from its skinned stream (`dyn`: 6 floats a vertex, `count` vertices), relative to `root`. Runs on a worker thread: touches only body `id`'s slice.
+    static func build(id: Int, dyn: UnsafePointer<Float>, count: Int, root: SIMD2<Float>) {
+        guard id >= 0, id < capacity else { return }
+        let b = base(id)
+        let r2 = b + oBR, px = b + oBX, pz = b + oBZ
+        for k in 0..<K { r2[k] = -1 }
+        let lim = min(eggLimit, count)
+        binOfSlot.withUnsafeBufferPointer { tb in
+            @inline(__always) func add(_ i: Int) {
+                let o = 6 * i
+                let x = dyn[o] - root.x, z = dyn[o + 2] - root.y
+                let q = x * x + z * z
+                guard q > 1e-6, q < 25 else { return }          // (a NaN fails both)
+                let slot = Int(pseudo(x, z) * (Float(tableN) / 4))
+                let k = Int(tb[min(max(slot, 0), tableN)])
+                if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z }
+            }
+            var i = 0
+            while i < lim { add(i); i += eggStride }
+            i = lim
+            while i < count { add(i); i += limbStride }
+        }
+        castTable(r2, px, pz, into: b + oRho, fallback: true)
+        b[oMeta] = root.x; b[oMeta + 1] = root.y
+        b[oMeta + 2] = 1
+        b[oMeta + 4] += 1
+    }
+
+    /// A feature's profile (wings, spikes, daisy) from its emitted world vertices: `position` yields the world position of each. Main thread, after the skin.
+    static func buildFeature(id: Int, count: Int, position: (Int) -> SIMD3<Float>) {
+        guard id >= 0, id < capacity, isValid(id) else { return }
+        let b = base(id)
+        let root = SIMD2(b[oMeta], b[oMeta + 1])
+        let r2 = b + oFR, px = b + oFX, pz = b + oFZ
+        for k in 0..<K { r2[k] = -1 }
+        for i in 0..<count {
+            let p = position(i)
+            let x = p.x - root.x, z = p.z - root.y
+            let q = x * x + z * z
+            guard q > 1e-6, q < 25 else { continue }
+            let slot = Int(pseudo(x, z) * (Float(tableN) / 4))
+            let k = Int(binOfSlot[min(max(slot, 0), tableN)])
+            if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z }
+        }
+        castTable(r2, px, pz, into: b + oFRho, fallback: false)
+        b[oMeta + 3] = 1
+    }
+    static func clearFeature(id: Int) {
+        guard id >= 0, id < capacity else { return }
+        let b = base(id)
+        for k in 0..<K { b[oFRho + k] = 0; b[oFR + k] = -1 }
+        b[oMeta + 3] = 0
+    }
+
+    /// The ray cast of the polygon through the per-bin farthest vertices, from the origin, along each bin centre.
+    private static func castTable(_ r2: UnsafeMutablePointer<Float>, _ px: UnsafeMutablePointer<Float>, _ pz: UnsafeMutablePointer<Float>, into out: UnsafeMutablePointer<Float>, fallback: Bool) {
+        for k in 0..<K {
+            let dx = cosT[k], dz = sinT[k]
+            var best: Float = 0
+            // edges between the points of the bins around this one (the ray lies between the two points whose directions straddle it)
+            for j in (k - 3)...(k + 2) {
+                let a = (j + K) % K, c = (j + 1 + K) % K
+                guard r2[a] > 0, r2[c] > 0 else { continue }
+                let ax = px[a], az = pz[a], ex = px[c] - ax, ez = pz[c] - az
+                let denom = dx * ez - dz * ex
+                if abs(denom) < 1e-9 { continue }
+                let t = (ax * ez - az * ex) / denom
+                let u = (ax * dz - az * dx) / denom
+                if t > 0, u >= -1e-4, u <= 1 + 1e-4, t > best { best = t }
+            }
+            if best <= 0, fallback {          // (a sparse ring: the nearest filled bin's own radius; a feature has no reach where it has no vertices)
+                var d = 1
+                while d < K / 2, best <= 0 {
+                    for s in [k - d, k + d] { let q = (s + K) % K; if r2[q] > 0 { best = max(best, r2[q].squareRoot()) } }
+                    d += 1
+                }
+            }
+            out[k] = best
+        }
+    }
+
+    // MARK: queries (radial)
+    @inline(__always) private static func sample(_ t: UnsafeMutablePointer<Float>, _ dir: SIMD2<Float>) -> Float {
+        let theta = angle(dir.y, dir.x)
+        let u = (theta + .pi) * (Float(K) / (2 * .pi)) - 0.5
+        let f = floorf(u)
+        let i0 = ((Int(f) % K) + K) % K, i1 = (i0 + 1) % K, w = u - f
+        return t[i0] * (1 - w) + t[i1] * w
+    }
+    /// How far body `id` reaches from its root along the unit horizontal `dir` (body skin, limbs, ears, tail; + the features when asked). nil = no profile.
+    static func ext(_ id: Int, _ dir: SIMD2<Float>, features: Bool = false) -> Float? {
+        guard enabled, isValid(id) else { return nil }
+        let b = base(id)
+        let e = sample(b + oRho, dir)
+        guard features, b[oMeta + 3] > 0.5 else { return e }
+        return max(e, sample(b + oFRho, dir))
+    }
+    /// Only the features' reach (0 where there are none).
+    static func featureExt(_ id: Int, _ dir: SIMD2<Float>) -> Float {
+        guard enabled, isValid(id), base(id)[oMeta + 3] > 0.5 else { return 0 }
+        return sample(base(id) + oFRho, dir)
+    }
+    /// The estimate for hot paths: the roots' rays only, ext(a, dir) + ext(b, -dir) (`dir` unit, from a to b).
+    static func touch(_ a: Int, _ b: Int, dir: SIMD2<Float>, features: Bool = false) -> Float? {
+        guard let ea = ext(a, dir, features: features), let eb = ext(b, -dir, features: features) else { return nil }
+        return ea + eb
+    }
+
+    // MARK: the pair gap (exact translation gap of the two footprints)
+    nonisolated(unsafe) private static var gapStamp = [Int](repeating: -1, count: capacity * capacity)
+    nonisolated(unsafe) private static var gapValue = [Float](repeating: 0, count: capacity * capacity)
+
+    /// THE pair metric: the distance the two bodies could still slide toward each other along their root axis before the drawn footprints touch. + apart, - sunk into each other,
+    /// on the roots the profiles were built at. nil = no profile for one of them (or the footprints do not face each other). Main thread; cached per pair of profile stamps.
+    static func gap(_ a: Int, _ b: Int, features: Bool = false) -> Float? {
+        guard enabled, isValid(a), isValid(b), a != b else { return nil }
+        let lo = min(a, b), hi = max(a, b)
+        let key = lo * capacity + hi
+        let st = stamp(lo) &* 100_003 &+ stamp(hi) &+ (features ? 1 : 0) &* 7
+        if gapStamp[key] == st { let v = gapValue[key]; return v.isNaN ? nil : v }
+        let d = root(hi) - root(lo), L = simd_length(d)
+        var best = Float.infinity
+        if L > 1e-4 {
+            let u = d / L
+            best = polyGap(lo, hi, L, u, bodyA: true, bodyB: true)
+            if features {
+                if base(lo)[oMeta + 3] > 0.5 { best = min(best, polyGap(lo, hi, L, u, bodyA: false, bodyB: true)) }
+                if base(hi)[oMeta + 3] > 0.5 { best = min(best, polyGap(lo, hi, L, u, bodyA: true, bodyB: false)) }
+                if base(lo)[oMeta + 3] > 0.5, base(hi)[oMeta + 3] > 0.5 { best = min(best, polyGap(lo, hi, L, u, bodyA: false, bodyB: false)) }
+            }
+        }
+        let v: Float = best.isFinite ? best : .nan
+        gapStamp[key] = st; gapValue[key] = v
+        return best.isFinite ? best : nil
+    }
+
+    /// The translation gap of polygon A (body `a`, at the origin) and polygon B (body `b`, `L` along `u`) along `u`: the smallest, over the lateral positions where both exist, of
+    /// (B's nearest axial coordinate - A's farthest axial coordinate). The envelopes are piecewise linear: it is enough to look at the facing vertices of both.
+    private static func polyGap(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, bodyA: Bool, bodyB: Bool) -> Float {
+        let v = SIMD2(-u.y, u.x)
+        let pa = base(a), pb = base(b)
+        let ar = bodyA ? pa + oBR : pa + oFR, ax = bodyA ? pa + oBX : pa + oFX, az = bodyA ? pa + oBZ : pa + oFZ
+        let br = bodyB ? pb + oBR : pb + oFR, bx = bodyB ? pb + oBX : pb + oFX, bz = bodyB ? pb + oBZ : pb + oFZ
+        var best = Float.infinity
+        withUnsafeTemporaryAllocation(of: Float.self, capacity: 4 * K) { buf in
+            let aA = buf.baseAddress!, wA = aA + K, aB = aA + 2 * K, wB = aA + 3 * K
+            var maxA = -Float.infinity, minB = Float.infinity
+            for k in 0..<K {
+                if ar[k] > 0 { aA[k] = ax[k] * u.x + az[k] * u.y; wA[k] = ax[k] * v.x + az[k] * v.y; maxA = max(maxA, aA[k]) } else { aA[k] = -Float.infinity }
+                if br[k] > 0 { aB[k] = L + bx[k] * u.x + bz[k] * u.y; wB[k] = bx[k] * v.x + bz[k] * v.y; minB = min(minB, aB[k]) } else { aB[k] = Float.infinity }
+            }
+            guard maxA.isFinite, minB.isFinite else { return }
+            let reach: Float = 0.4          // only the cap of each footprint that faces the other can touch
+            // the facing edges (between neighbouring bins that are both facing), collected once
+            var ea = [Int](), eb = [Int]()
+            ea.reserveCapacity(48); eb.reserveCapacity(48)
+            for k in 0..<K {
+                let k2 = (k + 1) % K
+                if ar[k] > 0, ar[k2] > 0, aA[k] >= maxA - reach, aA[k2] >= maxA - reach { ea.append(k) }
+                if br[k] > 0, br[k2] > 0, aB[k] <= minB + reach, aB[k2] <= minB + reach { eb.append(k) }
+            }
+            // the envelope of A (farthest axial at lateral w) and of B (nearest axial at lateral w)
+            func envA(_ w: Float) -> Float? {
+                var r: Float?
+                for k in ea {
+                    let k2 = (k + 1) % K
+                    let w0 = wA[k], w1 = wA[k2]
+                    if w < min(w0, w1) - 1e-5 || w > max(w0, w1) + 1e-5 { continue }
+                    let dw = w1 - w0
+                    let t: Float = abs(dw) < 1e-7 ? max(aA[k], aA[k2]) : aA[k] + (aA[k2] - aA[k]) * ((w - w0) / dw)
+                    if r == nil || t > r! { r = t }
+                }
+                return r
+            }
+            func envB(_ w: Float) -> Float? {
+                var r: Float?
+                for k in eb {
+                    let k2 = (k + 1) % K
+                    let w0 = wB[k], w1 = wB[k2]
+                    if w < min(w0, w1) - 1e-5 || w > max(w0, w1) + 1e-5 { continue }
+                    let dw = w1 - w0
+                    let t: Float = abs(dw) < 1e-7 ? min(aB[k], aB[k2]) : aB[k] + (aB[k2] - aB[k]) * ((w - w0) / dw)
+                    if r == nil || t < r! { r = t }
+                }
+                return r
+            }
+            for k in ea { for q in [k, (k + 1) % K] { if let e = envB(wA[q]) { best = min(best, e - aA[q]) } } }
+            for k in eb { for q in [k, (k + 1) % K] { if let e = envA(wB[q]) { best = min(best, aB[q] - e) } } }
+        }
+        return best
+    }
+}

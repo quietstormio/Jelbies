@@ -375,6 +375,7 @@ final class FeatureSet {
     func frame(hidden: Bool = false, skin: (Int) -> UnsafePointer<Float>?, spec: FeatureSpec = .shared) -> RoomMesh {
         var m = RoomMesh()
         lastBounds = []
+        for i in slots.indices { ContactField.clearFeature(id: i) }          // (re-filled below for the features drawn now)
         guard !hidden, let body else { return m }
         for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none && !(s.feature == .ears && TeddyEarsVariant.active.inBody) {
             var pl = FeatureMeshes.Placement()
@@ -405,7 +406,8 @@ final class FeatureSet {
                 Self.emit(p, into: &m, slot: s, skin: skin(id), spec: spec)
             }
             if m.vertices.count > first {
-                FeatureClip.clip(&m, range: first..<m.vertices.count, own: id)          // nothing of the feature is drawn inside ANOTHER Jelbie's body (FeatureClip.swift)
+                FeatureClip.clip(&m, range: first..<m.vertices.count, own: id)
+                ContactField.buildFeature(id: id, count: m.vertices.count - first) { let p = m.vertices[first + $0].pos; return SIMD3(p.x, p.y, p.z) }          // the feature's reach, at its current fold (ContactProfile.swift)          // nothing of the feature is drawn inside ANOTHER Jelbie's body (FeatureClip.swift)
                 var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
                 for v in m.vertices[first...] { let q = SIMD3(v.pos.x, v.pos.y, v.pos.z); lo = simd_min(lo, q); hi = simd_max(hi, q) }
                 lastBounds.append((lo, hi))
