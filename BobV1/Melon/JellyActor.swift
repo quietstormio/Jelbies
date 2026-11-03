@@ -131,7 +131,7 @@ nonisolated enum JellyParallel {
         acc.slowSum += slow; acc.steps += 1; acc.wall += CACurrentMediaTime() - w0
     }
 
-    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float> }
+    struct SkinJob { var skinner: Skinner; var sim: SoftBody; var dst: UnsafeMutablePointer<Float>; var id: Int = 0 }
 
     static func skin(_ jobs: [SkinJob], index: [UInt32]) {
         if jobs.count < minForThreads { for j in jobs { j.skinner.update(x: j.sim.x, index: index, into: j.dst) }; return }
