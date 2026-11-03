@@ -6,32 +6,33 @@
 
 import SwiftUI
 
-/// One composition for every screen: the iPhone portrait design (440x956) scaled by min(w/440, h/956) and centred, so a landscape or iPad
-/// screen shows the same logo / buttons / face, just sized by its height. The scale never goes below `minScale` (buttons stay >= 44 pt tall);
-/// on a very short screen the spacing tightens and the face is pushed down to peek less rather than overlap.
+/// One composition for every screen: the iPhone portrait design (logo on top, Continue / New Game stacked, the face peeking from the bottom),
+/// grown to FILL the screen. The element scale `s` (logo, buttons, text, spacing) is limited by the width (logo <= ~83 %) and by the height left above
+/// the face; the face's own scale spans the width but never hides its eyes. At the 440x956 design size every number equals the approved portrait look.
+/// `s` never goes below `minScale` (buttons stay >= 44 pt tall); on a very short screen the face is pushed down (peeks less) instead.
 struct MenuMetrics {
-    var s: CGFloat, titleTop: CGFloat, buttonsGap: CGFloat, contentBottom: CGFloat, faceScale: CGFloat, faceDrop: CGFloat
-    var faceTop: CGFloat { faceTopDefault + faceDrop }
-    var faceTopDefault: CGFloat = 0
     static let minScale: CGFloat = 0.72          // 62 * 0.72 = 44.6 pt: the smaller (New Game) button keeps a 44 pt tap height
+    var s: CGFloat, titleTop: CGFloat, buttonsGap: CGFloat, faceScale: CGFloat, faceTop: CGFloat
 
     init(w: CGFloat, h: CGFloat, hasSave: Bool) {
-        s = max(min(w / 440, h / 956), Self.minScale)
-        faceScale = 4.8 * s
-        let titleH = 364 * s / 0.96 * 307 / 620
-        let btnH = (hasSave ? 74 + 8 + 20 + 62 + 6 : 74 + 8) * s
-        faceTopDefault = 0.91 * h + 14 * faceScale - 65.5 * faceScale
-        let avail = faceTopDefault - 14 * s
-        var top = 156 * s, gap = 95 * s
-        let need = top + titleH + gap + btnH
-        if need > avail {
-            let squeeze = min(need - avail, (top - 12) + (gap - 24 * s))
-            let tShare = (top - 12) / max(1, (top - 12) + (gap - 24 * s))
-            top -= squeeze * tShare; gap -= squeeze * (1 - tShare)
-        }
-        titleTop = top; buttonsGap = gap
-        contentBottom = top + titleH + gap + btnH
-        faceDrop = max(0, contentBottom + 14 * s - faceTopDefault)
+        let aspect = w / h
+        // Where the rim of the face starts: 65 % of the height on an iPhone portrait, lower on wider screens (more room for the stack).
+        var top = h * (0.6514 + 0.0486 * min(1, max(0, (aspect - 0.46) / 0.29)))
+        let titleUnits = 364 / 0.96 * 307 / 620, btnUnits: CGFloat = hasSave ? 74 + 8 + 20 + 62 + 6 : 74 + 8          // 188, 170 (82 with one button)
+        let content = titleUnits + btnUnits
+        let faceGap = h * 0.015, minGaps = h * 0.07
+        let fitH = (top - faceGap - minGaps) / content
+        var raw = min(w / 440, fitH)
+        if aspect > 1 { raw = min(raw, 0.55 * w / 379, 0.40 * w / 300) }          // landscape: the logo and buttons stay a sensible share of the width
+        let sc = max(raw, Self.minScale)
+        if raw < Self.minScale { top = max(top, content * sc + minGaps + 14 * sc) }          // short screen: the face peeks less
+        let free = max(0, top - faceGap - content * sc)
+        let topShare = 156.0 / 251.0
+        s = sc
+        titleTop = max(8, free * topShare)
+        buttonsGap = max(4, free * (1 - topShare))
+        faceScale = max(1.0, min(4.8 * w / 440, (0.91 * h - top) / 51.5))
+        faceTop = top
     }
 }
 
@@ -49,7 +50,7 @@ struct MainMenuView: View {
             let w = geo.size.width, h = geo.size.height
             let m = MenuMetrics(w: w, h: h, hasSave: hasSave)
             ZStack {
-                TitleBackdrop(still: still, size: geo.size, landscape: w > h, palette: theme.palette, scale: m.s, faceDrop: m.faceDrop)
+                TitleBackdrop(still: still, size: geo.size, landscape: w > h, palette: theme.palette, scale: m.s, faceScale: m.faceScale, faceTop: m.faceTop)
                     .id(theme.palette.id).transition(.opacity)          // a new theme colour crossfades in
                 VStack(spacing: 0) {
                     title(width: 364 * m.s).padding(.top, m.titleTop)
@@ -256,7 +257,8 @@ struct TitleBackdrop: View {
     var palette: ThemePalette = ThemeMath.palette(.sky)
     /// The menu composition scale (nil = w/440, the portrait design) and how far the face is pushed down on a very short screen.
     var scale: CGFloat? = nil
-    var faceDrop: CGFloat = 0
+    var faceScale: CGFloat? = nil
+    var faceTop: CGFloat? = nil
     /// false = just the colour and the pattern (the loading screen).
     var extras = true
 
@@ -300,10 +302,10 @@ struct TitleBackdrop: View {
                     sc.fill(Self.sparkle(w / 2 + (x - 220) * ds, y * ds, r * ds, t), with: .color(.white))
                 }
                 // Peeking Jelbie
-                let scale = 4.8 * ds      // zoomed in: just the head dome, brows and eyes
+                let scale = Double(faceScale ?? CGFloat(4.8 * ds))      // zoomed in: just the head dome, brows and eyes
                 let cx = w / 2
                 let bob = still ? 0 : -10 * ds * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
-                let cy = 0.91 * h + 14 * scale + bob + Double(faceDrop)                            // eyes sit ~9% of the screen above the bottom
+                let cy = (faceTop.map { Double($0) + 65.5 * scale } ?? 0.91 * h + 14 * scale) + bob                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)

@@ -1,6 +1,6 @@
 //
 //  MainMenuLayoutUITests.swift
-//  The title screen keeps ONE composition on every screen (the iPhone portrait design scaled by min(w/440, h/956), centred): logo on top, Continue
+//  The title screen keeps ONE composition on every screen (the iPhone portrait design grown to fill the screen, centred): logo on top, Continue
 //  then New Game stacked below, all centred, fully on screen, tap targets >= 44 pt. Run on iPhone or iPad; checks portrait and landscape.
 //  Set MENU_SHOTS to a directory to also write a PNG per orientation (landscape PNGs from XCUIScreen come out rotated).
 //
@@ -15,13 +15,11 @@ final class MainMenuLayoutUITests: XCTestCase {
         app.launchArguments += save ? ["-Jelbies.started.v1", "YES"] : ["-ResetForAdoption", "1"]
         app.launch()
         XCTAssertTrue(app.otherElements["main-menu"].waitForExistence(timeout: 90), "menu shows after the intro")
-        var portraitNorm: [String: CGFloat] = [:]          // frame values / scale, from the first orientation
         for (name, o) in [("portrait", UIDeviceOrientation.portrait), ("landscape", .landscapeLeft)] {
             XCUIDevice.shared.orientation = o
             sleep(4)
             let win = app.windows.firstMatch.frame
             XCTAssertEqual(win.width > win.height, name == "landscape", "window is \(name): \(win)")
-            let s = max(min(win.width / 440, win.height / 956), 0.72)
             let primary = save ? app.buttons["menu-continue"] : app.buttons["menu-start"]
             let logo = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Jelbies' AND elementType != %d", XCUIElement.ElementType.button.rawValue)).firstMatch
             XCTAssertTrue(primary.waitForExistence(timeout: 5))
@@ -37,14 +35,18 @@ final class MainMenuLayoutUITests: XCTestCase {
             if save { XCTAssertLessThan(primary.frame.maxY, app.buttons["menu-new"].frame.minY + 1, "\(name): Continue above New Game") }
             XCTAssertGreaterThanOrEqual(primary.frame.height, 44, "\(name) tap height")
             if save { XCTAssertGreaterThanOrEqual(app.buttons["menu-new"].frame.height, 44, "\(name) New Game tap height") }
-            XCTAssertEqual(primary.frame.width, 300 * s, accuracy: 3, "\(name) button width is the portrait 300 x scale")
-            // same proportions: positions / scale match across orientations unless the short screen tightened the spacing (scale floor)
-            let squeezed = win.height / 956 < 0.72 || win.width / 440 < 0.72
-            let norm = ["primaryTop": primary.frame.minY / s, "logoW": logo.frame.width / s]
-            if name == "portrait" { portraitNorm = norm }
-            else if !squeezed {
-                for (k, v) in norm { XCTAssertEqual(v, portraitNorm[k] ?? v, accuracy: 6, "\(k) in landscape matches portrait") }
+            // the composition fills the screen: width fractions (portrait ~ the iPhone design, landscape limited by the height)
+            let logoFrac = logo.frame.width / win.width, btnFrac = primary.frame.width / win.width
+            if name == "portrait" {
+                XCTAssertTrue((0.70...0.92).contains(logoFrac), "portrait logo is \(logoFrac) of the width")
+                XCTAssertTrue((0.55...0.78).contains(btnFrac), "portrait buttons are \(btnFrac) of the width")
+            } else {
+                XCTAssertTrue((0.28...0.58).contains(logoFrac), "landscape logo is \(logoFrac) of the width")
+                XCTAssertTrue((0.22...0.42).contains(btnFrac), "landscape buttons are \(btnFrac) of the width")
             }
+            let lastBottom = save ? app.buttons["menu-new"].frame.maxY : primary.frame.maxY
+            XCTAssertLessThanOrEqual(lastBottom, win.height * 0.80, "\(name): buttons leave room for the face")
+            if name == "landscape" || win.height > 900 { XCTAssertGreaterThan(lastBottom, win.height * 0.45, "\(name): the stack uses the height") }
             if let dir = shotDir {
                 try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
                 try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/\(save ? "continue" : "first")_\(name).png"))
