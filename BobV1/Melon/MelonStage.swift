@@ -877,7 +877,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for i in HopDiag.wmx.indices { HopDiag.wmx[i] = 0 }
         for i in lapWinMax.indices { lapWinMax[i] = 0 }
         PerfProbe.reset()
-        let top = all.sorted { $0.1 > $1.1 }.prefix(3).filter { $0.1 >= 0.2 }
+        let top = all.sorted { $0.1 > $1.1 }.prefix(7).filter { $0.1 >= 0.2 }
         return top.isEmpty ? "" : "brainTop[" + top.map { String(format: "%@ %.1f", $0.0, $0.1) }.joined(separator: ", ") + "]"
     }
 
