@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# derived data / build output must never be committed
+dd_*/
+*.xcresult/
+DerivedData/

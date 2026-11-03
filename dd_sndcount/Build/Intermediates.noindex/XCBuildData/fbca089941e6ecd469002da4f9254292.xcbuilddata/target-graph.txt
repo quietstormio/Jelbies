@@ -1,8 +1,0 @@
-Target dependency graph (4 targets)
-Target 'BobV1Tests' in project 'BobV1'
-➜ Explicit dependency on target 'BobV1' in project 'BobV1'
-Target 'BobV1UITests' in project 'BobV1'
-➜ Explicit dependency on target 'BobV1' in project 'BobV1'
-Target 'BobV1' in project 'BobV1'
-➜ Explicit dependency on target 'JelbiesWidget' in project 'BobV1'
-Target 'JelbiesWidget' in project 'BobV1' (no dependencies)
