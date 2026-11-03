@@ -65,6 +65,7 @@ extension GameCare {
             room.setDecorStatic(DecorModels.build(feet: f.feet.filter { !active.contains($0.uid) }, field: f, time: time))
         }
         if refreshGroomFx(room) { return }          // the Jelly Spa street: the door, the glow, bubbles and steam (Groomer/GameCare+Groom.swift); the room's toys are gone from the static mesh above first
+        if refreshTossBall(room, active: active, time: time) { return }          // Play mode: the thrown ball and its shadow (Play/GameCare+Play.swift)
         if refreshVolleyBall(room) { return }          // the beach: the ball and its shadow are the animating decor (Volley/GameCare+Volley.swift); the room's toys are gone from the static mesh above first
         if !active.isEmpty {
             room.setDecorActive(DecorModels.build(feet: f.feet.filter { active.contains($0.uid) }, field: f, time: time))

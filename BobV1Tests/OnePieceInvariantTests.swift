@@ -82,10 +82,11 @@ final class OnePieceInvariantTests: XCTestCase {
         .shake: Entry(seconds: 3), .lieDown: Entry(seconds: 9), .chirp: Entry(seconds: 3),
         .soccerKick: Entry(via: "soccer: dribble the ball to the goal and shoot"),
         .hiccup: Entry(seconds: 4), .sneeze: Entry(seconds: 4), .dizzyWobble: Entry(seconds: 4.5), .politeBow: Entry(seconds: 7), .bellyDrum: Entry(seconds: 7), .signatureFlourish: Entry(seconds: 8),
+        .tossHeader: Entry(seconds: 5), .tossBump: Entry(seconds: 7),
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.
-    static let gaitNames = ["flip", "faceplant", "hop", "spin", "turn", "walk", "march", "wave", "volleyDive", "volleySpike", "volleyBlock", "volleyCheer", "toy: scooter", "toy: rocket", "toy: rocking horse"]
+    static let gaitNames = ["flip", "faceplant", "hop", "spin", "turn", "walk", "march", "wave", "volleyDive", "volleySpike", "volleyBlock", "volleyCheer", "toy: scooter", "toy: rocket", "toy: rocking horse", "toss: header", "toss: bump", "toss: rally"]
     /// Script cases that no scenario of the list starts, and why.
     static let scriptNotRun: [String: String] = ["none": "no script", "look": "head turn only (the idle table's look)", "eat": "dining (DiningFlowTests); standing feet", "dine": "dining table (DiningFlowTests)", "race": "Jelly Circuit (RaceTests); the gait is the walk"]
     static let scriptCovered: [String: String] = ["walk": "walk", "turn": "turn", "stepInPlace": "march", "wave": "wave", "spin": "spin", "hopPlay": "hop", "flipPlay": "flip / faceplant", "idle": "idleTable"]
@@ -118,6 +119,7 @@ final class OnePieceInvariantTests: XCTestCase {
         case "toy: scooter": return LegsDrawnAuditTests.ride(name, .kickscooter, at: SIMD2(1.2, 0.4), move: .decorSlide, seconds: 30)
         case "toy: rocket": return LegsDrawnAuditTests.ride(name, .toyrocket, at: SIMD2(1.1, 0.5), move: .decorSit, seconds: 30)
         case "toy: rocking horse": return LegsDrawnAuditTests.ride(name, .rockinghorse, at: SIMD2(1.1, 0.5), move: .decorSit, seconds: 30)
+        case "toss: header", "toss: bump", "toss: rally": return PlayTossTests.scenario(name)
         default: return nil
         }
     }

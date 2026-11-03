@@ -12,16 +12,18 @@ import Foundation
 
 nonisolated enum StoreKind: String, CaseIterable, Codable, Sendable {
     case food, treat, drink, supply, trickPage, shoes, wear, decor, room
+    /// A hand-held toy used from Play (the bubble wand): bought once, kept, never used up (2026-11-02, Play toys).
+    case toy
     var title: String {
         switch self {
         case .food: return "Food"; case .treat: return "Treats"; case .drink: return "Drinks"; case .supply: return "Care"; case .trickPage: return "Tricks"
-        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"
+        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"; case .toy: return "Toys"
         }
     }
     var symbol: String {
         switch self {
         case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .drink: return "cup.and.saucer.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
-        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"
+        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"; case .toy: return "wand.and.stars"
         }
     }
 }
@@ -85,7 +87,12 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems + food4Items
+    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems + food4Items + playToyItems
+
+    /// Hand-held Play toys (Toys/PlayToy.swift lists them for the picker). The balls are the existing decor toys; the wand is its own item.
+    static let playToyItems: [StoreItem] = [
+        StoreItem(id: "toy-bubbleWand", name: "Bubble wand", kind: .toy, price: 40, perk: nil, description: "Blow a stream of bubbles for the Jelbies to pop. Pick it from Play.", symbol: "wand.and.stars"),
+    ]
 
     /// The rooms for sale (home is never sold).
     static let roomItems: [StoreItem] = [

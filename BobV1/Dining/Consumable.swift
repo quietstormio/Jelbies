@@ -10,7 +10,11 @@
 import simd
 import Foundation
 
-nonisolated enum ConsumableKind: String { case food, drink }
+nonisolated enum ConsumableKind: String {
+    case food, drink
+    /// Not a consumable: the Play row's toy picker rides on the same sliding strip as Feed / Drink (the picker's state is one `ConsumableKind?`).
+    case toy
+}
 
 /// How it reaches his mouth: `finger` (the piece sticks to the nub, then is flicked into his mouth: EVERY food), `sip` (his own bendy straw).
 /// `fork` is RETIRED (user decision 2026-10-17): no catalogue food uses it; the code path is dead and unreachable.

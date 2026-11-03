@@ -80,6 +80,9 @@ enum IdleKind: String, CaseIterable, Sendable {
     case politeBow     // a sweet bow: forward ~0.35 rad, a slight head dip, a hold, then up
     case bellyDrum     // pats the belly with both stubby arms alternately, the body jiggling with each pat
     case signatureFlourish   // the species' own: Pip wags the tail, wings flutter, Moss spins the daisy, Teddy wiggles ears + pom, Bob a proud jiggle
+    // Play mode (2026-11-02, g-playtoss): BlobBrain+PlayToss.swift
+    case tossHeader    // a hop on the spot, the ball meets the crown at the top
+    case tossBump      // walks round behind the ball, turns onto the line and stomp-bumps it toward the player
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -190,6 +193,8 @@ struct IdleState {
     var reaction: ReactionKind?
     /// Soccer (BlobBrain+Soccer.swift): the mode, stage, kick line and target of the running kick / dribble / shot.
     var soccer = SoccerIdle()
+    /// Play mode's bump (BlobBrain+PlayToss.swift).
+    var toss = TossIdle()
     /// The window antic: walking to the window (true) before the look (W2).
     var windowGo = false
     /// Moves begun by this Jelly lately (seconds left): a friend may not echo them (kindCooling).
@@ -258,8 +263,8 @@ extension BlobBrain {
 
     var idleActivity: Activity {
         switch idleState.kind {
-        case .run, .stumble, .zoomies, .decorKick, .soccerKick: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish: return .playing
+        case .run, .stumble, .zoomies, .decorKick, .soccerKick, .tossBump: return .walking
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -350,7 +355,7 @@ extension BlobBrain {
         switch script {
         case .idle: mine = true
         case .spin: mine = kind == .tail || kind == .legSpin
-        case .walk: mine = (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .window && idleState.windowGo)
+        case .walk: mine = (kind == .tossBump && idleState.toss.walking) || (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .window && idleState.windowGo)
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
             if kind == .zoomies && idleState.phase == 0 {
@@ -359,6 +364,7 @@ extension BlobBrain {
                 script = .idle; activity = .walking
                 jellyKick = 3.2
             }
+            else if kind == .tossBump && idleState.toss.walking { mine = true; tossBumpArrived() }
             else if kind == .sleep && sleep.stage == 0 { mine = true; sleepArrived(sim, skinner) }
             else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
             else if kind == .window && idleState.windowGo { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
@@ -618,6 +624,8 @@ extension BlobBrain {
             script = .idle; activity = .lookingAround
         case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish:
             return emoteBegin(kind, sim)
+        case .tossHeader: return tossHeaderStart(sim)
+        case .tossBump: return tossBumpStart(sim, stand: here, dir: SIMD2(0, 1))
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -690,6 +698,7 @@ extension BlobBrain {
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)
+        case .tossBump: runTossBump(sim, skinner, dt)
         case .yawn, .stretch: runYawn(sim, skinner, dt)
         case .flop, .peek: runPosePlay(sim, skinner, dt)
         case .shake: runShake(sim, skinner, dt)
@@ -960,7 +969,7 @@ extension BlobBrain {
         let here = SIMD2(pose.centroid.x, pose.centroid.z)
         let d = idleState.target - here
         let dl = simd_length(d)
-        var step = (idleState.kind == .bounce || idleState.kind == .joy) ? 0 : min(Self.scootHop, dl)
+        var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader) ? 0 : min(Self.scootHop, dl)
         var u = dl > 1e-3 ? d / dl : SIMD2(sinf(yaw), cosf(yaw))
         if idleState.kind == .hopscotch {          // 0.34 u ahead along the leg, alternating 0.12 u to either side
             let f = SIMD2(sinf(idleState.baseYaw), cosf(idleState.baseYaw)), right = SIMD2(f.y, -f.x)
@@ -971,7 +980,7 @@ extension BlobBrain {
         gait.facingYaw = idleState.kind == .startle ? yaw : atan2f(u.x, u.y)
         gait.home = here
         poseW = 0; poseOn = false
-        let apex: Float = (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
+        let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
         gait.hopApex = apex
         gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
         gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
@@ -983,7 +992,7 @@ extension BlobBrain {
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
-        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
+        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .tossHeader || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt
