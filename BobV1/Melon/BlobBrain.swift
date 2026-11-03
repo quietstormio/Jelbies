@@ -200,6 +200,9 @@ final class BlobBrain {
     var reserved = false
     /// Where the waiting Jelly looks first (the tray); nil = at the nearest neighbour or just stays.
     var waitFocus: SIMD2<Float>?
+    /// Play mode: the floor point a waiting Jelly keeps turning to (the ball); nil = none. And the controller's hook for the moment a bump's foot lands (BlobBrain+PlayToss.swift).
+    var trackPoint: SIMD2<Float>?
+    var tossFire: ((BlobBrain) -> Void)?
     var waitBounceT: Float = 0
     var held: Bool { idleBlocked || reserved }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
@@ -820,7 +823,8 @@ final class BlobBrain {
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         let r = rand()
         var aim: Float?
-        if r < 0.35 {
+        if let tp = trackPoint, r < 0.8 { aim = yawTo(tp) }
+        else if r < 0.35 {
             if let o = socialOthers().filter({ $0 !== self }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) { aim = yawTo(o.position) }
         } else if r < 0.6, let f = waitFocus { aim = yawTo(f) }
         if let aim, abs(wrapAngle(aim - yaw)) > 0.12 {

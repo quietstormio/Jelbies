@@ -1,0 +1,134 @@
+//
+//  GameCare+Play.swift
+//  Play mode's glue: when Play may start, the actors handed to the controller, the room's world for the ball (walls, furniture), the ball's mesh in the room
+//  renderer, and what the player feels (haptics, sounds) for each PlayEvent. The camera is GameCamera.playBlend (eased by the controller).
+//
+
+import Foundation
+import UIKit
+import simd
+
+extension GameCare {
+    /// Play may start: roaming in the room, nothing else going on, and somebody awake to play with.
+    var canPlay: Bool {
+        focus.phase == .roaming && !bath.active && !tripActive && !raceBusy && !trayOut && !cafe.active && !arranging && !park.inScene && !volley.inScene && !groom.inScene
+            && !guestBook.present && !nightSkip.active && !play.active && !playJellies().isEmpty
+    }
+    /// Why Play is not available (VoiceOver), nil = it is.
+    var playBlocker: String? {
+        if play.active { return "Already playing" }
+        if focus.isActive { return "Not in the close-up" }
+        if bath.active { return "Not while cleaning" }
+        if trayOut { return "Food is already out" }
+        if tripActive || raceBusy || cafe.active { return "Not while away" }
+        if guestBook.present { return "Not while a friend is over" }
+        if playJellies().isEmpty { return "Everybody is asleep" }
+        return nil
+    }
+
+    /// The awake Jelbies in the room, as the controller sees them.
+    func playJellies() -> [PlayJelly] {
+        playActors.compactMap { a in
+            guard let b = a.brain, !parkHides(a.id), !b.isSleeping, !b.isNapping else { return nil }
+            return PlayJelly(id: a.id, brain: b, sim: a.sim, skinner: a.skinner)
+        }
+    }
+
+    /// A toy was picked: Play mode on with that ball.
+    func beginPlay(ball kind: DecorKind) {
+        guard canPlay else { AudioHub.shared.play(.notEnough); return }
+        select.cancel()
+        clearHighlight()
+        play.onEvent = { [weak self] e in self?.playFeedback(e) }
+        play.begin(ball: kind, title: kind.title, jellies: playJellies())
+        AudioHub.shared.play(.uiconfirm)
+    }
+
+    func endPlay() {
+        play.end()
+        play.onEvent = nil
+    }
+
+    /// Once per fixed step (after the Jellies and the decor): the ball's physics, the Jelbies' parts in the game.
+    func tickPlay(_ actors: [JellyActor], dt: Float) {
+        playActors = actors
+        guard play.active || play.camBlend > 0 || GameCamera.playBlend != 0 else { return }
+        if play.active, focus.isActive || bath.active || tripActive || guestBook.present { endPlay() }
+        play.tick(dt: dt, world: tossWorld(), jellies: play.active ? playJellies() : [])
+        if play.active, UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(play.clock * 60) % 15 == 0 {
+            let b = play.ball
+            NSLog("[playtoss] t=%.2f %@ ball (%.2f %.2f %.2f) v (%.1f %.1f %.1f) jellies %@", play.clock, String(describing: play.phase), b.pos.x, b.pos.y, b.pos.z, b.vel.x, b.vel.y, b.vel.z,
+                  play.jellies.map { String(format: "%d:(%.1f,%.1f)%@", $0.id, $0.pos.x, $0.pos.y, $0.brain.tossBusy ? "*" : "") }.joined(separator: " "))
+        }
+    }
+
+    /// The room as the ball sees it: the visible floor's sides, the furniture and the sofa under their tops.
+    func tossWorld() -> TossWorld {
+        var w = TossWorld()
+        w.xHalf = { DecorPlacement.visibleHalf(z: $0) + 0.3 }
+        let solids = DecorField.shared.feet.filter { $0.spec.solid && $0.kind != .minigoal }
+        let cyl = RoomLayout.cylinders
+        w.solid = { p in
+            var d = RoomLayout.sofaDistanceXZ(p)
+            for f in solids { d = min(d, f.distance(p)) }
+            for c in cyl { d = min(d, simd_distance(p, c.centre) - c.radius) }
+            return d
+        }
+        return w
+    }
+
+    // MARK: feel
+
+    func playFeedback(_ e: PlayEvent) {
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playtoss] %@", String(describing: e)) }
+        let hub = AudioHub.shared
+        func buzz(_ style: UIImpactFeedbackGenerator.FeedbackStyle, _ i: CGFloat) { guard HapticSettings.enabled else { return }; UIImpactFeedbackGenerator(style: style).impactOccurred(intensity: i) }
+        switch e {
+        case .release(let s):
+            buzz(.soft, min(0.9, 0.35 + CGFloat(s) * 0.04)); hub.play(.tick, volume: 0.6, rate: 1.1)
+        case .floorBounce(let s):
+            if s > 1.4 { hub.play(.boop, volume: min(0.45, 0.12 + s * 0.04), rate: 1.5) }
+        case .header(let id, _):
+            buzz(.soft, 0.75); hub.play(.highFiveBoop, jelly: id, volume: 0.8)
+        case .bodyBoop(let id):
+            buzz(.light, 0.4); hub.play(.boop, jelly: id, volume: 0.4, rate: 1.2)
+        case .kick(let id):
+            buzz(.light, 0.5); hub.play(.boop, jelly: id, volume: 0.5, rate: 1.3)
+        case .pass:
+            hub.play(.sparkle, volume: 0.35)
+        case .whiff, .rescue: break
+        case .caught(let rally):
+            buzz(.soft, 1.0); hub.play(.squish, volume: 0.6, rate: 0.8)
+            if rally >= 1 { hub.play(.cheerSmall, volume: 0.35) }
+        }
+    }
+
+    // MARK: drawing
+
+    /// The ball and its shadow, drawn with the room's animating decor. True = this frame's active decor mesh was set here.
+    func refreshTossBall(_ room: RoomRenderer, active: Set<Int>, time: Float) -> Bool {
+        let p = play
+        guard p.active, p.camBlend > 0.02 || p.phase != .inHand else {
+            if playShown { playShown = false; room.setDecorActive(RoomMesh()); decorDrawn.activeShown = false }
+            return false
+        }
+        let f = DecorField.shared
+        let b = RoomMeshBuilder(); b.material = .plain
+        func add(_ m: RoomMesh) { let off = UInt32(b.mesh.vertices.count); b.mesh.vertices.append(contentsOf: m.vertices); b.mesh.indices.append(contentsOf: m.indices.map { $0 + off }) }
+        if !active.isEmpty { add(DecorModels.build(feet: f.feet.filter { active.contains($0.uid) }, field: f, time: time)) }
+        let ball = p.ball
+        let h = max(ball.pos.y - ball.radius, 0)
+        // a soft dark disc under it: smaller and fainter the higher it is
+        let k = min(1, h / 3)
+        let col = SIMD3<Float>(repeating: 0.55 + 0.25 * k) * SIMD3(0.9, 0.8, 0.7)
+        if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: ball.pos.x, cz: ball.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
+        var a = DecorAnim(); a.rot = ball.rot; a.pos = SIMD2(ball.pos.x, ball.pos.z)
+        let m = RoomMeshBuilder(); m.material = .plain
+        DecorModels.add(p.ballKind, at: SIMD2(ball.pos.x, ball.pos.z), lift: h, anim: a, time: time, uid: 0, into: m)
+        add(m.mesh)
+        room.setDecorActive(b.mesh)
+        decorDrawn.activeShown = true
+        playShown = true
+        return true
+    }
+}

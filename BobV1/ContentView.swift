@@ -8,7 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var flow = StartFlow.shared
     @State private var studioModel = ContentView.makeStudioModel()
-    @State private var introOn = IntroGate.shouldShow()
+    @State private var introOn = IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // (-SkipIntro 1: capture aid)
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0
 
     var body: some View {

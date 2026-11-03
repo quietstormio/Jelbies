@@ -12,16 +12,18 @@ enum ShopTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .food: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture, .toys: return [.decor]; case .rooms: return [.room]
+        case .food: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture: return [.decor]; case .toys: return [.decor, .toy]; case .rooms: return [.room]
         }
     }
     var items: [StoreItem] {
         switch self {
         case .furniture: return StoreCatalog.decorItems(.furniture)
-        case .toys: return StoreCatalog.decorItems(.toys)
+        case .toys: return StoreCatalog.decorItems(.toys) + StoreCatalog.items(.toy)
         default: return kinds.flatMap { StoreCatalog.items($0) }.filter { !$0.awarded }
         }
     }
+    /// A tab the next Shop opening starts on (the Play picker's "no toys yet" button sets it; the Shop takes it once).
+    nonisolated(unsafe) static var pending: ShopTab?
     /// The tab named by the `-StoreTab` capture aid ("decor" = furniture).
     static func named(_ s: String?) -> ShopTab? { let n = (s ?? "").capitalized; return ShopTab(rawValue: n == "Decor" ? "Furniture" : n) }
     /// Tabs with goods in them.
@@ -67,7 +69,7 @@ struct ShopScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
         }
-        .onAppear { AudioHub.shared.play(.storeOpen) }
+        .onAppear { AudioHub.shared.play(.storeOpen); if let t = ShopTab.pending { ShopTab.pending = nil; tab = t } }
     }
 
     private var header: some View {

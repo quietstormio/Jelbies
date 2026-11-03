@@ -180,6 +180,9 @@ final class StoreBook {
         save()
     }
 
+    /// A play toy (Toys/PlayToy.swift) is owned: a count under "toy-<id>" (no catalogue item needed, so no save change).
+    func addToyCount(_ key: String) { saved.counts[key, default: 0] += 1; save() }
+
     // MARK: awards
 
     /// A first place on the Circuit: the winner medal is awarded (once) and can then be worn. True when it is new.

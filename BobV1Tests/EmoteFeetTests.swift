@@ -20,7 +20,7 @@ final class EmoteFeetTests: XCTestCase {
     static func reset() {
         BlobBrain.topDepthFix = true; BlobBrain.airTuck = true; OnePieceInvariantTests.guardArmed = true; Skinner.leashObserver = nil; FootBean.neckKeepOn = true; Skinner.collarAirFade = true; Skinner.teleportJump = 1.0
         ToyTuning.settle = 5; DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
-        RoomLayout.dynamicBoxes = []
+        RoomLayout.dynamicBoxes = []; GameCamera.playBlend = 0; RoomLayout.ballSpheres = []
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 

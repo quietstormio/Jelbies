@@ -652,6 +652,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game { model.care.tickMasks(actors, dt: sim.stepDt); model.care.tickWear(actors, dt: sim.stepDt) }         // sleep eye masks: on when he settles on his back, poof away when he wakes
         lapEnd(.masks, &lt)
         if game { model.care.tickDecor(dt: sim.stepDt) }                 // decor: the sat-in beanbag, the booped plant, the rolling ball
+        if game { model.care.tickPlay(actors, dt: sim.stepDt) }          // Play mode: the thrown ball, the headers and bumps (Play/PlayToss.swift)
         lapEnd(.decor, &lt)
     }
 
@@ -734,7 +735,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
-                brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
+                brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.active) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
                 brain.focusPaused = false
             }
             if brain.followsStudioCamera { brain.cameraPosXZ = SIMD2(rig.target.x, rig.target.z) + SIMD2(sinf(rig.azimuth), cosf(rig.azimuth)) * 10 }

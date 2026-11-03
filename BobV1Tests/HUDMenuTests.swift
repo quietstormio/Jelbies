@@ -118,7 +118,7 @@ final class HUDMenuTests: XCTestCase {
     func testRoutes() {
         let care = care3()
         XCTAssertEqual(HUDMenu.perform(.dress, .individual(2), care: care), .bag(.wear, who: 2))
-        XCTAssertEqual(HUDMenu.perform(.play, .group, care: care), .bag(.toys, who: 0))
+        XCTAssertEqual(HUDMenu.perform(.play, .group, care: care), .picker(.toy))          // (2026-11-02: Play opens the toy picker)
         XCTAssertEqual(HUDMenu.perform(.decor, .group, care: care), .bag(.furniture, who: 0))
         XCTAssertEqual(HUDMenu.perform(.compete, .individual(2), care: care), .competeChips)
         XCTAssertEqual(HUDMenu.compete(.track, id: 2), .town(.track, who: 2))
