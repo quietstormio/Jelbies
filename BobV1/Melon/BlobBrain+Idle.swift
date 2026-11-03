@@ -195,6 +195,9 @@ struct IdleState {
     var soccer = SoccerIdle()
     /// Play mode's bump (BlobBrain+PlayToss.swift).
     var toss = TossIdle()
+    /// The lie-down's snuggle: where he eases to (the last measured gap to a lying neighbour) and the seconds to the next measurement (BlobBrain+LieClear).
+    var snugGoal: SIMD2<Float>?
+    var snugNext: Float = 0, snugRuns = 0
     /// The window antic: walking to the window (true) before the look (W2).
     var windowGo = false
     /// Moves begun by this Jelly lately (seconds left): a friend may not echo them (kindCooling).
@@ -604,7 +607,7 @@ extension BlobBrain {
             }
             return flapHopBegin(sim)
         case .flop:
-            guard let spot = lieSpot(from: here) else { return false }          // (BlobBrain+LieClear: a flat body is wider; not next to a friend)
+            guard let spot = lieSpot(from: here, yaw: yaw) else { return false }          // (BlobBrain+LieClear: a flat body is wider; not next to a friend)
             idleBegin(.flop)
             script = .idle; activity = .playing
             lieWalk(to: spot, from: here); lieTipToward(spot, lieYaw: yaw)

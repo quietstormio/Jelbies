@@ -58,6 +58,18 @@ nonisolated struct ClipEgg {
         return -Float(BobForm.bodySDF(SIMD3<Double>(Double(abs(q.x)), Double(q.y), Double(q.z))))
     }
 
+    /// The same without the box shortcut: + inside, - outside (pseudo distance, rest units), for the snuggle's gap measure.
+    func depthFull(_ p: SIMD3<Float>) -> Float {
+        let q = rest(p)
+        return -Float(BobForm.bodySDF(SIMD3<Double>(Double(abs(q.x)), Double(q.y), Double(q.z))))
+    }
+    /// A point on the egg's surface (rest-space ring `t` 0...1 up the body, angle `a`) in the world.
+    func surfacePoint(t: Double, a: Float) -> SIMD3<Float> {
+        let hw = Float(BobForm.halfWidth(t: t)), hd = Float(BobForm.halfDepth(t: t))
+        let q = SIMD3(hw * cosf(a), Float(BobForm.lift + BobForm.bodyH * t), hd * sinf(a))
+        return centroid + minv.inverse * (q - restCentroid)
+    }
+
     /// World point `p` (inside the egg by `d`) moved out to `margin` outside the surface.
     func pushedOut(_ p: SIMD3<Float>, depth d: Float, margin: Float) -> SIMD3<Float> {
         var p = p

@@ -583,7 +583,7 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
-        runDt = dt
+        runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
@@ -1499,6 +1499,8 @@ final class BlobBrain {
         skinnerRef?.clearOverride()
     }
     weak var skinnerRef: Skinner?
+    /// The body this brain drives (set each tick): a lying neighbour's fitted egg for the snuggle (BlobBrain+LieClear).
+    weak var simRef: SoftBody?
     /// Teddy's ears + pom as body vertices (TeddyBean): what the feature layer (hat rule, pop, follow-through) wants; driveLimbs hands it to the skinner.
     var teddyBody = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1, teddySway = SIMD2<Float>.zero
 
