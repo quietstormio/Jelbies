@@ -37,19 +37,21 @@ final class MainMenuLayoutUITests: XCTestCase {
             if save { XCTAssertGreaterThanOrEqual(app.buttons["menu-new"].frame.height, 44, "\(name) New Game tap height") }
             // the composition fills the screen: width fractions (portrait ~ the iPhone design, landscape limited by the height)
             let logoFrac = logo.frame.width / win.width, btnFrac = primary.frame.width / win.width
+            let lastBottomShort = save ? app.buttons["menu-new"].frame.maxY : primary.frame.maxY
             if name == "portrait" {
                 XCTAssertTrue((0.70...0.92).contains(logoFrac), "portrait logo is \(logoFrac) of the width")
                 XCTAssertTrue((0.55...0.78).contains(btnFrac), "portrait buttons are \(btnFrac) of the width")
             } else {
                 if win.width / win.height > 1.6 {          // a short, wide screen (iPhone landscape) spans most of the width
-                    XCTAssertGreaterThanOrEqual(logoFrac, 0.45, "short landscape logo fraction")
-                    XCTAssertTrue((0.34...0.48).contains(btnFrac), "short landscape button fraction \(btnFrac)")
+                    XCTAssertGreaterThanOrEqual(logoFrac, 0.34, "short landscape logo fraction \(logoFrac)")
+                    XCTAssertLessThanOrEqual(lastBottomShort, win.height * 0.92 - 17 * 3.6 - 4 + 1, "buttons stay above the face's brows and eyes")
+                    XCTAssertTrue((0.28...0.48).contains(btnFrac), "short landscape button fraction \(btnFrac)")
                 }
                 XCTAssertTrue((0.28...0.60).contains(logoFrac), "landscape logo is \(logoFrac) of the width")
                 XCTAssertTrue((0.22...0.62).contains(btnFrac), "landscape buttons are \(btnFrac) of the width")
             }
             let lastBottom = save ? app.buttons["menu-new"].frame.maxY : primary.frame.maxY
-            XCTAssertLessThanOrEqual(lastBottom, win.height * (win.width / win.height > 1.6 ? 0.92 : 0.80), "\(name): buttons leave room for the face")
+            XCTAssertLessThanOrEqual(lastBottom, win.height * (win.width / win.height > 1.6 ? 0.80 : 0.80), "\(name): buttons leave room for the face")
             if name == "landscape" || win.height > 900 { XCTAssertGreaterThan(lastBottom, win.height * 0.45, "\(name): the stack uses the height") }
             if let dir = shotDir {
                 try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)

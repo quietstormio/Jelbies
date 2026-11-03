@@ -37,15 +37,18 @@ struct MenuMetrics {
         btnScale = sc; btnWidth = 300 * sc
         if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen
             let k: CGFloat = hasSave ? 0.75 : 0.9
-            let ft = h * 0.90                                                    // the face only peeks a thin band
+            let sf: CGFloat = 3.6                                                // the Jelbie peeks with brows and eyes: ~49 % of the width incl. its rim
+            let eyesY = h * 0.92                                                 // eyes ~8 % above the bottom edge
+            let ft = eyesY - 51.5 * sf                                           // rim top (the buttons may overlap it, never the brows or eyes)
+            let stackBottom = eyesY - 17 * sf - 4 - 8                            // above the brows (8 pt for the bob)
             let pad: CGFloat = 6
             let btnH = btnUnits * k
-            let logoH = ft - 4 - pad - 6 - btnH
+            let logoH = stackBottom - pad - 6 - btnH
             let sl = min(logoH / titleUnits, 0.55 * w / 379)
             s = sl; btnScale = k; btnWidth = 0.85 * 379 * sl
             titleTop = pad
-            buttonsGap = max(4, ft - 4 - pad - titleUnits * sl - btnH)
-            faceScale = 4.8 * w / 440
+            buttonsGap = max(4, stackBottom - pad - titleUnits * sl - btnH)
+            faceScale = sf
             faceTop = ft
         }
     }
