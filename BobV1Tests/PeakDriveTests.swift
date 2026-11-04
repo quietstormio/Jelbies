@@ -1,6 +1,6 @@
 //
 //  PeakDriveTests.swift
-//  Motion warping of the touching emotes (BlobSocial+Peak.swift, +Part.swift pressTurnWarp, ringAround radius): the math that keeps a lunge's peak at skin contact.
+//  Motion warping of the touching emotes (BlobSocial+Peak.swift, ringAround radius): the math that keeps a lunge's peak at skin contact.
 //
 
 import XCTest
@@ -24,6 +24,12 @@ final class PeakDriveTests: XCTestCase {
         XCTAssertGreaterThan(travel, 0.5 * (gap - PeakTuning.rest), "but it is a visible lean, not nothing")
     }
 
+    /// A lean that is IN while the gap is open may always relax back to neutral (a guard that froze the lean held the high five 30 cm apart for 5 s).
+    func testRelaxingIsNeverBlocked() {
+        let b = PeakTuning.leanBounds(now: 0.055, trim: 0, gap: 0.33)
+        XCTAssertLessThanOrEqual(b.maxOut, 0)
+    }
+
     /// A wind-up (lean away) may open the gap only up to `openCap`: with the pair at the cap it may not lean further away.
     func testWindUpCapped() {
         let atCap = PeakTuning.leanBounds(now: -0.02, trim: 0, gap: PeakTuning.openCap)
@@ -38,7 +44,8 @@ final class PeakDriveTests: XCTestCase {
         let a = PeakTuning.leanBounds(now: 0.1, trim: 0, gap: 0.02)
         let b = PeakTuning.leanBounds(now: 0.1, trim: 0.06, gap: 0.02)
         XCTAssertEqual(a.maxIn - b.maxIn, 0.06, accuracy: 1e-6)
-        XCTAssertEqual(a.maxOut - b.maxOut, 0.06, accuracy: 1e-6)
+        XCTAssertLessThanOrEqual(a.maxOut, 0)          // (the away bound never forbids relaxing to neutral)
+        XCTAssertLessThanOrEqual(b.maxOut, 0)
     }
 
     /// The ring hop moves along a chord: mid-hop the pair is closer by cos(hop / 2). The ring radius for the widest touch keeps even that moment clear.
@@ -47,16 +54,5 @@ final class PeakDriveTests: XCTestCase {
         let r = (touch + 0.06) / (2 * cosf(Friends2Tuning.ringHop / 2))
         XCTAssertGreaterThanOrEqual(2 * r * cosf(Friends2Tuning.ringHop / 2), touch)
         XCTAssertEqual(Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 15, "1.5 turns of 36 degree hops")
-    }
-
-    /// The turn-in-place warp: the reach after a turn of `dyaw` is the profile's reach in the direction the turn brings round (what pressTurnWarp reads).
-    func testTurnReachDirection() {
-        // a body that is 0.7 wide to its +x and 0.4 deep to its +z, yaw 0; it turns 90 degrees so that its +x side faces +z: the reach toward +z becomes 0.7
-        func reach(_ d: SIMD2<Float>) -> Float { abs(d.x) > abs(d.y) ? 0.7 : 0.4 }
-        let u = SIMD2<Float>(0, 1)
-        let dyaw: Float = .pi / 2
-        let back = rotXZ(u, -dyaw)
-        XCTAssertEqual(reach(u), 0.4)
-        XCTAssertEqual(reach(back), 0.7, "after a +90 degree turn the body's +x side points where +z was: the old reach toward +x is the new reach toward +z")
     }
 }

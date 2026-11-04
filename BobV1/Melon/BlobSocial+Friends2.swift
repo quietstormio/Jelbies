@@ -453,7 +453,7 @@ extension BlobBrain {
             else if isA, s.phaseT > 4 { s.setPhase(3) }
         default:   // both sit, and sway together
             let ft = s.phaseT
-            if !socialBook.hopStarted, fxFree, ft > (isA ? 0.1 : 0.35), peakArmed(o) || ft > 3.5 {          // (a sitting body cannot close a gap: sit once the backs are within a lean of each other)
+            if !socialBook.hopStarted, fxFree, ft > (isA ? 0.1 : 0.35) {
                 letGo()
                 if idleStart(.sit, sim) { idleState.hold = s.duration + 0.5; idleState.goalYaw = away; socialBook.hopStarted = true } else { s.finish(.aborted) }
             }

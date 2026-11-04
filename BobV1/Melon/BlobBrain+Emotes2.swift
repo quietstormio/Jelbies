@@ -404,7 +404,6 @@ extension BlobBrain {
             }
         }
         idleState.k = k
-        snuggleTick(sim, dt)          // (lying next to a friend: the settle on the drawn skin gap, BlobBrain+LieClear.swift)
         // the feet stay under him, a touch behind (they splay back as he lies on his belly)
         if k > 0 || idleState.phase >= 1 {
             let back = SIMD2(-sinf(yaw), -cosf(yaw)) * 0.06 * smooth01(k)

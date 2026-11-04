@@ -768,7 +768,7 @@ extension BlobBrain {
             if scriptIsNone { faceEach(o) }
             if s.t > 16 { s.finish(.aborted); return }
             if scriptIsNone && s.phaseT > 0.3 {
-                if d < peerGap + 0.4 { s.setPhase(1); s.fightT = 0 } else { s.finish(.aborted) }
+                if d < max(peerGap + 0.4, Self.walkUpFar) { s.setPhase(1); s.fightT = 0 } else { s.finish(.aborted) }
             }
         case 1: // the face-off + shove-bumps
             faceEach(o)
