@@ -656,8 +656,10 @@ extension BlobBrain {
         } else if sleep.holdForce { sleep.holdSide = 1 }
         let leanSign: Float = sleep.holdSide == 1 ? 1 : -1
         let fid = sleep.fid, fa = fid.active && sleep.stage == 3
-        let q0 = yawQuat(yaw + (fa ? fid.yawOff : 0)) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
-        let q = fa && (fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW, axis: SIMD3(0, 0, 1)) : q0
+        let q0 = yawQuat(yaw) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
+        // (user 2026-11-04: belly-up he must NEVER spin like a clock hand. The heading offset is gone, and the side roll turns about his own head-to-foot
+        //  axis, body y after the pitch back, so he rocks onto a side and back. It used to turn about body z, which points at the sky when lying, so it was a spin.)
+        let q = fa && (fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW, axis: SIMD3(0, 1, 0)) : q0
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
         else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
