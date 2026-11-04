@@ -140,7 +140,7 @@ extension BlobBrain {
         switch kind {
         case .groupHug, .circleDance, .groupCheer:
             let packed = kind != .groupCheer
-            guard let plan = groupPlan(crew, chord: max(peerGap * (packed ? GroupTuning.touch : GroupTuning.loose), packed ? 1.45 : 0), packed: packed) else { return false }
+            guard let plan = groupPlan(crew, chord: packed ? ringChord(crew) : peerGap * GroupTuning.loose, packed: packed) else { return false }
             s = newGroupSession(kind, crew: crew, duration: kind == .groupHug ? vDur(5.8) : 0)
             s.home0 = plan.c; s.ringR = plan.r; s.slotAng = plan.ang
             s.slotSpot = plan.spots

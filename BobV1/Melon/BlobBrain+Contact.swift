@@ -18,6 +18,8 @@ enum ContactTuning {
     static let cooldown: Float = 1.6
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
+    static let leanBudget: Float = 0.08          // rad of lean a planted body spends on a residual gap (~ 4 cm at the cheeks); beyond it: one shuffle step
+    static let leanPerMetre: Float = 2.0          // rad per metre to close (the cheeks sit ~ 0.5 m up)
     static let rearmHold: Float = 0          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
@@ -146,10 +148,17 @@ extension BlobBrain {
                         // (only while the stance is HOLDING the touch - the press phase; an approach brush or a part is the default squish)
                         let st = contactStance(with: o).flatMap { st in social.flatMap { st.step(at: $0.phase)?.target == ContactStance.hold ? st : nil } }
                         AudioHub.shared.play(st?.sound ?? .squish, jelly: steerID, x: px, volume: st?.sound != nil ? st!.volume : 0.25)
-                        switch st?.haptic ?? .none {
-                        case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
-                        case .treat(let key): treatHaptic(key)
-                        case .none: break
+                        if let sess = social { sess.contactTouches += 1 }
+                        if (social?.contactTouches ?? 1) <= 1 {          // (the emote's own haptic: once a session, with its first touch; AudioHub.play already sent the sound's cue)
+                            switch st?.haptic ?? .none {
+                            case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
+                            case .treat(let key): treatHaptic(key)
+                            case .none: break
+                            }
+                        }
+                        if let sess = social, let any = contactStance(with: o), any.cls == .touching {          // the heart / shove event rides on the touch too (it used to fire on the drive's timer)
+                            if sess.kind == .squabble { onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID)) }
+                            else if !sess.kind.isGroup { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
                         }
                         contactEvents += 1
                     }

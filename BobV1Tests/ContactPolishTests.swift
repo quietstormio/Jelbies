@@ -47,14 +47,14 @@ extension FeatureClipTests.Duo {
 
 // MARK: - the catalogue (mirrors docs/CONTACT_EMOTES.md)
 
-enum ContactStance: String { case touching, proximity }
+enum ContactClass: String { case touching, proximity }
 enum ContactScenario { case social(SocialKind), lie(IdleKind), sleepPair }
 enum ContactProp { case none, ball, beanbag, loveseat }
 
 struct ContactEntry {
     var name: String
     var scenario: ContactScenario
-    var stance: ContactStance
+    var stance: ContactClass
     var props: ContactProp = .none
     var maxSec: Float = 70
     /// true = start from the lab's default spots (1.7 apart: already inside a boop's / greet's window); false = 3 apart, so the walk-up happens.
@@ -86,7 +86,7 @@ final class ContactPolishTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var all: [Result] = []
 
-    static func e(_ n: String, _ k: SocialKind, _ s: ContactStance, props: ContactProp = .none, sec: Float = 70) -> ContactEntry { ContactEntry(name: n, scenario: .social(k), stance: s, props: props, maxSec: sec) }
+    static func e(_ n: String, _ k: SocialKind, _ s: ContactClass, props: ContactProp = .none, sec: Float = 70) -> ContactEntry { ContactEntry(name: n, scenario: .social(k), stance: s, props: props, maxSec: sec) }
     /// Pair emotes (rig 0 starts it with rig 1).
     static let pairEntries: [ContactEntry] = [
         e("boop", .boop, .touching), e("squabble", .squabble, .touching), e("bump", .bump, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
@@ -111,7 +111,7 @@ final class ContactPolishTests: XCTestCase {
     // MARK: results
 
     struct Result {
-        var name = "", cast = "", stance = ContactStance.proximity, kind = ""
+        var name = "", cast = "", stance = ContactClass.proximity, kind = ""
         var started = false, completed = false
         var seconds: Float = 0, frames = 0
         var minGap: Float = .infinity, minGapT: Float = 0, minGapFrame = 0, minGapPair = "", minGapPhase = ""
@@ -212,7 +212,7 @@ final class ContactPolishTests: XCTestCase {
         var prevRoot = rigs.map { $0.root }
         var evCount = Array(repeating: 0, count: n)
         var inEpisode = false, lastEnd = -1000, lastMg: Float = 9
-        var curEpisode = -1
+        var curEpisode = -1, evPrev = 0, evDelta = 0
         var sndSeen = 0, hapSeen = 0
         var secondSleeper = false
         var trace: [String] = []
@@ -221,6 +221,10 @@ final class ContactPolishTests: XCTestCase {
         while frame < maxF {
             tap.frame = frame
             d.tick()
+            // THE touch event: the gate's own (contactTick: fires at skin gap <= +0.5 cm, re-armed past +3 cm). One episode per event; its sound / haptic are the ones requested in the same frame.
+            let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }
+            evDelta = evNow - evPrev; evPrev = evNow
+            if evDelta > 0 { for _ in 0..<evDelta { res.episodes += 1; res.sndInEpisode.append(0); res.hapInEpisode.append(0) }; curEpisode = res.episodes - 1 }
             if case .sleepPair = e.scenario, !secondSleeper, a.brain.isNapping {
                 secondSleeper = true
                 d.lab.snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
@@ -242,11 +246,14 @@ final class ContactPolishTests: XCTestCase {
             var inSession = true
             if case .social = e.scenario { inSession = (a.brain.social?.phase ?? 0) >= 1 } else { inSession = frame > 60 }
             var gapNow: Float? = nil
+            var activePhase = true          // the stance median only counts the frames where the table is HOLDING the touch (a walk-up, a run, a part are not the stance)
+            if case .social(let k) = e.scenario, let st = ContactStance.entry(k), st.cls == .touching, let ph = a.brain.social?.phase { activePhase = st.step(at: ph)?.target == ContactStance.hold }
             if sampled || (plan?.contains(frame) ?? false) {
                 let S = d.contactSurfaces()
                 var mg = Float.infinity, mp = ""
                 for i in 0..<n { for j in (i + 1)..<n {
-                    let g = BruteForceContactMetric.skinGap(S[i], S[j])
+                    var g = BruteForceContactMetric.skinGap(S[i], S[j])
+                    if e.name == "leapfrog", Self.verticallyClear(S[i], S[j]) { g = max(g, 0.5) }          // (the hopper's soles are above the lying body's top: the plan view means nothing)
                     if g < mg { mg = g; mp = "\(Self.names[cast[i]])-\(Self.names[cast[j]])" }
                 } }
                 if sampled && mg < 8 {
@@ -255,10 +262,8 @@ final class ContactPolishTests: XCTestCase {
                         res.minGapPhase = "\(a.brain.socialKind.map { $0.rawValue } ?? "-")/ph\(a.brain.social?.phase ?? -1)/idle \(a.brain.idleState.kind.map { "\($0)" } ?? "-")" }
                     if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined())) }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
-                    if still, inSession, mg < 2.2 { res.stance01.append(mg) }
+                    if still, inSession, activePhase, mg < 2.2 { res.stance01.append(mg) }
                     // episodes
-                    if !inEpisode, mg <= Self.touchOn { inEpisode = true; res.episodes += 1; curEpisode = res.episodes - 1; res.sndInEpisode.append(0); res.hapInEpisode.append(0) }
-                    else if inEpisode, mg > Self.touchOff { inEpisode = false; lastEnd = frame }
                     lastMg = mg
                 }
                 if let sh = shooter, let pl = plan, pl.contains(frame), cells.count < pl.count {
@@ -274,13 +279,13 @@ final class ContactPolishTests: XCTestCase {
                 res.sounds[name, default: 0] += 1
                 if Self.contactSounds.contains(name) {
                     res.sndGapMin = min(res.sndGapMin, lastMg); res.sndGapMax = max(res.sndGapMax, lastMg)
-                    if inEpisode || f - lastEnd <= 20, curEpisode >= 0 { res.sndInEpisode[curEpisode] += 1 } else { res.sndOutside += 1 }
+                    _ = f; if evDelta > 0, curEpisode >= 0 { res.sndInEpisode[curEpisode] += 1 } else { res.sndOutside += 1 }
                 }
             }
             while hapSeen < tap.haps.count {
                 let (f, name) = tap.haps[hapSeen]; hapSeen += 1
                 res.haps[name, default: 0] += 1
-                if inEpisode || f - lastEnd <= 20, curEpisode >= 0 { res.hapInEpisode[curEpisode] += 1 } else { res.hapOutside += 1 }
+                _ = f; if evDelta > 0, curEpisode >= 0 { res.hapInEpisode[curEpisode] += 1 } else { res.hapOutside += 1 }
             }
             _ = gapNow
             // features / limbs (every 6th frame while it is going on)
@@ -320,6 +325,11 @@ final class ContactPolishTests: XCTestCase {
 
     // MARK: the table
 
+    /// 3D check for a pass-over: one body's lowest point is above the other's highest (its soles clear the lying body's top).
+    static func verticallyClear(_ a: ContactSurface, _ b: ContactSurface) -> Bool {
+        guard let aLo = a.points.map(\.y).min(), let aHi = a.points.map(\.y).max(), let bLo = b.points.map(\.y).min(), let bHi = b.points.map(\.y).max() else { return false }
+        return aLo >= bHi - 0.01 || bLo >= aHi - 0.01
+    }
     static func cm(_ f: Float) -> String { f.isFinite ? String(format: "%.1f", f * 100) : "-" }
     /// A depth in cm; "-" when there was none to measure (the sentinel is -1 u).
     static func dcm(_ f: Float) -> String { f <= -0.99 ? "-" : cm(f) }

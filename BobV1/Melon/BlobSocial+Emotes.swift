@@ -28,10 +28,10 @@ enum EmoteTuning {
     static let treatWait: (Float, Float) = (40, 90)
     static let treatCrew = 3
     /// Conga: the gap between two in the line (x peerGap), the leg length (u), the longest route (legs), waddle frequency (Hz) and roll (rad).
-    static let congaGap: Float = 1.15, congaLeg: Float = 1.5, maxLegs = 7, minLegs = 3
+    static let congaGap: Float = 1.15, congaSpace: Float = 0.17, congaLeg: Float = 1.5, maxLegs = 7, minLegs = 3
     static let waddleHz: Float = 1.8, waddleRoll: Float = 0.055, waddleSquash: Float = 0.03
     /// Ring: chord between neighbours (x peerGap), the plan of steps (0 = bounce, 1 = quarter-turn shuffle), the pitch of each member's chime.
-    static let ringChord: Float = 1.25
+    static let ringChord: Float = 1.25, ringSpace: Float = 0.30
     static let ringPlan: [Int] = [0, 0, 1, 0, 0, 0, 1, 0]
     static let ringPitch: [Float] = [1.0, 1.26, 1.5, 1.12, 1.33]
 }
@@ -110,7 +110,7 @@ extension BlobBrain {
     private func congaPlan(_ crew: [BlobBrain]) -> SocialSession? {
         let n = crew.count
         let strangers = socialOthers().filter { x in !crew.contains { $0 === x } }.map(\.position)
-        let gapBehind = peerGap * EmoteTuning.congaGap
+        let gapBehind = ringChord(crew, extra: EmoteTuning.congaSpace)
         let want = min(EmoteTuning.maxLegs, max(EmoteTuning.minLegs, Int((rand(8, 14)) * 0.55)))
         var best: (score: Float, leader: Int, h: Float, path: [SIMD2<Float>], slots: [SIMD2<Float>])?
         let cam = faceCameraYaw()
@@ -177,7 +177,7 @@ extension BlobBrain {
     private func ringPlan(_ crew: [BlobBrain]) -> SocialSession? {
         let n = crew.count
         guard n == 3 else { return nil }
-        let chord = peerGap * EmoteTuning.ringChord
+        let chord = ringChord(crew, extra: EmoteTuning.ringSpace)
         let r = chord / (2 * sinf(.pi / Float(n)))
         let cen = crew.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(n)
         let strangers = socialOthers().filter { x in !crew.contains { $0 === x } }.map(\.position)
@@ -261,7 +261,7 @@ extension BlobBrain {
             if !socialBook.apartStarted, fxFree, t >= 0 {
                 socialBook.apartStarted = true; letGo()
                 // (the same waypoints; each stops his own gap short of the leader's last point, so the line does not bunch up when the leader stops)
-                let pts = trimmedPath(s.path, by: Float(idx) * peerGap * EmoteTuning.congaGap)
+                let pts = trimmedPath(s.path, by: Float(idx) * ringChord(mem, extra: EmoteTuning.congaSpace))
                 if let last = pts.last, pts.count >= 2 {
                     socialWalk(to: last, sim)
                     route = Array(pts.dropFirst().dropLast())

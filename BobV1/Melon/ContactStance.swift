@@ -44,23 +44,25 @@ struct ContactStance: Sendable {
     static let hold: Float = -0.004
     /// Where an approach stands before the press (above the 3 cm re-arm of contactTick, so the touch is a fresh one).
     static let approach: Float = 0.04
+    /// Where a walk ends relative to the touch (the lean closes the rest, <= the lean budget).
+    static let arrive: Float = 0.015
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
     /// Touching for the whole hold from phase `from`.
-    static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
+    static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
         var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic, pulses: pulses)
     }
     /// Approach (stand `approach` apart) from `from`, press from `press`, off from `until`.
-    static func pressing(from: Int, press: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
+    static func pressing(from: Int, press: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
         var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: approach), Step(from: press, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
     }
     /// Never overlap (and never squish): gap >= `near` from phase `from`.
-    static func proximity(from: Int = 0, features: Bool = false) -> ContactStance {
+    static func proximity(from: Int = 0, features: Bool = true) -> ContactStance {
         ContactStance(cls: .proximity, steps: [Step(from: from, target: near, onlySeparate: true)], features: features)
     }
 
@@ -79,7 +81,9 @@ struct ContactStance: Sendable {
         .chase: .pressing(from: 2, press: 2, until: 3, sound: .boop, volume: 0.9),
         // holds
         .nuzzle: .holding(from: 2),
-        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)]),
+        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
+        .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
+        .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
         .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
         .backToBack: .holding(from: 3, features: true),
@@ -133,11 +137,12 @@ extension BlobBrain {
 
     private func contactSettlePair(_ a: BlobBrain, _ b: BlobBrain, _ st: ContactStance, _ step: ContactStance.Step, _ target: Float) {
         func fixed(_ x: BlobBrain, _ role: ContactStance.Anchor) -> Bool {
-            return x.held || x.idleState.kind == .sleep || (st.anchor == role && st.anchor != .none)
+            return x.held || x.idleState.kind == .sleep || x.idleState.kind == .decorSit || (st.anchor == role && st.anchor != .none)
         }
         guard let s = a.social else { return }
+        a.contactStanceWalk(partner: b, gapWanted: target); b.contactStanceWalk(partner: a, gapWanted: target)
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
-        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: true, support: true)
+        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }
 }
 
@@ -182,6 +187,46 @@ extension BlobBrain {
         case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
         case .treat(let key): treatHaptic(key)
         case .none: break
+        }
+    }
+}
+
+extension BlobBrain {
+    /// The heart / shove event of a touching emote. With profiles `contactTick` posts it at the real touch; this is the old drive-timer path for rigs with no profile.
+    func contactBoopFallback(_ o: BlobBrain, shove: Bool = false) {
+        guard !ContactField.enabled || ContactField.gap(steerID, o.steerID) == nil else { return }
+        if shove { onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID)) }
+        else { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
+    }
+}
+
+extension BlobBrain {
+    /// The widest root distance at which my skin and `o`'s touch over the compass (x and z, both ways): a body turns on the spot, so a ring / line planned on this never ends up inside a neighbour. + the approach margin.
+    /// Without profiles (the first tick): 1.445.
+    func ringTouch(_ o: BlobBrain) -> Float {
+        var w: Float = 0, ok = false
+        for u in [SIMD2<Float>(1, 0), SIMD2(-1, 0), SIMD2(0, 1), SIMD2(0, -1)] { if let t = touchRadius(o, along: u) { w = max(w, t); ok = true } }
+        return ok ? w + ContactStance.approach : 1.445
+    }
+    /// The chord / follow distance for a crew: `extra` more than the widest touch of any two of them (0 = packed, touching).
+    func ringChord(_ crew: [BlobBrain], extra: Float = 0) -> Float {
+        var w: Float = 0
+        for i in crew.indices { for j in (i + 1)..<crew.count where j < crew.count { w = max(w, crew[i].ringTouch(crew[j])) } }
+        return (w > 0 ? w : 1.445) + extra
+    }
+}
+
+extension BlobBrain {
+    /// The sleep pile: two sleepers that lie side by side are kept touching (gap 0, the wings / tail counted), the one that fell asleep first stays. Called every tick by the one that has the lower id.
+    func sleepPileTick() {
+        guard ContactField.enabled, idleState.kind == .sleep, social == nil else { return }
+        for o in socialOthers() where o !== self && !o.isNapping && !o.held && o.social == nil && o.idleState.kind != .sleep {          // (a neighbour who is up: the sleeper does not move, the neighbour is kept off)
+            ContactSettle.step(self, o, target: ContactStance.near, anchoredA: true, onlySeparate: true, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
+        }
+        for o in socialOthers() where o !== self && isNapping && o.isNapping && steerID < o.steerID {
+            let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
+            guard let g = ContactField.gap(steerID, o.steerID, features: true), g < 0.7 else { continue }
+            ContactSettle.step(self, o, target: ContactStance.hold, anchoredA: !older, anchoredB: older, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
         }
     }
 }

@@ -29,7 +29,8 @@ extension BlobBrain {
     /// False = the circle is not on the floor (the walls / furniture), so there is no spin.
     private func spinPlan(_ s: SocialSession, _ o: BlobBrain) -> Bool {
         s.home0 = (position + o.position) / 2
-        let r = min(SpinHugTuning.radius.upperBound, max(SpinHugTuning.radius.lowerBound, simd_distance(position, o.position) / 2))
+        let half = ringTouch(o) / 2          // (the ring's diameter is never under the widest touch of the pair)
+        let r = max(half, min(half + 0.10, simd_distance(position, o.position) / 2))
         s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))
         let was = socialBook.passThrough
         socialBook.passThrough = true          // (the floor rules only: the partner's own body is not an obstacle for the plan, he moves along the other half)
@@ -66,7 +67,7 @@ extension BlobBrain {
                 if !s.impacted, t > 0.7 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .emoteSpinHug, 1, haptic: .treat("spinHug.press"))
                     face(.joyArc, hold: 1.2); o.face(.joyArc, hold: 1.2)
                 }
