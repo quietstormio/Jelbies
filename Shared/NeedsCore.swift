@@ -48,9 +48,10 @@ nonisolated enum NeedTier: Int, CaseIterable, Sendable {
 
 /// Every tunable of the needs in one place.
 nonisolated enum NeedsTuning {
-    /// Real hours for a full need to run empty.
+    /// Real hours for a full need to run empty. A game day is 24 real minutes (GameClockTuning), and he should be hungry about TWICE a day: he WANTS food
+    /// (level < 0.3, i.e. 0.7 of the way down) every ~12 real minutes = 12 game hours, so hunger empties in 0.3 h (was 3 h) and thirst, kept at 2/3 of it, in 0.2 h (was 2 h).
     static func hoursToEmpty(_ k: NeedKind) -> Double {
-        switch k { case .hunger: return 3; case .thirst: return 2; case .attention: return 4 }
+        switch k { case .hunger: return 0.3; case .thirst: return 0.2; case .attention: return 4 }
     }
     /// Time AWAY has its own, gentler curve (the in-app rates above are unchanged): real hours for a full need to fall to empty, linearly
     /// (the floor stops it first), so after 3 h away: hunger 0.70, thirst 0.625, attention 0.50. After 8 h (or overnight) all three sit on the floor.

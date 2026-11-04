@@ -66,6 +66,7 @@ struct SleepFidget {
     var u: Float = 0, dur: Float = 1                   // progress 0...1 of the shift in hand
     var yawOff: Float = 0, yawGoal: Float = 0          // slow extra heading (rad)
     var rollOff: Float = 0, rollGoal: Float = 0        // side tilt (rad): which side he lies on
+    var ySign: Float = 1, rSign: Float = 1               // the side the NEXT nuzzle / lean goes to (alternates every time: no net turn)
     var wigAmp: Float = 0                              // transient wiggle amplitude (rad)
     var from = SIMD2<Float>.zero, to = SIMD2<Float>.zero, home = SIMD2<Float>.zero
     var twU: Float = -1, twSide = 0, twFoot = false    // twitch progress (-1 = none)
@@ -122,7 +123,8 @@ enum SleepTuning {
     static let breathKick: Float = 0.9
     /// Sleep fidgets: a shift every `shiftEvery` s, a twitch every `twitchEvery`, a half-wake every `halfEvery` (Reduce Motion: smaller and x2.5 rarer).
     static let shiftEvery: ClosedRange<Float> = 20...60, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
-    static let maxRoll: Float = 0.38, maxYaw: Float = 0.5, rollRate: Float = 0.16, yawRate: Float = 0.12
+    // (2026-11-04: the turn used to wander up to +-0.5 rad at 0.12 rad/s and read as a slow clockwise spin; now small, slow, alternating and always back to centre)
+    static let maxRoll: Float = 0.22, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
     static let driftMax: Float = 0.22, driftMaxBed: Float = 0.07
     /// A finger on him for less than this wakes him gently; longer = a real pick up (the sleep is dropped and the touch play takes over).
     static let tapTime: Float = 0.9
@@ -597,11 +599,14 @@ extension BlobBrain {
             f.kind = 1; f.dur = rand(2.2, 3.4); f.wigAmp = 0.07 * sc
             jellyKick = max(jellyKick, 0.35 * sc)
         } else if r < 0.55 {  // nuzzle in: a small turn
-            f.yawGoal = max(-T.maxYaw, min(T.maxYaw, f.yawOff + rand(-0.3, 0.3) * sc))
+            // a slight turn one way, then back to centre, then the other way: the sign alternates and every turn is undone, so there is no net rotation
+            if f.yawGoal != 0 || abs(f.yawOff) > 0.02 { f.yawGoal = 0 }
+            else { f.yawGoal = f.ySign * rand(0.5, 1) * T.maxYaw * sc; f.ySign = -f.ySign }
             f.kind = 0         // (the offset itself is the move)
         } else if r < 0.75 {  // roll over onto the other side
-            f.rollGoal = abs(f.rollOff) < 0.05 || f.rollGoal == 0 ? (rand() < 0.5 ? -1 : 1) * T.maxRoll * sc : -f.rollGoal
-            if f.rollGoal == 0 { f.rollGoal = T.maxRoll * sc }
+            // a slight lean onto one side and back, then onto the other side and back (alternating, bounded, no net turn)
+            if f.rollGoal != 0 || abs(f.rollOff) > 0.02 { f.rollGoal = 0 }
+            else { f.rollGoal = f.rSign * rand(0.6, 1) * T.maxRoll * sc; f.rSign = -f.rSign }
             jellyKick = max(jellyKick, 0.2 * sc)
         } else if sleep.bed < 0 || r < 0.9 {  // a slight change of where he lies
             sleepPlanDrift(&f, sc)

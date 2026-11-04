@@ -47,14 +47,15 @@ final class NeedsTests: XCTestCase {
     func testNeedsDecayInRealTimeAtTheTunedRates() {
         let n = make(suite())
         for k in NeedKind.allCases { n.set(k, 1) }
-        run(n, seconds: 3600, dt: 10)                                   // one hour
-        XCTAssertEqual(n.level(.hunger), 1 - 1.0 / 3, accuracy: 0.002, "hunger empties in about 3 h")
-        XCTAssertEqual(n.level(.thirst), 1 - 1.0 / 2, accuracy: 0.002, "thirst in about 2 h")
-        XCTAssertEqual(n.level(.attention), 1 - 1.0 / 4, accuracy: 0.002, "attention in about 4 h")
-        run(n, seconds: 3600, dt: 10)
+        run(n, seconds: 360, dt: 1)                                     // six minutes
+        XCTAssertEqual(n.level(.hunger), 1 - 0.1 / 0.3, accuracy: 0.002, "hunger empties in about 18 min (wanting twice per 24-min game day)")
+        XCTAssertEqual(n.level(.thirst), 1 - 0.1 / 0.2, accuracy: 0.002, "thirst in about 12 min")
+        XCTAssertEqual(n.level(.attention), 1 - 0.1 / 4, accuracy: 0.002, "attention in about 4 h")
+        run(n, seconds: 720, dt: 1)
         XCTAssertLessThan(n.level(.thirst), 0.001)
+        XCTAssertTrue(n.isWanting(.hunger))
         XCTAssertTrue(n.isWanting(.thirst))
-        run(n, seconds: 3 * 3600, dt: 30)
+        run(n, seconds: 5 * 3600, dt: 30)
         for k in NeedKind.allCases { XCTAssertEqual(n.level(k), 0, accuracy: 1e-6, "clamped at 0") }
     }
 
@@ -334,5 +335,17 @@ final class NeedsTests: XCTestCase {
         let proj = (CFAbsoluteTimeGetCurrent() - t1) / 5000 * 1e6
         NSLog("[needs] perf: needs.step + schedule %.2f us per sim step, bubble projection %.2f us per frame (%f)", step, proj, acc)
         XCTAssertLessThan(step, 20); XCTAssertLessThan(proj, 100)
+    }
+}
+
+extension NeedsTests {
+    @MainActor func testTripReturnStepIsOnTheAwayPathAndParkAddsThirst() {
+        let n = BlobNeeds(defaults: UserDefaults(suiteName: "NeedsTests.trip.\(UUID().uuidString)")!, persists: false)
+        for k in NeedKind.allCases { n.set(k, 1) }
+        n.applyAway(seconds: TripClockTuning.outAway)
+        XCTAssertEqual(n.level(.hunger), 1 - Float(TripClockTuning.outAway / (NeedsTuning.awayHoursToEmpty(.hunger) * 3600)), accuracy: 1e-5)
+        XCTAssertGreaterThan(n.level(.hunger), 0.9, "a small step, never a starve")
+        n.gain(.thirst, -TripClockTuning.parkThirst)
+        XCTAssertLessThan(n.level(.thirst), n.level(.hunger))
     }
 }
