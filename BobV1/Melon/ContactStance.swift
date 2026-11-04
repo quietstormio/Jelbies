@@ -27,6 +27,11 @@ struct ContactStance: Sendable {
     var sound: SFX? = nil
     var volume: Float = 0.25
     var haptic: ContactHaptic = .none
+    /// How the two bodies STAND at the touch (the drives' facing): the slot walk plans the meeting distance on the stance's own yaws, not on the (side-on) heading they walk in with
+    /// (a touch distance is ~1.4 m side by side and ~0.75 m face to face).
+    enum Facing: Sendable { case toward, camera, away }
+    var facing: Facing = .toward
+    func faced(_ f: Facing) -> ContactStance { var c = self; c.facing = f; return c }
     /// Real re-touches inside the hold: (phase, from, to) in seconds of the phase - the pair eases `approach` apart (> the 3 cm re-arm) and meets again, so a second squeeze / press is a second
     /// touch with its own sound (the drives' old extra sounds, now on a real contact).
     var pulses: [(phase: Int, from: Float, to: Float)] = []
@@ -39,16 +44,21 @@ struct ContactStance: Sendable {
         return r
     }
 
+    /// The first REAL stance step (a target that is not an onlySeparate keep-apart) that starts after phase `p`: the slot the walkers of the walk-up phase are heading for.
+    func upcomingReal(after p: Int) -> Step? {
+        steps.first { $0.from > p && $0.target != nil && !$0.onlySeparate }
+    }
+
     // MARK: building blocks
     /// Plush rest point of a touch: 0.2 cm of press (inside the 0.5 cm sound window, far above the -1 cm limit).
     static let hold: Float = -0.004
     /// Where an approach stands before the press (above the 3 cm re-arm of contactTick, so the touch is a fresh one).
     static let approach: Float = 0.04
     /// Where a walk ends relative to the touch (the lean closes the rest, <= the lean budget).
-    static let arrive: Float = 0.015
+    static let arrive: Float = 0.005
     /// A stance walk aims this much SHORT of the touch (total; a meeting pair shares it): a walk's last step lands up to ~6 cm off its target (measured overshoots: 7 - 15 cm for two walkers) (planWalkStep's arrival radius) and a walker cannot step backward without turning round,
     /// so a short stop is closed by a forward shuffle / the lean, an overshoot is not.
-    static let walkShort: Float = 0.10
+    static let walkShort: Float = 0.02
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
@@ -83,16 +93,16 @@ struct ContactStance: Sendable {
         .bellyBounce: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, until: 3, sound: .boop, volume: 0.9),
         // holds
-        .nuzzle: .holding(from: 2),
-        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
+        .nuzzle: .holding(from: 2).faced(.camera),
+        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true).faced(.camera),
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
-        .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
-        .backToBack: .holding(from: 3, features: true),
-        .cuddleLean: .holding(from: 2, sound: .squish, volume: 0.5),
-        .swayHug: .holding(from: 2, sound: .squish, volume: 0.55),
-        .whisperGiggle: .holding(from: 2),
+        .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]).faced(.camera),
+        .backToBack: .holding(from: 3, features: true).faced(.away),
+        .cuddleLean: .holding(from: 2, sound: .squish, volume: 0.5).faced(.camera),
+        .swayHug: .holding(from: 2, sound: .squish, volume: 0.55).faced(.camera),
+        .whisperGiggle: .holding(from: 2).faced(.camera),
         .ringAround: .holding(from: 2, features: true),
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
@@ -152,7 +162,10 @@ extension BlobBrain {
             return x.held || x.idleState.kind == .sleep || x.idleState.kind == .decorSit || (st.anchor == role && st.anchor != .none)
         }
         guard let s = a.social else { return }
-        a.contactStanceWalk(partner: b, gapWanted: target, features: st.features, retarget: !step.onlySeparate); b.contactStanceWalk(partner: a, gapWanted: target, features: st.features, retarget: !step.onlySeparate)
+        // SLOT WALK (2026-11-04): the walk-up phase (before the first real step) already heads for the stance's slot, so the walkers arrive AT the touch / approach spot, not at the emote's old standing constant
+        let slot: Float? = step.onlySeparate && !s.kind.isGroup ? st.upcomingReal(after: s.phase)?.target : nil
+        let walkTarget = slot ?? target, retarget = !step.onlySeparate || slot != nil
+        a.contactStanceWalk(partner: b, gapWanted: walkTarget, features: st.features, retarget: retarget); b.contactStanceWalk(partner: a, gapWanted: walkTarget, features: st.features, retarget: retarget)
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
         ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }

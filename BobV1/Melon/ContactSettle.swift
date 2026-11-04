@@ -120,7 +120,7 @@ extension BlobBrain {
     /// value is a hard low-pass of the live one (first sample clamped to a plausible 0.6 ... 1.5 m, then an EMA with a rate clamp). Kept per (walker, partner) in `ContactTouchMemory`, reset per session / phase,
     /// and re-captured when the axis turns by more than 25 degrees (front-to-front touches closer than side-by-side).
     func contactStableTouch(_ p: BlobBrain, axis u: SIMD2<Float>) -> Float? {
-        guard let raw = touchRadius(p, along: u), let s = social else { return nil }
+        guard let s = social, let raw = stanceTouch(p, axis: u, facing: ContactStance.entry(s.kind)?.facing ?? .toward) else { return nil }
         let key = steerID &* 4096 &+ p.steerID
         let sid = ObjectIdentifier(s)
         func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
@@ -139,6 +139,22 @@ extension BlobBrain {
         let x = ContactTouchMemory.Entry(session: sid, phase: s.phase, axis: u, d: d0, d0: d0, frozen: standing)
         ContactTouchMemory.store[key] = x
         return x.d
+    }
+
+    /// The touch distance on the stance's OWN yaws (`ContactStance.Facing`), from the profiles of the bodies as they stand now: a body's support toward a world direction `dir` at the hypothetical heading `hyp` is the
+    /// profile's support at `rotXZ(rotXZ(dir, -hyp), yaw)` (the same local direction in the pose it has now). `u` runs from the partner to me.
+    func stanceTouch(_ p: BlobBrain, axis u: SIMD2<Float>, facing: ContactStance.Facing) -> Float? {
+        func head(_ v: SIMD2<Float>) -> Float { atan2f(v.x, v.y) }
+        let cam = faceCameraYaw()
+        let hm: Float, hp: Float
+        switch facing {
+        case .toward: hm = head(-u); hp = head(u)
+        case .camera: hm = cam; hp = cam
+        case .away: hm = head(u); hp = head(-u)
+        }
+        func ext(_ b: BlobBrain, _ dir: SIMD2<Float>, _ hyp: Float) -> Float? { ContactField.supportExt(b.steerID, rotXZ(rotXZ(dir, -hyp), b.yaw)) }
+        guard let a = ext(self, -u, hm), let c = ext(p, u, hp) else { return nil }
+        return a + c
     }
 
     /// A walker never turns round to walk BACK (an overshoot): the turn on the spot swings the wide axis (arms, ears, 1.4 m across) through the partner. A destination behind the walker (against the way he
@@ -166,6 +182,7 @@ extension BlobBrain {
             ContactTrace.mod(steerID) { $0.walk = w; $0.tgt = tg }
         }
         if case .walk = script {} else { ContactTouchMemory.shuffling.remove(steerID) }
+        slotWalk = false
         if retarget, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
             if L > 0.3 {
@@ -192,6 +209,7 @@ extension BlobBrain {
                     want = noTurnAround(want, was: t, partner: p)
                     let dT = simd_distance(want, t)
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then) }
+                    slotWalk = okFix
                 } else {
                     stable = contactStableTouch(p, axis: u)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
@@ -200,6 +218,7 @@ extension BlobBrain {
                     want = noTurnAround(want, was: t, partner: p)
                     let dT = simd_distance(want, t)
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
+                    slotWalk = okFix && !ContactTouchMemory.shuffling.contains(steerID)
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
                     else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
                 }
