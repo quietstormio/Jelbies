@@ -45,7 +45,7 @@ enum ContactDemo {
         let spots = xs.map { SIMD2<Float>($0, -0.9) }
         for a in cast { if let b = a.brain { note(" start (%.2f, %.2f)", b.position.x, b.position.y) } }
         for (a, g) in zip(cast, spots) { a.brain?.requestNow(.goTo(g)) }
-        for _ in 0..<100 {
+        for _ in 0..<250 {
             try? await Task.sleep(nanoseconds: 100_000_000)
             if zip(cast, spots).allSatisfy({ a, g in a.brain.map { simd_distance($0.position, g) < 0.5 } ?? true }) { break }
         }
