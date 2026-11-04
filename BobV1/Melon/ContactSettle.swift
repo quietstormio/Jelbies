@@ -212,10 +212,11 @@ extension BlobBrain {
         if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
             let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
             // the residual from the LIVE gap (the lean is released by the step, so its share counts): the step is as long as the error, 3 ... 14 cm
-            var step: Float = 0.14
+            var step: Float = 0.14, trim = false
             if var g = ContactField.gap(steerID, p.steerID, features: features) {
                 if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
                 let need = (g - gapWanted) + socialBook.leanTrim / ContactTuning.leanPerMetre
+                trim = need <= 0.2
                 step = max(0.065, min(0.14, need))          // (forward only; 6.5 cm at least: a shorter walk 'arrives' at once, planWalkStep's arrival radius is 6 cm - the lean takes the overshoot back)
                 if need < 0.038 { socialBook.shuffleReq = 0; return }          // (under that the lean covers it; the step's quantum is ~6 cm and the lean's reach +-2.7 cm)
             }
@@ -224,7 +225,7 @@ extension BlobBrain {
             let moved = simd_distance(spot, position)
             let ok = idleState.kind == nil && moved >= 0.5 * abs(step) && moved >= 0.02
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.shuffle = (ok ? "STEP" : "step-dropped") + String(format: "(idle%@,step%.3f,moved%.3f)", idleState.kind.map { "\($0)" } ?? "nil", step, moved) } }
-            if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim); ContactTouchMemory.shuffling.insert(steerID) }
+            if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim); if trim { ContactTouchMemory.shuffling.insert(steerID) } }          // (a big residual is an APPROACH, not a trim: the retarget carries that walk to the stance)
         } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
     }
 }
