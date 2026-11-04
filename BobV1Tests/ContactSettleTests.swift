@@ -112,6 +112,36 @@ final class ContactSettleTests: XCTestCase {
         }
     }
 
+    /// 2026-11-04: the peer wall for SESSION PARTNERS is the skin wall alone (no circle spring: it stopped Bob + Teddy 16 cm short of any touch); everybody else keeps the spring exactly as before.
+    func testKeepApartPartnersUseTheSkinWallOthersKeepTheSpring() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .ears], seed: 5)
+        d.place([SIMD2(-0.7, 0.6), SIMD2(0.7, 0.6)])
+        d.live = true
+        for _ in 0..<10 { d.tick() }
+        XCTAssertTrue(ContactField.isValid(0) && ContactField.isValid(1))
+        let r0 = ContactField.root(0)
+        let peers: [(pos: SIMD2<Float>, walking: Bool)] = [(r0, false), (ContactField.root(1), false)]
+        let g = MelonController.jellyGap, L: Float = 0.5
+        let p = SIMD3<Float>(r0.x + L, 0, r0.y)
+        // a non-social pair (no partners): the spring exactly as before
+        let q = MelonController.keepApart(p, id: 1, peers: peers)
+        let dq = simd_distance(SIMD2(q.x, q.z), r0)
+        XCTAssertEqual(dq, max(L + (g - L) * MelonController.softPush, g * MelonController.softFloor), accuracy: 0.01, "a non-social pair still stops at the old spring radius")
+        // the same with the other id listed as a partner of someone else: still the spring
+        let q2 = MelonController.keepApart(p, id: 1, peers: peers, partners: [7])
+        XCTAssertEqual(simd_distance(SIMD2(q2.x, q2.z), r0), dq, accuracy: 1e-4, "a third party keeps the spring")
+        // session partners with profiles: the skin wall alone, the skins end up touching (gap 0 +- 0.5 cm), well inside the spring radius
+        let q3 = MelonController.keepApart(p, id: 1, peers: peers, partners: [0])
+        let d3 = simd_distance(SIMD2(q3.x, q3.z), r0)
+        let gp = ContactField.gap(0, at: r0, 1, at: SIMD2(q3.x, q3.z), features: true) ?? 9
+        XCTAssertEqual(gp, 0, accuracy: 0.005, "partners stand skin to skin")
+        XCTAssertLessThan(d3, dq - 0.1, "and closer than the spring would let them")
+        // a partner without a profile falls back to the spring, never to no floor
+        ContactField.reset(); ContactField.enabled = true
+        let q4 = MelonController.keepApart(p, id: 1, peers: peers, partners: [0])
+        XCTAssertEqual(simd_distance(SIMD2(q4.x, q4.z), r0), dq, accuracy: 1e-4, "no profile: the spring")
+    }
+
     /// Tuning sweep (TUNE_SETTLE=1): standing starts + the lying pair for several controller settings; logs the worst gap after the first entry / after 4 s.
     func testZTuneSettle() throws {
         guard ProcessInfo.processInfo.environment["TUNE_SETTLE"] == "1" else { throw XCTSkip("TUNE_SETTLE not set") }

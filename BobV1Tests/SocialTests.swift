@@ -93,7 +93,7 @@ final class SocialTests: XCTestCase {
                 r.brain.resolve = { [unowned self, unowned b = r.brain] p, rad in
                     if b.socialBook.passThrough { if ContactTrace.on { self.resolveStat[i].calls += 1; self.resolveStat[i].pass += 1 }; return floorRules(p, rad) }
                     let fr = floorRules(p, rad)
-                    let out = floorRules(MelonController.keepApart(fr, id: i, peers: self.snapshot, gap: b.inCloseSocial ? MelonController.jellyGap * SocialTuning.closeGapFactor : nil), rad)
+                    let out = floorRules(MelonController.keepApart(fr, id: i, peers: self.snapshot, gap: b.inCloseSocial ? MelonController.jellyGap * SocialTuning.closeGapFactor : nil, partners: b.contactPartnerIDs()), rad)
                     if ContactTrace.on { self.resolveStat[i].calls += 1; self.resolveStat[i].push = max(self.resolveStat[i].push, simd_distance(SIMD2(fr.x, fr.z), SIMD2(out.x, out.z))) }
                     return out }
                 r.brain.peers = { [unowned self] in self.snapshot.enumerated().filter { $0.offset != i }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }

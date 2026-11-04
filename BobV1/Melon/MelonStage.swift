@@ -439,7 +439,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let floorRules = b.resolve
         b.resolve = { [weak self, weak b] p, r in
             guard let self, !self.peerSnapshot.isEmpty, b?.socialBook.passThrough != true else { return floorRules(p, r) }          // (a leapfrog hop goes over its partner)
-            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap ?? (b?.inCloseSocial == true ? Self.jellyGap * SocialTuning.closeGapFactor : nil)), r)
+            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap ?? (b?.inCloseSocial == true ? Self.jellyGap * SocialTuning.closeGapFactor : nil), partners: b?.contactPartnerIDs() ?? []), r)
         }
     }
 
@@ -476,14 +476,19 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// overlap (a continuous map: no pop at the edge of the circle, no flip-flopping when two stand close), down to a floor (`softFloor` of the gap) where two
     /// bodies are squashed together and no deeper, so they never sit inside each other even when the planner finds no way around (the soft bodies themselves
     /// do not collide: the contact squish is BlobBrain+Contact).
-    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil) -> SIMD3<Float> {
+    ///
+    /// `partners` (2026-11-04): the ids of the peers this body is in a touching-class SESSION with (`BlobBrain.contactPartnerIDs`). For those, when both bodies have a contact profile, the circle spring is
+    /// skipped and the skin wall alone holds them apart (gap >= 0, features counted): the spring stops two skins that touch at ~0.75 m at ~0.92 m, 16 cm short of any touch. A missing / invalid profile falls
+    /// back to the spring, never to "no floor"; everybody else (third parties, non-session peers) keeps the spring exactly as before.
+    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil, partners: Set<Int> = []) -> SIMD3<Float> {
         var q = p
         let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
             let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
             var to = L
-            if L < g { to = max(L + (g - L) * softPush, g * softFloor) }
+            let skinOnly = !partners.isEmpty && partners.contains(j) && ContactField.enabled && ContactField.isValid(id) && ContactField.isValid(j)
+            if L < g, !skinOnly { to = max(L + (g - L) * softPush, g * softFloor) }
             // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the exact footprint gap of the pair along this axis: lying / leaning / limbs / ears / tail included). A max of two continuous maps: no pop.
             if ContactField.enabled, L > 1e-4, let est = ContactField.touch(id, j, dir: -u, features: true), L < est + 0.5,
                let g = ContactField.gap(id, at: SIMD2(q.x, q.z), j, at: o.pos, features: true), g < 0 { to = max(to, L - g) }          // (only a pair that is near: the exact footprint gap, 3 us)
