@@ -33,6 +33,7 @@ enum ContactDemo {
         applyCamera()
         guard let name = d.string(forKey: "ContactDemo"), !name.isEmpty else { return }
         try? await Task.sleep(nanoseconds: UInt64((d.double(forKey: "ContactDemoDelay") > 0 ? d.double(forKey: "ContactDemoDelay") : 4) * 1e9))
+        for _ in 0..<300 where care.raceBook.actors.count < 2 || care.raceBook.actors.contains(where: { $0.brain == nil }) { try? await Task.sleep(nanoseconds: 100_000_000) }          // (the roster may still be loading)
         let actors = care.raceBook.actors
         let ids = d.string(forKey: "ContactDemoIds").map { $0.split(separator: ",").compactMap { Int($0) } } ?? Array(actors.indices)
         let cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
