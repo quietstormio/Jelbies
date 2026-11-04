@@ -41,6 +41,21 @@ final class CafeBook {
     /// Latte drinkers whose burst already ran (during the serving): the cheer skips them.
     var zoomed: Set<Int> = []
     var serial = 0
+    /// The café table (floor x, z), each Jelbie's stand at it (by actor id) and whether the table is out (arrival to the white fade home).
+    var origin: SIMD2<Float> = .zero
+    var stands: [Int: SIMD2<Float>] = [:]
+    var tableOut = false
+    /// A serving is open (ordered, not yet finished): leaving then cleans up and refunds when nothing was eaten.
+    var servingOpen = false
+    /// The table talk: seconds to the next line, who spoke last, replies due (by actor id, seconds), the thought bubbles up now and the wait for the next one.
+    var chatT: Float = 1.5
+    var lastSpeaker: Int?
+    var replyIn: [Int: Float] = [:]
+    var thought: CafeThought?
+    var thoughtT: Float = 3
+    /// The lounge began; seconds to each Jelbie's next calm idle.
+    var lounged = false
+    var loungeIdle: [Int: Float] = [:]
     nonisolated deinit {}
 }
 
@@ -71,7 +86,7 @@ extension GameCare {
             }
         }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return .listening }
-        if bath.wallet.count < CafeMenu.cheapest { return .noDrops }
+        if bath.wallet.count < CafeMenu.cheapest, !cafe.stamps.isFull { return .noDrops }          // (a full stamp card is a free order)
         return nil
     }
 
@@ -93,6 +108,13 @@ extension GameCare {
         race.active || show.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging
             || cafeBook.actors.contains { $0.brain?.isSleeping == true }
     }
+
+    /// Today's special: the Show's daily theme picks the item that raises the theme's main stat the most (the Diet bar's stat).
+    var cafeSpecial: CafeTreatID { CafeMenu.special(theme: ShowSchedule.theme(dayKey: Self.showDay), dayKey: Self.showDay) }
+    /// Nobody in the room can eat food right now (the Town tile says "drinks only"; the menu still opens).
+    var cafeNobodyHungry: Bool { !jellies.isEmpty && jellies.allSatisfy { needs(for: $0.id).tier(.hunger) == .full } }
+    /// Whether Jelbie `id` can order food (the real hunger tier: not Full).
+    func cafeCanEat(_ id: Int) -> Bool { CafeRules.canEatFood(needs(for: id).tier(.hunger)) }
 
     // MARK: per fixed step
 
@@ -118,7 +140,7 @@ extension GameCare {
             }
         case .eating:
             if actors.count == 1 { tickGroup(actors, dt: dt) }     // the stage only runs tickOthers (and so tickGroup) with 2+ Jelbies
-            let finished = groupWanted == nil && !group.isActive && groupQueue.isEmpty && dining.phase == .absent
+            let finished = groupWanted == nil && !group.isActive && groupQueue.isEmpty          // (the café table stays out for the lounge)
             tickCafeZoomies(actors, dt: dt)          // (a latte drinker who is done and released dashes now; the others go on eating)
             if finished { cafeServingFinished() }
         case .cheer:
@@ -128,8 +150,11 @@ extension GameCare {
                 t -= dt
                 if t <= 0 { book.cheerIn[a.id] = nil; cafeCheer(a) } else { book.cheerIn[a.id] = t }
             }
+        case .lounge, .done:
+            tickCafeLounge(actors, dt: dt)
         default: break
         }
+        if cafe.phase == .arriveIn || cafe.phase == .menu || cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done { tickCafeTalk(actors, dt: dt) }
     }
 
     // MARK: the world swaps (under the white)
@@ -151,18 +176,44 @@ extension GameCare {
                 for a in actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
             }
             syncDecor()
+            // the café table is out from the start, empty: the Jelbies already stand at it (the food is set down on it at Order)
+            book.thought = nil; book.thoughtT = 3; book.chatT = 1.5; book.lastSpeaker = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]; book.servingOpen = false
+            cafe.special = cafeSpecial
+            dining.reset()
             dining.tableSkin = { n in FoodMeshes.mesh(id: "cafetable_\(n)") }
-            let spots = JellyRoster.spawnSpots(count: max(actors.count, 1))
-            for (k, a) in actors.enumerated() where k < spots.count {
-                rehome(a, at: spots[k])
+            let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
+            let n = max(diners.count, 1)
+            let layout = DiningLayout.make(n: n)
+            book.origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: layout)
+            dining.spawn(serving: CafePlate.emptyTable, n: n, bobAt: SIMD2(99, 99), forcedOrigin: book.origin)
+            book.tableOut = true
+            let order: [Int] = n == 3 ? [1, 0, 2] : Array(0..<n)          // left, middle, right
+            book.stands = [:]
+            for (k, a) in diners.enumerated() {
+                let pl = layout.places[order[k]]
+                var st = book.origin + pl.rel
+                st.y += GameCare.eatCloser
+                book.stands[a.id] = st
+                rehome(a, at: st)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4
-                brain.startTurn(to: 0, sim: a.sim)
+                brain.startTurn(to: pl.yaw, sim: a.sim)
                 brain.face(.excited, hold: 1.5)
                 book.hopIn[a.id] = 0.35 + Float(k) * CafeTuning.arriveHopStagger
             }
             if select.phase != .none { select.cancel() }
         case .home:
+            // leaving at any point: an open serving is dropped (what was eaten stays paid; nothing eaten = the Drops come back), the café table goes
+            if book.servingOpen {
+                cancelGroup()
+                let atePieces = book.ate.values.reduce(0, +)
+                if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { bath.wallet.add(book.charged, silent: true) }
+                for (id, n) in book.ate where n > 0 { needs(for: id).gain(.attention, CafeTuning.attentionBonus) }
+                book.servingOpen = false
+            }
+            groupWanted = nil
+            dining.reset()
+            book.tableOut = false; book.stands = [:]; book.thought = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
                 for a in actors where (book.arena[a.id] ?? a.sim.arenaRadius).isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
@@ -197,25 +248,38 @@ extension GameCare {
         return ids.isEmpty ? jellies.map(\.id) : ids
     }
 
-    /// Order for the table. Returns the friendly refusal when the Drops are short (nothing is charged, the card shows it); nil = ordered (or ignored: not at the menu).
+    /// Order for the table. Returns the friendly refusal when a full Jelbie ordered food or the Drops are short (nothing is charged, the card shows it); nil = ordered (or ignored: not at the menu).
+    /// A full stamp card makes the order free (and the card starts again); any other order earns a stamp.
     @discardableResult
     func orderCafe(_ o: CafeOrder) -> String? {
         guard cafe.phase == .menu else { return nil }
         let ids = Array(cafeDinerIDs.prefix(DiningGroup.maxDiners))
         guard o.isComplete(jellies: ids) else { return nil }
-        let total = o.total(jellies: ids)
+        for id in ids {          // food is for the hungry: a full Jelbie can only have a drink (nothing is ever wasted)
+            if let t = o.treat(for: id), !CafeRules.canOrder(t, tier: needs(for: id).tier(.hunger)) {
+                AudioHub.shared.play(.notEnough)
+                return "\(jelly(id)?.name ?? "He")'s full. Pick a drink!"
+            }
+        }
+        let free = cafe.stamps.isFull
+        let total = free ? 0 : o.total(jellies: ids, special: cafeSpecial)
         if let why = CafeOrder.refusal(total: total, wallet: bath.wallet.count) { AudioHub.shared.play(.notEnough); return why }
-        guard bath.wallet.spend(total) else { return nil }
+        guard total == 0 || bath.wallet.spend(total) else { return nil }
         let book = cafeBook
         book.serial += 1
-        book.charged = total; book.ate = [:]
+        book.charged = total; book.ate = [:]; book.servingOpen = true
+        cafe.charged = total; cafe.wasFree = free; cafe.served = []
+        cafe.stamps.recordOrder()          // (a free order resets the card; the others earn a stamp, with the chime)
+        if !free { AudioHub.shared.play(.perkSparkle, volume: 0.8) }
         let plate = CafePlate(order: o, serial: book.serial)
         book.plate = plate
         book.hooks = CafeServingHooks(
             pay: { [weak self] id, k in
                 guard let self else { return }
-                self.needs(for: id).gain(.hunger, Float(k) * MealAppetite.gainPerPiece)
-                if let t = o.treat(for: id) { self.cafeAte(jelly: id, treat: t, pieces: k) }
+                let t = o.treat(for: id)
+                let drink = t.map { CafeMenu.treat($0).category == .drink } ?? false
+                self.needs(for: id).gain(.hunger, Float(k) * (drink ? CafeRules.drinkFillPerPiece : MealAppetite.gainPerPiece))
+                if let t { self.cafeAte(jelly: id, treat: t, pieces: k) }
             },
             seated: { ids, placeOf in
                 var by: [Int: CafeTreatID] = [:]
@@ -233,6 +297,7 @@ extension GameCare {
         let t = CafeMenu.treat(treat)
         let first = cafeBook.ate[id, default: 0] == 0
         cafeBook.ate[id, default: 0] += pieces
+        if cafeBook.ate[id, default: 0] >= CafeTuning.piecesPerTreat { cafe.served.insert(id) }
         let share = Float(pieces) / Float(CafeTuning.piecesPerTreat)
         prof.stats.nudge(t.condition.mapValues { $0 * share }, food: t.name)
         if first {
@@ -251,7 +316,8 @@ extension GameCare {
         let atePieces = book.ate.values.reduce(0, +)
         for (id, n) in book.ate where n > 0 { needs(for: id).gain(.attention, CafeTuning.attentionBonus) }
         if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { bath.wallet.add(book.charged, silent: true) }
-        book.hooks = nil; book.plate = nil
+        book.hooks = nil; book.plate = nil; book.servingOpen = false
+        for id in book.ate.keys where (book.ate[id] ?? 0) > 0 { cafe.served.insert(id) }
         cafe.servingEnded()
         book.cheerIn = [:]
         for (k, a) in book.actors.enumerated() where a.brain != nil && book.zoomT[a.id] == nil && !book.zoomed.contains(a.id) { book.cheerIn[a.id] = Float(k) * CafeTuning.cheerStagger }

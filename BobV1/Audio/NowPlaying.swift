@@ -37,13 +37,16 @@ nonisolated struct NowPlaying: Equatable, Sendable {
 
     /// Mirrors `SessionPolicy.gameMusicAllowed` (the off / your-music branches use it so the two cannot drift).
     static func make(muted: Bool, musicOn: Bool, musicVolume: Float, otherAudioPlaying: Bool,
-                     mode: MusicMode, scene: MusicScene, current: MusicTrack?, inGap: Bool, layerOn: Bool) -> NowPlaying {
+                     mode: MusicMode, scene: MusicScene, current: MusicTrack?, inGap: Bool, layerOn: Bool, sceneTrack: SceneTrack? = nil) -> NowPlaying {
         if muted { return NowPlaying(state: .muted, line: "Music", note: "Sound is muted", canSkip: false) }
         if !musicOn || musicVolume < 0.01 {
             return NowPlaying(state: .musicOff, line: "Music is off", note: "Turn Music on to pick songs", canSkip: false)
         }
         if !SessionPolicy.gameMusicAllowed(musicOn: musicOn, otherAudioPlaying: otherAudioPlaying) {
             return NowPlaying(state: .yourMusic, line: "Your music is playing", note: "Game music rests until it stops", canSkip: false)
+        }
+        if scene.isPlaylist {          // the café plays its own playlist: "Café · title", Skip works
+            return NowPlaying(state: .playing, line: "\(sceneLabel(scene)) · \(sceneTrack.flatMap { CafeMusic.title($0) } ?? "Playlist")", note: nil, canSkip: true)
         }
         if scene != .none {
             return NowPlaying(state: .screen, line: "\(sceneLabel(scene)) music", note: "Plays on its own here", canSkip: false)

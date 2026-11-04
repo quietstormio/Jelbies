@@ -59,7 +59,7 @@ extension GameCare {
     func tickGroup(_ actors: [JellyActor], dt: Float) {
         if let c = groupWanted {
             groupAge += dt
-            let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && dining.phase == .absent
+            let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
             if focus.isActive || bath.active || groupAge > Self.mealTimeout { groupWanted = nil; groupQueueClear(); return }
             guard ready else { return }
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
@@ -72,9 +72,11 @@ extension GameCare {
             let floors: [() -> SIMD2<Float>] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero } }
             if let cafeHooks = cafeBook.hooks {          // the café: everybody eats the whole treat, paid by the café's own hooks
                 group.eager = false
+                group.forcedOrigin = cafeBook.tableOut ? cafeBook.origin : nil; group.keepTable = cafeBook.tableOut
                 group.tierOf = { _ in .famished }
                 group.pay = cafeHooks.pay
             } else {
+                group.forcedOrigin = nil; group.keepTable = false
                 group.eager = eagerWhenFamished
                 group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }

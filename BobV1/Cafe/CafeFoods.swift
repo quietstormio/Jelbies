@@ -111,8 +111,45 @@ nonisolated enum CafeFoodModels {
         DiningModels.ellipsoid(b, centre: SIMD3(c.x - 0.01 * s, top + 0.012 * s + Float(j % 2) * 0.0005, c.z - 0.012 * s), rx: 0.006 * s, ry: 0.004 * s, color: p.detail, rings: 2, segments: 6)          // a foam dollop
     }
 
+    /// Warm cocoa: a round rose mug with a handle, a dark chocolate top, three tiny marshmallows and a pinch of cinnamon.
+    static func cocoa(_ b: B, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) {
+        let y0 = c.y + floorOff * s
+        let h: Float = 0.046
+        let mug: [DiningModels.PP] = [.init(r: 0, y: y0, nr: 0, ny: -1), .init(r: 0.025 * s, y: y0, nr: 0.3, ny: -1), .init(r: 0.035 * s, y: y0 + 0.008 * s, nr: 1, ny: -0.2),
+                                      .init(r: 0.038 * s, y: y0 + (h - 0.006) * s, nr: 1, ny: 0), .init(r: 0.038 * s, y: y0 + h * s, nr: 0.7, ny: 0.7), .init(r: 0, y: y0 + h * s, nr: 0, ny: 1)]
+        b.lathe(cx: c.x, cz: c.z, profile: mug, segments: 24, color: p.primary)
+        cylinder(b, cx: c.x, cz: c.z, r: 0.0385 * s, y0: y0 + 0.026 * s, y1: y0 + 0.032 * s, p.detail, bevel: 0.002 * s)          // a cream stripe round the mug
+        b.roundedBox(centre: SIMD3(c.x + 0.046 * s, y0 + 0.026 * s, c.z), half: SIMD3(0.009, 0.0045, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)          // the handle
+        b.roundedBox(centre: SIMD3(c.x + 0.051 * s, y0 + 0.019 * s, c.z), half: SIMD3(0.0045, 0.009, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)
+        b.roundedBox(centre: SIMD3(c.x + 0.046 * s, y0 + 0.012 * s, c.z), half: SIMD3(0.009, 0.0045, 0.0045) * s, radius: 0.002 * s, segments: 2, aoFloor: false, color: p.primary)
+        let top = y0 + h * s
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top, c.z), rx: 0.0355 * s, ry: 0.006 * s, color: p.secondary, rings: 3, segments: 16)          // the cocoa
+        for k in 0..<3 {          // marshmallows
+            let a = Float(k) * 2.1 + Float(j) * 0.6
+            DiningModels.ellipsoid(b, centre: SIMD3(c.x + cosf(a) * 0.014 * s, top + 0.008 * s, c.z + sinf(a) * 0.014 * s), rx: 0.0095 * s, ry: 0.0085 * s, color: p.accent, rings: 3, segments: 8)
+        }
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, top + 0.007 * s, c.z), rx: 0.006 * s, ry: 0.003 * s, color: p.detail * 0.7, rings: 2, segments: 6)
+    }
+
+    /// Berry juice: a tall clear tumbler of pink juice, a striped straw, an ice cube and a raspberry on the rim.
+    static func juice(_ b: B, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) {
+        let y0 = c.y + floorOff * s
+        let h: Float = 0.058
+        let glass: [DiningModels.PP] = [.init(r: 0, y: y0, nr: 0, ny: -1), .init(r: 0.022 * s, y: y0, nr: 0.3, ny: -1), .init(r: 0.026 * s, y: y0 + 0.006 * s, nr: 1, ny: -0.2),
+                                        .init(r: 0.033 * s, y: y0 + (h - 0.004) * s, nr: 1, ny: 0.1), .init(r: 0.034 * s, y: y0 + h * s, nr: 0.7, ny: 0.7), .init(r: 0, y: y0 + h * s, nr: 0, ny: 1)]
+        b.lathe(cx: c.x, cz: c.z, profile: glass, segments: 24, color: p.secondary)          // the juice shows through the glass: a pale rim, a berry-pink body
+        cylinder(b, cx: c.x, cz: c.z, r: 0.0325 * s, y0: y0 + 0.01 * s, y1: y0 + (h - 0.006) * s, p.primary, bevel: 0.003 * s)
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x, y0 + (h - 0.005) * s, c.z), rx: 0.0325 * s, ry: 0.004 * s, color: p.primary * 1.06, rings: 3, segments: 16)
+        b.roundedBox(centre: SIMD3(c.x + 0.012 * s, y0 + (h + 0.012) * s, c.z - 0.004 * s), half: SIMD3(0.0035, 0.032, 0.0035) * s, radius: 0.0015 * s, segments: 2, aoFloor: false, color: p.detail)          // the straw
+        b.roundedBox(centre: SIMD3(c.x + 0.012 * s, y0 + (h + 0.022) * s, c.z - 0.004 * s), half: SIMD3(0.0037, 0.006, 0.0037) * s, radius: 0.0015 * s, segments: 2, aoFloor: false, color: p.accent)
+        b.roundedBox(centre: SIMD3(c.x - 0.01 * s, y0 + (h - 0.008) * s, c.z + 0.006 * s), half: SIMD3(0.008, 0.007, 0.008) * s, radius: 0.003 * s, segments: 2, aoFloor: false, color: SIMD3(0.95, 0.98, 1.0))          // an ice cube
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x - 0.03 * s, y0 + (h - 0.004) * s, c.z), rx: 0.01 * s, ry: 0.009 * s, color: p.accent, rings: 3, segments: 8)          // a raspberry on the rim
+        DiningModels.ellipsoid(b, centre: SIMD3(c.x - 0.03 * s, y0 + (h + 0.004) * s, c.z), rx: 0.005 * s, ry: 0.003 * s, color: SIMD3(0.45, 0.72, 0.4), rings: 2, segments: 6)
+    }
+
     static func procedural(_ id: CafeTreatID) -> PieceBuilder {
-        switch id { case .swirl: return swirl; case .fizzmac: return fizzmac; case .pancakes: return pancakes; case .sundae: return sundae; case .jellycup: return jellycup; case .latte: return latte }
+        switch id {
+        case .cocoa: return cocoa; case .juice: return juice; case .swirl: return swirl; case .fizzmac: return fizzmac; case .pancakes: return pancakes; case .sundae: return sundae; case .jellycup: return jellycup; case .latte: return latte }
     }
 }
 
@@ -133,11 +170,13 @@ extension Consumables {
     static let cafePancakes = cafe(.pancakes, symbol: "fork.knife", pal((0.93, 0.74, 0.46), (0.60, 0.33, 0.14), (1.0, 0.90, 0.55), (1, 1, 1)))
     static let cafeSundae = cafe(.sundae, symbol: "birthday.cake.fill", pal((0.88, 0.68, 0.40), (1.0, 0.95, 0.82), (0.45, 0.28, 0.20), (0.82, 0.16, 0.20)))
     static let cafeJellyCup = cafe(.jellycup, symbol: "cup.and.saucer.fill", pal((0.97, 0.96, 0.94), (1.0, 0.98, 0.95), (0.42, 0.66, 0.98), (0.80, 0.90, 1.0)))
+    static let cafeCocoa = cafe(.cocoa, symbol: "mug.fill", pal((0.93, 0.60, 0.64), (0.34, 0.20, 0.14), (1.0, 0.97, 0.93), (0.99, 0.93, 0.84)))
+    static let cafeJuice = cafe(.juice, symbol: "wineglass.fill", pal((0.92, 0.30, 0.46), (0.93, 0.96, 0.99), (0.86, 0.15, 0.30), (1.0, 0.82, 0.88)))
     static let cafeLatte = cafe(.latte, symbol: "mug.fill", pal((0.97, 0.93, 0.86), (0.55, 0.36, 0.22), (0.99, 0.93, 0.80), (1, 0.98, 0.92)))
 
     /// The café's treat as a hand-held food (menu thumbnails and the plate). Not in `Consumables.all`: it is served only at the café.
     static func cafeFood(_ id: CafeTreatID) -> Consumable {
-        switch id { case .swirl: return cafeSwirl; case .fizzmac: return cafeFizzmac; case .pancakes: return cafePancakes; case .sundae: return cafeSundae; case .jellycup: return cafeJellyCup; case .latte: return cafeLatte }
+        switch id { case .swirl: return cafeSwirl; case .fizzmac: return cafeFizzmac; case .pancakes: return cafePancakes; case .sundae: return cafeSundae; case .jellycup: return cafeJellyCup; case .latte: return cafeLatte; case .cocoa: return cafeCocoa; case .juice: return cafeJuice }
     }
 }
 
@@ -148,6 +187,10 @@ nonisolated final class CafePlate: @unchecked Sendable {
     /// Filled when the group is seated (place -> treat): the group decides who stands where.
     private let lock = NSLock()
     private var byPlace: [Int: CafeTreatID] = [:]
+
+    /// The empty café table that is out from the moment the Jelbies arrive (the food is set down on it at Order).
+    static let emptyTable = Consumable(id: "cafe-empty", name: "Café table", kind: .food, eatStyle: .finger, symbol: "cup.and.saucer.fill", palette: Consumables.cafeSwirl.palette,
+                                       benefits: [:], serving: { _, _, _, _ in })
 
     init(order: CafeOrder, serial: Int) { self.order = order; self.serial = serial }
 

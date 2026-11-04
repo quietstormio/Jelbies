@@ -34,6 +34,9 @@ final class DiningGroup {
     var eager = true
     /// Every Jelbie's floor spot when the serving is asked for (GameCare sets it): the tray never appears on one of them.
     var avoid: [SIMD2<Float>] = []
+    /// The café: the table is already out at this spot (restocked, not popped) and stays out when the sitting ends (the café despawns it).
+    var forcedOrigin: SIMD2<Float>?
+    var keepTable = false
     private var tiers: [NeedTier] = []
     private var paid: [Int] = []
     private var savedFinished: [((BlobRequest) -> Void)?] = []
@@ -132,10 +135,10 @@ final class DiningGroup {
     }
 
     func start(_ c: Consumable, brains bs: [BlobBrain], floor f: @escaping (Int) -> SIMD2<Float>, ids: [Int]? = nil) {
-        guard state == .idle, dining.phase == .absent, !bs.isEmpty else { return }
+        guard state == .idle, dining.phase == .absent || (forcedOrigin != nil && dining.phase != .poofing), !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
+        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
@@ -186,6 +189,13 @@ final class DiningGroup {
 
     /// Pops the tray in at the chosen spot (once the old one has gone) and fixes each diner's plan from his tier.
     private func spawnTray() {
+        if forcedOrigin != nil, dining.phase == .present || dining.phase == .popping, dining.n == n, dining.restock(serving: serving) {          // the café's table is already out: the food lands on it
+            for i in brains.indices {
+                paid[i] = 0
+                if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
+            }
+            return
+        }
         guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
         for i in brains.indices {
             paid[i] = 0
@@ -203,7 +213,8 @@ final class DiningGroup {
 
     private func end() {
         settlePay()
-        dining.despawn(); state = .idle; requested = false
+        if !keepTable { dining.despawn() }
+        state = .idle; requested = false
         for (i, b) in brains.enumerated() where i < savedFinished.count {
             b.peerGap = savedGap[i]
             if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)

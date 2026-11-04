@@ -725,7 +725,7 @@ final class AudioHub {
 
     private func refreshNowPlaying() {
         let n = NowPlaying.make(muted: muted, musicOn: settings.musicOn, musicVolume: settings.musicVolume, otherAudioPlaying: otherAudioPlaying,
-                                mode: director.mode, scene: director.scene, current: director.current, inGap: director.gapLeft != nil, layerOn: director.layerOn)
+                                mode: director.mode, scene: director.scene, current: director.current, inGap: director.gapLeft != nil, layerOn: director.layerOn, sceneTrack: director.sceneTrack)
         if n != nowPlaying { nowPlaying = n }
     }
 
@@ -822,7 +822,8 @@ final class AudioHub {
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)
         let b = DayClock.shared.blend
         let a = musicLevelNow * duck.gain * AudioMix.ambience
-        ambDay?.player.volume = Float(b.morning + b.day) * a
-        ambEve?.player.volume = Float(b.evening + b.night) * a
+        let cafeQuiet: Float = director.scene == .cafe ? 0 : 1          // the café has its own music: the home room's ambience bed is off there
+        ambDay?.player.volume = Float(b.morning + b.day) * a * cafeQuiet
+        ambEve?.player.volume = Float(b.evening + b.night) * a * cafeQuiet
     }
 }

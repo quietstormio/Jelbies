@@ -20,6 +20,9 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
     case studioPractice = "studio_practice_1", contestStage = "contest_stage_2"
     case park1 = "park_1", park2 = "park_2", cafe1 = "cafe_1", cafe2 = "cafe_2", volley1 = "volley_1", volley2 = "volley_2"      // 2026-10-24; loops = the whole file (past a 2000-frame lead-in), seam crossfaded
 
+    /// The café playlist's other tracks (2026-11-03): the whole file loops like the others.
+    case cafe3 = "cafe_3", cafe4 = "cafe_4", cafe5 = "cafe_5", cafe6 = "cafe_6", cafe7 = "cafe_7", cafe8 = "cafe_8"
+
     var loopStartFrame: Int {
         switch self {
         case .circuitRace: return 1_289_559
@@ -29,7 +32,7 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .town: return 655_869
         case .studioPractice: return 1_235_736
         case .contestStage: return 1_511_597
-        case .park1, .park2, .cafe1, .cafe2, .volley1, .volley2: return 2_000
+        case .park1, .park2, .cafe1, .cafe2, .cafe3, .cafe4, .cafe5, .cafe6, .cafe7, .cafe8, .volley1, .volley2: return 2_000
         }
     }
     var loopEndFrame: Int {
@@ -43,6 +46,9 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .contestStage: return 2_922_798
         case .park1, .park2: return 3_970_058
         case .cafe1, .cafe2: return 4_411_412
+        case .cafe3, .cafe7: return 4_634_469
+        case .cafe4, .cafe5: return 4_632_175
+        case .cafe6, .cafe8: return 4_629_882
         case .volley1: return 3_308_105
         case .volley2: return 3_307_833
         }
@@ -87,15 +93,24 @@ nonisolated enum MusicScene: Equatable, Sendable {
         case .none, .results: return nil
         }
     }
+    /// A playlist scene advances at the end of each track (shuffled, no repeat until the list is through) and has a Skip; the others loop one track.
+    var isPlaylist: Bool { self == .cafe }
     /// The candidates for a visit (the director picks one at random); one entry for the other scenes.
     var tracks: [SceneTrack] {
         switch self {
         case .park: return [.park1, .park2]
-        case .cafe: return [.cafe1, .cafe2]
+        case .cafe: return CafeMusic.tracks.map(\.track)
         case .volley: return [.volley1, .volley2]
         default: return track.map { [$0] } ?? []
         }
     }
+}
+
+/// The café's playlist, data-driven: a file (a SceneTrack case; its loop points are in SceneTrack) and the title the Sound panel shows. New tracks are added here.
+nonisolated enum CafeMusic {
+    static let tracks: [(track: SceneTrack, title: String)] = [(.cafe1, "Morning Latte"), (.cafe2, "Rainy Window"), (.cafe3, "Window Seat"), (.cafe4, "Sunny Bossa"),
+                                                                (.cafe5, "Dusty Rhodes"), (.cafe6, "Steamed Milk"), (.cafe7, "Late Library"), (.cafe8, "Golden Hour")]
+    static func title(_ t: SceneTrack) -> String? { tracks.first { $0.track == t }?.title }
 }
 
 // MARK: - decoding

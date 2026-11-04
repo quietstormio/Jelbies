@@ -22,6 +22,7 @@ final class CafeTests: XCTestCase {
         let r = DiningJellyTests.Room(count: count)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
         r.care.bath.wallet.add(drops - r.care.bath.wallet.count, silent: true)
+        for j in r.care.jellies { r.care.needs(for: j.id).set(.hunger, 0.3) }          // hungry enough for food (a full Jelbie may only order a drink)
         step(r, 1)
         return r
     }
@@ -46,8 +47,10 @@ final class CafeTests: XCTestCase {
     // 1. menu
 
     func testMenuPricesAndTotals() {
-        XCTAssertEqual(CafeMenu.treats.count, 6)
-        XCTAssertEqual(CafeMenu.treats.map(\.price), [14, 15, 16, 18, 8, 12])
+        XCTAssertEqual(CafeMenu.treats.count, 8)
+        XCTAssertEqual(CafeMenu.treats.map(\.price), [14, 15, 16, 18, 8, 12, 11, 10])
+        XCTAssertEqual(CafeMenu.drinks.map(\.id), [.latte, .cocoa, .juice])
+        XCTAssertEqual(CafeMenu.foods.count, 5)
         XCTAssertEqual(CafeMenu.cheapest, 8)
         XCTAssertEqual(mixed.total(jellies: [0, 1, 2]), 14 + 16 + 18)
         let t = CafeOrder(forTable: .fizzmac)
@@ -140,11 +143,12 @@ final class CafeTests: XCTestCase {
         XCTAssertEqual(t.phase, .menu)
         XCTAssertEqual(swaps, [.cafe], "one swap in")
         t.ordered(CafeOrder(forTable: .swirl)); XCTAssertEqual(t.phase, .eating)
-        t.ordered(CafeOrder(forTable: .sundae)); t.goHome()
-        XCTAssertEqual(t.phase, .eating, "goHome ignored while eating; ordered ignored outside the menu")
+        t.ordered(CafeOrder(forTable: .sundae))
+        XCTAssertEqual(t.phase, .eating, "ordered is ignored outside the menu")
         t.servingEnded(); XCTAssertEqual(t.phase, .cheer)
-        t.goHome(); XCTAssertEqual(t.phase, .cheer, "no leaving mid-cheer")
         for _ in 0..<(Int(CafeTuning.cheerSeconds * 60) + 2) { t.step(dt: 1.0 / 60) }
+        XCTAssertEqual(t.phase, .lounge, "after the cheer they stay at the table")
+        for _ in 0..<(Int(CafeTuning.loungeSeconds * 60) + 2) { t.step(dt: 1.0 / 60) }
         XCTAssertEqual(t.phase, .done)
         t.goHome()
         for _ in 0..<200 { t.step(dt: 1.0 / 60) }
@@ -193,7 +197,7 @@ final class CafeTests: XCTestCase {
         let r = room(drops: 100)
         enter(r)
         let c = r.care
-        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.95); c.needs(for: i).set(.attention, 0.4) }
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.3); c.needs(for: i).set(.attention, 0.4) }
         let bag = StoreCatalog.items.map { c.store.count($0.id) }
         XCTAssertNil(c.orderCafe(mixed))
         step(r, 120) { c.cafe.phase == .cheer }
@@ -204,7 +208,7 @@ final class CafeTests: XCTestCase {
             let p = c.jelly(i)!.perks
             XCTAssertTrue(p.isActive(want[i]), "perk \(want[i]) for \(i)")
             XCTAssertGreaterThan(p.remaining(want[i]), want[i].duration + 1, "longer than the store's")
-            XCTAssertGreaterThanOrEqual(r.level(i), 0.95)
+            XCTAssertGreaterThan(r.level(i), 0.3, "the treat filled him")
             XCTAssertGreaterThanOrEqual(r.level(i, .attention), 0.7, "an outing is love")
         }
         XCTAssertEqual(StoreCatalog.items.map { c.store.count($0.id) }, bag, "the bag is untouched")
@@ -215,7 +219,7 @@ final class CafeTests: XCTestCase {
         let r = room(count: 3, drops: 100)
         enter(r)
         let c = r.care
-        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.95); c.needs(for: i).set(.attention, 0.4) }
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.3); c.needs(for: i).set(.attention, 0.4) }
         XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .latte, 1: .sundae, 2: .pancakes])))
         var zoomDuringEating = false
         step(r, 120) {
@@ -225,8 +229,8 @@ final class CafeTests: XCTestCase {
         XCTAssertTrue(zoomDuringEating, "the latte drinker zoomed while the others were still at the table")
         XCTAssertTrue(c.cafeBook.zoomed.contains(0))
         XCTAssertNil(c.cafeBook.cheerIn[0], "a zoomer is not cheered again")
-        step(r, 40) { c.cafe.phase == .done }
-        XCTAssertEqual(c.cafe.phase, .done)
+        step(r, 80) { c.cafe.phase == .lounge }
+        XCTAssertEqual(c.cafe.phase, .lounge)
     }
 
     // 8. one Jelbie, the table treat
@@ -240,7 +244,7 @@ final class CafeTests: XCTestCase {
         step(r, 90) { c.cafe.phase == .cheer }
         XCTAssertEqual(c.cafeBook.ate[0], 3)
         XCTAssertTrue(c.zoomiesDue.contains(0))
-        step(r, 8) { c.cafe.phase == .done }
+        step(r, 8) { c.cafe.phase == .lounge }
         c.cafe.goHome()
         step(r, 20) { !c.zoomiesDue.contains(0) }
         XCTAssertFalse(c.zoomiesDue.contains(0), "the sugar rush fires at home")
@@ -285,6 +289,170 @@ final class CafeTests: XCTestCase {
         step(r, 10) { c.cafe.phase == .cheer }
         XCTAssertEqual(c.cafe.phase, .cheer)
         XCTAssertEqual(c.bath.wallet.count, 100, "nobody ate a piece: the Drops come back")
+    }
+
+    // 13. the upgrade: hunger rule, drinks, special, stamps, diet, lounge, leaving, playlist
+
+    func testFullJelbieMayOnlyOrderADrink() {
+        let r = room(drops: 100)
+        enter(r)
+        let c = r.care
+        c.needs(for: 0).set(.hunger, 0.95)
+        XCTAssertFalse(c.cafeCanEat(0)); XCTAssertTrue(c.cafeCanEat(1))
+        XCTAssertFalse(CafeRules.canOrder(.swirl, tier: .full)); XCTAssertTrue(CafeRules.canOrder(.cocoa, tier: .full)); XCTAssertTrue(CafeRules.canOrder(.latte, tier: .full))
+        let msg = c.orderCafe(CafeOrder(picks: [0: .swirl, 1: .pancakes, 2: .sundae]))
+        XCTAssertEqual(msg, "\(c.jelly(0)!.name)'s full. Pick a drink!")
+        XCTAssertEqual(c.bath.wallet.count, 100, "nothing charged")
+        XCTAssertEqual(c.cafe.phase, .menu)
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .juice, 1: .pancakes, 2: .sundae])))
+        XCTAssertEqual(c.cafe.phase, .eating)
+    }
+
+    func testDrinkDoesNotFillHunger() {
+        let r = room(drops: 100)
+        enter(r)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.3) }
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .cocoa, 1: .juice, 2: .swirl])))
+        step(r, 120) { c.cafe.phase == .cheer }
+        XCTAssertLessThan(r.level(0), 0.3 + 3 * CafeRules.drinkFillPerPiece + 0.02, "a drink is not a meal")
+        XCTAssertLessThan(r.level(1), 0.3 + 3 * CafeRules.drinkFillPerPiece + 0.02)
+        XCTAssertGreaterThan(r.level(2), 0.4, "the food filled him")
+        XCTAssertTrue(c.jelly(0)!.perks.isActive(.cozy)); XCTAssertTrue(c.jelly(1)!.perks.isActive(.bouncy))
+    }
+
+    func testNobodyHungryStillOpensTheCafe() {
+        let r = room(drops: 100)
+        for j in r.care.jellies { r.care.needs(for: j.id).set(.hunger, 0.95) }
+        XCTAssertTrue(r.care.cafeNobodyHungry)
+        XCTAssertNil(r.care.cafeBlocker(), "the café still opens")
+        r.care.needs(for: 1).set(.hunger, 0.2)
+        XCTAssertFalse(r.care.cafeNobodyHungry)
+    }
+
+    func testDailySpecialFollowsTheShowTheme() {
+        for theme in ShowTheme.allCases {
+            let key = theme.main.condition
+            let top = CafeMenu.treats.map { $0.condition[key] ?? 0 }.max() ?? 0
+            for day in [20261101, 20261102, 20261103] {
+                let sp = CafeMenu.special(theme: theme, dayKey: day)
+                XCTAssertEqual(CafeMenu.treat(sp).condition[key] ?? 0, top, accuracy: 1e-5, "\(theme) special raises the theme's main stat")
+                XCTAssertEqual(sp, CafeMenu.special(theme: theme, dayKey: day), "deterministic")
+            }
+        }
+        XCTAssertEqual(CafeMenu.price(.sundae, special: .sundae), Int((18 * 0.8).rounded()))
+        XCTAssertEqual(CafeMenu.price(.sundae, special: .swirl), 18)
+        let o = CafeOrder(picks: [0: .sundae, 1: .swirl])
+        XCTAssertEqual(o.total(jellies: [0, 1], special: .sundae), 14 + 14)
+        XCTAssertEqual(o.fullPrice(jellies: [0, 1]), 32)
+    }
+
+    func testStampCardFreeAfterEight() {
+        let r = room(drops: 500)
+        let c = r.care
+        XCTAssertEqual(c.cafe.stamps.card.count, 0)
+        for visit in 1...8 {
+            enter(r)
+            let before = c.bath.wallet.count
+            XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .jellycup, 1: .jellycup, 2: .jellycup])))
+            XCTAssertEqual(c.cafe.stamps.card.count, visit)
+            XCTAssertLessThan(c.bath.wallet.count, before)
+            c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }; step(r, 2)
+            for j in c.jellies { c.needs(for: j.id).set(.hunger, 0.3) }
+        }
+        XCTAssertTrue(c.cafe.stamps.isFull)
+        enter(r)
+        let before = c.bath.wallet.count
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .swirl, 1: .swirl, 2: .swirl])))
+        XCTAssertEqual(c.bath.wallet.count, before, "the 9th order is free")
+        XCTAssertTrue(c.cafe.wasFree)
+        XCTAssertEqual(c.cafe.stamps.card.count, 0, "the card starts again")
+    }
+
+    func testFullCardBypassesNoDrops() {
+        let r = room(drops: 100)
+        r.care.bath.wallet.add(3 - r.care.bath.wallet.count, silent: true)
+        XCTAssertEqual(r.care.cafeBlocker(), .noDrops)
+        r.care.cafe.stamps.set(8)
+        XCTAssertNil(r.care.cafeBlocker())
+    }
+
+    func testCafeFoodCountsTowardTheShowDiet() {
+        let r = room(drops: 100)
+        enter(r)
+        let c = r.care
+        let sweet0 = c.jelly(0)!.stats.condition(.sweet)
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .sundae, 1: .jellycup, 2: .swirl])))
+        step(r, 120) { c.cafe.phase == .cheer }
+        XCTAssertGreaterThan(c.jelly(0)!.stats.condition(.sweet), sweet0, "a café sundae raises the Sweet diet like the same food at home")
+    }
+
+    func testLoungeStaysAtTheTableAndLeavingCleansUp() {
+        let r = room(drops: 100)
+        enter(r)
+        let c = r.care
+        XCTAssertTrue(c.cafeBook.tableOut)
+        XCTAssertTrue(c.dining.isPresent, "the table is out from the start")
+        for a in r.actors { XCTAssertLessThan(simd_distance(a.floor, c.cafeBook.stands[a.id] ?? a.floor), 0.6, "already standing at the table") }
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .swirl, 1: .cocoa, 2: .juice])))
+        step(r, 120) { c.cafe.phase == .lounge }
+        XCTAssertEqual(c.cafe.phase, .lounge)
+        XCTAssertTrue(c.dining.isPresent, "the table stays for the lounge")
+        step(r, 8)
+        for a in r.actors { XCTAssertLessThan(simd_distance(a.floor, c.cafeBook.stands[a.id] ?? a.floor), 0.9, "they stay at their own spot") }
+        c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }; step(r, 2)
+        XCTAssertFalse(c.dining.isPresent); XCTAssertFalse(c.cafeBook.tableOut)
+    }
+
+    func testLeavingMidMealRefundsWhenNothingWasEaten() {
+        let r = room(drops: 100)
+        enter(r)
+        let c = r.care
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .swirl, 1: .swirl, 2: .swirl])))
+        XCTAssertEqual(c.cafe.phase, .eating)
+        c.cafe.goHome()
+        step(r, 8) { c.cafe.phase == .off }; step(r, 2)
+        XCTAssertEqual(c.bath.wallet.count, 100, "nothing eaten: refunded")
+        XCTAssertFalse(c.dining.isPresent); XCTAssertFalse(c.groupActive); XCTAssertEqual(RoomLayout.current.id, c.store.currentRoom)
+    }
+
+    func testCafePlaylistAdvancesAndSkipsOnlyInTheCafe() {
+        var rnd = 0.0
+        var d = MusicDirector(length: { _ in 90 }, rand: { rnd += 0.37; return rnd.truncatingRemainder(dividingBy: 1) })
+        var input = MusicInput(); input.scene = .none
+        _ = d.update(dt: 1, input: input)
+        XCTAssertFalse(d.skip().isEmpty, "skip works at home")
+        input.scene = .cafe
+        var ev = d.update(dt: 1, input: input)
+        guard case .sceneOn(let first, _)? = ev.first(where: { if case .sceneOn = $0 { return true } else { return false } }) else { return XCTFail("the café starts a track") }
+        XCTAssertTrue(CafeMusic.tracks.map(\.track).contains(first))
+        var seen = [first]
+        for _ in 0..<(CafeMusic.tracks.count - 1) {
+            for _ in 0..<2 { _ = d.update(dt: 1, input: input) }          // (the skip interval)
+            ev = d.skip()
+            guard case .sceneOn(let t, _)? = ev.first else { return XCTFail("skip in the café plays the next café track") }
+            XCTAssertFalse(seen.contains(t), "no repeat until the list is through")
+            seen.append(t)
+        }
+        XCTAssertEqual(Set(seen).count, CafeMusic.tracks.count)
+        // it advances by itself at the end of the track
+        let len = d.sceneTrack!.loopEnd
+        var advanced = false
+        for _ in 0..<(Int(len) + 5) { if d.update(dt: 1, input: input).contains(where: { if case .sceneOn = $0 { return true } else { return false } }) { advanced = true; break } }
+        XCTAssertTrue(advanced, "the playlist advances at the end of a track")
+        XCTAssertEqual(NowPlaying.make(muted: false, musicOn: true, musicVolume: 1, otherAudioPlaying: false, mode: .day, scene: .cafe, current: nil, inGap: false, layerOn: false, sceneTrack: .cafe1).line, "Café · Morning Latte")
+        input.scene = .race
+        _ = d.update(dt: 1, input: input); _ = d.update(dt: 1, input: input)
+        XCTAssertTrue(d.skip().isEmpty, "other screens keep their own music")
+    }
+
+    func testDrinkMeshesAndPlaylistFilesAreBundled() {
+        for t in [CafeTreatID.cocoa, .juice] {
+            let m = DiningModels.heldPiece(Consumables.cafeFood(t), index: 0, scale: 1)
+            XCTAssertFalse(m.vertices.isEmpty, "\(t)")
+        }
+        XCTAssertEqual(CafeMusic.tracks.count, 8)
+        for t in CafeMusic.tracks { XCTAssertNotNil(SceneRender.fileLength(t.track), "\(t.track) is bundled") }
     }
 
     // 11. the room's floor

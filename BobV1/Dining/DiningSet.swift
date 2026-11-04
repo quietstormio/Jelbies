@@ -304,6 +304,20 @@ final class DiningSet {
         return true
     }
 
+    /// The café: the table is already out (an empty one); the food is set down on it now: a soft clink and a small puff, the places keep their spots. False if no table is out.
+    @discardableResult
+    func restock(serving s: Consumable) -> Bool {
+        guard phase == .popping || phase == .present else { return false }
+        serving = s
+        bitesLeft = Array(repeating: DiningTiming.bitesPerServing, count: n)
+        pieceInHand = Array(repeating: nil, count: n); piecePose = Array(repeating: nil, count: n)
+        drunk = Array(repeating: 0, count: n)
+        groupKey = ""; worldKey = ""; dirty = true
+        AudioHub.shared.play(.setdown)
+        for p in places { puffs.spawn(at: SIMD3(p.mouth.x, 0.55, p.mouth.z - 0.05), radius: 0.18) }
+        return true
+    }
+
     /// Poofs the tray away (shrinks inside a puff, then it is gone).
     func despawn() {
         guard phase == .popping || phase == .present else { return }

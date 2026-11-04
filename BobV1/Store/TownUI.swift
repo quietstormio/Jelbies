@@ -178,7 +178,7 @@ struct TownView: View {
             Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
             Place(id: "town-track", title: "Track", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
             Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
-            Place(id: "town-cafe", title: "Café", sub: "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
+            Place(id: "town-cafe", title: "Café", sub: care.cafeNobodyHungry ? "Nobody's hungry \u{00B7} drinks only" : "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
             Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
             Place(id: "town-groom", title: "Groomer", sub: "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops]) { groom() },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },

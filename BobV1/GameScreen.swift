@@ -593,9 +593,19 @@ struct GameScreen: View {
             withAnimation(.easeInOut(duration: 0.25)) { goOut.wrappedValue = .town }
         }
         // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; latte / latte2 order baby lattes for one / two Jelbies and slower treats for the rest; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
+        // also: -CafeAuto menu|lounge; -CafeHunger full,hungry,hungry (hunger per Jelbie before the visit); -CafeStamps 7 (the stamp card); -CafePicks swirl,juice,latte (pre-fills the list)
         if let m = d.string(forKey: "CafeAuto") {
             await sleep(4)
+            if let h = d.string(forKey: "CafeHunger") { for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) } }
+            if let n = d.string(forKey: "CafeStamps").flatMap(Int.init) { care.cafe.stamps.set(n) }
             care.requestCafe()
+            if m == "lounge" {
+                for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
+                await sleep(2)
+                let ids = care.cafeDinerIDs
+                let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
+                care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, care.cafeCanEat($0.element) ? menu[$0.offset % 3] : .juice) })))
+            }
             if m == "order" || m == "refuse" || m == "latte" || m == "latte2" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
                 await sleep(2)

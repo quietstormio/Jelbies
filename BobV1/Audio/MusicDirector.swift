@@ -123,6 +123,9 @@ nonisolated struct MusicDirector {
     private var started = false
     private var eveningIntro = true
     private var bag: [MusicTrack] = []
+    /// A playlist scene (the café): the shuffled tracks still to play and how long the current one has played.
+    private var sceneBag: [SceneTrack] = []
+    private(set) var sceneElapsed = 0.0
     private var eveningBag: [MusicTrack] = []
     private(set) var lastPlayed: MusicTrack?
     private(set) var played: [MusicTrack] = []
@@ -212,14 +215,33 @@ nonisolated struct MusicDirector {
     /// Skip to the next track of the current playlist (no repeat until the pool cycles). [] (nothing changes) while a screen's scene music is up,
     /// before the first update, or within `skipMinInterval` of the last skip. In a gap it ends the gap. The play layer is released so the new track is heard.
     mutating func skip(fade f: Double = MusicDirector.skipFade) -> [MusicEvent] {
-        guard started, scene == .none, sinceSkip >= Self.skipMinInterval else { return [] }
+        guard started, scene == .none || scene.isPlaylist, sinceSkip >= Self.skipMinInterval else { return [] }
         sinceSkip = 0
         var ev: [MusicEvent] = []
+        if scene.isPlaylist {          // the café: the next track of ITS playlist, crossfaded
+            if let t = nextSceneTrack() { ev.append(.sceneOn(t, fade: f)) }
+            return ev
+        }
         if layerOn { layerOn = false; cooldownLeft = Self.layerCooldown; ev.append(.layerOff(fade: f)) }
         tracksSincePause = 0
         pickGapPlan()
         startNext(&ev, fade: f)
         return ev
+    }
+
+    /// The next track of a playlist scene: shuffled, each once, and the first of a new shuffle is never the one that just played.
+    private mutating func nextSceneTrack() -> SceneTrack? {
+        let all = scene.tracks
+        guard !all.isEmpty else { return nil }
+        if sceneBag.isEmpty {
+            var b = all
+            for i in stride(from: b.count - 1, to: 0, by: -1) { b.swapAt(i, min(Int(rand() * Double(i + 1)), i)) }
+            if b.count > 1, b.last == sceneTrack { b.swapAt(0, b.count - 1) }          // (the bag is popped from the back)
+            sceneBag = b
+        }
+        let t = sceneBag.removeLast()
+        sceneTrack = t; sceneElapsed = 0
+        return t
     }
 
     /// Test seam: be in an ambience-only gap of `length` seconds.
@@ -248,7 +270,9 @@ nonisolated struct MusicDirector {
                 current = nil; gapLeft = nil; tracksSincePause = 0
             }
             let cands = scene.tracks
-            sceneTrack = cands.isEmpty ? nil : cands[min(Int(rand() * Double(cands.count)), cands.count - 1)]
+            sceneBag = []; sceneElapsed = 0
+            if scene.isPlaylist { sceneTrack = nil; _ = nextSceneTrack() }
+            else { sceneTrack = cands.isEmpty ? nil : cands[min(Int(rand() * Double(cands.count)), cands.count - 1)] }
             if let t = sceneTrack { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : 0.8)) }
             else if scene == .results { ev.append(.sceneOff(fade: 0.5)) }
             else {                                  // back in the room
@@ -259,6 +283,10 @@ nonisolated struct MusicDirector {
                 pickGapPlan()
                 startNext(&ev)
             }
+        }
+        if scene.isPlaylist, let cur = sceneTrack {          // the café: on to the next track as this one ends (crossfaded)
+            sceneElapsed += dt
+            if sceneElapsed >= cur.loopEnd - Self.skipFade, let t = nextSceneTrack() { ev.append(.sceneOn(t, fade: Self.skipFade)) }
         }
         if scene != .none { return ev }          // a screen's music plays: no playlist, no play layer
 
