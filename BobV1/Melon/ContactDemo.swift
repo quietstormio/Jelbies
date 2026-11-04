@@ -1,7 +1,7 @@
 //
 //  ContactDemo.swift
 //  Capture aid only (launch arguments; nothing happens without them): force one touching emote between chosen Jelbies in the real app.
-//    -ContactDemo <SocialKind raw value | lieDown | sleepPile>   e.g. swayHug, noseBoop, backToBack, cuddleLean, groupHug, lieDown
+//    -ContactDemo <SocialKind raw value | lieDown | sleepPile; groupHug, circleDance, groupCheer take the whole cast>   e.g. swayHug, noseBoop, backToBack, cuddleLean, groupHug, lieDown
 //    -ContactDemoIds 0,1[,2]                          roster slots of the cast; the first one starts it (default: everyone, in order)
 //    -ContactCam low|side                             camera (Photo-mode orbit pose); works without -ContactDemo
 //    -ContactDemoDelay <s>                            wait before it starts (default 4)
@@ -63,7 +63,7 @@ enum ContactDemo {
             return
         }
         guard let kind = SocialKind(rawValue: name), let a = cast.first, let ab = a.brain, let bb = cast[1].brain else { note(" unknown kind %@", name); return }
-        if kind == .groupHug {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
+        if kind == .groupHug || kind == .circleDance || kind == .groupCheer {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
             note(" %@ started=%d crew=%d", name, ab.socialStartGroup(kind, with: cast.dropFirst().compactMap(\.brain), a.sim) ? 1 : 0, cast.count)
             return
         }

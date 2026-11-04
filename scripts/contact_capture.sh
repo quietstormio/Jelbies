@@ -18,12 +18,12 @@ grep -v '^#' scripts/contact_scenes.tsv | while IFS=$'\t' read -r NAME CAST KIND
   [ -n "$NAME" ] || continue
   if [ ${#ONLY[@]} -gt 0 ]; then ok=0; for p in $ONLY; do [[ $NAME == $p* ]] && ok=1; done; [ $ok = 1 ] || continue; fi
   for ANGLE in ${(s:,:)ANGLES}; do
-    S=${NAME}_$ANGLE
+    S=${NAME}_$ANGLE; rm -f $OUT/$S.demolog
     TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_NAME=$NAME TEST_RUNNER_CAPTURE_CAST=$CAST TEST_RUNNER_CAPTURE_KIND=$KIND TEST_RUNNER_CAPTURE_ANGLE=$ANGLE \
       TEST_RUNNER_CAPTURE_ARGS="$ARGS" TEST_RUNNER_CAPTURE_SECS=$SECS xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG \
-      -destination "$DEST" -derivedDataPath dd_contactcap -only-testing:BobV1UITests/ContactCaptureUITests/testScene >$OUT/xcodebuild_$S.log 2>&1
+      -destination "$DEST" -derivedDataPath dd_contactcap -only-testing:BobV1UITests/ContactCaptureUITests/testScene </dev/null >$OUT/xcodebuild_$S.log 2>&1
     ( cd $OUT/$S 2>/dev/null && N=$(ls f_*.png | wc -l) && ffmpeg -loglevel error -y -framerate $(( N / SECS > 0 ? N / SECS : 1 )) -pattern_type glob -i 'f_*.png' \
-        -vf "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900" -pix_fmt yuv420p ../$S.mp4 ) || echo "FAILED $S"
+        -vf "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900" -pix_fmt yuv420p ../$S.mp4 </dev/null ) || echo "FAILED $S"
     echo "$S: $(cat $OUT/$S.demolog 2>/dev/null | grep -v ' \(start\|at\) ' | tr '\n' ';')"
   done
 done
