@@ -965,7 +965,7 @@ final class BlobBrain {
                            rate: Float? = nil, swingFrac: Float = 0.85, inPlace: Bool = false, outScale: Float = 1) {
         let s = nextSwing
         var rootD = rootD
-        if !inPlace, rootD == .zero, let r = partingRetreat(dyaw: dyaw) { rootD = r }          // (a turn away from a partner at touching distance backs off: BlobSocial+Part.swift)
+        if !inPlace, rootD == .zero, !contactStanceTurnInPlace, let r = partingRetreat(dyaw: dyaw) { rootD = r }          // (a turn away from a partner at touching distance backs off: BlobSocial+Part.swift)
         stepRoot0 = SIMD2(px, pz); stepRootD = rootD
         stepYaw0 = yaw; stepYawD = dyaw
         let landYaw = yaw + dyaw

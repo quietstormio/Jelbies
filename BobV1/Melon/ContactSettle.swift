@@ -109,10 +109,34 @@ extension BlobBrain {
 
     /// Adds the lean trim to this tick's lean overlay (after the emote's drive set its own): toward the partner with the soles fixed.
     func contactApplyLean() {
+        defer { contactGovernLean() }
         guard abs(socialBook.leanTrim) > 1e-4, let o = socialBrain(socialBook.trimPartner), social != nil else { return }
         let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
         socialBook.wantRoll += -local.x / ln * socialBook.leanTrim
         socialBook.wantPitch += local.y / ln * socialBook.leanTrim
+    }
+
+    /// THE LUNGE GOVERNOR (2026-11-04): a drive's lean (boop 0.20 rad, bump 0.22 rad EACH) is shaped for a standing distance it does not know; the peak of the move must land AT the skin contact, never past it. After
+    /// the drive set its wants (and the trim was added), the lean toward the partner is capped at what the rest of the gap can take: applied lean + this body's half of the predicted gap / `ContactTuning.leanMetresPerRad`.
+    /// Only caps (never adds), only while the stance asks for a target in this phase.
+    func contactGovernLean() {
+        guard ContactField.enabled, let s = social, s.end == nil, !s.kind.isGroup, let st = ContactStance.entry(s.kind), st.cls == .touching, let step = st.step(at: s.phase), let target = step.target,
+              let p = (s.a === self ? s.b : s.a), p !== self, var g = ContactField.gap(steerID, p.steerID, features: st.features) else { return }
+        if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
+        let key = steerID &* 4096 &+ p.steerID
+        let prev = s.t < 0.1 ? g : (ContactTouchMemory.govGap[key] ?? g)
+        ContactTouchMemory.govGap[key] = g
+        let gPred = g + ContactSettleTuning.lead * (g - prev)
+        let local = rotXZ(p.position - position, -yaw), ln = max(simd_length(local), 1e-3)
+        func toward(_ pitch: Float, _ roll: Float) -> Float { (pitch * local.y - roll * local.x) / ln }
+        let applied = toward(socialBook.pitch, socialBook.roll)
+        let want = toward(socialBook.wantPitch, socialBook.wantRoll)
+        let cap = applied + 0.5 * (min(g, gPred) - target) / ContactTuning.leanMetresPerRad
+        guard want > cap else { return }
+        let over = want - cap
+        socialBook.wantPitch -= over * local.y / ln
+        socialBook.wantRoll += over * local.x / ln
+        if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge += String(format: "|gov%.3f", over) } }
     }
 
     /// The pair's touch distance for the walk destination, STABLE (2026-11-04): the live support reach swings 0.39 ... 1.6 m while the legs step, so a destination derived from it every tick jumps and the pair
@@ -125,18 +149,19 @@ extension BlobBrain {
         let sid = ObjectIdentifier(s)
         func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
         var e = ContactTouchMemory.store[key]
-        if let x = e, x.session != sid || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 { e = nil }
+        if let x = e, x.session != sid || s.t < x.seenT - 0.05 || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 { e = nil }          // (s.t running backwards = a new session at a recycled address)
         if var x = e {
             if !x.frozen {
                 if planted(self), planted(p) { x.d = raw; x.frozen = true }
                 else { x.d = max(x.d0 - 0.12, min(x.d0 + 0.12, x.d + max(-0.01, min(0.01, (raw - x.d) * 0.1)))) }
             }
+            x.seenT = s.t
             ContactTouchMemory.store[key] = x
             return x.d
         }
         let standing = planted(self) && planted(p)
         let d0 = standing ? raw : max(0.6, min(1.5, raw))
-        let x = ContactTouchMemory.Entry(session: sid, phase: s.phase, axis: u, d: d0, d0: d0, frozen: standing)
+        let x = ContactTouchMemory.Entry(session: sid, phase: s.phase, axis: u, d: d0, d0: d0, frozen: standing, seenT: s.t)
         ContactTouchMemory.store[key] = x
         return x.d
     }
@@ -153,8 +178,17 @@ extension BlobBrain {
         case .away: hm = head(u); hp = head(-u)
         }
         func ext(_ b: BlobBrain, _ dir: SIMD2<Float>, _ hyp: Float) -> Float? { ContactField.supportExt(b.steerID, rotXZ(rotXZ(dir, -hyp), b.yaw)) }
+        guard simd_distance(ContactField.root(steerID), position) < 0.05, simd_distance(ContactField.root(p.steerID), p.position) < 0.05 else { return nil }          // (a profile of an older pose - the first tick of a session - says nothing about the yaw used here)
         guard let a = ext(self, -u, hm), let c = ext(p, u, hp) else { return nil }
         return a + c
+    }
+
+    /// A turn step inside a touching stance's own HOLD (a real, non-keep-apart step, no explicit parting): the turn belongs to the stance (nuzzle turns to the camera at the touch, the retarget turns back toward the partner ...).
+    /// A parting retreat there backs the body off a full 36 cm each turn and the pair never rests; the settle takes the swing.
+    var contactStanceTurnInPlace: Bool {
+        guard ContactField.enabled, socialBook.partFrom < 0 || peerClock >= socialBook.partUntil, let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching,
+              let step = st.step(at: s.phase), step.target != nil, !step.onlySeparate else { return false }
+        return true
     }
 
     /// A walker never turns round to walk BACK (an overshoot): the turn on the spot swings the wide axis (arms, ears, 1.4 m across) through the partner. A destination behind the walker (against the way he
@@ -194,12 +228,13 @@ extension BlobBrain {
                     let key = min(steerID, p.steerID) &* 4096 &+ max(steerID, p.steerID), lo = steerID < p.steerID
                     let sid = ObjectIdentifier(ses), ph = ses.phase
                     var m = ContactTouchMemory.meet[key]
-                    if m == nil || m!.session != sid || m!.phase != ph {
+                    if m == nil || m!.session != sid || m!.phase != ph || ses.t < m!.seenT - 0.05 {
                         let tLo = lo ? t : tp, tHi = lo ? tp : t
                         let ax = simd_normalize(tHi - tLo + SIMD2(1e-6, 0))
-                        m = ContactTouchMemory.Meet(session: sid, phase: ph, mid: (tLo + tHi) / 2, axis: ax)
+                        m = ContactTouchMemory.Meet(session: sid, phase: ph, mid: (tLo + tHi) / 2, axis: ax, seenT: ses.t)
                         ContactTouchMemory.meet[key] = m
                     }
+                    m!.seenT = ses.t; ContactTouchMemory.meet[key] = m
                     let side: SIMD2<Float> = lo ? -m!.axis : m!.axis          // from the meeting point toward my side
                     stable = contactStableTouch(p, axis: side)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
@@ -220,7 +255,7 @@ extension BlobBrain {
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
                     slotWalk = okFix && !ContactTouchMemory.shuffling.contains(steerID)
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
-                    else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
+                    else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f,want(%.2f,%.2f),fixed(%.2f,%.2f),partner(%.2f,%.2f))", okFix ? 1 : 0, dT, dist, (p.position + u * dist).x, (p.position + u * dist).y, fixed(p.position + u * dist).x, fixed(p.position + u * dist).y, p.position.x, p.position.y) } }
                 }
             }
         }
@@ -252,11 +287,13 @@ extension BlobBrain {
 /// The stable touch distances of the walkers (`BlobBrain.contactStableTouch`): per (walker, partner). Kept here, not in SocialBook (a drive-side file).
 @MainActor
 enum ContactTouchMemory {
-    struct Entry { var session: ObjectIdentifier; var phase: Int; var axis: SIMD2<Float>; var d: Float; var d0: Float; var frozen: Bool }
+    struct Entry { var session: ObjectIdentifier; var phase: Int; var axis: SIMD2<Float>; var d: Float; var d0: Float; var frozen: Bool; var seenT: Float = 0 }
     /// Bodies whose current walk IS a shuffle step (aimed by the residual, not to be retargeted to the stance spot).
     static var shuffling: Set<Int> = []
     static var store: [Int: Entry] = [:]
     /// Two walkers heading for each other: their meeting point and axis (lower steerID -> higher), fixed once per session phase.
-    struct Meet { var session: ObjectIdentifier; var phase: Int; var mid: SIMD2<Float>; var axis: SIMD2<Float> }
+    struct Meet { var session: ObjectIdentifier; var phase: Int; var mid: SIMD2<Float>; var axis: SIMD2<Float>; var seenT: Float = 0 }
     static var meet: [Int: Meet] = [:]
+    /// The last pair gap the lunge governor saw, per (body, partner).
+    static var govGap: [Int: Float] = [:]
 }

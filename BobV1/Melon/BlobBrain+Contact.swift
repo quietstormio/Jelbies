@@ -19,6 +19,7 @@ enum ContactTuning {
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
     static let leanBudget: Float = 0.11          // rad of lean a planted body spends on a residual gap (~ 2.7 cm at the cheeks, measured: 0.08 rad closed 1.8 cm in the boop trace); beyond it: one shuffle step
+    static let leanMetresPerRad: Float = 0.30          // metres the skin contact moves per rad of lean (the lunge governor's conversion; ~1 / leanPerMetre)
     static let leanPerMetre: Float = 3.2          // rad per metre to close (measured 2026-11-04: a lean of 1 rad moves the skin contact ~ 0.22 m)
     static let rearmHold: Float = 0          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
