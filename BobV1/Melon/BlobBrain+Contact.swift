@@ -139,8 +139,14 @@ extension BlobBrain {
                     let press = min(1, max(0, -gap) / 0.03 + 0.4)
                     jellyKick = max(jellyKick, 0.9 + 0.9 * press)
                     if steerID < o.steerID || !(o.attached && !o.held) {          // (one sound + one haptic a touch, not one a body: the lower id, or whoever is left when he cannot)
-                        AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
-                        roomCue(.sfx(.squish))          // (the contact haptic: Haptics+Emotes.swift)
+                        // the emote's own contact sound (ContactStance.table: boop, squish, highfive_boop ...) or the default squish; AudioHub.play sends the sound's haptic cue too
+                        let st = contactStance(with: o)
+                        AudioHub.shared.play(st?.sound ?? .squish, jelly: steerID, x: px, volume: st?.sound != nil ? st!.volume : 0.25)
+                        switch st?.haptic ?? .none {
+                        case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
+                        case .treat(let key): treatHaptic(key)
+                        case .none: break
+                        }
                         contactEvents += 1
                     }
                 }

@@ -10,7 +10,7 @@ import Foundation
 import simd
 
 enum SpinHugTuning {
-    static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.74...0.80, legs = 8
+    static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.68...0.80, legs = 8
 }
 
 extension BlobBrain {
@@ -67,9 +67,7 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.emoteSpinHug, jelly: steerID, x: px, volume: 1)
                     face(.joyArc, hold: 1.2); o.face(.joyArc, hold: 1.2)
-                    treatHaptic("spinHug.press")
                 }
                 if s.impacted, t > 1.2 {
                     let ok = spinPlan(s, o)

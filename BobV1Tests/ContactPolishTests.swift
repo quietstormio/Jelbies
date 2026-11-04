@@ -71,6 +71,8 @@ final class ContactPolishTests: XCTestCase {
     static let enforce = ProcessInfo.processInfo.environment["CONTACT_ENFORCE"] == "1"
     /// CONTACT_ONLY=boop,bump,... runs just those emotes (names as in the catalogue; a quick iteration loop). Unset = all.
     static let only: Set<String>? = { let v = ProcessInfo.processInfo.environment["CONTACT_ONLY"] ?? ""; return v.isEmpty ? nil : Set(v.split(separator: ",").map(String.init)) }()
+    /// CONTACT_TRACE=boop,... also writes trace_<emote>_<cast>.tsv (t, phase, skin gap, root distance, standing) into CONTACT_OUT: the timeline for debugging a stance.
+    static let traced: Set<String> = Set((ProcessInfo.processInfo.environment["CONTACT_TRACE"] ?? "").split(separator: ",").map(String.init))
     static func wanted(_ e: ContactEntry) -> Bool { only.map { $0.contains(e.name) } ?? true }
     /// 0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl.
     static let names = OnePieceInvariantTests.characters.map { $0.0 }
@@ -213,6 +215,7 @@ final class ContactPolishTests: XCTestCase {
         var curEpisode = -1
         var sndSeen = 0, hapSeen = 0
         var secondSleeper = false
+        var trace: [String] = []
         let maxF = Int(e.maxSec * 60)
         var frame = 0
         while frame < maxF {
@@ -250,6 +253,7 @@ final class ContactPolishTests: XCTestCase {
                     gapNow = mg
                     if mg < res.minGap { res.minGap = mg; res.minGapT = Float(frame) / 60; res.minGapFrame = frame; res.minGapPair = mp
                         res.minGapPhase = "\(a.brain.socialKind.map { $0.rawValue } ?? "-")/ph\(a.brain.social?.phase ?? -1)/idle \(a.brain.idleState.kind.map { "\($0)" } ?? "-")" }
+                    if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined())) }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
                     if still, inSession, mg < 2.2 { res.stance01.append(mg) }
                     // episodes
@@ -300,6 +304,7 @@ final class ContactPolishTests: XCTestCase {
             if res.completed { break }
         }
         res.frames = frame; res.seconds = Float(frame) / 60
+        if !trace.isEmpty, let dir = Self.outDir { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true); try? (["t\tphase\tgap_cm\troot\tstill\tlastSound"] + trace).joined(separator: "\n").write(toFile: dir + "/trace_\(Self.fileName(e.name))_\(Self.fileName(castName)).tsv", atomically: true, encoding: .utf8) }
         AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; HapticDriver.cueTap = nil
         return (res, cells)
     }

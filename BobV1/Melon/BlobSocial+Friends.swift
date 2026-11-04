@@ -87,7 +87,7 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5 else { return false }
             let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : 0.78)
             let away = (me - you) / max(d, 1e-3)
-            let want = you + away * peerGap * gapK
+            let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: kind == .hum ? vDur(4.6) : 0)
@@ -175,7 +175,6 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.9)
                 }
                 if t > 0.6, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil {
                     s.round += 1
@@ -226,8 +225,6 @@ extension BlobBrain {
                     s.impacted = true; s.bumpT = t
                     jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.highFiveBoop, jelly: steerID, x: px, volume: 0.85)
-                    emoteHaptic("highFive.bump", EmoteHaptic.tap)          // (one soft tap, with the boop)
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
                 } else if !s.impacted, t > 9 { s.finish(.aborted) }
                 if s.impacted {
@@ -290,7 +287,6 @@ extension BlobBrain {
     }
     private func squishBoth(_ o: BlobBrain, first: Bool) {
         jellyKick = max(jellyKick, 1.5); o.jellyKick = max(o.jellyKick, 1.5)
-        AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7)
         if first { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
         else { face(.joyArc, hold: 1.0); o.face(.joyArc, hold: 1.0) }
     }
@@ -307,7 +303,6 @@ extension BlobBrain {
             if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, t > (isA ? 0.1 : 0.45) {
                 socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil
                 startSpin(sim: sim)
-                AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5)
             } else if socialBook.hopStarted, scriptIsNone { faceEach(o) }
             if isA, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, t > 2.0 {
                 s.round += 1

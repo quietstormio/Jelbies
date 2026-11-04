@@ -24,7 +24,7 @@ extension BlobBrain {
     func sideSpot(of o: BlobBrain, gap: Float) -> SIMD2<Float>? {
         let dir: Float = position.x >= o.position.x ? 1 : -1
         for sgn in [dir, -dir] {
-            let p = o.position + SIMD2(sgn * gap, 0)
+            let p = o.position + SIMD2(sgn * standGap(o, along: SIMD2(sgn, 0), gap), 0)          // (never inside him: the touch distance + the approach margin, ContactStance.swift)
             let q = closeFixed(p)
             if simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) { return q }
         }
@@ -33,7 +33,7 @@ extension BlobBrain {
     /// A spot behind `o` (opposite to where he faces).
     func behindSpot(of o: BlobBrain, gap: Float) -> SIMD2<Float>? {
         let f = SIMD2(sinf(o.yaw), cosf(o.yaw))
-        let p = o.position - f * gap
+        let p = o.position - f * standGap(o, along: -f, gap)
         let q = fixed(p)
         return simd_distance(p, q) < 0.2 && spotFree(q, besides: [self, o]) ? q : nil
     }
@@ -83,8 +83,9 @@ extension BlobBrain {
         case .bump:
             guard d > 0.5, d < 5.5 else { return false }
             let away = (me - you) / max(d, 1e-3)
-            let spot = fixed(you + away * peerGap * 0.92)
-            guard simd_distance(spot, you + away * peerGap * 0.92) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
+            let want = you + away * standGap(o, along: away, peerGap * 0.92)
+            let spot = fixed(want)
+            guard simd_distance(spot, want) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(.bump, with: o, duration: 0)
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me)
@@ -232,7 +233,6 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9)
                 }
                 if t > 0.95 { if s.phase == 2 { s.setPhase(3); s.impacted = false } else { s.setPhase(4) } }
             }
@@ -272,7 +272,6 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 3.0)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9)
                 }
                 if t > 0.7 { s.setPhase(3) }
             } else if s.impacted, !socialBook.hopStarted, scriptIsNone {
@@ -344,7 +343,7 @@ extension BlobBrain {
                 if !socialBook.hopStarted, s.impacted, s.phaseT > 0.35, scriptIsNone, idleState.kind == nil {
                     let to = s.goal
                     var u = position - to; let L = simd_length(u); u = L > 1e-3 ? u / L : SIMD2(0, 1)
-                    let spot = fixed(to + u * (peerGap * 0.95))
+                    let spot = fixed(to + u * (touchRadius(o, along: u).map { $0 + ContactStance.approach } ?? peerGap * 0.95))
                     if simd_distance(position, spot) > 1.0, idleStart(.run, sim, goal: spot) { socialBook.hopStarted = true; socialBook.hold = false }
                     else if simd_distance(position, spot) <= 1.0 { socialBook.hopStarted = true; socialBook.hold = false; socialWalk(to: spot, sim) }
                     else { s.finish(.aborted) }
@@ -366,7 +365,6 @@ extension BlobBrain {
                     let chaser = chaserIsA ? self : o, runner = chaserIsA ? o : self
                     chaser.jellyKick = max(chaser.jellyKick, 1.4); runner.jellyKick = max(runner.jellyKick, 2.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9)
                 }
                 if t > 0.95 {
                     s.round += 1; s.roles = 1 - s.roles

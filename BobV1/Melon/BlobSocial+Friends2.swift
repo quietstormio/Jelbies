@@ -70,7 +70,7 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5 else { return false }
             let gapK: Float = kind == .ringAround ? 0.72 : (kind == .noseBoop ? 0.68 : Friends2Tuning.faceGap)
             let away = (me - you) / max(d, 1e-3)
-            let want = you + away * peerGap * gapK
+            let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.14, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: 0)
@@ -82,7 +82,7 @@ extension BlobBrain {
             // behind him, seen from the camera (he stands between the camera and me)
             let cy = o.faceCameraYaw()
             let u = SIMD2(sinf(cy), cosf(cy))
-            let want = you - u * peerGap * 0.95
+            let want = you - u * standGap(o, along: -u, peerGap * 0.95)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.14, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: 0)
@@ -218,7 +218,6 @@ extension BlobBrain {
                     let tagger = taggerIsA ? self : o, tagged = taggerIsA ? o : self
                     tagger.jellyKick = max(tagger.jellyKick, 1.2); tagged.jellyKick = max(tagged.jellyKick, 2.6)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.9)
                     AudioHub.shared.chirp(jelly: tagged.steerID, .babble)
                 }
                 if t > 0.85 { s.setPhase(3); s.impacted = false }
@@ -234,7 +233,7 @@ extension BlobBrain {
                 if !socialBook.hopStarted { holdFacing(yawTo(o.position)); socialBook.wantSquash = 1 - 0.04 * abs(sinf(2 * .pi * 3 * t)) }
                 if !socialBook.hopStarted, s.impacted, t > 0.55, fxFree {
                     var u = position - s.goal; let L = simd_length(u); u = L > 1e-3 ? u / L : SIMD2(0, 1)
-                    let spot = fixed(s.goal + u * (peerGap * Friends2Tuning.faceGap))
+                    let spot = fixed(s.goal + u * (touchRadius(o, along: u).map { $0 + ContactStance.approach } ?? peerGap * Friends2Tuning.faceGap))
                     letGo()
                     socialBook.hopStarted = true
                     if simd_distance(position, spot) > 1.0 { if !idleStart(.run, sim, goal: spot) { socialWalk(to: spot, sim) } } else { socialWalk(to: spot, sim) }
@@ -367,7 +366,6 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.9)
                     AudioHub.shared.chirp(jelly: steerID, .babble)
                 }
                 if t > 1.15 {
@@ -430,7 +428,6 @@ extension BlobBrain {
         booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, 2.2)
         onSocial?(.boop(partner: booped.steerID)); booped.onSocial?(.boop(partner: booper.steerID))
         booped.onSocial?(.makeUp(partner: booper.steerID)); onSocial?(.makeUp(partner: booped.steerID))
-        AudioHub.shared.play(.boop, jelly: booper.steerID, x: booper.px, volume: 0.8)
         AudioHub.shared.chirp(jelly: booped.steerID, .babble)
         booped.blushBump(hold: 2.0, peak: 0.6)
     }
@@ -486,7 +483,6 @@ extension BlobBrain {
                 s.impacted = true
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.5)
             }
             if s.passes == 0, ft > 2.0 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy) }
             if s.passes == 1, ft > 3.4 { s.passes = 2; AudioHub.shared.chirp(jelly: o.steerID, .babble) }

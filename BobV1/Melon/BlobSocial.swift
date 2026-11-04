@@ -330,7 +330,7 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5 else { return false }
             let gap = peerGap
             let away = (me - you) / max(d, 1e-3)
-            let spot = fixed(you + away * gap)
+            let spot = fixed(you + away * standGap(o, along: away, gap))
             guard simd_distance(spot, you) < gap + 0.3 else { return false }
             let s = newSession(kind, with: o, duration: kind == .squabble ? rand(5, 8) : 0)
             o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me)
@@ -668,13 +668,13 @@ extension BlobBrain {
         if s.kind.isGroup {
             let mem = s.members
             if mem.count < s.crewIDs.count || mem.contains(where: { $0.socialTaken }) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
-            if isA { s.t += dt; s.phaseT += dt }
+            if isA { s.t += dt; s.phaseT += dt; contactStanceTick(s) }
             driveGroup(s, mem, isA, sim, dt)
             return
         }
         guard let o else { s.finish(.aborted); socialRelease(skinner, hard: true); return }
         if socialTaken || o.socialTaken || (s.c?.socialTaken ?? false) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
-        if isA { s.t += dt; s.phaseT += dt }          // the initiator keeps the session clock (one tick per frame)
+        if isA { s.t += dt; s.phaseT += dt; contactStanceTick(s) }          // the initiator keeps the session clock (one tick per frame) and holds the stance (ContactStance.swift)
         switch s.kind {
         case .boop: driveBoop(s, o, isA, sim, skinner, dt)
         case .squabble: driveSquabble(s, o, isA, sim, skinner, dt)

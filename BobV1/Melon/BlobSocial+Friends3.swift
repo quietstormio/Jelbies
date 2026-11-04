@@ -31,7 +31,7 @@ extension BlobBrain {
         case .danceOff:
             guard d > 0.5, d < 5.5 else { return false }
             let away = (me - you) / max(d, 1e-3)
-            let want = you + away * peerGap * 0.95
+            let want = you + away * standGap(o, along: away, peerGap * 0.95)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.14, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: 0)
@@ -78,7 +78,6 @@ extension BlobBrain {
                 jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 1.6)
                 onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
-                AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.55)
                 face(.joyArc, hold: 1.4); o.face(.joyArc, hold: 1.4)
             }
             if s.passes == 0, ft > 2.4 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy); jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0) }
