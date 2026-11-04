@@ -69,6 +69,7 @@ extension BlobBrain {
         stepRoot0 += d          // (a step in flight: its root path slides with the root, the soles with it - the same as the unstick nudge)
         if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
         if gait.isBusy { gait.nudge(d) }
+        if flapHop.active { flapHop.from += d }          // (the winged hop re-derives the root from its own start point every tick)
         if social != nil { socialBook.shiftPending += d }          // (the body itself is slid by the same amount at the next social tick: the pose attractor alone trails the root by ~0.2 s, too slow for a lean)
     }
     /// Slide the sim by what the settle moved the root since the last tick (once a tick, before the scripts run).
