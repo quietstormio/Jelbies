@@ -72,6 +72,25 @@ final class ContactSettleTests: XCTestCase {
         }
     }
 
+    /// The cost of the feature path (wings / spikes / tail in the pair gap) against the body-only gap, per query; logged (CONTACT cost ...), and the tail must be in the Pip profile.
+    func testFeatureGapCost() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-0.7, 0.6), SIMD2(0.7, 0.6)], features: [OnePieceInvariantTests.characters[1].1, OnePieceInvariantTests.characters[3].1], seed: 5)
+        d.live = true
+        for _ in 0..<30 { d.tick() }
+        XCTAssertFalse(ContactField.featurePoints(0).isEmpty, "Pip's spikes / tail are feature points")
+        let pa = ContactField.root(0), pb = ContactField.root(1)
+        func time(_ f: Bool) -> Double {
+            let t0 = CACurrentMediaTime()
+            var acc: Float = 0
+            for k in 0..<20000 { acc += ContactField.gap(0, at: pa, 1, at: pb + SIMD2(Float(k % 7) * 1e-4, 0), features: f) ?? 0 }
+            _ = acc
+            return (CACurrentMediaTime() - t0) / 20000 * 1e6
+        }
+        let body = time(false), feat = time(true)
+        MotionLog.write(String(format: "CONTACT cost: pair gap at hypothetical roots %.2f us body only, %.2f us with features (wall query)", body, feat))
+        XCTAssertLessThan(feat, 40, "the feature path stays cheap enough for the keepApart wall (hundreds of queries a step)")
+    }
+
     func testAnchoredBodyStaysPut() {
         for d0 in [0.7, 2.0] as [Float] {
             let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .none], seed: 5)
