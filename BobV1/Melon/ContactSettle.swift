@@ -146,7 +146,7 @@ extension BlobBrain {
     /// value is a hard low-pass of the live one (first sample clamped to a plausible 0.6 ... 1.5 m, then an EMA with a rate clamp). Kept per (walker, partner) in `ContactTouchMemory`, reset per session / phase,
     /// and re-captured when the axis turns by more than 25 degrees (front-to-front touches closer than side-by-side).
     func contactStableTouch(_ p: BlobBrain, axis u: SIMD2<Float>) -> Float? {
-        guard let s = social, let raw = stanceTouch(p, axis: u, facing: ContactStance.entry(s.kind)?.facing ?? .toward) else { return nil }
+        guard let s = social, let raw = stanceTouch(p, axis: u, facing: ContactStance.entry(s.kind)?.facing ?? .toward, features: ContactStance.entry(s.kind)?.features ?? false) else { return nil }
         let key = steerID &* 4096 &+ p.steerID
         let sid = ObjectIdentifier(s)
         func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
@@ -170,7 +170,7 @@ extension BlobBrain {
 
     /// The touch distance on the stance's OWN yaws (`ContactStance.Facing`), from the profiles of the bodies as they stand now: a body's support toward a world direction `dir` at the hypothetical heading `hyp` is the
     /// profile's support at `rotXZ(rotXZ(dir, -hyp), yaw)` (the same local direction in the pose it has now). `u` runs from the partner to me.
-    func stanceTouch(_ p: BlobBrain, axis u: SIMD2<Float>, facing: ContactStance.Facing) -> Float? {
+    func stanceTouch(_ p: BlobBrain, axis u: SIMD2<Float>, facing: ContactStance.Facing, features: Bool = false) -> Float? {
         func head(_ v: SIMD2<Float>) -> Float { atan2f(v.x, v.y) }
         let cam = faceCameraYaw()
         let hm: Float, hp: Float
@@ -179,7 +179,11 @@ extension BlobBrain {
         case .camera: hm = cam; hp = cam
         case .away: hm = head(u); hp = head(-u)
         }
-        func ext(_ b: BlobBrain, _ dir: SIMD2<Float>, _ hyp: Float) -> Float? { ContactField.supportExt(b.steerID, rotXZ(rotXZ(dir, -hyp), b.yaw)) }
+        func ext(_ b: BlobBrain, _ dir: SIMD2<Float>, _ hyp: Float) -> Float? {
+            let w = rotXZ(rotXZ(dir, -hyp), b.yaw)
+            guard let e = ContactField.supportExt(b.steerID, w) else { return nil }
+            return features ? max(e, ContactField.featureExt(b.steerID, w)) : e          // (wings / tail / spikes / daisy in the way count for the stances that count them)
+        }
         guard simd_distance(ContactField.root(steerID), position) < 0.05, simd_distance(ContactField.root(p.steerID), p.position) < 0.05 else { return nil }          // (a profile of an older pose - the first tick of a session - says nothing about the yaw used here)
         guard let a = ext(self, -u, hm), let c = ext(p, u, hp) else { return nil }
         return a + c

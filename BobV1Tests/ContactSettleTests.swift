@@ -278,4 +278,51 @@ final class ContactSettleTests: XCTestCase {
             ContactField.reset()
         }
     }
+    // MARK: arrival B (slot walk) mechanisms, 2026-11-04
+
+    /// FootGait.shift moves the planted spots AND the running swing's endpoints (the circle dance's join glitch: the foot snapped back to the un-warped `to`).
+    func testFootGaitShiftMovesTheRunningSwingToo() {
+        var f = FootGait()
+        f.pos = [SIMD2(0, 0), SIMD2(0.2, 0)]
+        f.begin(side: 1, to: SIMD2(0.2, 0.5), toYaw: 0, peak: 0.05, rate: 3.5)
+        f.shift(SIMD2(0.1, -0.3))
+        f.advance(1)          // the whole step
+        XCTAssertEqual(f.pos[1].x, 0.3, accuracy: 1e-5); XCTAssertEqual(f.pos[1].y, 0.2, accuracy: 1e-5)
+        XCTAssertEqual(f.pos[0].x, 0.1, accuracy: 1e-5); XCTAssertEqual(f.pos[0].y, -0.3, accuracy: 1e-5)
+    }
+
+    /// The stance touch distance is planned on the stance's own facing: face to face is shorter than side by side (a body is wider than deep), and the profile-less pair gives nil.
+    func testStanceTouchFollowsTheStanceFacing() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-0.9, 0.6), SIMD2(0.9, 0.6)], features: [.none, .none], seed: 5)
+        d.live = true
+        for _ in 0..<40 { d.tick() }
+        let a = d.lab.rigs[0].brain, b = d.lab.rigs[1].brain
+        let u = simd_normalize(a.position - b.position)          // from the partner to me
+        guard let toward = a.stanceTouch(b, axis: u, facing: .toward), let side = a.stanceTouch(b, axis: u, facing: .camera) else { return XCTFail("no profile") }
+        XCTAssertGreaterThan(side, toward + 0.2, "side by side (facing the camera, partner to the side) must be wider than face to face: \(side) vs \(toward)")
+        XCTAssertGreaterThan(toward, 0.5); XCTAssertLessThan(side, 1.7)
+    }
+
+    /// The lunge governor caps the lean toward the partner at what the rest of the gap can take, and never adds lean.
+    func testLungeGovernorCapsTheLeanAtTheContact() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-0.85, 0.6), SIMD2(0.85, 0.6)], features: [.none, .none], seed: 5)
+        d.live = true
+        let a = d.lab.rigs[0].brain, b = d.lab.rigs[1].brain
+        guard a.socialStart(.bump, with: b, d.lab.rigs[0].sim) else { return XCTFail("no start") }
+        var capped = false
+        for _ in 0..<600 {
+            d.tick()
+            if a.social?.phase == 2 { break }
+        }
+        // a lunge far beyond what the gap allows, applied by hand in the bump phase: the governor must clip it
+        a.socialBook.pitch = 0; a.socialBook.roll = 0
+        a.socialBook.wantPitch = 0.6; a.socialBook.wantRoll = 0
+        a.contactGovernLean()
+        capped = a.socialBook.wantPitch < 0.6 - 1e-4 || a.social == nil
+        XCTAssertTrue(capped || a.social?.phase != 2, "a 0.6 rad lunge at touching distance must be capped (pitch now \(a.socialBook.wantPitch))")
+        let before = a.socialBook.wantPitch
+        a.socialBook.wantPitch = -0.1
+        a.contactGovernLean()
+        XCTAssertEqual(a.socialBook.wantPitch, -0.1, accuracy: 1e-6, "a lean away is never touched (was \(before))")
+    }
 }

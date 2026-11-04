@@ -1250,7 +1250,7 @@ final class BlobBrain {
         let u = D > 1e-4 ? d / D : SIMD2<Float>(sinf(yaw), cosf(yaw))
         let stance = 1 - nextSwing
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)    // how far the stance foot leads
-        if D < (slotWalk ? 0.012 : 0.06) && abs(s) < 0.08 && !intermediate { return 1 }
+        if D < (slotWalk && social != nil ? 0.012 : 0.06) && abs(s) < 0.08 && !intermediate { return 1 }
         if scriptT > 14 + D / 0.25 { return 1 }
         if stuckT > 1.5 { return 2 }
         let arc = abs(err) <= 1.2 && D > 0.4 && !intermediate         // turn while moving: a short arc into the new direction
@@ -1263,7 +1263,7 @@ final class BlobBrain {
         let arcK: Float = abs(err) > 0.5 ? 0.6 : 1
         let L = stride * runStrideMul * amplitude.clamped(0.6, 1) * arcK
         var a: Float, r: Float
-        if !intermediate && slotWalk && abs(D - s) < 0.10 && abs(err) <= 0.5 { a = D; r = 0; walkFinal = true }    // SLOT final step: the root lands exactly on the slot (the stance foot stays planted, up to 10 cm off its nominal spot; the swing foot lands square under the root)
+        if !intermediate && slotWalk && social != nil && abs(D - s) < 0.10 && abs(err) <= 0.5 { a = D; r = 0; walkFinal = true }    // SLOT final step: the root lands exactly on the slot (the stance foot stays planted, up to 10 cm off its nominal spot; the swing foot lands square under the root)
         else if !intermediate && (abs(D - s) < 0.06 || D < s) { a = max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
         else if D > s + 1.1 * L || intermediate { r = 0.5 * L; a = s + r }                        // regular step: lands half a step ahead
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
