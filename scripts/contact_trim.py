@@ -13,8 +13,8 @@ try:
     log = open(f"{out}/{scene}.demolog").read()
     s = re.findall(r"startEpoch=([\d.]+)", log); e = re.findall(r"endEpoch=([\d.]+)", log)
     if s:
-        st = float(s[-1]); en = float(e[-1]) if e else st + 12
-        lo, hi = int((st - t0 - 0.5) * 1000), int((en - t0 + 2) * 1000)
+        st = float(s[-1]); lo = int((st - t0 - 0.5) * 1000)
+        if e: hi = int((float(e[-1]) - t0 + 2) * 1000)          # (no endEpoch = a lie-down / sleep pile: keep to the end of the capture)
 except Exception as ex:
     print("trim: whole clip,", ex)
 sel = [f for f in frames if lo <= ms(f) <= hi] or frames
