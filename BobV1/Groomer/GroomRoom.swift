@@ -70,6 +70,8 @@ enum GroomScenery {
 
     // palette: warm white plaster, sage, light wood, charcoal, a touch of brass (and stone for the ground)
     static let plaster = c(0.96, 0.94, 0.89), sage = c(0.60, 0.70, 0.60), sageDeep = c(0.50, 0.61, 0.52), wood = c(0.80, 0.65, 0.46)
+    /// The sign's lettering: a soft jelly teal with a pale sage shadow (fun but calm, fits the spa palette).
+    static let signInk = c(0.22, 0.50, 0.54), signShadow = c(0.74, 0.82, 0.74)
     static let charcoal = c(0.20, 0.22, 0.23), brass = c(0.80, 0.65, 0.30), stone = c(0.80, 0.78, 0.73), stoneDark = c(0.70, 0.68, 0.63)
     static let white = c(1.0, 0.99, 0.97), warm = c(1.0, 0.86, 0.60)
 
@@ -126,19 +128,35 @@ enum GroomScenery {
     private static func P(_ x: Float, _ y: Float) -> SIMD2<Float> { SIMD2(x, y) }
 
     /// "Jelly Spa" centred on x = `cx`, baseline `y`, glyph cap height `h`, at depth `z`.
-    static func text(_ b: RoomMeshBuilder, _ s: String, cx: Float, baseline y: Float, height h: Float, z: Float, color: V3) {
+    /// A playful sign style: `weight` = stroke width (× h); each letter bobs on a gentle wave (`bounce` × h) and leans a little (`tilt` rad), and an
+    /// optional `shadow` colour lays a soft offset copy behind the letters (a puffy, sticker-like read). Defaults = the plain stroke font.
+    static func text(_ b: RoomMeshBuilder, _ s: String, cx: Float, baseline y: Float, height h: Float, z: Float, color: V3,
+                     weight: Float = 0.13, bounce: Float = 0, tilt: Float = 0, shadow: V3? = nil) {
+        if let sh = shadow {
+            text(b, s, cx: cx + h * 0.045, baseline: y - h * 0.06, height: h, z: z - 0.025, color: sh, weight: weight * 1.25, bounce: bounce, tilt: tilt, shadow: nil)
+        }
         let width = s.reduce(Float(0)) { $0 + (glyphs[$1]?.advance ?? 0.8) } * h
         var x0 = cx - width / 2
-        let w = h * 0.13
-        for ch in s {
+        let w = h * weight
+        for (i, ch) in s.enumerated() {
             guard let g = glyphs[ch] else { continue }
+            let fi = Float(i)
+            let dy = bounce * h * sin(fi * 1.35 + 0.4)
+            let ang = tilt * sin(fi * 2.2 + 1.1)
+            let ca = cos(ang), sa = sin(ang)
+            let pivot = SIMD2<Float>(g.advance * 0.45, 0.45)
+            func at(_ q: SIMD2<Float>) -> V3 {
+                let d = q - pivot
+                let r = SIMD2<Float>(d.x * ca - d.y * sa, d.x * sa + d.y * ca) + pivot
+                return V3(x0 + r.x * h, y + dy + r.y * h, z)
+            }
             for st in g.strokes {
-                for i in 0..<(st.count - 1) {
-                    let a = V3(x0 + st[i].x * h, y + st[i].y * h, z), d = V3(x0 + st[i + 1].x * h, y + st[i + 1].y * h, z)
+                for k in 0..<(st.count - 1) {
+                    let a = at(st[k]), d = at(st[k + 1])
                     let dir = simd_normalize(d - a), perp = V3(-dir.y, dir.x, 0) * (w / 2)
                     b.flatQuad(a - perp, a + perp, d + perp, d - perp, normal: V3(0, 0, 1), colors: Array(repeating: color, count: 4))
                 }
-                for p in st { discZ(b, V3(x0 + p.x * h, y + p.y * h, z), w / 2, color: color, segments: 10) }
+                for p in st { discZ(b, at(p), w / 2, color: color, segments: 12) }
             }
             x0 += g.advance * h
         }
@@ -199,7 +217,7 @@ enum GroomScenery {
         // the sign: a slim charcoal-lettered plate on the wall, a tiny brass droplet mark to the left of the name
         box(b, V3(0, 3.6, Z + 0.1), V3(1.9, 0.5, 0.05), r: 0.06, color: wood)
         box(b, V3(0, 3.6, Z + 0.16), V3(1.82, 0.42, 0.04), r: 0.05, color: plaster)
-        text(b, "Jelly Spa", cx: 0.22, baseline: 3.46, height: 0.46, z: Z + 0.3, color: charcoal)
+        text(b, "Jelly Spa", cx: 0.22, baseline: 3.44, height: 0.46, z: Z + 0.3, color: signInk, weight: 0.19, bounce: 0.06, tilt: 0.09, shadow: signShadow)
         droplet(b, V3(-1.52, 3.6, Z + 0.3), 0.15, color: brass)
 
         // the solid sage awning (a clean sloping canopy over the window and door, plain front lip)
