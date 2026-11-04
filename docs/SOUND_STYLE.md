@@ -42,7 +42,7 @@ Rules learned: say "creature" and "coo/hum", never "sigh/sneeze/breath/giggle/la
 ## Which voice each character uses
 `JellyVoiceSet.file(character:)` (AudioCatalog.swift) picks `chirp_jelly{n}_*`, `babble_jelly{n}`, `snore_jelly{n}_*` with n = min(character, 3) + 1, via the character in the slot (`JellyRoster.character(slot)`):
 - Bob (0) -> jelly1; Pip (1) -> jelly2; Moss (2) -> jelly3; Lavender (3) -> jelly4.
-- Teddy (4) and Pearl (5) both clamp to jelly4, so they share Lavender's voice. Suggestion: give Teddy (round, light brown, ears) and Pearl (white, winged) their own voice sets (jelly5/jelly6: extend `JellyVoiceSet.count`, generate chirp/babble/snore with `voice_synth.py`, e.g. Teddy lower and rounder than Bob, about 380 Hz; Pearl soft and airy near 580 Hz). Not done; ask the user.
+- Teddy (4), Pearl (5) and Panda (6) all clamp to jelly4 (`min(character, 3)`), so they share Lavender's voice (Panda confirmed 2026-11-03: shared for now, no new clips). Suggestion: give Teddy (round, light brown, ears) and Pearl (white, winged) their own voice sets (jelly5/jelly6: extend `JellyVoiceSet.count`, generate chirp/babble/snore with `voice_synth.py`, e.g. Teddy lower and rounder than Bob, about 380 Hz; Pearl soft and airy near 580 Hz). Not done; ask the user.
 
 ## Where this applies
 New vocal in the emotes: `emote_hic_1`, `emote_achoo_1`, `emote_woozy_1`, and `storm_relief_sigh` follow this guide (redone 2026-11-02). `cheer_small_*` (older crowd cheer, centroid 1.2-1.8 kHz) was not part of the new batch.

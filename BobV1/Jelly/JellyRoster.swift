@@ -45,12 +45,15 @@ nonisolated enum JellyRoster {
     /// Characters available (Bob, Pip, Moss, Lavender).
     static let characterCount = 4
     /// The species' own names (what the Adoption Center offers as the default).
-    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl"]
+    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
     /// Teddy (character 4): a species that exists but is NOT offered anywhere yet (not in the intro, the Jelly Spring picker or the starter roster; never
     /// padded into a short roster, not in any default). Reachable only through the `-ForceSpecies teddy` / `-SetRoster teddy` test hooks.
     static let teddyID = 4
-    /// Every character id that exists (the four on offer + Teddy).
-    static let knownCount = 6
+    /// Panda (character 6): Teddy's round bear ears + pom on a white body with black eye patches, ears, arms, feet, shoulder band and pom (PandaLook.swift).
+    /// Like Teddy and Pearl it is NOT offered anywhere yet (not in the intro, the Jelly Spring picker, the starter roster or any generator).
+    static let pandaID = 6
+    /// Every character id that exists (the four on offer + Teddy, Pearl, Panda).
+    static let knownCount = 7
     /// Pearl (character 5): the white winged Jelbie (WhiteWing.swift): Lavender's wings re-tinted pearl, a soft white body. Like Teddy it is NOT offered anywhere
     /// (not in the intro, the Jelly Spring picker, the starter roster or any generator); a roster gets him only by `-SetRoster` / `-NewGame` / a save.
     static let pearlID = 5
@@ -83,7 +86,7 @@ nonisolated enum JellyRoster {
     /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings. (By CHARACTER id.)
     static func feature(_ id: Int) -> JellyFeature {
         if WhiteWing.isForced(id) { return .wings }          // -ForceSpecies whitewing (look-only candidate, captures)
-        switch id { case 1: return .spines; case 2: return .daisy; case 3, pearlID: return .wings; case teddyID: return .ears; default: return .none }
+        switch id { case 1: return .spines; case 2: return .daisy; case 3, pearlID: return .wings; case teddyID, pandaID: return .ears; default: return .none }
     }
 
     // MARK: the roster (characters by slot)
@@ -172,6 +175,7 @@ nonisolated enum JellyRoster {
         case 2: return JellyPalettes.green
         case 3: return JellyPalettes.lavender
         case teddyID: return TeddyLook.current.palette
+        case pandaID: return PandaLook.palette
         default: return nil
         }
     }
@@ -184,6 +188,7 @@ nonisolated enum JellyRoster {
         case 2: return SIMD3(0.70, 0.90, 0.66)
         case 3: return SIMD3(0.80, 0.72, 0.93)
         case teddyID: return TeddyLook.current.flesh
+        case pandaID: return PandaLook.swatch
         default: return SIMD3(0.70, 0.83, 0.945)
         }
     }

@@ -134,7 +134,7 @@ final class ContactPolishTests: XCTestCase {
         FeatureClip.enabled = true; LieClearTuning.enabled = true
     }
     override func tearDown() {
-        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; RoomHaptics.requestTap = nil
+        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil
         FeatureClip.enabled = true; FeatureClip.eggs = []
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         EmoteFeetTests.reset()
@@ -174,7 +174,6 @@ final class ContactPolishTests: XCTestCase {
         AudioHub.requestTap = { tap.sounds.append((tap.frame, $0)) }
         EmoteHaptic.requestTap = { tap.haps.append((tap.frame, "emote:" + $0)) }
         EmoteTreats.requestTap = { tap.haps.append((tap.frame, "treat:" + $0)) }
-        RoomHaptics.requestTap = { tap.haps.append((tap.frame, "room:\($0)")) }
         let rigs = d.lab.rigs
         let a = rigs[0], b = rigs[1]
         var ok = false
@@ -296,7 +295,7 @@ final class ContactPolishTests: XCTestCase {
             if res.completed { break }
         }
         res.frames = frame; res.seconds = Float(frame) / 60
-        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; RoomHaptics.requestTap = nil
+        AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil
         return (res, cells)
     }
 

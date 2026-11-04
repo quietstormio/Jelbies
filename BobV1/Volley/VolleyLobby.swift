@@ -10,6 +10,8 @@ struct VolleyLobby: View {
     let care: GameCare
     @Binding var who: Int
     var back: () -> Void
+    /// "Go to the Park": leaves the lobby for the Park trip (the Town's own path).
+    var park: () -> Void = {}
     var play: (VolleyTier) -> Void
     /// A drill, for the Jelbie picked on the Training sheet.
     var drill: (VolleyDrillKind, Int) -> Void
@@ -19,24 +21,27 @@ struct VolleyLobby: View {
     @State private var sheet: Sheet?
     @State private var trainee = 0
     @State private var hint = LobbyHint()
-    enum Sheet { case train, how }
+    enum Sheet { case train, how, options }
     private var book: VolleyBook { care.volley.book }
     private var compact: Bool { vsc == .compact }
-    private var blocker: String? { care.volleyBlocker(jelly: who) }
+    private var blocker: String? { care.volleyBlocker(jelly: who, match: true) }
+    /// Training and drills are solo: they never need a partner.
+    private var drillBlocker: String? { care.volleyBlocker(jelly: who) }
+    private var needsPartner: Bool { care.volleyPartnerBlocker(jelly: who) != nil }
 
     var body: some View {
         let char = care.jelly(who)?.character ?? who
         ZStack {
-            LobbyScreen(header: AnyView(LobbyHeader(title: "Volleyball", wallet: care.bath.wallet, backID: "volley-back", helpID: "volley-help", back: back, help: { open(.how) })),
-                        why: blocker, whyID: "volley-why") {
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Volleyball", wallet: care.bath.wallet, backID: "volley-back", helpID: "volley-help", back: back, help: { open(.how) },
+                                                 optionsID: "volley-options", options: { open(.options) })),
+                        why: needsPartner ? nil : blocker, whyID: "volley-why") {          // the partner rule is said under the picker instead
                 courts
             } right: {
-                VolleyTeamCard(care: care, who: $who, compact: compact)
-                    .padding(.top, compact ? 0 : 18)
-                optionsCard.padding(.top, compact ? 0 : 12)
+                VolleyTeamCard(care: care, who: $who, compact: compact, park: park)
+                    .padding(.top, compact ? 0 : 12)
             } bar: {
                 LobbyBottomBar(pepLeft: book.sessionsLeft(char), pepTotal: VolleyTraining.fullSessions, pepID: "volley-pep", trainID: "volley-train", playID: "volley-play",
-                               playTitle: "Play", playIcon: .ball, blocked: blocker != nil,
+                               playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, trainBlocked: drillBlocker != nil,
                                train: { trainee = who; open(.train) }, play: { play(book.chosen) })
             }
             .accessibilityHidden(sheet != nil)
@@ -44,6 +49,8 @@ struct VolleyLobby: View {
                 Group {
                     switch sheet {
                     case .train: trainingSheet
+                    case .options:
+                        LobbySheet(title: "Options", close: { close() }) { optionsCard.padding(.top, 4) }.accessibilityIdentifier("volley-options-sheet")
                     case .how:
                         LobbyHowSheet(rows: [
                             (.three, "Three touches a side", "Bump, set, then spike it over the net."),
@@ -56,6 +63,7 @@ struct VolleyLobby: View {
                 .zIndex(1)
             }
         }
+        .environment(\.lobbyTheme, .beach)
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-lobby")
         .onAppear {
             trainee = who
@@ -80,10 +88,8 @@ struct VolleyLobby: View {
                 ForEach(VolleyTier.allCases, id: \.rawValue) { t in courtCard(t).id("tier-\(t.rawValue)") }
             }
             .accessibilityIdentifier("volley-courts")
-            LobbyInfoLine(text: hint.text ?? book.chosen.blurb, pillsBelow: typeSize.isAccessibilitySize) {
-                LobbyPill(label: "Win", amount: VolleyTuning.drops(win: true, tier: book.chosen), gold: true)
-                LobbyPill(label: "Loss", amount: VolleyTuning.drops(win: false, tier: book.chosen))
-            }
+            LobbyPlaceInfo(text: hint.text ?? book.chosen.blurb, textID: "volley-blurb",
+                           prizes: [LobbyPrize(label: "Win", amount: VolleyTuning.drops(win: true, tier: book.chosen), gold: true), LobbyPrize(label: "Loss", amount: VolleyTuning.drops(win: false, tier: book.chosen))], prizeID: "volley-prizes")
             .accessibilityElement(children: .contain)
         }
     }
@@ -200,10 +206,10 @@ struct VolleyLobby: View {
                 close(); drill(k, id)
             } label: {
                 Text("Go").font(SK.font(14.5, .black)).foregroundStyle(.white).padding(.horizontal, 16).frame(minHeight: 36)
-                    .background(Capsule().fill(blocker == nil ? SK.pinkStrong : SK.muted.opacity(0.45)))
+                    .background(Capsule().fill(drillBlocker == nil ? SK.pinkStrong : SK.muted.opacity(0.45)))
                     .frame(minHeight: 44).contentShape(Rectangle())
             }
-            .buttonStyle(.plain).disabled(blocker != nil)
+            .buttonStyle(.plain).disabled(drillBlocker != nil)
             .accessibilityLabel("Go, \(k.title)").accessibilityHint(k.blurb).accessibilityIdentifier("volley-drill-\(k.rawValue)")
         }
         .padding(EdgeInsets(top: 9, leading: 9, bottom: 9, trailing: 10))
@@ -211,137 +217,67 @@ struct VolleyLobby: View {
     }
 }
 
-// MARK: - The Team card
+// MARK: - The Team (picker + stats card)
 
+/// The shared Jelbie picker (pick two) and the stats card with both team members' Speed / Power / Hops / Timing. With three Jelbies a tap on an unselected tile replaces the one
+/// picked earliest (`who` is always the earlier pick, `VolleyBook.partner` the later); with two both play; with one the Park friend is the teammate.
 struct VolleyTeamCard: View {
     let care: GameCare
     @Binding var who: Int
     var compact = false
-    @State private var cardW: CGFloat = 0
+    var park: () -> Void = {}
     private var book: VolleyBook { care.volley.book }
 
     var body: some View {
         let mine = care.jelly(who)
         let partner = care.volleyPartner(for: who)
-        // with three Jelbies the third sits on the bench: a swap button trades a tile's Jelbie with him (two have no bench; one has a Park friend)
-        let bench = care.volleyBench(for: who)
-        let stacked = needsStack(mine: mine, partner: partner, swap: bench != nil)
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Team").font(SK.font(19, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
-            HStack(alignment: .top, spacing: 10) {
-                if let mine {
-                    VolleyTeamTile(care: care, jelly: mine, tileID: "volley-team-1", swapTo: bench, stacked: stacked) {
-                        guard let b = bench else { return }
-                        book.partner = partner?.character
-                        who = b.id
-                    }
-                }
-                if let partner {
-                    VolleyTeamTile(care: care, jelly: partner, tileID: "volley-team-2", swapTo: bench, stacked: stacked) {
-                        guard let b = bench else { return }
-                        book.partner = b.character
-                    }
-                } else {
-                    parkFriendTile
-                }
+        let friend = partner == nil ? care.volleyParkFriend() : nil
+        let locked = partner == nil && friend == nil
+        VStack(alignment: .leading, spacing: 0) {
+            LobbyJelbiePicker(care: care, title: "Team", selected: [who, partner?.id].compactMap { $0 }, selectCount: 2, id: "volley-picker", tileID: { "volley-who-\($0.id)" }, friends: friend.map { [$0] } ?? [],
+                              blocker: locked ? GameCare.volleyNeedsPartner : nil,
+                              footnote: friend.map { "Your Park friend \($0.name) fills in." } ?? "Short a teammate? A Park friend fills in.", footnoteButton: locked ? (title: "Go to the Park", id: "volley-go-park", action: park) : nil, lockedCount: locked ? 1 : 0, lockedText: "Needs a partner") { id in
+                guard care.jellies.count >= 3, id != who, id != partner?.id, let c = care.jelly(id) else { return }
+                let keep = partner?.id ?? who
+                book.partner = c.character; book.save()
+                who = keep
             }
-        }
-        .padding(compact ? 12 : 14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
-        .accessibilityIdentifier("volley-team")
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardW = $0 }
-    }
-
-    /// Both tiles use the mockup's row (portrait, name, swap button) when the longest name of ANY Jelbie in the room still fits at 0.8 scale, else both stack the name under
-    /// the portrait. Deciding over the whole roster keeps the card the same height whoever is swapped in.
-    private func needsStack(mine: JellyProfile?, partner: JellyProfile?, swap: Bool) -> Bool {
-        let tileInner = (cardW - 2 * (compact ? 12 : 14) - 10) / 2 - 24
-        guard tileInner > 0 else { return false }
-        let size = JFont.scaledSize(18)
-        let base = UIFont.systemFont(ofSize: size, weight: .black)
-        let font = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
-        let w = care.jellies.map { ($0.name as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
-        return 46 + 8 + w * 1.06 * 0.8 + 6 + (swap ? 26 : 0) > tileInner
-    }
-
-    private var parkFriendTile: some View {
-        let friend = care.volleyParkFriend()
-        return VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 10) {
-                // the friend as he will play: the lone Jelbie's body in the friend's colour and item, rendered by the stage (a friend with a signature feature is never picked)
-                JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: 46, border: .white, outerRing: 3, head: true, friend: friend)
-                Text("Park\nfriend").font(SK.font(15.5, .black)).foregroundStyle(SK.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
-            }
-            Text("Plays with you until you adopt a second Jelbie. Steady, and sets you up.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true).padding(2)
-        }
-        .padding(EdgeInsets(top: 10, leading: 12, bottom: 11, trailing: 12)).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.tile))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(SK.ink.opacity(0.06), lineWidth: 1.5))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Park friend. Plays with you until you adopt a second Jelbie. Steady, and sets you up.")
-        .accessibilityIdentifier("volley-team-friend")
-    }
-}
-
-struct VolleyTeamTile: View {
-    let care: GameCare
-    let jelly: JellyProfile
-    let tileID: String
-    /// The Jelbie on the bench this tile can trade with (nil: no swap button).
-    let swapTo: JellyProfile?
-    var stacked = false
-    var swap: () -> Void
-
-    private var book: VolleyBook { care.volley.book }
-
-    private var swapButton: some View {
-        Group {
-            if let b = swapTo {
-                Button { UIImpactFeedbackGenerator(style: .light).impactOccurred(); AudioHub.shared.uiTap(); swap() } label: {
-                    LobbyIcon(kind: .swap, color: SK.muted).frame(width: 26, height: 26).background(Circle().fill(SK.ink.opacity(0.07)))
-                        .frame(width: 44, height: 44).contentShape(Circle())
-                }
-                .buttonStyle(.plain).padding(-9)
-                .accessibilityLabel("Swap \(jelly.name) for \(b.name)").accessibilityIdentifier("\(tileID)-swap")
-            }
+            .padding(.bottom, 6)
+            LobbyStatsCard(title: "Team stats", groups: [group(mine, id: "volley-team-1"), partner.map { group($0, id: "volley-team-2") } ?? friendGroup(friend)].compactMap { $0 }, id: "volley-team")
         }
     }
 
-    private var avatar: some View {
-        JelbiePortrait(care: care, who: jelly.id, size: 46, border: .white, outerRing: 3, head: true).accessibilityHidden(true)
+    private func group(_ j: JellyProfile?, id: String) -> LobbyStatGroup? {
+        guard let j else { return nil }
+        let st = book.stats(character: j.character)
+        return LobbyStatGroup(id: id, name: j.name, rows: [
+            LobbyStatRow(label: "Speed", value: st.speed, color: SK.sky), LobbyStatRow(label: "Power", value: st.power, color: SK.pink),
+            LobbyStatRow(label: "Hops", value: st.hops, color: SK.mint), LobbyStatRow(label: "Timing", value: st.timing, color: SK.honeyDeep),
+        ])
     }
-    private var name: some View { Text(jelly.name).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineLimit(1) }
 
-    var body: some View {
-        let st = book.stats(character: jelly.character)
-        VStack(alignment: .leading, spacing: 9) {
-            if stacked {
-                HStack(alignment: .top, spacing: 6) { VStack(alignment: .leading, spacing: 6) { avatar; name.minimumScaleFactor(0.6) }.frame(maxWidth: .infinity, alignment: .leading); swapButton }
-            } else {
-                HStack(spacing: 0) { avatar; name.minimumScaleFactor(0.8).padding(.leading, 8).padding(.trailing, 6).frame(maxWidth: .infinity, alignment: .leading); swapButton }
+    private func friendGroup(_ friend: ParkVisitor?) -> LobbyStatGroup {
+        guard let friend else {
+            return LobbyStatGroup(id: "volley-team-friend", custom: AnyView(
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) { Image(systemName: "lock.fill").font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.muted); Text("No partner yet").font(SK.font(15.5, .black)).foregroundStyle(SK.ink) }
+                    Text("Make a friend at the Park, or adopt a second Jelbie.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minWidth: 0, idealWidth: 170, maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .ignore).accessibilityLabel("No partner yet. Make a friend at the Park, or adopt a second Jelbie.")))
+        }
+        return LobbyStatGroup(id: "volley-team-friend", custom: AnyView(
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    // the friend as he will play: the lone Jelbie's body in the friend's colour and item, rendered by the stage (a friend with a signature feature is never picked)
+                    JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: 46, border: .white, outerRing: 3, head: true, friend: friend)
+                    Text(friend.name).font(SK.font(15.5, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                Text("Plays with you until you adopt a second Jelbie. Steady, and sets you up.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
-            Grid(horizontalSpacing: 7, verticalSpacing: 0) {
-                miniRow("Speed", st.speed, SK.sky)
-                miniRow("Power", st.power, SK.pink)
-                miniRow("Hops", st.hops, SK.mint)
-                miniRow("Timing", st.timing, SK.honeyDeep)
-            }
+            .frame(minWidth: 0, idealWidth: 170, maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(jelly.name): Speed \(Int((st.speed * 100).rounded())), Power \(Int((st.power * 100).rounded())), Hops \(Int((st.hops * 100).rounded())), Timing \(Int((st.timing * 100).rounded()))")
-        }
-        .padding(EdgeInsets(top: 10, leading: 12, bottom: 11, trailing: 12))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.tile))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(SK.ink.opacity(0.06), lineWidth: 1.5))
-        .accessibilityElement(children: .contain).accessibilityIdentifier(tileID)
-    }
-
-    private func miniRow(_ n: String, _ v: Float, _ c: Color) -> some View {
-        GridRow {
-            Text(n).font(SK.font(12.5, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).gridColumnAlignment(.leading)
-            LobbyBar(value: v, color: c, height: 8).frame(minWidth: 20)
-            Text("\(Int((v * 100).rounded()))").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit().gridColumnAlignment(.trailing)
-        }
-        .frame(minHeight: 20)
+            .accessibilityLabel("Park friend. Plays with you until you adopt a second Jelbie. Steady, and sets you up.")
+        ))
     }
 }

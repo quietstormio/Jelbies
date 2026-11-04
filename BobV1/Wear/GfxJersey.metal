@@ -36,6 +36,7 @@ static float teddyPomMask(float3 Q) {
     return f * f;
 }
 // TEDDYEAR-END
+#include "../Melon/PandaMarks.h"
 
 struct JerseyUniforms {
     float4x4 viewProj; float4x4 view; float4x4 invViewProj; float4x4 lightVP; float4x4 topVP;
@@ -132,7 +133,10 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
-    if (bb > 0.5) {
+    float pandaPatch = 0.0;
+    if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
+        col = pandaPaint(col, Q, bm, pandaPatch);
+    } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
         if (bm < 1.5) {
@@ -203,7 +207,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     if (bl > 0.002 && Q.z > 0.15) {
         float2 bc = float2(abs(Q.x) - 0.315, Q.y - 0.69);
         float bd = length(bc / float2(0.078, 0.050));
-        float bk = (1.0 - smoothstep(0.30, 1.0, bd)) * clamp(bl, 0.0, 1.0);
+        float bk = (1.0 - smoothstep(0.30, 1.0, bd)) * clamp(bl, 0.0, 1.0) * (1.0 - pandaPatch);
         float lum = dot(col, float3(0.299, 0.587, 0.114));
         col = mix(col, float3(0.95, 0.40, 0.50) * (0.55 + lum), bk * 0.62);
     }

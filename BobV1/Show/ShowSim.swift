@@ -231,11 +231,11 @@ nonisolated struct ShowSim: Sendable {
             if parts.glow < 12 { return "Look was \(name)'s weakest at \(p.lookPts). A Clean before the show makes him glow, and Glow is 20 of the 100." }
             return "Look was \(name)'s weakest at \(p.lookPts). \(theme.main.title) food fills his \(theme.main.title) jar, which counts 70% of the stats part."
         case .dance:
-            return player.danceSkill < 0.5 ? "Dance was \(name)'s lowest at \(p.dancePts). Practise a dance in the Studio: dance skill is 30% of the round."
+            return player.danceSkill < 0.5 ? "Dance was \(name)'s lowest at \(p.dancePts). Practice a dance in the Studio: dance skill is 30% of the round."
                 : "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
         default:
             return knownTricks.count < 3 ? "Trick was \(name)'s lowest at \(p.trickPts). Teach him more tricks (the Shop has pages): a fresh trick scores 18, a repeat 12."
-                : "Trick was \(name)'s lowest at \(p.trickPts). Practise his tricks by voice so they land more often, and tap when the ring hugs him."
+                : "Trick was \(name)'s lowest at \(p.trickPts). Practice his tricks by voice so they land more often, and tap when the ring hugs him."
         }
     }
 }

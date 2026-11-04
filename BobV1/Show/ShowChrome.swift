@@ -809,7 +809,7 @@ struct PracticeChrome: View {
                         Image(systemName: "xmark").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(SK.cream))
                     }.buttonStyle(.plain).accessibilityLabel("Stop practice").accessibilityIdentifier("practice-quit")
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("STUDIO \u{00B7} PRACTISE").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
+                        Text("STUDIO \u{00B7} PRACTICE").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
                         Text(show.practiceDance.title).font(SK.font(24, .black)).foregroundStyle(SK.cream)
                     }
                     Spacer()
@@ -882,7 +882,7 @@ struct PracticeResultCard: View {
     var body: some View {
         let r = result
         VStack(spacing: vsc == .compact ? 6 : 12) {
-            Text(r.accuracy >= 0.75 ? "Great dancing!" : r.accuracy >= 0.45 ? "Nice moves!" : "Keep practising!").font(SK.font(vsc == .compact ? 22 : 28, .black)).foregroundStyle(SK.ink)
+            Text(r.accuracy >= 0.75 ? "Great dancing!" : r.accuracy >= 0.45 ? "Nice moves!" : "Keep practicing!").font(SK.font(vsc == .compact ? 22 : 28, .black)).foregroundStyle(SK.ink)
             HStack(spacing: 8) {
                 chip("Perfect \(r.perfects)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
                 chip("Good \(r.goods)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)

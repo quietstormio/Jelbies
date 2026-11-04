@@ -257,7 +257,7 @@ struct DrillResultCard: View {
     var body: some View {
         let r = result
         VStack(spacing: vsc == .compact ? 6 : 12) {
-            Text(r.accuracy >= 0.75 ? "Great practice!" : r.accuracy >= 0.45 ? "Nice practice!" : "Keep practising!")
+            Text(r.accuracy >= 0.75 ? "Great practice!" : r.accuracy >= 0.45 ? "Nice practice!" : "Keep practicing!")
                 .font(SK.font(vsc == .compact ? 22 : 28, .black)).foregroundStyle(SK.ink)
             HStack(spacing: 8) {
                 chip("Perfect \(r.perfects)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
