@@ -39,12 +39,16 @@ extension GameCare {
         let c = p.cache
         let f = PerkFlags(bouncy: c.any && p.isActive(.bouncy), social: c.any && p.isActive(.social), bedtime: c.any && p.isActive(.bedtime))
         if brain.perkFlags != f { brain.perkFlags = f }
-        if zoomiesDue.contains(id), !tripActive, !(id == mealJelly && (meal != nil || wanted != nil)), !(groupActive), !brain.reserved, brain.activity != .eating, brain.activity != .drinking,
+        if zoomiesDue.contains(id), !tripActive, !(id == mealJelly && (meal != nil || wanted != nil)), !groupHolds(id), !brain.reserved, brain.activity != .eating, brain.activity != .drinking,
            !brain.commanded, brain.commandedIdle == nil, !brain.isSleeping, !bath.active {
             zoomiesDue.remove(id)
             brain.commandedIdle = .zoomies
         }
     }
+
+    /// Is Jelly `id` still tied up in a group meal (a diner not yet released, a waiter for the next sitting, or the sitting about to form)? A diner who is
+    /// done is released on his own, so his sugar rush does not wait for the others.
+    func groupHolds(_ id: Int) -> Bool { groupWanted != nil || groupQueue.contains(id) || group.isHolding(id) }
 
     // MARK: supplies (soaps and sprays used with Clean)
 

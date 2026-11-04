@@ -38,6 +38,8 @@ final class CafeBook {
     /// Seconds of café zoomies left, by Jelbie (the baby latte), and how long past zero each has waited for a clean stop.
     var zoomT: [Int: Float] = [:]
     var zoomOver: [Int: Float] = [:]
+    /// Latte drinkers whose burst already ran (during the serving): the cheer skips them.
+    var zoomed: Set<Int> = []
     var serial = 0
     nonisolated deinit {}
 }
@@ -117,6 +119,7 @@ extension GameCare {
         case .eating:
             if actors.count == 1 { tickGroup(actors, dt: dt) }     // the stage only runs tickOthers (and so tickGroup) with 2+ Jelbies
             let finished = groupWanted == nil && !group.isActive && groupQueue.isEmpty && dining.phase == .absent
+            tickCafeZoomies(actors, dt: dt)          // (a latte drinker who is done and released dashes now; the others go on eating)
             if finished { cafeServingFinished() }
         case .cheer:
             tickCafeZoomies(actors, dt: dt)
@@ -136,7 +139,7 @@ extension GameCare {
         let actors = book.actors
         switch dest {
         case .cafe:
-            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.charged = 0
+            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; book.charged = 0
             for a in actors {
                 guard let brain = a.brain else { continue }
                 book.homes[a.id] = a.floor; book.autonomy[a.id] = brain.autonomy; book.arena[a.id] = a.sim.arenaRadius
@@ -182,7 +185,7 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
-            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; cafe.holdCheer = false; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
+            book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; cafe.holdCheer = false; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
         }
     }
 
@@ -251,7 +254,7 @@ extension GameCare {
         book.hooks = nil; book.plate = nil
         cafe.servingEnded()
         book.cheerIn = [:]
-        for (k, a) in book.actors.enumerated() where a.brain != nil && book.zoomT[a.id] == nil { book.cheerIn[a.id] = Float(k) * CafeTuning.cheerStagger }
+        for (k, a) in book.actors.enumerated() where a.brain != nil && book.zoomT[a.id] == nil && !book.zoomed.contains(a.id) { book.cheerIn[a.id] = Float(k) * CafeTuning.cheerStagger }
         cafe.holdCheer = !book.zoomT.isEmpty
     }
 
@@ -262,13 +265,15 @@ extension GameCare {
         let book = cafeBook
         for a in actors {
             guard var left = book.zoomT[a.id], let b = a.brain else { continue }
+            // during the serving he starts the moment his own treat is down and he is released (not while still a held diner / waiting for a sitting)
+            if cafe.phase == .eating, groupHolds(a.id) { continue }
             left -= dt
             let idle = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
             if left > 0 {
                 book.zoomT[a.id] = left
                 if idle { b.commandedIdle = .zoomies }
             } else if idle || (book.zoomOver[a.id, default: 0] + dt) > 4 {          // (a dash in flight finishes first; never wait more than 4 s)
-                book.zoomT[a.id] = nil; book.zoomOver[a.id] = nil
+                book.zoomT[a.id] = nil; book.zoomOver[a.id] = nil; book.zoomed.insert(a.id)
                 if !idle { b.abortAll(a.sim, a.skinner) }
                 b.commandedIdle = .sit
                 b.face(.excited, hold: 2)

@@ -210,6 +210,25 @@ final class CafeTests: XCTestCase {
         XCTAssertEqual(StoreCatalog.items.map { c.store.count($0.id) }, bag, "the bag is untouched")
     }
 
+    /// The baby latte's burst starts during the serving, as soon as that drinker is done; the slower eaters are not interrupted, and the cheer skips the zoomer.
+    func testLatteZoomiesStartWhileOthersStillEat() {
+        let r = room(count: 3, drops: 100)
+        enter(r)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.95); c.needs(for: i).set(.attention, 0.4) }
+        XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .latte, 1: .sundae, 2: .pancakes])))
+        var zoomDuringEating = false
+        step(r, 120) {
+            if c.cafe.phase == .eating, r.actors[0].brain?.idleState.kind == .zoomies, c.group.isActive { zoomDuringEating = true }
+            return c.cafe.phase == .cheer && c.cafeBook.zoomT.isEmpty
+        }
+        XCTAssertTrue(zoomDuringEating, "the latte drinker zoomed while the others were still at the table")
+        XCTAssertTrue(c.cafeBook.zoomed.contains(0))
+        XCTAssertNil(c.cafeBook.cheerIn[0], "a zoomer is not cheered again")
+        step(r, 40) { c.cafe.phase == .done }
+        XCTAssertEqual(c.cafe.phase, .done)
+    }
+
     // 8. one Jelbie, the table treat
 
     func testForTableAndOneJelbie() {

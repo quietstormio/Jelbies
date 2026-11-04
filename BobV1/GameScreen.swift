@@ -592,22 +592,31 @@ struct GameScreen: View {
             await sleep(5)
             withAnimation(.easeInOut(duration: 0.25)) { goOut.wrappedValue = .town }
         }
-        // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
+        // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; latte / latte2 order baby lattes for one / two Jelbies and slower treats for the rest; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
         if let m = d.string(forKey: "CafeAuto") {
             await sleep(4)
             care.requestCafe()
-            if m == "order" || m == "refuse" {
+            if m == "order" || m == "refuse" || m == "latte" || m == "latte2" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
                 await sleep(2)
                 let ids = care.cafeDinerIDs
+                if m.hasPrefix("latte") { care.bath.wallet.add(100, silent: true) }
                 if m == "refuse" {
                     care.bath.wallet.add(9 - care.bath.wallet.count, silent: true)
                     care.cafe.cardRefusal = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.map { ($0, CafeTreatID.sundae) })))
                 } else {
-                    let menu: [CafeTreatID] = [.swirl, .pancakes, .sundae]
+                    // latte: the first Jelbie gets the baby latte, the others slower treats; latte2: the first two get lattes
+                    let menu: [CafeTreatID] = m == "latte" ? [.latte, .sundae, .pancakes] : m == "latte2" ? [.latte, .sundae, .latte] : [.swirl, .pancakes, .sundae]
                     care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
                 }
             }
+        }
+        // capture aid: -MealAuto <store food id> (e.g. taco, donut) after 5 s: the bag gets 3, hunger is set to 0.7 / 0.1 / 0.3 (so the pieces eaten differ) and a group meal is fed
+        if let f = d.string(forKey: "MealAuto") {
+            await sleep(5)
+            care.store.grant(f, 3)
+            for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(.hunger, h) }
+            care.feedSnack(f)
         }
         // capture aid: -LobbyTier sandcastle|shore|reef|tidal and -LobbyCourse puddle|ripple|splash|wave|tsunami pick that court / course (locked or not) to see its blurb
         if let t = d.string(forKey: "LobbyTier").flatMap(VolleyTier.init(rawValue:)) { care.volley.book.chosen = t }

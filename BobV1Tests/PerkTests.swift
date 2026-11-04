@@ -270,6 +270,43 @@ final class PerkTests: XCTestCase {
         XCTAssertTrue(care.zoomiesDue.isEmpty)
     }
 
+    /// A group meal of a zoomies food: the diner who finishes first (the least hungry, fewest pieces) dashes while the others are still at the tray.
+    func testZoomiesFoodStartsForTheEarlyFinisherBeforeTheGroupEnds() {
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        let c = r.care
+        c.store.grant("taco", 3)
+        for (i, h) in [Float(0.6), 0.1, 0.1].enumerated() { c.needs(for: i).set(.hunger, h) }
+        r.run(1)
+        c.feedSnack("taco")
+        XCTAssertTrue(c.groupActive)
+        var zoomedDuringGroup = false, startedAt: [Int: Float] = [:]
+        r.run(120) {
+            for a in r.actors where startedAt[a.id] == nil && a.brain?.idleState.kind == .zoomies { startedAt[a.id] = r.t }
+            if c.group.isActive, c.trayOut, r.actors.contains(where: { $0.brain?.idleState.kind == .zoomies }) { zoomedDuringGroup = true }
+            return r.t > 2 && !c.trayOut && startedAt.count == 3
+        }
+        XCTAssertTrue(zoomedDuringGroup, "an early finisher's zoomies started while the others were still eating \(startedAt)")
+        XCTAssertTrue(c.zoomiesDue.isEmpty || startedAt.count == 3, "each one runs on his own finish")
+    }
+
+    /// Foods without the zoomies perk never start zoomies (single or group).
+    func testPlainFoodNeverStartsZoomies() {
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.1) }
+        r.run(1)
+        c.feed(Consumables.berries.id)
+        var saw = false
+        r.run(60) {
+            if r.actors.contains(where: { $0.brain?.idleState.kind == .zoomies }) { saw = true }
+            return r.t > 2 && !c.trayOut
+        }
+        XCTAssertFalse(saw)
+        XCTAssertTrue(c.zoomiesDue.isEmpty)
+    }
+
     func testConditionRisesCapsAndDecaysSlowly() {
         let c = Clock()
         let s = JellyStats(persists: false, now: { c.t })
