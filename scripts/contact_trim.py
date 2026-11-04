@@ -22,7 +22,7 @@ dur = max((ms(sel[-1]) - ms(sel[0])) / 1000, 0.5)
 fps = max(len(sel) / dur, 1)
 tmp = tempfile.mkdtemp()
 for i, f in enumerate(sel): os.symlink(f, f"{tmp}/{i:05d}.png")
-vf = "crop=iw:ih*0.36:0:ih*0.32,scale=-2:720" if angle in ("perp", "top") else "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900"
+vf = ("crop=iw:ih*0.42:0:ih*0.25,scale=-2:720" if angle == "top" else "crop=iw:ih*0.36:0:ih*0.32,scale=-2:720") if angle in ("perp", "top") else "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900"
 subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", f"{fps:.3f}", "-i", f"{tmp}/%05d.png", "-vf", vf, "-pix_fmt", "yuv420p", f"{out}/{scene}_frames.mp4"], stdin=subprocess.DEVNULL)
 shutil.rmtree(tmp)
 print(f"{scene}: {len(sel)} frames, {dur:.1f} s real time (kept {lo/1000:.1f}..{hi/1000 if hi<10**9 else secs:.1f} s)")
