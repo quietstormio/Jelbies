@@ -90,12 +90,18 @@ final class SocialTests: XCTestCase {
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
             for (i, r) in rigs.enumerated() {
                 let floorRules = r.brain.resolve
-                r.brain.resolve = { [unowned self, unowned b = r.brain] p, rad in b.socialBook.passThrough ? floorRules(p, rad) : floorRules(MelonController.keepApart(floorRules(p, rad), id: i, peers: self.snapshot, gap: b.inCloseSocial ? MelonController.jellyGap * SocialTuning.closeGapFactor : nil), rad) }
+                r.brain.resolve = { [unowned self, unowned b = r.brain] p, rad in
+                    if b.socialBook.passThrough { if ContactTrace.on { self.resolveStat[i].calls += 1; self.resolveStat[i].pass += 1 }; return floorRules(p, rad) }
+                    let fr = floorRules(p, rad)
+                    let out = floorRules(MelonController.keepApart(fr, id: i, peers: self.snapshot, gap: b.inCloseSocial ? MelonController.jellyGap * SocialTuning.closeGapFactor : nil), rad)
+                    if ContactTrace.on { self.resolveStat[i].calls += 1; self.resolveStat[i].push = max(self.resolveStat[i].push, simd_distance(SIMD2(fr.x, fr.z), SIMD2(out.x, out.z))) }
+                    return out }
                 r.brain.peers = { [unowned self] in self.snapshot.enumerated().filter { $0.offset != i }.map { (id: $0.element.walking ? $0.offset : Int.max / 2, pos: $0.element.pos) } }
             }
             for r in rigs { r.brain.autonomy = true; if quiet { r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6; r.brain.restTimer = 1e6 } }
             for _ in 0..<60 { tick(watching: false) }
         }
+        var resolveStat: [(calls: Int, pass: Int, push: Float)] = Array(repeating: (0, 0, 0), count: 8)          // (ContactTrace only: per tick, how often the Lab's wall ran for this body, how often it was bypassed by passThrough, the biggest push)
         func tick(watching: Bool = true) {
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: $0.brain.activity == .walking || $0.brain.activity == .coming) }          // (as the stage: the body's centroid while a hop / scoot / slide has the body, else the root)
             asideClock += 1.0 / 60

@@ -25,16 +25,16 @@ enum ContactSettle {
     /// One step for the pair. Returns the measured skin gap (nil: no profile yet), `moved` = whether the roots were nudged.
     @discardableResult
     static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false, urgent: Bool = false, support: Bool = false) -> (gap: Float, moved: Bool)? {
-        guard var gap = ContactField.gap(a.steerID, b.steerID, features: features) else { return nil }
+        guard var gap = ContactField.gap(a.steerID, b.steerID, features: features) else { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "nil" } }; return nil }
         if support, let sg = ContactField.skinGap(a.steerID, b.steerID) { gap = min(gap, sg) }          // (the catalogue's support gap - the harness's ground truth - is the stricter of the two when the bodies stand staggered or turn)
         let stamp = ContactField.stamp(a.steerID) &+ ContactField.stamp(b.steerID) &* 7919
         let key = b.steerID
-        if a.socialBook.settleStamp[key] == stamp { return (gap, false) }          // (this measurement was acted on)
+        if a.socialBook.settleStamp[key] == stamp { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "stamp"; $0.e = gap - target } }; return (gap, false) }          // (this measurement was acted on)
         a.socialBook.settleStamp[key] = stamp
         let e = gap - target
         let prev = a.socialBook.settleGap[key]
         a.socialBook.settleGap[key] = e
-        if (onlySeparate && e >= 0) || (anchoredA && anchoredB) { return (gap, false) }
+        if (onlySeparate && e >= 0) || (anchoredA && anchoredB) { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = (anchoredA && anchoredB) ? "anchored" : "onlySep"; $0.e = e } }; return (gap, false) }
         // the slow average of the gap: a lying body breathes (+-1 cm of skin), a jelly wobbles: the last centimetre is trimmed on the average, not chased
         var ema = a.socialBook.settleEMA[key] ?? gap
         if abs(gap - ema) > 0.03 { ema = gap }
@@ -47,16 +47,17 @@ enum ContactSettle {
             c = max(-0.16, min(ePred, e)); cap = 0.08
         } else if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
-            if abs(ePred) <= ContactSettleTuning.deadband { return (gap, false) }
+            if abs(ePred) <= ContactSettleTuning.deadband { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadband"; $0.e = e } }; return (gap, false) }
             c = max(-ContactSettleTuning.maxStep * 2, min(ContactSettleTuning.maxStep * 2, ePred * ContactSettleTuning.gain))
         } else {          // near: trim the average
             let eAvg = ema - target
-            if abs(eAvg) <= ContactSettleTuning.deadband * 0.6 { return (gap, false) }
+            if abs(eAvg) <= ContactSettleTuning.deadband * 0.6 { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadbandNear"; $0.e = e } }; return (gap, false) }
             c = max(-ContactSettleTuning.maxStep * 0.3, min(ContactSettleTuning.maxStep * 0.3, eAvg * ContactSettleTuning.fineGain))
         }
         let axis = simd_normalize(ContactField.root(b.steerID) - ContactField.root(a.steerID) + SIMD2(1e-6, 0))
         let share: Float = (anchoredA || anchoredB) ? 1 : 0.5
         let m = max(-cap, min(cap, c * share))
+        if ContactTrace.on { let kind = (urgent && e < -ContactSettleTuning.deadband) ? "urgent" : (abs(e) > ContactSettleTuning.fineBand ? "far" : "near"); ContactTrace.mod(a.steerID) { $0.step = kind; $0.e = e; $0.c = c; $0.m = m } }
         if !anchoredA { a.contactNudge(axis * m) }
         if !anchoredB { b.contactNudge(-axis * m) }
         return (gap, true)
@@ -74,6 +75,7 @@ extension BlobBrain {
     func contactNudge(_ d: SIMD2<Float>) {
         let lying = idleState.kind == .sleep || idleState.kind == .lieDown || idleState.kind == .flop
         guard social != nil, !lying else {
+            if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "lying" } }
             px += d.x; pz += d.y
             if idleState.kind == .sleep {
                 sleep.spot += d
@@ -83,6 +85,7 @@ extension BlobBrain {
         }
         let airborne = gait.isBusy || flapHop.active || airBothFeet
         if airborne {
+            if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air" } }
             px += d.x; pz += d.y
             stepRoot0 += d
             if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
@@ -91,7 +94,7 @@ extension BlobBrain {
             contactSim?.shift(byXZ: d)
             return
         }
-        if case .walk = script { return }          // (walking: the destination carries it)
+        if case .walk = script { if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "walk" } }; return }          // (walking: the destination carries it)
         // planted: lean. d is along the axis to the partner: its length is the cm to close (+) or give (-); a lean of theta moves the contact point ~ theta/2 m (the cheeks sit ~0.5 m up)
         guard let pid = socialPartnerID, let o = socialBrain(pid) else { return }
         let toward = simd_dot(d, simd_normalize(o.position - position + SIMD2(1e-6, 0)))
@@ -101,6 +104,7 @@ extension BlobBrain {
             socialBook.leanTrim = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, want))
             if socialBook.shuffleReq == 0 { socialBook.shuffleReq = toward > 0 ? 1 : -1 }
         } else { socialBook.leanTrim = want }
+        if ContactTrace.on { let sr = socialBook.shuffleReq; ContactTrace.mod(steerID) { $0.nudge = (abs(want) > ContactTuning.leanBudget ? "lean+budget" : "lean") + "/req\(sr)"; $0.want = want } }
     }
 
     /// Adds the lean trim to this tick's lean overlay (after the emote's drive set its own): toward the partner with the soles fixed.
@@ -115,20 +119,39 @@ extension BlobBrain {
     /// whose lean ran out takes one shuffle step (locomotion), then the trim is released.
     func contactStanceWalk(partner p: BlobBrain, gapWanted: Float) {
         guard let sim = contactSim else { return }
+        if ContactTrace.on {
+            var w = "noWalk", tg = "-"
+            if case .walk(let t, _) = script {
+                let L = simd_distance(t, p.position); w = L >= 3.2 ? "far" : (L <= 0.5 ? "Lsmall" : "inRange")
+                let toP = simd_normalize(p.position - position + SIMD2(1e-6, 0))
+                let uu = simd_normalize(t - p.position + SIMD2(1e-6, 0))
+                let tr = touchRadius(p, along: uu), td = ContactField.touchDistance(steerID, p.steerID)
+                tg = String(format: "tgtAlong%.2f|tgtFromP%.2f|posFromP%.2f|touchRadius%@|touchDist%@", simd_dot(t - position, toP), L, simd_distance(position, p.position), tr.map { String(format: "%.3f", $0) } ?? "nil", td.map { String(format: "%.3f", $0) } ?? "nil")
+            }
+            ContactTrace.mod(steerID) { $0.walk = w; $0.tgt = tg }
+        }
         if case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
             if L > 0.5 {
                 u /= L
                 let dist = (touchRadius(p, along: u) ?? 1.405) + max(gapWanted, ContactStance.arrive)
                 let want = fixed(p.position + u * dist)
-                if simd_distance(want, p.position + u * dist) < 0.1, simd_distance(want, t) > 0.02, simd_distance(want, t) < 0.6 { script = .walk(target: want, then: then) }
+                let okFix = simd_distance(want, p.position + u * dist) < 0.1, dT = simd_distance(want, t)
+                if ContactTrace.on { let was = socialBook.passThrough; socialBook.passThrough = true; let fl = fixed(p.position + u * dist); socialBook.passThrough = was; ContactTrace.mod(steerID) { $0.tgt += String(format: "|wallPush%.3f|floorPush%.3f", simd_distance(want, p.position + u * dist), simd_distance(fl, p.position + u * dist)) } }
+                if okFix, dT > 0.02, dT < 0.6 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
+                else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
             }
+        }
+        if ContactTrace.on, socialBook.shuffleReq != 0 {
+            let why = "blk(script\(scriptIsNone ? "None" : "Busy"),feet\(feet.active ? "Active" : "Idle"),idle\(idleState.kind.map { "\($0)" } ?? "nil"))"
+            if !(scriptIsNone && !feet.active && (idleState.kind == nil || idleState.kind == .sit)) { ContactTrace.mod(steerID) { $0.shuffle = why } }
         }
         if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
             let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
             let step: Float = 0.14 * Float(socialBook.shuffleReq)
             let spot = fixed(position + u * step)
             socialBook.shuffleReq = 0
+            if ContactTrace.on { let go = idleState.kind == nil && simd_distance(spot, position) > 0.1; let raw = position + u * step; let was = socialBook.passThrough; socialBook.passThrough = true; let fl = fixed(raw); socialBook.passThrough = was; let gF = ContactField.gap(steerID, at: raw, p.steerID, at: p.position, features: true), gN = ContactField.gap(steerID, at: raw, p.steerID, at: p.position, features: false); ContactTrace.mod(steerID) { $0.shuffle = (go ? "STEP" : "step-dropped") + String(format: "(idle%@,spotMoved%.3f,rawToSpot%.3f,floorOnlyPush%.3f,rawDistP%.3f,rawGapFeat%@,rawGapNoFeat%@)", idleState.kind.map { "\($0)" } ?? "nil", simd_distance(spot, position), simd_distance(spot, raw), simd_distance(fl, raw), simd_distance(raw, p.position), gF.map { String(format: "%.3f", $0) } ?? "nil", gN.map { String(format: "%.3f", $0) } ?? "nil") } }
             if idleState.kind == nil, simd_distance(spot, position) > 0.1 { socialBook.leanTrim = 0; socialWalk(to: spot, sim) }
         } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
     }

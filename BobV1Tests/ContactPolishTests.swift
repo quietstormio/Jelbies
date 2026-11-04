@@ -72,6 +72,8 @@ final class ContactPolishTests: XCTestCase {
     /// CONTACT_ONLY=boop,bump,... runs just those emotes (names as in the catalogue; a quick iteration loop). Unset = all.
     static let only: Set<String>? = { let v = ProcessInfo.processInfo.environment["CONTACT_ONLY"] ?? ""; return v.isEmpty ? nil : Set(v.split(separator: ",").map(String.init)) }()
     /// CONTACT_TRACE=boop,... also writes trace_<emote>_<cast>.tsv (t, phase, skin gap, root distance, standing) into CONTACT_OUT: the timeline for debugging a stance.
+    /// CONTACT_TRACE_COLS=1 (needs CONTACT_TRACE): the engine's own per-tick stamps (ContactTrace) become extra columns in the trace tsv; the Lab's wall counters too.
+    static let traceCols = ProcessInfo.processInfo.environment["CONTACT_TRACE_COLS"] == "1"
     static let traced: Set<String> = Set((ProcessInfo.processInfo.environment["CONTACT_TRACE"] ?? "").split(separator: ",").map(String.init))
     static func wanted(_ e: ContactEntry) -> Bool { only.map { $0.contains(e.name) } ?? true }
     /// 0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl.
@@ -156,6 +158,29 @@ final class ContactPolishTests: XCTestCase {
         return d
     }
 
+    static let traceHeader = "\tevent" + ["a", "b"].map { w in ["act", "idle", "script", "feetAct", "gaitBusy", "dRootToward_mm", "step", "e_mm", "c_mm", "m_mm", "nudge", "want", "leanTrim", "walkRetarget", "walkGeom", "shuffle", "resolveCalls", "resolvePass", "resolvePush_mm", "brainDist", "pitch", "roll", "squash", "kick", "reachToward", "airBoth", "flapHop", "simMinusBrain_mm", "simAlong_mm", "feetMidAlong_mm", "stepRoot0Along_mm", "stepLive", "yawDeg", "anchorAlong_mm", "profileRootAlong_mm", "profileValid"].map { "\(w)_\($0)" }.joined(separator: "\t") }.map { "\t" + $0 }.joined()
+    /// One row of the engine's per-tick stamps for the first two rigs (ContactTrace).
+    static func traceRow(_ rigs: [MotionRig], _ lab: SocialTests.Lab, _ pre: [SIMD2<Float>], _ ev: [String], _ mg: Float) -> String {
+        var out = "\t" + ev.joined(separator: ";")
+        for i in 0..<2 {
+            let b = rigs[i].brain, o = rigs[1 - i].brain
+            let r = ContactTrace.rec[b.steerID] ?? ContactTrace.Rec()
+            let toward = simd_normalize(rigs[1 - i].root - rigs[i].root + SIMD2(1e-6, 0))
+            let dRoot = simd_dot(rigs[i].root - pre[i], toward) * 1000
+            var sc = "none"; switch b.script { case .none: sc = "none"; case .walk: sc = "walk"; default: sc = "other" }
+            _ = o
+            let st = lab.resolveStat[i]
+            out += String(format: "\t%@\t%@\t%@\t%d\t%d\t%.1f\t%@\t%.1f\t%.1f\t%.1f\t%@\t%.3f\t%.3f\t%@\t%@\t%@\t%d\t%d\t%.1f", "\(b.activity)", b.idleState.kind.map { "\($0)" } ?? "nil", sc, b.feet.active ? 1 : 0, b.gait.isBusy ? 1 : 0, dRoot, r.step, r.e * 1000, r.c * 1000, r.m * 1000, r.nudge, r.want, b.socialBook.leanTrim, r.walk, r.tgt, r.shuffle, st.calls, st.pass, st.push * 1000)
+            let u2 = simd_normalize(o.position - b.position + SIMD2(1e-6, 0))
+            out += String(format: "\t%.3f\t%.3f\t%.3f\t%.3f\t%.2f\t%.3f\t%d\t%d\t%.1f", simd_distance(b.position, o.position), b.socialBook.pitch, b.socialBook.roll, b.socialBook.squash, b.jellyKick, ContactField.supportExt(b.steerID, u2) ?? -1, b.airBothFeet ? 1 : 0, b.flapHop.active ? 1 : 0, simd_distance(rigs[i].root, b.position) * 1000)
+            let fm = (b.feet.pos.count > 1) ? (b.feet.pos[0] + b.feet.pos[1]) * 0.5 : b.position
+            out += String(format: "\t%.1f\t%.1f\t%.1f\t%d\t%.1f", simd_dot(rigs[i].root - b.position, u2) * 1000, simd_dot(fm - b.position, u2) * 1000, simd_dot(b.stepRoot0 - b.position, u2) * 1000, b.stepLive ? 1 : 0, b.yaw * 57.2958)
+            let an = rigs[i].sim.attractor.anchor
+            out += String(format: "\t%.1f\t%.1f\t%d", simd_dot(SIMD2(an.x, an.z) - b.position, u2) * 1000, simd_dot(ContactField.root(b.steerID) - b.position, u2) * 1000, ContactField.isValid(b.steerID) ? 1 : 0)
+        }
+        return out
+    }
+
     func setProps(_ p: ContactProp) {
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         switch p {
@@ -216,11 +241,28 @@ final class ContactPolishTests: XCTestCase {
         var sndSeen = 0, hapSeen = 0
         var secondSleeper = false
         var trace: [String] = []
+        if Self.traceCols { ContactTrace.on = true }
+        defer { ContactTrace.on = false }
+        var wasWalking = [Bool](repeating: false, count: n)
+        var arriveEv = [String](repeating: "", count: n)
         let maxF = Int(e.maxSec * 60)
         var frame = 0
         while frame < maxF {
             tap.frame = frame
+            if Self.traceCols {
+                ContactTrace.rec = [:]
+                for i in 0..<8 { d.lab.resolveStat[i] = (0, 0, 0) }
+                if frame == 0 { for i in 0..<n { wasWalking[i] = false } }
+            }
+            let preRoots = rigs.map { $0.root }
             d.tick()
+            if Self.traceCols {
+                for i in 0..<n {
+                    var isWalk = false; if case .walk = rigs[i].brain.script { isWalk = true }
+                    if wasWalking[i], !isWalk, let g = ContactField.gap(rigs[0].brain.steerID, rigs[1].brain.steerID, features: false) { arriveEv[i] = String(format: "ARRIVE%d gap=%.1fcm", i, g * 100) }
+                    wasWalking[i] = isWalk
+                }
+            }
             // THE touch event: the gate's own (contactTick: fires at skin gap <= +0.5 cm, re-armed past +3 cm). One episode per event; its sound / haptic are the ones requested in the same frame.
             let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }
             evDelta = evNow - evPrev; evPrev = evNow
@@ -260,7 +302,7 @@ final class ContactPolishTests: XCTestCase {
                     gapNow = mg
                     if mg < res.minGap { res.minGap = mg; res.minGapT = Float(frame) / 60; res.minGapFrame = frame; res.minGapPair = mp
                         res.minGapPhase = "\(a.brain.socialKind.map { $0.rawValue } ?? "-")/ph\(a.brain.social?.phase ?? -1)/idle \(a.brain.idleState.kind.map { "\($0)" } ?? "-")" }
-                    if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined())) }
+                    if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined()) + (Self.traceCols ? Self.traceRow(rigs, d.lab, preRoots, arriveEv, mg) : "")) ; if Self.traceCols { arriveEv = [String](repeating: "", count: n) } }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
                     if still, inSession, activePhase, mg < 2.2 { res.stance01.append(mg) }
                     // episodes
@@ -309,7 +351,7 @@ final class ContactPolishTests: XCTestCase {
             if res.completed { break }
         }
         res.frames = frame; res.seconds = Float(frame) / 60
-        if !trace.isEmpty, let dir = Self.outDir { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true); try? (["t\tphase\tgap_cm\troot\tstill\tlastSound"] + trace).joined(separator: "\n").write(toFile: dir + "/trace_\(Self.fileName(e.name))_\(Self.fileName(castName)).tsv", atomically: true, encoding: .utf8) }
+        if !trace.isEmpty, let dir = Self.outDir { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true); try? (["t\tphase\tgap_cm\troot\tstill\tlastSound" + (Self.traceCols ? Self.traceHeader : "")] + trace).joined(separator: "\n").write(toFile: dir + "/trace_\(Self.fileName(e.name))_\(Self.fileName(castName)).tsv", atomically: true, encoding: .utf8) }
         AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; HapticDriver.cueTap = nil
         return (res, cells)
     }
