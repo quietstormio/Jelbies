@@ -217,6 +217,9 @@ extension BlobBrain {
     /// The sleep pile: two sleepers that lie side by side are kept touching (gap 0, the wings / tail counted), the one that fell asleep first stays. Called every tick by the one that has the lower id.
     func sleepPileTick() {
         guard ContactField.enabled, isNapping, social == nil else { return }
+        for o in socialOthers() where o !== self && !o.isNapping && !o.held && o.social == nil && o.idleState.kind != .sleep {          // (a neighbour who is up: the sleeper does not move, the neighbour is kept off)
+            ContactSettle.step(self, o, target: ContactStance.near, anchoredA: true, onlySeparate: true, features: true, urgent: true, support: true)
+        }
         for o in socialOthers() where o !== self && o.isNapping && steerID < o.steerID {
             let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
             guard let g = ContactField.gap(steerID, o.steerID, features: true), g < 0.7 else { continue }
