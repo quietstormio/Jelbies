@@ -135,6 +135,8 @@ struct SocialBook {
     var contactPrev: [Int: Float] = [:]
     var settleEMA: [Int: Float] = [:]          // per other body: the slow average of the gap (ContactSettle's fine trim)
     var settleGap: [Int: Float] = [:]          // per other body: the error ContactSettle measured last
+    var shiftPending = SIMD2<Float>.zero          // the settle's root nudges not yet applied to the sim body (ContactSettle.swift)
+    var glow: [Int: Float] = [:]          // after a session: partner id -> seconds the pair is still kept apart (ContactStance.swift)
     var settleStamp: [Int: Int] = [:]          // per other body: the profile stamps ContactSettle last acted on
     var contactCoolPer: [Int: Float] = [:]          // per other body: seconds before another contact event with him
     var contactArmed: [Int: Bool] = [:]          // per other body: the next touch may fire (the skins were > 3 cm apart since the last one)
@@ -539,6 +541,7 @@ extension BlobBrain {
             socialDrive(s, sim, skinner, dt)
         } else {
             socialInviteTick(sim, dt)
+            contactGlowTick(dt)
             if social == nil { socialWakeGreetTick(sim, dt) }
             if social == nil { socialWatch(sim, dt) }
             if social == nil { socialGroupWatch(sim, dt) }
@@ -578,6 +581,7 @@ extension BlobBrain {
             if DecorField.shared.occupant[s.uid] == s.idA || DecorField.shared.occupant[s.uid] == s.idB { DecorField.shared.occupant[s.uid] = nil }
         }
         let pid = s.idA == steerID ? s.idB : s.idA
+        if let st = ContactStance.entry(s.kind), st.cls != .none { for id in (s.kind.isGroup ? s.crewIDs : [pid]) where id != steerID { socialBook.glow[id] = 1.5 } }
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
             let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1)
@@ -668,13 +672,13 @@ extension BlobBrain {
         if s.kind.isGroup {
             let mem = s.members
             if mem.count < s.crewIDs.count || mem.contains(where: { $0.socialTaken }) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
-            if isA { s.t += dt; s.phaseT += dt; contactStanceTick(s) }
+            if isA { s.t += dt; s.phaseT += dt }
             driveGroup(s, mem, isA, sim, dt)
             return
         }
         guard let o else { s.finish(.aborted); socialRelease(skinner, hard: true); return }
         if socialTaken || o.socialTaken || (s.c?.socialTaken ?? false) || s.t > 90 { s.finish(.aborted); socialRelease(skinner, hard: false); return }
-        if isA { s.t += dt; s.phaseT += dt; contactStanceTick(s) }          // the initiator keeps the session clock (one tick per frame) and holds the stance (ContactStance.swift)
+        if isA { s.t += dt; s.phaseT += dt }          // the initiator keeps the session clock (one tick per frame)
         switch s.kind {
         case .boop: driveBoop(s, o, isA, sim, skinner, dt)
         case .squabble: driveSquabble(s, o, isA, sim, skinner, dt)

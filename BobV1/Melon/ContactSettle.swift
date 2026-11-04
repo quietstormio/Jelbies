@@ -23,7 +23,7 @@ nonisolated enum ContactSettleTuning {
 enum ContactSettle {
     /// One step for the pair. Returns the measured skin gap (nil: no profile yet), `moved` = whether the roots were nudged.
     @discardableResult
-    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false) -> (gap: Float, moved: Bool)? {
+    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false, urgent: Bool = false) -> (gap: Float, moved: Bool)? {
         guard let gap = ContactField.gap(a.steerID, b.steerID, features: features) else { return nil }
         let stamp = ContactField.stamp(a.steerID) &+ ContactField.stamp(b.steerID) &* 7919
         let key = b.steerID
@@ -39,7 +39,11 @@ enum ContactSettle {
         ema += (gap - ema) * ContactSettleTuning.fineAlpha
         a.socialBook.settleEMA[key] = ema
         var c: Float
-        if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
+        var cap = ContactSettleTuning.maxStep
+        if urgent, e < -ContactSettleTuning.deadband {          // (sunk in during a fast move - a lean, a hop: the way out is quick, 5 cm a step at most; the way in stays gentle)
+            let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
+            c = max(-0.1, ePred * 0.6); cap = 0.05
+        } else if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
             if abs(ePred) <= ContactSettleTuning.deadband { return (gap, false) }
             c = max(-ContactSettleTuning.maxStep * 2, min(ContactSettleTuning.maxStep * 2, ePred * ContactSettleTuning.gain))
@@ -50,7 +54,7 @@ enum ContactSettle {
         }
         let axis = simd_normalize(ContactField.root(b.steerID) - ContactField.root(a.steerID) + SIMD2(1e-6, 0))
         let share: Float = (anchoredA || anchoredB) ? 1 : 0.5
-        let m = max(-ContactSettleTuning.maxStep, min(ContactSettleTuning.maxStep, c * share))
+        let m = max(-cap, min(cap, c * share))
         if !anchoredA { a.contactNudge(axis * m) }
         if !anchoredB { b.contactNudge(-axis * m) }
         return (gap, true)
@@ -59,5 +63,18 @@ enum ContactSettle {
 
 extension BlobBrain {
     /// Move the root by `d` (the settle controller: a few mm a step; the body follows through its pose).
-    func contactNudge(_ d: SIMD2<Float>) { px += d.x; pz += d.y }
+    func contactNudge(_ d: SIMD2<Float>) {
+        px += d.x; pz += d.y
+        stepRoot0 += d          // (a step in flight: its root path slides with the root, the soles with it - the same as the unstick nudge)
+        if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
+        if gait.isBusy { gait.nudge(d) }
+        if social != nil { socialBook.shiftPending += d }          // (the body itself is slid by the same amount at the next social tick: the pose attractor alone trails the root by ~0.2 s, too slow for a lean)
+    }
+    /// Slide the sim by what the settle moved the root since the last tick (once a tick, before the scripts run).
+    func contactApplyShift(_ sim: SoftBody) {
+        let d = socialBook.shiftPending
+        guard d != .zero else { return }
+        socialBook.shiftPending = .zero
+        sim.shift(byXZ: d)
+    }
 }

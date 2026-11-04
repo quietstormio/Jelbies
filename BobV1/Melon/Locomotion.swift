@@ -86,6 +86,8 @@ struct GaitDriver {
     private var seed: UInt64 = 0x9E3779B97F4A7C15
 
     var isBusy: Bool { phase != .idle }
+    /// The contact settle moves the root while a hop / slide runs: the move's start and end points slide with it (else the move's own anchor undoes the nudge).
+    mutating func nudge(_ d: SIMD2<Float>) { from += d; to += d }
     var isFlying: Bool { phase == .thrown }
 
     // MARK: helpers

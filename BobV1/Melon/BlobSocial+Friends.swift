@@ -303,6 +303,7 @@ extension BlobBrain {
             if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, t > (isA ? 0.1 : 0.45) {
                 socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil
                 startSpin(sim: sim)
+                AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.5)
             } else if socialBook.hopStarted, scriptIsNone { faceEach(o) }
             if isA, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, t > 2.0 {
                 s.round += 1

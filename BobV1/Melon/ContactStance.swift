@@ -7,7 +7,7 @@
 //    anchor     the partner who does not move (the booped one, the sneaked-up-on one); asleep / lying / held bodies are always anchored
 //    features   the gap counts wings / tail / spikes / daisy at their current fold (back to back, sneak, peekaboo, leapfrog, the spins, the huddles)
 //    sound      the emote's own contact sound + haptic, fired by `contactTick` at the touch (ONE per touch, none while apart); nil = the default squish
-//  ONE call site: `BlobBrain.contactStanceTick` from `socialDrive` (BlobSocial.swift), every step while a session is on. No drive is edited to hold a distance.
+//  ONE call site: `BlobBrain.contactStanceTick` from the brain tick (BlobBrain.swift, just before the idle moves take the body), every step while a session is on. No drive is edited to hold a distance.
 //
 
 import Foundation
@@ -46,14 +46,14 @@ struct ContactStance: Sendable {
 
     /// Touching for the whole hold from phase `from`.
     static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
-        var st = [Step(from: from, target: hold)]
-        if let u = until { st.append(Step(from: u, target: nil)) }
+        var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: hold)]
+        if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
     }
     /// Approach (stand `approach` apart) from `from`, press from `press`, off from `until`.
     static func pressing(from: Int, press: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
-        var st = [Step(from: from, target: approach), Step(from: press, target: hold)]
-        if let u = until { st.append(Step(from: u, target: nil)) }
+        var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: approach), Step(from: press, target: hold)]
+        if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
     }
     /// Never overlap (and never squish): gap >= `near` from phase `from`.
@@ -69,14 +69,14 @@ struct ContactStance: Sendable {
         .bump: .pressing(from: 1, press: 2, sound: .boop, volume: 0.9),
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        .highFive: .pressing(from: 1, press: 2, until: 3, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        .highFive: .pressing(from: 1, press: 2, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.9),
         .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
         .bellyBounce: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, until: 3, sound: .boop, volume: 0.9),
         // holds
         .nuzzle: .holding(from: 2),
-        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 1, target: nil), Step(from: 2, target: hold)]),
+        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)]),
         .hum: .holding(from: 2),
         .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7),
         .backToBack: .holding(from: 3, features: true),
@@ -84,7 +84,7 @@ struct ContactStance: Sendable {
         .swayHug: .holding(from: 2, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 2),
         .ringAround: .holding(from: 2, features: true),
-        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true), Step(from: 4, target: nil)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
+        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
         .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7),
         .circleDance: .holding(from: 2, features: true),
@@ -128,10 +128,12 @@ extension BlobBrain {
     }
 
     private func contactSettlePair(_ a: BlobBrain, _ b: BlobBrain, _ st: ContactStance, _ step: ContactStance.Step, _ target: Float) {
-        func fixed(_ x: BlobBrain, _ role: ContactStance.Anchor) -> Bool { x.held || x.idleState.kind == .sleep || (st.anchor == role && st.anchor != .none) }
+        func fixed(_ x: BlobBrain, _ role: ContactStance.Anchor) -> Bool {
+            return x.held || x.idleState.kind == .sleep || (st.anchor == role && st.anchor != .none)
+        }
         guard let s = a.social else { return }
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
-        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features)
+        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: true)
     }
 }
 
@@ -146,10 +148,22 @@ extension BlobBrain {
 
 extension BlobBrain {
     /// The root distance to stand from `o` for a close stance, along `u` (from him to me): `want` (the emote's old constant) but never closer than the skins touch + the approach margin
-    /// (a stance that stands inside the partner is what made the touching emotes overlap). Without profiles yet (the first tick): side by side 1.45, one behind the other 1.34 (docs/CONTACT_EMOTES.md 5.2).
+    /// (a stance that stands inside the partner is what made the touching emotes overlap). Never under 1.445 (side-by-side touch 1.405 + margin: bodies turn on the spot after arriving, and the widest axis must clear).
     func standGap(_ o: BlobBrain, along u: SIMD2<Float>, _ want: Float) -> Float {
         guard ContactField.enabled else { return want }
-        let fallback: Float = abs(u.x) > 0.7 ? 1.45 : 1.34
-        return max(want, touchRadius(o, along: u).map { $0 + ContactStance.approach } ?? fallback)
+        let fallback: Float = 1.445          // (the widest axis, 1.405 + the margin: a body turning on the spot - squaring up to the camera - never ends up inside him)
+        return max(want, fallback, touchRadius(o, along: u).map { $0 + ContactStance.approach } ?? 0)
+    }
+}
+
+extension BlobBrain {
+    /// After a session: for 1.5 s the partners are kept apart (gap >= 0) while the bodies turn back and the wobble dies out (`SocialBook.glow`: partner id -> seconds left).
+    func contactGlowTick(_ dt: Float) {
+        guard !socialBook.glow.isEmpty else { return }
+        for (id, left) in socialBook.glow {
+            if left <= dt || social != nil { socialBook.glow[id] = nil; continue }
+            socialBook.glow[id] = left - dt
+            if steerID < id, let o = socialBrain(id), o.social == nil { ContactSettle.step(self, o, target: ContactStance.near, onlySeparate: true, features: true) }
+        }
     }
 }
