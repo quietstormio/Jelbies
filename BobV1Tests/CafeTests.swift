@@ -347,11 +347,11 @@ final class CafeTests: XCTestCase {
         XCTAssertEqual(o.fullPrice(jellies: [0, 1]), 32)
     }
 
-    func testStampCardFreeAfterEight() {
+    func testStampCardEighthOrderIsFree() {
         let r = room(drops: 500)
         let c = r.care
         XCTAssertEqual(c.cafe.stamps.card.count, 0)
-        for visit in 1...8 {
+        for visit in 1...7 {
             enter(r)
             let before = c.bath.wallet.count
             XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .jellycup, 1: .jellycup, 2: .jellycup])))
@@ -364,7 +364,7 @@ final class CafeTests: XCTestCase {
         enter(r)
         let before = c.bath.wallet.count
         XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .swirl, 1: .swirl, 2: .swirl])))
-        XCTAssertEqual(c.bath.wallet.count, before, "the 9th order is free")
+        XCTAssertEqual(c.bath.wallet.count, before, "the 8th order is free")
         XCTAssertTrue(c.cafe.wasFree)
         XCTAssertEqual(c.cafe.stamps.card.count, 0, "the card starts again")
     }
@@ -373,7 +373,7 @@ final class CafeTests: XCTestCase {
         let r = room(drops: 100)
         r.care.bath.wallet.add(3 - r.care.bath.wallet.count, silent: true)
         XCTAssertEqual(r.care.cafeBlocker(), .noDrops)
-        r.care.cafe.stamps.set(8)
+        r.care.cafe.stamps.set(7)
         XCTAssertNil(r.care.cafeBlocker())
     }
 
@@ -452,7 +452,13 @@ final class CafeTests: XCTestCase {
             XCTAssertFalse(m.vertices.isEmpty, "\(t)")
         }
         XCTAssertEqual(CafeMusic.tracks.count, 8)
-        for t in CafeMusic.tracks { XCTAssertNotNil(SceneRender.fileLength(t.track), "\(t.track) is bundled") }
+        for t in CafeMusic.tracks {
+            guard let len = SceneRender.fileLength(t.track) else { XCTFail("\(t.track) is not bundled"); continue }
+            XCTAssertGreaterThan(t.track.loopEndFrame, t.track.loopStartFrame, "\(t.track) loops a real span")
+            XCTAssertLessThanOrEqual(t.track.loopEndFrame, len, "\(t.track): the loop ends inside the file")
+            XCTAssertNotNil(SceneRender.render(t.track), "\(t.track) decodes to a playable loop")
+            XCTAssertTrue(MusicScene.cafe.tracks.contains(t.track))
+        }
     }
 
     /// Everybody finishes his own treat at the preset table (nobody is left with food on the plate), over several visits.

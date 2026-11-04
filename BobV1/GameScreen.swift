@@ -603,6 +603,11 @@ struct GameScreen: View {
             if let h = d.string(forKey: "CafeHunger") { for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) } }
             if let n = d.string(forKey: "CafeStamps").flatMap(Int.init) { care.cafe.stamps.set(n) }
             care.requestCafe()
+            if let n = d.string(forKey: "CafeSkips").flatMap(Int.init) {          // capture aid: skip the café music n times and log each title (proof the playlist cycles)
+                for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
+                NSLog("[cafe-music] start %@", AudioHub.shared.nowPlaying.line)
+                for i in 1...max(n, 1) { await sleep(2); AudioHub.shared.skipTrack(); NSLog("[cafe-music] skip %d -> %@", i, AudioHub.shared.nowPlaying.line) }
+            }
             if m == "lounge" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
                 await sleep(2)

@@ -188,6 +188,20 @@ nonisolated final class CafePlate: @unchecked Sendable {
     private let lock = NSLock()
     private var byPlace: [Int: CafeTreatID] = [:]
 
+    /// The lounge: one cup in front of each place (a drinker keeps his own drink, a food eater gets cocoa). They "sip" at the table.
+    static func cups(_ byPlace: [Int: CafeTreatID]) -> Consumable {
+        let key = byPlace.sorted { $0.key < $1.key }.map { "\($0.key)\($0.value.rawValue)" }.joined(separator: "-")
+        return Consumable(id: "cafe-cups-\(key)", name: "Café cups", kind: .food, eatStyle: .finger, symbol: "cup.and.saucer.fill", palette: Consumables.cafeCocoa.palette, benefits: [:],
+                          serving: { b, _, _, L in
+                              for i in 0..<L.n {
+                                  let t = byPlace[i] ?? .cocoa
+                                  let drink = CafeMenu.treat(t).category == .drink ? t : CafeTreatID.cocoa
+                                  let food = Consumables.cafeFood(drink)
+                                  food.piece?(b, DiningModels.berryAnchor(layout: L, place: i, index: 1), 1, L.scale, food.palette)
+                              }
+                          })
+    }
+
     /// The empty café table that is out from the moment the Jelbies arrive (the food is set down on it at Order).
     static let emptyTable = Consumable(id: "cafe-empty", name: "Café table", kind: .food, eatStyle: .finger, symbol: "cup.and.saucer.fill", palette: Consumables.cafeSwirl.palette,
                                        benefits: [:], serving: { _, _, _, _ in })

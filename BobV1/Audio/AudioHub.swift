@@ -689,6 +689,18 @@ final class AudioHub {
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
 
+    @ObservationIgnored private var lastRegularVoice: Double = 0
+    /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
+    func chirp(character: Int, _ v: JellyVoice) {
+        guard !muted, started, active else { return }
+        let level = settings.sfxLevel * duck.gain
+        guard level > 0.01 else { return }
+        let now = CACurrentMediaTime()
+        if now - lastRegularVoice < 2.2 { return }
+        lastRegularVoice = now
+        fire(JellyVoiceSet.file(character: character, v), volume: 0.6 * level, pan: 0)
+    }
+
     /// Haptics' touch transients -> squish / boop / wobble (the pairing HapticDriver.soundHook promised).
     private var letGoRing = LetGoRing()
 

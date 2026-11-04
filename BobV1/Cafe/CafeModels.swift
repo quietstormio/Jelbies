@@ -64,10 +64,11 @@ nonisolated enum CafeRules {
 
 /// The stamp card: 8 slots, one stamp per visit with an order; with a full card the next order is free and the card starts again.
 nonisolated struct CafeStamps: Equatable, Sendable {
-    static let slots = 8
+    /// 8 slots: seven paid, stamped visits, then the 8th order is free (and the card starts again).
+    static let slots = 8, paidVisits = 7
     static let key = "CafeStamps.v1"
     var count = 0
-    var isFull: Bool { count >= Self.slots }
+    var isFull: Bool { count >= Self.paidVisits }
     /// An order was placed: a free one (full card) resets the card, any other earns a stamp.
     mutating func recordOrder() { if isFull { count = 0 } else { count += 1 } }
 }
@@ -81,7 +82,7 @@ final class CafeStampBook {
     private let persists: Bool
     init(persists: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil) {
         self.persists = persists
-        if persists { card.count = min(max(UserDefaults.standard.integer(forKey: CafeStamps.key), 0), CafeStamps.slots) }
+        if persists { card.count = min(max(UserDefaults.standard.integer(forKey: CafeStamps.key), 0), CafeStamps.paidVisits) }
     }
     var isFull: Bool { card.isFull }
     func recordOrder() {
@@ -90,7 +91,7 @@ final class CafeStampBook {
         if !wasFull { landed += 1 }
         if persists { UserDefaults.standard.set(card.count, forKey: CafeStamps.key) }
     }
-    func set(_ n: Int) { card.count = min(max(n, 0), CafeStamps.slots); if persists { UserDefaults.standard.set(card.count, forKey: CafeStamps.key) } }
+    func set(_ n: Int) { card.count = min(max(n, 0), CafeStamps.paidVisits); if persists { UserDefaults.standard.set(card.count, forKey: CafeStamps.key) } }
 }
 
 /// What the table orders: a treat for each Jelbie (by roster id), or one treat for everybody ("Same for everyone", a little cheaper).

@@ -55,6 +55,14 @@ final class CafeBook {
     var thoughtT: Float = 3
     /// The lounge began; seconds to each Jelbie's next calm idle.
     var lounged = false
+    /// The regulars (Park friends at the bistro table and the counter): bodies, who they are, seconds to each one's next idle, and where each stands.
+    var regularsPending = false
+    var regulars: [JellyActor] = []
+    var regularVisitors: [ParkVisitor] = []
+    var regularIdle: [Int: Float] = [:]
+    var regularHome: [Int: SIMD2<Float>] = [:]
+    /// What each place had (place -> treat), kept for the lounge's cups.
+    var lastTreatByPlace: [Int: CafeTreatID] = [:]
     var loungeIdle: [Int: Float] = [:]
     nonisolated deinit {}
 }
@@ -154,7 +162,7 @@ extension GameCare {
             tickCafeLounge(actors, dt: dt)
         default: break
         }
-        if cafe.phase == .arriveIn || cafe.phase == .menu || cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done { tickCafeTalk(actors, dt: dt) }
+        if cafe.phase == .arriveIn || cafe.phase == .menu || cafe.phase == .eating || cafe.phase == .cheer || cafe.phase == .lounge || cafe.phase == .done { tickCafeTalk(actors, dt: dt); tickCafeRegulars(actors, dt: dt) }
     }
 
     // MARK: the world swaps (under the white)
@@ -177,6 +185,7 @@ extension GameCare {
             }
             syncDecor()
             // the café table is out from the start, empty: the Jelbies already stand at it (the food is set down on it at Order)
+            book.regularsPending = true; book.regulars = []; book.regularVisitors = []; book.regularIdle = [:]; book.regularHome = [:]; book.lastTreatByPlace = [:]
             book.thought = nil; book.thoughtT = 3; book.chatT = 1.5; book.lastSpeaker = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]; book.servingOpen = false
             cafe.special = cafeSpecial
             dining.reset()
@@ -206,6 +215,7 @@ extension GameCare {
             }
             if select.phase != .none { select.cancel() }
         case .home:
+            cafeRegularsLeave()
             // leaving at any point: an open serving is dropped (what was eaten stays paid; nothing eaten = the Drops come back), the café table goes
             if book.servingOpen {
                 cancelGroup()
@@ -319,6 +329,7 @@ extension GameCare {
         let atePieces = book.ate.values.reduce(0, +)
         for (id, n) in book.ate where n > 0 { needs(for: id).gain(.attention, CafeTuning.attentionBonus) }
         if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { bath.wallet.add(book.charged, silent: true) }
+        if let p = book.plate { book.lastTreatByPlace = p.treatByPlace }
         book.hooks = nil; book.plate = nil; book.servingOpen = false
         for id in book.ate.keys where (book.ate[id] ?? 0) > 0 { cafe.served.insert(id) }
         cafe.servingEnded()

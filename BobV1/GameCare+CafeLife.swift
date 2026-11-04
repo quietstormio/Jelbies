@@ -37,7 +37,10 @@ extension GameCare {
         if book.chatT <= 0 {
             book.chatT = Float.random(in: CafeTuning.chatEvery)
             let pool = live.count > 1 ? live.filter { $0.id != book.lastSpeaker } : live
-            if let sp = pool.randomElement(), let sb = sp.brain {
+            if !book.regulars.isEmpty, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
+                AudioHub.shared.chirp(character: Self.regularVoiceCharacter(book.regularVisitors[k]), Bool.random() ? .babble : .happy)
+                rb.face(.excited, hold: 1.2)
+            } else if let sp = pool.randomElement(), let sb = sp.brain {
                 book.lastSpeaker = sp.id
                 AudioHub.shared.chirp(jelly: sp.id, Bool.random() ? .babble : .happy)
                 sb.face(.excited, hold: 1.2)
@@ -64,6 +67,7 @@ extension GameCare {
         let book = cafeBook
         if !book.lounged {
             book.lounged = true
+            if dining.phase == .present, !book.lastTreatByPlace.isEmpty { dining.restock(serving: CafePlate.cups(book.lastTreatByPlace)) }          // a cup in front of everybody: they sip
             for a in actors {
                 guard let b = a.brain else { continue }
                 b.abortAll(a.sim, a.skinner)
@@ -85,7 +89,8 @@ extension GameCare {
             if t > 0 { book.loungeIdle[a.id] = t; continue }
             book.loungeIdle[a.id] = Float.random(in: 3...6)
             if let st = book.stands[a.id], simd_distance(Self.floorPos(b, a.sim), st) > 0.3 { b.requestNow(.goTo(st)); book.loungeIdle[a.id] = 2; continue }
-            b.commandedIdle = [IdleKind.look, .chirp, .giggle, .bounce, .stretch].randomElement()
+            if abs(Self.wrapAngle(b.yaw - b.faceCameraYaw())) > 0.5 { b.startTurn(to: b.faceCameraYaw(), sim: a.sim); book.loungeIdle[a.id] = 1.3; continue }          // always facing the room, never away
+            b.commandedIdle = [IdleKind.chirp, .giggle, .bounce, .stretch].randomElement()
             b.face(.happy, hold: 1.5)
             if Float.random(in: 0..<1) < 0.5 { b.blushBump(hold: 2, peak: 0.5) }
             if Float.random(in: 0..<1) < 0.25 { touchPlay?.spawnHeart(now: CACurrentMediaTime()) }

@@ -46,7 +46,7 @@ struct CafeChrome: View {
                         HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.43 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -199,24 +199,19 @@ struct CafeOrderCard: View {
         }
     }
 
-    /// Food then Drinks in one sideways strip (Drinks first for a Jelbie who is full), today's special in front when he can have it.
+    /// Food and Drinks as two labelled rows, everything on screen at once (Food is greyed for a Jelbie who is full).
     private var strip: some View {
-        let canFood = table ? ids.allSatisfy { care.cafeCanEat($0) } : care.cafeCanEat(who)
-        let lead = special.flatMap { sp in CafeRules.canOrder(sp, tier: table ? .famished : care.needs(for: who).tier(.hunger)) ? sp : nil }
-        let groups: [(String, [CafeTreat])] = canFood ? [("FOOD", CafeMenu.foods), ("DRINKS", CafeMenu.drinks)] : [("DRINKS", CafeMenu.drinks), ("FOOD", CafeMenu.foods)]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 5) {
-                if let sp = lead { sideLabel("TODAY"); tile(CafeMenu.treat(sp)).frame(width: 92) }
-                ForEach(groups, id: \.0) { g in
-                    sideLabel(g.0)
-                    ForEach(g.1.filter { $0.id != lead }) { tile($0).frame(width: 92) }
-                }
-            }
+        VStack(spacing: 4) {
+            tileRow("Food", CafeMenu.foods)
+            tileRow("Drinks", CafeMenu.drinks)
         }
-        .scrollBounceBehavior(.basedOnSize)
     }
-    private func sideLabel(_ t: String) -> some View {
-        Text(t).font(SK.font(10, .black)).foregroundStyle(SK.muted).fixedSize().rotationEffect(.degrees(-90)).frame(width: 14, height: 62).accessibilityHidden(true)
+    private func tileRow(_ title: String, _ items: [CafeTreat]) -> some View {
+        HStack(spacing: 4) {
+            Text(title).font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 38, alignment: .leading).accessibilityHidden(true)
+            ForEach(items) { tile($0).frame(maxWidth: .infinity) }
+            ForEach(0..<max(0, 5 - items.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+        }
     }
 
     // MARK: pieces
@@ -261,7 +256,7 @@ struct CafeOrderCard: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .padding(.horizontal, 8).frame(minHeight: compact ? 36 : 40)
+            .padding(.horizontal, 8).frame(minHeight: compact ? 34 : 36)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(active ? SK.honey : Color.white.opacity(0.7)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
@@ -345,17 +340,17 @@ struct CafeOrderCard: View {
         return Button { pick(t) } label: {
             VStack(spacing: 1) {
                 ZStack(alignment: .topTrailing) {
-                    thumb(t.id, size: 30).frame(maxWidth: .infinity)
-                    if isSpecial { Text("\u{2212}20%").font(SK.font(10, .black)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)) }
+                    thumb(t.id, size: 26).frame(maxWidth: .infinity)
+                    if isSpecial { Text("\u{2212}20%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
                 }
-                Text(t.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
-                HStack(spacing: 3) {
-                    JellyCoinIcon(size: 13)
-                    if isSpecial { Text("\(t.price)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
-                    Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                Text(t.name).font(SK.font(9.5, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(height: 24)
+                HStack(spacing: 2) {
+                    JellyCoinIcon(size: 11)
+                    if isSpecial { Text("\(t.price)").font(SK.font(9, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(12, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 40).padding(.vertical, 3)
+            .frame(maxWidth: .infinity, minHeight: 56).padding(.vertical, 2)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
             .opacity(ok ? 1 : 0.35)
@@ -400,14 +395,15 @@ struct CafeOrderCard: View {
         let n = cafe.stamps.card.count, full = cafe.stamps.isFull
         return HStack(spacing: 3) {
             ForEach(0..<CafeStamps.slots, id: \.self) { i in
-                let on = i < n
+                let gift = i == CafeStamps.slots - 1          // the 8th slot is the free order
+                let on = gift ? full : i < n
                 ZStack {
                     Circle().fill(Color.white.opacity(0.7))
-                        .overlay(Image(systemName: "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.muted.opacity(0.35)))
-                        .overlay(Circle().strokeBorder(SK.muted.opacity(0.25), lineWidth: 1.5))
+                        .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(gift ? SK.pinkStrong.opacity(0.7) : SK.muted.opacity(0.35)))
+                        .overlay(Circle().strokeBorder(gift ? SK.pinkStrong.opacity(0.5) : SK.muted.opacity(0.25), lineWidth: 1.5))
                     if on {          // the stamp lands: it drops in big and settles
                         Circle().fill(SK.honey)
-                            .overlay(Image(systemName: "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.ink))
+                            .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.ink))
                             .overlay(Circle().strokeBorder(SK.honeyDeep, lineWidth: 1.5))
                             .transition(.scale(scale: 2.2).combined(with: .opacity))
                     }
