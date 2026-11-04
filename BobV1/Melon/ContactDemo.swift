@@ -97,7 +97,7 @@ enum ContactDemo {
         let cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
         guard cast.count >= 2 else { note(" cast too small (%d)", cast.count); return }
         for a in cast { a.brain?.autonomy = false; a.brain?.idleForced = true }
-        Task { @MainActor in await keepNeedsFull(cast) }
+        if name != "lieDown" && name != "sleepPile" { Task { @MainActor in await keepNeedsFull(cast) } }          // (a full-needs Jelbie may not lie down at all)
         if let c = d.string(forKey: "ContactCam"), c == "perp" || c == "top" { let bs = cast.compactMap(\.brain); Task { @MainActor in await track(bs, top: c == "top") } }
         // side by side across the screen first (a pair along the camera axis hides the touch): spots at z -0.9 (the camera's look-at depth), 2.6 u apart (3: 2.4 u)
         let half: Float = (name == "lieDown" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
