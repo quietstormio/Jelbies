@@ -818,7 +818,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
-        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil })          // the contact profile samples the egg more sparsely than the limb blocks
+        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rm.index)          // the contact profile samples the egg more sparsely than the limb blocks
         embedding = emb
         LaunchTiming.span("WearBody.install") { WearBody.install(rm) }
         actors = LaunchTiming.span("actors") { (0..<count).map {

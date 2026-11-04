@@ -58,11 +58,11 @@ final class ContactProfileTests: XCTestCase {
 
     /// Ground truth of the pair gap from the full skinned meshes: the translation gap along the root axis of the two projected triangle meshes, sampled every 1 mm across the
     /// lateral overlap (B's nearest axial coordinate - A's farthest, over every projected edge of both meshes).
-    static func truthGap(_ da: UnsafePointer<Float>, _ db: UnsafePointer<Float>, count: Int, index: [UInt32], rootA: SIMD2<Float>, rootB: SIMD2<Float>) -> Float {
+    static func truthGap(_ da: UnsafePointer<Float>, _ db: UnsafePointer<Float>, count: Int, index: [UInt32], indexB: [UInt32]? = nil, rootA: SIMD2<Float>, rootB: SIMD2<Float>) -> Float {
         let d = rootB - rootA, L = simd_length(d), u = d / L, v = SIMD2(-u.y, u.x)
         let w0: Float = -1.2, step: Float = 0.001, n = 2400
         var envA = [Float](repeating: -.infinity, count: n), envB = [Float](repeating: .infinity, count: n)
-        func edges(_ dyn: UnsafePointer<Float>, _ root: SIMD2<Float>, _ offset: Float, _ isA: Bool) {
+        func edges(_ dyn: UnsafePointer<Float>, _ root: SIMD2<Float>, _ offset: Float, _ isA: Bool, _ index: [UInt32]) {
             var i = 0
             while i + 2 < index.count {
                 for e in 0..<3 {
@@ -83,8 +83,8 @@ final class ContactProfileTests: XCTestCase {
                 i += 3
             }
         }
-        edges(da, rootA, 0, true)
-        edges(db, rootB, L, false)
+        edges(da, rootA, 0, true, index)
+        edges(db, rootB, L, false, indexB ?? index)
         var best = Float.infinity
         for k in 0..<n where envA[k].isFinite && envB[k].isFinite { best = min(best, envB[k] - envA[k]) }
         return best
@@ -223,7 +223,7 @@ final class ContactProfileTests: XCTestCase {
                     let surf = (0..<2).map { i -> ContactSurface in
                         var rs = d.contactRanges(i)
                         rs.removeAll { $0.lowerBound == ContactField.tailLo }          // (the tail is a feature: FeatureClip's job, not the body profile's)
-                        return ContactSurface(root: ContactField.root(i), dyn: UnsafePointer(d.dyn[i]), ranges: rs)
+                        return ContactSurface(root: ContactField.root(i), dyn: UnsafePointer(d.dyn[i]), ranges: rs, index: MotionRig.renderMesh.index)          // (with the triangles: the footprint gap sees the surface between the vertices)
                     }
                     let truth = BruteForceContactMetric.skinGap(surf[0], surf[1]), foot = BruteForceContactMetric.footprintGap(surf[0], surf[1])
                     let sg = ContactField.skinGap(0, 1) ?? 9
@@ -250,7 +250,7 @@ final class ContactProfileTests: XCTestCase {
         var tBuild = 0.0
         for _ in 0..<n {
             let t0 = CACurrentMediaTime()
-            for j in js { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root) }
+            for j in js { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root, blocks: j.skinner.contactBlocks) }
             tBuild += CACurrentMediaTime() - t0
         }
         var tPairs = 0.0, sink: Float = 0
