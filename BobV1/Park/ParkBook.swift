@@ -34,7 +34,9 @@ final class ParkBook {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { visitors = v.map { var x = $0; x.signature = x.colour.speciesFeature; return x } }   // (old saves had random signatures; they follow the colour species now)
+        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { let fresh = ParkPool.generate()
+            // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
+            visitors = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x } }
         else { visitors = ParkPool.generate() }
     }
 

@@ -22,6 +22,13 @@ nonisolated enum ParkStyle: String, Codable, CaseIterable, Sendable {
 /// Body colours beyond the four starters (blue, yellow, green, lavender).
 nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
     case pink, orange, mint, teal, cream, grey, red, peach, lime, plum, coral, cocoa
+    /// The four classic species colours (Bob blue, Pip yellow, Moss green, Lavender purple): what a visitor normally is. Declared last so `mutations` keeps the old order.
+    case blue, yellow, green, lavender
+
+    var isClassic: Bool { switch self { case .blue, .yellow, .green, .lavender: return true; default: return false } }
+    static let classics: [ParkColour] = [.blue, .yellow, .green, .lavender]
+    /// The variant colours a rare mutation visitor may have (the original twelve).
+    static var mutations: [ParkColour] { allCases.filter { !$0.isClassic } }
 
     var title: String { rawValue.capitalized }
     /// The species signature for this colour. A signature belongs to a colour SPECIES, never to one character, and never appears on another colour
@@ -29,8 +36,9 @@ nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
     /// No visitor colour is yellow today (cream / peach / orange stay plain), so the yellow case is reserved.
     var speciesFeature: JellyFeature {
         switch self {
-        case .plum: return .wings
-        case .mint, .lime: return .daisy
+        case .plum, .lavender: return .wings
+        case .mint, .lime, .green: return .daisy
+        case .yellow: return .spines
         default: return .none
         }
     }
@@ -49,6 +57,11 @@ nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
         case .plum: return ([0.720, 0.520, 0.780], [0.520, 0.300, 0.600])
         case .coral: return ([0.990, 0.620, 0.580], [0.840, 0.380, 0.360])
         case .cocoa: return ([0.780, 0.620, 0.520], [0.550, 0.380, 0.300])
+        // swatches of the real starters (JellyRoster.tint); their bodies use the starters' own palettes (JellyPalettes.park)
+        case .blue: return ([0.70, 0.83, 0.945], [0.45, 0.64, 0.88])
+        case .yellow: return ([0.99, 0.90, 0.62], [0.90, 0.72, 0.30])
+        case .green: return ([0.70, 0.90, 0.66], [0.290, 0.650, 0.350])
+        case .lavender: return ([0.80, 0.72, 0.93], [0.520, 0.410, 0.780])
         }
     }
     /// sRGB 0...1 swatch for the little dots and the card.
@@ -58,6 +71,13 @@ nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
 extension JellyPalettes {
     /// A visitor's body colours: the same soft matte treatment as Moss's green and Lavender.
     static func park(_ c: ParkColour) -> Palette {
+        switch c {
+        case .blue: return PaletteKey.blue.palette
+        case .yellow: return PaletteKey.yellow.palette
+        case .green: return green
+        case .lavender: return lavender
+        default: break
+        }
         let unused = SIMD3<Float>(0.5, 0.5, 0.5)
         let (f, d) = c.flesh
         return matte(Palette(name: c.title, flesh: f, fleshDeep: d, pale: unused, skin: unused, stripe: unused, seed: PaletteKey.blue.palette.seed,
@@ -113,6 +133,8 @@ nonisolated enum ParkTuning {
     /// A visitor's body solves with fewer substeps than a Jelbie's 10 (the same XPBD, a touch softer): the park runs up to 5 soft bodies, and the solver is ~all of its CPU.
     nonisolated(unsafe) static var visitorSubsteps: Int = { let k = UserDefaults.standard.integer(forKey: "ParkVisitorSubsteps"); return k > 0 ? k : 6 }()
     static let poolSize = 16
+    /// Chance that a visitor is a MUTATION (one of the variant colours) instead of its species' classic colour; the Jelly Spring's rare rate.
+    static let mutationRate: Double = VariantTuning.rareRate
     static let poolSeed: UInt64 = 0x9A2B_17C3_5D41
     // Friendship (points per second near each other; a social together is faster). Doubled on 2026-10-25 (friends come in a couple of visits, not ages):
     // a visit of ~5 minutes among the visitors is now worth ~20...40 points with each one met, the friendly socials a good deal more.
@@ -193,10 +215,19 @@ nonisolated enum ParkPool {
     static let wearables: [WearLook] = [.beanieHoney, .beaniePink, .bucketHat, .bucketHatPink, .partyHat, .catEars, .bunnyEars, .frogEars, .flowerClip,
                                         .sweatband, .bowtiePink, .bowtieSky, .bandanaCoral, .bandanaMint, .scarfSky, .glassesRound, .sunglassesStar]
 
+    /// A visitor's colour: normally its species' classic colour (blue / yellow / green / lavender, balanced round the pool), rarely (`ParkTuning.mutationRate`) the
+    /// mutation colour drawn for it. Own seeded stream, so names, styles and wear are untouched.
+    static func visitorColour(index i: Int, mutation: ParkColour, seed: UInt64) -> ParkColour {
+        var c = ParkRandom(seed ^ 0xC0_1042 &+ UInt64(i) &* 0x9E37_79B9)
+        _ = c.next()
+        if Double(c.unit()) < ParkTuning.mutationRate { return mutation }
+        return ParkColour.classics[(i + Int(seed % 4)) % 4]
+    }
+
     /// The whole pool: `ParkTuning.poolSize` visitors, every colour used, signatures and items mixed. The same on every device.
     static func generate(count: Int = ParkTuning.poolSize, seed: UInt64 = ParkTuning.poolSeed) -> [ParkVisitor] {
         var r = ParkRandom(seed)
-        var colours = ParkColour.allCases.filter { JellyVariantBook.parkEligible($0) }          // the Spring's exclusive variants never appear here
+        var colours = ParkColour.mutations.filter { JellyVariantBook.parkEligible($0) }          // the Spring's exclusive variants never appear here
         for i in stride(from: colours.count - 1, to: 0, by: -1) { colours.swapAt(i, Int(r.next() % UInt64(i + 1))) }
         var names = ParkWords.names
         for i in stride(from: names.count - 1, to: 0, by: -1) { names.swapAt(i, Int(r.next() % UInt64(i + 1))) }
@@ -206,10 +237,11 @@ nonisolated enum ParkPool {
         for i in 0..<count {
             let style = ParkStyle.allCases[Int(r.next() % UInt64(ParkStyle.allCases.count))]
             _ = r.pick(signatures)
-            let sig = colours[i % colours.count].speciesFeature
+            let colour = visitorColour(index: i, mutation: colours[i % colours.count], seed: seed)
+            let sig = colour.speciesFeature
             let wear: WearLook? = r.unit() < 0.45 ? r.pick(wearables) : nil
             let name = names[i % names.count]
-            out.append(ParkVisitor(id: i, name: name, colour: colours[i % colours.count], signature: sig, wear: wear, style: style,
+            out.append(ParkVisitor(id: i, name: name, colour: colour, signature: sig, wear: wear, style: style,
                                    blurb: ParkWords.blurb(style, &r), greeting: ParkWords.greeting(name, style, &r)))
         }
         return out

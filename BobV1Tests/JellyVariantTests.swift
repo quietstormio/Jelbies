@@ -50,4 +50,25 @@ struct JellyVariantTests {
         JellyVariants.adopt(3, nil, d)
         #expect(JellyVariants.load(d)[3] == nil)
     }
+
+    @Test func parkVisitorsAreClassicSpeciesWithRareMutations() {
+        var mutants = 0, total = 0
+        for k in 0..<400 {
+            let pool = ParkPool.generate(seed: ParkTuning.poolSeed &+ UInt64(k) &* 7919)
+            #expect(pool == ParkPool.generate(seed: ParkTuning.poolSeed &+ UInt64(k) &* 7919))
+            for v in pool {
+                total += 1
+                if !v.colour.isClassic { mutants += 1 }
+                #expect(JellyVariantBook.parkEligible(v.colour))
+                #expect(v.signature == v.colour.speciesFeature)
+            }
+        }
+        let rate = Double(mutants) / Double(total)
+        #expect(rate > 0.025 && rate < 0.055, "mutation rate \(rate)")
+        #expect(ParkTuning.mutationRate == VariantTuning.rareRate)
+        // the real pool: names and ids unchanged in shape, every classic species present
+        let pool = ParkPool.generate()
+        #expect(pool.map(\.id) == Array(0..<ParkTuning.poolSize))
+        #expect(Set(pool.filter { $0.colour.isClassic }.map(\.colour)) == Set(ParkColour.classics))
+    }
 }
