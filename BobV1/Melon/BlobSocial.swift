@@ -738,6 +738,7 @@ extension BlobBrain {
                 if !s.impacted && t >= 0.12 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 2.6)
+                    contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
                 }
                 if t > 1.1 { s.finish(.done) }
@@ -777,6 +778,7 @@ extension BlobBrain {
                     if !s.impacted && s.bumpT >= 0.12 {
                         s.impacted = true
                         jellyKick = max(jellyKick, 1.4); o.jellyKick = max(o.jellyKick, 2.4)
+                        contactCueFallback(o, .squish, 0.5)
                         onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID))
                     }
                     if s.bumpT > 0.7 { s.bumpT = -1; s.bumpNext = rand(0.8, 1.4) }
