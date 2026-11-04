@@ -45,9 +45,9 @@ enum ContactDemo {
         let spots = xs.map { SIMD2<Float>($0, -0.9) }
         for a in cast { if let b = a.brain { note(" start (%.2f, %.2f)", b.position.x, b.position.y) } }
         for (a, g) in zip(cast, spots) { a.brain?.requestNow(.goTo(g)) }
-        for _ in 0..<160 {
+        for _ in 0..<100 {
             try? await Task.sleep(nanoseconds: 100_000_000)
-            if zip(cast, spots).allSatisfy({ a, g in a.brain.map { simd_distance($0.position, g) < 0.25 } ?? true }) { break }
+            if zip(cast, spots).allSatisfy({ a, g in a.brain.map { simd_distance($0.position, g) < 0.5 } ?? true }) { break }
         }
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         for a in cast { if let b = a.brain { note(" at (%.2f, %.2f) steer=%d", b.position.x, b.position.y, b.steerID) } }
