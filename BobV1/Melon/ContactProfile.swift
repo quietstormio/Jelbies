@@ -410,6 +410,16 @@ nonisolated enum ContactField {
     /// The translation gap of polygon A (body `a`, at the origin) and polygon B (body `b`, `L` along `u`) along `u`: the smallest, over the lateral positions where both exist, of
     /// (B's nearest axial coordinate - A's farthest axial coordinate). The envelopes are piecewise linear: it is enough to look at the facing vertices of both.
     private static func polyGap(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, bodyA: Bool, bodyB: Bool) -> Float {
+        let g = polyGapCap(a, b, L, u, bodyA: bodyA, bodyB: bodyB, reach: 0.4)
+        if g.isFinite { return g }
+        // (a deep overlap: the facing caps no longer pair up - widen them to the whole footprint so the gap stays a finite, signed number: 2026-11-04, the settle and the wall need it most when the overlap is deepest)
+        let g2 = polyGapCap(a, b, L, u, bodyA: bodyA, bodyB: bodyB, reach: 4)
+        if g2.isFinite || !(bodyA && bodyB) { return g2 }
+        if let ea = supportExt(a, u), let eb = supportExt(b, -u) { return L - (ea + eb) }          // (last resort for the two bodies: the support gap, a lower bound)
+        return g2
+    }
+
+    private static func polyGapCap(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, bodyA: Bool, bodyB: Bool, reach: Float) -> Float {
         let v = SIMD2(-u.y, u.x)
         let pa = base(a), pb = base(b)
         let ar = bodyA ? pa + oBR : pa + oFR, ax = bodyA ? pa + oBX : pa + oFX, az = bodyA ? pa + oBZ : pa + oFZ
@@ -423,7 +433,7 @@ nonisolated enum ContactField {
                 if br[k] > 0 { aB[k] = L + bx[k] * u.x + bz[k] * u.y; wB[k] = bx[k] * v.x + bz[k] * v.y; minB = min(minB, aB[k]) } else { aB[k] = Float.infinity }
             }
             guard maxA.isFinite, minB.isFinite else { return }
-            let reach: Float = 0.4          // only the cap of each footprint that faces the other can touch
+            // (reach: only the cap of each footprint that faces the other can touch)
             // the facing edges (between neighbouring bins that are both facing), collected once
             var ea = [Int](), eb = [Int]()
             ea.reserveCapacity(48); eb.reserveCapacity(48)

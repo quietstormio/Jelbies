@@ -240,6 +240,27 @@ final class ContactProfileTests: XCTestCase {
         MotionLog.write(String(format: "BRUTEFORCE worst |skinGap - brute force| %.1f mm, |gap - brute-force footprint| %.1f mm over %d pairs (%d within 0.5 cm)", worst * 1000, worstF * 1000, n, within))
     }
 
+    /// 2026-11-04: the gap stays a finite signed number however deep the footprints sit in each other (it used to go nil past ~-0.3 m: the settle and the wall switched off exactly there).
+    func testGapIsFiniteOnDeepOverlap() {
+        for (f0, f1) in [(JellyFeature.none, JellyFeature.ears), (.ears, .wings), (.spines, .none)] {
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [f0, f1], seed: 5)
+            FeatureClipTests.keep.append(d)
+            d.place([SIMD2(-0.8, 0.6), SIMD2(0.8, 0.6)])
+            for _ in 0..<20 { d.tick() }
+            _ = d.skinAll()
+            guard let t = ContactField.touchDistance(0, 1) else { XCTFail("no profile"); continue }
+            let ra = ContactField.root(0), u = simd_normalize(ContactField.root(1) - ra)
+            for depth in [0.1, 0.2, 0.3, 0.4, 0.5, 0.7] as [Float] {
+                for feats in [false, true] {
+                    let g = ContactField.gap(0, at: ra, 1, at: ra + u * (t - depth), features: feats)
+                    XCTAssertNotNil(g, "\(f0)/\(f1) \(depth) m deep: a gap, never nil")
+                    if let g, !feats { XCTAssertEqual(g, -depth, accuracy: 0.01, "\(f0)/\(f1): \(depth) m into each other reads about -\(depth)") }
+                    if let g { XCTAssertLessThan(g, 0, "\(f0)/\(f1) \(depth) m deep (features \(feats)): negative") }
+                }
+            }
+        }
+    }
+
     /// Cost: building the profiles inside the parallel skin pass, and the pair queries.
     func testProfilePerf() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6), SIMD2(0, 2.4), SIMD2(0, -1), SIMD2(2.4, 2.4)], features: [.ears, .wings, .spines, .daisy, .none], seed: 5)
