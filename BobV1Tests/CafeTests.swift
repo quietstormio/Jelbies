@@ -484,13 +484,6 @@ final class CafeTests: XCTestCase {
         for owned in 1...6 { XCTAssertLessThanOrEqual(owned + CafeTuning.regularCount(owned: owned, want: 2), max(owned, CafeTuning.maxBodies)) }
     }
 
-    func testOrderDraftIsSharedAndReset() {
-        let t = CafeTrip()
-        t.draft = [0: .swirl]; t.draftTable = true; t.draftWho = 2
-        t.begin()
-        XCTAssertTrue(t.draft.isEmpty); XCTAssertFalse(t.draftTable); XCTAssertEqual(t.draftWho, 0)
-    }
-
     // 11. the room's floor
 
     func testCafeDefKeepsTheFloor() {

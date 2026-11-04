@@ -41,21 +41,12 @@ struct CafeChrome: View {
                     .padding(.horizontal, 16).padding(.top, 8)
                     .allowsHitTesting(true)
                 }
-                if cafe.listOpen, !cardHidden {          // the order stack: above the menu (portrait: in the wall band above the Jelbies), beside it on the left in landscape
+                if cafe.listOpen, !cardHidden {
                     if vsc == .compact {
-                        HStack { CafeOrderStack(care: care, compact: true).frame(width: 200); Spacer() }
-                            .padding(.top, 62).padding(.leading, 12).frame(maxHeight: .infinity, alignment: .top)
-                    } else {
-                        VStack { CafeOrderStack(care: care, compact: false).padding(.horizontal, 22); Spacer() }
-                            .padding(.top, g.size.height * 0.2)
-                    }
-                }
-                if cafe.menuOpen, !cardHidden {          // the menu: the old card, a bottom card in portrait and a trailing panel in landscape
-                    if vsc == .compact {
-                        HStack { Spacer(); CafeMenuCard(care: care, compact: true).frame(width: min(360, g.size.width * 0.44)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
+                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeMenuCard(care: care, compact: false).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.bottom, 6) }
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -72,7 +63,7 @@ struct CafeChrome: View {
                         }
                         .buttonStyle(.plain).accessibilityLabel("Go home").accessibilityIdentifier("cafe-go-home-done")
                     }
-                    .padding(.bottom, 24).frame(maxWidth: vsc == .compact ? g.size.width * 0.5 : .infinity, alignment: .center)
+                    .padding(.bottom, 24).frame(maxWidth: vsc == .compact ? g.size.width * 0.55 : .infinity, alignment: .center)
                     .frame(maxWidth: .infinity, alignment: vsc == .compact ? .leading : .center)
                     .transition(.opacity)
                 }
@@ -101,7 +92,7 @@ struct CafeChrome: View {
                 Color.white.opacity(Double(cafe.wipe)).ignoresSafeArea().allowsHitTesting(cafe.wipe > 0).accessibilityHidden(true)
             }
             .frame(width: g.size.width, height: g.size.height)
-            .animation(.easeInOut(duration: 0.25), value: cafe.menuOpen)
+            .animation(.easeInOut(duration: 0.25), value: cafe.listOpen)
             .animation(.easeInOut(duration: 0.25), value: cafe.canGoHome)
             .animation(.easeInOut(duration: 0.25), value: cafe.phase == .done)
             .animation(.easeInOut(duration: 0.2), value: cafe.refusal)
@@ -138,110 +129,212 @@ struct CafeChrome: View {
     }
 }
 
-// MARK: - the order stack (above the menu)
+// MARK: - the itemized order card
 
-/// One rounded row per Jelbie who has a pick (or, after Order, per Jelbie: the receipt with a tick once he is served): his face, name, the treat's icon and name and the price.
-/// It grows as picks are made (a gentle spring), re-picking updates the row in place, and a tap on a row selects that Jelbie in the menu. "Same for everyone" shows a row for
-/// everybody with the price struck through and the 15 % off.
-struct CafeOrderStack: View {
+/// The order: a row per Jelbie (portrait, name, the chosen treat and its price; the active row is honey; tap a row to pick for that Jelbie), the daily special, Food and Drinks
+/// (Food is greyed for a Jelbie who is full), the stamp card, the total and Order. After Order the same card stays up as the receipt with a tick per served Jelbie.
+struct CafeOrderCard: View {
     let care: GameCare
     var compact: Bool
+    var maxHeight: CGFloat
+    @State private var picks: [Int: CafeTreatID] = [:]
+    @State private var table = false
+    @State private var who = 0
+    @State private var refusal: String?
+
     private var cafe: CafeTrip { care.cafe }
     private var editing: Bool { cafe.phase == .menu }
     private var ids: [Int] { Array(care.cafeDinerIDs.prefix(DiningGroup.maxDiners)) }
     private var special: CafeTreatID? { cafe.special ?? care.cafeSpecial }
-
-    private func treat(_ id: Int) -> CafeTreatID? {
-        if !editing { return cafe.order?.treat(for: id) }
-        if cafe.draftTable { return cafe.draft[ids.first ?? 0] ?? cafe.draft.values.first }
-        return cafe.draft[id]
-    }
-    private var rows: [(id: Int, treat: CafeTreatID)] { ids.compactMap { id in treat(id).map { (id, $0) } } }
+    private var order: CafeOrder { editing ? (table ? CafeOrder(picks: [:], forTable: picks[ids.first ?? 0] ?? picks.values.first) : CafeOrder(picks: picks)) : (cafe.order ?? CafeOrder()) }
+    private var free: Bool { editing ? cafe.stamps.isFull : cafe.wasFree }
+    private var total: Int { editing ? (free ? 0 : order.total(jellies: ids, special: special)) : cafe.charged }
+    private var complete: Bool { order.isComplete(jellies: ids) }
+    private var name: (Int) -> String { { care.jelly($0)?.name ?? "Jelbie" } }
 
     var body: some View {
-        VStack(spacing: 4) {
-            ForEach(rows, id: \.id) { r in row(r.id, r.treat).transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity)) }
+        VStack(spacing: 6) {
+            ViewThatFits(in: .vertical) {
+                scrolled
+                ScrollView(.vertical, showsIndicators: false) { scrolled }.scrollBounceBehavior(.basedOnSize)
+            }
+            footer
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.72), value: rows.map { "\($0.id)\($0.treat.rawValue)" })
-        .accessibilityElement(children: .contain).accessibilityIdentifier("cafe-orders")
+        .padding(compact ? 12 : 10)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 6, y: 3))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        .frame(maxHeight: maxHeight)
+        .onAppear {
+            if let w = UserDefaults.standard.string(forKey: "CafePicks") {          // capture aid: -CafePicks swirl,juice,latte
+                for (i, n) in w.split(separator: ",", omittingEmptySubsequences: false).enumerated() where ids.indices.contains(i) { if let t = CafeTreatID(rawValue: String(n)) { picks[ids[i]] = t } }
+            }
+            if UserDefaults.standard.bool(forKey: "CafeSameForAll") { table = true }
+            who = ids.first(where: { picks[$0] == nil }) ?? ids.first ?? 0
+        }
+        .accessibilityElement(children: .contain).accessibilityIdentifier("cafe-menu")
     }
 
-    private func row(_ id: Int, _ t: CafeTreatID) -> some View {
-        let served = cafe.served.contains(id), active = editing && !cafe.draftTable && cafe.draftWho == id
-        let base = CafeMenu.price(t, special: special)
-        let off = cafe.draftTable && editing || (!editing && (cafe.order?.forTable != nil))
-        let paid = off ? Int((Double(base) * CafeTuning.tableDiscount).rounded(.down)) : base
-        return Button { if editing { AudioHub.shared.uiTap(); cafe.draftWho = id; cafe.draftTable = false } } label: {
-            HStack(spacing: 7) {
-                JelbiePortrait(care: care, who: id, size: compact ? 28 : 30, head: true).accessibilityHidden(true)
-                Text(care.jelly(id)?.name ?? "Jelbie").font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 2)
-                thumb(t, size: 22)
-                if !(compact && off) { Text(CafeMenu.treat(t).name).font(SK.font(compact ? 11 : 12, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5) }
-                HStack(spacing: 2) {
-                    JellyCoinIcon(size: 13)
-                    if base != paid, !compact { Text("\(base)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit().lineLimit(1).fixedSize() }
-                    Text(cafe.wasFree && !editing ? "0" : "\(paid)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).fixedSize()
-                    if off && base != paid { Text("\u{2212}15%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
-                }
-                if !editing {
-                    Image(systemName: served ? "checkmark.circle.fill" : "circle.dotted").font(.system(size: 18, weight: .heavy))
-                        .foregroundStyle(served ? Color(hex: 0x3E9B63) : SK.muted).contentTransition(.symbolEffect(.replace))
+    private var scrolled: some View {
+        VStack(spacing: 4) {
+            slimHeader
+            VStack(spacing: 4) { ForEach(ids, id: \.self) { row($0) } }
+            if editing {
+                strip
+            }
+        }
+    }
+
+    /// Portrait: the title with the stamp card beside it (the card is short, the stage stays in view).
+    private var slimHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(cafe.stamps.isFull && editing ? "Free order!" : (editing ? "Café menu" : "Your order")).font(SK.font(compact ? 17 : 18, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                if let r = refusal ?? cafe.cardRefusal {
+                    Text(r).font(SK.font(11, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(2).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
+                } else if editing {
+                    specialLine
                 }
             }
-            .padding(.horizontal, 8).frame(minHeight: 36)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(SK.cream.opacity(0.97)).shadow(color: SK.shadow.opacity(0.22), radius: 4, y: 2))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.white.opacity(0.6), lineWidth: active ? 2 : 1))
+            Spacer(minLength: 2)
+            stampRow
+        }
+    }
+
+    /// Food and Drinks as two labelled rows, everything on screen at once (Food is greyed for a Jelbie who is full).
+    private var strip: some View {
+        VStack(spacing: 4) {
+            tileRow("Food", CafeMenu.foods)
+            tileRow("Drinks", CafeMenu.drinks)
+        }
+    }
+    private func tileRow(_ title: String, _ items: [CafeTreat]) -> some View {
+        HStack(spacing: 4) {
+            Text(title).font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 38, alignment: .leading).accessibilityHidden(true)
+            ForEach(items) { tile($0).frame(maxWidth: .infinity) }
+            ForEach(0..<max(0, 5 - items.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+        }
+    }
+
+    // MARK: pieces
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(editing ? "Café menu" : "Your order").font(SK.font(compact ? 18 : 20, .black)).foregroundStyle(SK.ink)
+                if let r = refusal ?? cafe.cardRefusal {
+                    Text(r).font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
+                } else {
+                    Text(editing ? "Tap a name, then pick for them" : "Served at your table").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+                }
+            }
+            Spacer(minLength: 4)
+            if editing, ids.count > 1 { tableToggle }
+        }
+    }
+
+    private func row(_ id: Int) -> some View {
+        let t = editing ? (table ? order.forTable : picks[id]) : order.treat(for: id)
+        let active = editing && !table && who == id
+        let served = cafe.served.contains(id)
+        return Button {
+            guard editing else { return }
+            AudioHub.shared.uiTap(); who = id; table = false
+        } label: {
+            HStack(spacing: 8) {
+                JelbiePortrait(care: care, who: id, size: 34, head: true).accessibilityHidden(true)
+                if compact, let t {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(name(id)).font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                        Text(CafeMenu.treat(t).name).font(SK.font(13, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.85)
+                    }
+                    Spacer(minLength: 2)
+                    thumb(t, size: 24)
+                    priceView(t)
+                } else if let t {
+                    Text(name(id)).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Spacer(minLength: 4)
+                    thumb(t, size: 26)
+                    Text(CafeMenu.treat(t).name).font(SK.font(13, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    priceView(t)
+                } else {
+                    Text(name(id)).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Spacer(minLength: 4)
+                    Text("Choose…").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
+                }
+                if !editing {
+                    Image(systemName: served ? "checkmark.circle.fill" : "circle.dotted").font(.system(size: 20, weight: .heavy))
+                        .foregroundStyle(served ? Color(hex: 0x3E9B63) : SK.muted)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .padding(.horizontal, 8).frame(minHeight: compact ? 44 : 36)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(active ? SK.honey : Color.white.opacity(0.7)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("cafe-who-\(id)")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(care.jelly(id)?.name ?? "Jelbie"): \(CafeMenu.treat(t).name), \(paid) JellyCoins\(!editing ? (served ? ", served" : ", on the way") : "")")
-        .accessibilityHint(editing ? "Picks this Jelbie in the menu" : "").accessibilityIdentifier("cafe-order-\(id)")
+        .accessibilityLabel("\(name(id)): \(t.map { "\(CafeMenu.treat($0).name), \(CafeMenu.price($0, special: special)) JellyCoins" } ?? "no treat yet")\(!editing ? (served ? ", served" : ", on the way") : "")")
+        .accessibilityHint(editing ? "Choose a treat for this Jelbie" : "")
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
-    private func thumb(_ t: CafeTreatID, size: CGFloat) -> some View {
-        Group {
-            if let img = StoreThumb.image("cafe-\(t.rawValue)", mesh: DiningModels.heldPiece(Consumables.cafeFood(t), index: 0, scale: 1.25)) { Image(uiImage: img).resizable().scaledToFit() }
-            else { Image(systemName: Consumables.cafeFood(t).symbol).foregroundStyle(SK.ink) }
+    @ViewBuilder private func priceView(_ t: CafeTreatID) -> some View {
+        if cafe.wasFree && !editing {
+            Text("Free").font(SK.font(12, .black)).foregroundStyle(.white).lineLimit(1).fixedSize().padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(SK.pinkStrong))
+        } else {
+            let full = CafeMenu.treat(t).price, now = CafeMenu.price(t, special: special)
+            let paid = table && editing ? Int((Double(now) * CafeTuning.tableDiscount).rounded(.down)) : now
+            HStack(spacing: 3) {
+                JellyCoinIcon(size: 14)
+                if paid != full, !compact { Text("\(full)").font(SK.font(11, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit().lineLimit(1).fixedSize() }
+                Text("\(paid)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).fixedSize()
+            }
+            .fixedSize().opacity(free ? 0.45 : 1)
         }
-        .frame(width: size, height: size).accessibilityHidden(true)
     }
-}
 
-// MARK: - the menu card (the old card: name chips, the treats, Same for everyone, the total, Order)
-
-struct CafeMenuCard: View {
-    let care: GameCare
-    var compact: Bool
-    @State private var refusal: String?
-    private var cafe: CafeTrip { care.cafe }
-    private var ids: [Int] { Array(care.cafeDinerIDs.prefix(DiningGroup.maxDiners)) }
-    private var picks: [Int: CafeTreatID] { cafe.draft }
-    private var table: Bool { cafe.draftTable }
-    private var who: Int { cafe.draftWho }
-    private var special: CafeTreatID? { cafe.special ?? care.cafeSpecial }
-    private var order: CafeOrder { table ? CafeOrder(picks: [:], forTable: picks[ids.first ?? 0] ?? picks.values.first) : CafeOrder(picks: picks) }
-    private var free: Bool { cafe.stamps.isFull }
-    private var total: Int { free ? 0 : order.total(jellies: ids, special: special) }
-    private var complete: Bool { order.isComplete(jellies: ids) }
-    private func tint(_ id: Int) -> Color {
-        let t = JellyRoster.tint(care.jelly(id)?.character ?? id)
-        return Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
+    private var specialLine: some View {
+        HStack(spacing: 4) {
+            if let n = foodNote {
+                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12, weight: .heavy)).foregroundStyle(Color(hex: 0xB0413E))
+                Text(n + " \u{00B7} try a drink").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(1).minimumScaleFactor(0.6).accessibilityIdentifier("cafe-full-note")
+            } else if let sp = special {
+                Image(systemName: "sparkles").font(.system(size: 12, weight: .heavy)).foregroundStyle(SK.honeyDeep)
+                Text("Daily special: \(CafeMenu.treat(sp).name) \u{2212}20%").font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(special.map { "Daily special: \(CafeMenu.treat($0).name), 20 percent off" } ?? "").accessibilityIdentifier("cafe-special")
     }
-    private func name(_ id: Int) -> String { care.jelly(id)?.name ?? "Jelbie" }
-    private var fullNote: String? {
-        if table { let f = ids.filter { !care.cafeCanEat($0) }; return f.isEmpty ? nil : "\(f.map(name).joined(separator: " & ")) full" }
+
+    private var foodNote: String? {
+        let full = ids.filter { !care.cafeCanEat($0) }
+        if table { return full.isEmpty ? nil : "\(full.map(name).joined(separator: " & ")) full" }
         return care.cafeCanEat(who) ? nil : "\(name(who))'s full"
     }
 
-    private var tableToggle: some View {
-        Button { AudioHub.shared.uiTap(); cafe.draftTable.toggle(); refusal = nil } label: {
-            HStack(spacing: 6) {
-                Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold))
-                Text(compact ? "All same" : "Same for everyone").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
-                if table || !(free || compact) { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
+    private func section(_ title: String, note: String?) -> some View {
+        HStack(spacing: 6) {
+            Text(title).font(SK.font(13, .black)).foregroundStyle(SK.ink)
+            if let note {
+                Text(note + (title == "Food" ? " \u{00B7} try a drink" : "")).font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(1).minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("cafe-full-note")
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6).padding(.top, 2)
+    }
+
+    private var tableToggle: some View {
+        Button { AudioHub.shared.uiTap(); table.toggle(); refusal = nil } label: {
+            HStack(spacing: 5) {
+                Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 14, weight: .bold))
+                Text("All same").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
+                if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
+            }
+            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 36)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
@@ -249,33 +342,69 @@ struct CafeMenuCard: View {
         .accessibilityValue(table ? "on" : "off")
         .accessibilityAddTraits(table ? .isSelected : [])
     }
-    private var orderButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            refusal = care.orderCafe(order)
-        } label: {
-            Text("Order").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize()
-                .padding(.horizontal, 16).frame(minHeight: 44)
-                .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
-        }
-        .buttonStyle(.plain).disabled(!complete).accessibilityIdentifier("cafe-order")
-        .accessibilityHint(complete ? "Places the order" : "Choose a treat for every Jelbie first")
+
+    // MARK: tiles
+
+    private func available(_ t: CafeTreat) -> Bool {
+        if table { return ids.allSatisfy { CafeRules.canOrder(t.id, tier: care.needs(for: $0).tier(.hunger)) } }
+        return CafeRules.canOrder(t.id, tier: care.needs(for: who).tier(.hunger))
     }
-    private var totalView: some View {
-        Group {
-            if free {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("Free").font(SK.font(17, .black)).foregroundStyle(SK.pinkStrong)
-                    Text("stamp card").font(SK.font(10, .heavy)).foregroundStyle(SK.pinkStrong).lineLimit(1).fixedSize()
+    private func isChosen(_ t: CafeTreat) -> Bool { table ? order.forTable == t.id : picks[who] == t.id }
+
+    private func tile(_ t: CafeTreat) -> some View {
+        let ok = available(t), chosen = isChosen(t), isSpecial = t.id == special
+        return Button { pick(t) } label: {
+            VStack(spacing: 1) {
+                ZStack(alignment: .topTrailing) {
+                    thumb(t.id, size: 26).frame(maxWidth: .infinity)
+                    if isSpecial { Text("\u{2212}20%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
                 }
-            } else {
-                HStack(spacing: 4) {
-                    JellyCoinIcon(size: 18)
-                    Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                Text(t.name).font(SK.font(9.5, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(height: 24)
+                HStack(spacing: 2) {
+                    JellyCoinIcon(size: 11)
+                    if isSpecial { Text("\(t.price)").font(SK.font(9, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(12, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: 56).padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
+            .opacity(ok ? 1 : 0.35)
         }
-        .accessibilityElement(children: .ignore).accessibilityLabel(free ? "Free, stamp card" : "\(total) JellyCoins").accessibilityIdentifier("cafe-total")
+        .buttonStyle(.plain).disabled(!ok).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
+        .accessibilityLabel("\(t.name), \(CafeMenu.price(t.id, special: special)) JellyCoins\(isSpecial ? ", daily special" : ""). \(ok ? t.blurb : "\(name(who)) is full, pick a drink.")")
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    private func pick(_ t: CafeTreat) {
+        AudioHub.shared.uiTap(); refusal = nil
+        if table { for id in ids { picks[id] = t.id } }
+        else {
+            picks[who] = t.id
+            if let next = ids.first(where: { picks[$0] == nil }) { who = next }          // on to the next Jelbie without a pick
+        }
+    }
+
+    private func thumb(_ t: CafeTreatID, size: CGFloat) -> some View {
+        Group {
+            if let img = StoreThumb.image("cafe-\(t.rawValue)", mesh: DiningModels.heldPiece(Consumables.cafeFood(t), index: 0, scale: 1.25)) {
+                Image(uiImage: img).resizable().scaledToFit()
+            } else { Image(systemName: Consumables.cafeFood(t).symbol).foregroundStyle(SK.ink) }
+        }
+        .frame(width: size, height: size).accessibilityHidden(true)
+    }
+
+    // MARK: footer (pinned): the stamp card, the total, Order
+
+    private var footer: some View {
+        VStack(spacing: compact ? 6 : 3) {
+            HStack(spacing: 8) {
+                totalView
+                Spacer(minLength: 2)
+                if editing, ids.count > 1 { tableToggle }
+                if editing { orderButton }
+            }
+        }
     }
 
     private var stampRow: some View {
@@ -286,143 +415,60 @@ struct CafeMenuCard: View {
                 let on = gift ? full : i < n
                 ZStack {
                     Circle().fill(Color.white.opacity(0.7))
-                        .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 9, weight: .heavy)).foregroundStyle(gift ? SK.pinkStrong.opacity(0.7) : SK.muted.opacity(0.35)))
+                        .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(gift ? SK.pinkStrong.opacity(0.7) : SK.muted.opacity(0.35)))
                         .overlay(Circle().strokeBorder(gift ? SK.pinkStrong.opacity(0.5) : SK.muted.opacity(0.25), lineWidth: 1.5))
                     if on {          // the stamp lands: it drops in big and settles
                         Circle().fill(SK.honey)
-                            .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.ink))
+                            .overlay(Image(systemName: gift ? "gift.fill" : "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.ink))
                             .overlay(Circle().strokeBorder(SK.honeyDeep, lineWidth: 1.5))
                             .transition(.scale(scale: 2.2).combined(with: .opacity))
                     }
                 }
-                .frame(width: 19, height: 19)
+                .frame(width: 20, height: 20)
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.5), value: n)
-        .accessibilityElement(children: .ignore).accessibilityLabel("Stamp card: \(n) of \(CafeStamps.paidVisits)\(full ? ", the next order is free" : "")").accessibilityIdentifier("cafe-stamps")
+        .accessibilityElement(children: .ignore).accessibilityLabel("Stamp card: \(n) of \(CafeStamps.slots)\(full ? ", the next order is free" : "")").accessibilityIdentifier("cafe-stamps")
     }
 
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(free ? "Free order!" : "Café menu").font(SK.font(compact ? 18 : 20, .black)).foregroundStyle(SK.ink)
-                    if let r = refusal ?? cafe.cardRefusal {
-                        Text(r).font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
-                    } else if let n = fullNote {
-                        Text(n + " \u{00B7} try a drink").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("cafe-full-note")
-                    } else if let sp = special {
-                        Text("\(compact ? "Special" : "Daily special"): \(CafeMenu.treat(sp).name) \u{2212}20%").font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("cafe-special")
-                    } else {
-                        Text(table ? "One treat for the table" : "A treat for each Jelbie").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
-                    }
+    private var totalView: some View {
+        let list = order.fullPrice(jellies: ids)
+        return Group {
+            if free {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Total").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                    Text("Free \u{00B7} stamp card").font(SK.font(13, .black)).foregroundStyle(SK.pinkStrong).lineLimit(1)
                 }
-                Spacer(minLength: 4)
-                stampRow
-            }
-            HStack(spacing: 6) {
-                ForEach(ids, id: \.self) { id in
-                    let sel = !table && who == id
-                    Button { AudioHub.shared.uiTap(); cafe.draftWho = id; cafe.draftTable = false } label: {
-                        HStack(spacing: 5) {
-                            Circle().fill(tint(id)).frame(width: 12, height: 12).overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1))
-                            Text(name(id)).font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
-                            if let t = (table ? order.forTable : picks[id]) { thumb(t, size: 20) }
-                        }
-                        .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: 44)
-                        .background(Capsule().fill(sel ? SK.honey : Color.white.opacity(0.7)))
-                    }
-                    .buttonStyle(.plain).accessibilityIdentifier("cafe-who-\(id)")
-                    .accessibilityLabel(name(id))
-                    .accessibilityValue((table ? order.forTable : picks[id]) != nil ? "treat chosen" : "no treat yet")
-                    .accessibilityHint("Choose a treat for this Jelbie")
-                    .accessibilityAddTraits(sel ? .isSelected : [])
+            } else {
+                HStack(spacing: 5) {
+                    Text("Total").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    JellyCoinIcon(size: 18)
+                    if list > total, total > 0 || !editing { Text("\(list)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: compact ? 5 : 6), count: compact ? 4 : 3), spacing: compact ? 5 : 6) { ForEach(CafeMenu.treats) { treatTile($0) } }
-            HStack(spacing: 8) {
-                if ids.count > 1 { tableToggle }
-                Spacer(minLength: 2)
-                totalView
-                orderButton
-            }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 6, y: 3))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-        .onAppear {
-            if let w = UserDefaults.standard.string(forKey: "CafePicks") {          // capture aid: -CafePicks swirl,juice,latte ("-" skips a Jelbie)
-                for (i, n) in w.split(separator: ",", omittingEmptySubsequences: false).enumerated() where ids.indices.contains(i) { if let t = CafeTreatID(rawValue: String(n)) { cafe.draft[ids[i]] = t } }
-            }
-            if UserDefaults.standard.bool(forKey: "CafeSameForAll") { cafe.draftTable = true }
-            cafe.draftWho = ids.first(where: { cafe.draft[$0] == nil }) ?? ids.first ?? 0
-        }
-        .accessibilityIdentifier("cafe-menu")
+        .fixedSize().layoutPriority(1)
+        .accessibilityElement(children: .ignore).accessibilityLabel(free ? "Total: free, stamp card" : "Total: \(total) JellyCoins").accessibilityIdentifier("cafe-total")
     }
 
-    private func pick(_ t: CafeTreat) {
-        AudioHub.shared.uiTap(); refusal = nil
-        if table { for id in ids { cafe.draft[id] = t.id } }
-        else {
-            cafe.draft[who] = t.id
-            if let next = ids.first(where: { cafe.draft[$0] == nil }) { cafe.draftWho = next }          // on to the next Jelbie without a pick
+    private var orderButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            refusal = care.orderCafe(order)
+        } label: {
+            Text("Order").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize()
+                .padding(.horizontal, 22).frame(minHeight: 44)
+                .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
         }
-    }
-    private func isChosen(_ t: CafeTreat) -> Bool { table ? order.forTable == t.id : picks[who] == t.id }
-    private func available(_ t: CafeTreat) -> Bool {
-        if table { return ids.allSatisfy { CafeRules.canOrder(t.id, tier: care.needs(for: $0).tier(.hunger)) } }
-        return CafeRules.canOrder(t.id, tier: care.needs(for: who).tier(.hunger))
-    }
-
-    private func thumb(_ t: CafeTreatID, size: CGFloat) -> some View {
-        Group {
-            if let img = StoreThumb.image("cafe-\(t.rawValue)", mesh: DiningModels.heldPiece(Consumables.cafeFood(t), index: 0, scale: 1.25)) {
-                Image(uiImage: img).resizable().scaledToFit()
-            } else { Image(systemName: Consumables.cafeFood(t).symbol).foregroundStyle(SK.ink) }
-        }
-        .frame(width: size, height: size)
-    }
-
-    /// The old tile (picture, name, price, perk), a little shorter so nine of them fit; greyed for a Jelbie who is full and Food; the daily special wears a badge.
-    private func treatTile(_ t: CafeTreat) -> some View {
-        let ok = available(t), chosen = isChosen(t), isSpecial = t.id == special
-        let now = CafeMenu.price(t.id, special: special)
-        return Button { pick(t) } label: {
-            VStack(spacing: 0) {
-                ZStack(alignment: .topTrailing) {
-                    thumb(t.id, size: compact ? 28 : 34).frame(maxWidth: .infinity)
-                    if isSpecial { Text("\u{2212}20%").font(SK.font(9, .black)).foregroundStyle(.white).padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
-                }
-                Text(t.name).font(SK.font(compact ? 10 : 12, .heavy)).foregroundStyle(SK.ink).lineLimit(compact ? 2 : 1).minimumScaleFactor(0.55).multilineTextAlignment(.center)
-                    .frame(height: compact ? 24 : nil)
-                HStack(spacing: 3) {
-                    JellyCoinIcon(size: compact ? 12 : 14)
-                    if isSpecial { Text("\(t.price)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
-                    Text("\(now)").font(SK.font(compact ? 12 : 14, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                    if compact { Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy)).foregroundStyle(SK.muted).accessibilityHidden(true) }
-                }
-                if !compact {
-                    HStack(spacing: 2) {
-                        Image(systemName: t.perk.symbol).font(.system(size: 9, weight: .heavy))
-                        Text(t.perk.title).font(SK.font(10, .heavy)).lineLimit(1).minimumScaleFactor(0.6)
-                    }
-                    .foregroundStyle(SK.muted)
-                }
-            }
-            .frame(maxWidth: .infinity).padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
-            .opacity(ok ? 1 : 0.35)
-        }
-        .buttonStyle(.plain).disabled(!ok).accessibilityIdentifier("cafe-treat-\(t.id.rawValue)")
-        .accessibilityLabel("\(t.name), \(now) JellyCoins\(isSpecial ? ", daily special" : ""). \(ok ? t.blurb : "\(name(who)) is full, pick a drink.")")
-        .accessibilityAddTraits(chosen ? .isSelected : [])
+        .buttonStyle(.plain).disabled(!complete).accessibilityIdentifier("cafe-order")
+        .accessibilityHint(complete ? "Places the order" : "Choose a treat for every Jelbie first")
     }
 }
 
 // MARK: - thought bubbles
 
-/// A small thought bubble with an icon over the Jelbie who is thinking (one at a time, 3...5 s): a coffee cup, cocoa, cake, a heart, a note, a sparkle, a friend's face or the stamp card.
+/// A small thought bubble with an icon over the Jelbie who is thinking (one at a time, 3...5 s): a coffee cup, cocoa, cake, a heart, a note, a sparkle or the stamp card (icons only, never a face).
 struct CafeThoughts: View {
     let care: GameCare
 
@@ -457,8 +503,6 @@ struct CafeThoughts: View {
             switch t.icon {
             case .symbol(let name):
                 Image(systemName: name).font(.system(size: 26, weight: .bold)).foregroundStyle(color(name))
-            case .friend(let id):
-                JelbiePortrait(care: care, who: id, size: 34, head: true)
             }
         }
         .frame(width: 80, height: 90)

@@ -168,7 +168,7 @@ nonisolated enum CafeBlock: String, Sendable {
 
 /// One thought bubble over a Jelbie at the table: an icon (no words), shown for a few seconds.
 nonisolated struct CafeThought: Equatable, Sendable {
-    enum Icon: Equatable, Sendable { case symbol(String), friend(Int) }
+    enum Icon: Equatable, Sendable { case symbol(String) }          // icons only: never a face
     var who: Int
     var icon: Icon
     var total: Float
@@ -176,10 +176,10 @@ nonisolated struct CafeThought: Equatable, Sendable {
     /// 0...1 through its life (for the pop in and out).
     var age: Float { total > 0 ? 1 - left / total : 1 }
 
-    /// The café-themed icons: coffee cup, cocoa, cake slice, heart, music note, sparkle, a friend's face, the stamp card.
+    /// The café-themed icons: coffee cup, cocoa, cake slice, heart, music note, sparkle, the stamp card (icons only).
     static func pick(who: Int, friends: [Int], using rng: inout some RandomNumberGenerator, seconds: ClosedRange<Float>) -> CafeThought {
         var icons: [Icon] = [.symbol("cup.and.saucer.fill"), .symbol("mug.fill"), .symbol("birthday.cake.fill"), .symbol("heart.fill"), .symbol("music.note"), .symbol("sparkles"), .symbol("seal.fill")]
-        for f in friends where f != who { icons.append(.friend(f)) }
+        _ = friends
         let t = Float.random(in: seconds, using: &rng)
         return CafeThought(who: who, icon: icons.randomElement(using: &rng) ?? .symbol("heart.fill"), total: t, left: t)
     }
