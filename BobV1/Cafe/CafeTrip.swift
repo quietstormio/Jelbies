@@ -22,6 +22,10 @@ final class CafeTrip {
     /// What the order cost and whether it was the stamp card's free one (the list's footer).
     var charged = 0
     var wasFree = false
+    /// The order being made (the menu card writes it, the order stack above it reads it): picks by Jelbie, "same for everyone", and whose chip is active.
+    var draft: [Int: CafeTreatID] = [:]
+    var draftTable = false
+    var draftWho = 0
     /// Today's special (set by GameCare when the menu opens).
     var special: CafeTreatID?
     /// The friendly line for a blocked entry (the toast); cleared after `toastSeconds`.
@@ -59,7 +63,7 @@ final class CafeTrip {
 
     func begin() {
         guard phase == .off else { return }
-        phase = .goOut; wipe = 0; holdFrames = 0; order = nil; cardRefusal = nil; serial += 1; served = []; charged = 0; wasFree = false
+        phase = .goOut; wipe = 0; holdFrames = 0; order = nil; cardRefusal = nil; serial += 1; served = []; charged = 0; wasFree = false; draft = [:]; draftTable = false; draftWho = 0
     }
     func goHome() {
         guard canGoHome else { return }

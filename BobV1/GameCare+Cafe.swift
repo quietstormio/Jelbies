@@ -61,6 +61,15 @@ final class CafeBook {
     var regularVisitors: [ParkVisitor] = []
     var regularIdle: [Int: Float] = [:]
     var regularHome: [Int: SIMD2<Float>] = [:]
+    /// 0 waiting (off the floor), 1 walking in, 2 at his table; seconds to his turn (-1 = not started); his own table.
+    var regularState: [Int: Int] = [:]
+    var regularWait: [Int: Float] = [:]
+    var regularTable: [Int: DiningSet] = [:]
+    /// The regulars' small tables and the meshes the room draws (the player's table frame is cached too, so the merge never loses it).
+    var extraTables: [DiningSet] = []
+    var extraFrames: [DiningFrame?] = []
+    var mainFrame: DiningFrame?
+    var forceDiningPush = false
     /// What each place had (place -> treat), kept for the lounge's cups.
     var lastTreatByPlace: [Int: CafeTreatID] = [:]
     var loungeIdle: [Int: Float] = [:]

@@ -270,7 +270,10 @@ final class DiningSet {
     func nextPiece(place i: Int) -> Int { DiningTiming.bitesPerServing - bitesLeft[i] }
     var totalBitesLeft: Int { bitesLeft.reduce(0, +) }
 
+    /// The café's regulars' little tables do not register a floor collider (the global list belongs to the player's table).
+    var registersCollider = true
     private func refreshColliders() {
+        guard registersCollider else { return }
         guard phase != .absent, phase != .poofing else { RoomLayout.dynamicBoxes = []; return }         // the collider goes the moment the tray starts to poof
         let s = max(scale, 0.001)
         RoomLayout.dynamicBoxes = [.init(centre: origin, half: layout.colliderHalf * s, height: (DiningDims.trayTop + DiningDims.trayRim) * s)]

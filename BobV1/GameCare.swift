@@ -829,7 +829,7 @@ final class GameCare {
         preview?.tick(dining: dining, bob: brain.position, dt: dt)
         #endif
         dining.update(dt: dt)
-        if let room = renderer?.room, let f = dining.frame(theme: room.theme) { room.setDining(f) }
+        if let room = renderer?.room { pushDiningFrames(room) }
         let out = wanted != nil || meal != nil || dining.isPresent || groupActive
         if out != trayOut { trayOut = out }
         let cp = focus.phase == .approaching || groupActive || bedtimeWalking

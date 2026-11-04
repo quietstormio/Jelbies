@@ -474,6 +474,23 @@ final class CafeTests: XCTestCase {
         }
     }
 
+    func testNoMoreThanFiveJelbiesOnScreen() {
+        XCTAssertEqual(CafeTuning.maxBodies, 5)
+        XCTAssertEqual(CafeTuning.regularCount(owned: 3, want: 2), 2)
+        XCTAssertEqual(CafeTuning.regularCount(owned: 3, want: 9), 2, "never more than two regulars")
+        XCTAssertEqual(CafeTuning.regularCount(owned: 4, want: 2), 1)
+        XCTAssertEqual(CafeTuning.regularCount(owned: 5, want: 2), 0)
+        XCTAssertEqual(CafeTuning.regularCount(owned: 1, want: 2), 2)
+        for owned in 1...6 { XCTAssertLessThanOrEqual(owned + CafeTuning.regularCount(owned: owned, want: 2), max(owned, CafeTuning.maxBodies)) }
+    }
+
+    func testOrderDraftIsSharedAndReset() {
+        let t = CafeTrip()
+        t.draft = [0: .swirl]; t.draftTable = true; t.draftWho = 2
+        t.begin()
+        XCTAssertTrue(t.draft.isEmpty); XCTAssertFalse(t.draftTable); XCTAssertEqual(t.draftWho, 0)
+    }
+
     // 11. the room's floor
 
     func testCafeDefKeepsTheFloor() {

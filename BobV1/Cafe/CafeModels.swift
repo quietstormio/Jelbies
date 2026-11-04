@@ -130,6 +130,9 @@ nonisolated enum CafeTuning {
     static let arriveHopStagger: Float = 0.25
     static let cheerSeconds: Float = 2.8, cheerStagger: Float = 0.3
     static let toastSeconds: Float = 2.5
+    /// At most this many Jelbies on screen in the café: the player's own plus the regulars who walk in (never more than 2 of them).
+    static let maxBodies = 5, maxRegulars = 2
+    static func regularCount(owned: Int, want: Int) -> Int { max(0, min(want, maxRegulars, maxBodies - owned)) }
     /// After the cheer: they stay at the table, sip, chat and think until Go home or this long.
     static let loungeSeconds: Float = 30
     /// The cosy lounge's mood boost (stronger and longer than at home): attention + a cozy perk that lasts this much longer than a café treat's.
