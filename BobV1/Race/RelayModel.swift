@@ -16,7 +16,7 @@ nonisolated enum RelayTuning {
     static func prize(place: Int) -> Int { prizes[min(max(place, 1), prizes.count) - 1] }
     static let legCount = 3
     /// Floor between the handoff line and the waiting runner's spot (world units): more than a body length, so the incoming runner never touches him.
-    static let boxGap: Float = 1.3
+    static let boxGap: Float = 1.7
     /// A waiting runner starts bouncing when the runner before him is this close to the line.
     static let bounceAhead: Float = 3.0
     /// Seconds between his bounces.
