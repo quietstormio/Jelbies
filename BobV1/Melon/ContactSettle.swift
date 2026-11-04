@@ -88,7 +88,7 @@ extension BlobBrain {
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air" } }
             px += d.x; pz += d.y
             stepRoot0 += d
-            if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
+            feet.shift(d)
             if gait.isBusy { gait.nudge(d) }
             if flapHop.active { flapHop.from += d }
             contactSim?.shift(byXZ: d)

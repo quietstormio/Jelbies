@@ -175,6 +175,10 @@ struct FootGait {
 
     mutating func reset() { active = false; t = 0 }
 
+    /// Translate the whole foot system by `d` (a rigid warp of an airborne body): both planted spots AND the running swing's start / end, so the swing does not land back on the un-warped spot
+    /// (the join glitch of the circle dance: the foot snapped to its old `to` at the end of the swing).
+    mutating func shift(_ d: SIMD2<Float>) { pos[0] += d; pos[1] += d; from += d; to += d }
+
     /// `out`: how far (world units) the swing foot swings sideways away from the body at mid swing; `tilt`: toe-up angle (rad) at mid swing
     /// so the sole shows from the front.
     mutating func begin(side s: Int, to target: SIMD2<Float>, toYaw ty: Float, peak h: Float, rate r: Float, swingFrac f: Float = 0.85,
