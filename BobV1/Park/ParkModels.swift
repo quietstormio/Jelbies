@@ -191,7 +191,7 @@ nonisolated struct ParkRandom: Sendable {
 nonisolated enum ParkPool {
     /// Items a visitor may wear (none covers the mouth).
     static let wearables: [WearLook] = [.beanieHoney, .beaniePink, .bucketHat, .bucketHatPink, .partyHat, .catEars, .bunnyEars, .frogEars, .flowerClip,
-                                        .sweatband, .bowtiePink, .bowtieSky, .bandanaCoral, .bandanaMint, .scarfSky, .glassesRound, .sunglassesStar]
+                                        .sweatband, .bowtiePink, .bowtieSky, .bandanaCoral, .bandanaMint, .scarfSky, .glassesRound, .sunglassesStar, .bucketHatHoney, .beanieMint, .bandanaSun, .scarfPlum]
 
     /// The whole pool: `ParkTuning.poolSize` visitors, every colour used, signatures and items mixed. The same on every device.
     static func generate(count: Int = ParkTuning.poolSize, seed: UInt64 = ParkTuning.poolSeed) -> [ParkVisitor] {

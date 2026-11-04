@@ -1,0 +1,48 @@
+{
+ "id": "beanie_mint",
+ "tris": 780,
+ "verts": 407,
+ "parts": [
+  {
+   "name": "beanie",
+   "tris": 700,
+   "verts": 365
+  },
+  {
+   "name": "pom",
+   "tris": 80,
+   "verts": 42
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.553,
+  -0.3655,
+  -0.5029
+ ],
+ "bounds_local_max": [
+  0.553,
+  0.1537,
+  0.4657
+ ],
+ "size": [
+  1.106,
+  0.5192,
+  0.9686
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cute",
+  "sweet"
+ ],
+ "price": 40,
+ "title": "Mint pom-pom beanie",
+ "desc": "Knit beanie with a ribbed cuff and a fluffy pom-pom. Sits above the brows.",
+ "colourway": "beanie_mint",
+ "batch": 4
+}

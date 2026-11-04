@@ -2187,11 +2187,135 @@
     "cool"
    ],
    "price": 450,
-   "tris": 4692,
-   "verts": 3082,
+   "tris": 3388,
+   "verts": 2174,
    "files": [
     "diamond_j.obj",
     "diamond_j.json"
+   ]
+  },
+  "bandana_sun": {
+   "title": "Sunny bandana",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 25,
+   "tris": 1192,
+   "verts": 819,
+   "files": [
+    "bandana_sun.obj",
+    "bandana_sun.json"
+   ]
+  },
+  "beanie_mint": {
+   "title": "Mint pom-pom beanie",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 40,
+   "tris": 780,
+   "verts": 407,
+   "files": [
+    "beanie_mint.obj",
+    "beanie_mint.json"
+   ]
+  },
+  "bib_honey": {
+   "title": "Honey jersey bib",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty"
+   ],
+   "price": 20,
+   "tris": 1024,
+   "verts": 551,
+   "files": [
+    "bib_honey.obj",
+    "bib_honey.json"
+   ]
+  },
+  "bib_mint": {
+   "title": "Mint jersey bib",
+   "slot": "body",
+   "anchor": "chest",
+   "anchor_rest": [
+    0.0,
+    0.355,
+    0.4683
+   ],
+   "tags": [
+    "sporty"
+   ],
+   "price": 20,
+   "tris": 1024,
+   "verts": 551,
+   "files": [
+    "bib_mint.obj",
+    "bib_mint.json"
+   ]
+  },
+  "bucket_hat_honey": {
+   "title": "Honey bucket hat",
+   "slot": "head",
+   "anchor": "head_top",
+   "anchor_rest": [
+    0.0,
+    1.3458,
+    0.0
+   ],
+   "tags": [
+    "cool",
+    "sporty"
+   ],
+   "price": 40,
+   "tris": 868,
+   "verts": 561,
+   "files": [
+    "bucket_hat_honey.obj",
+    "bucket_hat_honey.json"
+   ]
+  },
+  "scarf_plum": {
+   "title": "Plum cosy scarf",
+   "slot": "neck",
+   "anchor": "neck",
+   "anchor_rest": [
+    0.0,
+    0.47,
+    0.5055
+   ],
+   "tags": [
+    "cute",
+    "sweet"
+   ],
+   "price": 35,
+   "tris": 1238,
+   "verts": 750,
+   "files": [
+    "scarf_plum.obj",
+    "scarf_plum.json"
    ]
   }
  },

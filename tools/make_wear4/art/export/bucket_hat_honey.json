@@ -1,0 +1,48 @@
+{
+ "id": "bucket_hat_honey",
+ "tris": 868,
+ "verts": 561,
+ "parts": [
+  {
+   "name": "crown",
+   "tris": 476,
+   "verts": 253
+  },
+  {
+   "name": "brim",
+   "tris": 392,
+   "verts": 308
+  }
+ ],
+ "anchor_rest": [
+  0.0,
+  1.3458,
+  0.0
+ ],
+ "bounds_local_min": [
+  -0.6741,
+  -0.3778,
+  -0.6222
+ ],
+ "bounds_local_max": [
+  0.6741,
+  0.03,
+  0.5922
+ ],
+ "size": [
+  1.3482,
+  0.4078,
+  1.2143
+ ],
+ "anchor": "head_top",
+ "slot": "head",
+ "tags": [
+  "cool",
+  "sporty"
+ ],
+ "price": 40,
+ "title": "Honey bucket hat",
+ "desc": "Soft bucket hat: contrast band on a rounded crown and a floppy drooping brim (lowest brim edge y~1.0, above the brows). Rigid; carried with the head squash.",
+ "colourway": "bucket_hat_honey",
+ "batch": 4
+}
