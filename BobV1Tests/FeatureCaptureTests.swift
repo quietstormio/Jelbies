@@ -101,11 +101,12 @@ final class FeatureCaptureTests: XCTestCase {
                 }
                 ren.room!.setWear(opaque: f.opaque, translucent: f.translucent, bounds: [])
                 ren.room!.setShoes(sb.mesh)
-                ren.setJersey(d.worn[o].jersey(0), body: 0)
+                ren.setJersey(Self.forceJersey ?? d.worn[o].jersey(0), body: 0)
             } else {
                 ren.room!.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); ren.room!.setShoes(RoomMesh()); ren.setJersey(nil, body: 0)
             }
             ren.setMouth(0, body: 0)
+            ren.setBathLook(Self.forceBath ?? .dry, body: 0)
             var fp = FrameParams()
             fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
             fp.exposure = 1; fp.meshAlpha = 0

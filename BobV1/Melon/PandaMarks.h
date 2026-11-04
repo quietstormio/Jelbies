@@ -63,18 +63,16 @@ static float pandaBand(float3 Q) {
     float cz = Q.z / max(length(Q.xz), 0.05);              // 1 = straight ahead, -1 = back
     // a saddle: low and thin across the chest (under the mouth, between the arms), wider at the sides, swooping up over the shoulders at the back (the pom sits below it, on white)
     float top = mix(0.93, 0.68, smoothstep(-1.0, -0.10, cz));
-    top = mix(top, 0.525, smoothstep(0.1, 0.85, cz));
     float bottom = mix(0.66, 0.40, smoothstep(-1.0, -0.10, cz));
-    bottom = mix(bottom, 0.425, smoothstep(0.1, 0.85, cz));
-    return smoothstep(bottom - 0.02, bottom + 0.035, Q.y) * (1.0 - smoothstep(top - 0.05, top, Q.y));
+    float edge = smoothstep(bottom - 0.02, bottom + 0.035, Q.y) * (1.0 - smoothstep(top - 0.05, top, Q.y));
+    return edge * (1.0 - smoothstep(0.15, 0.70, cz));      // gone across the front: the chest / tummy stays white (the arms still join it over the shoulders and back)
 }
 /// Black arms and feet on the egg (the rest-space arm / foot shapes; soft over their fillet into the body).
 static float pandaLimbs(float3 Q) {
     float3 q = float3(fabs(Q.x), Q.y, Q.z);
     float arm = 1.0 - smoothstep(0.004, 0.034, pandaArmD(q));
-    float foot = 1.0 - smoothstep(0.004, 0.060, pandaFootD(q));      // (a wide soft fillet: the belly's underside crumples toward a lifted foot when he walks)
-    float under = 1.0 - smoothstep(0.125, 0.185, Q.y);               // the belly's underside is charcoal too
-    return max(max(arm, foot), under);
+    float foot = 1.0 - smoothstep(0.004, 0.075, pandaFootD(q));      // (a wide soft fillet: the belly's underside crumples toward a lifted foot when he walks)
+    return max(arm, foot);
 }
 
 /// The whole Panda paint. `col` is the shaded white; bm 1 = the egg, 2 = a black piece. `patch` returns the eye-patch weight (blush stays off it).

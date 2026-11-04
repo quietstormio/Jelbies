@@ -1218,11 +1218,10 @@ final class MelonRenderer {
                     let isPanda = pandaBody > 50.5 && pandaBody < 51.5
                     if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
                         var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
-                        let plain = usesBathShader(slot) || slot.jersey != nil          // (the bath / jersey shaders know no Panda marks: a plain white body there)
-                        ub.shape.w = plain ? 0 : 51
+                        ub.shape.w = 51
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
                         e.drawIndexedPrimitives(type: tri, indexCount: cap.indexFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
-                        ub.shape.w = plain ? 0 : 52
+                        ub.shape.w = 52
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - cap.indexFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: cap.indexFirst * 4)
                         e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)

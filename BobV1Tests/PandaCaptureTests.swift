@@ -12,6 +12,9 @@ import UIKit
 
 extension FeatureCaptureTests {
     static let pandaID = JellyRoster.pandaID
+    /// Capture hooks (composite reads them): a team jersey / a bath look forced on the one body drawn.
+    nonisolated(unsafe) static var forceJersey: WearTeam? = nil
+    nonisolated(unsafe) static var forceBath: BathLook? = nil
 
     func pandaDir() throws -> String {
         guard let d = ProcessInfo.processInfo.environment["PANDA_DIR"], !d.isEmpty else { throw XCTSkip("PANDA_DIR not set") }
@@ -103,6 +106,26 @@ extension FeatureCaptureTests {
             }
         }
         try pandaSave(tgrid(cells, cols: 2), "both_shaders.png")
+    }
+
+    /// The Panda in the bath shader (suds + wet + sparkle) and in the team jersey shader: the marks, the ears, the pom and the black limbs must all still be there.
+    func testPandaBathAndJersey() throws {
+        _ = try pandaDir(); DayClock.shared.forcedHour = 12
+        defer { Self.forceJersey = nil; Self.forceBath = nil }
+        var cells: [UIImage] = []
+        var wet = BathLook(); wet.wet = 0.8; wet.sparkle = 0.6; wet.visible = true
+        var suds = BathLook(); suds.visible = true
+        for r in 3..<9 { for c in 0..<BathLook.cols { suds.foam[r * BathLook.cols + c] = 0.9 } }
+        for (name, look) in [("bath: wet + sparkle", wet), ("bath: suds", suds)] {
+            Self.forceBath = look
+            for yaw in [Float(0.75), 2.4] { cells.append(pandaLabelled(try pandaStill(id: Self.pandaID, yaw: yaw, size: 480, dist: 3.9, lookY: 0.5, lift: 0.18), "\(name) \(yaw < 1 ? "3/4 front" : "3/4 back")")) }
+        }
+        Self.forceBath = nil
+        for team in [WearTeam.sky, WearTeam.pink] {
+            Self.forceJersey = team
+            for yaw in [Float(0.75), 2.4] { cells.append(pandaLabelled(try pandaStill(id: Self.pandaID, yaw: yaw, size: 480, dist: 3.9, lookY: 0.5, lift: 0.18), "jersey \(team) \(yaw < 1 ? "3/4 front" : "3/4 back")")) }
+        }
+        try pandaSave(tgrid(cells, cols: 4), "bath_jersey.png")
     }
 
     /// Teddy | Panda | Pearl in a row, each facing the game-like camera (three separate stills side by side: the bodies always face the same way).

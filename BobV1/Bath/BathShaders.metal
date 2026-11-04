@@ -33,6 +33,7 @@ static float teddyPomMask(float3 Q) {
     return f * f;
 }
 // TEDDYEAR-END
+#include "../Melon/PandaMarks.h"
 
 constant float BATH_PI = 3.14159265;
 
@@ -239,7 +240,10 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
-    if (bb > 0.5) {
+    float pandaPatch = 0.0;
+    if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
+        col = pandaPaint(col, Q, bm, pandaPatch);
+    } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
         if (bm < 1.5) {
@@ -497,7 +501,10 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
-    if (bb > 0.5) {
+    float pandaPatch = 0.0;
+    if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
+        col = pandaPaint(col, Q, bm, pandaPatch);
+    } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
         if (bm < 1.5) {
