@@ -98,6 +98,7 @@ extension BlobBrain {
         // planted: lean. d is along the axis to the partner: its length is the cm to close (+) or give (-); a lean of theta moves the contact point ~ theta/2 m (the cheeks sit ~0.5 m up)
         guard let pid = socialPartnerID, let o = socialBrain(pid) else { return }
         let toward = simd_dot(d, simd_normalize(o.position - position + SIMD2(1e-6, 0)))
+        if toward > 0, contactTurning { if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "turning" } }; return }          // (the skin's reach toward him changes with the heading: the gap of a body that is still turning says nothing - closing on it makes the shuffle step that turns him back)
         socialBook.trimPartner = pid
         let want = socialBook.leanTrim + toward * ContactTuning.leanPerMetre
         if abs(want) > ContactTuning.leanBudget {          // beyond the budget: one small shuffle step on the locomotion (soles stay put until then)
@@ -181,6 +182,13 @@ extension BlobBrain {
         guard simd_distance(ContactField.root(steerID), position) < 0.05, simd_distance(ContactField.root(p.steerID), p.position) < 0.05 else { return nil }          // (a profile of an older pose - the first tick of a session - says nothing about the yaw used here)
         guard let a = ext(self, -u, hm), let c = ext(p, u, hp) else { return nil }
         return a + c
+    }
+
+    /// The body is turning to the heading the stance wants (the drive's hold / face yaw), or a turn step is running.
+    var contactTurning: Bool {
+        if feet.active, abs(stepYawD) > 0.05 { return true }
+        if socialBook.hold, let fy = socialBook.faceYaw, abs(wrapAngle(fy - yaw)) > 0.2 { return true }
+        return false
     }
 
     /// A turn step inside a touching stance's own HOLD (a real, non-keep-apart step, no explicit parting): the turn belongs to the stance (nuzzle turns to the camera at the touch, the retarget turns back toward the partner ...).
