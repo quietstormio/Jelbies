@@ -258,6 +258,7 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
+            tripReturned(Array(book.homes.keys))
             book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; cafe.holdCheer = false; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
         }
     }

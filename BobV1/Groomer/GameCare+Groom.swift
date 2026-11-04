@@ -205,6 +205,7 @@ extension GameCare {
         }
         syncDecor()
         let ids = book.actors.filter { groom.picked.contains($0.id) }.map(\.id)
+        tripReturned(ids)
         let base = VoiceCoordinator.comeSpot
         for a in book.actors {
             guard let brain = a.brain else { continue }

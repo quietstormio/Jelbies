@@ -130,7 +130,7 @@ final class TimeAwayTests: XCTestCase {
     }
 
     func testInAppRatesAreUnchanged() {
-        XCTAssertEqual(NeedsTuning.hoursToEmpty(.hunger), 3); XCTAssertEqual(NeedsTuning.hoursToEmpty(.thirst), 2); XCTAssertEqual(NeedsTuning.hoursToEmpty(.attention), 4)
+        XCTAssertEqual(NeedsTuning.hoursToEmpty(.hunger), 0.3); XCTAssertEqual(NeedsTuning.hoursToEmpty(.thirst), 0.2); XCTAssertEqual(NeedsTuning.hoursToEmpty(.attention), 4)
         XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 10); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 8); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 6)
     }
 

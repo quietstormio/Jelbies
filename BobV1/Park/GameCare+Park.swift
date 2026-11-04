@@ -336,6 +336,7 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
+            tripReturned(book.comers, extraThirst: TripClockTuning.parkThirst)
             work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]
             book.comers = []
             park.card = nil
