@@ -64,15 +64,21 @@ static float pandaBand(float3 Q) {
     // a saddle: low and thin across the chest (under the mouth, between the arms), wider at the sides, swooping up over the shoulders at the back (the pom sits below it, on white)
     float top = mix(0.93, 0.68, smoothstep(-1.0, -0.10, cz));
     float bottom = mix(0.66, 0.40, smoothstep(-1.0, -0.10, cz));
-    float edge = smoothstep(bottom - 0.02, bottom + 0.035, Q.y) * (1.0 - smoothstep(top - 0.05, top, Q.y));
-    return edge * (1.0 - smoothstep(0.15, 0.70, cz));      // gone across the front: the chest / tummy stays white (the arms still join it over the shoulders and back)
+    float edge = smoothstep(bottom - 0.008, bottom + 0.014, Q.y) * (1.0 - smoothstep(top - 0.016, top, Q.y));          // crisp edges: no grey halo on the white body
+    return edge * (1.0 - smoothstep(0.0, 0.10, cz));      // ends at the front of the arms: the chest / tummy stays white (the saddle joins the arms over the shoulders and back)
 }
 /// Black arms and feet on the egg (the rest-space arm / foot shapes; soft over their fillet into the body).
 static float pandaLimbs(float3 Q) {
     float3 q = float3(fabs(Q.x), Q.y, Q.z);
-    float arm = 1.0 - smoothstep(0.004, 0.034, pandaArmD(q));
+    float arm = 1.0 - smoothstep(0.017, 0.023, pandaArmD(q));         // crisp: the arm is solid charcoal out to its own crease (the body's fillet lies inside d ~ 0.02), a ~6 mm anti-aliased edge
     float foot = 1.0 - smoothstep(0.004, 0.075, pandaFootD(q));      // (a wide soft fillet: the belly's underside crumples toward a lifted foot when he walks)
     return max(arm, foot);
+}
+
+/// The belly oval: Teddy's B2 belly (Shaders.metal / GfxBodyFast.metal belly block, crisp mode 3) maths 1:1, painted charcoal instead of cream.
+static float pandaBelly(float3 Q) {
+    float2 bp2 = float2(Q.x, Q.y - 0.335) / float2(0.335, 0.205);
+    return (1.0 - smoothstep(0.70, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
 }
 
 /// The whole Panda paint. `col` is the shaded white; bm 1 = the egg, 2 = a black piece. `patch` returns the eye-patch weight (blush stays off it).
@@ -81,7 +87,7 @@ static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) {
     patch = 0.0;
     if (bm > 1.5) { return blk; }
     patch = pandaEyePatch(Q);
-    float m = max(max(patch, pandaBand(Q)), pandaLimbs(Q));
+    float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
     return mix(col, blk, m);
 }
 
