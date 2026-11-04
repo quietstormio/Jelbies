@@ -86,6 +86,7 @@ extension BlobBrain {
         let airborne = gait.isBusy || flapHop.active || airBothFeet
         if airborne {
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air" } }
+            let d = simd_length(d) > 0.015 ? simd_normalize(d) * 0.015 : d          // (a rigid warp of the sim body strains the one-piece join: 1.5 cm a step at most, the settle asks again next step)
             px += d.x; pz += d.y
             stepRoot0 += d
             feet.shift(d)
