@@ -69,6 +69,9 @@ final class ContactPolishTests: XCTestCase {
 
     static let outDir: String? = { let d = ProcessInfo.processInfo.environment["CONTACT_OUT"] ?? ""; return d.isEmpty ? nil : d }()
     static let enforce = ProcessInfo.processInfo.environment["CONTACT_ENFORCE"] == "1"
+    /// CONTACT_ONLY=boop,bump,... runs just those emotes (names as in the catalogue; a quick iteration loop). Unset = all.
+    static let only: Set<String>? = { let v = ProcessInfo.processInfo.environment["CONTACT_ONLY"] ?? ""; return v.isEmpty ? nil : Set(v.split(separator: ",").map(String.init)) }()
+    static func wanted(_ e: ContactEntry) -> Bool { only.map { $0.contains(e.name) } ?? true }
     /// 0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl.
     static let names = OnePieceInvariantTests.characters.map { $0.0 }
     static let pairs: [(String, [Int])] = [("Bob+Teddy", [0, 4]), ("Teddy+Pearl", [4, 5]), ("Lavender+Pip", [3, 1]), ("Pip+Teddy", [1, 4]), ("Moss+Pearl", [2, 5])]
@@ -376,7 +379,7 @@ final class ContactPolishTests: XCTestCase {
     private func pairTest(_ pi: Int) throws {
         let (label, cast) = Self.pairs[pi]
         var rs: [Result] = []
-        for e in Self.pairEntries { rs.append(run(e, cast: cast, castName: label).0) }
+        for e in Self.pairEntries where Self.wanted(e) { rs.append(run(e, cast: cast, castName: label).0) }
         Self.write(rs, file: "results_\(label).tsv")
         try finish(rs, label)
     }
@@ -388,7 +391,7 @@ final class ContactPolishTests: XCTestCase {
 
     func testGroups() throws {
         var rs: [Result] = []
-        for (label, cast) in Self.trios { for e in Self.groupEntries { rs.append(run(e, cast: cast, castName: label).0) } }
+        for (label, cast) in Self.trios { for e in Self.groupEntries where Self.wanted(e) { rs.append(run(e, cast: cast, castName: label).0) } }
         Self.write(rs, file: "results_groups.tsv")
         try finish(rs, "groups")
     }
