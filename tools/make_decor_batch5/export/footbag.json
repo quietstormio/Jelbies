@@ -1,0 +1,40 @@
+{
+ "id": "footbag",
+ "tris": 1440,
+ "verts": 1176,
+ "sub_meshes": [
+  {
+   "name": "ball",
+   "pivot": [
+    0.0,
+    0.17,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 1440
+  }
+ ],
+ "bounds_min": [
+  -0.17,
+  0.0,
+  -0.1691
+ ],
+ "bounds_max": [
+  0.17,
+  0.34,
+  0.1691
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ],
+ "footprint_half": [
+  0.17,
+  0.17
+ ],
+ "height": 0.34,
+ "spots": 1,
+ "solid": false,
+ "roll_radius": 0.17
+}

@@ -111,5 +111,7 @@ nonisolated enum AICatalogRegistry {
         // batch 4
         .beachball: ["beach ball", "beachball"], .playtunnel: ["tunnel", "play tunnel", "crawl tunnel"], .ringstacker: ["ring stacker", "rings", "stacker"], .toyrocket: ["rocket", "toy rocket"],
         .plushdino: ["dino", "dinosaur", "plush dino"], .kickscooter: ["scooter", "kick scooter"],
+        // batch 5
+        .footbag: ["hacky sack", "footbag", "sack"], .frisbee: ["frisbee", "disc"], .skateboard: ["skateboard", "skate board", "board"], .hoop: ["hoop", "basketball hoop", "basket"],
     ]
 }

@@ -22,7 +22,7 @@ extension DecorKind {
         case .toyrocket: return DecorSpec(half: SIMD2(0.86, 0.42), height: 1.4, solid: true, units: 2, corner: 0.15, reach: 1, box: true)
         case .plushdino: return DecorSpec(half: SIMD2(0.62, 0.62), height: 1.42, solid: true, units: 1, corner: 0.3, reach: 1, box: true)
         case .kickscooter: return DecorSpec(half: SIMD2(0.80, 0.52), height: 1.0, solid: true, units: 1, corner: 0.1, reach: 1, box: true)
-        default: return parkSpec
+        default: return batch5Spec
         }
     }
     /// The saddle of the ride-on rocket (rocket frame: the cushion's top, a little behind the middle).
@@ -49,14 +49,14 @@ extension DecorKind {
         case .playtunnel: return .decorPeek
         case .ringstacker, .plushdino: return .decorBoop
         case .kickscooter: return .decorSlide
-        default: return nil
+        default: return batch5Interaction
         }
     }
     var batch4Title: String {
         switch self {
         case .beachball: return "Beach ball"; case .playtunnel: return "Play tunnel"; case .ringstacker: return "Ring stacker"
         case .toyrocket: return "Toy rocket"; case .plushdino: return "Plush dino"; case .kickscooter: return "Kick scooter"
-        default: return parkTitle
+        default: return batch5Title
         }
     }
     var batch4Use: String {
@@ -67,7 +67,7 @@ extension DecorKind {
         case .toyrocket: return "A ride-on rocket. Jelbies climb on and rock with it, its flame flickering."
         case .plushdino: return "A squishy plush dino. Jelbies hug it, one or two at a time, and it wobbles and swishes its tail."
         case .kickscooter: return "Boop it, the bell dings and the handlebars twist."
-        default: return parkUse
+        default: return batch5Use
         }
     }
     /// The shop symbols (SF Symbols) and JellyCoins prices of the batch (earned currency; toys 30...85).

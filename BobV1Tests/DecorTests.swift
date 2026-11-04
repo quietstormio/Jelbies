@@ -66,7 +66,7 @@ final class DecorTests: XCTestCase {
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
         // prices and spots come from the Blender exports' JSON
         let json: [DecorKind: (Int, Int)] = [.petbed: (90, 3),
-                                             .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 3), .monstera: (70, 1), .duck: (25, 1),
+                                             .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 3), .monstera: (70, 1),
                                              .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .soccerball: (35, 1), .minigoal: (70, 2)]
         for (k, v) in json { XCTAssertEqual(StoreCatalog.item(k.storeID)?.price, v.0, "\(k) price"); XCTAssertEqual(k.spec.units, v.1, "\(k) spots") }
     }
@@ -75,15 +75,15 @@ final class DecorTests: XCTestCase {
         let b = book()
         fillRoom(b)
         XCTAssertEqual(b.roomUnitsUsed, 10)
-        b.grant("decor-duck")
-        XCTAssertFalse(b.canPlace(StoreCatalog.item("decor-duck")!), "room full")
-        XCTAssertNil(b.place("decor-duck"))
-        XCTAssertNotNil(b.placeBlocker(StoreCatalog.item("decor-duck")!))
+        b.grant("decor-drum")
+        XCTAssertFalse(b.canPlace(StoreCatalog.item("decor-drum")!), "room full")
+        XCTAssertNil(b.place("decor-drum"))
+        XCTAssertNotNil(b.placeBlocker(StoreCatalog.item("decor-drum")!))
         // putting one away frees the spots; the big one needs 2
         let bean = b.placedDecor.first { $0.kind == .aquarium }!
         b.putAway(bean.uid)
         XCTAssertEqual(b.roomUnitsUsed, 8)
-        XCTAssertNotNil(b.place("decor-duck"))
+        XCTAssertNotNil(b.place("decor-drum"))
         XCTAssertNil(b.place("decor-soccerball"), "no soccer ball owned")
     }
 
@@ -176,7 +176,7 @@ final class DecorTests: XCTestCase {
         XCTAssertEqual(o.count("sushi"), 2)
         XCTAssertTrue(o.ownsLook(.sneakerMint))
         XCTAssertTrue(o.placedDecor.isEmpty)
-        XCTAssertNotNil({ () -> PlacedDecor? in o.grant("decor-duck"); return o.place("decor-duck") }())
+        XCTAssertNotNil({ () -> PlacedDecor? in o.grant("decor-drum"); return o.place("decor-drum") }())
     }
 
     // MARK: obstacles

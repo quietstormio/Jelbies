@@ -34,6 +34,8 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     case beachball, playtunnel, ringstacker, toyrocket, plushdino, kickscooter
     // Park-only (2026-10-25, Park/ParkToys.swift): never sold; placed permanently in the Park
     case seesaw, springrider, sandbox
+    // batch 5 (2026-11-04, Room/DecorKind+Batch5.swift): sport toys
+    case footbag, frisbee, skateboard, hoop
 
     /// The first eight pieces (circle placement geometry, as they were built).
     static let original: [DecorKind] = [.beanbag, .cushion, .plant, .ball, .rug, .toybox, .nightlight, .bouncymat]
@@ -43,17 +45,17 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     var category: Category {
         switch self {
         case .seesaw, .springrider, .sandbox, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
-        default: return Self.batch3Toys.contains(self) || Self.batch4Toys.contains(self) ? .toys : .furniture
+        default: return Self.batch3Toys.contains(self) || Self.batch4Toys.contains(self) || Self.batch5Toys.contains(self) ? .toys : .furniture
         }
     }
     /// Pieces that roll when kicked (the ball and its cousins).
-    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .soccerball || self == .beachball }
+    var rolls: Bool { self == .ball || self == .yarnball || self == .toycar || self == .soccerball || self == .beachball || self == .footbag || self == .frisbee || self == .skateboard }
     /// Round things a pair of Jellies may pass to each other.
-    var isBallLike: Bool { self == .ball || self == .yarnball || self == .soccerball || self == .beachball }
+    var isBallLike: Bool { self == .ball || self == .yarnball || self == .soccerball || self == .beachball || self == .footbag || self == .frisbee }
     /// Radius of the rolling piece for the wall bounce and the roll angle.
     var rollRadius: Float {
         switch self {
-        case .ball: return 0.27; case .yarnball: return 0.30; case .soccerball: return SoccerTuning.radius; case .toycar: return 0.42; case .beachball: return 0.34
+        case .ball: return 0.27; case .yarnball: return 0.30; case .soccerball: return SoccerTuning.radius; case .toycar: return 0.42; case .skateboard: return 0.42; case .footbag: return 0.17; case .frisbee: return 0.16; case .beachball: return 0.34
         default: return 0.27
         }
     }
@@ -144,7 +146,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .rug: return "A cosy little rug. Small things can sit on it."
         case .toybox: return "Jelbies lean over to peek in at the toys."
         case .nightlight: return "A glowing mushroom for when the room goes dark."
-        case .bouncymat: return "A big springy mat. Jelbies hop on it and it dips."
+        case .bouncymat: return "A big trampoline pad. Jelbies bounce on it and it dips."
         case .loveseat: return "A two-seat sofa. Two friends hop up and cuddle."
         case .petbed: return "A cosy pet bed. A sleepy Jelbie hops in and curls up."
         case .pouf: return "A round pouf. Jelbies hop on and stand on it."
@@ -159,9 +161,9 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .slide: return "Climb the steps and whoosh down the slide."
         case .monstera: return "A big leafy plant. Jelbies boop it and the leaves wiggle."
         case .duck: return "A squeaky rubber duck. Boop it for a squeak."
-        case .blocks: return "A tower of blocks. A kick sends them tumbling."
+        case .blocks: return "A stack of blocks. A kick sends them tumbling."
         case .spintop: return "Boop it and it spins, wobbles and falls over."
-        case .toycar: return "A little car. Kick it and it rolls along."
+        case .toycar: return "A remote-control car. Kick it and it speeds along."
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelbies kick it with their stubby legs, dribble it and pass it."
@@ -172,12 +174,12 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     var title: String {
         switch self {
         case .beanbag: return "Beanbag"; case .cushion: return "Floor cushion"; case .plant: return "Potted plant"; case .ball: return "Bouncy ball"
-        case .rug: return "Small rug"; case .toybox: return "Toy box"; case .nightlight: return "Night light"; case .bouncymat: return "Bouncy mat"
+        case .rug: return "Small rug"; case .toybox: return "Toy box"; case .nightlight: return "Night light"; case .bouncymat: return "Trampoline pad"
         case .loveseat: return "Loveseat"; case .petbed: return "Pet bed"; case .pouf: return "Pouf"; case .rockingchair: return "Rocking chair"
         case .armchair: return "Armchair"; case .swing: return "Swing"; case .diningset: return "Dining set"; case .bookshelf: return "Bookshelf"
         case .wardrobe: return "Wardrobe"; case .divider: return "Room divider"; case .floorlamp: return "Floor lamp"; case .slide: return "Slide"
-        case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block tower"; case .spintop: return "Spinning top"
-        case .toycar: return "Toy car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"
+        case .monstera: return "Monstera"; case .duck: return "Rubber duck"; case .blocks: return "Block stack"; case .spintop: return "Spinning top"
+        case .toycar: return "RC car"; case .yarnball: return "Yarn ball"; case .drum: return "Drum"
         case .soccerball: return "Soccer ball"; case .minigoal: return "Mini goal"
         default: return batch3Title
         }
@@ -736,12 +738,13 @@ final class DecorField {
                 if f.kind == .blocks { Self.tickBlocks(&a, dt: dt, uid: uid, held: held == uid) }
                 if f.kind == .soccerball, a.moving { Self.rollSoccer(&a, dt: dt, uid: uid, feet: feet, bodies: bodies) }
                 else if f.kind.rolls, a.moving { Self.roll(&a, dt: dt, ignoring: uid, feet: feet, kind: f.kind) }
-                if f.kind == .toycar, a.moving {
+                if f.kind == .frisbee, a.moving { a.spinAngle += min(simd_length(a.vel), 6) * dt * 2.5 }          // (batch 5: the disc spins flat as it skids)
+                if f.kind.carLike, a.moving {
                     let want = atan2f(-a.vel.x, -a.vel.y)
                     var d = want - a.heading
                     while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
                     a.heading += d * min(1, dt * 10)
-                    a.wheel += simd_length(a.vel) * dt / 0.17
+                    a.wheel += simd_length(a.vel) * dt / f.kind.wheelRadius
                 }
                 if f.kind == .yarnball, a.moving {
                     let want = atan2f(-a.vel.x, -a.vel.y)
@@ -817,7 +820,7 @@ final class DecorField {
     }
     static func roll(_ a: inout DecorAnim, dt: Float, ignoring uid: Int, feet: [DecorFoot], kind: DecorKind = .ball) {
         let r = kind.rollRadius
-        a.vel *= expf(kind == .toycar ? -1.4 * dt : -1.15 * dt)
+        a.vel *= expf(kind.carLike ? -1.4 * dt : -1.15 * dt)
         if simd_length(a.vel) < 0.06 { a.vel = .zero; return }
         var p = a.pos + a.vel * dt
         // the visible floor
