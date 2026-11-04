@@ -139,7 +139,7 @@ extension BlobBrain {
         }
         guard let s = a.social else { return }
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
-        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: true, support: true)
+        ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }
 }
 
@@ -218,12 +218,12 @@ extension BlobBrain {
     func sleepPileTick() {
         guard ContactField.enabled, idleState.kind == .sleep, social == nil else { return }
         for o in socialOthers() where o !== self && !o.isNapping && !o.held && o.social == nil && o.idleState.kind != .sleep {          // (a neighbour who is up: the sleeper does not move, the neighbour is kept off)
-            ContactSettle.step(self, o, target: ContactStance.near, anchoredA: true, onlySeparate: true, features: true, urgent: true, support: true)
+            ContactSettle.step(self, o, target: ContactStance.near, anchoredA: true, onlySeparate: true, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
         }
         for o in socialOthers() where o !== self && isNapping && o.isNapping && steerID < o.steerID {
             let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
             guard let g = ContactField.gap(steerID, o.steerID, features: true), g < 0.7 else { continue }
-            ContactSettle.step(self, o, target: ContactStance.hold, anchoredA: !older, anchoredB: older, features: true, urgent: true, support: true)
+            ContactSettle.step(self, o, target: ContactStance.hold, anchoredA: !older, anchoredB: older, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
         }
     }
 }

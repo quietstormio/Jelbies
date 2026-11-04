@@ -16,6 +16,7 @@ import simd
 nonisolated enum ContactSettleTuning {
     nonisolated(unsafe) static var deadband: Float = 0.005, maxStep: Float = 0.015, gain: Float = 0.15, lead: Float = 3          // lead: frames the skin trails the root (the error is judged where it is going)
     /// Within `fineBand` of the target the gap is trimmed on its slow average (a lying body breathes +-1 cm, a jelly wobbles): 0 = off.
+    nonisolated(unsafe) static var stanceUrgent = false          // the stance ticks' fast way out of an overlap (A/B: off once the geometry is right)
     nonisolated(unsafe) static var fineBand: Float = 0, fineAlpha: Float = 1.0 / 45, fineGain: Float = 0.12
 }
 
