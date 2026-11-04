@@ -40,17 +40,17 @@ final class StoreRoomsTests: XCTestCase {
     func testDecorIsPerRoom() {
         let d = suite("decor")
         let (b, _) = book(0, d: d)
-        b.grant("room-loft"); b.grant("decor-cushion", 2)
-        XCTAssertNotNil(b.place("decor-cushion"))
+        b.grant("room-loft"); b.grant("decor-plant", 2)
+        XCTAssertNotNil(b.place("decor-plant"))
         XCTAssertEqual(b.placedDecor.count, 1)
         XCTAssertTrue(b.moveIn(.loft))
         RoomLayout.apply(RoomCatalog.loft)
         XCTAssertEqual(b.currentRoom, .loft)
         XCTAssertTrue(b.placedDecor.isEmpty)
-        XCTAssertEqual(b.unplaced("decor-cushion"), 1)
-        XCTAssertNotNil(b.place("decor-cushion"))
-        XCTAssertNil(b.place("decor-cushion"), "only two cushions are owned")
-        XCTAssertEqual(b.placedCount("decor-cushion"), 2)
+        XCTAssertEqual(b.unplaced("decor-plant"), 1)
+        XCTAssertNotNil(b.place("decor-plant"))
+        XCTAssertNil(b.place("decor-plant"), "only two plants are owned")
+        XCTAssertEqual(b.placedCount("decor-plant"), 2)
         // a new book on the same defaults keeps both lists and the current room
         let b2 = StoreBook(wallet: DropsWallet(persists: false), persists: true, defaults: d, key: "book")
         Self.keep.append(b2)
@@ -60,28 +60,28 @@ final class StoreRoomsTests: XCTestCase {
         XCTAssertTrue(b.moveIn(.home))
         XCTAssertEqual(b.currentRoom, .home); XCTAssertEqual(b.placedDecor.count, 1)
         b.putAwayAll()
-        XCTAssertEqual(b.placedCount("decor-cushion"), 1, "put away clears only this room")
+        XCTAssertEqual(b.placedCount("decor-plant"), 1, "put away clears only this room")
         XCTAssertTrue(b.moveIn(.loft)); XCTAssertEqual(b.placedDecor.count, 1)
     }
 
     func testCapacityPerRoom() {
         let (b, _) = book(0, d: suite("cap"), persists: false)
-        b.grant("room-loft"); b.grant("decor-cushion", 12)
+        b.grant("room-loft"); b.grant("decor-plant", 12)
         var n = 0
-        while b.place("decor-cushion") != nil { n += 1 }
+        while b.place("decor-plant") != nil { n += 1 }
         XCTAssertGreaterThan(n, 0)
-        XCTAssertGreaterThan(b.unplaced("decor-cushion"), 0)
+        XCTAssertGreaterThan(b.unplaced("decor-plant"), 0)
         RoomLayout.apply(RoomCatalog.home)
         b.moveIn(.loft); RoomLayout.apply(RoomCatalog.loft)
         XCTAssertEqual(b.roomUnitsUsed, 0)
-        XCTAssertTrue(b.canPlace(StoreCatalog.item("decor-cushion")!))
-        XCTAssertNotNil(b.place("decor-cushion"))
+        XCTAssertTrue(b.canPlace(StoreCatalog.item("decor-plant")!))
+        XCTAssertNotNil(b.place("decor-plant"))
         XCTAssertEqual(b.roomUnitsUsed, 1)
     }
 
     func testOldSaveDecodes() throws {
         let d = suite("old")
-        let old = #"{"counts":{"decor-cushion":1},"pages":[],"wearables":[],"worn":{},"starterGiven":true,"newItems":0,"placed":[],"placedAt":[{"uid":1,"kind":"cushion","x":1.0,"z":0.5}],"nextDecorUID":2}"#
+        let old = #"{"counts":{"decor-plant":1},"pages":[],"wearables":[],"worn":{},"starterGiven":true,"newItems":0,"placed":[],"placedAt":[{"uid":1,"kind":"plant","x":1.0,"z":0.5}],"nextDecorUID":2}"#
         d.set(Data(old.utf8), forKey: "book")
         let (b, _) = book(0, d: d)
         XCTAssertEqual(b.currentRoom, .home)

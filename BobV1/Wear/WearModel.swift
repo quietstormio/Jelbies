@@ -75,7 +75,7 @@ nonisolated enum WearRules {
         let up: Float
         switch l {
         case .pearls, .chainGold, .diamondJ: up = 0.20
-        case .scarfCosy, .scarfSky, .whistleCoach, .bandanaCoral, .bandanaMint: up = 0.19
+        case .scarfCosy, .scarfSky, .scarfPlum, .whistleCoach, .bandanaCoral, .bandanaMint, .bandanaSun: up = 0.19
         case .scarfSilk, .bowtiePink, .bowtieSky: up = 0.22
         case .lei: up = 0.23
         default: return nil
@@ -141,7 +141,7 @@ nonisolated enum WearRules {
     /// Which looks have any surface-bound part.
     static func isSurface(_ l: WearLook) -> Bool {
         switch l {
-        case .bandanaCoral, .bandanaMint, .bibPink, .bibSky, .sashPink, .sashSky, .heroPatch, .sweatband, .scarfCosy, .scarfSky, .medalGold,
+        case .bandanaCoral, .bandanaMint, .bandanaSun, .bibHoney, .bibMint, .scarfPlum, .bibPink, .bibSky, .sashPink, .sashSky, .heroPatch, .sweatband, .scarfCosy, .scarfSky, .medalGold,
              .whistleCoach, .pearls, .tutuPink, .capeHero, .backpackSky, .monocleGold, .gogglesAviator, .lei, .hoodie, .raincoat,
              .vestPuffer, .cardiganCable, .bagCrossbody, .scarfSilk, .chainGold, .diamondJ, .bowtiePink, .bowtieSky: return true
         default: return false

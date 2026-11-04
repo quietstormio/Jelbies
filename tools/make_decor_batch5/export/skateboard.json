@@ -1,0 +1,80 @@
+{
+ "id": "skateboard",
+ "tris": 2872,
+ "verts": 1588,
+ "sub_meshes": [
+  {
+   "name": "deck",
+   "pivot": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 1944
+  },
+  {
+   "name": "wheel00",
+   "pivot": [
+    -0.2438,
+    0.1063,
+    -0.375
+   ],
+   "material": "plain",
+   "tris": 232
+  },
+  {
+   "name": "wheel01",
+   "pivot": [
+    -0.2438,
+    0.1063,
+    0.375
+   ],
+   "material": "plain",
+   "tris": 232
+  },
+  {
+   "name": "wheel10",
+   "pivot": [
+    0.2438,
+    0.1063,
+    -0.375
+   ],
+   "material": "plain",
+   "tris": 232
+  },
+  {
+   "name": "wheel11",
+   "pivot": [
+    0.2438,
+    0.1063,
+    0.375
+   ],
+   "material": "plain",
+   "tris": 232
+  }
+ ],
+ "bounds_min": [
+  -0.345,
+  0.0,
+  -0.693
+ ],
+ "bounds_max": [
+  0.345,
+  0.3542,
+  0.693
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ],
+ "footprint_half": [
+  0.3,
+  0.78
+ ],
+ "height": 0.34,
+ "spots": 1,
+ "solid": false,
+ "roll_radius": 0.42
+}

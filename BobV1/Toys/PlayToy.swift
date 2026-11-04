@@ -56,7 +56,7 @@ enum PlayToyRegistry {
 /// The thrown balls: the store's bouncy, soccer and beach balls (the decor items; owned = bought, placed in the room or not).
 @MainActor
 final class BallToy: PlayToy {
-    static let kinds: [DecorKind] = [.ball, .soccerball, .beachball]
+    static let kinds: [DecorKind] = [.ball, .soccerball, .beachball, .footbag, .frisbee]
     let kind: DecorKind
     init(kind: DecorKind) { self.kind = kind }
     var toyID: String { "ball-" + kind.rawValue }

@@ -28,7 +28,7 @@ final class FoodDecorPerfTests: XCTestCase {
         let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
         for k in DecorTests.fullMix { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID)) }
         XCTAssertEqual(book.placedDecor.count, DecorTests.fullMix.count)
-        let bagUID = try XCTUnwrap(book.placedDecor.first { $0.kind == .beanbag }?.uid)
+        let bagUID = try XCTUnwrap(book.placedDecor.first { $0.kind == .aquarium }?.uid)
 
         var extraMs = 0.0, extraMeshes = (tray: 0, decor: 0, shoes: 0)
         /// One frame of work: sim step + skin happen in `frame()` (skin) and here (sim); `loaded` adds the meshes.
@@ -150,7 +150,7 @@ final class FoodDecorPerfTests: XCTestCase {
         let room = try XCTUnwrap(s.ren.room)
         let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
         for k in DecorTuning.heaviestRoom { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
-        let rocker = try XCTUnwrap(book.placedDecor.first { $0.kind == .rockingchair }?.uid)
+        let rocker = try XCTUnwrap(book.placedDecor.first { $0.kind == .aquarium }?.uid)
         let car = try XCTUnwrap(book.placedDecor.first { $0.kind == .toycar }?.uid)
         let tris = book.placedDecor.reduce(0) { $0 + (DecorMeshes.loaded[$1.kind]?.triangles ?? 0) }
         var extraMs = 0.0, decorTris = 0

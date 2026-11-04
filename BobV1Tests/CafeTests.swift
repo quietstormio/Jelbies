@@ -169,7 +169,7 @@ final class CafeTests: XCTestCase {
     func testSwapEntersCafeAndRestoresHome() {
         let r = room()
         let c = r.care
-        c.store.grant("decor-cushion"); XCTAssertNotNil(c.store.place("decor-cushion")); c.syncDecor()
+        c.store.grant("decor-nightlight"); XCTAssertNotNil(c.store.place("decor-nightlight")); c.syncDecor()
         XCTAssertFalse(DecorField.shared.feet.isEmpty)
         for a in r.actors { a.brain!.autonomy = true }
         let homeRoom = c.store.currentRoom

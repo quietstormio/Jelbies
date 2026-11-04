@@ -1,0 +1,49 @@
+{
+ "id": "hoop",
+ "tris": 2840,
+ "verts": 1904,
+ "sub_meshes": [
+  {
+   "name": "frame",
+   "pivot": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 2296
+  },
+  {
+   "name": "net",
+   "pivot": [
+    0.0,
+    1.4784,
+    0.224
+   ],
+   "material": "plain",
+   "tris": 544
+  }
+ ],
+ "bounds_min": [
+  -0.5152,
+  0.0,
+  -0.4928
+ ],
+ "bounds_max": [
+  0.5152,
+  2.0608,
+  0.5051
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ],
+ "footprint_half": [
+  0.45,
+  0.45
+ ],
+ "height": 2.25,
+ "spots": 1,
+ "solid": true
+}

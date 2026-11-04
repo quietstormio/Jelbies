@@ -11,7 +11,7 @@ import simd
 @MainActor
 final class FurniturePlacementTests: XCTestCase {
     static let aspects: [(String, Float)] = [("portrait", 440.0 / 956.0), ("landscape", 956.0 / 440.0)]
-    static let bigs: [DecorKind] = [.loveseat, .slide, .swing, .petbed, .diningset]
+    static let bigs: [DecorKind] = [.aquarium, .slide, .petbed, .minigoal]
 
     override func setUp() { DecorField.shared.clear() }
     override func tearDown() {
@@ -43,8 +43,8 @@ final class FurniturePlacementTests: XCTestCase {
             Self.room(a)
             if name == "landscape" {
                 let b = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-                for k in [DecorKind.loveseat, .slide, .swing] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) beside the others") }
-                XCTAssertEqual(b.roomUnitsUsed, 8, "loveseat 2 + slide 3 + swing 3 (the 1.25x swing / slide / pet bed count 3 spots)")
+                for k in [DecorKind.aquarium, .slide, .petbed] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) fits in \(name) beside the others") }
+                XCTAssertEqual(b.roomUnitsUsed, 8, "aquarium 2 + slide 3 + pet bed 3 (the 1.25x slide / pet bed count 3 spots)")
                 Self.assertClear(b.placedDecor, name)
             }
             for i in 0..<Self.bigs.count { for j in (i + 1)..<Self.bigs.count {
@@ -59,10 +59,10 @@ final class FurniturePlacementTests: XCTestCase {
             } }
             if name == "portrait" {
                 let b = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-                for k in [DecorKind.loveseat, .slide, .swing] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) in a portrait room of three") }
+                for k in [DecorKind.aquarium, .slide, .petbed] { b.grant(k.storeID); XCTAssertNotNil(b.place(k.storeID), "\(k) in a portrait room of three") }
                 Self.assertClear(b.placedDecor, name)
                 // the others are refused, not squeezed in
-                for k in [DecorKind.petbed, .diningset] { b.grant(k.storeID); if b.place(k.storeID) == nil { XCTAssertNotNil(b.placeBlocker(StoreCatalog.item(k.storeID)!)) } }
+                for k in [DecorKind.petbed, .roundtable] { b.grant(k.storeID); if b.place(k.storeID) == nil { XCTAssertNotNil(b.placeBlocker(StoreCatalog.item(k.storeID)!)) } }
                 Self.assertClear(b.placedDecor, name)
             }
         }

@@ -247,7 +247,7 @@ final class FurnCaptureTests: XCTestCase {
         let W = 1434, H = 660, a = Float(W) / Float(H)
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: a); GameCamera.refreshRoam(aspect: a)
         let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-        for k in [DecorKind.swing, .loveseat, .slide, .petbed, .diningset] { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
+        for k in [DecorKind.aquarium, .slide, .petbed, .bookshelf] { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
         DecorField.shared.set(book.placedDecor)
         let lab = SocialTests.Lab(positions: [SIMD2(-1.0, 0.6), SIMD2(0.7, 0.9), SIMD2(0.0, 2.2)], quiet: false, seed: 5)
         for (i, r) in lab.rigs.enumerated() { r.skinner.autoBlink = false; AnticsLabTests.lively(r.brain); r.brain.idleMood = .happy; r.brain.idleState.cooldown = 3 + Float(i) * 2; r.brain.restTimer = 0.5 + Float(i) }

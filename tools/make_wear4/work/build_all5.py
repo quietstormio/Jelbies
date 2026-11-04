@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wl import *
 import items5
 mods = [items5]
-for name in ("items6", "items7", "items8"):
+for name in ("items6", "items7", "items8", "items9"):
     try:
         mods.append(__import__(name))
     except ImportError as e:

@@ -87,7 +87,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems + food4Items + playToyItems
+    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems
 
     /// Hand-held Play toys (Toys/PlayToy.swift lists them for the picker). The balls are the existing decor toys; the wand is its own item.
     static let playToyItems: [StoreItem] = [
@@ -140,7 +140,7 @@ nonisolated enum StoreCatalog {
         StoreItem(id: "decor-nightlight", name: "Night light", kind: .decor, price: 45, perk: nil, description: DecorKind.nightlight.use, symbol: "moon.stars.fill", roomUnits: 1),
         StoreItem(id: "decor-toybox", name: "Toy box", kind: .decor, price: 55, perk: nil, description: DecorKind.toybox.use, symbol: "shippingbox.fill", roomUnits: 1),
         StoreItem(id: "decor-beanbag", name: "Beanbag", kind: .decor, price: 70, perk: nil, description: DecorKind.beanbag.use, symbol: "chair.lounge.fill", roomUnits: 2),
-        StoreItem(id: "decor-bouncymat", name: "Bouncy mat", kind: .decor, price: 90, perk: nil, description: DecorKind.bouncymat.use, symbol: "arrow.up.circle.fill", roomUnits: 2),
+        StoreItem(id: "decor-bouncymat", name: "Trampoline pad", kind: .decor, price: 90, perk: nil, description: DecorKind.bouncymat.use, symbol: "arrow.up.circle.fill", roomUnits: 2),
     ]
 
     static func item(_ id: String) -> StoreItem? { items.first { $0.id == id } }

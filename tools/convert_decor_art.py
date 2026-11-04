@@ -16,7 +16,9 @@ IDS = ("cushion ball rug plant nightlight toybox beanbag bouncymat "
        # batch 3 (2026-10-24): made by tools/make_decor_batch3/ (Blender, headless); an export dir without them just skips these
        "roundtable cushionpile aquarium plantstand easel mirror clock bubblemachine rockinghorse jackinbox plushbear toypiano pinwheel "
        # batch 4 (2026-10-27): tools/make_decor_batch4/ (toys)
-       "beachball playtunnel ringstacker toyrocket plushdino kickscooter").split()
+       "beachball playtunnel ringstacker toyrocket plushdino kickscooter "
+       # batch 5 (2026-11-04): tools/make_decor_batch5/ (sport toys)
+       "footbag frisbee skateboard hoop").split()
 # the pieces whose exported frame came out inside-out (see below); every other piece is trusted as exported (open surfaces such as the slide chute or the ropes
 # have a legitimately negative signed volume)
 FLIP_FIX = {"bouncymat"}

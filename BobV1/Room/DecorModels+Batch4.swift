@@ -100,7 +100,7 @@ extension DecorModels {
                 emit(bars) { v, n, _ in let (p1, n1) = spin4(v, n, about: scooterTop, simd_quatf(angle: ang, axis: scooterAxis)); return yawed(p1, n1) }
             }
         default:
-            all()
+            return addBatch5(kind, art, o: o, anim: a, time: time, uid: uid, into: b)          // (the fifth batch; any other kind: all parts as exported)
         }
         return true
     }

@@ -65,8 +65,8 @@ final class LandscapeTests: XCTestCase {
     /// that carries on after a rotation keeps moving the right piece to the right place.
     func testDragAcrossARotationFollowsTheSamePiece() {
         let care = GameCare(jellyCount: 3, persistent: false)
-        care.store.grant("decor-beanbag")
-        let p = care.placeDecor("decor-beanbag")!
+        care.store.grant("decor-toybox")
+        let p = care.placeDecor("decor-toybox")!
         for (a, b) in [(Self.sizes[0].1, Self.sizes[2].1), (Self.sizes[2].1, Self.sizes[0].1), (Self.sizes[2].1, Self.sizes[3].1)] {
             let f0 = GameCamera.floorPoint(screen: GameCamera.screenPoint(floor: p.at, size: a)!, size: a)!
             XCTAssertEqual(care.decorPiece(at: f0)?.uid, p.uid, "found before the turn")
