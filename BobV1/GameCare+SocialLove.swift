@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import QuartzCore
 
 enum SocialLoveTuning {
     /// Attention gained by each Jelbie when a warm session begins.
