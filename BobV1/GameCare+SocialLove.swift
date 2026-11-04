@@ -12,7 +12,7 @@ enum SocialLoveTuning {
     /// Attention gained by each Jelbie when a warm session begins.
     static let gain: Float = 0.04
     /// Chance of a heart over each of them at that moment (the stage already shows hearts on bumps and at the end of a session).
-    static let heartChance: Float = 0.3
+    static let heartChance: Float = 0.15
 }
 
 extension GameCare {
