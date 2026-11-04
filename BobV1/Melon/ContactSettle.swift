@@ -104,7 +104,9 @@ extension BlobBrain {
         let want = socialBook.leanTrim + toward * ContactTuning.leanPerMetre
         if abs(want) > ContactTuning.leanBudget {          // beyond the budget: one small shuffle step on the locomotion (soles stay put until then)
             socialBook.leanTrim = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, want))
-            if socialBook.shuffleReq == 0, toward > 0 { socialBook.shuffleReq = 1 }          // (forward only: a backward step would turn the walker round)
+            let lp = rotXZ(o.position - position, -yaw)
+            let facingHim = lp.y > 0.8 * simd_length(lp)          // (a forward step only closes the gap when he is AHEAD; with him at the side - camera-facing stances - the step turns the walker toward him, swings the whole skin and starts the walk-turn-walk cycle)
+            if socialBook.shuffleReq == 0, toward > 0, facingHim { socialBook.shuffleReq = 1 }          // (forward only: a backward step would turn the walker round)
         } else { socialBook.leanTrim = want }
         if ContactTrace.on { let sr = socialBook.shuffleReq; ContactTrace.mod(steerID) { $0.nudge = (abs(want) > ContactTuning.leanBudget ? "lean+budget" : "lean") + "/req\(sr)"; $0.want = want } }
     }
