@@ -25,7 +25,7 @@ final class ContactSettleTests: XCTestCase {
         HapticDriver.after = { _, f in f() }
         HapticDriver.jitter = { 1 }
         driver = HapticDriver(sinks: [RecordingHapticSink()]); HapticDriver.room = driver; HapticDriver.roomBusy = nil
-        HapticDriver.cueTap = { if $0.name == "sfx.squish" { c.haptic += 1 } }
+        HapticDriver.cueTap = { if $0.name.hasPrefix("sfx."), ContactPolishTests.contactSounds.contains(String($0.name.dropFirst(4))) { c.haptic += 1 } }          // (any contact sound's own cue: the squish AND the boop / high-five boop ... of the stances)
     }
     override func tearDown() {
         HapticDriver.clock = { CACurrentMediaTime() }
@@ -277,5 +277,64 @@ final class ContactSettleTests: XCTestCase {
             if ev > 0 { XCTAssertGreaterThanOrEqual(c.haptic, 1, "a haptic for the touches (the room allows 2 a second; the stances add their own): \(row)") }
             ContactField.reset()
         }
+    }
+
+    // MARK: arrival (2026-11-04, round 4 A: the stance owns the walk-up)
+
+    /// The warp moves the swing foot's own start and landing with the body: a step in progress lands where the warped body is, not on the old spot.
+    func testFootGaitNudgeMovesTheStepInProgress() {
+        var g = FootGait()
+        g.pos = [SIMD2(-0.1, 0), SIMD2(0.1, 0)]
+        g.begin(side: 1, to: SIMD2(0.1, 0.4), toYaw: 0, peak: 0.05, rate: 3.5)
+        g.nudge(SIMD2(0.2, -0.1))
+        for _ in 0..<60 { g.advance(1.0 / 60) }
+        XCTAssertEqual(g.pos[1].x, 0.3, accuracy: 1e-5); XCTAssertEqual(g.pos[1].y, 0.3, accuracy: 1e-5, "the swing foot lands at its target plus the warp")
+        XCTAssertEqual(g.pos[0].x, 0.1, accuracy: 1e-5); XCTAssertEqual(g.pos[0].y, -0.1, accuracy: 1e-5, "the planted foot moved with the body")
+    }
+
+    /// A crouching hop is planted: the settle moves only its landing spot (the take-off stays where the soles are); the flight is warped rigidly.
+    func testSettleNeverWarpsACrouchingHopOnlyItsLanding() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-0.6, 0.6), SIMD2(0.6, 0.6)], features: [.none, .none], seed: 5)
+        d.live = true
+        for _ in 0..<5 { d.tick() }
+        let a = d.lab.rigs[0]
+        let s = a.brain.newSession(.boop, with: d.lab.rigs[1].brain, duration: 5)
+        _ = s
+        a.brain.gait.hop(a.sim, to: SIMD2(-0.2, 0.6))
+        guard a.brain.gait.phase == .crouch else { return XCTFail("the hop crouches first (phase \(a.brain.gait.phase))") }
+        let root = a.brain.position, feet = a.brain.feet.pos
+        a.brain.contactNudge(SIMD2(0.05, 0))
+        XCTAssertEqual(simd_distance(a.brain.position, root), 0, accuracy: 1e-6, "no rigid warp while the soles are planted in the crouch")
+        XCTAssertEqual(a.brain.feet.pos[0], feet[0]); XCTAssertEqual(a.brain.feet.pos[1], feet[1])
+    }
+
+    /// The stance table: the pressing / holding kinds own the phase-0 walk-up; the side-by-side kinds say so (the touch distance is predicted for the posture they end in).
+    func testStanceTableOwnsTheWalkUp() {
+        for k in [SocialKind.boop, .bump, .sneak, .chestBump, .highFive, .noseBoop, .bellyBounce, .nuzzle, .hum, .cheekSquish, .swayHug, .whisperGiggle, .cuddleLean, .backToBack] {
+            let st = ContactStance.entry(k)
+            XCTAssertEqual(st?.steps.first?.retargets, true, "\(k): phase 0 walks up through the stance")
+        }
+        for k in [SocialKind.nuzzle, .sitTogether, .cheekSquish, .bellyBounce, .cuddleLean, .whisperGiggle, .swayHug, .backToBack] { XCTAssertEqual(ContactStance.entry(k)?.facing, .camera, "\(k) ends side by side") }
+        for k in [SocialKind.boop, .bump, .chestBump, .hum, .noseBoop] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
+        XCTAssertFalse(ContactStance.entry(.squabble)?.steps.first?.retargets ?? true); XCTAssertFalse(ContactStance.entry(.tag)?.steps.first?.retargets ?? true)
+    }
+
+    /// A walk-up reaches the touch exactly (the stance walk plants its last step within 1 cm of the destination, no shuffle) and the pair stands at skin contact: gap within [-1, +2] cm at the end of the walk-up phase.
+    func testBoopWalkUpArrivesAtTheTouchWithoutAShuffle() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: 31)
+        d.live = true
+        for _ in 0..<3 { d.tick() }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        XCTAssertTrue(a.brain.socialStart(.boop, with: b.brain, a.sim))
+        var arrival: Float?
+        var steps = 0, prevActive = false
+        for _ in 0..<(60 * 12) {
+            d.tick()
+            if a.brain.feet.active && !prevActive { steps += 1 }; prevActive = a.brain.feet.active
+            if (a.brain.social?.phase ?? 0) >= 1, arrival == nil, !a.brain.feet.active, let g = ContactField.gap(0, 1) { arrival = g }
+        }
+        guard let g = arrival else { return XCTFail("the walk-up ends") }
+        MotionLog.write(String(format: "ARRIVAL boop: gap %.3f at the last planted step", g))
+        XCTAssertLessThan(g, 0.03, "the walk-up ends within 3 cm of the touch (the lean closes the rest)"); XCTAssertGreaterThan(g, -0.015, "and never inside him")
     }
 }

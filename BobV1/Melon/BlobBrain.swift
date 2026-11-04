@@ -964,7 +964,7 @@ final class BlobBrain {
                            rate: Float? = nil, swingFrac: Float = 0.85, inPlace: Bool = false, outScale: Float = 1) {
         let s = nextSwing
         var rootD = rootD
-        if !inPlace, rootD == .zero, let r = partingRetreat(dyaw: dyaw) { rootD = r }          // (a turn away from a partner at touching distance backs off: BlobSocial+Part.swift)
+        if !inPlace, rootD == .zero, !contactStanceOwnsTurns, let r = partingRetreat(dyaw: dyaw) { rootD = r }          // (a turn away from a partner at touching distance backs off: BlobSocial+Part.swift)
         stepRoot0 = SIMD2(px, pz); stepRootD = rootD
         stepYaw0 = yaw; stepYawD = dyaw
         let landYaw = yaw + dyaw
@@ -1249,20 +1249,29 @@ final class BlobBrain {
         let u = D > 1e-4 ? d / D : SIMD2<Float>(sinf(yaw), cosf(yaw))
         let stance = 1 - nextSwing
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)    // how far the stance foot leads
-        if D < 0.06 && abs(s) < 0.08 && !intermediate { return 1 }
+        let exact = !intermediate && social != nil && ContactTouchMemory.exact.contains(steerID)          // (a stance walk: the destination is the touch spot, 1 cm)
+        if D < (exact ? 0.01 : 0.06) && abs(s) < 0.08 && !intermediate { return 1 }
         if scriptT > 14 + D / 0.25 { return 1 }
         if stuckT > 1.5 { return 2 }
-        let arc = abs(err) <= 1.2 && D > 0.4 && !intermediate         // turn while moving: a short arc into the new direction
+        // A stance walk that ends in a posture other than 'facing the partner' (side by side, facing the camera) turns into it during the last steps - an arc into the pose - so nobody squares up in place at contact
+        // (the turn on the spot at touching range sweeps the wide axis through the partner, and the wall / the parting retreat pushes the pair apart again).
+        var errF: Float = 0, finalTurn = false
+        if exact, let fy = ContactTouchMemory.finalYaw[steerID] {
+            errF = wrapAngle(fy - yaw)
+            let n = (abs(errF) / max(m, 0.1)).rounded(.up)
+            finalTurn = D <= (n + 2) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+        }
+        let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
             let tp = turnPlan(err: err, idle: false)
             startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)
             return 0
         }
         turnHopW = 0
-        let arcK: Float = abs(err) > 0.5 ? 0.6 : 1
+        let arcK: Float = (abs(err) > 0.5 && !finalTurn) ? 0.6 : 1
         let L = stride * runStrideMul * amplitude.clamped(0.6, 1) * arcK
         var a: Float, r: Float
-        if !intermediate && (abs(D - s) < 0.06 || D < s) { a = max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
+        if !intermediate && (abs(D - s) < 0.06 || D < s) { a = exact ? min(D, max(0, s) + 0.06) : max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
         else if D > s + 1.1 * L || intermediate { r = 0.5 * L; a = s + r }                        // regular step: lands half a step ahead
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
         var rootD = u * a
@@ -1271,7 +1280,7 @@ final class BlobBrain {
         let got = SIMD2(rv.x, rv.z) - root
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
-        let wm = abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err))
+        let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
         startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude)
         return 0
     }

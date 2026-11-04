@@ -19,7 +19,13 @@ enum ContactHaptic: Sendable { case none, emote(String), treat(String) }
 struct ContactStance: Sendable {
     enum Class: Sendable { case touching, proximity, none }
     enum Anchor: Sendable { case none, a, b }
-    struct Step: Sendable { var from: Int; var target: Float?; var onlySeparate = false }
+    /// `walks`: the stance owns the walk-up in this step (the walker's destination is re-derived from the touch distance, ContactSettle.swift), even while the settle only separates (phase 0: the drive's own walk-up
+    /// used to stop 60 cm short of the touch and the next phases patched it with hurried shuffles).
+    struct Step: Sendable { var from: Int; var target: Float?; var onlySeparate = false; var walks: Bool? = nil
+        var retargets: Bool { walks ?? !onlySeparate } }
+    /// How the pair stands once the stance is on (what the drive squares up to): face to face, or both facing the camera (side by side). The walk-up predicts the touch distance for THAT posture.
+    enum Facing: Sendable { case each, camera }
+    var facing: Facing = .each
     var cls: Class
     var steps: [Step]
     var anchor: Anchor = .none
@@ -46,23 +52,25 @@ struct ContactStance: Sendable {
     static let approach: Float = 0.04
     /// Where a walk ends relative to the touch (the lean closes the rest, <= the lean budget).
     static let arrive: Float = 0.015
+    /// Where a pressing stance stands before the press (skin gap): the walk's last step lands here, the press closes the last centimetre with the lean (budget 3.4 cm), no shuffle. Within the 1.5 cm arrival bar.
+    static let ready: Float = 0.012
     /// A stance walk aims this much SHORT of the touch (total; a meeting pair shares it): a walk's last step lands up to ~6 cm off its target (measured overshoots: 7 - 15 cm for two walkers) (planWalkStep's arrival radius) and a walker cannot step backward without turning round,
     /// so a short stop is closed by a forward shuffle / the lean, an overshoot is not.
-    static let walkShort: Float = 0.10
+    static let walkShort: Float = 0.0
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
     /// Touching for the whole hold from phase `from`.
-    static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
-        var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: hold)]
+    static func holding(from: Int, facing: Facing = .each, walk0: Bool = true, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
+        var st = [Step(from: 0, target: near, onlySeparate: true, walks: walk0), Step(from: from, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
-        return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic, pulses: pulses)
+        return ContactStance(facing: facing, cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic, pulses: pulses)
     }
     /// Approach (stand `approach` apart) from `from`, press from `press`, off from `until`.
-    static func pressing(from: Int, press: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
-        var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: approach), Step(from: press, target: hold)]
+    static func pressing(from: Int, press: Int, walk0: Bool = true, facing: Facing = .each, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
+        var st = [Step(from: 0, target: walk0 ? ready : near, onlySeparate: true, walks: walk0), Step(from: from, target: ready), Step(from: press, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
-        return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
+        return ContactStance(facing: facing, cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
     }
     /// Never overlap (and never squish): gap >= `near` from phase `from`.
     static func proximity(from: Int = 0, features: Bool = true) -> ContactStance {
@@ -73,31 +81,31 @@ struct ContactStance: Sendable {
     static let table: [SocialKind: ContactStance] = [
         // press / bump kinds: stand a few cm apart, touch when the move presses
         .boop: .pressing(from: 1, press: 2, anchor: .b, sound: .squish, volume: 0.5),
-        .squabble: .pressing(from: 1, press: 1, until: 2, sound: .squish, volume: 0.5),
+        .squabble: .pressing(from: 1, press: 1, walk0: false, until: 2, sound: .squish, volume: 0.5),
         .bump: .pressing(from: 1, press: 2, sound: .boop, volume: 0.9),
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
         .highFive: .pressing(from: 1, press: 2, until: 3, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
-        .tag: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.9),
+        .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
-        .bellyBounce: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        .chase: .pressing(from: 2, press: 2, until: 3, sound: .boop, volume: 0.9),
+        .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
+        .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
-        .nuzzle: .holding(from: 2),
-        .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
+        .nuzzle: .holding(from: 2, facing: .camera),
+        .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
-        .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
+        .cheekSquish: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
         .backToBack: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: arrive + 0.005), Step(from: 3, target: hold)], features: true),          // (side by side at 2 cm while the backs turn to each other - the turn step carries the warp, BlobSocial+Part.swift - and the lean closes the last 2 cm in the sit)
-        .cuddleLean: .holding(from: 2, sound: .squish, volume: 0.5),
-        .swayHug: .holding(from: 2, sound: .squish, volume: 0.55),
-        .whisperGiggle: .holding(from: 2),
+        .cuddleLean: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.5),
+        .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
+        .whisperGiggle: .holding(from: 2, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
-        .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
-        .circleDance: .holding(from: 2, features: true),
+        .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
+        .circleDance: .holding(from: 2, walk0: false, features: true),
         // proximity
         .twirl: .proximity(from: 1), .hopAlong: .proximity(from: 1), .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
@@ -125,6 +133,7 @@ extension BlobBrain {
 
     /// Called from `socialDrive` by the session's initiator, every step: hold the pair(s) of the session at the skin gap the stance table asks for in the current phase.
     func contactStanceTick(_ s: SocialSession) {
+        ContactTouchMemory.begin(s)
         guard ContactField.enabled, let st = ContactStance.entry(s.kind), st.cls != .none, let step = st.step(at: s.phase), let target = step.target else { return }
         if s.kind.isGroup {
             let mem = s.members
@@ -152,13 +161,27 @@ extension BlobBrain {
             return x.held || x.idleState.kind == .sleep || x.idleState.kind == .decorSit || (st.anchor == role && st.anchor != .none)
         }
         guard let s = a.social else { return }
-        a.contactStanceWalk(partner: b, gapWanted: target, features: st.features, retarget: !step.onlySeparate); b.contactStanceWalk(partner: a, gapWanted: target, features: st.features, retarget: !step.onlySeparate)
+        a.contactStanceWalk(partner: b, gapWanted: target, features: st.features, retarget: step.retargets); b.contactStanceWalk(partner: a, gapWanted: target, features: st.features, retarget: step.retargets)
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
         ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }
 }
 
 extension BlobBrain {
+    /// The touch distance for the posture the pair will STAND in (`ContactStance.facing`), not the one they have now: the profiles are the bodies' current outlines, so a body that is still to turn is rotated
+    /// first (the extent after turning by d is the extent before along the direction turned back by d). Side-on the pair touches at ~1.4 m, face to face at ~0.75 m: a destination from the current outline stops
+    /// the walker 60 cm short, or a pair that has to turn after arriving sweeps its wide axis through the partner.
+    func touchRadiusFacing(_ o: BlobBrain, along u: SIMD2<Float>, _ f: ContactStance.Facing) -> Float? {
+        let mine: Float, his: Float
+        switch f {
+        case .each: mine = atan2f(-u.x, -u.y); his = atan2f(u.x, u.y)
+        case .camera: mine = faceCameraYaw(); his = o.faceCameraYaw()
+        }
+        let d1 = wrapAngle(mine - yaw), d2 = wrapAngle(his - o.yaw)
+        guard let ea = ContactField.supportExt(steerID, rotXZ(-u, -d1)), let eb = ContactField.supportExt(o.steerID, rotXZ(u, -d2)) else { return nil }
+        return ea + eb
+    }
+
     /// The root distance at which my skin and `o`'s just touch along the unit `u` (from him to me), from the two contact profiles (support reach of each toward the other); nil before a skin pass.
     /// The approach spots of the touching stances use it instead of a constant: `touchRadius(o, along: u).map { $0 + ContactStance.approach } ?? fallback`.
     func touchRadius(_ o: BlobBrain, along u: SIMD2<Float>) -> Float? {
