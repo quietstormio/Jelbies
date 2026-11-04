@@ -1,7 +1,7 @@
 # name<TAB>cast (first one starts it)<TAB>ContactDemo kind (- = none)<TAB>angles<TAB>extra launch args (space separated, - = none)<TAB>secs (optional)
 # one row = one launch per angle; output <name>_<angle>.mp4 (angle low = low 3/4, side = steep orbit nearly along the row)
-lieDown_teddy_pearl	teddy,pearl	lieDown	low,side	-	30
-lieDown_pip_lavender	pip,lavender	lieDown	low,side	-	30
+lieDown_teddy_pearl	teddy,pearl	lieDown	low,side	-	120
+lieDown_pip_lavender	pip,lavender	lieDown	low,side	-	120
 sleepPile_pearl_pip	pearl,pip	sleepPile	low,side	-ClockHour 23
 backToBack_pip_teddy	pip,teddy	backToBack	low,side	-
 swayHug_bob_pearl	bob,pearl	swayHug	low	-

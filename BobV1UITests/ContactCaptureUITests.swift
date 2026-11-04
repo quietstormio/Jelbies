@@ -39,10 +39,10 @@ final class ContactCaptureUITests: XCTestCase {
             guard let txt = try? String(contentsOfFile: logPath, encoding: .utf8), let r = txt.range(of: key + "=", options: .backwards) else { return nil }
             return Double(txt[r.upperBound...].prefix(while: { $0 != "\n" && $0 != " " }))
         }
-        while Date().timeIntervalSince(t0) < secs {          // (secs = the longest it may run; it stops 2.5 s after the emote ends, 15 s after a lie-down starts)
+        while Date().timeIntervalSince(t0) < secs {          // (secs = the longest it may run; it stops 2.5 s after the emote ends, 40 s after a lie-down starts)
             let now = Date().timeIntervalSince1970
             if let e = epoch("endEpoch"), now > e + 2.5 { break }
-            if kind == "lieDown" || kind == "sleepPile", let st = epoch("startEpoch"), now > st + 15 { break }
+            if kind == "lieDown" || kind == "sleepPile", let st = epoch("startEpoch"), now > st + 40 { break }
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             let png = XCUIScreen.main.screenshot().pngRepresentation
             try? png.write(to: URL(fileURLWithPath: String(format: "%@/f_%06d.png", dir, ms)))
