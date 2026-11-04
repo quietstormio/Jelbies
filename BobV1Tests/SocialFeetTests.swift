@@ -54,7 +54,8 @@ final class SocialFeetTests: XCTestCase {
         var leash = 0, leashFirst = -1, leashPull: Float = 0
         var airSess = 0, joinSess: Float = .infinity, collarSess: Float = 0, joinWalk: Float = .infinity, collarWalk: Float = 0, badSess = ""
         var air = 0, ratio: Float = .infinity, join: Float = .infinity, collar: Float = 0, bad = ""
-        var skate = Skate()
+        var skate = Skate()          // (in-session planted phases only)
+        var skateWalk: Float = 0          // (worst drift of the planted phases outside the session: the walk-up and the walk away)
         var plantedFrames = 0, plantedInSession = 0
         var plantedFloat: Float = 0            // (m) highest planted sole clearance seen
         var overlap: Float = -.infinity, soleRise: Float = -.infinity, centre: Float = -.infinity, radius: Float = 0, overlapTag = ""
@@ -108,9 +109,10 @@ final class SocialFeetTests: XCTestCase {
         // sole skating: per rig, per foot, the planted phase's start xz
         var start: [[SIMD2<Float>?]] = Array(repeating: [nil, nil], count: n)
         var drift: [[Float]] = Array(repeating: [0, 0], count: n)
+        var startSess: [[Bool]] = Array(repeating: [false, false], count: n), run: [[Int]] = Array(repeating: [0, 0], count: n)
         func endPhase(_ i: Int, _ s: Int) {
             guard start[i][s] != nil else { return }
-            res.skate.phases += 1; if drift[i][s] > 0.005 { res.skate.over5 += 1 }
+            if startSess[i][s] { res.skate.phases += 1; if drift[i][s] > 0.005 { res.skate.over5 += 1 } }
             start[i][s] = nil; drift[i][s] = 0
         }
         let maxF = Int(maxSec * 60)
@@ -149,12 +151,17 @@ final class SocialFeetTests: XCTestCase {
                     }
                     if tracing, i == 0 { trace.append(String(format: "%d\tfoot%d\tplanted %d\txz %.3f %.3f\tclr %.3f\tph %d\tact %@\tfeetActive %d swinging %d side %d stepLive %d beans %d\troot %.3f %.3f", frame, s, isPlanted ? 1 : 0, r.renderedFootXZ(s).x, r.renderedFootXZ(s).y, r.renderedFootGap(s), r.brain.social?.phase ?? -1, "\(r.brain.activity)", r.brain.feet.active ? 1 : 0, r.brain.feet.swinging ? 1 : 0, r.brain.feet.side, r.brain.stepLive ? 1 : 0, sk.beansActive ? 1 : 0, r.root.x, r.root.y)) }
                     if isPlanted {
-                        if let st = start[i][s] {
+                        let sessNow: Bool = { if case .social = sc { return (r.brain.social?.phase ?? 0) >= 1 }; return frame > 60 }()
+                        if start[i][s] != nil, startSess[i][s] != sessNow { endPhase(i, s) }          // (a phase never spans the walk-up and the session)
+                        run[i][s] += 1
+                        if run[i][s] == 4 { start[i][s] = xz; startSess[i][s] = sessNow }          // (the first 3 planted frames are the foot landing: the drawn sole trails the brain's by a frame)
+                        else if let st = start[i][s] {
                             let dd = simd_distance(st, xz); drift[i][s] = max(drift[i][s], dd)
-                            if dd > res.skate.worst { res.skate.worst = dd; res.skate.frame = frame; res.skate.rig = i; res.skate.foot = s
-                                res.skate.tag = "social \(r.brain.socialKind?.rawValue ?? "-")/ph\(r.brain.social?.phase ?? -1) act \(r.brain.activity) idle \(r.brain.idleState.kind?.rawValue ?? "-") stepLive \(r.brain.stepLive) feetActive \(r.brain.feet.active)" }
-                        } else { start[i][s] = xz }
-                    } else { endPhase(i, s) }
+                            let tag = "social \(r.brain.socialKind?.rawValue ?? "-")/ph\(r.brain.social?.phase ?? -1) act \(r.brain.activity) idle \(r.brain.idleState.kind?.rawValue ?? "-") stepLive \(r.brain.stepLive) feetActive \(r.brain.feet.active) root \(r.root.x),\(r.root.y)"
+                            if startSess[i][s] { if dd > res.skate.worst { res.skate.worst = dd; res.skate.frame = frame; res.skate.rig = i; res.skate.foot = s; res.skate.tag = tag } }
+                            else if dd > res.skateWalk { res.skateWalk = dd }
+                        }
+                    } else { run[i][s] = 0; endPhase(i, s) }
                 }
             }
             frame += 1
@@ -183,12 +190,12 @@ final class SocialFeetTests: XCTestCase {
         // report
         if !trace.isEmpty { try? FileManager.default.createDirectory(atPath: Self.outDir, withIntermediateDirectories: true); try? trace.joined(separator: "\n").write(toFile: Self.outDir + "trace_\(name)_\(castName).tsv", atomically: true, encoding: .utf8) }
         let sk = res.skate
-        let line1 = String(format: "SOCIALFEET %@ | %@ | %.1f s | air frames %d | leash %d | ring %.2f | join %.1f cm (session %.1f, walk-up %.1f) | collar %.1f cm (session %.1f) | first bad in session [%@] | attach gap(overlap) %.3f (limit %.3f) | float soleRise %.3f (limit %.3f) centre %.3f (limit %.3f) | planted sole clearance max %.1f mm (%d planted foot-frames, %d in session) | SKATE worst %.1f mm over %d planted phases (%d > 5 mm) at frame %d rig %d foot %d [%@] | worst attach at %@",
-                           name, castName, res.seconds, res.air, res.leash, res.ratio, res.join * 100, res.joinSess * 100, res.joinWalk * 100, res.collar * 100, res.collarSess * 100, res.badSess, res.overlap, FeetAttachTests.minOverlap, res.soleRise, FeetAttachTests.maxSoleRise, res.centre, FeetAttachTests.maxCentreHeight, res.plantedFloat * 1000, res.plantedFrames, res.plantedInSession, sk.worst * 1000, sk.phases, sk.over5, sk.frame, sk.rig, sk.foot, sk.tag, res.overlapTag)
+        let line1 = String(format: "SOCIALFEET %@ | %@ | %.1f s | air frames %d | leash %d | ring %.2f | join %.1f cm (session %.1f, walk-up %.1f) | collar %.1f cm (session %.1f) | first bad in session [%@] | attach gap(overlap) %.3f (limit %.3f) | float soleRise %.3f (limit %.3f) centre %.3f (limit %.3f) | planted sole clearance max %.1f mm (%d planted foot-frames, %d in session) | SKATE (session) worst %.1f mm over %d planted phases (%d > 5 mm), walk-up/away worst %.1f mm at frame %d rig %d foot %d [%@] | worst attach at %@",
+                           name, castName, res.seconds, res.air, res.leash, res.ratio, res.join * 100, res.joinSess * 100, res.joinWalk * 100, res.collar * 100, res.collarSess * 100, res.badSess, res.overlap, FeetAttachTests.minOverlap, res.soleRise, FeetAttachTests.maxSoleRise, res.centre, FeetAttachTests.maxCentreHeight, res.plantedFloat * 1000, res.plantedFrames, res.plantedInSession, sk.worst * 1000, sk.phases, sk.over5, res.skateWalk * 1000, sk.frame, sk.rig, sk.foot, sk.tag, res.overlapTag)
         MotionLog.write(line1); print(line1)
         try? FileManager.default.createDirectory(atPath: Self.outDir, withIntermediateDirectories: true)
         let row = [name, castName, res.completed ? "done" : "cut", String(format: "%.1f", res.seconds), "\(res.leash)", String(format: "%.2f", res.ratio), String(format: "%.1f", res.join * 100), String(format: "%.1f", res.collar * 100),
-                   String(format: "%.3f", res.overlap), String(format: "%.3f", res.soleRise), String(format: "%.3f", res.centre), String(format: "%.1f", sk.worst * 1000), "\(sk.frame)", sk.tag, res.overlapTag].joined(separator: "\t") + "\n"
+                   String(format: "%.3f", res.overlap), String(format: "%.3f", res.soleRise), String(format: "%.3f", res.centre), String(format: "%.1f", sk.worst * 1000), "\(sk.frame)", String(format: "%.1f", res.skateWalk * 1000), String(format: "%.1f", res.joinSess * 100), String(format: "%.1f", res.joinWalk * 100), String(format: "%.1f", res.collarSess * 100), sk.tag, res.badSess, res.overlapTag].joined(separator: "\t") + "\n"
         let path = Self.outDir + "socialfeet.tsv"
         if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(row.utf8)); try? h.close() } else { try? row.write(toFile: path, atomically: true, encoding: .utf8) }
         return res
