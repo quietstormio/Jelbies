@@ -223,6 +223,31 @@ nonisolated enum ContactField {
         return ea + eb
     }
 
+    // MARK: the support metric (the catalogue's definition: BruteForceContactMetric.skinGap)
+    /// How far body `id`'s drawn skin reaches along the unit horizontal `dir`, measured as the SUPPORT (the largest projection on `dir` of any skin point, relative to the root):
+    /// the per-bin farthest vertices are the footprint's hull to 2.8 degrees, so this is the brute-force support to a mm. nil = no profile.
+    static func supportExt(_ id: Int, _ dir: SIMD2<Float>) -> Float? {
+        guard enabled, isValid(id) else { return nil }
+        let b = base(id)
+        var best = -Float.infinity
+        for k in 0..<K where b[oBR + k] > 0 { best = max(best, b[oBX + k] * dir.x + b[oBZ + k] * dir.y) }
+        return best.isFinite ? best : nil
+    }
+    /// The catalogue's touch distance: extA(u) + extB(-u) along the root axis u (support reaches), metres: the root distance at which the two skins' supports meet.
+    static func touchDistance(_ a: Int, _ b: Int) -> Float? {
+        guard enabled, isValid(a), isValid(b), a != b else { return nil }
+        let d = root(b) - root(a), L = simd_length(d)
+        let u = L > 1e-4 ? d / L : SIMD2<Float>(1, 0)
+        guard let ea = supportExt(a, u), let eb = supportExt(b, -u) else { return nil }
+        return ea + eb
+    }
+    /// The catalogue's skin gap: root distance - touchDistance (metres; + apart, - the supports overlap). Agrees with `BruteForceContactMetric.skinGap` to a few mm (ContactProfileTests).
+    /// It is a lower bound of `gap` (the supports can overlap where the footprints do not: two lying bodies whose farthest points sit side by side); decisions use `gap`.
+    static func skinGap(_ a: Int, _ b: Int) -> Float? {
+        guard let t = touchDistance(a, b) else { return nil }
+        return simd_distance(root(a), root(b)) - t
+    }
+
     // MARK: the pair gap (exact translation gap of the two footprints)
     nonisolated(unsafe) private static var gapStamp = [Int](repeating: -1, count: capacity * capacity)
     nonisolated(unsafe) private static var gapValue = [Float](repeating: 0, count: capacity * capacity)

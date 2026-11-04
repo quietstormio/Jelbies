@@ -18,7 +18,7 @@ enum ContactTuning {
     static let cooldown: Float = 1.6
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
-    static let touchGap: Float = 0.01, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+1 cm), the gap that arms the next touch, the least time between two events of one body
+    static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
 }
 
@@ -129,7 +129,7 @@ extension BlobBrain {
         for (k, v) in socialBook.contactCoolPer where v > 0 { socialBook.contactCoolPer[k] = v - dt }
         guard attached, !held else { return }
         for o in socialOthers() where o !== self {
-            if let gap = ContactField.gap(steerID, o.steerID) {
+            if let gap = ContactField.gap(steerID, o.steerID, features: true) {          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
                 let prev = socialBook.contactArmed[o.steerID]
                 var armed = prev ?? (gap > ContactTuning.rearmGap)          // (touching when first seen: no event, the touch began before)
                 if gap > ContactTuning.rearmGap { armed = true }

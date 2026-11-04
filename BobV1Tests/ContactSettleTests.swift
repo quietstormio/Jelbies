@@ -203,18 +203,25 @@ final class ContactSettleTests: XCTestCase {
             var episodes = 0
             var armed = [Bool](repeating: true, count: n * n)
             var minGap: Float = .infinity
-            for _ in 0..<(60 * 30) {
+            var epLog: [String] = [], evLog: [String] = [], lastEv = 0
+            // a re-touch within `eventGap` (0.35 s) of the pair's last touch is the same touch bouncing (a slap's rebound, a sway): one sound, as the brain does
+            var lastStart = [Int](repeating: -1000, count: n * n)
+            let debounce = Int((ContactTuning.eventGap * 60).rounded(.up))
+            for fr in 0..<(60 * 30) {
                 d.tick()
                 for i in 0..<n { for j in (i + 1)..<n {
-                    guard let g = ContactField.gap(i, j) else { continue }
+                    guard let g = ContactField.gap(i, j, features: true) else { continue }
                     minGap = min(minGap, g)
-                    if g > 0.03 { armed[i * n + j] = true } else if g <= 0.01, armed[i * n + j] { armed[i * n + j] = false; episodes += 1 }
+                    if g > ContactTuning.rearmGap { armed[i * n + j] = true } else if g <= ContactTuning.touchGap, armed[i * n + j], fr - lastStart[i * n + j] >= debounce { armed[i * n + j] = false; lastStart[i * n + j] = fr; episodes += 1; epLog.append("f\(fr) \(i)-\(j) \(String(format: "%.3f", g))") }
                 } }
+                let evNow = events(d)
+                if evNow != lastEv { evLog.append("f\(fr) ev\(evNow)"); lastEv = evNow }
                 if !d.lab.anySocial && episodes + c.squish > 0 && d.lab.rigs[0].brain.idleState.t > 5 { break }
             }
             let ev = events(d)
             let row = "\(kind): touch episodes \(episodes), contact events \(ev), squish requests \(c.squish), haptic requests \(c.haptic), min gap \(String(format: "%.3f", minGap))"
             rows.append(row); MotionLog.write("STANCE " + row)
+            if ev != episodes { MotionLog.write("STANCE \(kind) episodes at " + epLog.joined(separator: ", ") + " | events at " + evLog.joined(separator: ", ")) }
             XCTAssertEqual(ev, episodes, "exactly one contact event per touch: \(row)")
             XCTAssertGreaterThanOrEqual(c.squish, ev, "a sound with every contact: \(row)")
             if ev > 0 { XCTAssertGreaterThanOrEqual(c.haptic, 1, "a haptic for the touches (the room allows 2 a second; the stances add their own): \(row)") }

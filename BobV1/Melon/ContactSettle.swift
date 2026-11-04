@@ -5,7 +5,8 @@
 //    - once per fresh profile (a skin pass), so the few sim steps between two frames never act on the same stale measurement;
 //    - a first-order approach: gain `gain` of the error a step, at most `maxStep` (1.5 cm) a step, nothing inside the deadband: critically damped by construction (no overshoot);
 //    - the error is split between the two bodies unless one is ANCHORED (asleep, lying first, held, planted by a script): he does not move, the other takes it all.
-//  Call it from the stance's per-step code. `target` is the skin gap wanted (0 = touching). The contact sound / haptic are NOT here: `BlobBrain.contactTick` fires them at the first
+//  Call it from the stance's per-step code. `target` is the skin gap wanted (0 = touching). `features: true` = the gap counts the features (wings at their current fold, spikes,
+//  daisy): a folded wing between two backs is touched, never sunk into (the lying snuggle uses it). The contact sound / haptic are NOT here: `BlobBrain.contactTick` fires them at the first
 //  touch, and the last mm of press does not fire again (re-armed only after the skins part by 3 cm).
 //
 
@@ -22,8 +23,8 @@ nonisolated enum ContactSettleTuning {
 enum ContactSettle {
     /// One step for the pair. Returns the measured skin gap (nil: no profile yet), `moved` = whether the roots were nudged.
     @discardableResult
-    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false) -> (gap: Float, moved: Bool)? {
-        guard let gap = ContactField.gap(a.steerID, b.steerID) else { return nil }
+    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false) -> (gap: Float, moved: Bool)? {
+        guard let gap = ContactField.gap(a.steerID, b.steerID, features: features) else { return nil }
         let stamp = ContactField.stamp(a.steerID) &+ ContactField.stamp(b.steerID) &* 7919
         let key = b.steerID
         if a.socialBook.settleStamp[key] == stamp { return (gap, false) }          // (this measurement was acted on)

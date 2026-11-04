@@ -188,6 +188,58 @@ final class ContactProfileTests: XCTestCase {
         XCTAssertLessThan(worst, 0.006, "the pair gap is within 6 mm of the ground truth of the skinned meshes")
     }
 
+    /// The pair gap against `BruteForceContactMetric.skinGap` (the catalogue's ground truth: root distance minus both skins' support along the root axis over the shared height, every
+    /// drawn vertex) on the same skinned streams: 6 species (each with the next), standing / lying / leaning, side by side and one behind the other, near touching.
+    func testGapAgreesWithBruteForceMetric() {
+        var worst: Float = 0, worstF: Float = 0, rows: [String] = [], n = 0, within = 0
+        let sp = Self.species
+        for (si, s0) in sp.enumerated() {
+            let s1 = sp[(si + 1) % sp.count]
+            for pose in ["standing", "lying", "leaning"] {
+                for axis in ["x", "z"] {
+                    let u: SIMD2<Float> = axis == "x" ? SIMD2(1, 0) : SIMD2(0, 1)
+                    let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [s0.feature, s1.feature], seed: 5)
+                    FeatureClipTests.keep.append(d)
+                    LieClearTuning.enabled = false
+                    d.place([SIMD2(0, 0.6) - u * 1.0, SIMD2(0, 0.6) + u * 1.0])
+                    let a = d.lab.rigs[0], b = d.lab.rigs[1]
+                    switch pose {
+                    case "lying":
+                        for r in [a, b] { r.brain.idleForced = true; _ = r.brain.idleStart(.lieDown, r.sim); r.brain.idleState.hold = 60 }
+                        for _ in 0..<150 { d.tick() }
+                    case "leaning":
+                        for r in [a, b] { r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim); r.brain.idleState.hold = 60 }
+                        for _ in 0..<80 { d.tick() }
+                    default: for _ in 0..<20 { d.tick() }
+                    }
+                    // B settles along the axis to about touching (the profile's own say), then both are measured on the same frame
+                    d.live = true
+                    for _ in 0..<70 { d.tick(); ContactSettle.step(a.brain, b.brain, target: 0.005, anchoredA: true) }
+                    d.live = false
+                    FeatureClip.enabled = false
+                    _ = d.skinAll()
+                    FeatureClip.enabled = true
+                    guard let g = ContactField.gap(0, 1) else { XCTFail("no profile"); continue }
+                    let surf = (0..<2).map { i -> ContactSurface in
+                        var rs = d.contactRanges(i)
+                        rs.removeAll { $0.lowerBound == ContactField.tailLo }          // (the tail is a feature: FeatureClip's job, not the body profile's)
+                        return ContactSurface(root: ContactField.root(i), dyn: UnsafePointer(d.dyn[i]), ranges: rs)
+                    }
+                    let truth = BruteForceContactMetric.skinGap(surf[0], surf[1]), foot = BruteForceContactMetric.footprintGap(surf[0], surf[1])
+                    let sg = ContactField.skinGap(0, 1) ?? 9
+                    let e = abs(sg - truth), eF = abs(g - foot)
+                    worst = max(worst, e); worstF = max(worstF, eF); n += 1; if e <= 0.005 { within += 1 }
+                    let row = String(format: "%@+%@ %@ along %@: skinGap %.4f vs brute force %.4f (|diff| %.1f mm); footprint gap %.4f vs brute force %.4f (|diff| %.1f mm)", s0.name, s1.name, pose, axis, sg, truth, e * 1000, g, foot, eF * 1000)
+                    rows.append(row); MotionLog.write("BRUTEFORCE " + row)
+                    XCTAssertLessThanOrEqual(e, 0.005, "skinGap (support) vs BruteForceContactMetric.skinGap: " + row)
+                    XCTAssertLessThanOrEqual(eF, 0.005, "gap (footprint) vs BruteForceContactMetric.footprintGap: " + row)
+                    XCTAssertGreaterThanOrEqual(g, sg - 0.002, "the footprint gap is never below the support gap: " + row)
+                }
+            }
+        }
+        MotionLog.write(String(format: "BRUTEFORCE worst |skinGap - brute force| %.1f mm, |gap - brute-force footprint| %.1f mm over %d pairs (%d within 0.5 cm)", worst * 1000, worstF * 1000, n, within))
+    }
+
     /// Cost: building the profiles inside the parallel skin pass, and the pair queries.
     func testProfilePerf() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6), SIMD2(0, 2.4), SIMD2(0, -1), SIMD2(2.4, 2.4)], features: [.ears, .wings, .spines, .daisy, .none], seed: 5)

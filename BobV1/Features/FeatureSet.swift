@@ -36,6 +36,8 @@ nonisolated enum FeatureTuning {
     static let accelHistory = 30
     /// The wings' contact fold: seconds to fold / unfold.
     static let foldTime: Float = 0.16
+    /// The folded pose (deg): flap (nil = the fit's flapMax: raised) and spread (-15: swept a little forward, against the back: the smallest footprint, WINGSWEEP 2026-11-03: 2.5-3.5 cm outside the body, from 15-22 cm open) at fold 1; `forceFold` (tests) pins the fold.
+    nonisolated(unsafe) static var foldFlap: Float? = nil, foldSpread: Float = -15, forceFold: Float? = nil
     /// Teddy's ears / pom: spring (Hz), damping, acceleration push (deg per u/s^2) and the largest flop (deg).
     static let earHz: Float = 3.0, earZeta: Float = 0.30, earGain: Float = 9, earSquash: Float = 0.9, earMax: Float = 11
 }
@@ -375,25 +377,40 @@ final class FeatureSet {
         let want = wingFoldWant(&s, id: id)
         s.fold += (want - s.fold) * min(1, dt / FeatureTuning.foldTime)
         if abs(want - s.fold) < 0.002 { s.fold = want }
+        if let f = FeatureTuning.forceFold { s.fold = f }
         if s.fold > 0.001 {
-            s.flap += (s.fit.flapMax - s.flap) * s.fold
-            s.spread *= (1 - s.fold)
+            let ff = min(max(FeatureTuning.foldFlap ?? s.fit.flapMax, s.fit.flapMin), s.fit.flapMax)
+            s.flap += (ff - s.flap) * s.fold
+            s.spread += (FeatureTuning.foldSpread - s.spread) * s.fold
         }
     }
 
-    /// 1 when a neighbour's body skin is within 2 cm of my OPEN wings (their points as the contact profile saw them while they were open), else 0 (with a 6 cm hysteresis once folded).
+    /// 1 when a neighbour's body skin is within 2 cm of my OPEN wings (their points as the contact profile saw them while they were open, kept in the owner's heading frame so a turn
+    /// while folded turns them too), else 0 (with a 6 cm hysteresis once folded).
     private func wingFoldWant(_ s: inout Slot, id: Int) -> Float {
         guard ContactField.enabled, ContactField.isValid(id), !s.folded else { return 0 }
-        if s.fold < 0.05 { s.openPts = ContactField.featurePoints(id) }          // (measured while open; kept while folded)
+        let f = s.carry.rotation.act(SIMD3<Float>(0, 0, 1))
+        let h = atan2f(f.x, f.z), ch = cosf(h), sh = sinf(h)
+        if s.fold < 0.05 {          // (measured while open; kept while folded, in the heading frame)
+            s.openPts = ContactField.featurePoints(id).map { SIMD2($0.x * ch - $0.y * sh, $0.x * sh + $0.y * ch) }
+        }
         guard !s.openPts.isEmpty else { return 0 }
+        let pts = s.openPts.map { SIMD2($0.x * ch + $0.y * sh, -$0.x * sh + $0.y * ch) }
         var want: Float = 0
         let me = ContactField.root(id)
         for j in 0..<ContactField.capacity where j != id && ContactField.isValid(j) {
             let d = ContactField.root(j) - me
-            guard simd_length(d) < 3, let c = ContactField.clearance(of: s.openPts, ownerRoot: me, against: j) else { continue }
+            guard simd_length(d) < 3, let c = ContactField.clearance(of: pts, ownerRoot: me, against: j) else { continue }
             if c < (s.fold > 0.5 ? 0.06 : 0.02) { want = 1 }
         }
         return want
+    }
+    /// The open wings' points (relative to the owner's root, world axes, as the fold last saw them open): tests.
+    func openWingPoints(_ id: Int) -> [SIMD2<Float>] {
+        guard let s = slot(id) else { return [] }
+        let f = s.carry.rotation.act(SIMD3<Float>(0, 0, 1))
+        let h = atan2f(f.x, f.z), ch = cosf(h), sh = sinf(h)
+        return s.openPts.map { SIMD2($0.x * ch + $0.y * sh, -$0.x * sh + $0.y * ch) }
     }
 
     // MARK: frame

@@ -269,38 +269,75 @@ final class FeatureClipTests: XCTestCase {
     }
 
     /// Wings fold up against the owner's back when a neighbour's skin is within their (open) reach, and open again when he leaves (the contact fold, FeatureSet.wingFoldWant):
-    /// the neighbour goes round him, touching (the closest the room allows); wherever the open wings would touch him they fold (and then no wing point is inside his skin), wherever they would not they stay open.
+    /// the neighbour goes round him and settles to touching (ContactSettle on the gap WITH the features: the owner stays put). Wherever the open wings would touch him they fold, and he
+    /// stops at the folded wing (the wing lies between them, never inside him); wherever they would not, they stay open and the bodies touch.
     func testWingsFoldNextToANeighbourAndSpringBack() {
         let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.wings, .none], seed: 5)
         d.live = true
-        func openClear() -> Float { ContactField.clearance(of: d.feats[0].slot(0)?.openPts ?? [], ownerRoot: ContactField.root(0), against: 1) ?? 9 }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        func openClear() -> Float { ContactField.clearance(of: d.feats[0].openWingPoints(0), ownerRoot: ContactField.root(0), against: 1) ?? 9 }
         func fold() -> Float { d.feats[0].slot(0)?.fold ?? -1 }
         var conflicts = 0, rows: [String] = []
         for k in 0..<12 {
-            let a = Float(k) * (.pi / 6)
-            let u = SIMD2<Float>(sinf(a), cosf(a))
+            let ang = Float(k) * (.pi / 6)
+            let u = SIMD2<Float>(sinf(ang), cosf(ang))
             d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * 1.6])          // (first apart, to read the touching distance along this direction)
             for _ in 0..<4 { d.tick() }
-            let touchR = 1.6 - (ContactField.gap(0, 1) ?? 0.2)
-            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * touchR])          // (then touching, the closest the room lets two Jelbies stand)
-            for _ in 0..<50 { d.tick() }
+            let touchR = 1.6 - (ContactField.gap(0, 1) ?? 0.2) + 0.04
+            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * touchR])          // (then 4 cm short of touching: the settle closes in)
+            var bodyLo: Float = 9, featLo: Float = 9
+            for f in 0..<90 {
+                d.tick()
+                ContactSettle.step(a.brain, b.brain, target: 0, anchoredA: true, features: true)
+                if f >= 60 { bodyLo = min(bodyLo, ContactField.gap(0, 1) ?? 9); featLo = min(featLo, ContactField.gap(0, 1, features: true) ?? 9) }
+            }
             let f = fold(), oc = openClear()
             let fc = ContactField.clearance(of: ContactField.featurePoints(0), ownerRoot: ContactField.root(0), against: 1) ?? 9
-            rows.append(String(format: "%3d deg: open wings %.3f from his skin, fold %.2f, folded wings %.3f", k * 30, oc, f, fc))
+            rows.append(String(format: "%3d deg: open wings %.3f from his skin, fold %.2f, folded wings %.3f, body gap %.4f, gap with features %.4f", k * 30, oc, f, fc, bodyLo, featLo))
+            XCTAssertGreaterThanOrEqual(bodyLo, -0.01, "never inside his body: \(rows.last!)")
+            XCTAssertGreaterThanOrEqual(featLo, -0.01, "never inside the (folded) wings: \(rows.last!)")
             if oc < 0.02 {
                 conflicts += 1
                 XCTAssertGreaterThan(f, 0.7, "wings that would touch him fold: \(rows.last!)")
-                XCTAssertGreaterThanOrEqual(fc, oc - 0.01, "folded is never worse than open: \(rows.last!)")
+                XCTAssertGreaterThanOrEqual(fc, -0.012, "the folded wings are not inside him (he stops at them): \(rows.last!)")
+                XCTAssertLessThanOrEqual(bodyLo, 0.06, "and the folded wing between them is thin: the bodies are within 6 cm: \(rows.last!)")
                 let feat = d.skinAll()
                 XCTAssertLessThanOrEqual(d.penetration(feat[0], owner: 0, raw: feat[0]), Self.tol, "what the fold leaves is clipped: nothing drawn inside his egg: \(rows.last!)")
             }
-            if oc > 0.12 { XCTAssertLessThan(f, 0.1, "wings that are clear stay open: \(rows.last!)") }
+            if oc > 0.12 {
+                XCTAssertLessThan(f, 0.1, "wings that are clear stay open: \(rows.last!)")
+                XCTAssertLessThanOrEqual(bodyLo, 0.012, "and the bodies touch: \(rows.last!)")
+            }
             d.place([SIMD2(0, 0.6), SIMD2(3, 0.6)])          // (away between the angles: open again)
             for _ in 0..<45 { d.tick() }
             XCTAssertLessThan(fold(), 0.05, "springs back when he leaves (\(k * 30) deg)")
         }
         for r in rows { MotionLog.write("FEATCLIP wingfold " + r) }
         XCTAssertGreaterThan(conflicts, 0, "the ring puts him in the wings' reach somewhere")
+    }
+
+    /// Diagnostic (WINGFOLD_SWEEP=1): how far the wings stick out of their owner's own body footprint for each folded pose (flap, spread).
+    func testZWingFoldPoseSweep() throws {
+        guard ProcessInfo.processInfo.environment["WINGFOLD_SWEEP"] == "1" else { throw XCTSkip("WINGFOLD_SWEEP not set") }
+        defer { FeatureTuning.forceFold = nil; FeatureTuning.foldFlap = nil; FeatureTuning.foldSpread = -15 }
+        for pose in ["standing", "lying"] {
+            for flap: Float in [-40, -20, 0, 20, 40, 60, 75] {
+                for spread: Float in [-40, -20, 0, 20, 40] {
+                    let d = Duo(positions: [SIMD2(0, 0.6)], features: [.wings], seed: 5)
+                    let r = d.lab.rigs[0]
+                    FeatureTuning.forceFold = 1; FeatureTuning.foldFlap = flap; FeatureTuning.foldSpread = spread
+                    if pose == "lying" { r.brain.idleForced = true; _ = r.brain.idleStart(.lieDown, r.sim); r.brain.idleState.hold = 60; for _ in 0..<150 { d.tick() } } else { for _ in 0..<30 { d.tick() } }
+                    _ = d.skinAll()
+                    var worst: Float = -9, worstDeg = 0
+                    for p in ContactField.featurePoints(0) {
+                        let L = simd_length(p); guard L > 1e-3 else { continue }
+                        let o = L - (ContactField.ext(0, p / L) ?? 0)
+                        if o > worst { worst = o; worstDeg = Int(atan2f(p.x, p.y) * 180 / .pi) }
+                    }
+                    MotionLog.write(String(format: "WINGSWEEP %@ flap %3.0f spread %3.0f: wings out of his own footprint by %.3f (at %d deg, %d pts)", pose, flap, spread, worst, worstDeg, ContactField.featurePoints(0).count))
+                }
+            }
+        }
     }
 
     // MARK: every feature against a neighbour

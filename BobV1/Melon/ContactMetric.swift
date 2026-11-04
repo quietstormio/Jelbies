@@ -67,6 +67,27 @@ nonisolated enum BruteForceContactMetric: ContactMetric {
         return dist - ra - rb
     }
 
+    /// The FOOTPRINT gap: how far `b` could slide toward `a` along the root axis before any vertex of one meets the other's footprint (over the shared height): the vertices binned
+    /// by their lateral offset (5 mm strips), per strip `b`'s nearest axial minus `a`'s farthest axial, the least over the strips both cover. >= `skinGap` (the supports can overlap
+    /// where the footprints do not); this is the one the eye checks ("is there floor between them").
+    static func footprintGap(_ a: ContactSurface, _ b: ContactSurface, strip: Float = 0.005) -> Float {
+        guard let band = sharedBand(a, b) else { return farApart }
+        let d = b.root - a.root, dist = simd_length(d)
+        let u = dist > 1e-4 ? d / dist : SIMD2<Float>(1, 0), v = SIMD2(-u.y, u.x)
+        var envA: [Int: Float] = [:], envB: [Int: Float] = [:]
+        for p in a.points where band.contains(p.y) {
+            let q = SIMD2(p.x, p.z) - a.root, w = Int((simd_dot(q, v) / strip).rounded(.down)), t = simd_dot(q, u)
+            if t > envA[w] ?? -.infinity { envA[w] = t }
+        }
+        for p in b.points where band.contains(p.y) {
+            let q = SIMD2(p.x, p.z) - a.root, w = Int((simd_dot(q, v) / strip).rounded(.down)), t = simd_dot(q, u)
+            if t < envB[w] ?? .infinity { envB[w] = t }
+        }
+        var best = Float.infinity
+        for (w, ta) in envA { if let tb = envB[w] { best = min(best, tb - ta) } }
+        return best.isFinite ? best : farApart
+    }
+
     /// The plain closest horizontal distance between any vertex of `a` and any vertex of `b` over their shared height (unsigned: an overlap still reads positive). A cross-check: where the
     /// surfaces are apart, it is >= `skinGap` (the vertices are samples of the surface, the support gap is the planes').
     static func closestHorizontal(_ a: ContactSurface, _ b: ContactSurface) -> Float {
