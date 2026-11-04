@@ -109,7 +109,7 @@ nonisolated enum MusicScene: Equatable, Sendable {
 /// The café's playlist, data-driven: a file (a SceneTrack case; its loop points are in SceneTrack) and the title the Sound panel shows. New tracks are added here.
 nonisolated enum CafeMusic {
     static let tracks: [(track: SceneTrack, title: String)] = [(.cafe1, "Morning Latte"), (.cafe2, "Rainy Window"), (.cafe3, "Window Seat"), (.cafe4, "Sunny Bossa"),
-                                                                (.cafe5, "Dusty Rhodes"), (.cafe6, "Steamed Milk"), (.cafe7, "Late Library"), (.cafe8, "Golden Hour")]
+                                                                (.cafe5, "Dusty Rhodes"), (.cafe6, "Steamed Milk"), (.cafe7, "Late Library"), (.cafe8, "Golden Hour Café")]
     static func title(_ t: SceneTrack) -> String? { tracks.first { $0.track == t }?.title }
 }
 
