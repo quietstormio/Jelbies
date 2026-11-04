@@ -236,3 +236,42 @@ nonisolated struct SnoreScheduler: Sendable {
         return out
     }
 }
+
+// MARK: - sleep sounds (2026-11-04): soft coos and a quieter extra snore, ON TOP of the snores above (those keep their rate)
+
+extension JellyVoiceSet {
+    static let sleepCooVariants = 3
+    /// sleep_coo_jelly{c}_{1...3}: a soft hummed "oo" in the character's voice. `roll` in 0..<1 picks the variant.
+    static func sleepCooFile(character c: Int, roll: Double) -> String {
+        "sleep_coo_jelly\(index(character: c))_\(min(Int(roll * Double(sleepCooVariants)), sleepCooVariants - 1) + 1)"
+    }
+}
+
+nonisolated enum SleepSound: Equatable, Sendable { case coo, softSnore }
+
+/// Extra sleeping sounds per napping Jelly: a coo about every 9...18 s, now and then (`softSnoreChance`) a quiet snore in its place, and no two
+/// Jellies within `hubGap` of each other. Pure: the hub feeds it the clock and a random source.
+nonisolated struct SleepSoundScheduler: Sendable {
+    static let interval: ClosedRange<Double> = 9...18
+    static let firstDelay: ClosedRange<Double> = 3...8
+    static let hubGap: Double = 3
+    static let softSnoreChance: Double = 0.2
+    static let softSnoreGain: Float = 0.6
+    static let cooGain: Float = 0.08
+    private(set) var next: [Double] = [0, 0, 0]
+    private(set) var lastAny: Double = -100
+
+    mutating func due(napping: [Bool], now: Double, random: (ClosedRange<Double>) -> Double) -> [(jelly: Int, sound: SleepSound)] {
+        var out: [(jelly: Int, sound: SleepSound)] = []
+        for i in napping.indices where i < next.count {
+            guard napping[i] else { next[i] = 0; continue }
+            if next[i] == 0 { next[i] = now + random(Self.firstDelay) + Double(i) * 0.9 }
+            guard now >= next[i] else { continue }
+            if now - lastAny < Self.hubGap { next[i] = lastAny + Self.hubGap + random(0.2...1.0); continue }
+            next[i] = now + random(Self.interval)
+            lastAny = now
+            out.append((i, random(0...1) < Self.softSnoreChance ? .softSnore : .coo))
+        }
+        return out
+    }
+}

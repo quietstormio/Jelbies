@@ -293,7 +293,7 @@ struct GameScreen: View {
             model.care.launched()
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
-            AudioHub.shared.setTownScene(GameScreen.townMusic(town))
+            AudioHub.shared.setTownScene(currentMusicScene)
             Ears.shared.launch(care: model.care)
             PlayToyRegistry.registerBuiltIns()
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
@@ -346,6 +346,7 @@ struct GameScreen: View {
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
                 AudioHub.shared.setForeground(true)
+                AudioHub.shared.setTownScene(currentMusicScene)          // re-derive from the truth on every return: a stale café scene can never keep the room's sounds muted
                 Ears.shared.setForeground(true)
                 LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
@@ -773,6 +774,13 @@ struct GameScreen: View {
     }
 
     /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
+    /// The music scene the screen in front really wants, read from the model (not from change events, which a rebuilt view can miss).
+    private var currentMusicScene: MusicScene {
+        if model.care.cafe.inScene { return CafeTuning.music }
+        if model.care.park.inScene { return ParkTuning.music }
+        if model.care.volley.inScene { return .volley }
+        return GameScreen.townMusic(town)
+    }
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none

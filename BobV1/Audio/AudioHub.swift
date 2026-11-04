@@ -44,6 +44,13 @@ final class AudioHub {
     @ObservationIgnored private var lastTick = CACurrentMediaTime()
     @ObservationIgnored private var micSession = false
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
+    /// 0...1 multiplier on all game music + ambience: 0 at a return from the background / an interruption, then rises over `resumeFadeSeconds` (no pop-in).
+    @ObservationIgnored private var resumeFade: Float = 1
+    static let resumeFadeSeconds: Float = 1.5
+    /// Catches music that should be audible but is not (a failed reactivation, a dropped interruption-ended, a route change under the players).
+    @ObservationIgnored private var watchdog = MusicWatchdog()
+    /// The home room's ambience bed in the café: slews to 0 there and back to 1 elsewhere (a step is a pop). Derived from the director's scene only, so it cannot stick.
+    @ObservationIgnored private var homeAmbience: Float = 1
     @ObservationIgnored private var earsSession = false
     /// Another app (Music, Spotify, a podcast) is playing: the game's music + ambience stay silent, effects mix on top. The saved setting is untouched.
     @ObservationIgnored private(set) var otherAudioPlaying = false
@@ -77,6 +84,7 @@ final class AudioHub {
     @ObservationIgnored private var lastPlay: [String: Double] = [:]
     @ObservationIgnored private var lastFoot: [Double] = [0, 0, 0]
     @ObservationIgnored private var snores = SnoreScheduler()
+    @ObservationIgnored private var sleepSounds = SleepSoundScheduler()
     /// Called for the Jelly that snores now (the sleep z's ride it).
     @ObservationIgnored var onSnore: ((Int) -> Void)?
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
@@ -112,6 +120,9 @@ final class AudioHub {
         observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
             Task { @MainActor in if type == .ended { self?.refreshOtherAudio(); self?.resumeAfterInterruption(verify: true) } }
+        })
+        observers.append(nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.watchdog.nudge() }          // a headphone / Bluetooth change can stop the players without a notification: re-check soon
         })
         observers.append(nc.addObserver(forName: AVAudioSession.silenceSecondaryAudioHintNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.refreshOtherAudio() }
@@ -149,8 +160,9 @@ final class AudioHub {
     /// Music level the game really uses: the setting, silenced while someone else's audio plays.
     private var musicLevelNow: Float { SessionPolicy.gameMusicAllowed(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying) ? settings.musicVolume : 0 }
 
-    private func resumeAfterInterruption(verify: Bool = false) {
+    private func resumeAfterInterruption(verify: Bool = false, fadeIn: Bool = true) {
         guard started, active else { return }
+        if fadeIn { resumeFade = 0; applyLevels() }          // everything comes back silent, then rises (resume-from-background fades in)
         if !micSession { setUpSession() }
         for d in decks { d.player.play() }
         layer?.player.play(); ambDay?.player.play(); ambEve?.player.play()
@@ -190,6 +202,8 @@ final class AudioHub {
     /// Test seam: each live deck's effective volume (fader x main gain).
     var _deckEffective: [Float] { decks.map { equalPower($0.fader.level) * Float(mainSlew.gain) } }
     var _mainGain: Double { mainSlew.gain }
+    var _homeAmbience: Float { homeAmbience }
+    var _resumeFade: Float { resumeFade }
     func _tick(_ dt: Double) { _ = dt; tick() }
 
     /// Foreground / background (scenePhase).
@@ -202,6 +216,7 @@ final class AudioHub {
             resumeAfterInterruption(verify: true)
         } else {
             verifyTask?.cancel()
+            resumeFade = 0
             micSession = false          // the mic engine died with the background; a stale flag would skip setUpSession on return
             for d in decks { d.player.pause() }
             layer?.player.pause(); ambDay?.player.pause(); ambEve?.player.pause()
@@ -263,6 +278,9 @@ final class AudioHub {
         for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
             snore(jelly: i, x: i < xs.count ? xs[i] : 0)
             onSnore?(i)
+        }
+        for (i, kind) in sleepSounds.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
+            sleepSound(kind, jelly: i, x: i < xs.count ? xs[i] : 0)
         }
         for i in moods.indices {
             if let old = lastMood[i], old != moods[i] {
@@ -432,6 +450,11 @@ final class AudioHub {
             guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
             p.prepareToPlay(); pool[name] = [p]
         } }
+        for c in 0..<JellyVoiceSet.count { for v in 1...JellyVoiceSet.sleepCooVariants {
+            let name = JellyVoiceSet.sleepCooFile(character: c, roll: (Double(v) - 0.5) / Double(JellyVoiceSet.sleepCooVariants))
+            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
+            p.prepareToPlay(); pool[name] = [p]
+        } }
         for s in SFX.allCases where s != .snore {
             for v in 1...max(variants(s), 1) {
                 let name = "\(s.rawValue)_\(v)"
@@ -552,6 +575,24 @@ final class AudioHub {
     }
 
     // Jelly Circuit cues. Named hooks: dedicated sounds are added later under these names; for now they use existing effects.
+    /// A sleeping Jelly's extra sounds (2026-11-04): a soft coo in its own voice, or now and then a quieter snore. Added ON TOP of `snore` (its rate is unchanged).
+    func sleepSound(_ kind: SleepSound, jelly: Int, x: Float? = nil) {
+        guard !muted, started, active else { return }
+        let level = settings.sfxLevel * duck.gain
+        guard level > 0.01 else { return }
+        let now = CACurrentMediaTime()
+        let key = "sleepsound#\(jelly)"
+        if let l = lastPlay[key], now - l < 3 { return }
+        lastPlay[key] = now
+        let c = JellyRoster.character(jelly)
+        switch kind {
+        case .coo:
+            fire(JellyVoiceSet.sleepCooFile(character: c, roll: Double.random(in: 0..<1)), volume: min(1, SleepSoundScheduler.cooGain * level * AudioMix.sfxMaster), pan: panFor(x: x))
+        case .softSnore:
+            fire(JellyVoiceSet.snoreFile(character: c, roll: 0.99), volume: min(1, SFX.snore.gain * SleepSoundScheduler.softSnoreGain * level * AudioMix.sfxMaster), pan: panFor(x: x))
+        }
+    }
+
     func raceCountdownBeep() { play(.countdownBeep) }
     func raceGo() { play(.raceGo) }
     func raceFinish() { play(.raceFinish) }
@@ -806,6 +847,15 @@ final class AudioHub {
         // the crossfade into the next song is timed from the player that really plays the current one (a frame hitch must not outrun the file)
         if let cur = director.current, let d = decks.last(where: { $0.track == cur && $0.fader.target > 0 && $0.player.isPlaying }) { director.syncElapsed(d.player.currentTime) }
         perform(director.update(dt: dt, input: inp))
+        resumeFade = min(1, resumeFade + Float(dt) / Self.resumeFadeSeconds)
+        homeAmbience = HomeAmbience.slew(homeAmbience, scene: director.scene, dt: dt)
+        if !micSession, musicLevelNow > 0.01 {
+            let wantsRoom = director.scene == .none && director.current != nil && director.gapLeft == nil
+            let roomHeard = deckPlaying
+            let wantsScene = director.sceneTrack != nil && director.scene != .none && director.scene != .results
+            let sceneHeard = director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false
+            if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) { resumeAfterInterruption(verify: true, fadeIn: false) }
+        } else { watchdog.reset() }
         mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
         for i in decks.indices { decks[i].fader.update(dt: dt) }
         scene?.update(dt: dt)
@@ -821,7 +871,7 @@ final class AudioHub {
 
     private func applyLevels() {
         guard started else { return }
-        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain * stormDuck
+        let m = musicLevelNow * duck.gain * AudioMix.music * danceGain * stormDuck * resumeFade
         let main = Float(mainSlew.gain)
         var loud: Float = 0
         for d in decks { d.player.volume = equalPower(d.fader.level) * main * m; if d.player.isPlaying { loud = max(loud, d.player.volume) } }
@@ -833,8 +883,8 @@ final class AudioHub {
         Ears.shared.speakerMusicLevel(loud)
         // ambience follows the clock blend continuously (day room by day, evening room evening + night)
         let b = DayClock.shared.blend
-        let a = musicLevelNow * duck.gain * AudioMix.ambience
-        let cafeQuiet: Float = director.scene == .cafe ? 0 : 1          // the café has its own music: the home room's ambience bed is off there
+        let a = musicLevelNow * duck.gain * AudioMix.ambience * resumeFade
+        let cafeQuiet = homeAmbience          // the café has its own music: the home room's ambience bed fades off there (and back on leaving, whatever the exit)
         ambDay?.player.volume = Float(b.morning + b.day) * a * cafeQuiet
         ambEve?.player.volume = Float(b.evening + b.night) * a * cafeQuiet
     }
