@@ -69,10 +69,38 @@ struct JelbiePortrait: View {
     var friend: ParkVisitor? = nil
     /// A Show rival drawn as the stage draws her: this body in her pastel colour, no wear, no feature.
     var rival: ShowRival? = nil
+    /// The lobby picker's picture: just the head (the render has a clear background), no circle, ring or shadow, so nothing crops it.
+    var frameless = false
     @State private var image: UIImage?
     @State private var tried = false
     private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name) }
     var body: some View {
+        if frameless { framelessBody } else { framedBody }
+    }
+    private var framelessBody: some View {
+        let t = JellyRoster.tint(care.jelly(who)?.character ?? who)
+        return ZStack {
+            if let image { Image(uiImage: image).resizable().scaledToFit() }
+            else if tried { Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).padding(size * 0.2) }
+            else { ProgressView().tint(SK.muted) }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
+        .accessibilityIdentifier("jelbie-portrait")
+        .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") { await loadHead() }
+    }
+    private func loadHead() async {
+        image = nil; tried = false
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        for _ in 0..<40 {
+            await Task.yield()
+            if let img = care.headProvider?(key) { image = img; return }
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+        }
+        tried = true
+    }
+    private var framedBody: some View {
         ZStack {
             Circle().fill(head ? SK.tile : ShowUI.platform)
             if let image { Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle()) }
@@ -260,31 +288,52 @@ struct StudioScreen: View {
     var show: () -> Void
     var practise: (DanceID) -> Void
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wardrobeOpen = false
     @State private var danceOpen = false
+    @State private var howOpen = false
     private var compact: Bool { vsc == .compact }
     private var day: Int { GameCare.showDay }
     private var theme: ShowTheme { ShowSchedule.theme(dayKey: day) }
     private var rank: ShowRank { care.show.progress.chosen }
+    private var blocker: String? { care.showBlocker(jelly: who) }
 
+    /// The shared lobby frame (Lobby/LobbyKit.swift) in the Studio's purple: the stage (the place), the Jelbie picker, the Show-ready card, Practise dance / Enter Jelly Show.
     var body: some View {
-        VStack(spacing: compact ? 8 : 12) {
-            ShowHeader(title: "Studio", backID: "studio-back", back: back) { DropsPill(wallet: care.bath.wallet) }
-            if compact {
-                HStack(alignment: .top, spacing: 12) {
-                    stageCard.frame(maxWidth: .infinity)
-                    VStack(spacing: 10) { readyCard; buttons }.frame(maxWidth: .infinity)
+        ZStack {
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Studio", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })),
+                        why: blocker, whyID: "studio-why") {
+                VStack(alignment: .leading, spacing: 0) {
+                    LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.main.title)").accessibilityIdentifier("studio-theme")
+                    stageCard
+                    LobbyPlaceInfo(text: rank.lobbyBlurb, textID: "studio-blurb", prizes: LobbyPrize.places((1...3).map { rank.drops(place: $0) }), prizeID: "studio-prizes")
                 }
-            } else {
-                stageCard.frame(height: 300)
-                readyCard
-                Spacer(minLength: 0)
-                buttons
+            } right: {
+                VStack(alignment: .leading, spacing: 0) {
+                    LobbyJelbiePicker(care: care, title: "Contestant", selected: [who], selectCount: 1, id: "studio-picker", tileID: { "studio-who-\($0.id)" }) { who = $0 }
+                        .padding(.bottom, 6)
+                    readyCard
+                }
+                .padding(.top, compact ? 0 : 12)
+            } bar: {
+                let p = care.jelly(who)
+                LobbyBottomBar(pepLeft: p?.stats.pepLeft ?? 0, pepTotal: TrainingTuning.fullSessions, pepID: "studio-pep", trainID: "studio-dance", playID: "studio-show",
+                               playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, trainTitle: "Practice dance", trainIcon: .feet, blocksTrain: false,
+                               train: { danceOpen = true }, play: { show() })
+            }
+            .accessibilityHidden(howOpen)
+            if howOpen {
+                LobbyHowSheet(rows: [
+                    (.hanger, "Dress for the theme", "Things in today\u{2019}s style count most. Gold edge = a match."),
+                    (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the show adds Glow."),
+                    (.feet, "Practice dance", "Dance skill is 30% of the Dance round."),
+                    (.trophy, "Enter the Jelly Show", "Look, Dance and Trick, each scored out of 100."),
+                ], close: { setHow(false) })
+                .zIndex(1)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-        .background(ShowUI.hall.ignoresSafeArea())
-        .accessibilityIdentifier("studio-screen")
+        .environment(\.lobbyTheme, .studio)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("studio-screen")
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
                 .presentationDetents(compact ? [.large] : [.medium, .large]).presentationBackground(SK.cream)
@@ -294,6 +343,8 @@ struct StudioScreen: View {
                 .presentationDetents(compact ? [.large] : [.medium]).presentationBackground(SK.cream)
         }
     }
+
+    private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
 
     /// The stage card: the Jelbie under a spotlight, the day's theme, his slot chips either side.
     private var stageCard: some View {
@@ -305,41 +356,30 @@ struct StudioScreen: View {
             HStack(spacing: 0) {
                 VStack(spacing: 10) { ForEach(left, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme, caption: false) { wardrobeOpen = true } } }.frame(width: 56)
                 Spacer(minLength: 0)
-                JelbiePortrait(care: care, who: who, size: compact ? 118 : 140)
+                JelbiePortrait(care: care, who: who, size: 92)
                 Spacer(minLength: 0)
                 VStack(spacing: 10) { ForEach(right, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme, caption: false) { wardrobeOpen = true } } }.frame(width: 56)
             }
             .padding(.horizontal, 16)
             VStack {
-                Text("\(ShowUI.dayName(day))'s theme: \(theme.main.title)").font(SK.font(14, .black)).foregroundStyle(ShowUI.brownGold).jLine(1, scale: 0.7)
-                    .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(ShowUI.light))
-                    .accessibilityIdentifier("studio-theme")
                 Spacer()
                 HStack(alignment: .bottom) {
                     Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .heavy)).foregroundStyle(ShowUI.gold).jLine(1, scale: 0.7)
-                    if care.jellies.count > 1 { Spacer(minLength: 6); whoChips }
+                    Spacer(minLength: 6)
+                    Button { AudioHub.shared.uiTap(); wardrobeOpen = true } label: {
+                        Text("Dress up").font(SK.font(14, .black)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 7).background(Capsule().fill(ShowUI.light))
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .padding(.vertical, -4)
+                    .buttonStyle(.plain).accessibilityIdentifier("studio-dress")
                 }
                 .padding(.horizontal, 10)
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, minHeight: compact ? 230 : 300)
+        .frame(maxWidth: .infinity, minHeight: 152, maxHeight: 152)          // as tall as the Course / Court cards, so the lines under it sit where they do on the other lobbies
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .accessibilityElement(children: .contain).accessibilityIdentifier("studio-stage")
-    }
-
-    private var whoChips: some View {
-        HStack(spacing: 6) {
-            ForEach(care.jellies, id: \.id) { j in
-                let t = JellyRoster.tint(j.character)
-                Button { AudioHub.shared.uiTap(); who = j.id } label: {
-                    Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 26, height: 26)
-                        .overlay(Circle().strokeBorder(who == j.id ? ShowUI.gold : .white.opacity(0.6), lineWidth: who == j.id ? 3 : 1.5))
-                }
-                .buttonStyle(.plain).accessibilityLabel(j.name).accessibilityIdentifier("studio-who-\(j.id)").accessibilityAddTraits(who == j.id ? .isSelected : [])
-            }
-        }
-        .padding(6).background(Capsule().fill(.black.opacity(0.25)))
     }
 
     /// "Show ready": Look / Shine / Diet / Dance, each with a word on what to do.
@@ -353,36 +393,15 @@ struct StudioScreen: View {
         let main = p?.stats.condition(theme.main.condition) ?? 0, friend = p?.stats.condition(theme.friend.condition) ?? 0
         let dances = p?.stats.knownDances.count ?? 0
         let skill = p?.stats.bestDance.map { p!.stats.proficiency($0) } ?? 0
-        return VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Show ready").font(SK.font(17, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).frame(minHeight: 44) }
-                    .buttonStyle(.plain).accessibilityIdentifier("studio-card")
-            }
-            ShowBar(name: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme", nameWidth: 64)
-            ShowBar(name: "Shine", value: glow, color: SK.sky, note: glow > 0.8 ? "Bathed recently" : glow > 0.3 ? "Glow \(ShowUI.glowOf5(glow)) of 5" : "A Clean would help", nameWidth: 64)
-            ShowBar(name: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))", nameWidth: 64)
-            ShowBar(name: "Dance", value: skill, color: Color(hex: 0xB58BDB), note: dances == 0 ? "No dance yet" : "\(dances) dance\(dances == 1 ? "" : "s") learned", nameWidth: 64)
-        }
-        .padding(14).background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream))
-        .accessibilityElement(children: .contain).accessibilityIdentifier("studio-ready")
-    }
-
-    private var buttons: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                pill("Dress up", id: "studio-dress") { wardrobeOpen = true }
-                pill("Practise dance", id: "studio-dance") { danceOpen = true }
-            }
-            ShowCTA(title: "Enter Jelly Show \u{00B7} \(rank.title) rank", enabled: care.showBlocker(jelly: who) == nil, id: "studio-show") { show() }
-            if let why = care.showBlocker(jelly: who) { Text(why).font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale) }
-        }
-    }
-    private func pill(_ title: String, id: String, _ action: @escaping () -> Void) -> some View {
-        Button { AudioHub.shared.uiTap(); action() } label: {
-            Text(title).font(SK.font(17, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
-        }.buttonStyle(.plain).accessibilityIdentifier(id)
+        return LobbyStatsCard(title: "Show ready", groups: [LobbyStatGroup(id: "studio-stats", rows: [
+            LobbyStatRow(label: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme"),
+            LobbyStatRow(label: "Shine", value: glow, color: SK.sky, note: glow > 0.8 ? "Bathed recently" : glow > 0.3 ? "Glow \(ShowUI.glowOf5(glow)) of 5" : "A Clean would help"),
+            LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
+            LobbyStatRow(label: "Dance", value: skill, color: Color(hex: 0xB58BDB), note: dances == 0 ? "No dance yet" : "\(dances) dance\(dances == 1 ? "" : "s") learned"),
+        ])], id: "studio-ready", trailing: {
+            Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
+                .buttonStyle(.plain).padding(.vertical, -10).accessibilityIdentifier("studio-card")
+        })
     }
 }
 
@@ -456,7 +475,7 @@ struct DancePicker: View {
         let st = care.jelly(who)?.stats
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Practise dance").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                Text("Practice dance").font(SK.font(26, .black)).foregroundStyle(SK.ink)
                 Spacer()
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("dance-close")

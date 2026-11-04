@@ -71,15 +71,33 @@ extension GameCare {
         return jellies.first { $0.id != id && $0.id != p?.id }
     }
 
-    /// Who plays beside a lone Jelbie today (the same Park visitor all day).
-    func volleyParkFriend() -> ParkVisitor {
+    /// The player's real Park friends (a Pal or better with any of his Jelbies), the closest first: the highest level, then the most points. At most `n`.
+    func closestParkFriends(_ n: Int) -> [ParkVisitor] {
         #if targetEnvironment(simulator)
-        if UserDefaults.standard.object(forKey: "LobbyFriendDay") != nil { return ParkPool.dailyFriend(dayKey: UserDefaults.standard.integer(forKey: "LobbyFriendDay")) }          // capture aid: `-LobbyFriendDay N` shows another day's friend
+        if let seed = UserDefaults.standard.string(forKey: "ParkFriendSeed").flatMap({ Int($0) }), let c = jellies.first?.character {          // capture aid: `-ParkFriendSeed N` makes Park visitor N a Pal of the first Jelbie
+            parkBook.add(points: ParkTuning.palAt + 5, visitor: seed, character: c)
+        }
         #endif
-        return ParkPool.dailyFriend(dayKey: DayClock.shared.dayKey)
+        let chars = jellies.map(\.character)
+        func best(_ v: ParkVisitor) -> (ParkFriendLevel, Float) {
+            let pts = chars.map { v.points(with: $0) }.max() ?? 0
+            return (ParkFriendLevel.of(pts), pts)
+        }
+        let friends = parkBook.visitors.filter { best($0).0 >= .pal }
+        return Array(friends.sorted { let a = best($0), b = best($1); return a.0 != b.0 ? a.0 > b.0 : a.1 != b.1 ? a.1 > b.1 : $0.id < $1.id }.prefix(n))
     }
 
-    func volleyBlocker(jelly id: Int) -> String? {
+    /// Who plays beside a lone Jelbie: his closest real Park friend; nil when he has none (then Volleyball is locked).
+    func volleyParkFriend() -> ParkVisitor? { closestParkFriends(1).first }
+
+    static let volleyNeedsPartner = "Volleyball needs a partner. Go to the Park and make a friend!"
+    /// A match needs two on the team: another Jelbie, or a Park friend. nil = fine (or not a lone Jelbie).
+    func volleyPartnerBlocker(jelly id: Int) -> String? {
+        volleyPartner(for: id) == nil && volleyParkFriend() == nil ? Self.volleyNeedsPartner : nil
+    }
+
+    /// `match`: also the partner rule (drills are solo and need none).
+    func volleyBlocker(jelly id: Int, match: Bool = false) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
         if race.active || raceWait != nil { return "He is at the track." }
@@ -91,6 +109,7 @@ extension GameCare {
         if raceBook.returner != nil { return "Welcome him home first." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "He is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "He is not in the room." }
+        if match, let m = volleyPartnerBlocker(jelly: id) { return m }
         return nil
     }
     func canVolley(jelly id: Int) -> Bool { volleyBlocker(jelly: id) == nil }
@@ -102,6 +121,7 @@ extension GameCare {
 
     func startVolley(jelly id: Int, mode: VolleyMode, seed: UInt64? = nil) {
         guard canVolley(jelly: id) else { return }
+        if case .match = mode, volleyPartnerBlocker(jelly: id) != nil { return }          // no teammate (no other Jelbie, no Park friend): no match
         select.cancel(); queued.removeAll(); callRunning = false
         voice.cancel()
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
@@ -193,9 +213,9 @@ extension GameCare {
             if case .match = volley.mode {
                 var rng = ParkRandom(w.pendingSeed &+ 77)
                 let friend = volleyParkFriend()
-                var pool = ParkPool.generate().filter { $0.id != friend.id }
+                var pool = ParkPool.generate().filter { $0.id != friend?.id }
                 for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
-                let specs = (w.partnerID == nil ? [friend] : []) + Array(pool.prefix(2))
+                let specs = (w.partnerID == nil ? friend.map { [$0] } ?? [] : []) + Array(pool.prefix(2))
                 let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []
                 if let p = w.partnerID { bodies.append(w.roster[p]) } else if let v = vis.first { bodies.append(v) }
                 let opp = w.partnerID == nil ? Array(vis.dropFirst()) : vis

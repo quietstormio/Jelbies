@@ -23,26 +23,50 @@ final class LobbyStatesUITests: XCTestCase {
     private func el(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
 
     @MainActor
-    func testSwapButtons() {
+    func testTeamPickerThree() {
         let app = launch("volley")
         XCTAssertTrue(el(app, "volley-lobby").waitForExistence(timeout: 30))
         sleep(8)
         save("s1_vb_three")
-        XCTAssertTrue(el(app, "volley-team-2-swap").exists, "three Jelbies: a swap on each tile")
-        el(app, "volley-team-2-swap").tap(); sleep(6)
-        save("s2_vb_swap_tile2")
-        el(app, "volley-team-1-swap").tap(); sleep(6)
-        save("s3_vb_swap_tile1")
+        XCTAssertTrue(el(app, "volley-who-0").isSelected && el(app, "volley-who-1").isSelected, "who + the first other Jelbie start as the team")
+        XCTAssertFalse(el(app, "volley-who-2").isSelected)
+        el(app, "volley-who-2").tap(); sleep(2)
+        XCTAssertTrue(el(app, "volley-who-2").isSelected, "the tapped Jelbie joins")
+        XCTAssertFalse(el(app, "volley-who-0").isSelected, "the one picked earliest drops out")
+        save("s2_vb_pick_third")
     }
 
     @MainActor
-    func testNoSwapWithTwo() {
-        let app = launch("volley", roster: "pip,moss")
+    func testTeamPickerTwoAndOne() {
+        var app = launch("volley", roster: "pip,moss")
         XCTAssertTrue(el(app, "volley-lobby").waitForExistence(timeout: 30))
         sleep(8)
-        XCTAssertFalse(el(app, "volley-team-1-swap").exists, "two Jelbies: no bench, no swap")
-        XCTAssertFalse(el(app, "volley-team-2-swap").exists)
+        XCTAssertTrue(el(app, "volley-who-0").isSelected && el(app, "volley-who-1").isSelected, "two Jelbies: both play")
+        XCTAssertFalse(el(app, "volley-who-friend").exists)
         save("s3b_vb_two")
+        app.terminate()
+        app = launch("volley", roster: "pip")
+        XCTAssertTrue(el(app, "volley-lobby").waitForExistence(timeout: 30))
+        sleep(8)
+        XCTAssertFalse(el(app, "volley-who-friend").exists, "one Jelbie and no Park friend: no teammate")
+        XCTAssertTrue(el(app, "volley-picker-locked").exists, "the second slot is locked")
+        XCTAssertTrue(el(app, "volley-go-park").exists, "with a way to the Park")
+        XCTAssertFalse(el(app, "volley-play").isEnabled, "Play is locked")
+        XCTAssertTrue(el(app, "volley-train").isEnabled, "Train is solo: it stays on without a partner")
+        XCTAssertTrue(el(app, "volley-picker-note").label.contains("needs a partner"), "the partner rule is said under the picker")
+        save("s3c_vb_one_locked")
+        app.terminate()
+        app = launch("volley", roster: "pip")
+        app.terminate()
+        let friendly = XCUIApplication()
+        friendly.launchArguments += ["-SetRoster", "pip", "-MainMenu", "0", "-Intro", "0", "-BlobDrops.v1", "1024", "-LobbyAuto", "volley", "-BlobNoWander", "1", "-ParkFriendSeed", "7"]
+        friendly.launch()
+        XCTAssertTrue(el(friendly, "volley-lobby").waitForExistence(timeout: 30))
+        sleep(8)
+        XCTAssertTrue(el(friendly, "volley-who-friend").exists, "one Jelbie and a Park friend: the friend fills the second tile")
+        XCTAssertTrue(el(friendly, "volley-team-friend").exists)
+        XCTAssertTrue(el(friendly, "volley-play").isEnabled)
+        save("s3d_vb_one_friend")
     }
 
     @MainActor

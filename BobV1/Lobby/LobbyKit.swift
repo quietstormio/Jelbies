@@ -18,15 +18,21 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
     let right: Right
     let bar: Bar
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.lobbyTheme) private var theme
+    /// The portrait height of the place picker (a carousel with its info line, or the Studio's stage).
+    static var placeHeight: CGFloat { 254 }
 
     init(header: AnyView, why: String?, whyID: String, @ViewBuilder left: () -> Left, @ViewBuilder right: () -> Right, @ViewBuilder bar: () -> Bar) {
         self.header = header; self.why = why; self.whyID = whyID; self.left = left(); self.right = right(); self.bar = bar()
     }
 
+    /// One line, always reserved (empty when there is no blocker), so the bar and everything above it never move between states.
     private var whyLine: some View {
         Group {
-            if let why { Text(why).font(SK.font(12, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8).accessibilityIdentifier(whyID) }
+            if let why { Text(why).font(SK.font(12, .bold)).foregroundStyle(theme.subheading).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier(whyID) }
+            else { Text(" ").font(SK.font(12, .bold)).accessibilityHidden(true) }
         }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
     }
 
     var body: some View {
@@ -45,31 +51,32 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    header.padding(.top, 14).padding(.horizontal, 16)
+                    header.padding(.top, 8).padding(.horizontal, 16)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            left
+                            left.frame(maxWidth: .infinity, minHeight: Self.placeHeight, alignment: .topLeading)          // the place picker has the same height on every lobby, so the Jelbie picker below sits at the same y
                             right
                         }
-                        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 12)
+                        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                    VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10).modifier(BarBand())
+                    VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6).modifier(BarBand())
                 }
             }
         }
-        .background(SK.cream.ignoresSafeArea())
+        .background(theme.background.ignoresSafeArea())
     }
 }
 
 /// The pinned bar's own cream band (it reaches the bottom edge) with a soft fade above it, so scrolled content never pokes out over the buttons.
 private struct BarBand: ViewModifier {
+    @Environment(\.lobbyTheme) private var theme
     func body(content: Content) -> some View {
         content
-            .background(alignment: .bottom) { SK.cream.ignoresSafeArea(edges: .bottom) }
+            .background(alignment: .bottom) { theme.background.ignoresSafeArea(edges: .bottom) }
             .overlay(alignment: .top) {
-                LinearGradient(colors: [SK.cream.opacity(0), SK.cream], startPoint: .top, endPoint: .bottom).frame(height: 18).offset(y: -18).allowsHitTesting(false)
+                LinearGradient(colors: [theme.background.opacity(0), theme.background], startPoint: .top, endPoint: .bottom).frame(height: 18).offset(y: -18).allowsHitTesting(false)
             }
     }
 }
@@ -82,7 +89,11 @@ struct LobbyHeader: View {
     let backID: String, helpID: String
     var back: () -> Void
     var help: () -> Void
+    /// The gear next to the ?: a screen with options (the Volleyball's) opens them here, and nowhere else.
+    var optionsID: String? = nil
+    var options: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.lobbyTheme) private var theme
     private var backButton: some View {
         Button { AudioHub.shared.uiTap(); back() } label: {
             LobbyIcon(kind: .back).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
@@ -90,16 +101,24 @@ struct LobbyHeader: View {
     }
     private var helpButton: some View {
         Button { AudioHub.shared.uiTap(); help() } label: {
-            Text("?").font(SK.font(16, .black)).foregroundStyle(SK.muted).frame(width: 30, height: 30).background(Circle().fill(SK.ink.opacity(0.08)))
+            Text("?").font(SK.font(16, .black)).foregroundStyle(theme.subheading).frame(width: 30, height: 30).background(Circle().fill(theme.heading.opacity(0.12)))
                 .frame(width: 44, height: 44).contentShape(Circle())
         }.buttonStyle(.plain).padding(-7).accessibilityLabel("How to play").accessibilityIdentifier(helpID)
     }
-    private var titleText: some View { Text(title).font(SK.font(30, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader) }
+    @ViewBuilder private var optionsButton: some View {
+        if let options, let optionsID {
+            Button { AudioHub.shared.uiTap(); options() } label: {
+                Image(systemName: "gearshape.fill").font(.system(size: 14, weight: .black)).foregroundStyle(theme.subheading).frame(width: 30, height: 30).background(Circle().fill(theme.heading.opacity(0.12)))
+                    .frame(width: 44, height: 44).contentShape(Circle())
+            }.buttonStyle(.plain).padding(-7).accessibilityLabel("Options").accessibilityIdentifier(optionsID)
+        }
+    }
+    private var titleText: some View { Text(title).font(SK.font(30, .black)).foregroundStyle(theme.heading).accessibilityAddTraits(.isHeader) }
     var body: some View {
         if typeSize.isAccessibilitySize {
             // big text: the title gets a line of its own
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) { backButton; helpButton; Spacer(minLength: 0); DropsPill(wallet: wallet, lobby: true) }
+                HStack(spacing: 10) { backButton; helpButton; optionsButton; Spacer(minLength: 0); DropsPill(wallet: wallet, lobby: true) }
                 titleText.lineLimit(2).minimumScaleFactor(0.6)
             }
         } else {
@@ -107,6 +126,7 @@ struct LobbyHeader: View {
                 backButton
                 titleText.lineLimit(1).minimumScaleFactor(0.6)
                 helpButton.offset(y: 2)
+                optionsButton.offset(y: 2)
                 Spacer(minLength: 0)
                 DropsPill(wallet: wallet, lobby: true)
             }
@@ -115,16 +135,25 @@ struct LobbyHeader: View {
     }
 }
 
+private struct LobbyCardStyle: ViewModifier {
+    let padding: EdgeInsets
+    @Environment(\.lobbyTheme) private var theme
+    func body(content: Content) -> some View {
+        content.padding(padding).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(theme.card))
+    }
+}
+
 // MARK: - Labels, cards, pills
 
 /// "Court" ... "1 of 4 open".
 struct LobbyLabelRow: View {
     let title: String, trailing: String
+    @Environment(\.lobbyTheme) private var theme
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title).font(SK.font(17, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
+            Text(title).font(SK.font(17, .black)).foregroundStyle(theme.heading).accessibilityAddTraits(.isHeader)
             Spacer()
-            Text(trailing).font(SK.font(12.5, .bold)).foregroundStyle(SK.muted)
+            Text(trailing).font(SK.font(12.5, .bold)).foregroundStyle(theme.subheading)
         }
         .padding(.horizontal, 2).padding(.bottom, 8)
     }
@@ -132,8 +161,8 @@ struct LobbyLabelRow: View {
 
 extension View {
     /// The mockups' white card: radius 24.
-    func lobbyCard(padding: EdgeInsets = EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) -> some View {
-        self.padding(padding).frame(maxWidth: .infinity, alignment: .leading).background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
+    func lobbyCard(padding: EdgeInsets = EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)) -> some View {
+        modifier(LobbyCardStyle(padding: padding))
     }
 }
 
@@ -194,6 +223,7 @@ struct LobbyCarousel<Content: View>: View {
 struct LobbyPill: View {
     let label: String, amount: Int
     var gold = false
+    @Environment(\.lobbyTheme) private var theme
     var body: some View {
         HStack(spacing: 5) {
             Text(label).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
@@ -201,7 +231,7 @@ struct LobbyPill: View {
             Text("\(amount)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
         }
         .padding(.horizontal, 10).frame(minHeight: 30)
-        .background(Capsule().fill(gold ? SK.honey : Color.white.opacity(0.85)))
+        .background(Capsule().fill(gold ? theme.accent : theme.tile))
         .fixedSize()
         .accessibilityElement(children: .ignore).accessibilityLabel("\(label), \(amount) JellyCoins")
     }
@@ -218,6 +248,7 @@ struct LobbyInfoLine<Pills: View>: View {
     init(text: String, textID: String? = nil, pillsBelow: Bool = false, squeeze: Bool = false, @ViewBuilder pills: () -> Pills) { self.text = text; self.textID = textID; self.pillsBelow = pillsBelow; self.squeeze = squeeze; self.pills = pills() }
     @State private var availW: CGFloat = 0
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.lobbyTheme) private var theme
     /// One line when the text fits at 90% size or better (never scaled at accessibility sizes); otherwise it wraps at full size.
     private var oneLine: Bool {
         guard !typeSize.isAccessibilitySize, availW > 0 else { return false }
@@ -226,7 +257,7 @@ struct LobbyInfoLine<Pills: View>: View {
         return (text as NSString).size(withAttributes: [.font: font]).width * 0.9 <= availW
     }
     private var blurb: some View {
-        Text(text).font(SK.font(13, .bold)).foregroundStyle(SK.muted).lineSpacing(2)
+        Text(text).font(SK.font(13, .bold)).foregroundStyle(theme.subheading).lineSpacing(2)
             .lineLimit(oneLine || squeeze ? 1 : nil).minimumScaleFactor(squeeze ? 0.7 : (oneLine ? 0.9 : 1)).fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier(textID ?? "lobby-info")
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availW = $0 }
@@ -240,6 +271,30 @@ struct LobbyInfoLine<Pills: View>: View {
             }
         }
         .padding(.horizontal, 2).padding(.top, 10)
+    }
+}
+
+/// One prize: "1st" and its JellyCoins; the first is gold.
+struct LobbyPrize: Identifiable {
+    var id: String { label }
+    var label: String
+    var amount: Int
+    var gold = false
+    /// 1st / 2nd / 3rd from three amounts.
+    static func places(_ a: [Int]) -> [LobbyPrize] { zip(["1st", "2nd", "3rd"], a).enumerated().map { LobbyPrize(label: $0.element.0, amount: $0.element.1, gold: $0.offset == 0) } }
+}
+
+/// The line under the place picker (Course, Court, Stage): one short description on the left and, directly under it, the row of prize pills. The same place on every lobby.
+struct LobbyPlaceInfo: View {
+    let text: String
+    var textID: String? = nil
+    var prizes: [LobbyPrize]
+    var prizeID = "lobby-prizes"
+    var body: some View {
+        LobbyInfoLine(text: text, textID: textID, pillsBelow: true) {
+            ForEach(prizes) { LobbyPill(label: $0.label, amount: $0.amount, gold: $0.gold) }
+        }
+        .accessibilityIdentifier(prizeID)
     }
 }
 
@@ -354,19 +409,26 @@ struct WeightedRow: Layout {
     }
 }
 
-/// Train (white, ink outline, figure, pep pips) and the main button (pinkStrong, 1.25x as wide). A blocker mutes and disables both.
+/// Train (white, ink outline, figure, pep pips) and the main button (1.25x as wide). A blocker mutes and disables both (`blocksTrain: false`: only the main one).
+/// The Studio reuses it with "Practise dance" as the left button.
 struct LobbyBottomBar: View {
     let pepLeft: Int, pepTotal: Int
     let pepID: String
     let trainID: String, playID: String
     let playTitle: String, playIcon: LobbyIcon.Kind
     let blocked: Bool
+    var trainTitle = "Train"
+    var trainIcon: LobbyIcon.Kind = .run
+    var blocksTrain = true
+    /// Overrides when Train is off (Volleyball: the partner rule locks Play, never the solo Train).
+    var trainBlocked: Bool? = nil
     var train: () -> Void
     var play: () -> Void
-    @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.lobbyTheme) private var theme
 
     var body: some View {
         let minH: CGFloat = 58
+        let trainOff = trainBlocked ?? (blocked && blocksTrain)
         WeightedRow(weights: [1, 1.25], spacing: 12) {
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); train() } label: {
                 ViewThatFits(in: .horizontal) {
@@ -374,30 +436,32 @@ struct LobbyBottomBar: View {
                     trainContent(icon: false, dots: true)
                     trainContent(icon: false, dots: false)
                 }
-                .foregroundStyle(blocked ? SK.muted : SK.ink)
+                .foregroundStyle(trainOff ? SK.muted : theme.secondaryText)
                 .frame(maxWidth: .infinity, minHeight: minH)
-                .background(Capsule().fill(Color.white.opacity(0.92)))
-                .overlay(Capsule().strokeBorder(blocked ? SK.muted.opacity(0.4) : SK.ink, lineWidth: 3))
+                .background(Capsule().fill(theme.secondaryFill))
+                .overlay(Capsule().strokeBorder(trainOff ? SK.muted.opacity(0.4) : theme.secondaryStroke, lineWidth: 3))
             }
-            .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(trainID)
-            .accessibilityLabel("Train").accessibilityValue("Pep: \(pepLeft) of \(pepTotal) full practices left")
+            .buttonStyle(.plain).disabled(trainOff).accessibilityIdentifier(trainID)
+            .accessibilityLabel(trainTitle).accessibilityValue("Pep: \(pepLeft) of \(pepTotal) full practices left")
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play() } label: {
                 HStack(spacing: 9) {
-                    LobbyIcon(kind: playIcon, color: .white)
+                    LobbyIcon(kind: playIcon, color: theme.primaryText)
                     Text(playTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
                 }
-                .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: minH)
-                .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : SK.pinkStrong))
+                .padding(.horizontal, 12)
+                .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: minH)
+                .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : theme.primary))
             }
             .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(playID)
         }
     }
 
     private func trainContent(icon: Bool, dots: Bool) -> some View {
-        HStack(spacing: 9) {
-            if icon { LobbyIcon(kind: .run, color: blocked ? SK.muted : SK.ink) }
-            Text("Train").font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
-            if dots { PepDots(left: pepLeft, total: pepTotal, id: pepID).padding(.leading, 2).opacity(blocked ? 0.6 : 1) }
+        let off = trainBlocked ?? (blocked && blocksTrain)
+        return HStack(spacing: 9) {
+            if icon { LobbyIcon(kind: trainIcon, color: off ? SK.muted : theme.secondaryText) }
+            Text(trainTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
+            if dots { PepDots(left: pepLeft, total: pepTotal, id: pepID).padding(.leading, 2).opacity(off ? 0.6 : 1) }
         }
         .padding(.horizontal, 8)
     }

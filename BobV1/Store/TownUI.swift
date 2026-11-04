@@ -112,7 +112,7 @@ struct TownFlow: View {
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
-            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k, id in goHome(); care.startVolley(jelly: id, mode: .drill(k)) })
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k, id in goHome(); care.startVolley(jelly: id, mode: .drill(k)) })
             case .show: ShowLobby(care: care, who: $who, back: { up(.studio) }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
@@ -356,7 +356,7 @@ struct TrackPanel: View {
                         why: blocker, whyID: "track-why") {
                 CoursePicker(care: care, runner: prof?.character ?? who, bleed: !compact, hint: hint)
             } right: {
-                runnerCard(prof).padding(.top, compact ? 0 : 18)
+                runnerCard(prof).padding(.top, compact ? 0 : 12)
             } bar: {
                 LobbyBottomBar(pepLeft: prof?.stats.pepLeft ?? 0, pepTotal: TrainingTuning.fullSessions, pepID: "track-pep", trainID: "track-train", playID: "track-race",
                                playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, train: train, play: race)
@@ -385,28 +385,25 @@ struct TrackPanel: View {
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
 
+    /// The shared picker row and stats card: pick the runner, then his Waddle and Focus.
     private func runnerCard(_ prof: JellyProfile?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Runner").font(SK.font(19, .black)).foregroundStyle(SK.ink).padding(.bottom, 12).accessibilityAddTraits(.isHeader)
-            if care.jellies.count > 1 { LobbyChips(care: care, selected: who) { who = $0 } }
-            else if let p = prof { LobbyChip(care: care, jelly: p, selected: true) {} .allowsHitTesting(false) }
-            let waddle = LobbyBigStat(name: "Waddle", value: prof?.stats.waddle ?? 0, color: SK.pink)
-            let focus = LobbyBigStat(name: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky)
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 18) { waddle.frame(maxWidth: .infinity); focus.frame(maxWidth: .infinity) }
-                VStack(spacing: 12) { waddle; focus }
-            }
-            .padding(.top, 14)
-            if let p = prof, !p.perks.raceBoost.isNone {
-                FlowLayout(spacing: 6) {
-                    ForEach(p.perks.active.filter(\.raceOnly), id: \.rawValue) { PerkChip(kind: $0, left: p.perks.remaining($0)) }
-                    Text("for the next race").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+            LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker") { who = $0 }
+                .padding(.bottom, 6)
+            LobbyStatsCard(title: "Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
+                LobbyStatRow(label: "Waddle", value: prof?.stats.waddle ?? 0, color: SK.pink),
+                LobbyStatRow(label: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky),
+            ])], id: "track-runner", trailing: {
+                Text(prof?.name ?? "").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1)
+            }, footer: {
+                if let p = prof, !p.perks.raceBoost.isNone {
+                    FlowLayout(spacing: 6) {
+                        ForEach(p.perks.active.filter(\.raceOnly), id: \.rawValue) { PerkChip(kind: $0, left: p.perks.remaining($0)) }
+                        Text("for the next race").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+                    }
                 }
-                .padding(.top, 12)
-            }
+            })
         }
-        .lobbyCard()
-        .accessibilityIdentifier("track-runner")
     }
 }
 

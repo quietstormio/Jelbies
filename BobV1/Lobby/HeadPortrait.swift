@@ -17,5 +17,7 @@ struct HeadPortraitKey: Hashable, Sendable {
     var borrowed: Bool { colour != nil || rivalTint != nil }
     /// How far above the body's centre the camera looks, and how tall the picture is (world units): the head, a hat and a little body.
     static var focusUp: Float { UserDefaults.standard.object(forKey: "HeadFocus") != nil ? UserDefaults.standard.float(forKey: "HeadFocus") : 0.30 }          // (-HeadFocus / -HeadSpan: capture aids)
-    static var span: Float { UserDefaults.standard.object(forKey: "HeadSpan") != nil ? UserDefaults.standard.float(forKey: "HeadSpan") : 1.24 }
+    /// How far below the body's top the picture's centre sits, as a fraction of the picture's height (the crown, a hat, Moss's daisy and a margin above; the face and the chin below).
+    static var topFraction: Float { UserDefaults.standard.object(forKey: "HeadTop") != nil ? UserDefaults.standard.float(forKey: "HeadTop") : 0.33 }
+    static var span: Float { UserDefaults.standard.object(forKey: "HeadSpan") != nil ? UserDefaults.standard.float(forKey: "HeadSpan") : 1.5 }
 }
