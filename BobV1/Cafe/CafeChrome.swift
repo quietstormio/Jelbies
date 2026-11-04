@@ -180,8 +180,8 @@ struct CafeOrderStack: View {
                 if !(compact && off) { Text(CafeMenu.treat(t).name).font(SK.font(compact ? 11 : 12, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5) }
                 HStack(spacing: 2) {
                     JellyCoinIcon(size: 13)
-                    if base != paid { Text("\(base)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
-                    Text(cafe.wasFree && !editing ? "0" : "\(paid)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                    if base != paid, !compact { Text("\(base)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit().lineLimit(1).fixedSize() }
+                    Text(cafe.wasFree && !editing ? "0" : "\(paid)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).fixedSize()
                     if off && base != paid { Text("\u{2212}15%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
                 }
                 if !editing {
