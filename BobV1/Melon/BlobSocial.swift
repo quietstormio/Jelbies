@@ -114,6 +114,8 @@ struct SocialBook {
     var squinting = false
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
+    /// ringAround: this one has walked out to his spot on the ring.
+    var ringSpread = false
     var started: [SocialKind: Int] = [:]
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
@@ -545,6 +547,7 @@ extension BlobBrain {
         if idleState.kind == .sleep { socialBook.drought = 0 } else if !blocked && social == nil { socialBook.drought += dt }
         if let s = social {
             socialDrive(s, sim, skinner, dt)
+            peakGuard()
             contactApplyLean()
         } else {
             socialInviteTick(sim, dt)

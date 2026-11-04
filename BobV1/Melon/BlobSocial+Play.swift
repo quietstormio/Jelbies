@@ -220,7 +220,7 @@ extension BlobBrain {
             _ = walkUpPhase(s, o, isA)
         case 1:
             faceEach(o)
-            if isA, s.phaseT > 0.45 { s.setPhase(2); s.impacted = false }
+            if isA, s.phaseT > 0.45, peakArmed(o) || s.phaseT > 3 { s.setPhase(2); s.impacted = false }
         case 2, 3:
             faceEach(o)
             let t = s.phaseT

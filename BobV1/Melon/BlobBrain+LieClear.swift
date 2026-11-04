@@ -134,14 +134,14 @@ extension BlobBrain {
     /// While he lies next to a lying neighbour: the settle controller on the DRAWN skin gap (ContactProfile.swift). During the plop (phase 1) it only pushes the bodies out of each other;
     /// lying (phase 2) it eases them until the skins just touch (band -0.5 ... +0.5 cm). The older one stays, the later one scoots in (or away).
     func snuggleTick(_ sim: SoftBody, _ dt: Float) {
-        guard LieClearTuning.enabled, idleState.kind == .lieDown, !idleState.windowGo, idleState.phase >= 1, idleState.phase <= 2 else { return }
+        guard LieClearTuning.enabled, idleState.kind == .lieDown || idleState.kind == .flop, !idleState.windowGo, idleState.phase >= 1, idleState.phase <= 2 else { return }
         var best: (o: BlobBrain, g: Float)?
-        for o in socialOthers() where o !== self && o.enabled && o.idleState.kind == .lieDown && !o.idleState.windowGo && o.idleState.phase >= 1 && o.idleState.phase <= 2 {
+        for o in socialOthers() where o !== self && o.enabled && (o.idleState.kind == .lieDown || o.idleState.kind == .flop) && !o.idleState.windowGo && o.idleState.phase >= 1 && o.idleState.phase <= 2 {
             guard let g = ContactField.gap(steerID, o.steerID, features: true), g < 0.7 else { continue }
             if best == nil || g < best!.g { best = (o, g) }
         }
         guard let (o, _) = best else { return }
         let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
-        ContactSettle.step(self, o, target: 0, anchoredA: !older, anchoredB: older, onlySeparate: idleState.phase == 1, features: true)          // (a folded wing between the backs is touched, never sunk into)
+        ContactSettle.step(self, o, target: ContactStance.hold, anchoredA: !older, anchoredB: older, onlySeparate: idleState.phase == 1, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)          // (a folded wing between the backs is touched, never sunk into)
     }
 }
