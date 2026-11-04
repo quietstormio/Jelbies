@@ -14,7 +14,7 @@ final class RelayTests: XCTestCase {
 
     private func leg(_ n: String, _ w: Float, _ start: Float, ai: Bool = false) -> RelayLeg { RelayLeg(name: n, stats: RacerStats(waddle: w, focus: 1), ai: ai, startDist: start) }
 
-    private func plan(course: RaceCourse = .puddle, waddles: [[Float]] = [[0.9, 0.9, 0.9], [0.5, 0.5, 0.5], [0.3, 0.3, 0.3]], friendLegs: Set<Int> = []) -> RelayPlan {
+    private func plan(course: RaceCourse = .puddle, waddles: [[Float]] = [[0.9, 0.9, 0.9], [0.7, 0.7, 0.7], [0.6, 0.6, 0.6]], friendLegs: Set<Int> = []) -> RelayPlan {
         let st = RelayTuning.legs(length: course.length).starts
         let teams = waddles.enumerated().map { t, ws in ws.enumerated().map { j, w in leg("T\(t)L\(j)", w, st[j], ai: t == 0 && friendLegs.contains(j)) } }
         return RelayPlan(teams: teams, teamNames: ["A", "B", "C"], ownedIDs: [0, 1, 2], friendIDs: [], rivalVisitorIDs: [], course: course)

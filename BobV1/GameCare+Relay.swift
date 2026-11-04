@@ -120,7 +120,9 @@ extension GameCare {
         for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
         let rivalVisitors = Array(pool.prefix(6))
         let avg = RacerStats(waddle: team0.map(\.stats.waddle).reduce(0, +) / Float(max(team0.count, 1)), focus: team0.map(\.stats.focus).reduce(0, +) / Float(max(team0.count, 1)))
-        let rs = race.rivalSource.rivals(count: 6, player: avg, playerTint: JellyRoster.tint(jelly(lead)?.character ?? 0), seed: s, tier: tier)
+        let tint = JellyRoster.tint(jelly(lead)?.character ?? 0)
+        // (two calls of three: the generator draws each rival a different hue from a pool of six)
+        let rs = race.rivalSource.rivals(count: 3, player: avg, playerTint: tint, seed: s, tier: tier) + race.rivalSource.rivals(count: 3, player: avg, playerTint: tint, seed: s &+ 1, tier: tier)
         var teams: [[RelayLeg]] = [team0]
         var names = ["Your team"]
         for t in 0..<2 {
@@ -226,8 +228,9 @@ extension GameCare {
 
     func tickRelay(_ actors: [JellyActor], dt: Float) {
         let book = raceBook, rb = book.relay
-        guard race.sim != nil, let plan = race.relayPlan, rb.teams.count == 3 else { return }
+        guard race.sim != nil, let plan = race.relayPlan else { return }
         func body(_ t: Int) -> JellyActor? { rb.teams.indices.contains(t) ? rb.teams[t][min(rb.active[t], 2)] : nil }
+        guard rb.teams.count == 3 else { _ = race.tick(dt: dt, bodyFree: { _ in true }, bodyReady: { _ in true }); return }          // (the fade out and the swap)
         rb.sinceHandoff += dt
         for (a, v) in rb.visitors { visitorLook(a, v, dt: dt) }
         let course = race.sim!.course
