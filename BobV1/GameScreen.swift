@@ -594,6 +594,10 @@ struct GameScreen: View {
         }
         // capture aid: -CafeAuto enter|order|refuse (the café outing after 4 s; latte / latte2 order baby lattes for one / two Jelbies and slower treats for the rest; order picks Pip swirl, Moss pancakes, Lavender sundae; refuse orders with 9 Drops)
         // also: -CafeAuto menu|lounge; -CafeHunger full,hungry,hungry (hunger per Jelbie before the visit); -CafeStamps 7 (the stamp card); -CafePicks swirl,juice,latte (pre-fills the list)
+        if d.string(forKey: "CafeAuto") == nil, let h = d.string(forKey: "CafeHunger") {          // (the Town tile's "Nobody's hungry" capture)
+            await sleep(2)
+            for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) }
+        }
         if let m = d.string(forKey: "CafeAuto") {
             await sleep(4)
             if let h = d.string(forKey: "CafeHunger") { for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) } }

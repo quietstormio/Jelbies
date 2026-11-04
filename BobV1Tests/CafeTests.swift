@@ -455,6 +455,19 @@ final class CafeTests: XCTestCase {
         for t in CafeMusic.tracks { XCTAssertNotNil(SceneRender.fileLength(t.track), "\(t.track) is bundled") }
     }
 
+    /// Everybody finishes his own treat at the preset table (nobody is left with food on the plate), over several visits.
+    func testEveryoneFinishesAtThePresetTable() {
+        for visit in 0..<4 {
+            let r = room(drops: 500)
+            enter(r)
+            let c = r.care
+            XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .juice, 1: .cocoa, 2: .pancakes])), "visit \(visit)")
+            step(r, 120) { c.cafe.phase == .cheer }
+            XCTAssertFalse(c.group.gaveUp, "visit \(visit): the sitting was not given up; retries \(c.group.walkRetries) reserves \(c.group.reserves) wanted \(String(describing: c.groupWanted?.id)) dining \(c.dining.phase) n \(c.dining.n) floors \(r.actors.map { $0.floor }) stands \(c.cafeBook.stands) origin \(c.cafeBook.origin) placeOf \(c.group.placeOf)")
+            for i in 0..<3 { XCTAssertEqual(c.cafeBook.ate[i], 3, "visit \(visit): Jelbie \(i) ate his whole treat") }
+        }
+    }
+
     // 11. the room's floor
 
     func testCafeDefKeepsTheFloor() {

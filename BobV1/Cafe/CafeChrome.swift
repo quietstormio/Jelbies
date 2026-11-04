@@ -22,17 +22,19 @@ struct CafeChrome: View {
                     VStack {
                         HStack(alignment: .top, spacing: 8) {
                             if cafe.canGoHome { goHomeButton.transition(.opacity) }
-                            HStack(spacing: 7) {
-                                Image(systemName: "cup.and.saucer.fill").font(.system(size: 15, weight: .heavy))
-                                Text("Café").font(SK.font(17, .black))
+                            if !cafe.canGoHome || vsc == .compact {
+                                HStack(spacing: 7) {
+                                    Image(systemName: "cup.and.saucer.fill").font(.system(size: 15, weight: .heavy))
+                                    Text("Café").font(SK.font(17, .black)).lineLimit(1).fixedSize()
+                                }
+                                .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
+                                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
+                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                                .accessibilityElement(children: .ignore).accessibilityLabel("Café").accessibilityIdentifier("cafe-chip")
                             }
-                            .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
-                            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-                            .accessibilityElement(children: .ignore).accessibilityLabel("Café").accessibilityIdentifier("cafe-chip")
-                            Spacer()
+                            Spacer(minLength: 4)
                             musicButton
-                            DropsPill(wallet: care.bath.wallet)
+                            DropsPill(wallet: care.bath.wallet).fixedSize()
                         }
                         Spacer()
                     }
@@ -41,10 +43,10 @@ struct CafeChrome: View {
                 }
                 if cafe.listOpen, !cardHidden {
                     if vsc == .compact {
-                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 72).frame(width: min(340, g.size.width * 0.4)).padding(.top, 64).padding(.bottom, 8).padding(.trailing, 8) }
+                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(380, g.size.width * 0.44)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.6 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 84 : 18) }
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.43 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -103,7 +105,7 @@ struct CafeChrome: View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); cafe.goHome() } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.left").font(.system(size: 15, weight: .heavy))
-                Text("Go home").font(SK.font(16, .black)).lineLimit(1).minimumScaleFactor(0.7)
+                Text("Go home").font(SK.font(16, .black)).lineLimit(1).fixedSize()
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
             .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.22), radius: 5, y: 2))
@@ -158,13 +160,13 @@ struct CafeOrderCard: View {
             }
             footer
         }
-        .padding(12)
+        .padding(compact ? 12 : 10)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.28), radius: 6, y: 3))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
         .frame(maxHeight: maxHeight)
         .onAppear {
             if let w = UserDefaults.standard.string(forKey: "CafePicks") {          // capture aid: -CafePicks swirl,juice,latte
-                for (i, n) in w.split(separator: ",").enumerated() where ids.indices.contains(i) { if let t = CafeTreatID(rawValue: String(n)) { picks[ids[i]] = t } }
+                for (i, n) in w.split(separator: ",", omittingEmptySubsequences: false).enumerated() where ids.indices.contains(i) { if let t = CafeTreatID(rawValue: String(n)) { picks[ids[i]] = t } }
             }
             who = ids.first(where: { picks[$0] == nil }) ?? ids.first ?? 0
         }
@@ -172,17 +174,46 @@ struct CafeOrderCard: View {
     }
 
     private var scrolled: some View {
-        VStack(spacing: 8) {
-            header
-            VStack(spacing: 5) { ForEach(ids, id: \.self) { row($0) } }
+        VStack(spacing: 4) {
+            slimHeader
+            VStack(spacing: 4) { ForEach(ids, id: \.self) { row($0) } }
             if editing {
-                specialLine
-                section("Food", note: foodNote)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 3), spacing: 5) { ForEach(CafeMenu.foods) { tile($0) } }
-                section("Drinks", note: nil)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 3), spacing: 5) { ForEach(CafeMenu.drinks) { tile($0) } }
+                strip
             }
         }
+    }
+
+    /// Portrait: the title with the stamp card beside it (the card is short, the stage stays in view).
+    private var slimHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(cafe.stamps.isFull && editing ? "Free order!" : (editing ? "Café menu" : "Your order")).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                if let r = refusal ?? cafe.cardRefusal {
+                    Text(r).font(SK.font(11, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(2).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
+                } else if editing {
+                    specialLine
+                }
+            }
+            Spacer(minLength: 2)
+            stampRow
+        }
+    }
+
+    /// Portrait: Food then Drinks in one sideways strip.
+    private var strip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 5) {
+                if let sp = special { sideLabel("TODAY"); tile(CafeMenu.treat(sp)).frame(width: 92) }
+                sideLabel("FOOD")
+                ForEach(CafeMenu.foods.filter { $0.id != special }) { tile($0).frame(width: 92) }
+                sideLabel("DRINKS")
+                ForEach(CafeMenu.drinks.filter { $0.id != special }) { tile($0).frame(width: 92) }
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+    private func sideLabel(_ t: String) -> some View {
+        Text(t).font(SK.font(10, .black)).foregroundStyle(SK.muted).fixedSize().rotationEffect(.degrees(-90)).frame(width: 14, height: 62).accessibilityHidden(true)
     }
 
     // MARK: pieces
@@ -227,11 +258,11 @@ struct CafeOrderCard: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .padding(.horizontal, 8).frame(minHeight: 44)
+            .padding(.horizontal, 8).frame(minHeight: compact ? 38 : 40)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(active ? SK.honey : Color.white.opacity(0.7)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
-        .buttonStyle(.plain).disabled(!editing)
+        .buttonStyle(.plain)
         .accessibilityIdentifier("cafe-who-\(id)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(name(id)): \(t.map { "\(CafeMenu.treat($0).name), \(CafeMenu.price($0, special: special)) JellyCoins" } ?? "no treat yet")\(!editing ? (served ? ", served" : ", on the way") : "")")
@@ -250,14 +281,16 @@ struct CafeOrderCard: View {
     }
 
     private var specialLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "sparkles").font(.system(size: 12, weight: .heavy)).foregroundStyle(SK.honeyDeep)
-            if let sp = special {
+        HStack(spacing: 4) {
+            if let n = foodNote {
+                Image(systemName: "exclamationmark.circle.fill").font(.system(size: 12, weight: .heavy)).foregroundStyle(Color(hex: 0xB0413E))
+                Text(n + " \u{00B7} try a drink").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(1).minimumScaleFactor(0.6).accessibilityIdentifier("cafe-full-note")
+            } else if let sp = special {
+                Image(systemName: "sparkles").font(.system(size: 12, weight: .heavy)).foregroundStyle(SK.honeyDeep)
                 Text("Daily special: \(CafeMenu.treat(sp).name) \u{2212}20%").font(SK.font(12, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(special.map { "Daily special: \(CafeMenu.treat($0).name), 20 percent off" } ?? "").accessibilityIdentifier("cafe-special")
     }
@@ -287,7 +320,7 @@ struct CafeOrderCard: View {
                 Text("Same for all").font(SK.font(12, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
                 Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted)
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: 44)
+            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 36)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
@@ -309,7 +342,7 @@ struct CafeOrderCard: View {
         return Button { pick(t) } label: {
             VStack(spacing: 1) {
                 ZStack(alignment: .topTrailing) {
-                    thumb(t.id, size: compact ? 32 : 38).frame(maxWidth: .infinity)
+                    thumb(t.id, size: 30).frame(maxWidth: .infinity)
                     if isSpecial { Text("\u{2212}20%").font(SK.font(10, .black)).foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)) }
                 }
                 Text(t.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
@@ -319,7 +352,7 @@ struct CafeOrderCard: View {
                     Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 40).padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
             .opacity(ok ? 1 : 0.35)
@@ -350,11 +383,11 @@ struct CafeOrderCard: View {
     // MARK: footer (pinned): the stamp card, the total, Order
 
     private var footer: some View {
-        VStack(spacing: 6) {
-            stampRow
+        VStack(spacing: compact ? 6 : 3) {
             HStack(spacing: 8) {
                 totalView
                 Spacer(minLength: 2)
+                if editing, ids.count > 1 { tableToggle }
                 if editing { orderButton }
             }
         }
@@ -362,21 +395,24 @@ struct CafeOrderCard: View {
 
     private var stampRow: some View {
         let n = cafe.stamps.card.count, full = cafe.stamps.isFull
-        return HStack(spacing: 5) {
-            Text("Stamps").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+        return HStack(spacing: 3) {
             ForEach(0..<CafeStamps.slots, id: \.self) { i in
                 let on = i < n
-                Circle().fill(on ? SK.honey : Color.white.opacity(0.7))
-                    .overlay(Image(systemName: "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(on ? SK.ink : SK.muted.opacity(0.35)))
-                    .overlay(Circle().strokeBorder(on ? SK.honeyDeep : SK.muted.opacity(0.25), lineWidth: 1.5))
-                    .frame(width: 22, height: 22)
-                    .scaleEffect(on && i == n - 1 && cafe.stamps.landed > 0 ? 1.0 : 1)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.45), value: n)
-                    .symbolEffect(.bounce, value: on && i == n - 1 ? cafe.stamps.landed : 0)
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.7))
+                        .overlay(Image(systemName: "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.muted.opacity(0.35)))
+                        .overlay(Circle().strokeBorder(SK.muted.opacity(0.25), lineWidth: 1.5))
+                    if on {          // the stamp lands: it drops in big and settles
+                        Circle().fill(SK.honey)
+                            .overlay(Image(systemName: "pawprint.fill").font(.system(size: 10, weight: .heavy)).foregroundStyle(SK.ink))
+                            .overlay(Circle().strokeBorder(SK.honeyDeep, lineWidth: 1.5))
+                            .transition(.scale(scale: 2.2).combined(with: .opacity))
+                    }
+                }
+                .frame(width: 20, height: 20)
             }
-            Spacer(minLength: 0)
-            if full { Text("Next is free!").font(SK.font(12, .black)).foregroundStyle(SK.pinkStrong).lineLimit(1).minimumScaleFactor(0.6) }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.5), value: n)
         .accessibilityElement(children: .ignore).accessibilityLabel("Stamp card: \(n) of \(CafeStamps.slots)\(full ? ", the next order is free" : "")").accessibilityIdentifier("cafe-stamps")
     }
 
