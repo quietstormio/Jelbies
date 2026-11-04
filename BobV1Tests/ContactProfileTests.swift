@@ -310,25 +310,35 @@ final class ContactProfileTests: XCTestCase {
         }
     }
 
-    /// ArrivalTracker: nothing before somebody has stepped; the first quiet frame AFTER a step that stays quiet is the arrival; a one-frame hiccup between two steps is not.
+    /// ArrivalTracker: nothing before somebody has stepped; the first quiet spell AFTER a step that lasts long enough is the arrival (its first frame's gap); a short hiccup between two steps is not;
+    /// later stops are counted and the last one is kept; close() ends it.
     func testArrivalTracker() {
-        var t = ArrivalTracker()
+        var t = ArrivalTracker(settleFrames: 3)
         for f in 0..<5 { XCTAssertFalse(t.wantsGap(anyStepping: false)); t.feed(frame: f, anyStepping: false, gap: nil) }          // (no walker yet)
         XCTAssertNil(t.gap)
         for f in 5..<20 { t.feed(frame: f, anyStepping: true, gap: nil) }
         XCTAssertTrue(t.wantsGap(anyStepping: false))
         t.feed(frame: 20, anyStepping: false, gap: 0.30)          // a hiccup ...
+        t.feed(frame: 21, anyStepping: false, gap: nil)
         XCTAssertNil(t.gap)
-        t.feed(frame: 21, anyStepping: true, gap: nil)          // ... the next step goes on
+        t.feed(frame: 22, anyStepping: true, gap: nil)          // ... the next step goes on (2 quiet frames < 3)
         XCTAssertNil(t.gap)
         XCTAssertTrue(t.wantsGap(anyStepping: false), "the hiccup's candidate is dropped: the gap is wanted again")
         t.feed(frame: 30, anyStepping: false, gap: 0.062)          // the real arrival
         t.feed(frame: 31, anyStepping: false, gap: nil); XCTAssertNil(t.gap, "not confirmed after 2 quiet frames")
+        XCTAssertFalse(t.wantsGap(anyStepping: false), "one candidate at a time")
         t.feed(frame: 32, anyStepping: false, gap: nil)
-        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "the gap of the FIRST quiet frame")
+        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "the gap of the FIRST quiet frame of the spell")
         XCTAssertEqual(t.frame, 30)
-        t.feed(frame: 33, anyStepping: true, gap: nil); t.feed(frame: 50, anyStepping: false, gap: 0.5); t.feed(frame: 51, anyStepping: false, gap: nil); t.feed(frame: 52, anyStepping: false, gap: nil)
-        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "once recorded it never changes (later shuffles are not the arrival)")
+        XCTAssertFalse(t.wantsGap(anyStepping: false), "inside a stop nothing more is wanted")
+        t.feed(frame: 33, anyStepping: true, gap: nil)          // the pair walks on (walk-stop-walk) ...
+        t.feed(frame: 50, anyStepping: false, gap: 0.004); t.feed(frame: 51, anyStepping: false, gap: nil); t.feed(frame: 52, anyStepping: false, gap: nil)
+        XCTAssertEqual(t.settles.count, 2, "... and stops again: two stops")
+        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "the arrival stays the first stop")
+        XCTAssertEqual(t.last ?? 9, 0.004, accuracy: 1e-6, "the last plant is the second")
+        t.close(); t.feed(frame: 60, anyStepping: true, gap: nil); t.feed(frame: 70, anyStepping: false, gap: 0.9)
+        for f in 71...75 { t.feed(frame: f, anyStepping: false, gap: nil) }
+        XCTAssertEqual(t.settles.count, 2, "closed: nothing more is recorded")
     }
 
     /// The harness gap is a property of the DRAWN mesh: moving a root along the axis (the brain root runs ahead of the lagging sim body in a hop) changes nothing; moving the mesh does.

@@ -127,26 +127,33 @@ nonisolated enum BruteForceContactMetric: ContactMetric {
     }
 }
 
-/// THE ARRIVAL RESIDUAL (2026-11-04): the skin gap at the frame the last stance step plants, i.e. the first time everyone who walked in has stopped stepping. Fed once per frame with
-/// "is anybody mid-step (a gait step running, a walk script active)" and, when asked, the skin gap of that frame; it records the gap of the first quiet frame that STAYS quiet for
-/// `settleFrames` frames (a one-frame hiccup between two steps of the same walk is not an arrival). Nothing is recorded before somebody has stepped (a pair that starts already in place has no
-/// approach: `gap` stays nil, never a made-up number).
+/// THE ARRIVAL RESIDUAL (2026-11-04): the skin gap at the frame a stance step plants and the walker then STAYS stopped. Fed once per frame with "is anybody mid-step (a gait step running,
+/// a walk script active)" and, when asked, the skin gap of that frame. A quiet spell counts as a STOP when it lasts `settleFrames` frames (default 24 = 0.4 s: the pause between two steps of one
+/// walk is not a stop; a walker who really stands is); the gap is the one of the spell's FIRST frame. `gap` is the FIRST stop (the arrival of the brief: "both walkers have stopped stepping for
+/// the first time in the approach phase"), `last` the last one recorded (the final plant before the touch), `settles.count` how many times the pair stopped (more than one with a gap > 3 cm
+/// = walk-stop-walk, the stutter-step arrival). Nothing is recorded before somebody has stepped (a pair that starts already in place has no approach: nil, never a made-up number); a pair that
+/// never stands still that long never arrives (nil: the bar reads it as a failure). `close()` ends the recording (the touch happened).
 nonisolated struct ArrivalTracker {
-    static let settleFrames = 3
+    var settleFrames = 24
     private(set) var seenStepping = false
-    private(set) var candidate: (frame: Int, gap: Float)?
+    private(set) var settles: [(frame: Int, gap: Float)] = []
+    private var candidate: (frame: Int, gap: Float)?
     private var quiet = 0
-    private(set) var frame: Int?
-    private(set) var gap: Float?
-    /// The tracker wants the skin gap of THIS frame (a quiet frame after a step, and no arrival recorded yet): the caller computes it only then.
-    func wantsGap(anyStepping: Bool) -> Bool { gap == nil && seenStepping && !anyStepping && candidate == nil }
+    private var inStop = false
+    private(set) var closed = false
+    var gap: Float? { settles.first?.gap }
+    var frame: Int? { settles.first?.frame }
+    var last: Float? { settles.last?.gap }
+    mutating func close() { closed = true }
+    /// The tracker wants the skin gap of THIS frame (a quiet frame after a step, at the start of a quiet spell): the caller computes it only then.
+    func wantsGap(anyStepping: Bool) -> Bool { !closed && seenStepping && !anyStepping && candidate == nil && !inStop }
     mutating func feed(frame f: Int, anyStepping: Bool, gap g: Float?) {
-        guard gap == nil else { return }
-        if anyStepping { seenStepping = true; candidate = nil; quiet = 0; return }
-        guard seenStepping else { return }
+        guard !closed else { return }
+        if anyStepping { seenStepping = true; candidate = nil; quiet = 0; inStop = false; return }
+        guard seenStepping, !inStop else { return }
         if candidate == nil, let g { candidate = (f, g) }
         quiet += 1
-        if quiet >= Self.settleFrames, let c = candidate { frame = c.frame; gap = c.gap }
+        if quiet >= settleFrames, let c = candidate { settles.append(c); inStop = true }
     }
 }
 
