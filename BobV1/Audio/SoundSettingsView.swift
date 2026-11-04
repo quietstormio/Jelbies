@@ -65,13 +65,14 @@ struct SoundSettingsPanel: View {
             case .screen: return "music.note.house"
             }
         }()
+        let hint = np.state == .musicOff && !hub.settings.musicOn
         let showNote = np.note != nil && !(tight && (np.state == .playing || np.state == .quiet))
         return HStack(spacing: 8) {
             Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(ink.opacity(0.7)).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
-                Text(np.line).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(np.line).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.8)
                 if showNote, let n = np.note {
-                    Text(n).font(.system(size: 11, design: .rounded)).foregroundStyle(ink.opacity(0.6)).lineLimit(np.canSkip || tight ? 1 : 2).minimumScaleFactor(0.8)
+                    Text(hint ? "Tap to turn Music on" : n).font(.system(size: 11, weight: hint ? .semibold : .regular, design: .rounded)).foregroundStyle(hint ? tint : ink.opacity(0.6)).lineLimit(np.canSkip || tight ? 1 : 2).minimumScaleFactor(0.8)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -80,17 +81,19 @@ struct SoundSettingsPanel: View {
                 Label("Skip", systemImage: "forward.fill")
                     .font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(.white)
                     .padding(.horizontal, tight ? 8 : 10).padding(.vertical, tight ? 3 : 5)
-                    .background(Capsule().fill(tint))
+                    .background(Capsule().fill(np.canSkip ? tint : SoundSwitchStyle.offTrack.opacity(0.55)))
             }
             .buttonStyle(.plain)
             .disabled(!np.canSkip)
-            .opacity(np.canSkip ? 1 : 0.4)
             .accessibilityIdentifier("sound-skip")
             .accessibilityLabel("Skip song")
             .accessibilityHint(np.canSkip ? "" : (np.note ?? ""))
         }
         .padding(tight ? 6 : 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(ink.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(hint ? tint.opacity(0.14) : ink.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(hint ? tint.opacity(0.6) : .clear, lineWidth: 1.5))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture { if hint { hub.settings.musicOn = true } }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sound-now-playing")
         .animation(.easeInOut(duration: 0.2), value: np)
@@ -101,14 +104,83 @@ struct SoundSettingsPanel: View {
             Toggle(isOn: on) {
                 Label(title, systemImage: symbol).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
             }
-            .tint(theme.controlAccent)
-            .controlSize(tight ? .small : .regular)
+            .toggleStyle(SoundSwitchStyle(tint: theme.controlAccent, compact: tight))
             .accessibilityIdentifier("sound-\(id)-toggle")
-            Slider(value: Binding(get: { Double(volume.wrappedValue) }, set: { volume.wrappedValue = Float($0) }), in: 0...1)
-                .tint(theme.controlAccent)
-                .disabled(!on.wrappedValue)
-                .opacity(on.wrappedValue ? 1 : 0.4)
-                .accessibilityIdentifier("sound-\(id)-volume")
+            // The slider is always live: dragging it above 0 while the switch is off turns the switch on (volume 0 leaves it alone).
+            SoundVolumeSlider(value: Binding(get: { Double(volume.wrappedValue) },
+                                             set: { v in
+                                                 volume.wrappedValue = Float(v)
+                                                 if v > 0.001 && !on.wrappedValue { on.wrappedValue = true }
+                                             }),
+                              tint: on.wrappedValue ? theme.controlAccent : SoundSwitchStyle.offTrack,
+                              label: "\(title) volume", id: "sound-\(id)-volume")
         }
+    }
+}
+
+/// A switch whose OFF state is a clearly visible blue-grey track (>= 3:1 on the white card) with a shadowed knob: off but tappable.
+struct SoundSwitchStyle: ToggleStyle {
+    static let offTrack = Color(.sRGB, red: 0x72 / 255, green: 0x86 / 255, blue: 0x9E / 255)     // ~3.6:1 on white
+    var tint: Color
+    var compact = false
+    func makeBody(configuration: Configuration) -> some View {
+        let w: CGFloat = compact ? 44 : 51, h: CGFloat = compact ? 27 : 31
+        return Button { configuration.isOn.toggle() } label: {
+            HStack {
+                configuration.label
+                Spacer(minLength: 8)
+                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                    Capsule().fill(configuration.isOn ? tint : Self.offTrack).frame(width: w, height: h)
+                    Circle().fill(.white).frame(width: h - 4, height: h - 4)
+                        .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 1)
+                        .padding(2)
+                }
+                .animation(.easeInOut(duration: 0.15), value: configuration.isOn)
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+}
+
+/// An opaque volume slider that never ghosts: full-strength track and a shadowed knob in any state.
+struct SoundVolumeSlider: View {
+    @Binding var value: Double
+    var tint: Color
+    var label: String
+    var id: String
+    private let knob: CGFloat = 28
+    var body: some View {
+        GeometryReader { geo in
+            let usable = max(1, geo.size.width - knob)
+            ZStack(alignment: .leading) {
+                Capsule().fill(CloudTheme.ink.opacity(0.22)).frame(height: 8)
+                Capsule().fill(tint).frame(width: knob / 2 + usable * value, height: 8)
+                Circle().fill(.white).overlay(Circle().stroke(tint, lineWidth: 2))
+                    .frame(width: knob, height: knob)
+                    .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 1)
+                    .offset(x: usable * value)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { g in
+                value = min(1, max(0, (g.location.x - knob / 2) / usable))
+            })
+        }
+        .frame(height: 36)
+        .accessibilityElement()
+        .accessibilityLabel(label)
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
+        .accessibilityAdjustableAction { d in
+            switch d {
+            case .increment: value = min(1, value + 0.1)
+            case .decrement: value = max(0, value - 0.1)
+            @unknown default: break
+            }
+        }
+        .accessibilityIdentifier(id)
     }
 }

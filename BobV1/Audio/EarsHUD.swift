@@ -109,8 +109,7 @@ struct EarsSettingsRow: View {
             Toggle(isOn: on) {
                 Label("Ears", systemImage: "ear.fill").jFont(15, .semibold).foregroundStyle(ink)
             }
-            .tint(tint)
-            .controlSize(tight ? .small : .regular)
+            .toggleStyle(SoundSwitchStyle(tint: tint, compact: tight))
             .disabled(ears.state == .denied)
             .accessibilityIdentifier("sound-ears-toggle")
             Text(ears.state == .denied ? Self.deniedText : Self.privacyText)
