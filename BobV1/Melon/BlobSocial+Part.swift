@@ -10,9 +10,9 @@ import simd
 
 enum PartTuning {
     /// Skin gap (m) the turn needs around the partner before it may swing in place.
-    static let clear: Float = 0.32
+    static let clear: Float = 0.36
     /// Longest retreat of one step (m).
-    static let maxStep: Float = 0.36
+    static let maxStep: Float = 0.40
     /// How long a parting flag lives after it is set (s).
     static let life: Float = 6
     /// Smallest heading change (rad) of a step that counts as a turn.
