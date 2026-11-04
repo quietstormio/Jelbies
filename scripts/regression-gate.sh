@@ -30,11 +30,24 @@ git -C $ROOT worktree add --detach $WT/gate_head $HEADC >/dev/null || exit 2
 # the approved build gets HEAD's portable test files (the counts are the same code path; lines marked NEWONLY use APIs the approved build lacks)
 cp $WT/gate_head/BobV1Tests/HapticSinkRegressionTests.swift $WT/gate_approved/BobV1Tests/
 sed -e 's/lab.tick(); simNow += 1.0 \/ 60.*/lab.tick()/' -e '/NEWONLY-BEGIN/,/NEWONLY-END/d' -e '/NEWONLY/d' $WT/gate_head/BobV1Tests/RoomSFXCountTests.swift > $WT/gate_approved/BobV1Tests/RoomSFXCountTests.swift
-SIM=$(xcrun simctl create gate-sim "iPhone 16" com.apple.CoreSimulator.SimRuntime.iOS-26-2) || exit 2
+# newest available iOS runtime that offers an iPhone 17-class device type (plain iPhone 17 first, then Pro / 16 / any iPhone)
+PICK=$(xcrun simctl list -j runtimes | python3 -I -c '
+import json, sys
+def key(r): return ([int(x) for x in r["version"].split(".")], r.get("buildversion", ""))
+want = ["iPhone-17", "iPhone-17-Pro", "iPhone-16", "iPhone-16-Pro"]
+for r in sorted((r for r in json.load(sys.stdin)["runtimes"] if r.get("isAvailable") and r.get("platform", "iOS") == "iOS"), key=key, reverse=True):
+    ids = [d["identifier"] for d in r.get("supportedDeviceTypes", [])]
+    for w in want:
+        t = "com.apple.CoreSimulator.SimDeviceType." + w
+        if t in ids: print(t, r["identifier"]); sys.exit(0)
+') || exit 2
+[[ -n "$PICK" ]] || { echo "GATE FAIL: no iOS runtime with an iPhone 17-class device type"; exit 2; }
+echo "gate sim: $PICK"
+SIM=$(xcrun simctl create gate-sim ${=PICK}) || exit 2
 xcrun simctl boot $SIM
 run() {  # tree, derived data, env prefix args..., tests...
   local tree=$1 dd=$2; shift 2
-  ( cd $tree && xcodebuild build-for-testing -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO >$OUT/build.log 2>&1 ) || { tail -20 $OUT/build.log; echo "GATE FAIL: build of $tree"; return 1; }
+  ( cd $tree && xcodebuild build-for-testing -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO >$OUT/build.log 2>&1 ) || { grep -E "error:" $OUT/build.log | sort -u | head -20; tail -5 $OUT/build.log; echo "GATE FAIL: build of $tree"; return 1; }
   ( cd $tree && env "$@" xcodebuild test-without-building -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO ${=TESTS} 2>&1 | tee $OUT/test.log | grep -E "error:|failed|Executed|TEST (EXECUTE|SUCCEEDED|FAILED)" | tail -15 )
   return ${pipestatus[1]}
 }
