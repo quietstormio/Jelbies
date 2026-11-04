@@ -103,9 +103,13 @@ nonisolated final class RoomRenderer {
         didSet {
             guard raceVisible != oldValue else { return }
             staticVersion &+= 1
-            if raceVisible { buildRaceMeshes() }
+            if raceVisible {
+                if builtRelayMarks != RaceModels.relayMarkers { raceVB = nil; raceIB = nil; raceIndexCount = 0 }          // (a relay draws its handoff boxes: the track is rebuilt when that changes)
+                buildRaceMeshes()
+            }
         }
     }
+    private var builtRelayMarks = false
     /// The course the track is built for (Race/RaceCourse.swift). A change drops the built track; it is rebuilt for the new course when shown.
     var raceCourse: CourseTier = .puddle {
         didSet {
@@ -133,6 +137,7 @@ nonisolated final class RoomRenderer {
     }
     private func buildRaceMeshes() {
         guard raceVB == nil else { return }
+        builtRelayMarks = RaceModels.relayMarkers
         let m = RaceModels.build(course: RaceCourse.course(raceCourse))
         raceIndexCount = m.indices.count
         raceVB = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)

@@ -12,7 +12,7 @@ import QuartzCore
 import simd
 
 /// Race asked while a Jelly is asleep: the trip starts when everybody is upright.
-struct RaceWait { var id: Int; var seed: UInt64?; var age: Float = 0; var drill = false }
+struct RaceWait { var id: Int; var seed: UInt64?; var age: Float = 0; var drill = false; var relay: RelayRequest? }
 
 /// What GameCare keeps while a race trip is on: the room's Jellies as the stage last gave them, who races in which lane, where everybody was
 /// standing, and the welcome home that follows.
@@ -38,6 +38,8 @@ final class RaceBook {
     var follow: RaceFollowPose?
     /// The Live Activities the race glue drives (the race card, the Pep countdown). Swap for a test double / nil headless.
     var live: LiveActivities? = LiveActivities.shared
+    /// The relay's bodies and effects (GameCare+Relay.swift).
+    let relay = RelayBodies()
     nonisolated deinit {}
 }
 
@@ -167,6 +169,7 @@ extension GameCare {
         let book = raceBook
         switch dest {
         case .track:
+            if race.kind == .relay { relayEnter(); return }
             guard let sim = race.sim else { return }
             let player = race.playerID
             let others = book.actors.indices.filter { $0 != player }
@@ -200,6 +203,7 @@ extension GameCare {
                 if k > 0, k - 1 < race.rivals.count { book.palettes[aid] = LocalRivalSource.palette(for: race.rivals[k - 1].tint, name: race.rivals[k - 1].name) }
             }
         case .room:
+            relayLeave()          // (a relay's visitor bodies go first; the roster is put back below like any race's)
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
             for aid in book.racers + book.parked where book.actors.indices.contains(aid) {
@@ -231,6 +235,7 @@ extension GameCare {
     /// player framed together from a little way down the track, smoothed by `dt`. See Race/RaceCamera.swift.
     func raceFollow(_ actors: [JellyActor], dt: Float) -> RaceFollowPose? {
         let book = raceBook
+        if race.active, race.trackVisible, race.kind == .relay { return A11ySettings.shared.reduceMotion ? nil : relayFollow(dt) }          // a relay is followed on every course, the straight too
         guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight, !A11ySettings.shared.reduceMotion else { book.follow = nil; return nil }          // (Reduce Motion: the wide fixed frame, no banking follow camera)
         var spots: [RaceFollowPose.Racer] = []
         for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
@@ -255,13 +260,14 @@ extension GameCare {
             if w.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }       // gave up waiting: stand him up
             if sleeping.isEmpty || w.age > 8.5 {
                 raceWait = nil
-                beginRace(jelly: w.id, seed: w.seed, drill: w.drill)
+                if let r = w.relay { beginRelay(r, seed: w.seed) } else { beginRace(jelly: w.id, seed: w.seed, drill: w.drill) }
             } else { raceWait = w }
         }
         tickNewcomer(actors, dt: dt)
         raceHome(actors, dt: dt)
         if !race.active, let l = live, l.raceLive { l.raceFinished(place: 0, drops: 0) }          // a trip that ended without results (abort): the card goes quietly
         guard race.active else { return }
+        if race.kind == .relay { tickRelay(actors, dt: dt); return }
         let book = raceBook
         func body(_ i: Int) -> JellyActor? { book.racers.indices.contains(i) && actors.indices.contains(book.racers[i]) ? actors[book.racers[i]] : nil }
         if race.phase == .racing, race.sim != nil {

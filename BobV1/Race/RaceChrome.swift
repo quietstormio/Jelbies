@@ -22,7 +22,8 @@ struct RaceChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard, race.isRelay { RelayResultsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    else if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact { footButtons }
                 }
@@ -36,6 +37,7 @@ struct RaceChrome: View {
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
                 if race.showsGo { numeral("GO!") }
             }
+            if race.trackVisible, race.isRelay, race.ui.phase != .results { RelayOverlay(care: care) }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
         .allowsHitTesting(race.active)
@@ -44,12 +46,14 @@ struct RaceChrome: View {
 
     private var topBar: some View {
         VStack(spacing: 8) {
-            Text(race.ui.course == .puddle ? "Waddle Sprint" : "Waddle Sprint · \(race.ui.course.title)")
+            Text(race.isRelay ? RelayText.title(race) : race.ui.course == .puddle ? "Waddle Sprint" : "Waddle Sprint · \(race.ui.course.title)")
                 .playFont(17, .bold)
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
-            if race.ui.stumbling, race.ui.tripped {
+            if race.ui.relayAI {
+                hint("\(RelayText.runner(race)) is running. Cheer!")
+            } else if race.ui.stumbling, race.ui.tripped {
                 hint("Whoops! He tripped. Practice helps")
             } else if race.ui.stumbling {
                 hint("Oops! Left, right, left, right")

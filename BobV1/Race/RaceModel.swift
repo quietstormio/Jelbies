@@ -283,6 +283,8 @@ nonisolated enum RaceEvent: Equatable, Sendable {
     /// The racer takes off for a hurdle (the body does its existing hop; Race/Hurdles.swift), clears the bar he is over, or hits it (a `.trip` follows).
     case jump(racer: Int), hurdleCleared(racer: Int), hurdleHit(racer: Int)
     case finished(racer: Int, place: Int)
+    /// A relay team's runner crossed a handoff line: the racer index is now the next runner of the team (`leg` 1 or 2; Race/RelayModel.swift).
+    case handoff(racer: Int, leg: Int)
     case results
 }
 
@@ -349,6 +351,12 @@ nonisolated struct RaceRacer: Sendable {
     var planLead: Float = 0.55
     var inJump: Bool { airT != nil || recover > 0 }
 
+    // relay (Race/RelayModel.swift): the racer is a TEAM; at each handoff line the next runner's stats take over and he starts from his own waiting spot
+    var relayLegs: [RelayLeg] = []
+    var legIndex = 0
+    /// The current runner is a Park friend: a steady AI, not the player's fingers.
+    var relayAI = false
+
     /// The player's perk boost (never a rival's); capped at the fully trained stride / rate (RaceBoost.apply).
     var boost = RaceBoost.none
     var stride: Float { boost.apply(stride: RaceTuning.stride(waddle: stats.waddle), rate: 0).stride }
@@ -402,6 +410,37 @@ nonisolated struct RaceSim: Sendable {
         countdownLeft = 3 * RaceTuning.countdownBeat
     }
 
+    /// The handoff lines (arc lengths) of a relay: empty = an ordinary race. Set by `configureRelay`.
+    private(set) var relayLines: [Float] = []
+
+    /// Makes the racers TEAMS: `legs[k]` are team k's three runners (leg 0 is the one the sim was made with), `lines` the two handoff arcs.
+    mutating func configureRelay(lines: [Float], legs: [[RelayLeg]]) {
+        relayLines = lines
+        for k in racers.indices where legs.indices.contains(k) {
+            racers[k].relayLegs = legs[k]
+            racers[k].relayAI = k == 0 && (legs[k].first?.ai ?? false)
+        }
+    }
+
+    /// The runner crosses the line: the next runner of his team takes over from his waiting spot (fresh feet, fresh tap model; nothing else carries over).
+    private mutating func handoff(_ r: inout RaceRacer, _ i: Int) {
+        r.legIndex += 1
+        guard r.relayLegs.indices.contains(r.legIndex) else { return }
+        let leg = r.relayLegs[r.legIndex]
+        r.stats = leg.stats; r.name = leg.name
+        if i == 0 { r.relayAI = leg.ai }
+        let grace = r.tap.grace
+        r.tap = RaceTapModel(); r.tap.grace = grace
+        r.stepLeft = 0; r.stepCount = 0; r.sinceStep = 0
+        r.paused = false; r.pauseWanted = false; r.pauseCooldown = RaceTuning.pauseFreeStart
+        r.airT = nil; r.recover = 0; r.slow = 0; r.jumpWant = 0; r.planFor = -1
+        r.cornerTrips = 0
+        r.dist = leg.startDist; r.measured = nil          // (the glue measures the new body from the next step; headless the steps count)
+        r.nextHurdle = course.hurdles.firstIndex { $0 - HurdleTuning.contactLead > leg.startDist } ?? course.hurdles.count
+        r.aiTimer = r.rng.range(0.02, 0.2)
+        events.append(.handoff(racer: i, leg: r.legIndex))
+    }
+
     mutating func takeEvents() -> [RaceEvent] { let e = events; events.removeAll(keepingCapacity: true); return e }
 
     /// The player's repeated-foot forgiveness window (accessibility assist; never lowers a boost's own).
@@ -410,7 +449,7 @@ nonisolated struct RaceSim: Sendable {
     /// A tap of the player's foot button. Only meaningful while racing.
     @discardableResult
     mutating func playerTap(foot: Int) -> RaceTapModel.Outcome {
-        guard phase == .running || phase == .finishing, !racers[0].finished else { return .ignored }
+        guard phase == .running || phase == .finishing, !racers[0].finished, !racers[0].relayAI else { return .ignored }
         let o = racers[0].tap.tap(foot, canStep: !racers[0].paused)
         if o == .stumble { events.append(.stumble(racer: 0)) }
         return o
@@ -419,7 +458,7 @@ nonisolated struct RaceSim: Sendable {
     /// A press of the Jump button: the take-off waits (up to `HurdleTuning.jumpBuffer`) for his feet to be planted. Only on a course with hurdles.
     @discardableResult
     mutating func playerJump() -> Bool {
-        guard course.hasHurdles, phase == .running || phase == .finishing, !racers[0].finished, racers[0].airT == nil else { return false }          // (a press during the landing waits for the next take-off)
+        guard course.hasHurdles, phase == .running || phase == .finishing, !racers[0].finished, !racers[0].relayAI, racers[0].airT == nil else { return false }          // (a press during the landing waits for the next take-off)
         racers[0].jumpWant = HurdleTuning.jumpBuffer
         return true
     }
@@ -463,6 +502,7 @@ nonisolated struct RaceSim: Sendable {
         // distance: the body's own measurement when it has one
         let before = r.measured ?? r.dist
         if let m = r.measured { r.dist = m }
+        if !r.finished, r.legIndex < relayLines.count, r.dist >= relayLines[r.legIndex] { handoff(&r, i); return }
         if !r.finished, r.dist >= course.length { cross(&r, i, before: before, dt: dt) }
         if r.finished { coastTick(&r, i, free: free); return }
         // hurdles: the flight and the landing (no steps meanwhile), the bar he reaches, a jump he starts
@@ -492,7 +532,7 @@ nonisolated struct RaceSim: Sendable {
             return
         }
         // rivals tap on their own
-        if !r.isPlayer { aiTap(&r, dt: dt) }
+        if !r.isPlayer || r.relayAI { aiTap(&r, dt: dt) }
         // take the buffered step when the body is free; first the trip roll: his own feet, plus the corner he is in at the pace he is going
         // (stride over the time since his last step: slower taps are safer) and any bump underfoot. One draw, so the straight rolls as it always did.
         if r.stepLeft <= 0, !r.tap.stumbling, free, r.tap.pending != nil {
@@ -538,12 +578,12 @@ nonisolated struct RaceSim: Sendable {
         }
         guard r.nextHurdle < hs.count, !r.inJump, !r.tap.stumbling else { return }
         var go = r.jumpWant > 0
-        if !r.isPlayer || autoJumpPlayer {
+        if !r.isPlayer || r.relayAI || autoJumpPlayer {
             // a rival looks at the bar once it is near, decides by skill whether he will jump it, and takes off a little ahead of it
             if r.planFor != r.nextHurdle, hs[r.nextHurdle] - r.dist < HurdleTuning.lookAhead {
                 r.planFor = r.nextHurdle
                 let skill = 0.5 * RaceTuning.clamp01(r.stats.focus) + 0.5 * RaceTuning.clamp01(r.stats.waddle)
-                r.planJump = r.isPlayer || r.rng.next() < HurdleTuning.rivalSuccess(skill: skill)
+                r.planJump = (r.isPlayer && !r.relayAI) || r.rng.next() < HurdleTuning.rivalSuccess(skill: skill)
                 r.planLead = r.rng.range(0.5, 0.6)
             }
             if r.planFor == r.nextHurdle, r.planJump, r.dist >= hs[r.nextHurdle] - HurdleTuning.contactLead - r.planLead { go = true }

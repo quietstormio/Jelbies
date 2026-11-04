@@ -18,12 +18,12 @@ import simd
 final class RaceFlow {
     enum Phase: Equatable { case off, fade, racing }
     /// A race against rivals, or a practice drill alone on the track (Training/DrillFlow.swift).
-    enum Kind { case race, drill }
+    enum Kind { case race, drill, relay }
     enum Dest { case track, room }
     enum FadeStage { case out, hold, `in` }
 
-    private(set) var phase: Phase = .off
-    private(set) var kind: Kind = .race
+    var phase: Phase = .off
+    var kind: Kind = .race
     /// The course the next race is on (Race/RaceCourse.swift). The Track panel's picker sets it; `progress` says which are open.
     var courseTier: CourseTier {
         get { progress.chosen }
@@ -51,14 +51,19 @@ final class RaceFlow {
     /// Seconds the placings card has been up.
     var cardAge: Float = 0
     /// What the player earned and gained, once settled.
-    private(set) var earned = 0
+    var earned = 0
     var waddleGain: Float = 0
     /// A course this race opened (the placings card says so), nil when none.
     private(set) var unlockedNow: CourseTier?
     /// Rivals of this race (names / tints / stats), for the lane labels and the body colours.
-    private(set) var rivals: [Rival] = []
-    private(set) var playerName = ""
-    private(set) var playerID = 0
+    var rivals: [Rival] = []
+    /// The relay under way (Race/RelayFlow.swift); nil in a race.
+    @ObservationIgnored var relayPlan: RelayPlan?
+    /// The owned runners' stats (their training gain at the results) and the team's prize, once settled.
+    @ObservationIgnored var relayStats: [JellyStats] = []
+    @ObservationIgnored var relayGained = false
+    var playerName = ""
+    var playerID = 0
     /// How many races have been started (tests).
     private(set) var started = 0
     // the practice drill (Training/DrillFlow.swift)
@@ -78,8 +83,8 @@ final class RaceFlow {
     /// -TrainAuto: the drill is tapped for him (captures / tests).
     @ObservationIgnored var drillAuto = false
 
-    @ObservationIgnored private(set) var fadeDest: Dest = .track
-    @ObservationIgnored private(set) var fadeStage: FadeStage = .out
+    @ObservationIgnored var fadeDest: Dest = .track
+    @ObservationIgnored var fadeStage: FadeStage = .out
     @ObservationIgnored var holdT: Float = 0
     @ObservationIgnored var swapped = false
     @ObservationIgnored var settled = false
@@ -124,6 +129,7 @@ final class RaceFlow {
     var trackVisible: Bool { cameraBlend > 0 }
     var racing: Bool { phase == .racing && wipe == 0 }
     var isDrill: Bool { kind == .drill }
+    var isRelay: Bool { kind == .relay }
     /// Drops this trip has paid (a drill pays none).
     var earnedDropsForTest: Int { earned }
     /// The foot buttons are live.
@@ -179,6 +185,21 @@ final class RaceFlow {
         started += 1
     }
 
+    /// "Relay": the player's team (`plan.teams[0]`) and two rival teams run `plan.course` (Race/RelayModel.swift). `stats`: the owned runners' JellyStats (their training gain).
+    func beginRelay(playerID id: Int, plan: RelayPlan, stats: [JellyStats], seed: UInt64) {
+        guard phase == .off else { return }
+        kind = .relay; drill = nil; drillResult = nil; drillUI = DrillUI(); dip = 0
+        rivals = []; playerName = plan.teamNames[0]; playerID = id
+        relayPlan = plan; relayStats = stats; relayGained = false
+        sim = plan.makeSim(seed: seed)
+        ui = RaceUI()
+        phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
+        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
+        applyAssistAtStart()
+        sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump
+        started += 1
+    }
+
     /// "Back home" on the placings card.
     func goHome() {
         guard phase == .racing, hasResults, !leaving else { return }
@@ -206,7 +227,7 @@ final class RaceFlow {
     /// The Jump button: the take-off waits for his feet to be planted, and a bar reached in the middle of the flight is cleared (Race/Hurdles.swift).
     @discardableResult
     func jump() -> Bool {
-        guard kind == .race, buttonsLive else { return false }
+        guard kind != .drill, buttonsLive else { return false }
         let ok = sim?.playerJump() ?? false
         if ok { refreshUI() }
         return ok
@@ -248,13 +269,15 @@ final class RaceFlow {
         u.phase = kind == .drill && drill != nil ? (drillResult != nil ? .results : .running) : s.phase
         u.countdown = s.countdownNumber
         u.go = kind == .drill ? (drill != nil && drillState.goAge < RaceTuning.goFlash) : s.goFlashing
-        u.live = kind == .drill ? (drill != nil && drillResult == nil) : (s.phase == .running || s.phase == .finishing) && !s.racers[0].finished
+        u.live = kind == .drill ? (drill != nil && drillResult == nil) : (s.phase == .running || s.phase == .finishing) && !s.racers[0].finished && !s.racers[0].relayAI
         u.stalled = s.phase != .countdown && s.racers[0].stalled && u.live && s.clock > 1.2
         u.stumbling = s.racers[0].tap.stumbling
         u.tripped = s.racers[0].tap.tripped
-        u.inTurn = kind == .race && u.live && s.inTurn(0)
+        u.inTurn = kind != .drill && u.live && s.inTurn(0)
+        u.relayAI = kind == .relay && s.racers[0].relayAI && s.phase != .results && s.phase != .countdown
+        u.leg = s.racers[0].legIndex
         u.course = s.course.tier
-        u.hasHurdles = kind == .race && s.course.hasHurdles
+        u.hasHurdles = kind != .drill && s.course.hasHurdles
         if u.hasHurdles, u.live {
             let r = s.racers[0]
             u.hurdleAhead = r.nextHurdle < s.course.hurdles.count && s.course.hurdles[r.nextHurdle] - r.dist < HurdleTuning.hintAhead && !r.inJump
@@ -272,7 +295,7 @@ final class RaceFlow {
         case .countdown: cueSerial += 1; cue(.countdownBeep)
         case .go: cueSerial += 1; cue(.go)
         case .finished(let r, _): if r == RaceSim.playerIndex { cue(.finish) }
-        case .results: settle()
+        case .results: if kind == .relay { settleRelay() } else { settle() }
         default: break
         }
     }
@@ -325,7 +348,7 @@ final class RaceFlow {
     }
 
     private func finishTrip() {
-        let won = kind == .race ? (sim?.playerWon ?? false) : false
+        let won = kind != .drill ? (sim?.playerWon ?? false) : false
         let id = playerID
         phase = .off; leaving = false
         sim = nil
@@ -362,4 +385,7 @@ struct RaceUI: Equatable {
     var earned = 0
     var waddleGain: Float = 0
     var playerPlace: Int?
+    /// Relay: a Park friend is running the player's team's leg (the buttons rest), and which leg (0...2) the team is on.
+    var relayAI = false
+    var leg = 0
 }

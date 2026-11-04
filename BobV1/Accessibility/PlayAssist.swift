@@ -21,12 +21,12 @@ extension RaceFlow {
     static let autoPayShare: Float = 0.5
 
     /// The auto run's tap rate (nil unless the assist is `auto` in a race).
-    var autoAssistRate: Float? { assist == .auto && kind == .race ? Self.autoAssistTapRate : nil }
+    var autoAssistRate: Float? { assist == .auto && kind != .drill ? Self.autoAssistTapRate : nil }
 
     /// Called by `begin` / `beginDrill`: reads the settings and prepares the sim.
     func applyAssistAtStart() {
         assist = A11ySettings.shared.raceAssist
-        if kind == .race, assist != .off { sim?.setPlayerGrace(0.6) }          // a repeated finger bounce is forgiven (already supported by the tap model)
+        if kind != .drill, assist != .off { sim?.setPlayerGrace(0.6) }          // a repeated finger bounce is forgiven (already supported by the tap model)
     }
 
     /// Drops after the assist (the auto run pays half).

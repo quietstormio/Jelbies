@@ -506,6 +506,12 @@ struct GameScreen: View {
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startRace(jelly: who)
         }
+        // capture aid: -RelayStart 1 (with -RaceCourse) starts a relay with the current roster; Park friends (seeded as Pals on the simulator when there are none) fill to three; -RelayAuto 1 taps for him
+        if d.integer(forKey: "RelayStart") != 0 {
+            for _ in 0..<100 where !care.canRace(jelly: 0) || care.raceBook.actors.isEmpty { await sleep(0.1) }
+            await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            care.relayCaptureStart(auto: d.integer(forKey: "RelayAuto") != 0)
+        }
         // capture aid: -TrainStart 1 sends Jelly 0 (or -RaceJelly n) to practise Rhythm Steps; -TrainAuto 1 plays the drill for him
         if d.integer(forKey: "TrainStart") != 0 {
             let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0

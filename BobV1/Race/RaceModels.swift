@@ -39,6 +39,9 @@ enum RaceModels {
     static let swatch2 = srgb(0.52, 0.74, 0.44), swatch3 = srgb(0.86, 0.93, 1.0) / 0.62, swatch4 = srgb(0.74, 0.86, 1.0)
     static let greens = [srgb(0.46, 0.72, 0.42), srgb(0.52, 0.78, 0.46), srgb(0.40, 0.66, 0.40), srgb(0.58, 0.80, 0.50)]
 
+    /// A relay is on: the handoff lines and boxes are drawn too (set by GameCare+Relay; the renderer rebuilds the track when it changes).
+    nonisolated(unsafe) static var relayMarkers = false
+
     static func build() -> RoomMesh { build(course: .puddle) }
 
     static func build(course c: RaceCourse) -> RoomMesh {
@@ -106,6 +109,26 @@ enum RaceModels {
         let ss: Float = 0.45
         let tw = RaceTuning.laneSpacing * 1.5 + lw
         patch(-tw, tw, from: ss - 0.1, to: ss + 0.1, y: y3, color: white)
+
+        // ---- the relay's handoff lines (gold, across the track) and a pink ring in every lane where the next runner waits ----
+        if relayMarkers {
+            let legs = RelayTuning.legs(length: c.length)
+            let gold = srgb(1.0, 0.84, 0.30), ring = srgb(0.98, 0.52, 0.70)
+            for k in 0..<(RelayTuning.legCount - 1) {
+                patch(-tw, tw, from: legs.ends[k] - 0.07, to: legs.ends[k] + 0.07, y: y3 + 0.004, color: gold)
+                for lane in 0..<3 {
+                    let q = c.pose(at: legs.starts[k + 1]), r = RaceCourse.right(q.heading)
+                    let centre = q.pos + r * RaceTuning.laneX(lane)
+                    b.color = ring
+                    let n = 14, r0: Float = 0.40, r1: Float = 0.52
+                    for i in 0..<n {
+                        let a0 = Float(i) / Float(n) * 2 * .pi, a1 = Float(i + 1) / Float(n) * 2 * .pi
+                        func pt(_ rad: Float, _ a: Float) -> SIMD3<Float> { SIMD3(centre.x + cosf(a) * rad, y3 + 0.004, centre.y + sinf(a) * rad) }
+                        b.flatQuad(pt(r0, a0), pt(r1, a0), pt(r1, a1), pt(r0, a1), normal: up)
+                    }
+                }
+            }
+        }
 
         // ---- the finish line: two rows of checkers across the track ----
         let fs = c.length
