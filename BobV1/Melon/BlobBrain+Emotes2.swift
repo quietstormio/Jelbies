@@ -87,7 +87,7 @@ enum EmoteTreats {
         "floorNapFlop.settle": [Pulse(delay: 0, i: 0.12, s: 0.08)],
         "tapTilt.tilt": [Pulse(delay: 0, i: 0.18, s: 0.20)],
         "welcomeWiggle.wiggle": [Pulse(delay: 0, i: 0.26, s: 0.20), Pulse(delay: 0.16, i: 0.20, s: 0.20), Pulse(delay: 0.32, i: 0.14, s: 0.20)],
-        "checkIn.hello": [Pulse(delay: 0, i: 0.18, s: 0.20)],
+        "checkIn.hello": [Pulse(delay: 0, i: 0.16, s: 0.18), Pulse(delay: 0.14, i: 0.10, s: 0.14)],          // (a soft two-tap hello: its own pattern, not tapTilt's single tilt tap)
         "hearts.pop": [Pulse(delay: 0, i: 0.10, s: 0.20)],
     ]
     /// Test seam: every request ("floorNapFlop.flop" ...), before the stage's rate limit.
