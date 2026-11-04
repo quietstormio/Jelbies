@@ -34,6 +34,10 @@ enum ContactSettle {
         let e = gap - target
         let prev = a.socialBook.settleGap[key]
         a.socialBook.settleGap[key] = e
+        if onlySeparate, e >= 0 {          // (nothing to separate any more: the lean-away that did it is let go, else a body stays tipped away from a partner who is no longer there)
+            if !anchoredA, a.socialBook.trimPartner == b.steerID { a.socialBook.leanTrim *= 0.9 }
+            if !anchoredB, b.socialBook.trimPartner == a.steerID { b.socialBook.leanTrim *= 0.9 }
+        }
         if (onlySeparate && e >= 0) || (anchoredA && anchoredB) { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = (anchoredA && anchoredB) ? "anchored" : "onlySep"; $0.e = e } }; return (gap, false) }
         // the slow average of the gap: a lying body breathes (+-1 cm of skin), a jelly wobbles: the last centimetre is trimmed on the average, not chased
         var ema = a.socialBook.settleEMA[key] ?? gap
@@ -195,8 +199,14 @@ extension BlobBrain {
             }
             ContactTrace.mod(steerID) { $0.walk = w; $0.tgt = tg }
         }
-        if case .walk = script {} else { ContactTouchMemory.shuffling.remove(steerID); ContactTouchMemory.exact.remove(steerID); ContactTouchMemory.finalYaw[steerID] = nil }
-        if retarget, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
+        if case .walk = script {} else { ContactTouchMemory.shuffling.remove(steerID); ContactTouchMemory.exact.remove(steerID); ContactTouchMemory.finalYaw[steerID] = nil; ContactTouchMemory.locked[steerID] = nil; ContactTouchMemory.rewrote.remove(steerID) }
+        // THE DESTINATION IS DECIDED ONCE (motion warping): the last 0.8 m of a stance walk keep the spot they were given - the touch distance estimate wobbles +-4 cm with the jelly, and a spot that moves while the last two steps
+        // are planned is how the walk used to end 10 cm off. Unlocked when the partner moves (a meeting pair: both walk to a spot fixed per phase, so that does not happen).
+        if case .walk(let lt, _) = script, let lp = ContactTouchMemory.locked[steerID] {
+            if simd_distance(lp.partner, p.position) > 0.05 || simd_distance(lp.target, lt) > 0.02 { ContactTouchMemory.locked[steerID] = nil }
+        }
+        let locked = ContactTouchMemory.locked[steerID] != nil
+        if retarget, !locked, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
             ContactTouchMemory.exact.insert(steerID)          // (the stance owns this walk: planWalkStep lands its last step on the destination, within 1 cm)
             if let st = social.flatMap({ ContactStance.entry($0.kind) }), st.facing == .camera { ContactTouchMemory.finalYaw[steerID] = faceCameraYaw() } else { ContactTouchMemory.finalYaw[steerID] = nil }          // (side by side: the walk turns into the pose during its last steps)
@@ -224,7 +234,7 @@ extension BlobBrain {
                     let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25
                     want = noTurnAround(want, was: t, partner: p)
                     let dT = simd_distance(want, t)
-                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then) }
+                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); ContactTouchMemory.rewrote.insert(steerID) }
                 } else {
                     stable = contactStableTouch(p, axis: u)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
@@ -233,10 +243,13 @@ extension BlobBrain {
                     want = noTurnAround(want, was: t, partner: p)
                     let dT = simd_distance(want, t)
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
-                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
+                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); ContactTouchMemory.rewrote.insert(steerID); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
                     else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
                 }
             }
+        }
+        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < 0.8, ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
+            ContactTouchMemory.locked[steerID] = (t, p.position)
         }
         if ContactTrace.on, socialBook.shuffleReq != 0 {
             let why = "blk(script\(scriptIsNone ? "None" : "Busy"),feet\(feet.active ? "Active" : "Idle"),idle\(idleState.kind.map { "\($0)" } ?? "nil"))"
@@ -271,6 +284,9 @@ enum ContactTouchMemory {
     static var shuffling: Set<Int> = []
     /// Bodies whose walk is a stance walk (the destination is the stance spot): planWalkStep arrives within 1 cm and its final step covers exactly the remaining distance.
     static var exact: Set<Int> = []
+    /// Bodies whose walk target the stance has rewritten at least once, and the ones whose target is locked for the last 0.8 m (target, the partner's position at the lock).
+    static var rewrote: Set<Int> = []
+    static var locked: [Int: (target: SIMD2<Float>, partner: SIMD2<Float>)] = [:]
     /// The heading a stance walk ends in when it is not 'facing the partner' (side by side: facing the camera); planWalkStep turns into it during the last steps.
     static var finalYaw: [Int: Float] = [:]
     static var store: [Int: Entry] = [:]
@@ -286,7 +302,7 @@ enum ContactTouchMemory {
         if clocks.count > 64 { clocks = clocks.filter { $0.key == id } }
     }
     static func purge(_ ids: [Int]) {
-        for i in ids where i >= 0 { shuffling.remove(i); exact.remove(i); finalYaw[i] = nil }
+        for i in ids where i >= 0 { shuffling.remove(i); exact.remove(i); finalYaw[i] = nil; locked[i] = nil; rewrote.remove(i) }
         let set = Set(ids)
         store = store.filter { !(set.contains($0.key / 4096) || set.contains($0.key % 4096)) }
         meet = meet.filter { !(set.contains($0.key / 4096) || set.contains($0.key % 4096)) }

@@ -1259,7 +1259,7 @@ final class BlobBrain {
         if exact, let fy = ContactTouchMemory.finalYaw[steerID] {
             errF = wrapAngle(fy - yaw)
             let n = (abs(errF) / max(m, 0.1)).rounded(.up)
-            finalTurn = abs(errF) > 0.04 && D <= (n + 2) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+            finalTurn = D <= (n + 2) * stride * runStrideMul * amplitude.clamped(0.6, 1)
         }
         let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first

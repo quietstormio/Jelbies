@@ -61,8 +61,8 @@ struct ContactStance: Sendable {
     static let near: Float = 0.012
 
     /// Touching for the whole hold from phase `from`.
-    static func holding(from: Int, facing: Facing = .each, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
-        var st = [Step(from: 0, target: near, onlySeparate: true, walks: true), Step(from: from, target: hold)]
+    static func holding(from: Int, facing: Facing = .each, walk0: Bool = true, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
+        var st = [Step(from: 0, target: near, onlySeparate: true, walks: walk0), Step(from: from, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(facing: facing, cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic, pulses: pulses)
     }
@@ -101,11 +101,11 @@ struct ContactStance: Sendable {
         .cuddleLean: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 2, facing: .camera),
-        .ringAround: .holding(from: 2, features: true),
+        .ringAround: .holding(from: 2, walk0: false, features: true),
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
-        .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
-        .circleDance: .holding(from: 2, features: true),
+        .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
+        .circleDance: .holding(from: 2, walk0: false, features: true),
         // proximity
         .twirl: .proximity(from: 1), .hopAlong: .proximity(from: 1), .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
