@@ -22,6 +22,7 @@ final class ContactCaptureUITests: XCTestCase {
         let secs = env["CAPTURE_SECS"].flatMap(Double.init) ?? 18
         let app = XCUIApplication()
         app.launchArguments += ["-NewGame", cast, "-NewGameCoins", "10000", "-MainMenu", "0", "-RoomWide", "0", "-ContactCam", angle]
+        if kind != "lieDown" && kind != "sleepPile" { app.launchArguments += ["-NeedsHappy", "1"] }          // (no need bubbles to interrupt the emote)
         if kind != "-" { app.launchArguments += ["-ContactDemo", kind, "-ContactDemoDelay", "3"] }
         if let extra = env["CAPTURE_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: " ").map(String.init) }
         app.launchEnvironment["CONTACTDEMO_LOG"] = out + "/" + scene + ".demolog"
