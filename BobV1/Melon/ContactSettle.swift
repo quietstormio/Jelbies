@@ -66,12 +66,14 @@ extension BlobBrain {
     /// Move the root by `d` (the settle controller: a few mm a step; the body follows through its pose).
     func contactNudge(_ d: SIMD2<Float>) {
         px += d.x; pz += d.y
+        // inside a session (or asleep) the body is slid with the root; the plain nudge (the lying snuggle, the settle tests) stays the root alone
+        guard social != nil || isNapping || idleState.kind == .sleep else { return }
         stepRoot0 += d          // (a step in flight: its root path slides with the root, the soles with it - the same as the unstick nudge)
         if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
         if gait.isBusy { gait.nudge(d) }
         if flapHop.active { flapHop.from += d }          // (the winged hop re-derives the root from its own start point every tick)
         if idleState.kind == .sleep { sleep.spot += d }          // (a sleeper's floor spot is re-asserted from here)
-        if social != nil || isNapping { socialBook.shiftPending += d }          // (the body itself is slid by the same amount at the next social tick: the pose attractor alone trails the root by ~0.2 s, too slow for a lean)
+        socialBook.shiftPending += d          // (the body itself is slid by the same amount at the next tick: the pose attractor alone trails the root by ~0.2 s, too slow for a lean)
     }
     /// Slide the sim by what the settle moved the root since the last tick (once a tick, before the scripts run).
     func contactApplyShift(_ sim: SoftBody) {
