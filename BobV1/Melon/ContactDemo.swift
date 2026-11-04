@@ -122,6 +122,12 @@ enum ContactDemo {
             for a in cast { ok = (a.brain?.idleStart(.lieDown, a.sim) ?? false) && ok }
             note(" lieDown started=%d", ok ? 1 : 0)
             note(" startEpoch=%.3f", Date().timeIntervalSince1970)
+            let bs = cast.compactMap(\.brain)
+            for i in 0..<80 {          // every 0.5 s for 40 s: who is lying (kind / phase / k / yielding / a pending request), to see why one never lies down
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                let s = bs.map { String(format: "[%@ ph=%d k=%.2f y=%d pend=%d]", "\($0.idleState.kind.map { "\($0)" } ?? "none")", $0.idleState.phase, $0.idleState.k, $0.idleState.yielding ? 1 : 0, $0.pending != nil ? 1 : 0) }.joined(separator: " ")
+                note(" lie t=%.1f %@", Double(i + 1) * 0.5, s)
+            }
             return
         }
         guard let kind = SocialKind(rawValue: name), let a = cast.first, let ab = a.brain, let bb = cast[1].brain else { note(" unknown kind %@", name); return }
