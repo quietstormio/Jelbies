@@ -391,6 +391,8 @@ final class GameCare {
     /// Bedtime / wake / idle clocks (GameCare+NightRest.swift).
     @ObservationIgnored var nightRest = NightRestBook()
     @ObservationIgnored var greetPending: Set<Int> = []
+    /// Jelbies in a warm social session right now (GameCare+SocialLove.swift).
+    @ObservationIgnored var socialLoveActive: Set<Int> = []
     @ObservationIgnored var newcomer: NewcomerWalk?          // the bring-home walk (GameCare+Newcomer.swift)
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
@@ -711,6 +713,7 @@ final class GameCare {
     /// Once per fixed step, after Bob's `tick`: the other Jellies' needs and dirt, their mood for the idle behaviours, the selection hop and the
     /// greeting after a long absence. (Meals, Clean, Come here and voice stay Jelly 0's.)
     func tickOthers(_ actors: [JellyActor], dt: Float) {
+        tickSocialLove(actors)
         jellyFloors.removeAll(keepingCapacity: true)
         for a in actors where !parkHides(a.id) { if let b = a.brain { jellyFloors.append(Self.floorPos(b, a.sim)) } }
         for a in actors where a.id > 0 {
