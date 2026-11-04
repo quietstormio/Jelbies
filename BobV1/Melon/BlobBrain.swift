@@ -240,6 +240,7 @@ final class BlobBrain {
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
     var trainingLock = false
     var flapHop = FlapHopState()
+    weak var contactSim: SoftBody?          // set every tick: the settle slides this body at once when it warps an airborne one (ContactSettle.swift)
     /// The species flourish's drive of the feature layer (wings / daisy / Teddy's ears; Pip's tail goes through `tailDrive`): BlobBrain+Emotes.swift.
     var sig = SignatureDrive()
     var nameHopping = false
@@ -629,7 +630,7 @@ final class BlobBrain {
         if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
         if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
-        contactApplyShift(sim)
+        contactSim = sim
         if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
         sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
         if flipTick(sim, skinner, dt) { return }

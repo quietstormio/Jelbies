@@ -64,23 +64,72 @@ enum ContactSettle {
 }
 
 extension BlobBrain {
-    /// Move the root by `d` (the settle controller: a few mm a step; the body follows through its pose).
+    /// The settle's output for one body: `d` is the move along the pair axis the controller wants (+ toward the partner). A body whose soles are PLANTED never slides: the move is consumed by ONE channel
+    /// chosen by what the body is doing (2026-11-04, the skating rule):
+    ///   lying / asleep / outside a session   the root moves (rigid lying body; the settle tests) - as before
+    ///   WALKING                              nothing here: the walk's own destination is re-derived from the touch distance every tick (`contactRetarget`)
+    ///   AIRBORNE (hop, flap-hop, both feet up)   a rigid warp: root, stepRoot0, soles, the hop's start / end, the winged hop's start and the sim body move together, at once
+    ///   PLANTED (standing, sitting, a spin on the spot)   the body LEANS toward / away from the partner with the soles fixed (`leanTrim`, a budget of `leanBudget` rad); a residual beyond it asks the
+    ///                                        locomotion for one small shuffle step (`shuffleReq`), the only way feet move
     func contactNudge(_ d: SIMD2<Float>) {
-        px += d.x; pz += d.y
-        // inside a session (or asleep) the body is slid with the root; the plain nudge (the lying snuggle, the settle tests) stays the root alone
-        guard social != nil || isNapping || idleState.kind == .sleep else { return }
-        stepRoot0 += d          // (a step in flight: its root path slides with the root, the soles with it - the same as the unstick nudge)
-        if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
-        if gait.isBusy { gait.nudge(d) }
-        if flapHop.active { flapHop.from += d }          // (the winged hop re-derives the root from its own start point every tick)
-        if idleState.kind == .sleep { sleep.spot += d }          // (a sleeper's floor spot is re-asserted from here)
-        socialBook.shiftPending += d          // (the body itself is slid by the same amount at the next tick: the pose attractor alone trails the root by ~0.2 s, too slow for a lean)
+        let lying = idleState.kind == .sleep || idleState.kind == .lieDown || idleState.kind == .flop
+        guard social != nil, !lying else {
+            px += d.x; pz += d.y
+            if idleState.kind == .sleep {
+                sleep.spot += d
+                if let sim = contactSim { sim.shift(byXZ: d) }
+            }
+            return
+        }
+        let airborne = gait.isBusy || flapHop.active || airBothFeet
+        if airborne {
+            px += d.x; pz += d.y
+            stepRoot0 += d
+            if feet.pos.count > 1 { feet.pos[0] += d; feet.pos[1] += d }
+            if gait.isBusy { gait.nudge(d) }
+            if flapHop.active { flapHop.from += d }
+            contactSim?.shift(byXZ: d)
+            return
+        }
+        if case .walk = script { return }          // (walking: the destination carries it)
+        // planted: lean. d is along the axis to the partner: its length is the cm to close (+) or give (-); a lean of theta moves the contact point ~ theta/2 m (the cheeks sit ~0.5 m up)
+        guard let pid = socialPartnerID, let o = socialBrain(pid) else { return }
+        let toward = simd_dot(d, simd_normalize(o.position - position + SIMD2(1e-6, 0)))
+        socialBook.trimPartner = pid
+        let want = socialBook.leanTrim + toward * ContactTuning.leanPerMetre
+        if abs(want) > ContactTuning.leanBudget {          // beyond the budget: one small shuffle step on the locomotion (soles stay put until then)
+            socialBook.leanTrim = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, want))
+            if socialBook.shuffleReq == 0 { socialBook.shuffleReq = toward > 0 ? 1 : -1 }
+        } else { socialBook.leanTrim = want }
     }
-    /// Slide the sim by what the settle moved the root since the last tick (once a tick, before the scripts run).
-    func contactApplyShift(_ sim: SoftBody) {
-        let d = socialBook.shiftPending
-        guard d != .zero else { return }
-        socialBook.shiftPending = .zero
-        sim.shift(byXZ: d)
+
+    /// Adds the lean trim to this tick's lean overlay (after the emote's drive set its own): toward the partner with the soles fixed.
+    func contactApplyLean() {
+        guard abs(socialBook.leanTrim) > 1e-4, let o = socialBrain(socialBook.trimPartner), social != nil else { return }
+        let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
+        socialBook.wantRoll += -local.x / ln * socialBook.leanTrim
+        socialBook.wantPitch += local.y / ln * socialBook.leanTrim
+    }
+
+    /// Once a tick for the session's brains: walkers get their destination re-derived from the touch distance along the line they were sent on (so the steps themselves end at the stance), and a planted body
+    /// whose lean ran out takes one shuffle step (locomotion), then the trim is released.
+    func contactStanceWalk(partner p: BlobBrain, gapWanted: Float) {
+        guard let sim = contactSim else { return }
+        if case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
+            var u = t - p.position; let L = simd_length(u)
+            if L > 0.5 {
+                u /= L
+                let dist = (touchRadius(p, along: u) ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                let want = fixed(p.position + u * dist)
+                if simd_distance(want, p.position + u * dist) < 0.1, simd_distance(want, t) > 0.02, simd_distance(want, t) < 0.6 { script = .walk(target: want, then: then) }
+            }
+        }
+        if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
+            let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
+            let step: Float = 0.14 * Float(socialBook.shuffleReq)
+            let spot = fixed(position + u * step)
+            socialBook.shuffleReq = 0
+            if idleState.kind == nil, simd_distance(spot, position) > 0.1 { socialBook.leanTrim = 0; socialWalk(to: spot, sim) }
+        } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
     }
 }

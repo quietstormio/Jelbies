@@ -44,6 +44,8 @@ struct ContactStance: Sendable {
     static let hold: Float = -0.004
     /// Where an approach stands before the press (above the 3 cm re-arm of contactTick, so the touch is a fresh one).
     static let approach: Float = 0.04
+    /// Where a walk ends relative to the touch (the lean closes the rest, <= the lean budget).
+    static let arrive: Float = 0.015
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
@@ -138,6 +140,7 @@ extension BlobBrain {
             return x.held || x.idleState.kind == .sleep || x.idleState.kind == .decorSit || (st.anchor == role && st.anchor != .none)
         }
         guard let s = a.social else { return }
+        a.contactStanceWalk(partner: b, gapWanted: target); b.contactStanceWalk(partner: a, gapWanted: target)
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
         ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }
