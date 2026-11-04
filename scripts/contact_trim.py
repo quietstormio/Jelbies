@@ -18,6 +18,10 @@ try:
         touch = [t for t, dd in tk if dd <= 1.55]          # the touching window starts when two of them are within ~1.55 u (touch distance 1.405)
         if touch: st = touch[0]; print(f"touching from {touch[0]-t0:.1f} s (session start {float(s[-1])-t0:.1f} s)")
         lo = int((st - t0 - 0.5) * 1000)
+        lie = [(float(a), b) for a, b in re.findall(r" lie t=([\d.]+) (.*)", log)]          # lie-down: the demo logs each Jelbie's idle kind every 0.5 s -> cut to 1.5 s after the last one is up again
+        up = [a for a, b in lie if "[lieDown" not in b]
+        lying = [a for a, b in lie if "[lieDown" in b]
+        if lying and up and max(up) > max(lying): hi = int((st - t0 + max(lying) + 1.5) * 1000)
         if e: hi = int((float(e[-1]) - t0 + 2) * 1000)          # (no endEpoch = a lie-down / sleep pile: keep to the end of the capture)
 except Exception as ex:
     print("trim: whole clip,", ex)

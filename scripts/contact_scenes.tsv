@@ -28,3 +28,5 @@ circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	low,side	-
 leapfrog_moss_teddy	moss,teddy	leapfrog	low	-
 stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	low,side	-Storm 2 -StormDelay 2
 guestHug_bob_teddy_pearl	bob,teddy,pearl	-	low	-InviteGuest 1	34
+squabble_bob_teddy	bob,teddy	squabble	low	-
+bump_bob_teddy	bob,teddy	bump	low	-
