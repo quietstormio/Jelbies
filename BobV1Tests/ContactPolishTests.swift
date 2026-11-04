@@ -47,14 +47,14 @@ extension FeatureClipTests.Duo {
 
 // MARK: - the catalogue (mirrors docs/CONTACT_EMOTES.md)
 
-enum ContactStance: String { case touching, proximity }
+enum ContactClass: String { case touching, proximity }
 enum ContactScenario { case social(SocialKind), lie(IdleKind), sleepPair }
 enum ContactProp { case none, ball, beanbag, loveseat }
 
 struct ContactEntry {
     var name: String
     var scenario: ContactScenario
-    var stance: ContactStance
+    var stance: ContactClass
     var props: ContactProp = .none
     var maxSec: Float = 70
     /// true = start from the lab's default spots (1.7 apart: already inside a boop's / greet's window); false = 3 apart, so the walk-up happens.
@@ -86,7 +86,7 @@ final class ContactPolishTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var all: [Result] = []
 
-    static func e(_ n: String, _ k: SocialKind, _ s: ContactStance, props: ContactProp = .none, sec: Float = 70) -> ContactEntry { ContactEntry(name: n, scenario: .social(k), stance: s, props: props, maxSec: sec) }
+    static func e(_ n: String, _ k: SocialKind, _ s: ContactClass, props: ContactProp = .none, sec: Float = 70) -> ContactEntry { ContactEntry(name: n, scenario: .social(k), stance: s, props: props, maxSec: sec) }
     /// Pair emotes (rig 0 starts it with rig 1).
     static let pairEntries: [ContactEntry] = [
         e("boop", .boop, .touching), e("squabble", .squabble, .touching), e("bump", .bump, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
@@ -111,7 +111,7 @@ final class ContactPolishTests: XCTestCase {
     // MARK: results
 
     struct Result {
-        var name = "", cast = "", stance = ContactStance.proximity, kind = ""
+        var name = "", cast = "", stance = ContactClass.proximity, kind = ""
         var started = false, completed = false
         var seconds: Float = 0, frames = 0
         var minGap: Float = .infinity, minGapT: Float = 0, minGapFrame = 0, minGapPair = "", minGapPhase = ""
