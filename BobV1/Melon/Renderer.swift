@@ -1211,7 +1211,24 @@ final class MelonRenderer {
                     if sp != nil { e.setFragmentTexture(fibreNoiseTexture(), index: 0) }
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
-                if !bodyProbe.contains(.skipBody) { e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4) }
+                if !bodyProbe.contains(.skipBody) {
+                    // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
+                    // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
+                    let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
+                    let isPanda = pandaBody > 50.5 && pandaBody < 51.5
+                    if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
+                        var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
+                        ub.shape.w = 51
+                        e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
+                        e.drawIndexedPrimitives(type: tri, indexCount: cap.indexFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        ub.shape.w = 52
+                        e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - cap.indexFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: cap.indexFirst * 4)
+                        e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
+                    } else {
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                    }
+                }
                 if m.seeds.count > 0 && !bodyProbe.contains(.skipEyes) {
                     e.setRenderPipelineState(pEyes)
                     e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
