@@ -32,6 +32,7 @@ final class ContactCaptureUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         try? "go".write(toFile: out + "/" + scene + ".mark", atomically: true, encoding: .utf8)          // (the host script starts its video here)
         let t0 = Date()
+        try? String(format: "%.3f", t0.timeIntervalSince1970).write(toFile: out + "/" + scene + ".t0", atomically: true, encoding: .utf8)          // (frame f_<ms> is t0 + ms)
         var n = 0
         while Date().timeIntervalSince(t0) < secs {
             let ms = Int(Date().timeIntervalSince(t0) * 1000)

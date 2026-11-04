@@ -14,7 +14,7 @@ DEST="platform=iOS Simulator,id=$UDID"
 xcodebuild build-for-testing -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG -destination "$DEST" -derivedDataPath $DD ENABLE_TESTABILITY=YES -quiet || exit 1
 grep -v '^#' scripts/contact_scenes.tsv | while IFS=$'\t' read -r NAME CAST KIND ANGLES ARGS ROWSECS; do
   SECS=${ROWSECS:-${SECS0}}; [ "$ARGS" = "-" ] && ARGS=""
-  [ -n "$NAME" ] || continue
+  [ -n "$NAME" ] || continue; [ -n "${ANGLES_OVERRIDE:-}" ] && ANGLES=$ANGLES_OVERRIDE
   if [ ${#ONLY[@]} -gt 0 ]; then ok=0; for p in $ONLY; do [[ $NAME == $p* ]] && ok=1; done; [ $ok = 1 ] || continue; fi
   for ANGLE in ${(s:,:)ANGLES}; do
     S=${NAME}_$ANGLE; rm -f $OUT/$S.demolog
@@ -34,8 +34,7 @@ grep -v '^#' scripts/contact_scenes.tsv | while IFS=$'\t' read -r NAME CAST KIND
     if [ -n "$RPID" ]; then python3 -c "import os,signal,sys; os.kill(int(sys.argv[1]), signal.SIGINT)" $RPID; wait $RPID 2>/dev/null; sleep 1; fi
     rm -f $OUT/$S.mark
     [ -s $OUT/$S.mov ] || { rm -f $OUT/$S.mov; echo "NO VIDEO for $S (0 bytes / not recorded): screenshot mp4 only"; }
-    ( cd $OUT/$S 2>/dev/null && N=$(ls f_*.png | wc -l) && ffmpeg -loglevel error -y -framerate $(( N / SECS > 0 ? N / SECS : 1 )) -pattern_type glob -i 'f_*.png' \
-        -vf "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900" -pix_fmt yuv420p ../${S}_frames.mp4 </dev/null ) || echo "FAILED $S"
+    python3 scripts/contact_trim.py $OUT $S $ANGLE $SECS || echo "FAILED $S"
     echo "$S: $(cat $OUT/$S.demolog 2>/dev/null | grep -v ' \(start\|at\) ' | tr '\n' ';')"
   done
 done
