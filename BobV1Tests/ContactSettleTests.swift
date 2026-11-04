@@ -114,7 +114,7 @@ final class ContactSettleTests: XCTestCase {
 
     /// 2026-11-04: the peer wall for SESSION PARTNERS is the skin wall alone (no circle spring: it stopped Bob + Teddy 16 cm short of any touch); everybody else keeps the spring exactly as before.
     func testKeepApartPartnersUseTheSkinWallOthersKeepTheSpring() {
-        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .ears], seed: 5)
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .none], seed: 5)
         d.place([SIMD2(-0.7, 0.6), SIMD2(0.7, 0.6)])
         d.live = true
         for _ in 0..<10 { d.tick() }

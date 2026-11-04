@@ -419,8 +419,9 @@ nonisolated enum ContactField {
         let g = polyGapCap(a, b, L, u, bodyA: bodyA, bodyB: bodyB, reach: 0.4)
         if g.isFinite { return g }
         // (a deep overlap: the facing caps no longer pair up - widen them to the whole footprint so the gap stays a finite, signed number: 2026-11-04, the settle and the wall need it most when the overlap is deepest)
+        guard bodyA && bodyB else { return g }          // (a feature that faces nothing - laterally disjoint from the other's skin - can never touch it: infinity is right)
         let g2 = polyGapCap(a, b, L, u, bodyA: bodyA, bodyB: bodyB, reach: 4)
-        if g2.isFinite || !(bodyA && bodyB) { return g2 }
+        if g2.isFinite { return g2 }
         if let ea = supportExt(a, u), let eb = supportExt(b, -u) { return L - (ea + eb) }          // (last resort for the two bodies: the support gap, a lower bound)
         return g2
     }

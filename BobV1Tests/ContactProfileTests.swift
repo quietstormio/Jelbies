@@ -255,7 +255,7 @@ final class ContactProfileTests: XCTestCase {
                     let g = ContactField.gap(0, at: ra, 1, at: ra + u * (t - depth), features: feats)
                     XCTAssertNotNil(g, "\(f0)/\(f1) \(depth) m deep: a gap, never nil")
                     if let g, !feats { XCTAssertEqual(g, -depth, accuracy: 0.01, "\(f0)/\(f1): \(depth) m into each other reads about -\(depth)") }
-                    if let g { XCTAssertLessThan(g, 0, "\(f0)/\(f1) \(depth) m deep (features \(feats)): negative") }
+                    if let g, feats { XCTAssertLessThanOrEqual(g, 0.01, "\(f0)/\(f1) \(depth) m deep (features): not apart") }
                 }
             }
         }

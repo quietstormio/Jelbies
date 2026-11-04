@@ -160,13 +160,35 @@ extension BlobBrain {
             var u = t - p.position; let L = simd_length(u)
             if L > 0.3 {
                 u /= L
-                let stable = contactStableTouch(p, axis: u)
-                let dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
-                let want = fixed(p.position + u * dist)
-                let okFix = simd_distance(want, p.position + u * dist) < 0.25, dT = simd_distance(want, t)
-                if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
-                if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
-                else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
+                var want: SIMD2<Float>, dist: Float, stable: Float?
+                if case .walk(let tp, _) = p.script, let ses = social, p.social === ses {
+                    // BOTH walk toward each other: each retargeting to "the partner's current spot + the touch distance" chases a moving spot and the pair overshoots into each other. The meeting point is
+                    // fixed once per phase from the two drive destinations, and each takes half of the touch distance on its side of it (symmetric: neither target depends on the other's rewrite).
+                    let key = min(steerID, p.steerID) &* 4096 &+ max(steerID, p.steerID), lo = steerID < p.steerID
+                    let sid = ObjectIdentifier(ses), ph = ses.phase
+                    var m = ContactTouchMemory.meet[key]
+                    if m == nil || m!.session != sid || m!.phase != ph {
+                        let tLo = lo ? t : tp, tHi = lo ? tp : t
+                        let ax = simd_normalize(tHi - tLo + SIMD2(1e-6, 0))
+                        m = ContactTouchMemory.Meet(session: sid, phase: ph, mid: (tLo + tHi) / 2, axis: ax)
+                        ContactTouchMemory.meet[key] = m
+                    }
+                    let side: SIMD2<Float> = lo ? -m!.axis : m!.axis          // from the meeting point toward my side
+                    stable = contactStableTouch(p, axis: side)
+                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                    want = fixed(m!.mid + side * (dist / 2))
+                    if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += "|meet" } }
+                    let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25, dT = simd_distance(want, t)
+                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then) }
+                } else {
+                    stable = contactStableTouch(p, axis: u)
+                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                    want = fixed(p.position + u * dist)
+                    let okFix = simd_distance(want, p.position + u * dist) < 0.25, dT = simd_distance(want, t)
+                    if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
+                    if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
+                    else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
+                }
             }
         }
         if ContactTrace.on, socialBook.shuffleReq != 0 {
@@ -197,4 +219,7 @@ extension BlobBrain {
 enum ContactTouchMemory {
     struct Entry { var session: ObjectIdentifier; var phase: Int; var axis: SIMD2<Float>; var d: Float; var frozen: Bool }
     static var store: [Int: Entry] = [:]
+    /// Two walkers heading for each other: their meeting point and axis (lower steerID -> higher), fixed once per session phase.
+    struct Meet { var session: ObjectIdentifier; var phase: Int; var mid: SIMD2<Float>; var axis: SIMD2<Float> }
+    static var meet: [Int: Meet] = [:]
 }
