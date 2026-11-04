@@ -130,6 +130,9 @@ struct SocialBook {
     var greetHop = false
     /// A hop over a partner (leapfrog): the room's peer push does not move this Jelly while it is set.
     var passThrough = false
+    /// Parting from this brain's partner (BlobSocial+Part.swift): his id (-1 none) and the brain clock it lapses at.
+    var partFrom = -1
+    var partUntil: Float = 0
     var closePending = false
     var contactCool: Float = 0
     var contactPrev: [Int: Float] = [:]
@@ -578,6 +581,8 @@ extension BlobBrain {
         if hard { socialBook.pitch = 0; socialBook.roll = 0; socialBook.squash = 1 }
         if socialBook.squinting { socialBook.squinting = false; skinner?.setEyeOpenness(1) }
         socialBook.lookPeer = nil; socialBook.lookAway = false
+        // (leaving a close partner: the first turns away must not swing the skin into him)
+        if let s, s.closeOK, !s.kind.isGroup, let o = (s.a === self ? s.b : s.a) { startParting(from: o) }
         social = nil
         socialBook.drought = 0
         guard let s else { return }
@@ -804,7 +809,8 @@ extension BlobBrain {
                 s.bumpT = -1
                 socialBook.hold = false; socialBook.faceYaw = nil
                 let away = d > 1e-3 ? (position - o.position) / d : SIMD2(sinf(yaw + .pi), cosf(yaw + .pi))
-                socialWalk(to: fixed(position + away * 0.4), sim)
+                startParting(from: o)          // (the turn away backs off first: BlobSocial+Part.swift; the walk's target allows for that retreat)
+                socialWalk(to: fixed(position + away * (0.4 + PartTuning.maxStep)), sim)
             }
             socialBook.wantEyes = 0.85
             if isA, s.phaseT > 0.4, scriptIsNone, o.scriptIsNone || s.phaseT > 5, d >= peerGap + 0.05 || s.phaseT > 7 { s.setPhase(3) }

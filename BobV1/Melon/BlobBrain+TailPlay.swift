@@ -23,6 +23,8 @@ struct TailPlayState {
     var thumps = 0, thumpsDone = 0, impactT: Float = 9
     /// The hug: 0...1 curl blend and the side of the tail (+1 = +x).
     var hug: Float = 0
+    /// A social curl is easing (so it eases back out), and the latched side of that curl (+1 = +x, 0 = not chosen yet).
+    var socialLive = false, socialSide: Float = 0
     /// How many times each emote has played (tests).
     var played: [IdleKind: Int] = [:]
 }
@@ -81,7 +83,13 @@ extension BlobBrain {
         }
         // the emotes' shaped values; with no emote they ease back to rest
         if kind != .tailThump { tailPlay.lift *= expf(-dt / 0.12); tailPlay.thumpsDone = 0 }
-        if kind != .tailHug { tailPlay.curl *= expf(-dt / 0.2); tailPlay.hug *= expf(-dt / 0.2); if kind != .tailThump { tailPlay.liftTip *= expf(-dt / 0.2) } }
+        if kind != .tailHug {
+            // (a social that puts a body behind Pip wraps the tail round to one side so the backs can meet: BlobSocial+TailClear.swift)
+            let want = socialTailCurl()
+            if want != 0 || tailPlay.socialLive { tailPlay.curl += (want - tailPlay.curl) * (1 - expf(-dt / 0.3)); tailPlay.curlPow = 1.6; tailPlay.socialLive = abs(tailPlay.curl) > 0.5 }
+            else { tailPlay.curl *= expf(-dt / 0.2) }
+            tailPlay.hug *= expf(-dt / 0.2); if kind != .tailThump { tailPlay.liftTip *= expf(-dt / 0.2) }
+        }
         d.liftRoot = tailPlay.lift
         d.liftTip += tailPlay.liftTip
         d.bendYaw = tailPlay.curl; d.bendPow = tailPlay.curlPow

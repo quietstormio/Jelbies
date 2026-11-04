@@ -22,6 +22,8 @@ enum Friends2Tuning {
     /// Where the sides meet: centre distance as a fraction of `peerGap` (a body is ~1.4 wide, so the bodies just touch and squish a little).
     static let sideGap: Float = 0.82, faceGap: Float = 0.76
     static let raceLane: Float = 1.05
+    /// ringAround: extra centre distance (m) over the skins' touch distance on the hop circle (the 60 degree turn in place between hops swings the skin).
+    static let ringMargin: Float = 0.12
     static let tagRounds = 3
 }
 
@@ -225,6 +227,7 @@ extension BlobBrain {
             }
         case 3:    // the tagger runs off; "it" counts a beat, then chases
             stepKey(400 + s.round)
+            if t < 0.05 { startParting(from: o) }          // (the run-off and the other's turn back off first: BlobSocial+Part.swift)
             if iTag {
                 if !socialBook.hopStarted, fxFree {
                     letGo()
@@ -517,10 +520,16 @@ extension BlobBrain {
         let steps = 9
         switch s.phase {
         case 2:
-            if isA, !s.ready {          // the circle: centre between us, radius half the distance
+            if isA, !s.ready, scriptIsNone, o.scriptIsNone, !feet.active, !o.feet.active, s.phaseT > 0.3 {          // the circle: centre between us, radius half the distance - drawn once BOTH STAND (not while they are still walking in)
                 s.ready = true
                 s.home0 = (position + o.position) / 2
-                let r = simd_distance(position, o.position) / 2
+                // (the skins decide, not the roots: the circle is never smaller than the bodies' touch distance + a margin - measured once, here, with wings and tail counted. The hop then
+                //  is a pure 60 degree rotation of the pair on it, so their gap is the standing gap all the way round)
+                let dBrain = simd_distance(position, o.position)
+                var r = dBrain / 2
+                if let g = ContactField.gap(steerID, o.steerID, features: true) {
+                    r += max(0, (Friends2Tuning.ringMargin - g)) / 2          // (g < margin: open the circle by the shortfall)
+                }
                 s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))          // (radius, A's angle)
             }
             guard s.ready else { faceEach(o); return }

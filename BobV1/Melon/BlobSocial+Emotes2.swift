@@ -116,6 +116,7 @@ extension BlobBrain {
             }
         default:   // part: a joy squash, hearts
             s.choreo = false
+            if t < 0.05 { startParting(from: o) }          // (the turn to the camera backs off first: BlobSocial+Part.swift)
             holdFacing(faceCameraYaw())
             socialBook.wantRoll = lean * 0.09 * g * (1 - smooth01(t / 0.35))
             socialBook.wantEyes = 1
