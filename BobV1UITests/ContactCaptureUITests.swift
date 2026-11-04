@@ -30,6 +30,7 @@ final class ContactCaptureUITests: XCTestCase {
         if cont.waitForExistence(timeout: 20) { for _ in 0..<6 { if cont.exists, cont.isHittable { cont.tap() }; Thread.sleep(forTimeInterval: 1.5) } }
         XCTAssertTrue(app.buttons["care-menu"].waitForExistence(timeout: 90), "the room is up")
         Thread.sleep(forTimeInterval: 1)
+        try? "go".write(toFile: out + "/" + scene + ".mark", atomically: true, encoding: .utf8)          // (the host script starts its video here)
         let t0 = Date()
         var n = 0
         while Date().timeIntervalSince(t0) < secs {
