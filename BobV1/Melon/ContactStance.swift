@@ -171,3 +171,17 @@ extension BlobBrain {
         }
     }
 }
+
+extension BlobBrain {
+    /// The emote's own contact sound (+ haptic) when NO contact profile exists for the pair (a rig that never skins: the Lab, the room-sound counts, UI tests). With profiles - the app - this is a no-op:
+    /// `contactTick` fires the same sound and haptic ONCE at the real touch instead (ContactStance.table). So no environment loses a sound.
+    func contactCueFallback(_ o: BlobBrain, _ sfx: SFX, _ volume: Float, haptic: ContactHaptic = .none) {
+        guard !ContactField.enabled || ContactField.gap(steerID, o.steerID) == nil else { return }
+        AudioHub.shared.play(sfx, jelly: steerID, x: px, volume: volume)
+        switch haptic {
+        case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
+        case .treat(let key): treatHaptic(key)
+        case .none: break
+        }
+    }
+}

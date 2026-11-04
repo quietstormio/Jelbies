@@ -67,6 +67,7 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactCueFallback(o, .emoteSpinHug, 1, haptic: .treat("spinHug.press"))
                     face(.joyArc, hold: 1.2); o.face(.joyArc, hold: 1.2)
                 }
                 if s.impacted, t > 1.2 {

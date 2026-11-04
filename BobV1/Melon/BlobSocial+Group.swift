@@ -267,11 +267,13 @@ extension BlobBrain {
                         for x in mem where x !== m { m.onSocial?(.boop(partner: x.steerID)); break }
                         for x in mem where x !== m { m.onSocial?(.makeUp(partner: x.steerID)); break }
                     }
+                    contactCueFallback(mem.count > 1 ? mem[1] : self, .squish, 0.7)
                     AudioHub.shared.chirp(jelly: steerID, .happy)
                 }
                 if s.passes == 0, ft > 2.2 {          // a squeeze and an "aww"
                     s.passes = 1
                     for (i, m) in mem.enumerated() { m.jellyKick = max(m.jellyKick, 1.4); if i < 2 { AudioHub.shared.chirp(jelly: m.steerID, i == 0 ? .babble : .happy) } }
+                    contactCueFallback(mem.count > 1 ? mem[1] : self, .squish, 0.45)
                 }
                 if s.passes == 1, ft > s.duration - 1.6 {          // the last heart burst
                     s.passes = 2

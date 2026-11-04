@@ -218,6 +218,7 @@ extension BlobBrain {
                     let tagger = taggerIsA ? self : o, tagged = taggerIsA ? o : self
                     tagger.jellyKick = max(tagger.jellyKick, 1.2); tagged.jellyKick = max(tagged.jellyKick, 2.6)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactCueFallback(o, .boop, 0.9)
                     AudioHub.shared.chirp(jelly: tagged.steerID, .babble)
                 }
                 if t > 0.85 { s.setPhase(3); s.impacted = false }
@@ -366,6 +367,7 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
                     onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactCueFallback(o, .squish, 0.9)
                     AudioHub.shared.chirp(jelly: steerID, .babble)
                 }
                 if t > 1.15 {
@@ -428,6 +430,7 @@ extension BlobBrain {
         booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, 2.2)
         onSocial?(.boop(partner: booped.steerID)); booped.onSocial?(.boop(partner: booper.steerID))
         booped.onSocial?(.makeUp(partner: booper.steerID)); onSocial?(.makeUp(partner: booped.steerID))
+        booper.contactCueFallback(booped, .boop, 0.8)
         AudioHub.shared.chirp(jelly: booped.steerID, .babble)
         booped.blushBump(hold: 2.0, peak: 0.6)
     }
@@ -483,6 +486,7 @@ extension BlobBrain {
                 s.impacted = true
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                contactCueFallback(o, .squish, 0.5)
             }
             if s.passes == 0, ft > 2.0 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy) }
             if s.passes == 1, ft > 3.4 { s.passes = 2; AudioHub.shared.chirp(jelly: o.steerID, .babble) }
