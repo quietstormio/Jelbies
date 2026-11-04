@@ -52,12 +52,23 @@ struct AdoptionCenter: View {
         if d.object(forKey: "PickerTab") != nil { t = PickerTab(rawValue: min(max(d.integer(forKey: "PickerTab"), 0), 2)) ?? .about }
         #endif
         _page = State(initialValue: start); _tab = State(initialValue: t)
+        Self.previewOffer(mode: mode, character: SpeciesInfo.order[start])
     }
 
     private var reduce: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var info: SpeciesInfo { SpeciesInfo.of(SpeciesInfo.order[page]) }
     private var look: SpeciesLook { info.look }
     private var pick: Int { info.character }
+    /// Today's Jelly Spring colour variant of the shown species (nil = classic; the free first gift is always classic).
+    private var variant: JellyVariant? { Self.offer(mode: mode, character: pick) }
+    static func offer(mode: StartFlow.AdoptMode, character: Int) -> JellyVariant? {
+        mode == .first || JellyRoster.savedIDs().contains(character) ? nil : JellyVariantBook.offer(species: character, dayKey: JellyVariantBook.dayKey())
+    }
+    /// Makes the stage draw `character` in today's variant (read when the stage body is built).
+    static func previewOffer(mode: StartFlow.AdoptMode, character: Int) {
+        if mode == .more, JellyRoster.savedIDs().contains(character) { return }          // an owned Jelbie keeps his own (saved) colour
+        JellyVariants.setPreview(character, offer(mode: mode, character: character))
+    }
     private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count) }
     private var isHome: Bool { home.contains(pick) }
     private var canAdopt: Bool { !isHome && (price.map { $0 <= wallet.count } ?? false) }
@@ -76,7 +87,7 @@ struct AdoptionCenter: View {
         }
         .ignoresSafeArea()
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
-        .onDisappear { camera.release(); emoteTask?.cancel() }
+        .onDisappear { camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews() }
         .accessibilityIdentifier("adoption-center")
     }
 
@@ -169,7 +180,14 @@ struct AdoptionCenter: View {
             Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
                 .frame(height: 20).position(x: 220, y: 18)
             Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
-            Text(info.epithet).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
+            Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
+            if variant?.rare == true {
+                Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 10).frame(height: 22)
+                    .background(Capsule().fill(Color(hex: 0xFFD65C)))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+                    .position(x: 380, y: 18).accessibilityIdentifier("adopt-rare-tag")
+            }
             if mode == .more {
                 Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
                     .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8).frame(width: 380).position(x: 220, y: 160)
@@ -192,7 +210,7 @@ struct AdoptionCenter: View {
         }
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
+        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
         .accessibilityHint("Swipe up or down to change Jelbie")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
@@ -448,6 +466,7 @@ struct AdoptionCenter: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 170_000_000)
             ready = false; stageModel = nil
+            Self.previewOffer(mode: mode, character: SpeciesInfo.order[next])
             page = next
             camera.setSpecies(SpeciesInfo.order[next])
             slideX = reduce ? 0 : CGFloat(dir) * 160
@@ -505,6 +524,7 @@ struct AdoptionCenter: View {
         emoteTask?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { celebrating = true }
         let c = pick, n = name
+        JellyVariants.adopt(c, variant)          // the colour he was shown is the colour he keeps (nil = the classic one)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_800_000_000)
             done(c, n)

@@ -183,6 +183,7 @@ final class StartFlow {
         if introSeen { IntroGate.markSeen() }          // starting over does not replay the intro
         try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "BobSave.json"))
         JellyRoster.names = JellyRoster.loadNames()
+        JellyVariants.reload()
         JellyRoster.current = [0]
         DecorField.shared.set([])
         DayClock.shared.resetForNewGame()          // Day 1, 8:00

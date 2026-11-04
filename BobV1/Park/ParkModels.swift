@@ -196,7 +196,7 @@ nonisolated enum ParkPool {
     /// The whole pool: `ParkTuning.poolSize` visitors, every colour used, signatures and items mixed. The same on every device.
     static func generate(count: Int = ParkTuning.poolSize, seed: UInt64 = ParkTuning.poolSeed) -> [ParkVisitor] {
         var r = ParkRandom(seed)
-        var colours = ParkColour.allCases
+        var colours = ParkColour.allCases.filter { JellyVariantBook.parkEligible($0) }          // the Spring's exclusive variants never appear here
         for i in stride(from: colours.count - 1, to: 0, by: -1) { colours.swapAt(i, Int(r.next() % UInt64(i + 1))) }
         var names = ParkWords.names
         for i in stride(from: names.count - 1, to: 0, by: -1) { names.swapAt(i, Int(r.next() % UInt64(i + 1))) }

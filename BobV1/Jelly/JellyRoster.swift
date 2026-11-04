@@ -170,6 +170,7 @@ nonisolated enum JellyRoster {
     /// Body colours by CHARACTER: Bob is the model's palette (baby blue in the game; nil); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
     static func palette(_ id: Int) -> Palette? {
         if WhiteWing.hasLook(id) { return WhiteWing.palette }
+        if let v = JellyVariants.active(id) { return v.palette }          // an adopted / previewed Jelly Spring colour variant (species + feature unchanged)
         switch id {
         case 1: return PaletteKey.yellow.palette
         case 2: return JellyPalettes.green
@@ -183,6 +184,7 @@ nonisolated enum JellyRoster {
     /// sRGB 0...1 swatch for the roster card / selection preview (by CHARACTER).
     static func tint(_ id: Int) -> SIMD3<Float> {
         if WhiteWing.hasLook(id) { return WhiteWing.swatch }
+        if let v = JellyVariants.active(id) { return v.swatch }
         switch id {
         case 1: return SIMD3(0.99, 0.90, 0.62)
         case 2: return SIMD3(0.70, 0.90, 0.66)
