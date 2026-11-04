@@ -43,7 +43,7 @@ struct CafeChrome: View {
                 }
                 if cafe.listOpen, !cardHidden {          // the order stack: above the menu (portrait: in the wall band above the Jelbies), beside it on the left in landscape
                     if vsc == .compact {
-                        HStack { CafeOrderStack(care: care, compact: true).frame(width: 250); Spacer() }
+                        HStack { CafeOrderStack(care: care, compact: true).frame(width: 200); Spacer() }
                             .padding(.top, 62).padding(.leading, 12).frame(maxHeight: .infinity, alignment: .top)
                     } else {
                         VStack { CafeOrderStack(care: care, compact: false).padding(.horizontal, 22); Spacer() }
@@ -177,7 +177,7 @@ struct CafeOrderStack: View {
                 Text(care.jelly(id)?.name ?? "Jelbie").font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 2)
                 thumb(t, size: 22)
-                Text(CafeMenu.treat(t).name).font(SK.font(12, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.55)
+                if !(compact && off) { Text(CafeMenu.treat(t).name).font(SK.font(compact ? 11 : 12, .bold)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5) }
                 HStack(spacing: 2) {
                     JellyCoinIcon(size: 13)
                     if base != paid { Text("\(base)").font(SK.font(10, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
@@ -238,8 +238,8 @@ struct CafeMenuCard: View {
         Button { AudioHub.shared.uiTap(); cafe.draftTable.toggle(); refusal = nil } label: {
             HStack(spacing: 6) {
                 Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 15, weight: .bold))
-                Text(compact ? "Same for all" : "Same for everyone").font(SK.font(13, .heavy)).lineLimit(1).fixedSize()
-                Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted)
+                Text(compact ? "All same" : "Same for everyone").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
+                if table || !(free || compact) { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 10).frame(minHeight: 44)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
@@ -255,7 +255,7 @@ struct CafeMenuCard: View {
             refusal = care.orderCafe(order)
         } label: {
             Text("Order").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize()
-                .padding(.horizontal, 20).frame(minHeight: 44)
+                .padding(.horizontal, 16).frame(minHeight: 44)
                 .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
         }
         .buttonStyle(.plain).disabled(!complete).accessibilityIdentifier("cafe-order")
@@ -266,7 +266,7 @@ struct CafeMenuCard: View {
             if free {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("Free").font(SK.font(17, .black)).foregroundStyle(SK.pinkStrong)
-                    Text("stamp card").font(SK.font(10, .heavy)).foregroundStyle(SK.pinkStrong)
+                    Text("stamp card").font(SK.font(10, .heavy)).foregroundStyle(SK.pinkStrong).lineLimit(1).fixedSize()
                 }
             } else {
                 HStack(spacing: 4) {
@@ -312,7 +312,7 @@ struct CafeMenuCard: View {
                     } else if let n = fullNote {
                         Text(n + " \u{00B7} try a drink").font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("cafe-full-note")
                     } else if let sp = special {
-                        Text("Daily special: \(CafeMenu.treat(sp).name) \u{2212}20%").font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("cafe-special")
+                        Text("\(compact ? "Special" : "Daily special"): \(CafeMenu.treat(sp).name) \u{2212}20%").font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("cafe-special")
                     } else {
                         Text(table ? "One treat for the table" : "A treat for each Jelbie").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
                     }
