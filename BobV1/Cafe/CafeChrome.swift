@@ -331,10 +331,10 @@ struct CafeOrderCard: View {
         Button { AudioHub.shared.uiTap(); table.toggle(); refusal = nil } label: {
             HStack(spacing: 5) {
                 Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 14, weight: .bold))
-                Text("All same").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
+                Text("All same").font(SK.font(12, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
                 if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 34)
+            .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: compact ? 44 : 34)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
