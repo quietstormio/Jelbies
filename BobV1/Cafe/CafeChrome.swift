@@ -43,7 +43,7 @@ struct CafeChrome: View {
                 }
                 if cafe.listOpen, !cardHidden {
                     if vsc == .compact {
-                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(380, g.size.width * 0.44)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
+                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
                         VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.43 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
@@ -187,7 +187,7 @@ struct CafeOrderCard: View {
     private var slimHeader: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(cafe.stamps.isFull && editing ? "Free order!" : (editing ? "Café menu" : "Your order")).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                Text(cafe.stamps.isFull && editing ? "Free order!" : (editing ? "Café menu" : "Your order")).font(SK.font(compact ? 17 : 18, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
                 if let r = refusal ?? cafe.cardRefusal {
                     Text(r).font(SK.font(11, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).lineLimit(2).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
                 } else if editing {
@@ -199,15 +199,18 @@ struct CafeOrderCard: View {
         }
     }
 
-    /// Portrait: Food then Drinks in one sideways strip.
+    /// Food then Drinks in one sideways strip (Drinks first for a Jelbie who is full), today's special in front when he can have it.
     private var strip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let canFood = table ? ids.allSatisfy { care.cafeCanEat($0) } : care.cafeCanEat(who)
+        let lead = special.flatMap { sp in CafeRules.canOrder(sp, tier: table ? .famished : care.needs(for: who).tier(.hunger)) ? sp : nil }
+        let groups: [(String, [CafeTreat])] = canFood ? [("FOOD", CafeMenu.foods), ("DRINKS", CafeMenu.drinks)] : [("DRINKS", CafeMenu.drinks), ("FOOD", CafeMenu.foods)]
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 5) {
-                if let sp = special { sideLabel("TODAY"); tile(CafeMenu.treat(sp)).frame(width: 92) }
-                sideLabel("FOOD")
-                ForEach(CafeMenu.foods.filter { $0.id != special }) { tile($0).frame(width: 92) }
-                sideLabel("DRINKS")
-                ForEach(CafeMenu.drinks.filter { $0.id != special }) { tile($0).frame(width: 92) }
+                if let sp = lead { sideLabel("TODAY"); tile(CafeMenu.treat(sp)).frame(width: 92) }
+                ForEach(groups, id: \.0) { g in
+                    sideLabel(g.0)
+                    ForEach(g.1.filter { $0.id != lead }) { tile($0).frame(width: 92) }
+                }
             }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -258,7 +261,7 @@ struct CafeOrderCard: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .padding(.horizontal, 8).frame(minHeight: compact ? 38 : 40)
+            .padding(.horizontal, 8).frame(minHeight: compact ? 36 : 40)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(active ? SK.honey : Color.white.opacity(0.7)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
@@ -317,8 +320,8 @@ struct CafeOrderCard: View {
         Button { AudioHub.shared.uiTap(); table.toggle(); refusal = nil } label: {
             HStack(spacing: 5) {
                 Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 14, weight: .bold))
-                Text("Same for all").font(SK.font(12, .heavy)).lineLimit(1).minimumScaleFactor(0.7)
-                Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted)
+                Text("All same").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
+                if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 36)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
@@ -418,16 +421,22 @@ struct CafeOrderCard: View {
 
     private var totalView: some View {
         let list = order.fullPrice(jellies: ids)
-        return HStack(spacing: 5) {
-            Text("Total").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+        return Group {
             if free {
-                Text("Free \u{00B7} stamp card").font(SK.font(16, .black)).foregroundStyle(SK.pinkStrong).lineLimit(1).minimumScaleFactor(0.6)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Total").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                    Text("Free \u{00B7} stamp card").font(SK.font(13, .black)).foregroundStyle(SK.pinkStrong).lineLimit(1)
+                }
             } else {
-                JellyCoinIcon(size: 18)
-                if list > total, total > 0 || !editing { Text("\(list)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
-                Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                HStack(spacing: 5) {
+                    Text("Total").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    JellyCoinIcon(size: 18)
+                    if list > total, total > 0 || !editing { Text("\(list)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                }
             }
         }
+        .fixedSize().layoutPriority(1)
         .accessibilityElement(children: .ignore).accessibilityLabel(free ? "Total: free, stamp card" : "Total: \(total) JellyCoins").accessibilityIdentifier("cafe-total")
     }
 
