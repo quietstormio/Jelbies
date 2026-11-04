@@ -264,6 +264,7 @@ final class ContactPolishTests: XCTestCase {
         defer { ContactTrace.on = false }
         var arrival = ArrivalTracker()
         var holdTouched = false
+        var firstTouchFrame = -1
         var wasWalking = [Bool](repeating: false, count: n)
         var arriveEv = [String](repeating: "", count: n)
         let maxF = Int(e.maxSec * 60)
@@ -296,7 +297,8 @@ final class ContactPolishTests: XCTestCase {
                 arrival.feed(frame: frame, anyStepping: stepping, gap: g)
                 if let ag = arrival.gap { res.arrivalCm = ag; res.arrivalT = Float(arrival.frame ?? frame) / 60; res.lastPlantCm = arrival.last; res.stops = arrival.settles.count }
             }
-            if res.episodes > 0, !arrival.settles.isEmpty { arrival.close() }          // (the first touch has happened and the walkers have stopped once: the arrival is in)
+            if res.episodes > 0, firstTouchFrame < 0 { firstTouchFrame = frame }
+            if firstTouchFrame >= 0, frame >= firstTouchFrame + 60 { arrival.close() }          // (1 s after the first touch the approach is over: a stop that CONFIRMS later is the hold, not the arrival; the last plant usually comes <= 0.4 s before the touch)
             // THE touch event: the gate's own (contactTick: fires at skin gap <= +0.5 cm, re-armed past +3 cm). One episode per event; its sound / haptic are the ones requested in the same frame.
             let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }
             evDelta = evNow - evPrev; evPrev = evNow
@@ -343,7 +345,7 @@ final class ContactPolishTests: XCTestCase {
                     gapNow = mg
                     if mg < res.minGap { res.minGap = mg; res.minGapT = Float(frame) / 60; res.minGapFrame = frame; res.minGapPair = mp
                         res.minGapPhase = "\(a.brain.socialKind.map { $0.rawValue } ?? "-")/ph\(a.brain.social?.phase ?? -1)/idle \(a.brain.idleState.kind.map { "\($0)" } ?? "-")" }
-                    if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined()) + (Self.traceCols ? Self.traceRow(rigs, d.lab, preRoots, arriveEv, mg) : "")) ; if Self.traceCols { arriveEv = [String](repeating: "", count: n) } }
+                    if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined()) + Self.traceExtra(rigs, S, n) + (Self.traceCols ? Self.traceRow(rigs, d.lab, preRoots, arriveEv, mg) : "")) ; if Self.traceCols { arriveEv = [String](repeating: "", count: n) } }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
                     if still, inSession, activePhase, mg < 2.2 { res.stance01.append(mg) }
                     // the REAL hold: inside the table's hold step, from the first frame the skins touch (<= +0.5 cm) to the end of the step. (The hold step of a press is entered while the walker is still
@@ -398,7 +400,7 @@ final class ContactPolishTests: XCTestCase {
             if res.completed { break }
         }
         res.frames = frame; res.seconds = Float(frame) / 60
-        if !trace.isEmpty, let dir = Self.outDir { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true); try? (["t\tphase\tgap_cm\troot\tstill\tlastSound" + (Self.traceCols ? Self.traceHeader : "")] + trace).joined(separator: "\n").write(toFile: dir + "/trace_\(Self.fileName(e.name))_\(Self.fileName(castName)).tsv", atomically: true, encoding: .utf8) }
+        if !trace.isEmpty, let dir = Self.outDir { try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true); try? (["t\tphase\tgap_cm\troot\tstill\tlastSound\tprofGap_cm\tprofRoot\treach0_cm\treach1_cm\tmeshSpan0_cm\tmeshSpan1_cm" + (Self.traceCols ? Self.traceHeader : "")] + trace).joined(separator: "\n").write(toFile: dir + "/trace_\(Self.fileName(e.name))_\(Self.fileName(castName)).tsv", atomically: true, encoding: .utf8) }
         AudioHub.requestTap = nil; EmoteHaptic.requestTap = nil; EmoteTreats.requestTap = nil; HapticDriver.cueTap = nil
         return (res, cells)
     }
@@ -428,6 +430,17 @@ final class ContactPolishTests: XCTestCase {
     static func verticallyClear(_ a: ContactSurface, _ b: ContactSurface) -> Bool {
         guard let aLo = a.points.map(\.y).min(), let aHi = a.points.map(\.y).max(), let bLo = b.points.map(\.y).min(), let bHi = b.points.map(\.y).max() else { return false }
         return aLo >= bHi - 0.01 || bLo >= aHi - 0.01
+    }
+    /// Trace columns that tell a measurement artefact from a real overlap: the ENGINE's profile gap (ContactField, polygons of the skin at the brain roots) and root distance next to the harness gap; how far each drawn body reaches from its centroid, and the longest span between two of its vertices.
+    static func traceExtra(_ rigs: [MotionRig], _ S: [ContactSurface], _ n: Int) -> String {
+        let pg = ContactField.gap(rigs[0].brain.steerID, rigs[1].brain.steerID, features: false)
+        let pr = simd_distance(ContactField.root(rigs[0].brain.steerID), ContactField.root(rigs[1].brain.steerID))
+        func reach(_ s: ContactSurface) -> Float { s.points.reduce(Float(0)) { max($0, simd_length(SIMD2($1.x, $1.z) - s.root)) } }
+        func span(_ s: ContactSurface) -> Float {
+            guard let a = s.points.map({ $0.x }).min(), let b = s.points.map({ $0.x }).max(), let c = s.points.map({ $0.z }).min(), let d = s.points.map({ $0.z }).max() else { return 0 }
+            return max(b - a, d - c)
+        }
+        return String(format: "\t%@\t%.3f\t%.1f\t%.1f\t%.1f\t%.1f", pg.map { String(format: "%.1f", $0 * 100) } ?? "-", pr, reach(S[0]) * 100, reach(S[1]) * 100, span(S[0]) * 100, span(S[1]) * 100)
     }
     static func cm(_ f: Float) -> String { f.isFinite ? String(format: "%.1f", f * 100) : "-" }
     /// A depth in cm; "-" when there was none to measure (the sentinel is -1 u).
