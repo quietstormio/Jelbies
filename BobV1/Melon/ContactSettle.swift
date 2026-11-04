@@ -127,9 +127,10 @@ extension BlobBrain {
         var e = ContactTouchMemory.store[key]
         if let x = e, x.session != sid || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 { e = nil }
         if var x = e {
-            // at every STANDING moment the distance is re-read (the bodies turn to face each other during the approach: front-to-front touches closer than side-by-side); while stepping, a rate-clamped EMA
-            if planted(self), planted(p) { x.d = raw }
-            else { x.d += max(-0.01, min(0.01, (raw - x.d) * 0.1)) }
+            if !x.frozen {
+                if planted(self), planted(p) { x.d = raw; x.frozen = true }
+                else { x.d = max(x.d0 - 0.12, min(x.d0 + 0.12, x.d + max(-0.01, min(0.01, (raw - x.d) * 0.1)))) }
+            }
             ContactTouchMemory.store[key] = x
             return x.d
         }
@@ -165,7 +166,7 @@ extension BlobBrain {
             ContactTrace.mod(steerID) { $0.walk = w; $0.tgt = tg }
         }
         if case .walk = script {} else { ContactTouchMemory.shuffling.remove(steerID) }
-        if retarget, !feet.active, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
+        if retarget, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
             if L > 0.3 {
                 u /= L
