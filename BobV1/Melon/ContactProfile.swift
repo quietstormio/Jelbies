@@ -356,6 +356,12 @@ nonisolated enum ContactField {
         guard let ea = supportExt(a, u), let eb = supportExt(b, -u) else { return nil }
         return ea + eb
     }
+    /// The support touch distance along an EXPLICIT axis `u` (unit, from `a` toward `b`): extA(u) + extB(-u). Use it at a STANDING moment (both planted) for a distance that does not swing with the steps
+    /// (the live profile includes a swinging leg / arm: 0.39 ... 1.6 m on the same axis during a walk). nil = no profile for one of them.
+    static func touchDistance(_ a: Int, _ b: Int, dir u: SIMD2<Float>) -> Float? {
+        guard enabled, isValid(a), isValid(b), a != b, let ea = supportExt(a, u), let eb = supportExt(b, -u) else { return nil }
+        return ea + eb
+    }
     /// The catalogue's skin gap: root distance - touchDistance (metres; + apart, - the supports overlap). Agrees with `BruteForceContactMetric.skinGap` to a few mm (ContactProfileTests).
     /// It is a lower bound of `gap` (the supports can overlap where the footprints do not: two lying bodies whose farthest points sit side by side); decisions use `gap`.
     static func skinGap(_ a: Int, _ b: Int) -> Float? {

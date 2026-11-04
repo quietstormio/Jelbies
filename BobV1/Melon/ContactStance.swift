@@ -111,6 +111,15 @@ extension BlobBrain {
         return st
     }
 
+    /// The steerIDs of the bodies `self` is in a stance session with (touching-class stances only; and, for 1.5 s after it, the ones it just left: the spring must not snap back on a pair standing at the touch). Used by the room's
+    /// peer wall (`MelonStage.keepApart`): for these the skin wall replaces the circle spring.
+    func contactPartnerIDs() -> Set<Int> {
+        var r = Set<Int>()
+        if let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching { for id in (s.kind.isGroup ? s.crewIDs : [s.idA, s.idB, s.idC]) where id >= 0 && id != steerID { r.insert(id) } }
+        for id in socialBook.glow.keys { r.insert(id) }
+        return r
+    }
+
     /// Called from `socialDrive` by the session's initiator, every step: hold the pair(s) of the session at the skin gap the stance table asks for in the current phase.
     func contactStanceTick(_ s: SocialSession) {
         guard ContactField.enabled, let st = ContactStance.entry(s.kind), st.cls != .none, let step = st.step(at: s.phase), let target = step.target else { return }
@@ -140,7 +149,7 @@ extension BlobBrain {
             return x.held || x.idleState.kind == .sleep || x.idleState.kind == .decorSit || (st.anchor == role && st.anchor != .none)
         }
         guard let s = a.social else { return }
-        a.contactStanceWalk(partner: b, gapWanted: target); b.contactStanceWalk(partner: a, gapWanted: target)
+        a.contactStanceWalk(partner: b, gapWanted: target, features: st.features, retarget: !step.onlySeparate); b.contactStanceWalk(partner: a, gapWanted: target, features: st.features, retarget: !step.onlySeparate)
         let aa = fixed(a, s.a === a ? .a : .b), bb = fixed(b, s.a === b ? .a : .b)
         ContactSettle.step(a, b, target: target, anchoredA: aa, anchoredB: bb, onlySeparate: step.onlySeparate, features: st.features, urgent: ContactSettleTuning.stanceUrgent, support: true)
     }

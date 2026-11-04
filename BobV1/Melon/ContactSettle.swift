@@ -115,14 +115,40 @@ extension BlobBrain {
         socialBook.wantPitch += local.y / ln * socialBook.leanTrim
     }
 
-    /// Once a tick for the session's brains: walkers get their destination re-derived from the touch distance along the line they were sent on (so the steps themselves end at the stance), and a planted body
-    /// whose lean ran out takes one shuffle step (locomotion), then the trim is released.
-    func contactStanceWalk(partner p: BlobBrain, gapWanted: Float) {
+    /// The pair's touch distance for the walk destination, STABLE (2026-11-04): the live support reach swings 0.39 ... 1.6 m while the legs step, so a destination derived from it every tick jumps and the pair
+    /// chases itself. Captured along the stance axis `u` (partner -> destination) at a STANDING moment (both planted: `ContactField.touchDistance(_:_:dir:)` of the standing profiles); until such a moment the
+    /// value is a hard low-pass of the live one (first sample clamped to a plausible 0.6 ... 1.5 m, then an EMA with a rate clamp). Kept per (walker, partner) in `ContactTouchMemory`, reset per session / phase,
+    /// and re-captured when the axis turns by more than 25 degrees (front-to-front touches closer than side-by-side).
+    func contactStableTouch(_ p: BlobBrain, axis u: SIMD2<Float>) -> Float? {
+        guard let raw = touchRadius(p, along: u), let s = social else { return nil }
+        let key = steerID &* 4096 &+ p.steerID
+        let sid = ObjectIdentifier(s)
+        func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
+        var e = ContactTouchMemory.store[key]
+        if let x = e, x.session != sid || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 { e = nil }
+        if var x = e {
+            if !x.frozen {
+                if planted(self), planted(p) { x.d = raw; x.frozen = true }
+                else { x.d += max(-0.01, min(0.01, (raw - x.d) * 0.1)) }
+            }
+            ContactTouchMemory.store[key] = x
+            return x.d
+        }
+        let standing = planted(self) && planted(p)
+        let x = ContactTouchMemory.Entry(session: sid, phase: s.phase, axis: u, d: standing ? raw : max(0.6, min(1.5, raw)), frozen: standing)
+        ContactTouchMemory.store[key] = x
+        return x.d
+    }
+
+    /// Once a tick for the session's brains: walkers get their destination re-derived from the (stable) touch distance along the line they were sent on (so the steps themselves end at the stance), and a planted body
+    /// whose lean ran out takes one shuffle step (locomotion), proportional to the residual, then the trim is released. `retarget: false` (the stance step is `onlySeparate`: a part / step-apart walk) leaves
+    /// every walk alone: it must not be rewritten to the touch point.
+    func contactStanceWalk(partner p: BlobBrain, gapWanted: Float, features: Bool = true, retarget: Bool = true) {
         guard let sim = contactSim else { return }
         if ContactTrace.on {
             var w = "noWalk", tg = "-"
             if case .walk(let t, _) = script {
-                let L = simd_distance(t, p.position); w = L >= 3.2 ? "far" : (L <= 0.5 ? "Lsmall" : "inRange")
+                let L = simd_distance(t, p.position); w = L >= 3.2 ? "far" : (L <= 0.3 ? "Lsmall" : "inRange")
                 let toP = simd_normalize(p.position - position + SIMD2(1e-6, 0))
                 let uu = simd_normalize(t - p.position + SIMD2(1e-6, 0))
                 let tr = touchRadius(p, along: uu), td = ContactField.touchDistance(steerID, p.steerID)
@@ -130,15 +156,16 @@ extension BlobBrain {
             }
             ContactTrace.mod(steerID) { $0.walk = w; $0.tgt = tg }
         }
-        if case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
+        if retarget, case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
-            if L > 0.5 {
+            if L > 0.3 {
                 u /= L
-                let dist = (touchRadius(p, along: u) ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                let stable = contactStableTouch(p, axis: u)
+                let dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
                 let want = fixed(p.position + u * dist)
-                let okFix = simd_distance(want, p.position + u * dist) < 0.1, dT = simd_distance(want, t)
-                if ContactTrace.on { let was = socialBook.passThrough; socialBook.passThrough = true; let fl = fixed(p.position + u * dist); socialBook.passThrough = was; ContactTrace.mod(steerID) { $0.tgt += String(format: "|wallPush%.3f|floorPush%.3f", simd_distance(want, p.position + u * dist), simd_distance(fl, p.position + u * dist)) } }
-                if okFix, dT > 0.02, dT < 0.6 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
+                let okFix = simd_distance(want, p.position + u * dist) < 0.25, dT = simd_distance(want, t)
+                if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
+                if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
                 else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
             }
         }
@@ -148,11 +175,26 @@ extension BlobBrain {
         }
         if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
             let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
-            let step: Float = 0.14 * Float(socialBook.shuffleReq)
+            // the residual from the LIVE gap (the lean is released by the step, so its share counts): the step is as long as the error, 3 ... 14 cm
+            var step: Float = 0.14 * Float(socialBook.shuffleReq)
+            if var g = ContactField.gap(steerID, p.steerID, features: features) {
+                if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
+                let need = (g - gapWanted) + socialBook.leanTrim / ContactTuning.leanPerMetre
+                step = (need < 0 ? -1 : 1) * max(0.03, min(0.14, abs(need)))
+            }
             let spot = fixed(position + u * step)
             socialBook.shuffleReq = 0
-            if ContactTrace.on { let go = idleState.kind == nil && simd_distance(spot, position) > 0.1; let raw = position + u * step; let was = socialBook.passThrough; socialBook.passThrough = true; let fl = fixed(raw); socialBook.passThrough = was; let gF = ContactField.gap(steerID, at: raw, p.steerID, at: p.position, features: true), gN = ContactField.gap(steerID, at: raw, p.steerID, at: p.position, features: false); ContactTrace.mod(steerID) { $0.shuffle = (go ? "STEP" : "step-dropped") + String(format: "(idle%@,spotMoved%.3f,rawToSpot%.3f,floorOnlyPush%.3f,rawDistP%.3f,rawGapFeat%@,rawGapNoFeat%@)", idleState.kind.map { "\($0)" } ?? "nil", simd_distance(spot, position), simd_distance(spot, raw), simd_distance(fl, raw), simd_distance(raw, p.position), gF.map { String(format: "%.3f", $0) } ?? "nil", gN.map { String(format: "%.3f", $0) } ?? "nil") } }
-            if idleState.kind == nil, simd_distance(spot, position) > 0.1 { socialBook.leanTrim = 0; socialWalk(to: spot, sim) }
+            let moved = simd_distance(spot, position)
+            let ok = idleState.kind == nil && moved >= 0.5 * abs(step) && moved >= 0.02
+            if ContactTrace.on { ContactTrace.mod(steerID) { $0.shuffle = (ok ? "STEP" : "step-dropped") + String(format: "(idle%@,step%.3f,moved%.3f)", idleState.kind.map { "\($0)" } ?? "nil", step, moved) } }
+            if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim) }
         } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
     }
+}
+
+/// The stable touch distances of the walkers (`BlobBrain.contactStableTouch`): per (walker, partner). Kept here, not in SocialBook (a drive-side file).
+@MainActor
+enum ContactTouchMemory {
+    struct Entry { var session: ObjectIdentifier; var phase: Int; var axis: SIMD2<Float>; var d: Float; var frozen: Bool }
+    static var store: [Int: Entry] = [:]
 }
