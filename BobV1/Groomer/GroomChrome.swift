@@ -97,7 +97,7 @@ struct GroomChrome: View {
                 VStack(spacing: 12) {
                     HStack {
                         Image(systemName: "bubbles.and.sparkles.fill").font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
-                        SpaTitle(size: 24)
+                        Text("Jelly Spa").font(SK.font(22, .black)).foregroundStyle(SK.ink)
                         Spacer(minLength: 0)
                         DropsPill(wallet: care.bath.wallet)
                     }
@@ -154,27 +154,3 @@ struct GroomChrome: View {
     }
 }
 
-
-/// The "Jelly Spa" wordmark: the shop sign's playful style in the UI. Each letter bobs on a gentle wave and leans a touch, in the sign's jelly teal
-/// with a soft sage shadow. One accessibility label for the whole word.
-struct SpaTitle: View {
-    var size: CGFloat = 24
-    private let word = Array("Jelly Spa")
-    private static let ink = Color(red: 0.22, green: 0.50, blue: 0.54), shadow = Color(red: 0.74, green: 0.82, blue: 0.74)
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(word.indices, id: \.self) { i in
-                let f = Double(i)
-                Text(String(word[i]))
-                    .font(.system(size: size, weight: .black, design: .rounded))
-                    .foregroundStyle(Self.ink)
-                    .shadow(color: Self.shadow, radius: 0, x: size * 0.05, y: size * 0.07)
-                    .rotationEffect(.radians(0.09 * sin(f * 2.2 + 1.1)))
-                    .offset(y: -size * 0.08 * sin(f * 1.35 + 0.4))
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Jelly Spa")
-        .accessibilityAddTraits(.isHeader)
-    }
-}
