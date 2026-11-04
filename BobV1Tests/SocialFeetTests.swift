@@ -186,6 +186,7 @@ final class SocialFeetTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(res.join, OnePieceInvariantTests.minNeck, "\(who): the join is open by \(-res.join * 100) cm: \(res.bad)", file: file, line: line)
             XCTAssertLessThanOrEqual(res.collar, EmoteFeetTests.maxCollar, "\(who): the collar moved skin \(res.collar * 100) cm: \(res.bad)", file: file, line: line)
         }
+        XCTAssertLessThanOrEqual(res.skate.worst, 0.010, "\(who): a planted sole skated \(String(format: "%.1f", res.skate.worst * 1000)) mm in a session phase (limit 10 mm; engine-off ~1 mm): \(res.skate.tag)", file: file, line: line)          // the skating gate (2026-11-04): feet move only through locomotion
         d.lab.checkAll(who, plainBound: 0.03)          // (FeetAttachTests limits per rig: gap / float / radius, plus the arm cap)
         // report
         if !trace.isEmpty { try? FileManager.default.createDirectory(atPath: Self.outDir, withIntermediateDirectories: true); try? trace.joined(separator: "\n").write(toFile: Self.outDir + "trace_\(name)_\(castName).tsv", atomically: true, encoding: .utf8) }
