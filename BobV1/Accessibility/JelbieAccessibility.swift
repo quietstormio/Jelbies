@@ -49,6 +49,7 @@ nonisolated enum JelbieA11yText {
     }
     static func description(character: Int) -> String {
         if character == JellyRoster.pearlID { return "white with pearly little wings" }
+        if character == JellyRoster.pandaID { return "white with black patches round the eyes, round black bear ears, black arms and feet and a puffy black tail" }
         switch JellyRoster.feature(character) {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"

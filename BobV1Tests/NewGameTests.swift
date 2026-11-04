@@ -52,7 +52,7 @@ final class NewGameTests: XCTestCase {
         XCTAssertTrue(WhiteWing.hasLook(5))
         XCTAssertFalse(WhiteWing.hasLook(3), "Lavender keeps her own purple wings")
         XCTAssertEqual(JellyRoster.feature(4), .ears)
-        XCTAssertEqual(JellyRoster.knownCount, 6)
+        XCTAssertEqual(JellyRoster.knownCount, 7)
         XCTAssertEqual(JellyRoster.sanitised([3, 5, 4]), [3, 5, 4])
         XCTAssertEqual(JellyRoster.characterID(named: "Pearl"), 5)
         XCTAssertEqual(JellyRoster.characterCount, 4, "neither is on offer")

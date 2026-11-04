@@ -43,7 +43,7 @@ final class OnePieceInvariantTests: XCTestCase {
 
     // MARK: the characters and pacings
 
-    static let characters: [(String, JellyFeature)] = [("Bob", .none), ("Pip", .spines), ("Moss", .daisy), ("Lavender", .wings), ("Teddy", .ears), ("Pearl", .wings)]
+    static let characters: [(String, JellyFeature)] = [("Bob", .none), ("Pip", .spines), ("Moss", .daisy), ("Lavender", .wings), ("Teddy", .ears), ("Pearl", .wings), ("Panda", .ears)]
 
     enum Pacing: Int, CaseIterable {
         case hz60, hz120, alt12, burst30, hitch, hitchSmall
@@ -137,9 +137,9 @@ final class OnePieceInvariantTests: XCTestCase {
             } else {
                 sc = SC(name: "idle: \(k.rawValue)", game: true, seconds: e.seconds, setup: { r, _ in r.brain.idleForced = true; return r.brain.idleStart(k, r.sim) })
             }
-            if let sc { out.append(Job(name: "idle \(k.rawValue)", sc: sc, chars: e.chars ?? Array(0..<6))) }
+            if let sc { out.append(Job(name: "idle \(k.rawValue)", sc: sc, chars: e.chars ?? Array(0..<characters.count))) }
         }
-        for g in gaitNames { if let sc = gaitScenario(g) { out.append(Job(name: g, sc: sc, chars: Array(0..<6))) } }
+        for g in gaitNames { if let sc = gaitScenario(g) { out.append(Job(name: g, sc: sc, chars: Array(0..<characters.count))) } }
         let only = (ProcessInfo.processInfo.environment["ONEPIECE_ONLY"] ?? "").split(separator: ",").map(String.init)
         return only.isEmpty ? out : out.filter { j in only.contains { j.name.contains($0) } }
     }
