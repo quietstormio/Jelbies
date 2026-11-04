@@ -33,7 +33,7 @@ enum ContactDemo {
             let target = atan2f(n.x, n.y)
             let ext = (pts.map { abs(($0 - m).x * cosf(axis) + ($0 - m).y * sinf(axis)) }.max() ?? 0) * 2 + 1.5          // cast width along the axis + a body
             let tanH = tanf(GameCamera.fovY / 2) * GameCamera.aspect
-            let want = max(ext / 0.7 / (2 * tanH), 3)
+            let want = max(ext / 0.75 / (2 * tanH), 3)
             let a = first ? 1 : 1 - expf(-(1.0 / 30) / 0.5)
             first = false
             if yaw == nil { yaw = target } else { var dy = target - yaw!; while dy > .pi { dy -= 2 * .pi }; while dy < -.pi { dy += 2 * .pi }; yaw! += dy * a }
@@ -62,11 +62,27 @@ enum ContactDemo {
         }
     }
 
+    /// Keeps every need of the cast full (a thirst or hunger bubble interrupts the scene): topped up every 2 s while the scene runs.
+    @MainActor static func keepNeedsFull(_ cast: [JellyActor]) async {
+        while !Task.isCancelled {
+            for a in cast { if let n = a.needs { for k in NeedKind.allCases where n.level(k) < 0.95 { n.restore(k) } } }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
     /// Wall-clock start / end of the emote (epoch seconds) for the host to trim the clip: the session is over when the first brain's `social` is nil again.
-    @MainActor static func logSpan(_ started: Bool, _ lead: BlobBrain) async {
+    @MainActor static func logSpan(_ started: Bool, _ lead: BlobBrain, _ cast: [BlobBrain]) async {
         guard started else { return }
         note(" startEpoch=%.3f", Date().timeIntervalSince1970)
-        for _ in 0..<600 where lead.social != nil { try? await Task.sleep(nanoseconds: 100_000_000) }
+        var i = 0
+        while lead.social != nil && i < 6000 {
+            if i % 5 == 0 {          // every 0.5 s: the session phase and the smallest root distance between two of the cast (the touching window starts when it is <= ~1.55)
+                var dmin: Float = 99
+                for (x, p) in cast.enumerated() { for q in cast[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
+                note(" tick t=%.2f ph=%d d=%.2f", Date().timeIntervalSince1970, lead.social?.phase ?? -1, dmin)
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000); i += 1
+        }
         note(" endEpoch=%.3f", Date().timeIntervalSince1970)
     }
 
@@ -81,6 +97,7 @@ enum ContactDemo {
         let cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
         guard cast.count >= 2 else { note(" cast too small (%d)", cast.count); return }
         for a in cast { a.brain?.autonomy = false; a.brain?.idleForced = true }
+        Task { @MainActor in await keepNeedsFull(cast) }
         if let c = d.string(forKey: "ContactCam"), c == "perp" || c == "top" { let bs = cast.compactMap(\.brain); Task { @MainActor in await track(bs, top: c == "top") } }
         // side by side across the screen first (a pair along the camera axis hides the touch): spots at z -0.9 (the camera's look-at depth), 2.6 u apart (3: 2.4 u)
         let half: Float = (name == "lieDown" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
@@ -111,11 +128,11 @@ enum ContactDemo {
         if kind == .groupHug || kind == .circleDance || kind == .groupCheer {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
             let ok = ab.socialStartGroup(kind, with: cast.dropFirst().compactMap(\.brain), a.sim)
             note(" %@ started=%d crew=%d", name, ok ? 1 : 0, cast.count)
-            await logSpan(ok, ab)
+            await logSpan(ok, ab, cast.compactMap(\.brain))
             return
         }
         let ok = ab.socialStart(kind, with: bb, a.sim)
         note(" %@ started=%d", name, ok ? 1 : 0)
-        await logSpan(ok, ab)
+        await logSpan(ok, ab, cast.compactMap(\.brain))
     }
 }

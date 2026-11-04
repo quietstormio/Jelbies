@@ -21,7 +21,7 @@ final class ContactCaptureUITests: XCTestCase {
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let secs = env["CAPTURE_SECS"].flatMap(Double.init) ?? 18
         let app = XCUIApplication()
-        app.launchArguments += ["-NewGame", cast, "-NewGameCoins", "10000", "-MainMenu", "0", "-RoomWide", "0", "-ContactCam", angle]
+        app.launchArguments += ["-NewGame", cast, "-NewGameCoins", "10000", "-MainMenu", "0", "-RoomWide", "0", "-ContactCam", angle, "-NeedsHappy", "1"]
         if kind != "-" { app.launchArguments += ["-ContactDemo", kind, "-ContactDemoDelay", "3"] }
         if let extra = env["CAPTURE_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: " ").map(String.init) }
         app.launchEnvironment["CONTACTDEMO_LOG"] = out + "/" + scene + ".demolog"

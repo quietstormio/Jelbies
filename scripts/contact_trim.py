@@ -13,7 +13,11 @@ try:
     log = open(f"{out}/{scene}.demolog").read()
     s = re.findall(r"startEpoch=([\d.]+)", log); e = re.findall(r"endEpoch=([\d.]+)", log)
     if s:
-        st = float(s[-1]); lo = int((st - t0 - 0.5) * 1000)
+        st = float(s[-1])
+        tk = [(float(a), float(b)) for a, b in re.findall(r"tick t=([\d.]+) ph=-?\d+ d=([\d.]+)", log)]
+        touch = [t for t, dd in tk if dd <= 1.55]          # the touching window starts when two of them are within ~1.55 u (touch distance 1.405)
+        if touch: st = touch[0]; print(f"touching from {touch[0]-t0:.1f} s (session start {float(s[-1])-t0:.1f} s)")
+        lo = int((st - t0 - 0.5) * 1000)
         if e: hi = int((float(e[-1]) - t0 + 2) * 1000)          # (no endEpoch = a lie-down / sleep pile: keep to the end of the capture)
 except Exception as ex:
     print("trim: whole clip,", ex)
@@ -22,7 +26,7 @@ dur = max((ms(sel[-1]) - ms(sel[0])) / 1000, 0.5)
 fps = max(len(sel) / dur, 1)
 tmp = tempfile.mkdtemp()
 for i, f in enumerate(sel): os.symlink(f, f"{tmp}/{i:05d}.png")
-vf = ("crop=iw:ih*0.42:0:ih*0.25,scale=-2:720" if angle == "top" else "crop=iw:ih*0.36:0:ih*0.32,scale=-2:720") if angle in ("perp", "top") else "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900"
+vf = ("crop=iw:ih*0.42:0:ih*0.25,scale=1206:-2" if angle == "top" else "crop=iw:ih*0.36:0:ih*0.32,scale=1206:-2") if angle in ("perp", "top") else "crop=iw:ih*0.5:0:ih*0.2,scale=-2:900"
 subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", f"{fps:.3f}", "-i", f"{tmp}/%05d.png", "-vf", vf, "-pix_fmt", "yuv420p", f"{out}/{scene}_frames.mp4"], stdin=subprocess.DEVNULL)
 shutil.rmtree(tmp)
 print(f"{scene}: {len(sel)} frames, {dur:.1f} s real time (kept {lo/1000:.1f}..{hi/1000 if hi<10**9 else secs:.1f} s)")
