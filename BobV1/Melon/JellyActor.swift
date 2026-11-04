@@ -140,7 +140,7 @@ nonisolated enum JellyParallel {
     static func skin(_ jobs: [SkinJob], index: [UInt32]) {
         @inline(__always) func one(_ j: SkinJob) {
             j.skinner.update(x: j.sim.x, index: index, into: j.dst)
-            if ContactField.enabled { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root) }          // the contact profile of the DRAWN skin (ContactProfile.swift), in the same parallel pass
+            if ContactField.enabled { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root, blocks: j.skinner.contactBlocks) }          // the contact profile of the DRAWN skin (ContactProfile.swift), in the same parallel pass
         }
         if jobs.count < minForThreads { for j in jobs { one(j) }; return }
         jobs.withUnsafeBufferPointer { b in

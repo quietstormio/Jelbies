@@ -19,8 +19,24 @@ import simd
 nonisolated struct ContactSurface {
     var root: SIMD2<Float>
     var points: [SIMD3<Float>]
+    /// Optional triangles over `points` (indices into `points`, 3 a triangle): with them the footprint gap also sees the SURFACE between the vertices (the edges), not just the vertices.
+    var triangles: [UInt32] = []
 
     init(root: SIMD2<Float>, points: [SIMD3<Float>]) { self.root = root; self.points = points }
+
+    /// As `init(root:dyn:ranges:)`, plus the render mesh's triangle `index` (vertex ids): the triangles whose three vertices are all in `ranges` are kept, re-indexed into `points`.
+    init(root: SIMD2<Float>, dyn: UnsafePointer<Float>, ranges: [Range<Int>], index: [UInt32]) {
+        self.init(root: root, dyn: dyn, ranges: ranges)
+        var map = [Int32](repeating: -1, count: (index.max().map { Int($0) } ?? 0) + 1)
+        var n: Int32 = 0
+        for r in ranges { for v in r { if v < map.count { map[v] = n }; n += 1 } }
+        var t = 0
+        while t + 2 < index.count {
+            let a = map[Int(index[t])], b = map[Int(index[t + 1])], c = map[Int(index[t + 2])]
+            if a >= 0, b >= 0, c >= 0 { triangles.append(UInt32(a)); triangles.append(UInt32(b)); triangles.append(UInt32(c)) }
+            t += 3
+        }
+    }
 
     /// From a skinned vertex buffer (6 floats per vertex: position, normal), the vertices in `ranges` (the body, then the limb blocks that are drawn).
     init(root: SIMD2<Float>, dyn: UnsafePointer<Float>, ranges: [Range<Int>]) {
@@ -75,14 +91,26 @@ nonisolated enum BruteForceContactMetric: ContactMetric {
         let d = b.root - a.root, dist = simd_length(d)
         let u = dist > 1e-4 ? d / dist : SIMD2<Float>(1, 0), v = SIMD2(-u.y, u.x)
         var envA: [Int: Float] = [:], envB: [Int: Float] = [:]
-        for p in a.points where band.contains(p.y) {
-            let q = SIMD2(p.x, p.z) - a.root, w = Int((simd_dot(q, v) / strip).rounded(.down)), t = simd_dot(q, u)
-            if t > envA[w] ?? -.infinity { envA[w] = t }
+        func visit(_ s: ContactSurface, _ isA: Bool) {
+            func put(_ p: SIMD3<Float>) {
+                guard band.contains(p.y) else { return }
+                let q = SIMD2(p.x, p.z) - a.root, w = Int((simd_dot(q, v) / strip).rounded(.down)), t = simd_dot(q, u)
+                if isA { if t > envA[w] ?? -.infinity { envA[w] = t } } else { if t < envB[w] ?? .infinity { envB[w] = t } }
+            }
+            for p in s.points { put(p) }
+            // the triangle edges: points along each edge every ~strip / 4 (the surface between the vertices)
+            var i = 0
+            while i + 2 < s.triangles.count {
+                for e in 0..<3 {
+                    let p0 = s.points[Int(s.triangles[i + e])], p1 = s.points[Int(s.triangles[i + (e + 1) % 3])]
+                    let len = simd_length(SIMD2(p1.x - p0.x, p1.z - p0.z))
+                    let n = Int((len / (strip / 4)).rounded(.up))
+                    if n > 1 { for k in 1..<n { put(p0 + (p1 - p0) * (Float(k) / Float(n))) } }
+                }
+                i += 3
+            }
         }
-        for p in b.points where band.contains(p.y) {
-            let q = SIMD2(p.x, p.z) - a.root, w = Int((simd_dot(q, v) / strip).rounded(.down)), t = simd_dot(q, u)
-            if t < envB[w] ?? .infinity { envB[w] = t }
-        }
+        visit(a, true); visit(b, false)
         var best = Float.infinity
         for (w, ta) in envA { if let tb = envB[w] { best = min(best, tb - ta) } }
         return best.isFinite ? best : farApart

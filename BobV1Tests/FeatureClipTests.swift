@@ -39,7 +39,7 @@ final class FeatureClipTests: XCTestCase {
             feature = features
             WearBody.install(MotionRig.renderMesh)
             let rmc = MotionRig.renderMesh
-            ContactField.configure(eggLimit: rmc.armCapsule?.firstVertex.min() ?? rmc.vertexCount, tail: rmc.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil })
+            ContactField.configure(eggLimit: rmc.armCapsule?.firstVertex.min() ?? rmc.vertexCount, tail: rmc.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rmc.index)
             var fs: [FeatureSet] = []
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
@@ -143,12 +143,18 @@ final class FeatureClipTests: XCTestCase {
         func truthGap(_ i: Int, _ j: Int) -> Float {
             let rm = MotionRig.renderMesh
             for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: rm.index, into: dyn[k]) }
-            let tail = ContactField.tailLo..<ContactField.tailHi
-            var idx: [UInt32] = []
-            idx.reserveCapacity(rm.index.count)
-            var t = 0
-            while t + 2 < rm.index.count { if !(tail.contains(Int(rm.index[t])) || tail.contains(Int(rm.index[t + 1])) || tail.contains(Int(rm.index[t + 2]))) { idx.append(contentsOf: rm.index[t..<(t + 3)]) }; t += 3 }
-            return ContactProfileTests.truthGap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), count: rm.vertexCount, index: idx, rootA: GameCare.floorPos(lab.rigs[i].brain, lab.rigs[i].sim), rootB: GameCare.floorPos(lab.rigs[j].brain, lab.rigs[j].sim))
+            // the DRAWN triangles of each body: the egg and the limb blocks that are on (a parked arm / foot bean is not drawn), the tail left out like the profile does
+            func drawn(_ k: Int) -> [UInt32] {
+                var rs = contactRanges(k)
+                rs.removeAll { $0.lowerBound == ContactField.tailLo }
+                var on = [Bool](repeating: false, count: rm.vertexCount)
+                for r in rs { for v in r where v < on.count { on[v] = true } }
+                var idx: [UInt32] = []
+                var t = 0
+                while t + 2 < rm.index.count { if on[Int(rm.index[t])] && on[Int(rm.index[t + 1])] && on[Int(rm.index[t + 2])] { idx.append(contentsOf: rm.index[t..<(t + 3)]) }; t += 3 }
+                return idx
+            }
+            return ContactProfileTests.truthGap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), count: rm.vertexCount, index: drawn(i), indexB: drawn(j), rootA: GameCare.floorPos(lab.rigs[i].brain, lab.rigs[i].sim), rootB: GameCare.floorPos(lab.rigs[j].brain, lab.rigs[j].sim))
         }
         func skinGap(_ i: Int, _ j: Int) -> Float {
             for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[k]) }

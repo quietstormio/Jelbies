@@ -35,8 +35,40 @@ nonisolated enum ContactField {
     nonisolated(unsafe) static var eggLimit = Int.max
     /// Pip's tail block: NOT part of the body profile (a tail that holds two bodies a hand apart is not what "touching" means; it is a feature: FeatureClip pushes it out of the neighbour).
     nonisolated(unsafe) static var tailLo = Int.max, tailHi = Int.max
-    static func configure(eggLimit n: Int, tail: Range<Int>? = nil) { eggLimit = n; tailLo = tail?.lowerBound ?? Int.max; tailHi = tail?.upperBound ?? Int.max }
-    static let eggStride = 3, limbStride = 2
+    static func configure(eggLimit n: Int, tail: Range<Int>? = nil, index: [UInt32]? = nil) {
+        eggLimit = n; tailLo = tail?.lowerBound ?? Int.max; tailHi = tail?.upperBound ?? Int.max
+        if let index { buildNeighbours(index) }
+    }
+    nonisolated(unsafe) static var eggStride = 6, limbStride = 3
+    /// REFINE (2026-11-03): after the strided pass, each bin's winning vertex and its mesh neighbours (1-ring, then again around the bins that moved) are tested too, so a thin lobe whose tip
+    /// vertex fell between the samples is still found (the stride-3 pass alone missed vertices by up to 5.6 mm in a lean). 0 = off.
+    nonisolated(unsafe) static var refinePasses = 2
+    /// Vertex adjacency (CSR over the triangles of the render mesh): neighbours of v are nbr[nbrStart[v] ..< nbrStart[v + 1]].
+    nonisolated(unsafe) private static var nbrStart: UnsafeMutablePointer<Int32>? = nil
+    nonisolated(unsafe) private static var nbr: UnsafeMutablePointer<Int32>? = nil
+    nonisolated(unsafe) private static var nbrCount = 0
+    nonisolated(unsafe) private static var nbrKey = -1
+    private static func buildNeighbours(_ index: [UInt32]) {
+        guard index.count != nbrKey else { return }
+        var n = 0
+        for v in index { n = max(n, Int(v) + 1) }
+        var lists = [[Int32]](repeating: [], count: n)
+        var t = 0
+        while t + 2 < index.count {
+            let a = Int(index[t]), b = Int(index[t + 1]), c = Int(index[t + 2]); t += 3
+            for (x, y) in [(a, b), (b, c), (c, a)] {
+                if !lists[x].contains(Int32(y)) { lists[x].append(Int32(y)) }
+                if !lists[y].contains(Int32(x)) { lists[y].append(Int32(x)) }
+            }
+        }
+        let total = lists.reduce(0) { $0 + $1.count }
+        let st = UnsafeMutablePointer<Int32>.allocate(capacity: n + 1), nb = UnsafeMutablePointer<Int32>.allocate(capacity: max(total, 1))
+        var o = 0
+        for v in 0..<n { st[v] = Int32(o); for w in lists[v] { nb[o] = w; o += 1 } }
+        st[n] = Int32(o)
+        nbrStart?.deallocate(); nbr?.deallocate()
+        nbrStart = st; nbr = nb; nbrCount = n; nbrKey = index.count
+    }
 
     // MARK: layout
     @inline(__always) private static func base(_ id: Int) -> UnsafeMutablePointer<Float> { store + id * stride }
@@ -84,12 +116,15 @@ nonisolated enum ContactField {
 
     // MARK: build
     /// The body's profile from its skinned stream (`dyn`: 6 floats a vertex, `count` vertices), relative to `root`. Runs on a worker thread: touches only body `id`'s slice.
-    static func build(id: Int, dyn: UnsafePointer<Float>, count: Int, root: SIMD2<Float>) {
+    static func build(id: Int, dyn: UnsafePointer<Float>, count: Int, root: SIMD2<Float>, blocks: [Range<Int>]? = nil) {
         guard id >= 0, id < capacity else { return }
         let b = base(id)
         let r2 = b + oBR, px = b + oBX, pz = b + oBZ
         for k in 0..<K { r2[k] = -1 }
         let lim = min(eggLimit, count)
+        let passes = nbr != nil ? refinePasses : 0
+        withUnsafeTemporaryAllocation(of: Int32.self, capacity: 3 * K) { wbuf in
+        let win = wbuf.baseAddress!, cur = win + K, nxt = win + 2 * K
         binOfSlot.withUnsafeBufferPointer { tb in
             @inline(__always) func add(_ i: Int) {
                 let o = 6 * i
@@ -98,15 +133,42 @@ nonisolated enum ContactField {
                 guard q > 1e-6, q < 25 else { return }          // (a NaN fails both)
                 let slot = Int(pseudo(x, z) * (Float(tableN) / 4))
                 let k = Int(tb[min(max(slot, 0), tableN)])
-                if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z }
+                if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z; win[k] = Int32(i) }
             }
             var i = 0
             while i < lim { add(i); i += eggStride }
-            i = lim
-            while i < count {
-                if i >= tailLo, i < tailHi { i = tailHi; continue }          // (the tail is a feature)
-                add(i); i += limbStride
+            // the limb / ear blocks that are DRAWN (an inactive block is parked out of sight: it must not count; `blocks` nil = everything after the egg)
+            for r in blocks ?? [lim..<count] {
+                i = max(r.lowerBound, lim)
+                let hi = min(r.upperBound, count)
+                while i < hi {
+                    if i >= tailLo, i < tailHi { i = tailHi; continue }          // (the tail is a feature)
+                    add(i); i += limbStride
+                }
             }
+            if passes > 0, let ns = nbrStart, let nb = nbr {
+                for k in 0..<K { cur[k] = r2[k] > 0 ? 1 : 0 }          // round 1: every filled bin; later rounds: only the bins a neighbour improved
+                for _ in 0..<passes {
+                    for k in 0..<K { nxt[k] = 0 }
+                    for k in 0..<K where cur[k] != 0 {
+                        let v = Int(win[k])
+                        guard v < nbrCount else { continue }
+                        for e in Int(ns[v])..<Int(ns[v + 1]) {
+                            let w = Int(nb[e])
+                            if w >= count || (w >= tailLo && w < tailHi) { continue }
+                            let o = 6 * w
+                            let x = dyn[o] - root.x, z = dyn[o + 2] - root.y
+                            let q = x * x + z * z
+                            guard q > 1e-6, q < 25 else { continue }
+                            let slot = Int(pseudo(x, z) * (Float(tableN) / 4))
+                            let kk = Int(tb[min(max(slot, 0), tableN)])
+                            if q > r2[kk] { r2[kk] = q; px[kk] = x; pz[kk] = z; win[kk] = Int32(w); nxt[kk] = 1 }
+                        }
+                    }
+                    for k in 0..<K { cur[k] = nxt[k] }
+                }
+            }
+        }
         }
         castTable(r2, px, pz, into: b + oRho, fallback: true)
         b[oMeta] = root.x; b[oMeta + 1] = root.y
@@ -339,5 +401,17 @@ nonisolated enum ContactField {
             for k in eb { for q in [k, (k + 1) % K] { if let e = envA(wB[q]) { best = min(best, aB[q] - e) } } }
         }
         return best
+    }
+}
+
+
+extension Skinner {
+    /// The vertex blocks after the egg that are drawn right now (the arm capsules, the foot beans, Teddy's ears; not Pip's tail, a feature): what the contact profile samples.
+    var contactBlocks: [Range<Int>] {
+        var r: [Range<Int>] = []
+        if armCapsulesActive { for s in 0..<2 { r.append(armFirst[s]..<(armFirst[s] + ArmCapsule.vertexCount)) } }
+        if teddyOn, teddyFirst >= 0 { r.append(teddyFirst..<(teddyFirst + TeddyBean.vertexCount)) }
+        if beansActive { for s in 0..<2 { r.append(beanFirst[s]..<(beanFirst[s] + FootBean.vertexCount)) } }
+        return r
     }
 }
