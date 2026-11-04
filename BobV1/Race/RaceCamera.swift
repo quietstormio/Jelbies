@@ -42,7 +42,7 @@ struct RaceFollowPose: Equatable {
     }
 
     /// The pose a frame wants for `racers` on `course`.
-    static func aim(course: RaceCourse, racers: [Racer]) -> RaceFollowPose {
+    static func aim(course: RaceCourse, racers: [Racer], finishPush wantsPush: Bool = true) -> RaceFollowPose {
         let player = racers.first { $0.isPlayer } ?? racers[0]
         let leader = racers.max { $0.s < $1.s } ?? player
         var t = player.pos + (leader.pos - player.pos) * leaderShare
@@ -50,8 +50,8 @@ struct RaceFollowPose: Equatable {
         if d > maxGap { t = player.pos + (t - player.pos) * (maxGap / d) }
         let sFront = max(player.s, leader.s)
         let k = max(0, min(1, (sFront - (course.length - finishEase)) / finishEase))
-        let push = finishPush * k
-        if k > 0 { t += RaceCourse.forward(course.pose(at: course.length).heading) * push }
+        let push = wantsPush ? finishPush * k : 0
+        if k > 0, wantsPush { t += RaceCourse.forward(course.pose(at: course.length).heading) * push }
         let anchor = course.pose(at: sFront + lead + push).pos                       // the anchor moves with the push: the eye stays `lead` ahead of the target
         var dir = anchor - t
         let len = simd_length(dir)

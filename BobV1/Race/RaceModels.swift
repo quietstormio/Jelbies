@@ -148,11 +148,12 @@ enum RaceModels {
             b.roundedBox(centre: SIMD3(fx + s * gantryX, gantryHeight / 2, fz), half: SIMD3(0.13, gantryHeight / 2, 0.13), radius: 0.1, color: post)
             b.roundedBox(centre: SIMD3(fx + s * gantryX, 0.12, fz), half: SIMD3(0.32, 0.12, 0.32), radius: 0.1, color: banner)
         }
-        b.roundedBox(centre: SIMD3(fx, gantryHeight + 0.05, fz), half: SIMD3(gantryX + 0.2, 0.34, 0.1), radius: 0.12, color: banner)
+        // (a relay's follow camera sits close to the line and the banner would sweep across the runners: the relay has the posts and the checkered line only)
+        if !relayMarkers { b.roundedBox(centre: SIMD3(fx, gantryHeight + 0.05, fz), half: SIMD3(gantryX + 0.2, 0.34, 0.1), radius: 0.12, color: banner) }
         // checkers on the banner's near face
         let bcell: Float = 0.2, bcols = Int(((gantryX + 0.12) * 2 / bcell).rounded())
         let bn = SIMD3<Float>(0, 0, 1)
-        for row in 0..<3 {
+        for row in 0..<(relayMarkers ? 0 : 3) {
             for col in 0..<bcols where (col + row) % 2 == 0 {
                 b.color = white
                 let x0 = fx - (gantryX + 0.12) + Float(col) * bcell, y0 = gantryHeight - 0.2 + Float(row) * bcell

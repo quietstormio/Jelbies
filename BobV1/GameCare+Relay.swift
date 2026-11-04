@@ -218,7 +218,7 @@ extension GameCare {
             spots.append(RaceFollowPose.Racer(pos: SIMD2(b.px, b.pz), s: sim.racers[t].dist, isPlayer: t == 0))
         }
         guard !spots.isEmpty else { return book.follow }
-        let want = RaceFollowPose.aim(course: sim.course, racers: spots)
+        let want = RaceFollowPose.aim(course: sim.course, racers: spots, finishPush: false)          // (no finish banner in a relay: no push)
         let k: Float = rb.sinceHandoff < 1.2 ? 0.45 : 1
         book.follow = book.follow.map { $0.smoothed(toward: want, dt: dt * k) } ?? want
         return book.follow
