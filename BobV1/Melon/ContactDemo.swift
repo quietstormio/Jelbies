@@ -1,7 +1,7 @@
 //
 //  ContactDemo.swift
 //  Capture aid only (launch arguments; nothing happens without them): force one touching emote between chosen Jelbies in the real app.
-//    -ContactDemo <SocialKind raw value | lieDown | sleepPile; groupHug, circleDance, groupCheer take the whole cast>   e.g. swayHug, noseBoop, backToBack, cuddleLean, groupHug, lieDown
+//    -ContactDemo <SocialKind raw value (chase too) | lieDown | flop | sleepPile; groupHug, circleDance, groupCheer take the whole cast>   e.g. swayHug, noseBoop, backToBack, cuddleLean, groupHug, lieDown
 //    -ContactDemoIds 0,1[,2]                          roster slots of the cast; the first one starts it (default: everyone, in order)
 //    -ContactCam low|side|perp|top                    camera; works without -ContactDemo. low = the player's 3/4 view, side = steep orbit,
 //                                                     perp = tracks the cast, side-on (perpendicular to the cast's axis, on the room side), near body height;
@@ -85,29 +85,35 @@ enum ContactDemo {
             samples.append(Sample(touching: dmin <= 1.55, ph: ph, withF: f, body: b))
             return " gaps[" + pairs.enumerated().map { String(format: "%d-%d:%.1f/%.1f", $1.0, $1.1, f[$0], b[$0]) }.joined(separator: " ") + "]cm(feat/body)"
         }
-        /// The scene's summary, per pair: min gap over the touching ticks, median over the hold ticks (the touching ticks of the phase that has the most of them), both with and without features.
-        func summary() {
+        /// The scene's summary, per pair: min gap over the touching ticks, median over the hold ticks, both with and without features. The hold ticks are the ticks in a HOLD step of the stance table
+        /// (`isHold(phase)`, from ContactStance: the step whose target is the plush press), not the phase with the most touching ticks (a long walk-in phase used to win that); without a table
+        /// (lie-down, sleep pile) the touching ticks of the phase that has the most of them.
+        func summary(isHold: ((Int) -> Bool)? = nil) {
             let touch = samples.filter(\.touching)
             var count: [Int: Int] = [:]; for s in touch { count[s.ph, default: 0] += 1 }
-            let holdPh = count.max { $0.value < $1.value }?.key
-            let hold = touch.filter { $0.ph == holdPh }
+            var holdPh = count.max { $0.value < $1.value }?.key
+            var hold = touch.filter { $0.ph == holdPh }
+            if let isHold {
+                hold = samples.filter { isHold($0.ph) }
+                holdPh = hold.first?.ph ?? -1
+            }
             func med(_ a: [Float]) -> Float { let v = a.filter { !$0.isNaN }.sorted(); return v.isEmpty ? .nan : v[v.count / 2] }
             func mn(_ a: [Float]) -> Float { a.filter { !$0.isNaN }.min() ?? .nan }
             for (k, p) in pairs.enumerated() {
-                ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm", p.0, p.1, touch.count, holdPh ?? -1, hold.count,
+                ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d (%@) minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm", p.0, p.1, touch.count, holdPh ?? -1, hold.count, isHold == nil ? "most-touching-phase" : "stance-table-hold",
                                  mn(touch.map { $0.withF[k] }), mn(touch.map { $0.body[k] }), med(hold.map { $0.withF[k] }), med(hold.map { $0.body[k] }))
             }
         }
     }
 
     /// Wall-clock start / end of the emote (epoch seconds) for the host to trim the clip: the session is over when the first brain's `social` is nil again.
-    @MainActor static func logSpan(_ started: Bool, _ lead: BlobBrain, _ cast: [BlobBrain]) async {
+    @MainActor static func logSpan(_ started: Bool, _ lead: BlobBrain, _ cast: [BlobBrain], kind: SocialKind? = nil) async {
         guard started else { return }
         note(" startEpoch=%.3f", Date().timeIntervalSince1970)
         var i = 0
         let gl = GapLog(cast)
         while lead.social != nil && i < 6000 {
-            if i % 5 == 0 {          // every 0.5 s: the session phase and the smallest root distance between two of the cast (the touching window starts when it is <= ~1.55)
+            if i % 2 == 0 {          // every 0.2 s: the session phase and the smallest root distance between two of the cast (the touching window starts when it is <= ~1.55)
                 var dmin: Float = 99
                 for (x, p) in cast.enumerated() { for q in cast[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
                 let ph = lead.social?.phase ?? -1
@@ -116,7 +122,8 @@ enum ContactDemo {
             try? await Task.sleep(nanoseconds: 100_000_000); i += 1
         }
         note(" endEpoch=%.3f", Date().timeIntervalSince1970)
-        gl.summary()
+        let table = kind.flatMap { ContactStance.entry($0) }
+        gl.summary(isHold: table.map { t in { ph in t.step(at: ph)?.target == ContactStance.hold } })
     }
 
     @MainActor static func run(care: GameCare) async {
@@ -130,10 +137,10 @@ enum ContactDemo {
         let cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
         guard cast.count >= 2 else { note(" cast too small (%d)", cast.count); return }
         for a in cast { a.brain?.autonomy = false; a.brain?.idleForced = true }
-        if name != "lieDown" && name != "sleepPile" { Task { @MainActor in await keepNeedsFull(cast) } }          // (a full-needs Jelbie may not lie down at all)
+        if name != "lieDown" && name != "flop" && name != "sleepPile" { Task { @MainActor in await keepNeedsFull(cast) } }          // (a full-needs Jelbie may not lie down at all)
         if let c = d.string(forKey: "ContactCam"), c == "perp" || c == "top" { let bs = cast.compactMap(\.brain); Task { @MainActor in await track(bs, top: c == "top") } }
         // side by side across the screen first (a pair along the camera axis hides the touch): spots at z -0.9 (the camera's look-at depth), 2.6 u apart (3: 2.4 u)
-        let half: Float = (name == "lieDown" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
+        let half: Float = (name == "lieDown" || name == "flop" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
         let xs: [Float] = cast.count == 2 ? [-half, half] : (0..<cast.count).map { (Float($0) - Float(cast.count - 1) / 2) * 1.8 }
         let spots = xs.map { SIMD2<Float>($0, -0.9) }
         for a in cast { if let b = a.brain { note(" start (%.2f, %.2f)", b.position.x, b.position.y) } }
@@ -150,10 +157,11 @@ enum ContactDemo {
             for a in cast.dropFirst() { let ok = a.brain?.idleStart(.sleep, a.sim) ?? false; a.brain?.sleep.hold = 600; note(" sleepPile join=%d", ok ? 1 : 0) }
             return
         }
-        if name == "lieDown" {
+        if name == "lieDown" || name == "flop" {          // (flop = the quick plop-down pair; both go through the lie-down clearance)
             var ok = true
-            for a in cast { ok = (a.brain?.idleStart(.lieDown, a.sim) ?? false) && ok }
-            note(" lieDown started=%d", ok ? 1 : 0)
+            let idle: IdleKind = name == "flop" ? .flop : .lieDown
+            for a in cast { ok = (a.brain?.idleStart(idle, a.sim) ?? false) && ok }
+            note(" %@ started=%d", name, ok ? 1 : 0)
             note(" startEpoch=%.3f", Date().timeIntervalSince1970)
             let bs = cast.compactMap(\.brain)
             let gl = GapLog(bs)
@@ -171,11 +179,11 @@ enum ContactDemo {
         if kind == .groupHug || kind == .circleDance || kind == .groupCheer {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
             let ok = ab.socialStartGroup(kind, with: cast.dropFirst().compactMap(\.brain), a.sim)
             note(" %@ started=%d crew=%d", name, ok ? 1 : 0, cast.count)
-            await logSpan(ok, ab, cast.compactMap(\.brain))
+            await logSpan(ok, ab, cast.compactMap(\.brain), kind: kind)
             return
         }
         let ok = ab.socialStart(kind, with: bb, a.sim)
         note(" %@ started=%d", name, ok ? 1 : 0)
-        await logSpan(ok, ab, cast.compactMap(\.brain))
+        await logSpan(ok, ab, cast.compactMap(\.brain), kind: kind)
     }
 }

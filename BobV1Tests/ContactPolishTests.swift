@@ -34,14 +34,18 @@ extension FeatureClipTests.Duo {
         return r
     }
     /// Every body skinned like the stage does (+ the clip pass), as `ContactSurface`s (no feature meshes: those are judged by depth).
-    func contactSurfaces(bodyOnly: Bool = false) -> [ContactSurface] {
+    func contactSurfaces(bodyOnly: Bool = false, triangles: Bool = false) -> [ContactSurface] {
         var jobs: [JellyParallel.SkinJob] = []
         for (i, r) in lab.rigs.enumerated() {
             r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[i])
             jobs.append(JellyParallel.SkinJob(skinner: r.skinner, sim: r.sim, dst: dyn[i], id: i))
         }
         FeatureClip.apply(jobs: jobs)
-        return lab.rigs.indices.map { ContactSurface(root: lab.rigs[$0].root, dyn: UnsafePointer(dyn[$0]), ranges: bodyOnly ? [0..<eggLimit] : contactRanges($0)) }
+        return lab.rigs.indices.map {
+            let ranges = bodyOnly ? [0..<eggLimit] : contactRanges($0)
+            return triangles ? ContactSurface(root: lab.rigs[$0].root, dyn: UnsafePointer(dyn[$0]), ranges: ranges, index: MotionRig.renderMesh.index)
+                             : ContactSurface(root: lab.rigs[$0].root, dyn: UnsafePointer(dyn[$0]), ranges: ranges)
+        }
     }
 }
 
@@ -118,6 +122,10 @@ final class ContactPolishTests: XCTestCase {
         var seconds: Float = 0, frames = 0
         var minGap: Float = .infinity, minGapT: Float = 0, minGapFrame = 0, minGapPair = "", minGapPhase = ""
         var stance01: [Float] = []                      // gaps of the standing frames inside the session
+        /// The hold step of the stance table, EVERY sampled frame of it (moving or not: a press is short and dynamic): the real hold, however short (2026-11-04).
+        var holdGaps: [Float] = []
+        var arrivalCm: Float? = nil, arrivalT: Float = 0          // the skin gap at the frame the last stance step planted (ArrivalTracker), metres
+        var footMin: Float = .infinity                  // the least FOOTPRINT gap over the frames where the support gap read an overlap (what the eye sees; support is the strict lower bound)
         var touchFrames = 0
         var episodes = 0, sndInEpisode: [Int] = [], hapInEpisode: [Int] = [], sndOutside = 0, hapOutside = 0
         var sndGapMin: Float = .infinity, sndGapMax: Float = -.infinity
@@ -125,6 +133,10 @@ final class ContactPolishTests: XCTestCase {
         var featRaw: Float = -1, featClip: Float = -1, limbRaw: Float = -1, limbClip: Float = -1, eggPen: Float = -1
         var sounds: [String: Int] = [:], haps: [String: Int] = [:]
         var stanceMedian: Float? { stance01.count >= 10 ? stance01.sorted()[stance01.count / 2] : nil }
+        /// Median of the hold step's frames; nil under `minHold` samples (never a hold from one frame).
+        static let minHold = 3
+        var holdMedian: Float? { holdGaps.count >= Self.minHold ? holdGaps.sorted()[holdGaps.count / 2] : nil }
+        var holdTouchN: Int { holdGaps.filter { $0 <= 0.005 }.count }
         var sndTotalContact: Int { sndInEpisode.reduce(0, +) + sndOutside }
     }
 
@@ -243,6 +255,7 @@ final class ContactPolishTests: XCTestCase {
         var trace: [String] = []
         if Self.traceCols { ContactTrace.on = true }
         defer { ContactTrace.on = false }
+        var arrival = ArrivalTracker()
         var wasWalking = [Bool](repeating: false, count: n)
         var arriveEv = [String](repeating: "", count: n)
         let maxF = Int(e.maxSec * 60)
@@ -262,6 +275,18 @@ final class ContactPolishTests: XCTestCase {
                     if wasWalking[i], !isWalk, let g = ContactField.gap(rigs[0].brain.steerID, rigs[1].brain.steerID, features: false) { arriveEv[i] = String(format: "ARRIVE%d gap=%.1fcm", i, g * 100) }
                     wasWalking[i] = isWalk
                 }
+            }
+            // the arrival residual: the skin gap at the first frame everybody who walked in has stopped stepping (only for the social emotes: the others have no stance walk)
+            if case .social = e.scenario, arrival.gap == nil {
+                let stepping = rigs.prefix(n).contains { r in
+                    if r.brain.stepLive || r.brain.gait.isBusy { return true }
+                    if case .walk = r.brain.script { return true }
+                    return false
+                }
+                var g: Float? = nil
+                if arrival.wantsGap(anyStepping: stepping) { g = Self.pairMin(d.contactSurfaces(), e: e, n: n).gap }
+                arrival.feed(frame: frame, anyStepping: stepping, gap: g)
+                if let ag = arrival.gap { res.arrivalCm = ag; res.arrivalT = Float(arrival.frame ?? frame) / 60 }
             }
             // THE touch event: the gate's own (contactTick: fires at skin gap <= +0.5 cm, re-armed past +3 cm). One episode per event; its sound / haptic are the ones requested in the same frame.
             let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }
@@ -292,12 +317,14 @@ final class ContactPolishTests: XCTestCase {
             if case .social(let k) = e.scenario, let st = ContactStance.entry(k), st.cls == .touching, let ph = a.brain.social?.phase { activePhase = st.step(at: ph)?.target == ContactStance.hold }
             if sampled || (plan?.contains(frame) ?? false) {
                 let S = d.contactSurfaces()
-                var mg = Float.infinity, mp = ""
-                for i in 0..<n { for j in (i + 1)..<n {
-                    var g = BruteForceContactMetric.skinGap(S[i], S[j])
-                    if e.name == "leapfrog", Self.verticallyClear(S[i], S[j]) { g = max(g, 0.5) }          // (the hopper's soles are above the lying body's top: the plan view means nothing)
-                    if g < mg { mg = g; mp = "\(Self.names[cast[i]])-\(Self.names[cast[j]])" }
-                } }
+                let pm = Self.pairMin(S, e: e, n: n)
+                let mg = pm.gap, mp = pm.pair.map { "\(Self.names[cast[$0.0]])-\(Self.names[cast[$0.1]])" } ?? ""
+                if sampled, mg < -0.01 {          // a support overlap: what does the footprint (the eye's view) say about the same frame?
+                    let T = d.contactSurfaces(triangles: true)
+                    var fm = Float.infinity
+                    for i in 0..<n { for j in (i + 1)..<n { fm = min(fm, BruteForceContactMetric.footprintGap(T[i], T[j])) } }
+                    res.footMin = min(res.footMin, fm)
+                }
                 if sampled && mg < 8 {
                     gapNow = mg
                     if mg < res.minGap { res.minGap = mg; res.minGapT = Float(frame) / 60; res.minGapFrame = frame; res.minGapPair = mp
@@ -305,6 +332,7 @@ final class ContactPolishTests: XCTestCase {
                     if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined()) + (Self.traceCols ? Self.traceRow(rigs, d.lab, preRoots, arriveEv, mg) : "")) ; if Self.traceCols { arriveEv = [String](repeating: "", count: n) } }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
                     if still, inSession, activePhase, mg < 2.2 { res.stance01.append(mg) }
+                    if inSession, activePhase, mg < 2.2, case .social(let k) = e.scenario, ContactStance.entry(k)?.cls == .touching { res.holdGaps.append(mg) }
                     // episodes
                     lastMg = mg
                 }
@@ -367,6 +395,16 @@ final class ContactPolishTests: XCTestCase {
 
     // MARK: the table
 
+    /// The least support gap over all pairs of the cast, and the pair that has it (leapfrog: a hopper whose soles clear the lying body's top reads +0.5).
+    static func pairMin(_ S: [ContactSurface], e: ContactEntry, n: Int) -> (gap: Float, pair: (Int, Int)?) {
+        var mg = Float.infinity, mp: (Int, Int)? = nil
+        for i in 0..<n { for j in (i + 1)..<n {
+            var g = BruteForceContactMetric.skinGap(S[i], S[j])
+            if e.name == "leapfrog", verticallyClear(S[i], S[j]) { g = max(g, 0.5) }          // (the hopper's soles are above the lying body's top: the plan view means nothing)
+            if g < mg { mg = g; mp = (i, j) }
+        } }
+        return (mg, mp)
+    }
     /// 3D check for a pass-over: one body's lowest point is above the other's highest (its soles clear the lying body's top).
     static func verticallyClear(_ a: ContactSurface, _ b: ContactSurface) -> Bool {
         guard let aLo = a.points.map(\.y).min(), let aHi = a.points.map(\.y).max(), let bLo = b.points.map(\.y).min(), let bHi = b.points.map(\.y).max() else { return false }
@@ -376,12 +414,31 @@ final class ContactPolishTests: XCTestCase {
     /// A depth in cm; "-" when there was none to measure (the sentinel is -1 u).
     static func dcm(_ f: Float) -> String { f <= -0.99 ? "-" : cm(f) }
     static let header = ["emote", "cast", "stance", "started", "sec", "minGap_cm", "at_s", "pair", "where", "stanceMedian_cm", "stanceN", "touchFrames", "episodes", "snd_per_episode", "snd_outside", "hap_per_episode", "hap_outside",
-                         "sndGap_cm(min..max)", "boopEv", "featRaw_cm", "featClip_cm", "limbRaw_cm", "limbClip_cm", "eggPen_cm", "sounds", "haptics"].joined(separator: "\t")
+                         "sndGap_cm(min..max)", "boopEv", "featRaw_cm", "featClip_cm", "limbRaw_cm", "limbClip_cm", "eggPen_cm", "sounds", "haptics",
+                         "arrival_cm", "arrival_at_s", "holdMedian_cm", "holdN", "holdTouchN", "footMin_cm", "bar"].joined(separator: "\t")
     static func row(_ r: Result) -> String {
         [r.name, r.cast, r.stance.rawValue, r.started ? "yes" : "NO START", String(format: "%.1f", r.seconds), cm(r.minGap), String(format: "%.1f", r.minGapT), r.minGapPair, r.minGapPhase,
          r.stanceMedian.map(cm) ?? "-", "\(r.stance01.count)", "\(r.touchFrames)", "\(r.episodes)", r.sndInEpisode.map(String.init).joined(separator: ","), "\(r.sndOutside)", r.hapInEpisode.map(String.init).joined(separator: ","), "\(r.hapOutside)",
          r.sndGapMin.isFinite ? "\(cm(r.sndGapMin))..\(cm(r.sndGapMax))" : "-", "\(r.boopEvents)", dcm(r.featRaw), dcm(r.featClip), dcm(r.limbRaw), dcm(r.limbClip), dcm(r.eggPen),
-         r.sounds.sorted { $0.key < $1.key }.map { "\($0.key)x\($0.value)" }.joined(separator: " "), r.haps.sorted { $0.key < $1.key }.map { "\($0.key)x\($0.value)" }.joined(separator: " ")].joined(separator: "\t")
+         r.sounds.sorted { $0.key < $1.key }.map { "\($0.key)x\($0.value)" }.joined(separator: " "), r.haps.sorted { $0.key < $1.key }.map { "\($0.key)x\($0.value)" }.joined(separator: " "),
+         r.arrivalCm.map(cm) ?? "-", r.arrivalCm == nil ? "-" : String(format: "%.1f", r.arrivalT), r.holdMedian.map(cm) ?? "-", "\(r.holdGaps.count)", "\(r.holdTouchN)", r.footMin.isFinite ? cm(r.footMin) : "-", barFails(r).isEmpty ? "pass" : barFails(r).joined(separator: "; ")].joined(separator: "\t")
+    }
+    /// THE BAR as far as the harness measures it (the planted-sole drift and the mid-air join are SocialFeetTests'): empty = every measured number meets it.
+    ///   touching: arrival residual in -1...+1.5 cm; hold median 0 +- 0.5 cm (a hold must be reached: >= 3 frames); min skin gap >= -1 cm; features / limbs inside <= 0.5 cm; one contact sound per touch, none outside.
+    ///   proximity: min skin gap >= 0.
+    static func barFails(_ r: Result) -> [String] {
+        guard r.started else { return ["no start"] }
+        var f: [String] = []
+        if r.stance == .proximity { if r.minGap < 0 { f.append("minGap \(cm(r.minGap))") }; return f }
+        if r.minGap < -0.01 { f.append("minGap \(cm(r.minGap))") }
+        if let a = r.arrivalCm, a > 0.015 || a < -0.01 { f.append("arrival \(cm(a))") }
+        if r.holdGaps.count < Result.minHold { if r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { f.append("no hold (\(r.holdGaps.count) frames)") } }
+        else if let m = r.holdMedian, abs(m) > 0.005 { f.append("hold \(cm(m))") }
+        if max(r.featClip, r.limbClip) > 0.005 { f.append("feature inside \(dcm(max(r.featClip, r.limbClip)))") }
+        if r.episodes == 0 { f.append("never touches") }
+        for s in r.sndInEpisode where s != 1 { f.append("\(s) sounds in a touch"); break }
+        if r.sndOutside > 0 { f.append("\(r.sndOutside) sounds outside a touch") }
+        return f
     }
     static func write(_ rows: [Result], file: String) {
         guard let dir = outDir else { return }
@@ -405,6 +462,8 @@ final class ContactPolishTests: XCTestCase {
             if r.stance == .touching, let m = r.stanceMedian { XCTAssertLessThanOrEqual(m, 0.01, "\(who): the touching stance settles \(Self.cm(m)) cm apart (want <= 1 cm)") }
             XCTAssertLessThanOrEqual(max(r.featClip, r.limbClip), 0.005, "\(who): a feature / limb vertex is \(Self.cm(max(r.featClip, r.limbClip))) cm inside another body")
             if r.stance == .touching {
+                if let a = r.arrivalCm { XCTAssertLessThanOrEqual(a, 0.015, "\(who): arrives \(Self.cm(a)) cm apart (want <= 1.5)"); XCTAssertGreaterThanOrEqual(a, -0.01, "\(who): arrives \(Self.cm(-a)) cm sunk in (want <= 1)") }
+                if let m = r.holdMedian { XCTAssertLessThanOrEqual(abs(m), 0.005, "\(who): the hold sits \(Self.cm(m)) cm from touching (want 0 +- 0.5) over \(r.holdGaps.count) frames") }
                 XCTAssertGreaterThan(r.episodes, 0, "\(who): never touches")
                 for (k, s) in r.sndInEpisode.enumerated() { XCTAssertEqual(s, 1, "\(who): touch \(k) fired \(s) contact sounds (want exactly 1)") }
                 XCTAssertEqual(r.sndOutside, 0, "\(who): \(r.sndOutside) contact sounds fired while the skins were not touching")

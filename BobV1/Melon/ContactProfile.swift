@@ -417,6 +417,52 @@ nonisolated enum ContactField {
     /// The translation gap of polygon A (body `a`, at the origin) and polygon B (body `b`, `L` along `u`) along `u`: the smallest, over the lateral positions where both exist, of
     /// (B's nearest axial coordinate - A's farthest axial coordinate). The envelopes are piecewise linear: it is enough to look at the facing vertices of both.
     private static func polyGap(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, bodyA: Bool, bodyB: Bool) -> Float {
+        let g = polyGapEdges(a, b, L, u, bodyA: bodyA, bodyB: bodyB)
+        // a feature (tail, wing, spike, daisy) against the other's BODY: its own vertices tested against the whole footprint, so a tip INSIDE the body always reads negative (2026-11-04: the edge
+        // caps above need two neighbouring bins facing each other and a lateral overlap of the caps; a lone tail tip deep inside the body had neither and read +infinity).
+        if bodyA != bodyB { return min(g, featurePointsGap(a, b, L, u, featureIsA: !bodyA)) }
+        return g
+    }
+
+    /// The translation gap of body A's and body B's footprints along `u` where one of the two is a FEATURE polygon: per feature vertex, the body footprint's nearest (feature on A's side: it moves toward B)
+    /// or farthest (feature on B's side) crossing at the vertex's lateral position, minus the vertex's axial coordinate. Negative = the vertex is inside / past the body. Only vertices that reach within
+    /// 0.4 m of the body's near edge are tested (the edge pass covers the rest), so a clear pair costs one pass over the bins.
+    private static func featurePointsGap(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, featureIsA: Bool) -> Float {
+        let v = SIMD2(-u.y, u.x)
+        let pa = base(a), pb = base(b)
+        let fo = featureIsA ? pa : pb, bo = featureIsA ? pb : pa
+        let fOff: Float = featureIsA ? 0 : L, bOff: Float = featureIsA ? L : 0
+        let fr = fo + oFR, fx = fo + oFX, fz = fo + oFZ
+        let br = bo + oBR, bx = bo + oBX, bz = bo + oBZ
+        var best = Float.infinity
+        withUnsafeTemporaryAllocation(of: Float.self, capacity: 2 * K) { buf in
+            let ax = buf.baseAddress!, lw = ax + K          // the body's axial / lateral per bin
+            var near = Float.infinity, far = -Float.infinity
+            for k in 0..<K where br[k] > 0 {
+                ax[k] = bOff + bx[k] * u.x + bz[k] * u.y; lw[k] = bx[k] * v.x + bz[k] * v.y
+                near = min(near, ax[k]); far = max(far, ax[k])
+            }
+            guard near.isFinite else { return }
+            for k in 0..<K where fr[k] > 0 {
+                let p = fOff + fx[k] * u.x + fz[k] * u.y, w = fx[k] * v.x + fz[k] * v.y
+                if featureIsA ? (p < near - 0.4) : (p > far + 0.4) { continue }
+                var cross: Float? = nil          // the body's nearest (feature on A) / farthest (feature on B) axial coordinate at lateral w
+                for j in 0..<K {
+                    let j2 = (j + 1) % K
+                    guard br[j] > 0, br[j2] > 0 else { continue }
+                    let w0 = lw[j], w1 = lw[j2]
+                    if w < min(w0, w1) - 1e-5 || w > max(w0, w1) + 1e-5 { continue }
+                    let dw = w1 - w0
+                    let t: Float = abs(dw) < 1e-7 ? (featureIsA ? min(ax[j], ax[j2]) : max(ax[j], ax[j2])) : ax[j] + (ax[j2] - ax[j]) * ((w - w0) / dw)
+                    if let c = cross { cross = featureIsA ? min(c, t) : max(c, t) } else { cross = t }
+                }
+                if let c = cross { best = min(best, featureIsA ? c - p : p - c) }
+            }
+        }
+        return best
+    }
+
+    private static func polyGapEdges(_ a: Int, _ b: Int, _ L: Float, _ u: SIMD2<Float>, bodyA: Bool, bodyB: Bool) -> Float {
         let g = polyGapCap(a, b, L, u, bodyA: bodyA, bodyB: bodyB, reach: 0.4)
         if g.isFinite { return g }
         // (a deep overlap: the facing caps no longer pair up - widen them to the whole footprint so the gap stays a finite, signed number: 2026-11-04, the settle and the wall need it most when the overlap is deepest)

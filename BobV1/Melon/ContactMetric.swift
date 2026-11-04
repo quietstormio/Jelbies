@@ -126,3 +126,33 @@ nonisolated enum BruteForceContactMetric: ContactMetric {
         return best.isFinite ? best.squareRoot() : farApart
     }
 }
+
+/// THE ARRIVAL RESIDUAL (2026-11-04): the skin gap at the frame the last stance step plants, i.e. the first time everyone who walked in has stopped stepping. Fed once per frame with
+/// "is anybody mid-step (a gait step running, a walk script active)" and, when asked, the skin gap of that frame; it records the gap of the first quiet frame that STAYS quiet for
+/// `settleFrames` frames (a one-frame hiccup between two steps of the same walk is not an arrival). Nothing is recorded before somebody has stepped (a pair that starts already in place has no
+/// approach: `gap` stays nil, never a made-up number).
+nonisolated struct ArrivalTracker {
+    static let settleFrames = 3
+    private(set) var seenStepping = false
+    private(set) var candidate: (frame: Int, gap: Float)?
+    private var quiet = 0
+    private(set) var frame: Int?
+    private(set) var gap: Float?
+    /// The tracker wants the skin gap of THIS frame (a quiet frame after a step, and no arrival recorded yet): the caller computes it only then.
+    func wantsGap(anyStepping: Bool) -> Bool { gap == nil && seenStepping && !anyStepping && candidate == nil }
+    mutating func feed(frame f: Int, anyStepping: Bool, gap g: Float?) {
+        guard gap == nil else { return }
+        if anyStepping { seenStepping = true; candidate = nil; quiet = 0; return }
+        guard seenStepping else { return }
+        if candidate == nil, let g { candidate = (f, g) }
+        quiet += 1
+        if quiet >= Self.settleFrames, let c = candidate { frame = c.frame; gap = c.gap }
+    }
+}
+
+extension BruteForceContactMetric {
+    /// Both views of the same drawn skins: the support gap (the catalogue's `skinGap`, the strict one) and the footprint gap (what the eye sees in plan view: is there floor between them).
+    /// The support gap is a lower bound of the footprint gap: two bodies that stand staggered, or one hopping past the other, overlap in SUPPORT along the centre axis while a strip of floor remains between them.
+    /// A big difference between the two marks a measurement artefact of the axis, a small one a real overlap.
+    static func drawnGap(_ a: ContactSurface, _ b: ContactSurface) -> (support: Float, footprint: Float) { (skinGap(a, b), footprintGap(a, b)) }
+}

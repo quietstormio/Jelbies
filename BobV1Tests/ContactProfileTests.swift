@@ -261,6 +261,97 @@ final class ContactProfileTests: XCTestCase {
         }
     }
 
+    // MARK: 2026-11-04 measurement trust (g-measure)
+
+    /// A synthetic skinned stream: a cylinder of radius `r` around `c`, five heights, 360 points a ring (6 floats a vertex).
+    private func cylinder(_ c: SIMD2<Float>, r: Float) -> [Float] {
+        var f: [Float] = []
+        for h in 0..<5 { for k in 0..<360 {
+            let a = Float(k) * .pi / 180
+            f += [c.x + r * cosf(a), 0.1 + 0.2 * Float(h), c.y + r * sinf(a), 0, 1, 0]
+        } }
+        return f
+    }
+    private func withSyntheticBuild(_ body: () -> Void) {
+        let save = (ContactField.eggLimit, ContactField.tailLo, ContactField.tailHi, ContactField.eggStride, ContactField.limbStride, ContactField.refinePasses)
+        ContactField.eggLimit = Int.max; ContactField.tailLo = Int.max; ContactField.tailHi = Int.max; ContactField.eggStride = 1; ContactField.limbStride = 1; ContactField.refinePasses = 0
+        body()
+        (ContactField.eggLimit, ContactField.tailLo, ContactField.tailHi, ContactField.eggStride, ContactField.limbStride, ContactField.refinePasses) = save
+    }
+
+    /// A tail / wing / spike vertex INSIDE the other body always reads negative (it used to read +infinity - i.e. the plain body gap - when the lone tip had no neighbouring bin to make an edge).
+    func testFeatureTipInsideTheOtherBodyReadsNegative() {
+        withSyntheticBuild {
+            let ra = SIMD2<Float>(0, 0), rb = SIMD2<Float>(1.0, 0)
+            let da = cylinder(ra, r: 0.45), db = cylinder(rb, r: 0.45)
+            ContactField.build(id: 0, dyn: da, count: da.count / 6, root: ra)
+            ContactField.build(id: 1, dyn: db, count: db.count / 6, root: rb)
+            func rebuild() { ContactField.build(id: 0, dyn: da, count: da.count / 6, root: ra); ContactField.build(id: 1, dyn: db, count: db.count / 6, root: rb) }          // (a new stamp: the pair gap is cached per profile stamp)
+            XCTAssertEqual(ContactField.gap(0, 1) ?? 9, 0.10, accuracy: 0.01, "the bodies alone: 1.0 apart, two 0.45 radii")
+            // (1) A's tail: a lone tip at (1.0, 0) = B's centre, 0.45 inside B's skin
+            ContactField.buildFeature(id: 0, count: 1, position: { _ in SIMD3(1.0, 0.3, 0) })
+            let g1 = ContactField.gap(0, 1, features: true)
+            XCTAssertNotNil(g1); XCTAssertEqual(g1 ?? 9, -0.45, accuracy: 0.02, "A's tail tip at B's centre: 0.45 m inside B's near edge (0.55)")
+            XCTAssertEqual(ContactField.gap(0, at: ra, 1, at: rb, features: true) ?? 9, -0.45, accuracy: 0.02, "the hypothetical-roots query agrees")
+            rebuild()
+            // (2) the same tip beside B (lateral 0.8: nothing to hit): the features add nothing
+            ContactField.buildFeature(id: 0, count: 1, position: { _ in SIMD3(1.0, 0.3, 0.8) })
+            XCTAssertEqual(ContactField.gap(0, 1, features: true) ?? 9, 0.10, accuracy: 0.01, "a tip beside the other body is no overlap")
+            rebuild()
+            // (3) B's tail pointing into A: the mirror
+            ContactField.clearFeature(id: 0)
+            ContactField.buildFeature(id: 1, count: 1, position: { _ in SIMD3(0.1, 0.3, 0) })
+            XCTAssertEqual(ContactField.gap(0, 1, features: true) ?? 9, -0.35, accuracy: 0.02, "B's tail tip 0.1 from A's centre: 0.35 inside A's far edge (0.45)")
+            rebuild()
+            // (4) a short tail whose tip is OUTSIDE: positive, equal to the true tip clearance (tip at 0.7 from A's root, B's near edge at 0.55 -> -0.15 is inside; at 0.5 -> +0.05)
+            ContactField.clearFeature(id: 1)
+            ContactField.buildFeature(id: 0, count: 1, position: { _ in SIMD3(0.5, 0.3, 0) })
+            XCTAssertEqual(ContactField.gap(0, 1, features: true) ?? 9, 0.05, accuracy: 0.015, "a tail tip 5 cm short of B: the tip clearance (the body gap is 10 cm)")
+        }
+    }
+
+    /// ArrivalTracker: nothing before somebody has stepped; the first quiet frame AFTER a step that stays quiet is the arrival; a one-frame hiccup between two steps is not.
+    func testArrivalTracker() {
+        var t = ArrivalTracker()
+        for f in 0..<5 { XCTAssertFalse(t.wantsGap(anyStepping: false)); t.feed(frame: f, anyStepping: false, gap: nil) }          // (no walker yet)
+        XCTAssertNil(t.gap)
+        for f in 5..<20 { t.feed(frame: f, anyStepping: true, gap: nil) }
+        XCTAssertTrue(t.wantsGap(anyStepping: false))
+        t.feed(frame: 20, anyStepping: false, gap: 0.30)          // a hiccup ...
+        XCTAssertNil(t.gap)
+        t.feed(frame: 21, anyStepping: true, gap: nil)          // ... the next step goes on
+        XCTAssertNil(t.gap)
+        XCTAssertTrue(t.wantsGap(anyStepping: false), "the hiccup's candidate is dropped: the gap is wanted again")
+        t.feed(frame: 30, anyStepping: false, gap: 0.062)          // the real arrival
+        t.feed(frame: 31, anyStepping: false, gap: nil); XCTAssertNil(t.gap, "not confirmed after 2 quiet frames")
+        t.feed(frame: 32, anyStepping: false, gap: nil)
+        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "the gap of the FIRST quiet frame")
+        XCTAssertEqual(t.frame, 30)
+        t.feed(frame: 33, anyStepping: true, gap: nil); t.feed(frame: 50, anyStepping: false, gap: 0.5); t.feed(frame: 51, anyStepping: false, gap: nil); t.feed(frame: 52, anyStepping: false, gap: nil)
+        XCTAssertEqual(t.gap ?? 9, 0.062, accuracy: 1e-6, "once recorded it never changes (later shuffles are not the arrival)")
+    }
+
+    /// The harness gap is a property of the DRAWN mesh: moving a root along the axis (the brain root runs ahead of the lagging sim body in a hop) changes nothing; moving the mesh does.
+    /// And the support gap is the strict one: for bodies standing staggered it reads an overlap where the footprints still have floor between them.
+    func testGapIsFromTheMeshNotTheRoots() {
+        func box(_ c: SIMD2<Float>, root: SIMD2<Float>? = nil) -> ContactSurface {
+            var pts: [SIMD3<Float>] = []
+            for i in -20...20 { for j in -20...20 { for h in [0.1, 0.5, 0.9] as [Float] { pts.append(SIMD3(c.x + Float(i) * 0.02, h, c.y + Float(j) * 0.02)) } } }
+            return ContactSurface(root: root ?? c, points: pts)
+        }
+        let a = box(SIMD2(0, 0))
+        let base = BruteForceContactMetric.skinGap(a, box(SIMD2(1.0, 0)))
+        XCTAssertEqual(base, 0.2, accuracy: 1e-4, "two 0.8 wide boxes 1.0 apart")
+        XCTAssertEqual(BruteForceContactMetric.skinGap(a, box(SIMD2(1.0, 0), root: SIMD2(1.45, 0))), base, accuracy: 1e-4, "the root 0.45 ahead of the mesh along the axis: the same gap")
+        XCTAssertEqual(BruteForceContactMetric.skinGap(a, box(SIMD2(1.0, 0), root: SIMD2(0.55, 0))), base, accuracy: 1e-4, "... or behind it")
+        XCTAssertEqual(BruteForceContactMetric.skinGap(a, box(SIMD2(0.9, 0))), base - 0.1, accuracy: 1e-4, "moving the MESH moves the gap")
+        let st = box(SIMD2(0.5, 0.9))
+        let both = BruteForceContactMetric.drawnGap(a, st)
+        XCTAssertLessThan(both.support, 0, "staggered boxes overlap in support along the centre axis (\(both.support))")
+        XCTAssertGreaterThan(both.footprint, 0.05, "... while the footprints are apart (\(both.footprint)): the axis artefact the footprint column exposes")
+        XCTAssertLessThanOrEqual(both.support, both.footprint, "the support gap is the lower bound")
+    }
+
     /// Cost: building the profiles inside the parallel skin pass, and the pair queries.
     func testProfilePerf() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6), SIMD2(0, 2.4), SIMD2(0, -1), SIMD2(2.4, 2.4)], features: [.ears, .wings, .spines, .daisy, .none], seed: 5)

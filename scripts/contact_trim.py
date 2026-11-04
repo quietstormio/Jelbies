@@ -19,8 +19,9 @@ try:
         if touch: st = touch[0]; print(f"touching from {touch[0]-t0:.1f} s (session start {float(s[-1])-t0:.1f} s)")
         lo = int((st - t0 - 0.5) * 1000)
         lie = [(float(a), b) for a, b in re.findall(r" lie t=([\d.]+) (.*)", log)]          # lie-down: the demo logs each Jelbie's idle kind every 0.5 s -> cut to 1.5 s after the last one is up again
-        up = [a for a, b in lie if "[lieDown" not in b]
-        lying = [a for a, b in lie if "[lieDown" in b]
+        isLying = lambda b: "[lieDown" in b or "[flop" in b          # (flop = the quick plop-down pair, same clearance)
+        up = [a for a, b in lie if not isLying(b)]
+        lying = [a for a, b in lie if isLying(b)]
         if lying and up and max(up) > max(lying): hi = int((st - t0 + max(lying) + 1.5) * 1000)
         if e: hi = int((float(e[-1]) - t0 + 2) * 1000)          # (no endEpoch = a lie-down / sleep pile: keep to the end of the capture)
 except Exception as ex:
@@ -38,7 +39,7 @@ shutil.rmtree(tmp)
 print(f"{scene}: {len(sel)} frames, {dur:.1f} s real time (kept {lo/1000:.1f}..{hi/1000 if hi<10**9 else secs:.1f} s)")
 # the measured skin gaps (ContactDemo.GapLog, cm, + apart): one summary line per cast pair, printed next to the clip so numbers and frames are reviewed together
 try:
-    for m in re.finditer(r" summary (pair=\S+) touchTicks=(\d+) holdPh=(-?\d+) holdTicks=(\d+) minGapFeat=(\S+) minGapBody=(\S+) medHoldFeat=(\S+) medHoldBody=(\S+) cm", open(f"{out}/{scene}.demolog").read()):
-        print(f"{scene} SUMMARY {m[1]}: min gap over touching {m[5]} cm with features / {m[6]} body only; median over the hold (phase {m[3]}, {m[4]} ticks of {m[2]} touching) {m[7]} / {m[8]} cm")
+    for m in re.finditer(r" summary (pair=\S+) touchTicks=(\d+) holdPh=(-?\d+) holdTicks=(\d+) \((\S+)\) minGapFeat=(\S+) minGapBody=(\S+) medHoldFeat=(\S+) medHoldBody=(\S+) cm", open(f"{out}/{scene}.demolog").read()):
+        print(f"{scene} SUMMARY {m[1]}: min gap over touching {m[6]} cm with features / {m[7]} body only; median over the hold ({m[5]}, phase {m[3]}, {m[4]} ticks at 0.2 s, of {m[2]} touching) {m[8]} / {m[9]} cm")
 except Exception as ex:
     print("no gap summary:", ex)

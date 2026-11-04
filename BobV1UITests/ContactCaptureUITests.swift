@@ -22,7 +22,7 @@ final class ContactCaptureUITests: XCTestCase {
         let secs = env["CAPTURE_SECS"].flatMap(Double.init) ?? 18
         let app = XCUIApplication()
         app.launchArguments += ["-NewGame", cast, "-NewGameCoins", "10000", "-MainMenu", "0", "-RoomWide", "0", "-ContactCam", angle]
-        if kind != "lieDown" && kind != "sleepPile" { app.launchArguments += ["-NeedsHappy", "1"] }          // (no need bubbles to interrupt the emote)
+        if kind != "lieDown" && kind != "flop" && kind != "sleepPile" { app.launchArguments += ["-NeedsHappy", "1"] }          // (no need bubbles to interrupt the emote)
         if kind != "-" { app.launchArguments += ["-ContactDemo", kind, "-ContactDemoDelay", "3"] }
         if let extra = env["CAPTURE_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: " ").map(String.init) }
         app.launchEnvironment["CONTACTDEMO_LOG"] = out + "/" + scene + ".demolog"
@@ -43,7 +43,7 @@ final class ContactCaptureUITests: XCTestCase {
         while Date().timeIntervalSince(t0) < secs {          // (secs = the longest it may run; it stops 2.5 s after the emote ends, 40 s after a lie-down starts)
             let now = Date().timeIntervalSince1970
             if let e = epoch("endEpoch"), now > e + 2.5 { break }
-            if kind == "lieDown" || kind == "sleepPile", let st = epoch("startEpoch"), now > st + 40 { break }
+            if kind == "lieDown" || kind == "flop" || kind == "sleepPile", let st = epoch("startEpoch"), now > st + 40 { break }
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             let png = XCUIScreen.main.screenshot().pngRepresentation
             try? png.write(to: URL(fileURLWithPath: String(format: "%@/f_%06d.png", dir, ms)))
