@@ -8,7 +8,7 @@ swayHug_bob_pearl	bob,pearl	swayHug	low	-
 noseBoop_moss_lavender	moss,lavender	noseBoop	low	-
 groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	low,side	-
 groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	low,side	-
-cuddleLean_lavender_pip	lavender,pip	cuddleLean	low	-
+cuddleLean_lavender_pip	lavender,pip	cuddleLean	low,side	-
 boop_bob_teddy	bob,teddy	boop	low	-
 squabble_pip_moss	pip,moss	squabble	low	-
 bump_moss_pearl	moss,pearl	bump	low	-
