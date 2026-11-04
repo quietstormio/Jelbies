@@ -23,8 +23,9 @@ nonisolated enum ContactSettleTuning {
 enum ContactSettle {
     /// One step for the pair. Returns the measured skin gap (nil: no profile yet), `moved` = whether the roots were nudged.
     @discardableResult
-    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false, urgent: Bool = false) -> (gap: Float, moved: Bool)? {
-        guard let gap = ContactField.gap(a.steerID, b.steerID, features: features) else { return nil }
+    static func step(_ a: BlobBrain, _ b: BlobBrain, target: Float = 0, anchoredA: Bool = false, anchoredB: Bool = false, onlySeparate: Bool = false, features: Bool = false, urgent: Bool = false, support: Bool = false) -> (gap: Float, moved: Bool)? {
+        guard var gap = ContactField.gap(a.steerID, b.steerID, features: features) else { return nil }
+        if support, let sg = ContactField.skinGap(a.steerID, b.steerID) { gap = min(gap, sg) }          // (the catalogue's support gap - the harness's ground truth - is the stricter of the two when the bodies stand staggered or turn)
         let stamp = ContactField.stamp(a.steerID) &+ ContactField.stamp(b.steerID) &* 7919
         let key = b.steerID
         if a.socialBook.settleStamp[key] == stamp { return (gap, false) }          // (this measurement was acted on)
@@ -42,7 +43,7 @@ enum ContactSettle {
         var cap = ContactSettleTuning.maxStep
         if urgent, e < -ContactSettleTuning.deadband {          // (sunk in during a fast move - a lean, a hop: the way out is quick, 5 cm a step at most; the way in stays gentle)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
-            c = max(-0.1, ePred * 0.6); cap = 0.05
+            c = max(-0.16, min(ePred, e)); cap = 0.08
         } else if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
             if abs(ePred) <= ContactSettleTuning.deadband { return (gap, false) }

@@ -190,7 +190,7 @@ final class ContactPolishTests: XCTestCase {
             ok = a.brain.socialStart(k, with: b.brain, a.sim)
         case .lie(let k):
             res.kind = k.rawValue
-            d.place([SIMD2(-0.6, 0.6), SIMD2(0.6, 0.6)])
+            d.place([SIMD2(-0.8, 0.6), SIMD2(0.8, 0.6)])          // (1.6 apart: clear of each other, so the first frames are not a harness-made overlap)
             for r in rigs { r.brain.idleForced = true }
             ok = a.brain.idleStart(k, a.sim) && b.brain.idleStart(k, b.sim)
         case .sleepPair:

@@ -129,7 +129,8 @@ extension BlobBrain {
         for (k, v) in socialBook.contactCoolPer where v > 0 { socialBook.contactCoolPer[k] = v - dt }
         guard attached, !held else { return }
         for o in socialOthers() where o !== self {
-            if let gap = ContactField.gap(steerID, o.steerID, features: true) {          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
+            if var gap = ContactField.gap(steerID, o.steerID, features: true) {
+                if let sg = ContactField.skinGap(steerID, o.steerID) { gap = min(gap, sg) }          // (the support gap of the catalogue: the harness's ground truth for "touching")          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
                 let prev = socialBook.contactArmed[o.steerID]
                 var armed = prev ?? (gap > ContactTuning.rearmGap)          // (touching when first seen: no event, the touch began before)
                 if gap > ContactTuning.rearmGap { armed = true }
