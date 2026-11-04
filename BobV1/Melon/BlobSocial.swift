@@ -136,6 +136,7 @@ struct SocialBook {
     var settleEMA: [Int: Float] = [:]          // per other body: the slow average of the gap (ContactSettle's fine trim)
     var settleGap: [Int: Float] = [:]          // per other body: the error ContactSettle measured last
     var shiftPending = SIMD2<Float>.zero          // the settle's root nudges not yet applied to the sim body (ContactSettle.swift)
+    var contactAwayT: [Int: Float] = [:]          // per other body: seconds the skins have been > 3 cm apart (the re-arm of the touch sound)
     var glow: [Int: Float] = [:]          // after a session: partner id -> seconds the pair is still kept apart (ContactStance.swift)
     var settleStamp: [Int: Int] = [:]          // per other body: the profile stamps ContactSettle last acted on
     var contactCoolPer: [Int: Float] = [:]          // per other body: seconds before another contact event with him

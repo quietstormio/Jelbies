@@ -69,7 +69,7 @@ struct ContactStance: Sendable {
         .bump: .pressing(from: 1, press: 2, sound: .boop, volume: 0.9),
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        .highFive: .pressing(from: 1, press: 2, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        .highFive: .pressing(from: 1, press: 2, until: 3, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.9),
         .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
         .bellyBounce: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),

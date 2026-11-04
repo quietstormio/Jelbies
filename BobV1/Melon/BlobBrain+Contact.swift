@@ -18,6 +18,7 @@ enum ContactTuning {
     static let cooldown: Float = 1.6
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
+    static let rearmHold: Float = 0.15          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
 }
@@ -129,11 +130,12 @@ extension BlobBrain {
         for (k, v) in socialBook.contactCoolPer where v > 0 { socialBook.contactCoolPer[k] = v - dt }
         guard attached, !held else { return }
         for o in socialOthers() where o !== self {
-            if var gap = ContactField.gap(steerID, o.steerID, features: true) {
+            if var gap = ContactField.gap(steerID, o.steerID, features: social == nil) {          // (inside a session the drawn body decides, as the harness does; wings only count for a roaming / lying brush)
                 if let sg = ContactField.skinGap(steerID, o.steerID) { gap = min(gap, sg) }          // (the support gap of the catalogue: the harness's ground truth for "touching")          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
                 let prev = socialBook.contactArmed[o.steerID]
                 var armed = prev ?? (gap > ContactTuning.rearmGap)          // (touching when first seen: no event, the touch began before)
-                if gap > ContactTuning.rearmGap { armed = true }
+                if gap > ContactTuning.rearmGap { let t = (socialBook.contactAwayT[o.steerID] ?? 0) + dt; socialBook.contactAwayT[o.steerID] = t; if t >= ContactTuning.rearmHold || prev == nil { armed = true } }          // (apart by 3 cm for 0.15 s: a one-frame spike of a bounce is not a new touch)
+                else { socialBook.contactAwayT[o.steerID] = 0 }
                 if armed, gap <= ContactTuning.touchGap, (socialBook.contactCoolPer[o.steerID] ?? 0) <= 0 {
                     armed = false
                     socialBook.contactCoolPer[o.steerID] = ContactTuning.eventGap
@@ -141,7 +143,8 @@ extension BlobBrain {
                     jellyKick = max(jellyKick, 0.9 + 0.9 * press)
                     if steerID < o.steerID || !(o.attached && !o.held) {          // (one sound + one haptic a touch, not one a body: the lower id, or whoever is left when he cannot)
                         // the emote's own contact sound (ContactStance.table: boop, squish, highfive_boop ...) or the default squish; AudioHub.play sends the sound's haptic cue too
-                        let st = contactStance(with: o)
+                        // (only while the stance is HOLDING the touch - the press phase; an approach brush or a part is the default squish)
+                        let st = contactStance(with: o).flatMap { st in social.flatMap { st.step(at: $0.phase)?.target == ContactStance.hold ? st : nil } }
                         AudioHub.shared.play(st?.sound ?? .squish, jelly: steerID, x: px, volume: st?.sound != nil ? st!.volume : 0.25)
                         switch st?.haptic ?? .none {
                         case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
