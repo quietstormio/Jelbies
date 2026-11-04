@@ -219,17 +219,12 @@ extension BlobBrain {
                 step = max(0.065, min(0.14, need))          // (forward only; 6.5 cm at least: a shorter walk 'arrives' at once, planWalkStep's arrival radius is 6 cm - the lean takes the overshoot back)
                 if need < 0.038 { socialBook.shuffleReq = 0; return }          // (under that the lean covers it; the step's quantum is ~6 cm and the lean's reach +-2.7 cm)
             }
-            var spot = fixed(position + u * step)
-            if !trim {          // a big residual is an APPROACH: walk the whole way to the stance spot (aimed short of the touch like every stance walk)
-                let dist = (contactStableTouch(p, axis: -u) ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
-                spot = fixed(p.position - u * dist)
-                step = simd_distance(spot, position)
-            }
+            let spot = fixed(position + u * step)
             socialBook.shuffleReq = 0
             let moved = simd_distance(spot, position)
             let ok = idleState.kind == nil && moved >= 0.5 * abs(step) && moved >= 0.02
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.shuffle = (ok ? "STEP" : "step-dropped") + String(format: "(idle%@,step%.3f,moved%.3f)", idleState.kind.map { "\($0)" } ?? "nil", step, moved) } }
-            if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim) ; if trim { ContactTouchMemory.shuffling.insert(steerID) } }
+            if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim); if trim { ContactTouchMemory.shuffling.insert(steerID) } }          // (a big residual is an APPROACH, not a trim: the retarget carries that walk to the stance)
         } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
     }
 }
