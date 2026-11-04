@@ -25,6 +25,8 @@ try:
         if e: hi = int((float(e[-1]) - t0 + 2) * 1000)          # (no endEpoch = a lie-down / sleep pile: keep to the end of the capture)
 except Exception as ex:
     print("trim: whole clip,", ex)
+try: open(f"{out}/{scene}.clipstart", "w").write(f"{max(lo, 0) / 1000:.3f}")          # (scene seconds at the clip start: the sheet's time labels)
+except Exception: pass
 sel = [f for f in frames if lo <= ms(f) <= hi] or frames
 dur = max((ms(sel[-1]) - ms(sel[0])) / 1000, 0.5)
 fps = max(len(sel) / dur, 1)
@@ -34,3 +36,9 @@ vf = ("crop=iw:ih*0.42:0:ih*0.25,scale=1206:-2" if angle == "top" else "crop=iw:
 subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-framerate", f"{fps:.3f}", "-i", f"{tmp}/%05d.png", "-vf", vf, "-pix_fmt", "yuv420p", f"{out}/{scene}_frames.mp4"], stdin=subprocess.DEVNULL)
 shutil.rmtree(tmp)
 print(f"{scene}: {len(sel)} frames, {dur:.1f} s real time (kept {lo/1000:.1f}..{hi/1000 if hi<10**9 else secs:.1f} s)")
+# the measured skin gaps (ContactDemo.GapLog, cm, + apart): one summary line per cast pair, printed next to the clip so numbers and frames are reviewed together
+try:
+    for m in re.finditer(r" summary (pair=\S+) touchTicks=(\d+) holdPh=(-?\d+) holdTicks=(\d+) minGapFeat=(\S+) minGapBody=(\S+) medHoldFeat=(\S+) medHoldBody=(\S+) cm", open(f"{out}/{scene}.demolog").read()):
+        print(f"{scene} SUMMARY {m[1]}: min gap over touching {m[5]} cm with features / {m[6]} body only; median over the hold (phase {m[3]}, {m[4]} ticks of {m[2]} touching) {m[7]} / {m[8]} cm")
+except Exception as ex:
+    print("no gap summary:", ex)

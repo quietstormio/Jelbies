@@ -1,32 +1,36 @@
-# name<TAB>cast (first one starts it)<TAB>ContactDemo kind (- = none)<TAB>angles<TAB>extra launch args (space separated, - = none)<TAB>secs (optional)
-# one row = one launch per angle; output <name>_<angle>.mp4 (angle low = low 3/4, side = steep orbit nearly along the row)
-lieDown_teddy_pearl	teddy,pearl	lieDown	low,side	-	120
-lieDown_pip_lavender	pip,lavender	lieDown	low,side	-	120
-sleepPile_pearl_pip	pearl,pip	sleepPile	low,side	-ClockHour 23
-backToBack_pip_teddy	pip,teddy	backToBack	low,side	-
-swayHug_bob_pearl	bob,pearl	swayHug	low	-
-noseBoop_moss_lavender	moss,lavender	noseBoop	low	-
-groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	low,side	-
-groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	low,side	-
-cuddleLean_lavender_pip	lavender,pip	cuddleLean	low,side	-
-boop_bob_teddy	bob,teddy	boop	low	-
-squabble_pip_moss	pip,moss	squabble	low	-
-bump_moss_pearl	moss,pearl	bump	low	-
-nuzzle_lavender_teddy	lavender,teddy	nuzzle	low	-
-sitTogether_pip_pearl	pip,pearl	sitTogether	low,side	-
-sneak_pip_lavender	pip,lavender	sneak	low	-
-chestBump_bob_pip	bob,pip	chestBump	low	-
-highFive_pearl_teddy	pearl,teddy	highFive	low	-
-hum_moss_lavender	moss,lavender	hum	low	-
-cheekSquish_teddy_bob	teddy,bob	cheekSquish	low	-
-tag_lavender_pip	lavender,pip	tag	low	-
-bellyBounce_pip_pearl	pip,pearl	bellyBounce	low	-
-ringAround_teddy_pearl	teddy,pearl	ringAround	low	-
-whisperGiggle_teddy_moss	teddy,moss	whisperGiggle	low	-
-spinHug_pearl_pip	pearl,pip	spinHug	low,side	-
-circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	low,side	-
-leapfrog_moss_teddy	moss,teddy	leapfrog	low	-
-stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	low,side	-Storm 2 -StormDelay 2
-guestHug_bob_teddy_pearl	bob,teddy,pearl	-	low	-InviteGuest 1	34
-squabble_bob_teddy	bob,teddy	squabble	low	-
-bump_bob_teddy	bob,teddy	bump	low	-
+# name<TAB>cast (first one starts it)<TAB>ContactDemo kind (- = none)<TAB>angles<TAB>extra launch args (space separated, - = none)<TAB>secs (the longest a scene may run; default 90, backToBack 200)
+# one row = one launch per angle; output <name>_<angle>.mp4 (angles: perp = side-on tracking camera, top = tracking from above, low = the player's low 3/4 view; perp and top are mandatory for every row)
+lieDown_teddy_pearl	teddy,pearl	lieDown	perp,top,low	-	120
+lieDown_pip_lavender	pip,lavender	lieDown	perp,top,low	-	120
+sleepPile_pearl_pip	pearl,pip	sleepPile	perp,top,low	-ClockHour 23	90
+backToBack_pip_teddy	pip,teddy	backToBack	perp,top,low	-	200
+swayHug_bob_pearl	bob,pearl	swayHug	perp,top,low	-	90
+noseBoop_moss_lavender	moss,lavender	noseBoop	perp,top,low	-	90
+groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	perp,top,low	-	90
+groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	perp,top,low	-	90
+cuddleLean_lavender_pip	lavender,pip	cuddleLean	perp,top,low	-	90
+boop_bob_teddy	bob,teddy	boop	perp,top,low	-	90
+squabble_pip_moss	pip,moss	squabble	perp,top,low	-	90
+bump_moss_pearl	moss,pearl	bump	perp,top,low	-	90
+nuzzle_lavender_teddy	lavender,teddy	nuzzle	perp,top,low	-	90
+sitTogether_pip_pearl	pip,pearl	sitTogether	perp,top,low	-	90
+sneak_pip_lavender	pip,lavender	sneak	perp,top,low	-	90
+chestBump_bob_pip	bob,pip	chestBump	perp,top,low	-	90
+highFive_pearl_teddy	pearl,teddy	highFive	perp,top,low	-	90
+hum_moss_lavender	moss,lavender	hum	perp,top,low	-	90
+cheekSquish_teddy_bob	teddy,bob	cheekSquish	perp,top,low	-	90
+tag_lavender_pip	lavender,pip	tag	perp,top,low	-	90
+bellyBounce_pip_pearl	pip,pearl	bellyBounce	perp,top,low	-	90
+ringAround_teddy_pearl	teddy,pearl	ringAround	perp,top,low	-	90
+whisperGiggle_teddy_moss	teddy,moss	whisperGiggle	perp,top,low	-	90
+spinHug_pearl_pip	pearl,pip	spinHug	perp,top,low	-	90
+circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	perp,top,low	-	90
+leapfrog_moss_teddy	moss,teddy	leapfrog	perp,top,low	-	90
+stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	perp,top,low	-Storm 2 -StormDelay 2	90
+guestHug_bob_teddy_pearl	bob,teddy,pearl	-	perp,top,low	-InviteGuest 1	34
+squabble_bob_teddy	bob,teddy	squabble	perp,top,low	-	90
+bump_bob_teddy	bob,teddy	bump	perp,top,low	-	90
+backToBack_lavender_pip	lavender,pip	backToBack	perp,top,low	-	200
+sneak_bob_pip	bob,pip	sneak	perp,top,low	-	90
+swayHug_lavender_teddy	lavender,teddy	swayHug	perp,top,low	-	90
+cheekSquish_pip_teddy	pip,teddy	cheekSquish	perp,top,low	-	90

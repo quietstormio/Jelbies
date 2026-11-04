@@ -70,20 +70,53 @@ enum ContactDemo {
         }
     }
 
+    /// Gap sampling for the cast (cm, + apart): per pair i<j the drawn-skin gap with features (wings / tail / ears) and without. Needs the contact engine's ContactField.
+    @MainActor final class GapLog {
+        let brains: [BlobBrain]
+        var pairs: [(Int, Int)] = []
+        struct Sample { var touching: Bool; var ph: Int; var withF: [Float]; var body: [Float] }
+        var samples: [Sample] = []
+        init(_ b: [BlobBrain]) { brains = b; for i in 0..<b.count { for j in (i + 1)..<b.count { pairs.append((i, j)) } } }
+        func cm(_ v: Float?) -> Float { v.map { $0 * 100 } ?? .nan }
+        /// One tick: returns the text for the tick line and remembers the sample (touching = the closest root distance <= 1.55).
+        func sample(ph: Int, dmin: Float) -> String {
+            let f = pairs.map { cm(ContactField.gap(brains[$0.0].steerID, brains[$0.1].steerID, features: true)) }
+            let b = pairs.map { cm(ContactField.gap(brains[$0.0].steerID, brains[$0.1].steerID, features: false)) }
+            samples.append(Sample(touching: dmin <= 1.55, ph: ph, withF: f, body: b))
+            return " gaps[" + pairs.enumerated().map { String(format: "%d-%d:%.1f/%.1f", $1.0, $1.1, f[$0], b[$0]) }.joined(separator: " ") + "]cm(feat/body)"
+        }
+        /// The scene's summary, per pair: min gap over the touching ticks, median over the hold ticks (the touching ticks of the phase that has the most of them), both with and without features.
+        func summary() {
+            let touch = samples.filter(\.touching)
+            var count: [Int: Int] = [:]; for s in touch { count[s.ph, default: 0] += 1 }
+            let holdPh = count.max { $0.value < $1.value }?.key
+            let hold = touch.filter { $0.ph == holdPh }
+            func med(_ a: [Float]) -> Float { let v = a.filter { !$0.isNaN }.sorted(); return v.isEmpty ? .nan : v[v.count / 2] }
+            func mn(_ a: [Float]) -> Float { a.filter { !$0.isNaN }.min() ?? .nan }
+            for (k, p) in pairs.enumerated() {
+                ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm", p.0, p.1, touch.count, holdPh ?? -1, hold.count,
+                                 mn(touch.map { $0.withF[k] }), mn(touch.map { $0.body[k] }), med(hold.map { $0.withF[k] }), med(hold.map { $0.body[k] }))
+            }
+        }
+    }
+
     /// Wall-clock start / end of the emote (epoch seconds) for the host to trim the clip: the session is over when the first brain's `social` is nil again.
     @MainActor static func logSpan(_ started: Bool, _ lead: BlobBrain, _ cast: [BlobBrain]) async {
         guard started else { return }
         note(" startEpoch=%.3f", Date().timeIntervalSince1970)
         var i = 0
+        let gl = GapLog(cast)
         while lead.social != nil && i < 6000 {
             if i % 5 == 0 {          // every 0.5 s: the session phase and the smallest root distance between two of the cast (the touching window starts when it is <= ~1.55)
                 var dmin: Float = 99
                 for (x, p) in cast.enumerated() { for q in cast[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
-                note(" tick t=%.2f ph=%d d=%.2f", Date().timeIntervalSince1970, lead.social?.phase ?? -1, dmin)
+                let ph = lead.social?.phase ?? -1
+                note(" tick t=%.2f ph=%d d=%.2f%@", Date().timeIntervalSince1970, ph, dmin, gl.sample(ph: ph, dmin: dmin))
             }
             try? await Task.sleep(nanoseconds: 100_000_000); i += 1
         }
         note(" endEpoch=%.3f", Date().timeIntervalSince1970)
+        gl.summary()
     }
 
     @MainActor static func run(care: GameCare) async {
@@ -123,11 +156,15 @@ enum ContactDemo {
             note(" lieDown started=%d", ok ? 1 : 0)
             note(" startEpoch=%.3f", Date().timeIntervalSince1970)
             let bs = cast.compactMap(\.brain)
+            let gl = GapLog(bs)
             for i in 0..<80 {          // every 0.5 s for 40 s: who is lying (kind / phase / k / yielding / a pending request), to see why one never lies down
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 let s = bs.map { String(format: "[%@ ph=%d k=%.2f y=%d pend=%d]", "\($0.idleState.kind.map { "\($0)" } ?? "none")", $0.idleState.phase, $0.idleState.k, $0.idleState.yielding ? 1 : 0, $0.pending != nil ? 1 : 0) }.joined(separator: " ")
-                note(" lie t=%.1f %@", Double(i + 1) * 0.5, s)
+                var dmin: Float = 99
+                for (x, p) in bs.enumerated() { for q in bs[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
+                note(" lie t=%.1f %@%@", Double(i + 1) * 0.5, s, gl.sample(ph: bs.first?.idleState.phase ?? -1, dmin: dmin))
             }
+            gl.summary()
             return
         }
         guard let kind = SocialKind(rawValue: name), let a = cast.first, let ab = a.brain, let bb = cast[1].brain else { note(" unknown kind %@", name); return }
