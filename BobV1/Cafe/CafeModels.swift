@@ -30,7 +30,7 @@ nonisolated enum CafeMenu {
         .init(id: .pancakes, name: "Pancake stack", price: 16, perk: .fullBelly, blurb: "Fluffy and filling. Hungry much later.", condition: [.sporty: 0.08, .cute: 0.06]),
         .init(id: .sundae, name: "Mini sundae", price: 18, perk: .bouncy, blurb: "Cold and silly. Extra bouncy for a while.", condition: [.sweet: 0.12, .cool: 0.06]),
         .init(id: .jellycup, name: "Jelly Cup", price: 8, perk: .cozy, blurb: "A tiny cup of whipped cream, just for Jelbies.", condition: [.sweet: 0.08, .cute: 0.08]),
-        .init(id: .latte, name: "Baby latte", price: 12, perk: .zoomies, blurb: "Warm and foamy. Zoomies right here, and again at home!", condition: [.sporty: 0.06, .cool: 0.08]),
+        .init(id: .latte, name: "Baby latte", price: 12, perk: .zoomies, blurb: "Warm and foamy. Zoomies once you're home!", condition: [.sporty: 0.06, .cool: 0.08]),
         .init(id: .cocoa, name: "Warm cocoa", price: 11, perk: .cozy, blurb: "Marshmallows on top. Stays happy longer.", condition: [.sweet: 0.08, .cute: 0.06]),
         .init(id: .juice, name: "Berry juice", price: 10, perk: .bouncy, blurb: "Pink and fizzy. Extra bouncy for a while.", condition: [.sparkle: 0.10, .cute: 0.04])]
     static var foods: [CafeTreat] { treats.filter { $0.category == .food } }

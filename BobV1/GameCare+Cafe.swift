@@ -327,7 +327,7 @@ extension GameCare {
             prof.perks.grant(t.perk, duration: t.perk.raceOnly ? nil : t.perk.duration * CafeTuning.perkDurationMul)
             if fresh { AudioHub.shared.play(.perkSparkle, volume: 0.9) }
             if t.perk == .zoomies { zoomiesDue.insert(id) }
-            if treat == .latte { cafeBook.zoomT[id] = Float.random(in: CafeTuning.zoomSeconds) }          // the café burst, run after the serving (tickCafeZoomies)
+            // (no café burst: they stay at their tables to sip and chat; the .zoomies perk brings the run once home)
         }
     }
 
