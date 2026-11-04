@@ -37,7 +37,7 @@ final class DecorTests: XCTestCase {
         return StoreBook(wallet: w, persists: false)
     }
 
-    /// The most pieces the room's 10 spots hold, as a plausible mix: 2 beanbags + the mat (6), toy box, plant, night light, cushion (10).
+    /// The most pieces the room's 10 spots hold, as a plausible mix: aquarium + the mat (4), toy box, plant, night light, bookshelf, wardrobe, ball (10).
     static let fullMix: [DecorKind] = DecorTuning.fullRoom
 
     private func fillRoom(_ b: StoreBook, mix: [DecorKind] = DecorTuning.fullRoom) {
@@ -47,10 +47,11 @@ final class DecorTests: XCTestCase {
 
     // MARK: catalogue and capacity
 
-    func testCatalogueHasFortyEightDecorItemsInTheRightPriceBand() {
+    func testCatalogueSellsEveryNonRetiredDecorItemInTheRightPriceBand() {
         let items = StoreCatalog.items(.decor)
-        XCTAssertEqual(items.count, 48)          // (was 29; 48 after the later furniture and toy batches)
-        XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, 48, "every piece is on exactly one tab")
+        let sold = DecorKind.allCases.count - 3 - DecorKind.retired.count          // (the 3 park-only toys and the retired sit-on furniture are not sold)
+        XCTAssertEqual(items.count, sold)
+        XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, sold, "every piece is on exactly one tab")
         XCTAssertFalse(items.contains { $0.id == "decor-eggchair" }, "the swing replaces the egg chair")
         for i in items {
             XCTAssertTrue((25...120).contains(i.price), "\(i.name) \(i.price)")
@@ -58,13 +59,13 @@ final class DecorTests: XCTestCase {
             XCTAssertEqual(i.roomUnits, i.decor?.spec.units)
             XCTAssertTrue((1...3).contains(i.roomUnits))
         }
-        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting([.seesaw, .springrider, .sandbox]), "every kind but the park-only toys is sold")
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.aquarium, .beanbag, .bouncymat, .diningset, .loveseat, .minigoal, .rockinghorse, .toyrocket])
-        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .playtunnel, .slide, .swing], "the 1.25x swing, slide, play tunnel and pet bed count 3 spots")
+        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting([.seesaw, .springrider, .sandbox]).subtracting(DecorKind.retired), "every kind but the park-only toys and the retired sit-on furniture is sold")
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, Set(DecorKind.allCases).subtracting(DecorKind.retired).filter { $0.spec.units == 2 && ![.seesaw, .springrider, .sandbox].contains($0) }.sorted { $0.rawValue < $1.rawValue })
+        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .playtunnel, .slide], "the 1.25x slide, play tunnel and pet bed count 3 spots")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))
         // prices and spots come from the Blender exports' JSON
-        let json: [DecorKind: (Int, Int)] = [.loveseat: (120, 2), .petbed: (90, 3), .pouf: (40, 1), .rockingchair: (80, 1), .armchair: (70, 1), .swing: (100, 3), .diningset: (85, 2),
+        let json: [DecorKind: (Int, Int)] = [.petbed: (90, 3),
                                              .bookshelf: (65, 1), .wardrobe: (75, 1), .divider: (60, 1), .floorlamp: (55, 1), .slide: (110, 3), .monstera: (70, 1), .duck: (25, 1),
                                              .blocks: (35, 1), .spintop: (30, 1), .toycar: (50, 1), .yarnball: (25, 1), .drum: (45, 1), .soccerball: (35, 1), .minigoal: (70, 2)]
         for (k, v) in json { XCTAssertEqual(StoreCatalog.item(k.storeID)?.price, v.0, "\(k) price"); XCTAssertEqual(k.spec.units, v.1, "\(k) spots") }
@@ -74,16 +75,16 @@ final class DecorTests: XCTestCase {
         let b = book()
         fillRoom(b)
         XCTAssertEqual(b.roomUnitsUsed, 10)
-        b.grant("decor-cushion")
-        XCTAssertFalse(b.canPlace(StoreCatalog.item("decor-cushion")!), "room full")
-        XCTAssertNil(b.place("decor-cushion"))
-        XCTAssertNotNil(b.placeBlocker(StoreCatalog.item("decor-cushion")!))
+        b.grant("decor-duck")
+        XCTAssertFalse(b.canPlace(StoreCatalog.item("decor-duck")!), "room full")
+        XCTAssertNil(b.place("decor-duck"))
+        XCTAssertNotNil(b.placeBlocker(StoreCatalog.item("decor-duck")!))
         // putting one away frees the spots; the big one needs 2
-        let bean = b.placedDecor.first { $0.kind == .beanbag }!
+        let bean = b.placedDecor.first { $0.kind == .aquarium }!
         b.putAway(bean.uid)
         XCTAssertEqual(b.roomUnitsUsed, 8)
-        XCTAssertNotNil(b.place("decor-cushion"))
-        XCTAssertNil(b.place("decor-ball"), "no ball owned")
+        XCTAssertNotNil(b.place("decor-duck"))
+        XCTAssertNil(b.place("decor-soccerball"), "no soccer ball owned")
     }
 
     func testEveryPlacedPieceIsValidClearOfTheOthersAndOfTheFurniture() {
@@ -103,14 +104,14 @@ final class DecorTests: XCTestCase {
         // fully on the rug: a cushion is fine and is lifted; a beanbag is not
         XCTAssertTrue(DecorPlacement.isValid(.nightlight, at: SIMD2(2.9, -1), among: [rug]), "small things sit on the rug")
         XCTAssertGreaterThan(DecorPlacement.rugLift(.nightlight, at: SIMD2(2.9, -1), others: [rug], ignoring: nil), 0)
-        XCTAssertFalse(DecorPlacement.isValid(.beanbag, at: SIMD2(2.9, -1), among: [rug]), "a big piece does not go on the rug")
+        XCTAssertFalse(DecorPlacement.isValid(.aquarium, at: SIMD2(2.9, -1), among: [rug]), "a big piece does not go on the rug")
         XCTAssertFalse(DecorPlacement.isValid(.nightlight, at: SIMD2(2.9 - 0.85, -1), among: [rug]), "not half over the rug's edge")
     }
 
     func testDragStaysInTheRoomAndOffTheFurniture() {
         let b = book()
-        b.grant("decor-beanbag")
-        let p = b.place("decor-beanbag")!
+        b.grant("decor-toybox")
+        let p = b.place("decor-toybox")!
         XCTAssertFalse(b.move(p.uid, to: SIMD2(0, -4.0)), "on the sofa")
         XCTAssertFalse(b.move(p.uid, to: SIMD2(30, 0)), "off the floor")
         XCTAssertFalse(b.move(p.uid, to: SIMD2(0, 0.5)), "the middle of the rug is for the Jellies and the meal")
@@ -136,8 +137,8 @@ final class DecorTests: XCTestCase {
 
     func testDraggingMovesAPieceSlidesAlongObstaclesAndSavesIt() {
         let care = GameCare(jellyCount: 3, persistent: false)
-        care.store.grant("decor-cushion")
-        let p = care.placeDecor("decor-cushion")!
+        care.store.grant("decor-nightlight")
+        let p = care.placeDecor("decor-nightlight")!
         XCTAssertTrue(care.arranging)
         XCTAssertEqual(care.arrangingUID, p.uid)
         XCTAssertTrue(care.dragDecor(p.uid, to: SIMD2(-2.7, 1.0)))
@@ -145,11 +146,11 @@ final class DecorTests: XCTestCase {
         XCTAssertEqual(DecorField.shared.feet.first?.centre, SIMD2(-2.7, 1.0), "the room sees it at once")
         // dragged into the middle of the rug it stops where it is still allowed (the core is for the Jellies and the meal)
         _ = care.dragDecor(p.uid, to: SIMD2(0, 0.5))
-        XCTAssertTrue(DecorPlacement.isValid(.cushion, at: care.store.placedDecor.first!.at, among: [], ignoring: nil))
+        XCTAssertTrue(DecorPlacement.isValid(.nightlight, at: care.store.placedDecor.first!.at, among: [], ignoring: nil))
         XCTAssertEqual(care.decorPiece(at: care.store.placedDecor.first!.at)?.uid, p.uid, "a finger on it picks it up")
         care.putAwayDecor(p.uid)
         XCTAssertTrue(care.store.placedDecor.isEmpty); XCTAssertTrue(DecorField.shared.feet.isEmpty)
-        XCTAssertEqual(care.store.count("decor-cushion"), 1, "back in the bag, not lost")
+        XCTAssertEqual(care.store.count("decor-nightlight"), 1, "back in the bag, not lost")
         XCTAssertFalse(care.arranging, "nothing left to arrange")
     }
 
@@ -175,29 +176,7 @@ final class DecorTests: XCTestCase {
         XCTAssertEqual(o.count("sushi"), 2)
         XCTAssertTrue(o.ownsLook(.sneakerMint))
         XCTAssertTrue(o.placedDecor.isEmpty)
-        XCTAssertNotNil({ () -> PlacedDecor? in o.grant("decor-cushion"); return o.place("decor-cushion") }())
-    }
-
-    // MARK: the beanbag perk
-
-    func testBeanbagMakesLoveDrainSlowerWhileItIsInTheRoom() {
-        func attentionAfter(_ bean: Bool) -> Float {
-            let rig = MotionRig(game: true)
-            Self.keep.append(rig)
-            DecorField.shared.clear()
-            let care = GameCare(jellyCount: 1, persistent: false, defaults: suite)
-            // hermetic: no leftover placed decor and no running perks, whatever the host app persisted
-            care.store.putAwayAll()
-            XCTAssertFalse(care.store.beanbagPlaced, "a clean room to start")
-            for k in PerkKind.allCases { care.jelly(0)?.perks.clear(k) }
-            if bean { care.store.grant("decor-beanbag"); _ = care.store.place("decor-beanbag") }
-            let start = care.needs.levels[NeedKind.attention.rawValue]
-            for _ in 0..<(60 * 120) { care.tick(brain: rig.brain, renderer: nil, dt: 1.0 / 60, sim: rig.sim) }
-            return start - care.needs.levels[NeedKind.attention.rawValue]
-        }
-        let plain = attentionAfter(false), cosy = attentionAfter(true)
-        XCTAssertGreaterThan(plain, 0.001)
-        XCTAssertEqual(cosy / plain, Float(StoreTuning.beanbagAttentionDrain), accuracy: 0.06, "attention falls x0.85 with a beanbag")
+        XCTAssertNotNil({ () -> PlacedDecor? in o.grant("decor-duck"); return o.place("decor-duck") }())
     }
 
     // MARK: obstacles
@@ -541,7 +520,7 @@ final class DecorTests: XCTestCase {
 
     func testDoubleTapPicksAPieceUpAndTheHeldPieceIsLeftAloneByTheJellies() {
         let care = fullRoomCare()
-        let p = care.store.placedDecor.first { $0.kind == .beanbag }!
+        let p = care.store.placedDecor.first { $0.kind == .aquarium }!
         XCTAssertTrue(BlobBrain.decorOffers().contains(.decorSit))
         care.pickUpDecor(p.uid)
         XCTAssertTrue(care.arranging)
@@ -555,8 +534,8 @@ final class DecorTests: XCTestCase {
 
     func testAPieceAJellyIsUsingIsNeverMovedFromUnderHimAndIsPickedUpWhenHeHasGone() {
         let care = fullRoomCare()
-        let p = care.store.placedDecor.first { $0.kind == .beanbag }!
-        DecorField.shared.occupant[p.uid] = 1                 // Pip is sitting in it
+        let p = care.store.placedDecor.first { $0.kind == .aquarium }!
+        DecorField.shared.occupant[p.uid] = 1                 // Pip is using it
         care.pickUpDecor(p.uid)
         XCTAssertFalse(care.arranging, "not picked up while he is on it")
         XCTAssertEqual(care.arrangeWait?.uid, p.uid, "deferred until he hops off")

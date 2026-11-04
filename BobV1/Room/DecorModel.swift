@@ -300,14 +300,14 @@ struct DecorFoot: Equatable, Sendable {
 }
 
 enum DecorTuning {
-    /// A plausible 10-spot room (2 beanbags, the mat, a toy box, a plant, a night light, a cushion): the capture aid and the tests fill the room with it.
-    static let fullRoom: [DecorKind] = [.beanbag, .beanbag, .bouncymat, .toybox, .plant, .nightlight, .cushion]
+    /// A plausible 10-spot room (an aquarium, the mat, a toy box, a plant, a night light, a bookshelf, a wardrobe, a ball, a monstera): the capture aid and the tests fill the room with it.
+    static let fullRoom: [DecorKind] = [.aquarium, .bouncymat, .toybox, .plant, .nightlight, .bookshelf, .wardrobe, .ball]
     /// The second batch, big furniture (10 spots; fits a portrait room): swing, loveseat, slide, rocking chair, bookshelf, floor lamp, duck.
-    static let furnitureRoom: [DecorKind] = [.swing, .loveseat, .slide, .rockingchair, .bookshelf]
+    static let furnitureRoom: [DecorKind] = [.slide, .aquarium, .bookshelf, .wardrobe, .divider, .monstera, .floorlamp]
     /// The pet bed, the dining set and small pieces (10 spots).
-    static let bedRoom: [DecorKind] = [.petbed, .armchair, .diningset, .pouf]
+    static let bedRoom: [DecorKind] = [.petbed, .aquarium, .bookshelf, .roundtable, .easel]
     /// The heaviest new meshes (triangles), 10 spots: the perf test's room.
-    static let heaviestRoom: [DecorKind] = [.rockingchair, .loveseat, .diningset, .bookshelf, .toycar]
+    static let heaviestRoom: [DecorKind] = [.slide, .aquarium, .minigoal, .bookshelf, .toycar]
 }
 
 // MARK: - where things may go

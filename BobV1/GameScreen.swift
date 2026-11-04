@@ -845,13 +845,13 @@ struct GameScreen: View {
                 for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
             }
         }
-        // capture aid: -StoreDecor 1 owns one of every decor piece (a second beanbag) and puts the first few in the room; -StoreDecor 2 fills the room (10 spots)
+        // capture aid: -StoreDecor 1 owns one of every decor piece (a second plant) and puts the first few in the room; -StoreDecor 2 fills the room (10 spots)
         if d.integer(forKey: "StoreDecor") != 0 {
-            for k in DecorKind.allCases { care.store.grant(k.storeID) }
-            care.store.grant(DecorKind.beanbag.storeID)
+            for k in DecorKind.allCases where !k.isRetired { care.store.grant(k.storeID) }
+            care.store.grant(DecorKind.plant.storeID)
             care.bath.wallet.add(max(0, 120 - care.bath.wallet.count), silent: true)
             if care.store.placedDecor.isEmpty {
-                let order: [DecorKind] = d.integer(forKey: "StoreDecor") == 2 ? DecorTuning.fullRoom : [.beanbag, .plant, .ball]
+                let order: [DecorKind] = d.integer(forKey: "StoreDecor") == 2 ? DecorTuning.fullRoom : [.aquarium, .plant, .ball]
                 for k in order { _ = care.store.place(k.storeID) }
             }
             if d.integer(forKey: "DoubleTapDemo") != 0 {          // capture aid: a double tap on the first piece (the demo drag follows in Store/DecorUI.swift)

@@ -87,7 +87,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = base + batch2 + batch3 + batch4 + wearItems + roomItems + food4Items + playToyItems
+    static let items: [StoreItem] = (base + batch2 + batch3 + batch4).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems
 
     /// Hand-held Play toys (Toys/PlayToy.swift lists them for the picker). The balls are the existing decor toys; the wand is its own item.
     static let playToyItems: [StoreItem] = [

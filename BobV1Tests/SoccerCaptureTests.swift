@@ -204,7 +204,7 @@ extension FurnCaptureTests {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: a); GameCamera.refreshRoam(aspect: a)
         DecorField.shared.clear(); SoccerState.shared.reset(); SoccerEvents.clear()
         let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
-        for k in [DecorKind.minigoal, .loveseat, .floorlamp, .soccerball] { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
+        for k in [DecorKind.minigoal, .aquarium, .floorlamp, .soccerball] { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
         DecorField.shared.set(book.placedDecor)
         let goal = DecorField.shared.goals.first!
         // the ball at the goal's middle kick spot, where a Jelly can shoot from

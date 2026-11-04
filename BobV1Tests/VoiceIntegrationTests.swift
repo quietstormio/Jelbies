@@ -723,16 +723,16 @@ final class AIVoiceIntegrationTests: XCTestCase {
         XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .tail }, "the spin trick runs")
     }
 
-    func testGoSitOnThePlacedBeanbagAndWearAnOwnedHat() async {
+    func testGoToThePlacedToyBoxAndWearAnOwnedHat() async {
         let r = make()
-        r.care.store.grant("decor-beanbag")
-        XCTAssertNotNil(r.care.store.place("decor-beanbag"))
+        r.care.store.grant("decor-toybox")
+        XCTAssertNotNil(r.care.store.place("decor-toybox"))
         r.care.syncDecor()
         defer { DecorField.shared.set([]) }
-        await say(r, "go sit on the beanbag")
-        XCTAssertEqual(r.voice.understood?.text, "go to beanbag"); XCTAssertEqual(r.voice.understood?.ok, true)
+        await say(r, "go to the toy box")
+        XCTAssertEqual(r.voice.understood?.text, "go to toy box"); XCTAssertEqual(r.voice.understood?.ok, true)
         XCTAssertEqual(r.voice.feedbackLog.last, .command(.goTo))
-        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .decorSit }, "he heads for the beanbag")
+        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .decorPeek }, "he heads for the toy box")
         // the wardrobe: an owned hat goes on; one he does not own is "not in the wardrobe"
         await say(r, "put on the pirate hat")
         XCTAssertEqual(r.voice.understood?.text, "No pirate hat in the wardrobe"); XCTAssertEqual(r.voice.understood?.ok, false)

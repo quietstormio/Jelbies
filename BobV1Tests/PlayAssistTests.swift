@@ -225,8 +225,8 @@ final class PlayAssistTests: XCTestCase {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
         let care = GameCare(jellyCount: 3, persistent: false, defaults: UserDefaults(suiteName: "PlayAssist.arrange")!)
         Self.keep.append(care)
-        care.store.grant("decor-cushion")
-        let p = care.placeDecor("decor-cushion")!
+        care.store.grant("decor-nightlight")
+        let p = care.placeDecor("decor-nightlight")!
         _ = care.dragDecor(p.uid, to: SIMD2(-2.7, 1.0))
         var said: [String] = []
         A11yAnnounce.sink = { t, _ in said.append(t) }
@@ -244,8 +244,8 @@ final class PlayAssistTests: XCTestCase {
         XCTAssertTrue(stuck, "it cannot leave the room")
         XCTAssertTrue(said.contains { $0.hasSuffix("can't go there") }, "\(said)")
         // pieces cycle
-        care.store.grant("decor-cushion")
-        _ = care.placeDecor("decor-cushion")
+        care.store.grant("decor-nightlight")
+        _ = care.placeDecor("decor-nightlight")
         let first = ArrangeAssist.next(care: care), second = ArrangeAssist.next(care: care), third = ArrangeAssist.next(care: care)
         XCTAssertNotNil(first); XCTAssertNotEqual(first, second); XCTAssertEqual(first, third, "wraps")
         care.putAwayDecor(p.uid)
