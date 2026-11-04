@@ -46,7 +46,7 @@ struct CafeChrome: View {
                         HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 18) }
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 2) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -267,7 +267,7 @@ struct CafeOrderCard: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
-            .padding(.horizontal, 8).frame(minHeight: compact ? 44 : 36)
+            .padding(.horizontal, 8).frame(minHeight: compact ? 44 : 34)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(active ? SK.honey : Color.white.opacity(0.7)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(active ? SK.honeyDeep : Color.clear, lineWidth: 2))
         }
@@ -334,7 +334,7 @@ struct CafeOrderCard: View {
                 Text("All same").font(SK.font(12, .heavy)).lineLimit(1).fixedSize()
                 if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
             }
-            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 36)
+            .foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: compact ? 44 : 34)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
         }
         .buttonStyle(.plain).accessibilityIdentifier("cafe-table")
@@ -354,19 +354,19 @@ struct CafeOrderCard: View {
     private func tile(_ t: CafeTreat) -> some View {
         let ok = available(t), chosen = isChosen(t), isSpecial = t.id == special
         return Button { pick(t) } label: {
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
-                    thumb(t.id, size: 26).frame(maxWidth: .infinity)
+                    thumb(t.id, size: 22).frame(maxWidth: .infinity)
                     if isSpecial { Text("\u{2212}20%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
                 }
-                Text(t.name).font(SK.font(9.5, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(height: 24)
+                Text(t.name).font(SK.font(9.5, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(height: 23)
                 HStack(spacing: 2) {
                     JellyCoinIcon(size: 11)
                     if isSpecial { Text("\(t.price)").font(SK.font(9, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
                     Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(12, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 56).padding(.vertical, 2)
+            .frame(maxWidth: .infinity, minHeight: 50).padding(.vertical, 2)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(chosen ? SK.honey : Color.white.opacity(0.75)))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(chosen ? SK.honeyDeep : Color.clear, lineWidth: 2))
             .opacity(ok ? 1 : 0.35)
