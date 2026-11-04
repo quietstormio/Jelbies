@@ -48,8 +48,10 @@ xcrun simctl boot $SIM
 run() {  # tree, derived data, env prefix args..., tests...
   local tree=$1 dd=$2; shift 2
   ( cd $tree && xcodebuild build-for-testing -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO >$OUT/build.log 2>&1 ) || { grep -E "error:" $OUT/build.log | sort -u | head -20; tail -5 $OUT/build.log; echo "GATE FAIL: build of $tree"; return 1; }
-  ( cd $tree && env "$@" xcodebuild test-without-building -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO ${=TESTS} 2>&1 | tee $OUT/test.log | grep -E "error:|failed|Executed|TEST (EXECUTE|SUCCEEDED|FAILED)" | tail -15 )
-  return ${pipestatus[1]}
+  ( cd $tree && env "$@" xcodebuild test-without-building -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO ${=TESTS} 2>&1 | tee $OUT/test.log | grep -E "error:|failed|Executed|TEST (EXECUTE|SUCCEEDED|FAILED)" | tail -15; exit ${pipestatus[1]} )
+  local st=$?
+  echo "-- failing tests:"; grep -E "Test Case .* failed \(" $OUT/test.log | sed 's/.*-\[BobV1Tests\.//' | sort -u
+  return $st
 }
 TESTS="-only-testing:BobV1Tests/RoomSFXCountTests/testCountRoomSoundRequests -only-testing:BobV1Tests/HapticSinkRegressionTests"
 echo "== approved $APPROVED"
