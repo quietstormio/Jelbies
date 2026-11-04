@@ -193,7 +193,7 @@ final class ContactSettleTests: XCTestCase {
         var rows: [String] = []
         for kind in kinds {
             let c = Counter()
-            AudioHub.requestTap = { if $0 == "squish" { c.squish += 1 } }
+            AudioHub.requestTap = { if ["squish", "boop", "highfive_boop", "wobble", "emote_spinhug"].contains($0) { c.squish += 1 } }          // (a stance's own contact sound: ContactStance.table)
             let n = kind == .groupHug ? 3 : 2
             let d = FeatureClipTests.Duo(positions: Array(SocialTests.starts.prefix(n)), features: [JellyFeature](repeating: .none, count: n), seed: 3)
             d.live = true
@@ -201,7 +201,7 @@ final class ContactSettleTests: XCTestCase {
             for r in d.lab.rigs { r.brain.anticsEnabled = true }
             guard d.lab.rigs[0].brain.socialStart(kind, with: d.lab.rigs[1].brain, d.lab.rigs[0].sim) else { rows.append("\(kind): could not start"); continue }
             var episodes = 0
-            var armed = [Bool](repeating: true, count: n * n)
+            var armed = [Bool](repeating: true, count: n * n), awayF = [Int](repeating: 0, count: n * n)
             var minGap: Float = .infinity
             var epLog: [String] = [], evLog: [String] = [], lastEv = 0
             // a re-touch within `eventGap` (0.35 s) of the pair's last touch is the same touch bouncing (a slap's rebound, a sway): one sound, as the brain does
@@ -210,9 +210,10 @@ final class ContactSettleTests: XCTestCase {
             for fr in 0..<(60 * 30) {
                 d.tick()
                 for i in 0..<n { for j in (i + 1)..<n {
-                    guard let g = ContactField.gap(i, j, features: true) else { continue }
+                    guard var g = ContactField.gap(i, j, features: false) else { continue }
+                    if let sg = ContactField.skinGap(i, j) { g = min(g, sg) }          // (the gate of contactTick inside a session: the drawn body, support gap)
                     minGap = min(minGap, g)
-                    if g > ContactTuning.rearmGap { armed[i * n + j] = true } else if g <= ContactTuning.touchGap, armed[i * n + j], fr - lastStart[i * n + j] >= debounce { armed[i * n + j] = false; lastStart[i * n + j] = fr; episodes += 1; epLog.append("f\(fr) \(i)-\(j) \(String(format: "%.3f", g))") }
+                    if g > ContactTuning.rearmGap { awayF[i * n + j] += 1; if awayF[i * n + j] >= Int(ContactTuning.rearmHold * 60) { armed[i * n + j] = true } } else if g <= ContactTuning.touchGap, armed[i * n + j], fr - lastStart[i * n + j] >= debounce { armed[i * n + j] = false; awayF[i * n + j] = 0; lastStart[i * n + j] = fr; episodes += 1; epLog.append("f\(fr) \(i)-\(j) \(String(format: "%.3f", g))") }
                 } }
                 let evNow = events(d)
                 if evNow != lastEv { evLog.append("f\(fr) ev\(evNow)"); lastEv = evNow }

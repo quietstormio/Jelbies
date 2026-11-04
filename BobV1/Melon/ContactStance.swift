@@ -27,6 +27,9 @@ struct ContactStance: Sendable {
     var sound: SFX? = nil
     var volume: Float = 0.25
     var haptic: ContactHaptic = .none
+    /// Real re-touches inside the hold: (phase, from, to) in seconds of the phase - the pair eases `approach` apart (> the 3 cm re-arm) and meets again, so a second squeeze / press is a second
+    /// touch with its own sound (the drives' old extra sounds, now on a real contact).
+    var pulses: [(phase: Int, from: Float, to: Float)] = []
 
     /// The skin gap the settle holds in phase `p`: nil = the stance is off.
     func step(at p: Int) -> Step? {
@@ -38,17 +41,17 @@ struct ContactStance: Sendable {
 
     // MARK: building blocks
     /// Plush rest point of a touch: 0.2 cm of press (inside the 0.5 cm sound window, far above the -1 cm limit).
-    static let hold: Float = -0.002
+    static let hold: Float = -0.004
     /// Where an approach stands before the press (above the 3 cm re-arm of contactTick, so the touch is a fresh one).
     static let approach: Float = 0.04
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
     /// Touching for the whole hold from phase `from`.
-    static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
+    static func holding(from: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {
         var st = [Step(from: 0, target: near, onlySeparate: true), Step(from: from, target: hold)]
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
-        return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
+        return ContactStance(cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic, pulses: pulses)
     }
     /// Approach (stand `approach` apart) from `from`, press from `press`, off from `until`.
     static func pressing(from: Int, press: Int, until: Int? = nil, anchor: Anchor = .none, features: Bool = false, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none) -> ContactStance {
@@ -78,7 +81,7 @@ struct ContactStance: Sendable {
         .nuzzle: .holding(from: 2),
         .sitTogether: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)]),
         .hum: .holding(from: 2),
-        .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7),
+        .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
         .backToBack: .holding(from: 3, features: true),
         .cuddleLean: .holding(from: 2, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, sound: .squish, volume: 0.55),
@@ -86,7 +89,7 @@ struct ContactStance: Sendable {
         .ringAround: .holding(from: 2, features: true),
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
-        .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7),
+        .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
         .circleDance: .holding(from: 2, features: true),
         // proximity
         .twirl: .proximity(from: 1), .hopAlong: .proximity(from: 1), .littleRace: .proximity(), .leapfrog: .proximity(features: true),
@@ -110,6 +113,7 @@ extension BlobBrain {
         if s.kind.isGroup {
             let mem = s.members
             guard mem.count >= 2 else { return }
+            let target = st.pulses.contains { $0.phase == s.phase && s.phaseT >= $0.from && s.phaseT < $0.to } ? ContactStance.approach : target
             if s.kind == .groupHug || s.kind == .circleDance {          // a ring: each body with the two next to it (angle order), never the far side of the ring
                 let order = mem.sorted { (s.slotAng[$0.steerID] ?? 0) < (s.slotAng[$1.steerID] ?? 0) }
                 let n = order.count
@@ -123,7 +127,7 @@ extension BlobBrain {
             return
         }
         guard let a = s.a, let b = s.b else { return }
-        contactSettlePair(a, b, st, step, target)
+        contactSettlePair(a, b, st, step, st.pulses.contains { $0.phase == s.phase && s.phaseT >= $0.from && s.phaseT < $0.to } ? ContactStance.approach : target)
         if let c = s.c, s.kind == .line { contactSettlePair(a, c, st, step, target) }
     }
 
