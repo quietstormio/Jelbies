@@ -46,9 +46,9 @@ struct ContactStance: Sendable {
     static let approach: Float = 0.04
     /// Where a walk ends relative to the touch (the lean closes the rest, <= the lean budget).
     static let arrive: Float = 0.015
-    /// A stance walk aims this much SHORT of the touch: a walk's last step lands up to ~6 cm off its target (planWalkStep's arrival radius) and a walker cannot step backward without turning round,
+    /// A stance walk aims this much SHORT of the touch (total; a meeting pair shares it): a walk's last step lands up to ~6 cm off its target (measured overshoots: 7 - 15 cm for two walkers) (planWalkStep's arrival radius) and a walker cannot step backward without turning round,
     /// so a short stop is closed by a forward shuffle / the lean, an overshoot is not.
-    static let walkShort: Float = 0.045
+    static let walkShort: Float = 0.10
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 

@@ -140,6 +140,13 @@ extension BlobBrain {
         return x.d
     }
 
+    /// A walker never turns round to walk BACK (an overshoot): the turn on the spot swings the wide axis (arms, ears, 1.4 m across) through the partner. A destination behind the walker (against the way he
+    /// was sent) becomes "stop here" (the walk ends with the current step); the settle's lean takes the rest.
+    private func noTurnAround(_ want: SIMD2<Float>, was t: SIMD2<Float>) -> SIMD2<Float> {
+        let toNew = want - position, toOld = t - position
+        return simd_dot(toNew, toOld) < 0 ? position : want
+    }
+
     /// Once a tick for the session's brains: walkers get their destination re-derived from the (stable) touch distance along the line they were sent on (so the steps themselves end at the stance), and a planted body
     /// whose lean ran out takes one shuffle step (locomotion), proportional to the residual, then the trim is released. `retarget: false` (the stance step is `onlySeparate`: a part / step-apart walk) leaves
     /// every walk alone: it must not be rewritten to the touch point.
@@ -178,13 +185,17 @@ extension BlobBrain {
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
                     want = fixed(m!.mid + side * (dist / 2))
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += "|meet" } }
-                    let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25, dT = simd_distance(want, t)
+                    let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25
+                    want = noTurnAround(want, was: t)
+                    let dT = simd_distance(want, t)
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then) }
                 } else {
                     stable = contactStableTouch(p, axis: u)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
                     want = fixed(p.position + u * dist)
-                    let okFix = simd_distance(want, p.position + u * dist) < 0.25, dT = simd_distance(want, t)
+                    let okFix = simd_distance(want, p.position + u * dist) < 0.25
+                    want = noTurnAround(want, was: t)
+                    let dT = simd_distance(want, t)
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then); if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "fired(d%.3f,dist%.3f)", dT, dist) } } }
                     else if ContactTrace.on { ContactTrace.mod(steerID) { $0.walk = String(format: "skip(fixOK%d,dT%.3f,dist%.3f)", okFix ? 1 : 0, dT, dist) } }
@@ -203,7 +214,7 @@ extension BlobBrain {
                 if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
                 let need = (g - gapWanted) + socialBook.leanTrim / ContactTuning.leanPerMetre
                 step = max(0.065, min(0.14, need))          // (forward only; 6.5 cm at least: a shorter walk 'arrives' at once, planWalkStep's arrival radius is 6 cm - the lean takes the overshoot back)
-                if need < 0.02 { socialBook.shuffleReq = 0; return }
+                if need < 0.038 { socialBook.shuffleReq = 0; return }          // (under that the lean covers it; the step's quantum is ~6 cm and the lean's reach +-2.7 cm)
             }
             let spot = fixed(position + u * step)
             socialBook.shuffleReq = 0
