@@ -102,7 +102,7 @@ extension BlobBrain {
         let want = socialBook.leanTrim + toward * ContactTuning.leanPerMetre
         if abs(want) > ContactTuning.leanBudget {          // beyond the budget: one small shuffle step on the locomotion (soles stay put until then)
             socialBook.leanTrim = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, want))
-            if socialBook.shuffleReq == 0 { socialBook.shuffleReq = toward > 0 ? 1 : -1 }
+            if socialBook.shuffleReq == 0, toward > 0 { socialBook.shuffleReq = 1 }          // (forward only: a backward step would turn the walker round)
         } else { socialBook.leanTrim = want }
         if ContactTrace.on { let sr = socialBook.shuffleReq; ContactTrace.mod(steerID) { $0.nudge = (abs(want) > ContactTuning.leanBudget ? "lean+budget" : "lean") + "/req\(sr)"; $0.want = want } }
     }
@@ -175,14 +175,14 @@ extension BlobBrain {
                     }
                     let side: SIMD2<Float> = lo ? -m!.axis : m!.axis          // from the meeting point toward my side
                     stable = contactStableTouch(p, axis: side)
-                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
                     want = fixed(m!.mid + side * (dist / 2))
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += "|meet" } }
                     let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25, dT = simd_distance(want, t)
                     if okFix, dT > 0.01, dT < 1.2 { script = .walk(target: want, then: then) }
                 } else {
                     stable = contactStableTouch(p, axis: u)
-                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive)
+                    dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
                     want = fixed(p.position + u * dist)
                     let okFix = simd_distance(want, p.position + u * dist) < 0.25, dT = simd_distance(want, t)
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += String(format: "|stable%@", stable.map { String(format: "%.3f", $0) } ?? "nil") } }
@@ -198,11 +198,12 @@ extension BlobBrain {
         if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
             let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
             // the residual from the LIVE gap (the lean is released by the step, so its share counts): the step is as long as the error, 3 ... 14 cm
-            var step: Float = 0.14 * Float(socialBook.shuffleReq)
+            var step: Float = 0.14
             if var g = ContactField.gap(steerID, p.steerID, features: features) {
                 if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
                 let need = (g - gapWanted) + socialBook.leanTrim / ContactTuning.leanPerMetre
-                step = (need < 0 ? -1 : 1) * max(0.03, min(0.14, abs(need)))
+                step = max(0.065, min(0.14, need))          // (forward only; 6.5 cm at least: a shorter walk 'arrives' at once, planWalkStep's arrival radius is 6 cm - the lean takes the overshoot back)
+                if need < 0.02 { socialBook.shuffleReq = 0; return }
             }
             let spot = fixed(position + u * step)
             socialBook.shuffleReq = 0

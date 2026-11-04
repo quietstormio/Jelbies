@@ -398,7 +398,7 @@ nonisolated enum ContactField {
     }
 
     /// The pair gap for hypothetical roots (a candidate position, a steering probe): body `a` with its root at `pa`, body `b` at `pb`. Not cached (~3 us): call it only for a pair that is near.
-    static func gap(_ a: Int, at pa: SIMD2<Float>, _ b: Int, at pb: SIMD2<Float>, features: Bool = false) -> Float? {
+    static func gap(_ a: Int, at pa: SIMD2<Float>, _ b: Int, at pb: SIMD2<Float>, features: Bool = false, support: Bool = false) -> Float? {
         guard enabled, isValid(a), isValid(b), a != b else { return nil }
         let d = pb - pa, L = simd_length(d)
         guard L > 1e-4 else { return nil }
@@ -410,6 +410,7 @@ nonisolated enum ContactField {
             if fb { g = min(g, polyGap(a, b, L, u, bodyA: true, bodyB: false)) }
             if fa, fb { g = min(g, polyGap(a, b, L, u, bodyA: false, bodyB: false)) }
         }
+        if support, let ea = supportExt(a, u), let eb = supportExt(b, -u) { g = min(g, L - (ea + eb)) }          // (the catalogue's support gap, the stricter one when the bodies stand staggered: the harness's ground truth)
         return g.isFinite ? g : nil
     }
 

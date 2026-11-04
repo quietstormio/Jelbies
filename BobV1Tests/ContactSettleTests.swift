@@ -115,14 +115,14 @@ final class ContactSettleTests: XCTestCase {
     /// 2026-11-04: the peer wall for SESSION PARTNERS is the skin wall alone (no circle spring: it stopped Bob + Teddy 16 cm short of any touch); everybody else keeps the spring exactly as before.
     func testKeepApartPartnersUseTheSkinWallOthersKeepTheSpring() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .none], seed: 5)
-        d.place([SIMD2(-0.7, 0.6), SIMD2(0.7, 0.6)])
+        d.place([SIMD2(0, -0.1), SIMD2(0, 1.3)])          // (one behind the other: the front-to-back touch is ~0.8 m, under the spring's 1.09)
         d.live = true
         for _ in 0..<10 { d.tick() }
         XCTAssertTrue(ContactField.isValid(0) && ContactField.isValid(1))
         let r0 = ContactField.root(0)
         let peers: [(pos: SIMD2<Float>, walking: Bool)] = [(r0, false), (ContactField.root(1), false)]
         let g = MelonController.jellyGap, L: Float = 0.5
-        let p = SIMD3<Float>(r0.x + L, 0, r0.y)
+        let p = SIMD3<Float>(r0.x, 0, r0.y + L)
         // a non-social pair (no partners): the spring exactly as before
         let q = MelonController.keepApart(p, id: 1, peers: peers)
         let dq = simd_distance(SIMD2(q.x, q.z), r0)
