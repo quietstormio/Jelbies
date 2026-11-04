@@ -175,6 +175,9 @@ struct FootGait {
 
     mutating func reset() { active = false; t = 0 }
 
+    /// The whole body is warped by `d` (the contact settle, in the air): both planted soles AND a step in progress (its start and landing) move with it, else the swing foot lands on the old spot.
+    mutating func nudge(_ d: SIMD2<Float>) { pos[0] += d; pos[1] += d; from += d; to += d }
+
     /// `out`: how far (world units) the swing foot swings sideways away from the body at mid swing; `tilt`: toe-up angle (rad) at mid swing
     /// so the sole shows from the front.
     mutating func begin(side s: Int, to target: SIMD2<Float>, toYaw ty: Float, peak h: Float, rate r: Float, swingFrac f: Float = 0.85,

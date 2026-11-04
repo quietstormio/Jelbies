@@ -13,6 +13,7 @@ import simd
 
 enum ContactTuning {
     nonisolated(unsafe) static var lookAhead = true
+    nonisolated(unsafe) static var leanLimiter = true          // the lean toward a partner never grows past skin contact (ContactSettle.swift: contactApplyLean)
     static let lookDistance: Float = 2.4          // how far ahead along the leg a Jelly counts
     static let contactFrac: Float = 0.97          // closer than this fraction of the gap = the bodies touch
     static let cooldown: Float = 1.6
@@ -176,5 +177,15 @@ extension BlobBrain {
             jellyKick = max(jellyKick, 0.9 + 0.9 * press)
             AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
         }
+    }
+}
+
+
+extension BlobBrain {
+    /// A stance that is walking up / pressing owns the squaring-up turn at its spot (the spot was chosen for the posture the pair ends in, ContactStance.facing): the turn happens in place, it does not back the body off (the
+    /// parting retreat of BlobSocial+Part.swift is for walking AWAY - a part, a step apart - and keeps those).
+    var contactStanceOwnsTurns: Bool {
+        guard ContactField.enabled, let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching, let step = st.step(at: s.phase) else { return false }
+        return step.retargets && socialBook.partFrom < 0
     }
 }
