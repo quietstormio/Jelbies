@@ -69,12 +69,8 @@ struct CoursePicker: View {
             LobbyCarousel(bleed: bleed, scrollTo: chosen.index >= 2 ? "course-card-\(chosen.rawValue)" : nil) {
                 ForEach(CourseTier.allCases, id: \.rawValue) { t in card(t).id("course-card-\(t.rawValue)") }
             }
-            LobbyInfoLine(text: hint.text ?? chosen.blurb, textID: "course-blurb", pillsBelow: true) {
-                LobbyPill(label: "1st", amount: RaceTuning.drops(place: 1, tier: chosen), gold: true)
-                LobbyPill(label: "2nd", amount: RaceTuning.drops(place: 2, tier: chosen))
-                LobbyPill(label: "3rd", amount: RaceTuning.drops(place: 3, tier: chosen))
-            }
-            .accessibilityIdentifier("track-prizes")
+            LobbyPlaceInfo(text: hint.text ?? chosen.blurb, textID: "course-blurb",
+                           prizes: LobbyPrize.places((1...3).map { RaceTuning.drops(place: $0, tier: chosen) }), prizeID: "track-prizes")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("course-picker")

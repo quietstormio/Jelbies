@@ -1431,14 +1431,21 @@ final class MelonController: NSObject, MTKViewDelegate {
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
         var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
         var span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
-        if hp != nil { focusY = a.sim.restCentroid.y + HeadPortraitKey.focusUp; span = HeadPortraitKey.span }          // the head, hats and a little body fill the circle
+        if hp != nil {
+            // framed on the body's own top (the particles' highest point), so a squat or a tall body, in either orientation, shows the whole head with the same margin above it
+            var topY = -Float.infinity
+            var k = 1
+            while k < a.sim.x.count { topY = max(topY, a.sim.x[k]); k += 3 }
+            span = HeadPortraitKey.span
+            focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
+        }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
         let th = tanf(GameCamera.fovY / 2)
         let dist = (span / 2) / min(th, th * aspect)
         let target = SIMD3<Float>(c.x, focusY, c.z)
         var eye = target + dir * dist + SIMD3(0, dist * 0.12, 0)
         if hp != nil {          // looking down like the room camera (where the face was approved), so the latitude-curved brows read flat, not slanted
-            let down = GameCamera.eye - GameCamera.target
+            let down = GameCamera.baseEye - GameCamera.baseTarget          // the base pose, not the aspect-widened one: the portrait frames the same in either orientation
             let pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
             eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
         }

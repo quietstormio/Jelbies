@@ -50,7 +50,16 @@ final class LobbyTests: XCTestCase {
     func testAloneThereIsNoPartnerButAParkFriend() {
         let c = care(1)
         XCTAssertNil(c.volleyPartner(for: 0))
-        XCTAssertEqual(c.volleyParkFriend().id, c.volleyParkFriend().id)
+        XCTAssertNil(c.volleyParkFriend(), "a new game has no Park friends")
+        XCTAssertEqual(c.volleyBlocker(jelly: 0, match: true), GameCare.volleyNeedsPartner, "alone and friendless: no match")
+        XCTAssertNotEqual(c.volleyBlocker(jelly: 0, match: true) == nil, true)
+        c.parkBook.add(points: ParkTuning.palAt + 1, visitor: 7, character: c.jellies[0].character)
+        XCTAssertEqual(c.volleyParkFriend()?.id, 7, "a Pal fills in")
+        c.parkBook.add(points: ParkTuning.friendAt, visitor: 9, character: c.jellies[0].character)
+        XCTAssertEqual(c.volleyParkFriend()?.id, 9, "the closest friend (highest level) fills in")
+        XCTAssertEqual(c.closestParkFriends(2).map(\.id), [9, 7])
+        XCTAssertNil(c.volleyPartnerBlocker(jelly: 0))
+        XCTAssertNil(care(2).volleyPartnerBlocker(jelly: 0), "two Jelbies are a team without a friend")
     }
 
     func testTheParkFriendIsTheSameAllDayAndChangesAcrossDays() {
