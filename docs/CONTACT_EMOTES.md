@@ -223,3 +223,62 @@ So EVERY side-by-side stance below 1.40 overlaps by construction: closeGapFactor
 2. Compare `ContactProfile.skinGap` with `BruteForceContactMetric.skinGap` on the same `ContactSurface` (`ContactPolishTests.testMetricSanity` shows the shape of the check; surfaces are taken after the shipped FeatureClip pass, as drawn).
 3. The stance distances to move are the ones in 5.2 (anything < 1.405 side by side, < ~1.1 front to back); pass-overs (leapfrog) and spins (ringAround, spinHug, circleDance, ringDance) need the per-direction profile, not one touch number.
 
+
+### 5.6 AFTER measurements (g-contactmig: ContactStance table + one settle call; 5 pair casts, 3 trio casts, Release, CONTACT_ENFORCE=1)
+
+Columns as 5.3, worst case over the casts; BEFORE numbers are the 5.3 row of the same emote. "sounds per touch" = touch episodes (skin gap <= +1 cm, re-armed past +3 cm) that got 0 / 1 / 2+ contact sounds. "emote haptics" = `highFive.bump` + the treat haptics, "boop events" = the `.boop` / `.shove` events (a heart, a haptic in focus mode): these are NOT moved by the engine, only the contact sound / emote haptic are gated on the touch.
+Rows not owned by a SocialKind (lieDown / flop pair, sleep pile, bagSit, cuddle) are listed for completeness: lie / flop were started 1.2 apart by the harness itself (now 1.6, so the first frames are not a harness-made overlap); the sleep pile and bagSit are untouched by this branch; `cuddle` (loveseat) cannot run in the Lab (no seats wired).
+
+| emote | class | worst min gap (cm) BEFORE -> AFTER | stance median range (cm) AFTER | touch episodes (all casts) | contact sounds in / outside a touch, BEFORE -> AFTER | sounds per touch AFTER (episodes with 0 / 1 / 2+) | emote haptics + boop events AFTER (BEFORE) | sound names AFTER |
+|---|---|---|---|---|---|---|---|---|
+| boop | touching | 54.7 -> -0.8 | -0.0..-0.0 | 5 | 0/0 -> 5 / 0 | 0 / 5 / 0 | 0 / 10 (0 / 10) | squishx5 |
+| squabble | touching | -30.7 -> -24.8 | 25.8..35.5 | 20 | 0/0 -> 24 / 0 | 5 / 6 / 9 | 0 / 20 (0 / 20) | squishx24 |
+| bump | touching | 36.8 -> -28.7 | -0.1..2.0 | 40 | 0/10 -> 35 / 2 | 7 / 31 / 2 | 0 / 20 (0 / 20) | boopx37 |
+| nuzzle | touching | -17.1 -> -1.2 | -0.2..-0.1 | 5 | 5/0 -> 5 / 0 | 0 / 5 / 0 | 0 / 10 (0 / 10) | squishx5 |
+| sitTogether | touching | -28.9 -> -3.9 | -0.3..-0.2 | 22 | 5/0 -> 24 / 0 | 0 / 21 / 1 | 0 / 0 (0 / 0) | squishx24 |
+| sneak | touching | -30.1 -> -10.4 | -2.7..4.7 | 13 | 1/9 -> 8 / 6 | 5 / 8 / 0 | 0 / 10 (0 / 10) | boopx4 squishx10 |
+| chestBump | touching | -1.2 -> -4.4 | 1.7..2.3 | 34 | 2/13 -> 23 / 0 | 11 / 23 / 0 | 0 / 20 (0 / 20) | squishx23 |
+| highFive | touching | 0.1 -> -1.8 | -0.4..-0.2 | 26 | 0/5 -> 25 / 0 | 6 / 15 / 5 | 20 / 10 (5 / 10) | highfive_boopx20 squishx5 |
+| hum | touching | 29.2 -> -1.0 | -0.1..-0.0 | 5 | 0/5 -> 5 / 0 | 0 / 5 / 0 | 0 / 0 (0 / 0) | squishx5 |
+| cheekSquish | touching | -29.1 -> -1.6 | 2.1..2.5 | 10 | 15/0 -> 10 / 0 | 0 / 10 / 0 | 0 / 10 (0 / 10) | squishx10 |
+| bellyBounce | touching | -38.8 -> -2.4 | -0.4..5.5 | 15 | 15/0 -> 20 / 0 | 0 / 10 / 5 | 0 / 20 (0 / 20) | squishx20 |
+| noseBoop | touching | 14.0 -> -2.0 | -0.0..-0.0 | 18 | 0/15 -> 20 / 0 | 2 / 12 / 4 | 0 / 20 (0 / 20) | boopx20 |
+| backToBack | touching | -67.2 -> -18.6 | -7.8..-0.4 | 11 | 5/0 -> 5 / 0 | 6 / 5 / 0 | 0 / 10 (0 / 10) | squishx5 |
+| cuddleLean | touching | -36.8 -> -1.3 | -0.3..-0.0 | 5 | 10/0 -> 5 / 0 | 0 / 5 / 0 | 0 / 10 (0 / 10) | squishx5 |
+| ringAround | touching | -67.2 -> -25.4 | -5.5..4.5 | 140 | 8/17 -> 117 / 33 | 43 / 85 / 12 | 0 / 0 (0 / 0) | boopx10 squishx140 |
+| swayHug | touching | -37.8 -> -1.2 | -0.2..-0.1 | 5 | 10/0 -> 5 / 0 | 0 / 5 / 0 | 0 / 10 (0 / 10) | squishx5 |
+| whisperGiggle | touching | -34.5 -> -1.9 | -1.0..-0.3 | 7 | 5/0 -> 10 / 0 | 0 / 4 / 3 | 0 / 0 (0 / 0) | squishx10 |
+| spinHug | touching | -35.3 -> -7.0 | -0.1..-0.0 | 33 | 5/0 -> 18 / 47 | 15 / 18 / 0 | 25 / 10 (15 / 10) | emote_spinhugx5 squishx60 |
+| tag | touching | -19.0 -> -25.4 | 9.6..37.9 | 35 | 11/9 -> 28 / 2 | 11 / 20 / 4 | 0 / 30 (0 / 30) | boopx10 squishx20 |
+| chase | touching | 13.1 -> -16.5 | 1.0..18.4 | 26 | 0/15 -> 16 / 1 | 10 / 16 / 0 | 0 / 30 (0 / 30) | boopx9 squishx8 |
+| greet | proximity | 30.3 -> 30.3 | 67.2..67.2 | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| look | proximity | 146.5 -> 146.5 | - | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| follow | proximity | 13.7 -> 13.7 | - | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| zoomies | proximity | 17.9 -> 17.9 | - | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| dance | proximity | 130.4 -> 130.4 | 147.6..147.6 | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| keepAway | proximity | 53.7 -> 53.7 | 84.0..102.3 | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| line | proximity | 13.7 -> 13.7 | - | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| twirl | proximity | -0.6 -> -1.1 | 37.3..44.7 | 2 | 0/20 -> 0 / 20 | 2 / 0 / 0 | 0 / 0 (0 / 0) | wobblex20 |
+| hopAlong | proximity | -3.1 -> 1.4 | 4.0..8.6 | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| littleRace | proximity | -25.9 -> -3.6 | 49.4..56.2 | 9 | 0/0 -> 9 / 11 | 0 / 9 / 0 | 0 / 0 (0 / 0) | squishx20 |
+| leapfrog | proximity | -147.7 -> -12.2 | 18.8..43.1 | 33 | 21/4 -> 17 / 26 | 19 / 11 / 3 | 0 / 0 (0 / 0) | boopx10 squishx33 |
+| peekaboo | proximity | -35.3 -> -7.1 | 45.0..48.9 | 4 | 0/5 -> 2 / 3 | 2 / 2 / 0 | 0 / 0 (0 / 0) | squishx5 |
+| mirrorDance | proximity | -3.3 -> 34.8 | 67.7..67.7 | 0 | 4/1 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| danceOff | proximity | 8.5 -> 20.5 | 53.6..53.7 | 0 | 0/15 -> 0 / 10 | 0 / 0 / 0 | 0 / 0 (0 / 0) | wobblex10 |
+| shyWave | proximity | -10.3 -> -1.1 | 202.8..213.5 | 6 | 5/0 -> 5 / 1 | 1 / 5 / 0 | 0 / 0 (0 / 0) | squishx6 |
+| pass (ball) | proximity | 106.5 -> 106.5 | 135.1..136.0 | 0 | 0/5 -> 0 / 5 | 0 / 0 / 0 | 0 / 0 (0 / 0) | boopx5 |
+| bagSit (beanbag) | touching | -3.8 -> -3.8 | - | 5 | 0/0 -> 1 / 4 | 4 / 1 / 0 | 0 / 0 (0 / 0) | squishx5 |
+| cuddle (loveseat) | touching | 142.2 -> 142.2 | - | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| lieDown pair (LieClear) | touching | -43.6 -> -12.4 | -5.5..-1.1 | 9 | 18/12 -> 9 / 9 | 1 / 7 / 1 | 0 / 0 (0 / 0) | squishx18 |
+| flop pair (LieClear) | touching | -54.7 -> -13.6 | 12.6..34.7 | 11 | 20/10 -> 6 / 24 | 5 / 6 / 0 | 0 / 0 (0 / 0) | boopx10 squishx20 |
+| sleep pile | touching | -10.6 -> -10.6 | 25.7..25.7 | 20 | 5/5 -> 25 / 5 | 2 / 13 / 5 | 0 / 0 (0 / 0) | squishx30 |
+| groupHug | touching | -16.5 -> -17.4 | -0.6..-0.6 | 17 | 6/6 -> 38 / 0 | 6 / 2 / 9 | 0 / 9 (0 / 9) | squishx38 |
+| groupCheer | proximity | 25.8 -> 25.8 | 47.1..47.4 | 0 | 0/0 -> 0 / 0 | 0 / 0 / 0 | 0 / 0 (0 / 0) | none |
+| conga | proximity | -13.9 -> -2.3 | - | 3 | 0/0 -> 3 / 1 | 0 / 3 / 0 | 0 / 0 (0 / 0) | squishx4 |
+| circleDance | touching | -80.7 -> -32.4 | - | 173 | 6/0 -> 239 / 5 | 44 / 63 / 66 | 0 / 0 (0 / 0) | squishx244 |
+| congaLine | proximity | -62.4 -> -7.7 | - | 9 | 33/9 -> 15 / 44 | 1 / 3 / 5 | 6 / 0 (6 / 0) | conga_tickx47 squishx12 |
+| ringDance | proximity | -24.2 -> -3.9 | 77.6..79.2 | 6 | 0/72 -> 3 / 84 | 3 / 3 / 0 | 6 / 0 (6 / 0) | ring_chimex72 squishx15 |
+
+What changed (files): `Melon/ContactStance.swift` (the table: class, per-phase target gap, anchor, features, own sound + haptic, re-touch pulses; `standGap`, `touchRadius`, the post-session `glow`), one call `contactStanceTick` in `BlobBrain.tick` (just before the idle moves take the body, so hops / bounces / flap-hops are held too), `ContactSettle` (support-gap option, urgent separation, `contactNudge` slides the root, the step in flight, the soles, the hop / flap-hop path and the sim body), `contactTick` (the emote's own sound + haptic at the first real touch, only in the table's hold step; otherwise the default squish), `contactCueFallback` (the old timer sound where NO profile exists: Lab, sound counts, UI tests), spots: `sideSpot` / `behindSpot` / `standGap` floor every close stance at the touch distance + 4 cm (1.445 m side by side), group rings use chord >= 1.445, spinHug radius from the distance, tag / chase catch spots from the profile.
+
+Known gaps (numbers above, worst first): Pip's tail is not in the contact profile (FeatureClip owns it), so Pip casts overlap through the tail in bump (-28.7), tag, squabble (-24.8), backToBack (-18.6) and ringAround; the spins (ringAround -25, circleDance -32, spinHug) turn on a ring of walkers and still dip by up to 14-32 cm for a few frames and fire contact sounds outside a touch (spinHug 4-12 per cast); leapfrog is a pass-over by design; groupHug -16.5 at the break-apart; sneak -10 (Lavender+Pip); sleep pile / bagSit / cuddle are not wired to the engine in this branch. Several emotes now fire fewer contact sounds per touch than BEFORE (cheekSquish 3 -> 1-2, bellyBounce 3 -> 1 per bounce, cuddleLean 2 -> 1, swayHug 2 -> 1): the rule is exactly one per real touch; none was removed, a second sound needs a second touch (cheekSquish and groupHug part by 4 cm and meet again).
