@@ -12,12 +12,21 @@ WT=$ROOT/.claude/worktrees
 APPROVED=$(tr -d ' \n' < $ROOT/.approved-build)
 HEADC=$(git -C $ROOT rev-parse --short HEAD)
 OUT=$(mktemp -d /tmp/gate.XXXXXX)
+# persistent copy of the logs and tables (OUT is removed by the exit trap): ~/BobV1_backups/gate_logs/<head>_<timestamp>/
+KEEP=$HOME/BobV1_backups/gate_logs/${HEADC}_$(date +%Y%m%d_%H%M%S)
+mkdir -p $KEEP
 SIM=""
+# copies whatever logs / count files exist so far (the build log of a failed build, test.log of each run, the per-kind count files) and prints where they are
+keep_logs() {
+  cp -f $OUT/*.log $OUT/*.txt $KEEP/ 2>/dev/null
+  echo "gate logs kept in: $KEEP"
+}
 cleanup() {
   [[ -n "$SIM" ]] && { xcrun simctl shutdown $SIM 2>/dev/null; xcrun simctl delete $SIM 2>/dev/null; }
   git -C $ROOT worktree remove --force $WT/gate_approved 2>/dev/null
   git -C $ROOT worktree remove --force $WT/gate_head 2>/dev/null
   [[ "${1:-}" == "--clean" ]] && rm -rf $WT/dd_gate_approved $WT/dd_gate_head
+  keep_logs
   rm -rf $OUT
 }
 trap 'cleanup ${CLEAN:-}' EXIT
@@ -47,10 +56,12 @@ SIM=$(xcrun simctl create gate-sim ${=PICK}) || exit 2
 xcrun simctl boot $SIM
 run() {  # tree, derived data, env prefix args..., tests...
   local tree=$1 dd=$2; shift 2
-  ( cd $tree && xcodebuild build-for-testing -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO >$OUT/build.log 2>&1 ) || { grep -E "error:" $OUT/build.log | sort -u | head -20; tail -5 $OUT/build.log; echo "GATE FAIL: build of $tree"; return 1; }
+  ( cd $tree && xcodebuild build-for-testing -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO >$OUT/build.log 2>&1 ) || { cp -f $OUT/build.log $KEEP/build_${tree:t}.log 2>/dev/null; grep -E "error:" $OUT/build.log | sort -u | head -20; tail -5 $OUT/build.log; echo "GATE FAIL: build of $tree"; return 1; }
   ( cd $tree && env "$@" xcodebuild test-without-building -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination "id=$SIM" -derivedDataPath $dd -parallel-testing-enabled NO ${=TESTS} 2>&1 | tee $OUT/test.log | grep -E "error:|failed|Executed|TEST (EXECUTE|SUCCEEDED|FAILED)" | tail -15; exit ${pipestatus[1]} )
   local st=$?
+  cp -f $OUT/test.log $KEEP/test_${tree:t}.log 2>/dev/null          # (test.log is rewritten by the next run: keep each one)
   echo "-- failing tests:"; grep -E "Test Case .* failed \(" $OUT/test.log | sed 's/.*-\[BobV1Tests\.//' | sort -u
+  grep -E ": error: -\[BobV1Tests" $OUT/test.log | sed "s/.*error: -\[BobV1Tests\.//" | cut -c1-300          # (one line per failed assertion: "Executed N tests, with K failures" counts assertions, not tests)
   return $st
 }
 TESTS="-only-testing:BobV1Tests/RoomSFXCountTests/testCountRoomSoundRequests -only-testing:BobV1Tests/HapticSinkRegressionTests"
@@ -67,7 +78,7 @@ for key in transient wobble continuous; do
   [[ -z "$a" || -z "$h" || $h -lt $a ]] && { echo "GATE FAIL: touch haptic sink calls ($key) dropped"; FAIL=1; }
 done
 echo "== per-kind table (approved / head)"
-python3 -I - $OUT/base.txt $OUT/head.txt <<'PY'
+python3 -I - $OUT/base.txt $OUT/head.txt 2>&1 <<'PY' | tee $OUT/table.txt
 import sys
 def parse(p):
     try: return {k: int(v) for k, v in (t.split("=") for t in open(p).read().split()[1:])}
