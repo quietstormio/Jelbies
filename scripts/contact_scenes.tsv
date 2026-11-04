@@ -1,0 +1,30 @@
+# name<TAB>cast (first one starts it)<TAB>ContactDemo kind (- = none)<TAB>angles<TAB>extra launch args (space separated, - = none)<TAB>secs (optional)
+# one row = one launch per angle; output <name>_<angle>.mp4 (angle low = low 3/4, side = steep orbit nearly along the row)
+lieDown_teddy_pearl	teddy,pearl	lieDown	low,side	-	30
+lieDown_pip_lavender	pip,lavender	lieDown	low,side	-	30
+sleepPile_pearl_pip	pearl,pip	sleepPile	low,side	-ClockHour 23
+backToBack_pip_teddy	pip,teddy	backToBack	low,side	-
+swayHug_bob_pearl	bob,pearl	swayHug	low	-
+noseBoop_moss_lavender	moss,lavender	noseBoop	low	-
+groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	low,side	-
+groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	low,side	-
+cuddleLean_lavender_pip	lavender,pip	cuddleLean	low	-
+boop_bob_teddy	bob,teddy	boop	low	-
+squabble_pip_moss	pip,moss	squabble	low	-
+bump_moss_pearl	moss,pearl	bump	low	-
+nuzzle_lavender_teddy	lavender,teddy	nuzzle	low	-
+sitTogether_pip_pearl	pip,pearl	sitTogether	low,side	-
+sneak_pip_lavender	pip,lavender	sneak	low	-
+chestBump_bob_pip	bob,pip	chestBump	low	-
+highFive_pearl_teddy	pearl,teddy	highFive	low	-
+hum_moss_lavender	moss,lavender	hum	low	-
+cheekSquish_teddy_bob	teddy,bob	cheekSquish	low	-
+tag_lavender_pip	lavender,pip	tag	low	-
+bellyBounce_pip_pearl	pip,pearl	bellyBounce	low	-
+ringAround_teddy_pearl	teddy,pearl	ringAround	low	-
+whisperGiggle_teddy_moss	teddy,moss	whisperGiggle	low	-
+spinHug_pearl_pip	pearl,pip	spinHug	low,side	-
+circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	low,side	-
+leapfrog_moss_teddy	moss,teddy	leapfrog	low	-
+stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	low,side	-Storm 2 -StormDelay 2
+guestHug_bob_teddy_pearl	bob,teddy,pearl	-	low	-InviteGuest 1	34
