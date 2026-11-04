@@ -463,7 +463,7 @@ final class CafeTests: XCTestCase {
             let c = r.care
             XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .juice, 1: .cocoa, 2: .pancakes])), "visit \(visit)")
             step(r, 120) { c.cafe.phase == .cheer }
-            XCTAssertFalse(c.group.gaveUp, "visit \(visit): the sitting was not given up; retries \(c.group.walkRetries) reserves \(c.group.reserves) wanted \(String(describing: c.groupWanted?.id)) dining \(c.dining.phase) n \(c.dining.n) floors \(r.actors.map { $0.floor }) stands \(c.cafeBook.stands) origin \(c.cafeBook.origin) placeOf \(c.group.placeOf)")
+            XCTAssertFalse(c.group.gaveUp, "visit \(visit): the sitting was not given up (the table spot must be reachable: stands in front of the sofa collider)")
             for i in 0..<3 { XCTAssertEqual(c.cafeBook.ate[i], 3, "visit \(visit): Jelbie \(i) ate his whole treat") }
         }
     }
