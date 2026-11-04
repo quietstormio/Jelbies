@@ -76,7 +76,7 @@ extension BlobBrain {
             if !s.impacted, ft > 0.8 {
                 s.impacted = true
                 jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 1.6)
-                onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                contactBoopFallback(o)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                 contactCueFallback(o, .squish, 0.55)
                 face(.joyArc, hold: 1.4); o.face(.joyArc, hold: 1.4)

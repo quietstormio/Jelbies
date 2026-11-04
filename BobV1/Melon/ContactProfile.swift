@@ -29,6 +29,16 @@ nonisolated enum ContactField {
         p.initialize(repeating: 0, count: capacity * stride)
         return p
     }()
+    /// Pip's tail as a FEATURE (2026-11-03): its farthest vertex per bin (r2, x, z) kept apart from the body profile and merged into the feature bins, so `gap(features: true)` and the keepApart wall see it.
+    nonisolated(unsafe) static let tailBuf: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 3 * K); p.initialize(repeating: -1, count: capacity * 3 * K); return p
+    }()
+    nonisolated(unsafe) static let tailState: UnsafeMutablePointer<Float> = {          // per body: 1 = the tail is drawn and in tailBuf, 2 = a feature mesh owns the feature bins (the tail is merged after it)
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity); p.initialize(repeating: 0, count: capacity); return p
+    }()
+    nonisolated(unsafe) static let tailDrawn: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity); p.initialize(repeating: 0, count: capacity); return p
+    }()
     /// false = no profile is ever read (the legacy centre-distance rules).
     nonisolated(unsafe) static var enabled = true
     /// Vertex count of the egg proper (the limb / ear / tail blocks come after it): the egg is sampled more sparsely than the limbs.
@@ -74,7 +84,7 @@ nonisolated enum ContactField {
     @inline(__always) private static func base(_ id: Int) -> UnsafeMutablePointer<Float> { store + id * stride }
 
     /// Forget every profile (tests, a scene change).
-    static func reset() { store.initialize(repeating: 0, count: capacity * stride); gapStamp = [Int](repeating: -1, count: capacity * capacity) }
+    static func reset() { store.initialize(repeating: 0, count: capacity * stride); tailBuf.initialize(repeating: -1, count: capacity * 3 * K); tailState.initialize(repeating: 0, count: capacity); tailDrawn.initialize(repeating: 0, count: capacity); gapStamp = [Int](repeating: -1, count: capacity * capacity) }
     static func invalidate(_ id: Int) { if id >= 0, id < capacity { base(id)[oMeta + 2] = 0; base(id)[oMeta + 3] = 0 } }
     static func isValid(_ id: Int) -> Bool { id >= 0 && id < capacity && base(id)[oMeta + 2] > 0.5 }
     /// How many times body `id`'s profile was built (a controller acts once per fresh profile).
@@ -170,10 +180,48 @@ nonisolated enum ContactField {
             }
         }
         }
+        // the tail (a feature): its farthest vertex per bin, when the tail block is drawn
+        let tb = tailBuf + id * 3 * K
+        var drawn = false
+        if tailLo < tailHi {
+            for r in blocks ?? [lim..<count] where r.lowerBound < tailHi && r.upperBound > tailLo { drawn = true }
+        }
+        tailDrawn[id] = drawn ? 1 : 0
+        if drawn {
+            for k in 0..<K { tb[k] = -1 }
+            binOfSlot.withUnsafeBufferPointer { tbl in
+                var i = max(tailLo, 0)
+                let hi = min(tailHi, count)
+                while i < hi {
+                    let o = 6 * i
+                    let x = dyn[o] - root.x, z = dyn[o + 2] - root.y
+                    let q = x * x + z * z
+                    if q > 1e-6, q < 25 {
+                        let slot = Int(pseudo(x, z) * (Float(tableN) / 4))
+                        let k = Int(tbl[min(max(slot, 0), tableN)])
+                        if q > tb[k] { tb[k] = q; tb[K + k] = x; tb[2 * K + k] = z }
+                    }
+                    i += 2
+                }
+            }
+        }
         castTable(r2, px, pz, into: b + oRho, fallback: true)
+        if drawn {
+            if tailState[id] < 1.5 { mergeTail(id) }          // (a body with no feature mesh: the tail is its whole feature polygon)
+            else { tailState[id] = 2 }
+        } else if tailState[id] > 0.5 && tailState[id] < 1.5 { clearFeature(id: id); tailState[id] = 0 }
         b[oMeta] = root.x; b[oMeta + 1] = root.y
         b[oMeta + 2] = 1
         b[oMeta + 4] += 1
+    }
+
+    /// Merges the stored tail points into the feature bins of body `id` (max per bin). The tail counts as a feature from then on.
+    static func mergeTail(_ id: Int) {
+        let b = base(id), tb = tailBuf + id * 3 * K
+        let r2 = b + oFR, px = b + oFX, pz = b + oFZ
+        if tailState[id] < 1.5 { for k in 0..<K { r2[k] = -1 }; tailState[id] = 1 }
+        for k in 0..<K where tb[k] > r2[k] { r2[k] = tb[k]; px[k] = tb[K + k]; pz[k] = tb[2 * K + k] }
+        b[oMeta + 3] = 1
     }
 
     /// A feature's profile (wings, spikes, daisy) from its emitted world vertices: `position` yields the world position of each. Main thread, after the skin.
@@ -193,6 +241,11 @@ nonisolated enum ContactField {
             if q > r2[k] { r2[k] = q; px[k] = x; pz[k] = z }
         }
         b[oMeta + 3] = 1
+        tailState[id] = 2          // (a feature mesh owns the bins)
+        if tailDrawn[id] > 0.5 {          // ... and the drawn tail joins it
+            let tb = tailBuf + id * 3 * K
+            for k in 0..<K where tb[k] > r2[k] { r2[k] = tb[k]; px[k] = tb[K + k]; pz[k] = tb[2 * K + k] }
+        }
     }
     static func clearFeature(id: Int) {
         guard id >= 0, id < capacity else { return }
@@ -339,11 +392,18 @@ nonisolated enum ContactField {
     }
 
     /// The pair gap for hypothetical roots (a candidate position, a steering probe): body `a` with its root at `pa`, body `b` at `pb`. Not cached (~3 us): call it only for a pair that is near.
-    static func gap(_ a: Int, at pa: SIMD2<Float>, _ b: Int, at pb: SIMD2<Float>) -> Float? {
+    static func gap(_ a: Int, at pa: SIMD2<Float>, _ b: Int, at pb: SIMD2<Float>, features: Bool = false) -> Float? {
         guard enabled, isValid(a), isValid(b), a != b else { return nil }
         let d = pb - pa, L = simd_length(d)
         guard L > 1e-4 else { return nil }
-        let g = polyGap(a, b, L, d / L, bodyA: true, bodyB: true)
+        let u = d / L
+        var g = polyGap(a, b, L, u, bodyA: true, bodyB: true)
+        if features {          // a drawn wing / spike / daisy / tail is a surface too
+            let fa = base(a)[oMeta + 3] > 0.5, fb = base(b)[oMeta + 3] > 0.5
+            if fa { g = min(g, polyGap(a, b, L, u, bodyA: false, bodyB: true)) }
+            if fb { g = min(g, polyGap(a, b, L, u, bodyA: true, bodyB: false)) }
+            if fa, fb { g = min(g, polyGap(a, b, L, u, bodyA: false, bodyB: false)) }
+        }
         return g.isFinite ? g : nil
     }
 

@@ -205,7 +205,7 @@ extension BlobBrain {
             if lean > 0.85, !socialBook.hopStarted {
                 socialBook.hopStarted = true
                 jellyKick = max(jellyKick, 1.0)
-                if isA { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
+                if isA { contactBoopFallback(o) }
             }
             if isA, ft > s.duration { s.finish(.done) }
         }
@@ -232,7 +232,7 @@ extension BlobBrain {
                 if !s.impacted, t >= 0.12 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }
                 if t > 0.95 { if s.phase == 2 { s.setPhase(3); s.impacted = false } else { s.setPhase(4) } }
@@ -272,7 +272,7 @@ extension BlobBrain {
                 if !s.impacted, t >= 0.12 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 3.0)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }
                 if t > 0.7 { s.setPhase(3) }
@@ -366,7 +366,7 @@ extension BlobBrain {
                     s.impacted = true
                     let chaser = chaserIsA ? self : o, runner = chaserIsA ? o : self
                     chaser.jellyKick = max(chaser.jellyKick, 1.4); runner.jellyKick = max(runner.jellyKick, 2.8)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }
                 if t > 0.95 {

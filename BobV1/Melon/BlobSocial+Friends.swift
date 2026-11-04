@@ -174,7 +174,7 @@ extension BlobBrain {
                 if !s.impacted, t >= 0.34 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .squish, 0.9)
                 }
                 if t > 0.6, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil {
@@ -225,7 +225,7 @@ extension BlobBrain {
                 if !s.impacted, t >= 0.95 {          // the cheeks meet
                     s.impacted = true; s.bumpT = t
                     jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .highFiveBoop, 0.85, haptic: .emote("highFive.bump"))
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
                 } else if !s.impacted, t > 9 { s.finish(.aborted) }
@@ -290,7 +290,7 @@ extension BlobBrain {
     private func squishBoth(_ o: BlobBrain, first: Bool) {
         jellyKick = max(jellyKick, 1.5); o.jellyKick = max(o.jellyKick, 1.5)
         contactCueFallback(o, .squish, 0.7)
-        if first { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
+        if first { contactBoopFallback(o) }
         else { face(.joyArc, hold: 1.0); o.face(.joyArc, hold: 1.0) }
     }
 

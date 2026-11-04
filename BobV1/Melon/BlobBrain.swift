@@ -630,7 +630,8 @@ final class BlobBrain {
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
         if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         contactApplyShift(sim)
-        if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
+        if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
+        sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
         if flipTick(sim, skinner, dt) { return }
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }

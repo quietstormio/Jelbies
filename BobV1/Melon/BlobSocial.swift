@@ -172,6 +172,7 @@ final class SocialSession {
     var broke = false                            // squabble: stopFighting() was called
     var bumpT: Float = -1, bumper = 0, bumpNext: Float = 1.2, impacted = false, bumps = 0
     var fightT: Float = 0
+    var contactTouches = 0          // the gate's touches in this session (ContactStance.swift)
     var leaderWait: Float = 0
     var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
     var round = 0, roles = 0, fastMoves = 0
@@ -739,7 +740,7 @@ extension BlobBrain {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 2.6)
                     contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                 }
                 if t > 1.1 { s.finish(.done) }
             }
@@ -779,7 +780,7 @@ extension BlobBrain {
                         s.impacted = true
                         jellyKick = max(jellyKick, 1.4); o.jellyKick = max(o.jellyKick, 2.4)
                         contactCueFallback(o, .squish, 0.5)
-                        onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID))
+                        contactBoopFallback(o, shove: true)
                     }
                     if s.bumpT > 0.7 { s.bumpT = -1; s.bumpNext = rand(0.8, 1.4) }
                 }

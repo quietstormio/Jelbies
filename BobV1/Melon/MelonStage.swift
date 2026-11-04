@@ -485,8 +485,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             var to = L
             if L < g { to = max(L + (g - L) * softPush, g * softFloor) }
             // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the exact footprint gap of the pair along this axis: lying / leaning / limbs / ears / tail included). A max of two continuous maps: no pop.
-            if ContactField.enabled, L > 1e-4, let est = ContactField.touch(id, j, dir: -u), L < est + 0.5,
-               let g = ContactField.gap(id, at: SIMD2(q.x, q.z), j, at: o.pos), g < 0 { to = max(to, L - g) }          // (only a pair that is near: the exact footprint gap, 3 us)
+            if ContactField.enabled, L > 1e-4, let est = ContactField.touch(id, j, dir: -u, features: true), L < est + 0.5,
+               let g = ContactField.gap(id, at: SIMD2(q.x, q.z), j, at: o.pos, features: true), g < 0 { to = max(to, L - g) }          // (only a pair that is near: the exact footprint gap, 3 us)
             if to > L { q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to }
         }
         return q

@@ -217,7 +217,7 @@ extension BlobBrain {
                     s.impacted = true
                     let tagger = taggerIsA ? self : o, tagged = taggerIsA ? o : self
                     tagger.jellyKick = max(tagger.jellyKick, 1.2); tagged.jellyKick = max(tagged.jellyKick, 2.6)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                     AudioHub.shared.chirp(jelly: tagged.steerID, .babble)
                 }
@@ -366,7 +366,7 @@ extension BlobBrain {
                 if !s.impacted, t >= 0.2 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     contactCueFallback(o, .squish, 0.9)
                     AudioHub.shared.chirp(jelly: steerID, .babble)
                 }
@@ -428,7 +428,7 @@ extension BlobBrain {
     private func noseBoopHit(booped: BlobBrain) {
         let booper = booped === self ? (socialPartner ?? self) : self
         booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, 2.2)
-        onSocial?(.boop(partner: booped.steerID)); booped.onSocial?(.boop(partner: booper.steerID))
+        booper.contactBoopFallback(booped)
         booped.onSocial?(.makeUp(partner: booper.steerID)); onSocial?(.makeUp(partner: booped.steerID))
         booper.contactCueFallback(booped, .boop, 0.8)
         AudioHub.shared.chirp(jelly: booped.steerID, .babble)
@@ -458,7 +458,7 @@ extension BlobBrain {
                 if isA, !s.impacted, ft > 1.0 {
                     s.impacted = true
                     jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                    contactBoopFallback(o)
                     AudioHub.shared.chirp(jelly: steerID, .happy)
                 }
                 if isA, s.passes == 0, ft > 3.2 { s.passes = 1; AudioHub.shared.chirp(jelly: o.steerID, .babble) }
@@ -485,7 +485,7 @@ extension BlobBrain {
             if !s.impacted, ft > 0.9 {
                 s.impacted = true
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
-                onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+                contactBoopFallback(o)
                 contactCueFallback(o, .squish, 0.5)
             }
             if s.passes == 0, ft > 2.0 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy) }

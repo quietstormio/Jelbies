@@ -146,10 +146,17 @@ extension BlobBrain {
                         // (only while the stance is HOLDING the touch - the press phase; an approach brush or a part is the default squish)
                         let st = contactStance(with: o).flatMap { st in social.flatMap { st.step(at: $0.phase)?.target == ContactStance.hold ? st : nil } }
                         AudioHub.shared.play(st?.sound ?? .squish, jelly: steerID, x: px, volume: st?.sound != nil ? st!.volume : 0.25)
-                        switch st?.haptic ?? .none {
-                        case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
-                        case .treat(let key): treatHaptic(key)
-                        case .none: break
+                        if let sess = social { sess.contactTouches += 1 }
+                        if (social?.contactTouches ?? 1) <= 1 {          // (the emote's own haptic: once a session, with its first touch; AudioHub.play already sent the sound's cue)
+                            switch st?.haptic ?? .none {
+                            case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
+                            case .treat(let key): treatHaptic(key)
+                            case .none: break
+                            }
+                        }
+                        if let sess = social, let any = contactStance(with: o), any.cls == .touching {          // the heart / shove event rides on the touch too (it used to fire on the drive's timer)
+                            if sess.kind == .squabble { onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID)) }
+                            else if !sess.kind.isGroup { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
                         }
                         contactEvents += 1
                     }
