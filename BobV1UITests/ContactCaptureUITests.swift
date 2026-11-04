@@ -3,7 +3,7 @@
 //  Not a regression test: BEFORE / AFTER captures of the touching emotes in the REAL app (the contact fix). ONE scene per run, driven by env
 //  (scripts/contact_capture.sh reads scripts/contact_scenes.tsv and sets them): CAPTURE_OUT (TEST_RUNNER_CAPTURE_OUT) = folder, CAPTURE_NAME, CAPTURE_CAST
 //  ("teddy,pearl"), CAPTURE_KIND (a SocialKind raw value | lieDown | sleepPile | - for none), CAPTURE_ANGLE (low | side), CAPTURE_ARGS (extra launch
-//  arguments, space separated), CAPTURE_SECS (default 18). The app is launched with -NewGame <cast> -ContactDemo <kind> -ContactCam <angle>
+//  arguments, space separated), CAPTURE_SECS (the longest a scene may run, default 18; it stops early 2.5 s after the emote ends). The app is launched with -NewGame <cast> -ContactDemo <kind> -ContactCam <angle>
 //  (Melon/ContactDemo.swift) and screenshots are written to <out>/<name>_<angle>/f_<ms>.png as fast as the simulator gives them.
 //  Works on any branch that has ContactDemo.swift (merge g-contactcap into it). Release + ENABLE_TESTABILITY=YES like the other app captures.
 //
@@ -34,7 +34,15 @@ final class ContactCaptureUITests: XCTestCase {
         let t0 = Date()
         try? String(format: "%.3f", t0.timeIntervalSince1970).write(toFile: out + "/" + scene + ".t0", atomically: true, encoding: .utf8)          // (frame f_<ms> is t0 + ms)
         var n = 0
-        while Date().timeIntervalSince(t0) < secs {
+        let logPath = out + "/" + scene + ".demolog"
+        func epoch(_ key: String) -> Double? {          // the hook logs " startEpoch=<t>" / " endEpoch=<t>" (wall clock)
+            guard let txt = try? String(contentsOfFile: logPath, encoding: .utf8), let r = txt.range(of: key + "=", options: .backwards) else { return nil }
+            return Double(txt[r.upperBound...].prefix(while: { $0 != "\n" && $0 != " " }))
+        }
+        while Date().timeIntervalSince(t0) < secs {          // (secs = the longest it may run; it stops 2.5 s after the emote ends, 15 s after a lie-down starts)
+            let now = Date().timeIntervalSince1970
+            if let e = epoch("endEpoch"), now > e + 2.5 { break }
+            if kind == "lieDown" || kind == "sleepPile", let st = epoch("startEpoch"), now > st + 15 { break }
             let ms = Int(Date().timeIntervalSince(t0) * 1000)
             let png = XCUIScreen.main.screenshot().pngRepresentation
             try? png.write(to: URL(fileURLWithPath: String(format: "%@/f_%06d.png", dir, ms)))
