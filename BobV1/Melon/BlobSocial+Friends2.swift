@@ -24,6 +24,8 @@ enum Friends2Tuning {
     static let raceLane: Float = 1.05
     /// ringAround: extra centre distance (m) over the skins' touch distance on the hop circle (the 60 degree turn in place between hops swings the skin).
     static let ringMargin: Float = 0.12
+    /// Angle (rad) one ring hop turns the pair round their centre: 36 degrees (15 hops = 1.5 turns); the chord of it shortens the mid-air distance by 1.2 %.
+    static let ringHop: Float = .pi / 5
     static let tagRounds = 3
 }
 
@@ -500,11 +502,12 @@ extension BlobBrain {
     // MARK: ring around
 
     /// A hop (the locked hop: the body keeps facing the same way, the feet leave and land together) to a given floor spot, whatever side it is on.
-    func startHopTo(_ sim: SoftBody, _ spot: SIMD2<Float>) {
+    func startHopTo(_ sim: SoftBody, _ spot: SIMD2<Float>, facing: Float? = nil) {
+        if PeakTuning.log { print(String(format: "[peak] hopTo %d from (%.2f,%.2f) spot (%.2f,%.2f)", steerID, position.x, position.y, spot.x, spot.y)) }
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
-        gait.facingYaw = yaw
+        gait.facingYaw = facing.map { wrapAngle($0) } ?? yaw
         gait.home = SIMD2(px, pz)
         let rv = resolve(SIMD3(spot.x, 0, spot.y), footprint)
         poseW = 0
@@ -515,9 +518,9 @@ extension BlobBrain {
     /// Face to face at nub distance, they hold hands and hop round their shared centre (a step of 60 degrees each, both facing each other the whole way, 1.5 turns),
     /// then let go and flop over giggling.
     private func driveRing(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
-        if s.phase < 2, openFaceToFace(s, o, isA, settle: 0.5) { return }
+        if s.phase < 2 { socialBook.ringSpread = false; if openFaceToFace(s, o, isA, settle: 0.5) { return } }
         let t = s.phaseT
-        let steps = 9
+        let steps = Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded())          // (1.5 turns)
         switch s.phase {
         case 2:
             if isA, !s.ready, scriptIsNone, o.scriptIsNone, !feet.active, !o.feet.active, s.phaseT > 0.3 {          // the circle: centre between us, radius half the distance - drawn once BOTH STAND (not while they are still walking in)
@@ -527,20 +530,29 @@ extension BlobBrain {
                 //  is a pure 60 degree rotation of the pair on it, so their gap is the standing gap all the way round)
                 let dBrain = simd_distance(position, o.position)
                 var r = dBrain / 2
-                if let g = ContactField.gap(steerID, o.steerID, features: true) {
-                    r += max(0, (Friends2Tuning.ringMargin - g)) / 2          // (g < margin: open the circle by the shortfall)
-                }
+                // (the hop moves each body along the CHORD of its 36 degree arc, so the pair comes 1 - cos(18 deg) closer in mid-air than at the ends: the radius is the face-to-face touch distance
+                //  (support reach of both, wings / tail / spikes counted) over 2 cos(18 deg), so even the closest moment of the hop leaves the skins just apart - no passThrough needed to hide it)
+                // (the hop turns the body toward its chord, so mid-hop the pair stands SIDE ON: the widest touch of the compass, not the face-to-face one)
+                r = max(0.3, min(1.0, (ringTouch(o) + 0.06) / (2 * cosf(Friends2Tuning.ringHop / 2))))
+                if PeakTuning.log { print(String(format: "[peak] ring radius %.3f (brain dist %.3f)", r, dBrain)) }
                 s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))          // (radius, A's angle)
             }
             guard s.ready else { faceEach(o); return }
+            if !socialBook.ringSpread {          // walk out to my spot on the ring first (the ring is wider than the nose-to-nose greeting: the hops turn the bodies side on)
+                socialBook.ringSpread = true
+                let a0 = s.goal.y + (isA ? 0 : .pi)
+                let spot = s.home0 + SIMD2(sinf(a0), cosf(a0)) * s.goal.x
+                if simd_distance(position, spot) > 0.06, simd_distance(closeFixed(spot), spot) < 0.08 { socialWalk(to: spot, sim) }
+            }
+            if !scriptIsNone { return }          // (still walking out)
             socialBook.passThrough = true
             stepKey(900 + s.round)
             if !socialBook.hopStarted { if fxFree { faceEach(o) } }
             if !socialBook.hopStarted, fxFree, t > (s.round == 0 ? 0.35 : 0.12), turnedTo(yawTo(o.position), tol: 0.2) {
                 socialBook.hopStarted = true
-                let ang = s.goal.y + (Float(s.round) + 1) * (.pi / 3) + (isA ? 0 : .pi)
+                let ang = s.goal.y + (Float(s.round) + 1) * Friends2Tuning.ringHop + (isA ? 0 : .pi)
                 letGo()
-                startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.goal.x)
+                startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.goal.x, facing: ang + .pi)          // (lands facing the partner across the ring: no turn in place at contact)
                 if isA, s.round % 4 == 0 { AudioHub.shared.chirp(jelly: steerID, .happy) }
                 if !isA, s.round % 4 == 2 { AudioHub.shared.chirp(jelly: steerID, .babble) }
                 if isA { jellyKick = max(jellyKick, 0.6) }

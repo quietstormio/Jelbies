@@ -89,11 +89,11 @@ struct ContactStance: Sendable {
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
         .cheekSquish: .holding(from: 2, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
-        .backToBack: .holding(from: 3, features: true),
+        .backToBack: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: arrive + 0.005), Step(from: 3, target: hold)], features: true),          // (side by side at 2 cm while the backs turn to each other - the turn step carries the warp, BlobSocial+Part.swift - and the lean closes the last 2 cm in the sit)
         .cuddleLean: .holding(from: 2, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 2),
-        .ringAround: .holding(from: 2, features: true),
+        .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
         .groupHug: .holding(from: 2, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),

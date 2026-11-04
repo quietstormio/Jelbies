@@ -145,12 +145,14 @@ extension BlobBrain {
     }
 
     /// Walking up to `goal`: the initiator's phase 0. True = still walking.
+    /// A walk-up counts as arrived within this root distance (m): the standing distance `standGap` (>= 1.445) plus the walk's own stop radius.
+    static let walkUpFar: Float = 2.2
     func walkUpPhase(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, faceBoth: Bool = true, near: Float = 0.5) -> Bool {
         if !isA { return true }
         if scriptIsNone && faceBoth { faceEach(o) }
         if s.t > 18 { s.finish(.aborted); return true }
         if scriptIsNone && s.phaseT > 0.3 {
-            if simd_distance(position, o.position) < peerGap + near { s.setPhase(1) } else { s.finish(.aborted) }
+            if simd_distance(position, o.position) < max(peerGap + near, Self.walkUpFar) { s.setPhase(1) } else { s.finish(.aborted) }          // (the walk-up ends where the stance stands - 1.445 and more, the widest touch + the approach margin - which is farther than peerGap + near: the stance's own walk closes the rest in phase 1)
         }
         return true
     }
@@ -220,7 +222,7 @@ extension BlobBrain {
             _ = walkUpPhase(s, o, isA)
         case 1:
             faceEach(o)
-            if isA, s.phaseT > 0.45 { s.setPhase(2); s.impacted = false }
+            if isA, s.phaseT > 0.45, peakArmed(o) || s.phaseT > 3 { s.setPhase(2); s.impacted = false }
         case 2, 3:
             faceEach(o)
             let t = s.phaseT
@@ -257,7 +259,7 @@ extension BlobBrain {
             if !isA { socialBook.hold = true; return }
             if s.t > 18 { s.finish(.aborted); return }
             if scriptIsNone, s.phaseT > 0.3 {
-                if simd_distance(position, o.position) < peerGap + 0.4 { s.setPhase(1) } else { s.finish(.aborted) }
+                if simd_distance(position, o.position) < max(peerGap + 0.4, Self.walkUpFar) { s.setPhase(1) } else { s.finish(.aborted) }
             }
         case 1:   // a creeps the last bit: stands, squashes a little, face to his back
             if !isA { socialBook.hold = true; return }

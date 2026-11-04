@@ -11,6 +11,7 @@ import simd
 
 enum SpinHugTuning {
     static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.68...0.80, legs = 8
+    static let swayMargin: Float = 0.20
 }
 
 extension BlobBrain {
@@ -30,7 +31,7 @@ extension BlobBrain {
     private func spinPlan(_ s: SocialSession, _ o: BlobBrain) -> Bool {
         s.home0 = (position + o.position) / 2
         let half = ringTouch(o) / 2          // (the ring's diameter is never under the widest touch of the pair)
-        let r = max(half, min(half + 0.10, simd_distance(position, o.position) / 2))
+        let r = half + SpinHugTuning.swayMargin          // (+ the sway: walking, each body's root swings +-12 cm round its path with the steps; measured gap 21 / -21 cm on a ring of half + 0.10)
         s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))
         let was = socialBook.passThrough
         socialBook.passThrough = true          // (the floor rules only: the partner's own body is not an obstacle for the plan, he moves along the other half)

@@ -18,7 +18,7 @@ enum PartTuning {
     /// Smallest heading change (rad) of a step that counts as a turn.
     static let minTurn: Float = 0.35
     /// Sessions whose own choreography turns / circles at contact (the guard is only the explicit parting there).
-    static let circling: Set<SocialKind> = [.ringAround, .spinHug, .tag, .littleRace, .leapfrog, .peekaboo, .mirrorDance]
+    static let circling: Set<SocialKind> = [.spinHug, .tag, .littleRace, .leapfrog, .peekaboo, .mirrorDance]
 }
 
 extension BlobBrain {
@@ -49,3 +49,4 @@ extension BlobBrain {
         return simd_dot(got, u) > 0.3 * want ? got : nil
     }
 }
+
