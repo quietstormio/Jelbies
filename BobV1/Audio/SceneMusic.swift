@@ -178,6 +178,7 @@ final class SceneMusicEngine {
         let node = AVAudioPlayerNode()
         let track: SceneTrack
         var fader = Fader()
+        var fadeIn = 1.0
         var stopping = false
         var ready = false
         var started = false
@@ -207,6 +208,7 @@ final class SceneMusicEngine {
     func play(_ t: SceneTrack, fade: Double) {
         for v in voices where !v.stopping { v.stopping = true; v.fader.ramp(to: 0, over: fade) }
         let v = Voice(track: t)
+        v.fadeIn = fade
         v.fader.snap(0); v.fader.ramp(to: 1, over: fade)
         voices.append(v)
         engine.attach(v.node)
@@ -222,7 +224,8 @@ final class SceneMusicEngine {
         if !engine.isRunning { engine.prepare(); do { try engine.start() } catch { drop(v); return } }
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
         v.node.scheduleBuffer(r.loop, at: nil, options: .loops, completionHandler: nil)
-        v.node.volume = v.fader.level * level * v.track.gain
+        if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
+        v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
         v.ready = true; v.started = true
     }
