@@ -478,6 +478,7 @@ final class BathFlowTests: XCTestCase {
         let r = CleanRun(dirt: 0)
         Self.keep.append(r)
         XCTAssertTrue(r.care.canClean)
+        r.care.store.grant("berries", 3)          // (berries are a bag food: feed() returns early without one)
         r.care.feed("berries")
         r.run(0.2, scrubbing: false)
         XCTAssertTrue(r.care.trayOut)
@@ -490,6 +491,7 @@ final class BathFlowTests: XCTestCase {
         b.care.clean()
         b.run(0.2, scrubbing: false)
         XCTAssertFalse(b.care.canClean)
+        b.care.store.grant("berries", 3)          // so the bath, not an empty bag, is what blocks the tray
         b.care.feed("berries"); b.care.comeHere(); b.care.wave()
         b.run(0.2, scrubbing: false)
         XCTAssertFalse(b.care.trayOut, "no tray during a clean-up")
