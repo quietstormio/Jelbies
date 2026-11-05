@@ -13,7 +13,7 @@ import QuartzCore
 
 enum IntroClip {
     /// The full-screen logo animation (stars, the word puffing up, the jelly on the "i", the stomp, the letters pop, the jelly falls away; the old intro sting),
-    /// about 7.9 s at 60 fps, Blue theme, ending on empty paper. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
+    /// about 5.9 s at 60 fps (artifact loop timeline played once, then a 0.5 s fade to paper and 0.25 s of paper; the stomp is at about 3.9 s and the sting's hit is aligned to it), Blue theme, ending on empty paper (#F0EFF0). Re-render with tools/render_intro/render_intro.py. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
     static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
     static let fileExtension = "mp4"
     /// The last frame is held (paused) this long, then the intro cross-fades into the menu over `fadeSeconds` (-IntroHold / -IntroFade scale them on the simulator for captures).
