@@ -74,6 +74,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .sway: Entry(seconds: 8),
         .decorSit: Entry(via: "decor: sit on a cushion"), .decorBoop: Entry(via: "decor: boop the plant"), .decorKick: Entry(via: "decor: kick the ball"),
         .decorHop: Entry(via: "decor: hop on the mat"), .decorPeek: Entry(via: "decor: peek in the toy box"), .decorSlide: Entry(via: "decor2: climb the slide, sit, ride, exit"),
+        .decorHopscotch: Entry(via: "park: hop along the hopscotch court, wiggle, walk off"),
         .skipHop: Entry(seconds: 4), .hopscotch: Entry(seconds: 5), .legSpin: Entry(seconds: 4), .trot: Entry(seconds: 6), .stopLook: Entry(seconds: 6), .joy: Entry(seconds: 3),
         .giggle: Entry(seconds: 3), .startle: Entry(via: "reaction: startle hop"),
         .sigh: Entry(seconds: 6), .hmph: Entry(seconds: 3),

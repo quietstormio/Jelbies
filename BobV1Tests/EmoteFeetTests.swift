@@ -163,6 +163,7 @@ final class EmoteFeetTests: XCTestCase {
     func testSway() throws { try emote("sway", "idle sway") }
     func testDecorSit() throws { try emote("decorSit", "idle decorSit") }
     func testDecorSlide() throws { try emote("decorSlide", "idle decorSlide") }
+    func testDecorHopscotch() throws { try emote("decorHopscotch", "idle decorHopscotch") }
 
     /// Room <-> park: the body root jumps 5 m; the very next skinned frame has both pieces within the tether bound of the hip (45 cm), with or without a brain tick in between, and a control with the carry-over off proves the test can fail.
     func testSceneTeleportRoomToPark() throws {
