@@ -51,9 +51,9 @@ extension GameCare {
     #if targetEnvironment(simulator)
     nonisolated(unsafe) static var startParkPending = UserDefaults.standard.integer(forKey: "StartPark") != 0
     nonisolated(unsafe) static var startParkFrames = 0
-    /// Capture aid: `-StartHopscotch 1` has the first Jelbie who came start the hopscotch ~4 s into the park, `-StartSlide 1` / `-StartTunnel 1` the slide / the play tunnel.
+    /// Capture aid: `-StartHopscotch 1` has the first Jelbie who came start the hopscotch ~4 s into the park, `-StartSlide 1` the slide.
     nonisolated(unsafe) static var demoToys: [(key: String, kind: DecorKind, move: IdleKind)] = {
-        let all: [(key: String, kind: DecorKind, move: IdleKind)] = [("StartHopscotch", DecorKind.hopscotch, IdleKind.decorHopscotch), ("StartSlide", DecorKind.slide, IdleKind.decorSlide), ("StartTunnel", DecorKind.playtunnel, IdleKind.decorPeek)]
+        let all: [(key: String, kind: DecorKind, move: IdleKind)] = [("StartHopscotch", DecorKind.hopscotch, IdleKind.decorHopscotch), ("StartSlide", DecorKind.slide, IdleKind.decorSlide)]
         return all.filter { UserDefaults.standard.integer(forKey: $0.key) != 0 }
     }()
     nonisolated(unsafe) static var demoToyFrames = 0

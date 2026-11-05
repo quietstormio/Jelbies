@@ -47,6 +47,17 @@ extension BlobBrain {
         if let f = inside {
             if decorIgnore == nil { decorIgnore = f.uid }
             insideDecorT += dt
+            insideStuckT += dt
+            // the walk-out below finds no route from inside a piece (the planner steers round solids, and he is in one): after 3 s he is eased out in a straight line, feet with him
+            if insideStuckT > 3, !held, !sleepLocked, case .none = script, let out = decorFreeSpot(near: position) {
+                let d = out - position, len = simd_length(d)
+                let m = len > 0.02 ? d / len * min(len, 1.3 * dt) : SIMD2<Float>.zero
+                if len > 0.02, !steerPeers().contains(where: { simd_distance($0.pos, position + m) < peerGap }) {          // (never into a friend)
+                    px += m.x; pz += m.y
+                    feet.pos[0] += m; feet.pos[1] += m
+                    yaw = atan2f(d.x, d.y)
+                }
+            }
             if insideDecorT > 1.2, !held, !sleepLocked, pending == nil, let out = decorFreeSpot(near: position) {
                 insideDecorT = -1.5
                 decorIgnore = f.uid
@@ -54,7 +65,7 @@ extension BlobBrain {
             }
             return
         }
-        insideDecorT = 0
+        insideDecorT = 0; insideStuckT = 0
         guard let uid = decorIgnore else { return }
         if let f = DecorField.shared.foot(uid), f.distance(position) < footprint * f.spec.reach + 0.05 { return }
         decorIgnore = nil
