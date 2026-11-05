@@ -107,6 +107,37 @@ final class AudioHub {
     }
     nonisolated deinit {}
 
+
+    // MARK: AudioLog diagnostic (silent unless `-AudioLog 1`; the default is read once)
+    static let audioLog = UserDefaults.standard.bool(forKey: "AudioLog")
+    @ObservationIgnored private var diagCounts: [String: Int] = [:]
+    @ObservationIgnored private var diagLastState = -100.0
+    /// Logs one request and, when it was dropped, the guard that dropped it (`why` nil = it got past every guard).
+    private func diag(_ what: String, _ jelly: Int?, _ why: String?) {
+        guard Self.audioLog else { return }
+        diagCounts["\(what) \(why ?? "PLAYED")", default: 0] += 1
+        NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? "PLAYED")
+        stateLine()
+    }
+    /// At most once a second: the gates' state and the running per-reason counts.
+    private func stateLine() {
+        guard Self.audioLog else { return }
+        let t = CACurrentMediaTime()
+        guard t - diagLastState >= 1 else { return }
+        diagLastState = t
+        let counts = diagCounts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "; ")
+        NSLog("[audio] state muted=%d started=%d active=%d sfxLevel=%.2f duck=%.2f level=%.3f musicOn=%d deckPlaying=%d scene=%@ race=%@ counts{%@}", muted, started, active, settings.sfxLevel, duck.gain, settings.sfxLevel * duck.gain, settings.musicOn, deckPlaying, String(describing: director.scene), String(describing: raceScene), counts)
+    }
+    /// The first of the shared gates that blocks an effect (muted / not started / background / level), or nil.
+    private func gateWhy() -> String? {
+        if muted { return "muted" }
+        if !started { return "!started" }
+        if !active { return "!active" }
+        let level = settings.sfxLevel * duck.gain
+        if level <= 0.01 { return String(format: "level=%.3f sfxLevel=%.2f duck=%.2f", level, settings.sfxLevel, duck.gain) }
+        return nil
+    }
+
     // MARK: lifecycle
 
     /// Start the session, the music and the 30 Hz mixer. Call once when the game screen appears.
@@ -561,16 +592,16 @@ final class AudioHub {
         Self.requestTap?(sfx.rawValue)
         if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
         if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
-        guard !muted, started, active else { return }
+        if let w = gateWhy() { diag("play:\(sfx.rawValue)", jelly, w); return }
         let level = settings.sfxLevel * duck.gain
-        guard level > 0.01 else { return }
         let now = Self.clock()
         let key = jelly.map { "\(sfx.rawValue)#\($0)" } ?? sfx.rawValue
         if let j = jelly, [.emoteHic, .emoteAchoo, .emoteWoozy, .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn].contains(sfx) { lastEmoteVoice[min(max(j, 0), 2)] = now }
-        if let l = lastPlay[key], now - l < sfx.minGap { return }
+        if let l = lastPlay[key], now - l < sfx.minGap { diag("play:\(sfx.rawValue)", jelly, "minGap"); return }
         lastPlay[key] = now
         let n = variants(sfx)
-        guard n > 0 else { return }
+        guard n > 0 else { diag("play:\(sfx.rawValue)", jelly, "novariants"); return }
+        diag("play:\(sfx.rawValue)", jelly, nil)
         _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
         let v = picker.pick(sfx.rawValue, count: n) + 1
         fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
@@ -579,13 +610,13 @@ final class AudioHub {
     /// A sleeping Jelly's snore, in its own CHARACTER's voice (snore_jelly{c}_{1|2}, like the chirps; ~30% end in a bubble pop).
     func snore(jelly: Int, x: Float? = nil) {
         if let t = SoundCaptions.text(.snore, jelly: JellyRoster.name(slot: jelly)) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
-        guard !muted, started, active else { return }
+        if let w = gateWhy() { diag("snore", jelly, w); return }
         let level = settings.sfxLevel * duck.gain
-        guard level > 0.01 else { return }
         let now = Self.clock()
         let key = "snore#\(jelly)"
-        if let l = lastPlay[key], now - l < SFX.snore.minGap { return }
-        if now - lastSleepAny < 2.5 { return }          // two sleepers never overlap
+        if let l = lastPlay[key], now - l < SFX.snore.minGap { diag("snore", jelly, "minGap"); return }
+        if now - lastSleepAny < 2.5 { diag("snore", jelly, "hush sleepAny"); return }          // two sleepers never overlap
+        diag("snore", jelly, nil)
         lastSleepAny = now
         lastPlay[key] = now
         let name = JellyVoiceSet.snoreFile(character: JellyRoster.character(jelly), roll: Double.random(in: 0..<1))
@@ -595,13 +626,14 @@ final class AudioHub {
     // Jelly Circuit cues. Named hooks: dedicated sounds are added later under these names; for now they use existing effects.
     /// A sleeping Jelly's extra sounds (2026-11-04): a soft coo in its own voice, or now and then a quieter snore. Added ON TOP of `snore` (its rate is unchanged).
     func sleepSound(_ kind: SleepSound, jelly: Int, x: Float? = nil) {
-        guard !muted, started, active else { return }
+        let what = kind == .coo ? "coo" : "softSnore"
+        if let w = gateWhy() { diag(what, jelly, w); return }
         let level = settings.sfxLevel * duck.gain
-        guard level > 0.01 else { return }
         let now = Self.clock()
         let key = "sleepsound#\(jelly)"
-        if let l = lastPlay[key], now - l < 3 { return }
-        if now - lastSleepAny < 2.5 { return }
+        if let l = lastPlay[key], now - l < 3 { diag(what, jelly, "minGap"); return }
+        if now - lastSleepAny < 2.5 { diag(what, jelly, "hush sleepAny"); return }
+        diag(what, jelly, nil)
         lastSleepAny = now
         lastPlay[key] = now
         let c = JellyRoster.character(jelly)
@@ -738,15 +770,18 @@ final class AudioHub {
     func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
         Self.requestTap?("chirp:\(v)")
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
-        guard !muted, started, active else { return }
+        let what = "chirp:\(v)"
+        if let w = gateWhy() { diag(what, jelly, w); return }
         let level = settings.sfxLevel * duck.gain
-        guard level > 0.01 else { return }
         let i = min(max(jelly, 0), 2)
         let now = Self.clock()
-        if now - lastVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush || now - lastContextVoice[i] < 0.5 { return }
+        if now - lastVoice[i] < 2.2 { diag(what, jelly, "hush lastVoice"); return }
+        if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
+        if now - lastContextVoice[i] < 0.5 { diag(what, jelly, "hush context"); return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
-        if UserDefaults.standard.bool(forKey: "AudioLog") { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
+        diag(what, jelly, nil)
+        if Self.audioLog { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
 
@@ -756,13 +791,18 @@ final class AudioHub {
     /// they wait for the ambient voice's gap (1 s) and their own (2.2 s), and an ambient chirp waits 0.5 s after one, so a Jelbie never plays two voices at once.
     func contextVoice(jelly: Int, _ v: JellyVoice, chance: Double = 1, x: Float = 0) {
         Self.requestTap?("voice:\(v.rawValue)")
-        guard v.isContext, !muted, started, active, director.scene == .none, raceScene == .none else { return }
+        let what = "voice:\(v.rawValue)"
+        guard v.isContext else { diag(what, jelly, "notContext"); return }
+        if let w = gateWhy() { diag(what, jelly, w); return }
+        guard director.scene == .none, raceScene == .none else { diag(what, jelly, "scene \(director.scene) race \(raceScene)"); return }
         let level = settings.sfxLevel * duck.gain
-        guard level > 0.01 else { return }
         let i = min(max(jelly, 0), 2)
         let now = Self.clock()
-        if now - lastVoice[i] < 1.0 || now - lastContextVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush { return }
-        guard Double.random(in: 0..<1) < chance else { return }
+        if now - lastVoice[i] < 1.0 { diag(what, jelly, "hush lastVoice"); return }
+        if now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush context"); return }
+        if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
+        guard Double.random(in: 0..<1) < chance else { diag(what, jelly, "chance"); return }
+        diag(what, jelly, nil)
         lastContextVoice[i] = now
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
         let c = JellyRoster.character(jelly), j = min(max(jelly, 0), 2)
@@ -869,6 +909,7 @@ final class AudioHub {
     }
 
     private func tick() {
+        stateLine()
         guard started else { return }
         let now = CACurrentMediaTime()
         let dt = min(now - lastTick, 0.25)

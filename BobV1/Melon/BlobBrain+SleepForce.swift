@@ -23,7 +23,7 @@ extension BlobBrain {
                 var clash = false
                 for o in socialOthers() where o !== self {
                     if simd_distance(o.position, p) < SleepTuning.minGap { clash = true; break }
-                    if o.idleState.kind == .sleep, simd_distance(o.sleep.spot, p) < SleepTuning.minGap { clash = true; break }
+                    if o.idleState.kind == .sleep, simd_distance(o.sleep.spot, p) < SleepTuning.minGap || Self.lieClash(p - o.sleep.spot, yawA: faceCameraYaw(), yawB: o.sleep.lieYaw) { clash = true; break }
                 }
                 if !clash { cands.append((p, simd_distance(position, p))) }
             }
