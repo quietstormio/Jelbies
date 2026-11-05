@@ -1612,6 +1612,10 @@ final class BlobBrain {
     var airBothFeet = false
     nonisolated(unsafe) static var airTuck = true          // (false = before the air tuck: before / after captures)
     static let airNeckDepth: Float = 0.04
+    /// 2026-11-05: the air tuck is aimed at the pose the body had BEFORE this step; the step then moves / tilts the body under the placed foot (the hurried bath exit run: both feet off the floor, a flung body, ~5 cm of body-frame
+    /// drift per step), so a sole the tuck lifted to 0.075 was DRAWN at 0.124 (FeetAttachTests.maxSoleRise 0.12). The tuck therefore never lifts a sole above `airSoleCap` (maxSoleRise less `airStepDrift`) in the placement frame;
+    /// only the upward component is limited, the x / z part of the push still moves the piece in. (A foot already above the cap is not lifted further, it is not pulled down.)
+    static let airStepDrift: Float = 0.055, airSoleCap: Float = 0.12 - airStepDrift
     /// Shallowest (+ inside) of the piece's neck points (rings 11, 12, every other meridian) shifted by nothing, and the world direction that moves it deeper.
     @inline(__always) static func shallowestNeck(_ v: [SIMD3<Float>], off: SIMD3<Float> = .zero, pose: (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)) -> (Float, SIMD3<Float>) {
         var worst = Float.infinity, dir = SIMD3<Float>(0, 1, 0)
@@ -1630,7 +1634,7 @@ final class BlobBrain {
             let r = c0 + pose.rotation.inverse.act(v[best] - pose.centroid)
             let q = SIMD3<Double>(Double(abs(r.x)), Double(r.y), Double(r.z))
             let f = Float(BobForm.bodySDF(q))
-            var dW = SIMD3<Float>.zero
+            var dW = SIMD3<Float>.zero, airPush = false
             if f >= -Self.attachDepth {
                 let g = BobForm.eggGradient(q)
                 let l2 = Float(simd_dot(g, g)); if l2 < 1e-9 { return }
@@ -1645,9 +1649,18 @@ final class BlobBrain {
                     let (sd, sdir) = Self.shallowestNeck(v, pose: fp)
                     if sd >= Self.airNeckDepth { return }
                     dW = sdir * min(Self.airNeckDepth + 0.01 - sd, 0.04)
+                    airPush = true
                 } else { return }
             } else { return }
             if !lifted { dW.y = min(dW.y, 0) }        // a planted foot stays on the floor (it only slides toward the belly)
+            else if airPush {
+                let inv = pose.rotation.inverse
+                var lo = Float.infinity
+                for p in v { lo = min(lo, c0.y + inv.act(p - pose.centroid).y) }
+                var db = inv.act(dW)
+                let room = max(0, Self.airSoleCap - lo)
+                if db.y > room { db.y = room; dW = pose.rotation.act(db) }
+            }
             for i in v.indices { v[i] += dW }
         }
     }

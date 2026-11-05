@@ -31,6 +31,8 @@ final class CleanRun {
     var wetSeen: Float = 0
     var riseByPhase: [String: Float] = [:]
     var posLog: [String] = []
+    /// Max sole rise per bath phase, for the failure message / log (which phase is the worst frame).
+    var riseReport: String { riseByPhase.sorted { $0.value > $1.value }.map { String(format: "%@=%.4f", $0.key, $0.value) }.joined(separator: ", ") }
 
     init(dirt: Float = 0.5) {
         rig = MotionRig(game: true, settle: 1.0)
@@ -341,7 +343,8 @@ final class BathFlowTests: XCTestCase {
         reachSoapDone(r)
         r.run(20, scrubbing: false, autoNext: false)
         XCTAssertEqual(r.bath.phase, .soap)
-        FeetAttachTests.check("waiting in the tub", r.feet, frames: r.feetFrames)
+        MotionLog.write("RISEBYPHASE waiting in the tub: \(r.riseReport)")     // (which bath phase the worst sole frame is in)
+        FeetAttachTests.check("waiting in the tub [sole rise by phase: \(r.riseReport)]", r.feet, frames: r.feetFrames)
         XCTAssertGreaterThan(r.feetFrames, 100)
         XCTAssertLessThanOrEqual(r.arms.capMax, ArmCap.maximum * 1.02, "arms within the wave's maximum")
     }
@@ -523,7 +526,8 @@ final class BathFlowTests: XCTestCase {
         Self.keep.append(r)
         r.care.clean()
         r.run(60, until: { r.bath.phase == .off && r.phases.contains(.finish) })
-        FeetAttachTests.check("clean-up", r.feet, frames: r.feetFrames)
+        MotionLog.write("RISEBYPHASE clean-up: \(r.riseReport)")     // (which bath phase the worst sole frame is in)
+        FeetAttachTests.check("clean-up [sole rise by phase: \(r.riseReport)]", r.feet, frames: r.feetFrames)
         XCTAssertGreaterThan(r.feetFrames, 100, "the beans were out for part of it")
         XCTAssertLessThanOrEqual(r.arms.capMax, ArmCap.maximum * 1.02, "arms within the wave's maximum")
         if r.arms.frames > 0 { XCTAssertGreaterThanOrEqual(r.arms.minDepth, 0.015, "arm bases stay buried") }
