@@ -104,7 +104,7 @@ final class BathJellyTests: XCTestCase {
         XCTAssertGreaterThan(maxZ, BathTuning.exitCutZ - 0.5, "Moss ran out toward the camera")
         let spot = try! XCTUnwrap(inTubAt)
         XCTAssertEqual(spot.x, BathFlow.standXZ.x, accuracy: 0.25); XCTAssertEqual(spot.y, BathFlow.standXZ.y, accuracy: 0.25, "Moss stood in the tub")
-        XCTAssertEqual(soapStyle, 2, "his own soot placement")
+        XCTAssertEqual(soapStyle, 3, "his own soot placement (id + 1)")
         XCTAssertEqual(care.bath.targetID, 0)
         XCTAssertTrue(care.bath.grime === bobGrime, "Bob's grime is back in the flow")
         XCTAssertEqual(care.jelly(2)!.grime.dirt, 0, "Moss is clean")
@@ -116,7 +116,7 @@ final class BathJellyTests: XCTestCase {
         XCTAssertLessThan(simd_distance(moss.floor, mossBefore), 2.5, "and is back near where he was: \(moss.floor) vs \(mossBefore)")
         XCTAssertGreaterThan(simd_distance(moss.floor, pip.floor), 0.5); XCTAssertGreaterThan(simd_distance(moss.floor, bob.floor), 0.5)
         XCTAssertFalse(moss.brain!.hurry); XCTAssertTrue(moss.sim.arenaRadius.isFinite, "the fence is back")
-        XCTAssertEqual(care.renderLook(for: 0).sootStyle, 0)
+        XCTAssertEqual(care.renderLook(for: 0).sootStyle, 1)
         // dirt keeps building per Jelly afterwards
         let after = care.jelly(2)!.grime.dirt
         moss.brain!.request(.goTo(SIMD2(1.5, -1.0)))
@@ -133,7 +133,7 @@ final class BathJellyTests: XCTestCase {
         XCTAssertTrue(care.bath.grime === care.jelly(0)!.grime)
         for _ in 0..<(60 * 6) { step(care, actors); if care.bath.phase == .soap { break } }
         XCTAssertEqual(care.bath.phase, .soap)
-        XCTAssertEqual(care.renderLook(for: 0).sootStyle, 0)
+        XCTAssertEqual(care.renderLook(for: 0).sootStyle, 1)
         XCTAssertLessThan(simd_distance(actors[0].floor, BathFlow.standXZ), 0.3)
         XCTAssertGreaterThan(simd_distance(actors[2].floor, BathFlow.standXZ), 1.0, "the others did not move")
     }

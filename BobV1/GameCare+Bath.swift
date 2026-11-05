@@ -92,13 +92,13 @@ extension GameCare {
     }
 
     /// The look the renderer draws on Jelly `id` this frame: the washed Jelly's working look, Bob's own while another Jelly is washed,
-    /// else the profile's room look. `sootStyle` = id puts each Jelly's streaks in his own places (Bob's spots stay exactly the original).
+    /// else the profile's room look. `sootStyle` = id puts each Jelly's streaks in his own places (never 0: Bob varies too).
     func renderLook(for id: Int) -> BathLook {
         var l: BathLook
         if id == bath.targetID { l = bath.look }
         else if id == 0 { l = bath.savedBobLook ?? bath.look }
         else { l = jelly(id)?.look ?? .dry; if let w = bathPlug.wet[id] { l.wet = w } }
-        l.sootStyle = Float(id)
+        l.sootStyle = BathLook.sootSeed(jelly: id)
         return l
     }
 }
