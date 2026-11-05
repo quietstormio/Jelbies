@@ -651,7 +651,15 @@ struct GameScreen: View {
             await sleep(5)
             care.store.grant(f, 3)
             for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(.hunger, h) }
-            care.feedSnack(f)
+            care.feedSnack(f, jelly: d.object(forKey: "MealJelly") != nil ? d.integer(forKey: "MealJelly") : nil)          // (-MealJelly n: a single-Jelbie meal; the others roam)
+            // -MealRepeat s: serve the same meal again every s seconds (a capture aid for watching the tray over a long take)
+            let again = d.double(forKey: "MealRepeat")
+            while again > 0 {
+                await sleep(again)
+                care.store.grant(f, 3)
+                for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(.hunger, h) }
+                care.feedSnack(f, jelly: d.object(forKey: "MealJelly") != nil ? d.integer(forKey: "MealJelly") : nil)
+            }
         }
         // capture aid: -LobbyTier sandcastle|shore|reef|tidal and -LobbyCourse puddle|ripple|splash|wave|tsunami pick that court / course (locked or not) to see its blurb
         if let t = d.string(forKey: "LobbyTier").flatMap(VolleyTier.init(rawValue:)) { care.volley.book.chosen = t }
