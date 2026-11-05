@@ -13,6 +13,10 @@ final class LineupTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var debug = false
 
+    /// The sim must not depend on the wall clock: the autonomous goal search stops at a wall-clock budget (BlobBrain.pickBudgetSeconds), so a loaded machine could change a pick.
+    override func setUp() { BlobBrain.pickBudgetSeconds = .infinity }
+    override func tearDown() { BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds }
+
     /// Closest two bodies over a run (only samples where at least one of the pair walks), and the path each one took.
     struct Track {
         var minDist: Float = .infinity
