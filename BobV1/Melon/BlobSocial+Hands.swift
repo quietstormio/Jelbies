@@ -142,7 +142,15 @@ extension BlobBrain {
                 var hq = HandReach.pole(el: o.socialBook.handEl[1 - si], sa: o.socialBook.handSa[1 - si], out: o.socialBook.handOut * o.socialBook.handW); hq.x *= sgP
                 hisPole = orgo + RSo * hq
             }
-            if walking { return }          // (a walker's arms are the walk's own: the hand reaches once he stands - see the drives)
+            if walking {
+                saT = q.seek ? HandReach.saNub : 0
+                socialBook.handOut = 0; socialBook.handPrevD = 0
+                let rate: Float = 6 * dt
+                socialBook.handEl[si] += max(-rate, min(rate, q.el - socialBook.handEl[si]))
+                socialBook.handSa[si] += max(-rate, min(rate, saT - socialBook.handSa[si]))
+                armDirEl[si] = socialBook.handEl[si]; armDirSa[si] = socialBook.handSa[si]; armDirOut = 0
+                return
+            }
             // sweep (the pole's coordinate along n is monotonic in sa)
             func bisect(_ lo: Float, _ hi: Float, _ f: (Float) -> Float) -> Float {
                 var a = lo, b = hi; let fa = f(a), fb = f(b)

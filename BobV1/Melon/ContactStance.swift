@@ -72,10 +72,6 @@ struct ContactStance: Sendable {
         if let u = until { st.append(Step(from: u, target: near, onlySeparate: true)) }
         return ContactStance(facing: facing, cls: .touching, steps: st, anchor: anchor, features: features, sound: sound, volume: volume, haptic: haptic)
     }
-    /// A hand emote that holds the touch (cheek squish, whisper): side by side, the walk stops `reach` short (the arm is still down), phase 1 the walker's arm reaches onto the partner (the reach closes the gap), the hold from phase 2.
-    static func reaching(_ reach: Float, sound: SFX? = nil, volume: Float = 0.25) -> ContactStance {
-        ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: reach + HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold)], features: true, sound: sound, volume: volume)
-    }
     /// Never overlap (and never squish): gap >= `near` from phase `from`.
     static func proximity(from: Int = 0, features: Bool = true) -> ContactStance {
         ContactStance(cls: .proximity, steps: [Step(from: from, target: near, onlySeparate: true)], features: features)
@@ -84,14 +80,14 @@ struct ContactStance: Sendable {
     // MARK: the table
     static let table: [SocialKind: ContactStance] = [
         // press / bump kinds: stand a few cm apart, touch when the move presses
-        // boop (user rule 2): side by side at HAND REACH. The walk-up is the ordinary one (arms swinging, the outline the engine knows) and stops `gapBoop` short of the touch; then the booper stands and REACHES (the arm comes up and across, phase 1) onto the partner's arm - the reach closes exactly that gap - and the press closes the last cm. The bodies (eggs) never touch: the hand is the contact.
-        .boop: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.gapBoop + HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold)], anchor: .b, sound: .squish, volume: 0.5),
+        // boop (user rule 2): side by side at HAND REACH. The booper's arm is up (in its canonical pose) from the first step, so the outline the walk-up measures is hand to the partner's arm and the last steps land the HAND there; the press closes the last cm. The bodies (eggs) never touch: the hand is the contact.
+        .boop: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold)], anchor: .b, sound: .squish, volume: 0.5),
         .squabble: .pressing(from: 1, press: 1, walk0: true, until: 2, sound: .squish, volume: 0.5),
         .bump: .pressing(from: 1, press: 2, until: 4, sound: .boop, volume: 0.9),          // (phase 4 = the happy bounces AFTER the bump: the pair may part and hop)
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        // high five (user rule 2): side by side, the walk-up stops two reaches (`gapFive`) short of the touch, both arms rise and reach in phase 1 and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 3: the arms go down, they part.
-        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.gapFive + HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 3: the arms go down, they part.
+        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
@@ -102,12 +98,11 @@ struct ContactStance: Sendable {
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
-        // cheek squish / whisper (user rule 2): the walker's HAND rests on the partner (HandReach, BlobSocial+Hands.swift): the walk stops a reach short, the arm reaches in phase 1, the hold (one continuous press: the second squish is a lean + squash, not a back-off and a second touch) from phase 2
-        .cheekSquish: .reaching(HandReach.gapBoop, sound: .squish, volume: 0.7),
+        .cheekSquish: .holding(from: 1, facing: .camera, sound: .squish, volume: 0.7),          // (one continuous press: the second squish is a lean + squash, not a back-off and a second touch)
         .backToBack: .holding(from: 3, facing: .camera, features: true),
         .cuddleLean: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
-        .whisperGiggle: .reaching(HandReach.gapBoop),
+        .whisperGiggle: .holding(from: 1, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups

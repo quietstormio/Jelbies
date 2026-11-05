@@ -733,11 +733,11 @@ extension BlobBrain {
     // MARK: boop
 
     private func driveBoop(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        // 2026-11-05 (user rule 2): the pair stands SIDE BY SIDE at hand reach (ContactStance .boop: the bodies keep HandReach.gapBoop apart) and the booper's arm comes up and reaches across the gap; the
+        // 2026-11-05 (user rule 2): the pair stands SIDE BY SIDE at hand reach (ContactStance .boop: the walk-up lands the HAND on the partner's arm) and the booper's arm comes up and reaches across the gap; the
         // hand ends ON the partner's flank (BlobSocial+Hands.swift solves the elevation so the pole of the hand sits on his skin). The bodies never press: the hand is the contact.
         if openSideBySide(s, o, isA, settle: 0.6) {
-            // (the walk-up is the ordinary walk and stops a reach short; the booper stands and THEN reaches: the arm comes up and across onto the partner's arm)
-            if isA, s.phase >= 1 { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+            // (the arm is up from the first step in its canonical pose: the walk-up's outline already has the hand, and the last steps land the HAND on the partner's arm)
+            if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
             return
         }
         let t = s.phaseT

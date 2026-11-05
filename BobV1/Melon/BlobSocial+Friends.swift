@@ -203,7 +203,7 @@ extension BlobBrain {
 
     // MARK: high five (the "jelly bump")
 
-    /// 2026-11-05 (user rule 2, replaces the jelly bump of 11-02): the HIGH FIVE. The two stand side by side facing the camera, `HandReach.gapFive` short of the touch, each raises the arm toward the other (elevation `elFive`, a wave-sized
+    /// 2026-11-05 (user rule 2, replaces the jelly bump of 11-02): the HIGH FIVE. The two stand side by side facing the camera, the arms up from the first step, each raising the arm toward the other (elevation `elFive`, a wave-sized
     /// thumb, never longer than the wave's) and the hands MEET tip to tip in the middle (the stance holds the hands' gap at a squeeze: hand to hand 0 +- 0.5 cm); a slap: a jelly kick, the boop, the one haptic tap, happy eyes and hearts;
     /// both spring back with a second jiggle, the arms go down and they part. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown). (The old version leaned the bodies together and raised no arm: the hands hovered 55 cm from the partner.)
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
@@ -278,7 +278,7 @@ extension BlobBrain {
         // 2026-11-05 (user rule 2): the squisher's hand rests ON the partner (the arm comes up on the way in, BlobSocial+Hands.swift): the stub arm cannot reach a cheek from beside him, so it lands on his arm / shoulder where the
         // skins meet, the pair stands at hand reach and the squish is the lean + squash of the bodies around it.
         let reaching = isA
-        if reaching, s.phase >= 1 { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+        if reaching { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let ft = s.phaseT
