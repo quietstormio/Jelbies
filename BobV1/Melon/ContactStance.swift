@@ -111,6 +111,8 @@ struct ContactStance: Sendable {
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
+        // (explicit since 2026-11-04, user rule 3: EVERY kind has a row - a new emote without one fails ContactSettleTests.testEveryInteractiveKindHasAStanceRow)
+        .look: .proximity(), .zoomies: .proximity(), .pass: .proximity(),
     ]
     static func entry(_ k: SocialKind) -> ContactStance? { table[k] }
 }
@@ -128,6 +130,7 @@ extension BlobBrain {
         var r = Set<Int>()
         if let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching { for id in (s.kind.isGroup ? s.crewIDs : [s.idA, s.idB, s.idC]) where id >= 0 && id != steerID { r.insert(id) } }
         for id in socialBook.glow.keys { r.insert(id) }
+        if stanceStepFree { for id in r where id >= 0 { r.insert(-(id + 1)) } }          // (the final step of a stance walk: MelonStage.keepApart skips these partners for this one call)
         return r
     }
 

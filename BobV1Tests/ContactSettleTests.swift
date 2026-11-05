@@ -337,4 +337,16 @@ final class ContactSettleTests: XCTestCase {
         MotionLog.write(String(format: "ARRIVAL boop: gap %.3f at the last planted step", g))
         XCTAssertLessThan(g, 0.03, "the walk-up ends within 3 cm of the touch (the lean closes the rest)"); XCTAssertGreaterThan(g, -0.015, "and never inside him")
     }
+
+    /// USER RULE 3 (2026-11-04): every interactive emote follows the one formula. Enforced here, not in a note: EVERY SocialKind has an explicit row in the stance table (no fallthrough class), and every kind with a
+    /// touching / proximity row is measured by ContactPolishTests (a new emote shows up in the harness automatically or this test fails). Add a kind: row in ContactStance.table + entry in pairEntries / groupEntries.
+    func testEveryInteractiveKindHasAStanceRow() {
+        let measured = Set((ContactPolishTests.pairEntries + ContactPolishTests.groupEntries).compactMap { e -> SocialKind? in if case .social(let k) = e.scenario { return k }; return nil })
+        // (zoomies / look / pass have partners and rows; the lie / sleep scenarios are not SocialKinds)
+        for k in SocialKind.allCases {
+            guard let st = ContactStance.entry(k) else { XCTFail("SocialKind.\(k) has no ContactStance row (user rule 3: every interactive emote gets an explicit row: class, facing, features, sound)"); continue }
+            if st.cls != .none { XCTAssertTrue(measured.contains(k), "SocialKind.\(k) has a stance row but ContactPolishTests does not enumerate it (add it to pairEntries / groupEntries)") }
+            if st.cls == .touching { XCTAssertFalse(st.steps.isEmpty, "\(k): a touching row needs steps") }
+        }
+    }
 }

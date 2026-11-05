@@ -348,6 +348,8 @@ final class BlobBrain {
     var stepLive = false             // a step's root / heading interpolation is running
     var stepRoot0 = SIMD2<Float>(0, 0), stepRootD = SIMD2<Float>(0, 0)
     var stepYaw0: Float = 0, stepYawD: Float = 0
+    /// Set only around the planning call of a stance walk's final step: `contactPartnerIDs` then tells the room's peer wall to skip the session partner (encoded as -(id+1)).
+    var stanceStepFree = false
     var walkFinal = false            // the step in progress squares his feet and ends the walk
     var pivotSide: Int?              // pivot the pose on this foot (wave: its planted spot; gait: its nominal spot under the root)
     var pivotNominal = false
@@ -1276,12 +1278,18 @@ final class BlobBrain {
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
         var rootD = u * a
         let cand = root + rootD
+        // THE FINAL STEP OF A STANCE WALK lands on the spot the stance decided (the touch distance for the posture the pair ENDS in). The room's peer wall measures the partner at the walker's CURRENT, mid-turn
+        // outline (80 deg off the final yaw: 10 cm wider than the pose he lands in) and used to cut the step 9 cm short, which the lean then closed (stop-turn-lean). So this one planning call does not see the partner.
+        stanceStepFree = exact && walkFinal
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
+        stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
-        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude)
+        // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
+        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate : 1
+        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
     }
 

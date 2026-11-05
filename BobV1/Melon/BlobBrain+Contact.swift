@@ -21,6 +21,7 @@ enum ContactTuning {
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
     static let leanBudget: Float = 0.11          // rad of lean a planted body spends on a residual gap (~ 2.7 cm at the cheeks, measured: 0.08 rad closed 1.8 cm in the boop trace); beyond it: one shuffle step
     static let leanPerMetre: Float = 3.2          // rad per metre to close (measured 2026-11-04: a lean of 1 rad moves the skin contact ~ 0.22 m)
+    nonisolated(unsafe) static var finalStepRate: Float = Float(ProcessInfo.processInfo.environment["FINAL_STEP_RATE"] ?? "") ?? 0.6          // the last stride of a stance walk runs at this share of the normal step rate (brakes into the touch)
     static let rearmHold: Float = 0          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
