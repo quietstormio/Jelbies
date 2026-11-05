@@ -31,8 +31,8 @@ enum PeakTuning {
     /// the strike's visible lean stays inside the few cm the approach gap leaves.
     nonisolated(unsafe) static var leanCap: Float = env("PEAK_CAP", 0.08)
     /// The skin gap the lean may close to (the stance's plush rest).
-    /// Kinds whose hold is a standing contact the eye reads as a gap the moment it opens (squabble: the face-off stays pressed, the shoves are a lean + a jelly kick, not a step back): a tighter wind-up / recoil opening (m).
-    static let openCapByKind: [SocialKind: Float] = [.squabble: 0.012]
+    /// Per-kind override of `openCap` (m). Empty: a squabble value of 1.2 cm was measured with NO effect on the hold (the +-2 cm pulse there is the jelly kick, not the guarded lean).
+    static let openCapByKind: [SocialKind: Float] = [:]
     static let rest: Float = -0.006          // (a hair deeper than the stance's -0.4 cm: the approach is asymptotic, and the touch gate fires at +0.5 cm)
 
     /// The range the drive's toward-partner lean (rad, excluding the engine's own `trim`) may take when the body now leans `now` rad toward the partner with the live skin gap `gap` (m): in at most up to
