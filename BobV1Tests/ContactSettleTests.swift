@@ -392,4 +392,36 @@ final class ContactSettleTests: XCTestCase {
         // KNOWN OPEN (r4-arrivalA-r2): in this cold-start scene the first planted frame of phase 1 still reads 3.7 cm; the bar is 1.5. Expected to fail until it is closed - remove the expectation then.
         XCTExpectFailure("nuzzle arrives 3.7 cm apart in the cold-start Duo (bar <= 1.5 cm)", strict: false) { XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar") }
     }
+
+    /// r4-standing-r3: a side-by-side stance walker hangs his arms for the last 1.5 m (the walk lifts them out to the sides, +10 cm of reach toward the partner, which stopped the pair 12 cm short), a face-to-face walker does not,
+    /// and the pair's gap at the end of the walk-up is the standing one (it used to be 12 cm; the walk-up's destination was an estimate of the striding outline).
+    func testSideBySideWalkerHangsHisArmsAndArrivesNearTheTouch() {
+        func run(_ kind: SocialKind) -> (armsDownNear: Bool, armsDownFar: Bool, arrival: Float?, stable: Float?) {
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: 31)
+            d.live = true
+            for _ in 0..<3 { d.tick() }
+            let a = d.lab.rigs[0], b = d.lab.rigs[1]
+            XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim))
+            var near = false, far = false, arrival: Float?, stable: Float?
+            for _ in 0..<(60 * 12) {
+                d.tick()
+                if case .walk(let t, _) = a.brain.script {
+                    let dist = simd_distance(a.brain.position, t)
+                    if a.brain.stanceArmsDown(t) { if dist < 1.5 { near = true } else { far = true } }
+                    else if dist < 1.0, ContactTouchMemory.exact.contains(a.brain.steerID) { far = far || false }
+                    if let e = ContactTouchMemory.store[a.brain.steerID &* 4096 &+ b.brain.steerID] { stable = e.d }
+                }
+                if (a.brain.social?.phase ?? 0) >= 1, arrival == nil, !a.brain.feet.active, let g = ContactField.gap(0, 1) { arrival = g }
+            }
+            return (near, far, arrival, stable)
+        }
+        let side = run(.nuzzle)
+        MotionLog.write(String(format: "STANDING nuzzle: armsDownNear %d far %d arrival %@ stable %@", side.armsDownNear ? 1 : 0, side.armsDownFar ? 1 : 0, side.arrival.map { String(format: "%.3f", $0) } ?? "nil", side.stable.map { String(format: "%.3f", $0) } ?? "nil"))
+        XCTAssertTrue(side.armsDownNear, "a side-by-side walker hangs his arms inside the last 1.5 m")
+        XCTAssertFalse(side.armsDownFar, "...and not before")
+        if let g = side.arrival { XCTAssertLessThan(g, 0.08, "the walk-up ends within 8 cm of the touch (was 12 cm with the arms out)"); XCTAssertGreaterThan(g, -0.015, "never inside him") } else { XCTFail("the walk-up ends") }
+        if let st = side.stable { XCTAssertTrue(st > 1.3 && st < 1.5, "the averaged touch distance is the standing one (1.41 m here), got \(st)") } else { XCTFail("a stable touch distance is kept") }
+        let face = run(.hum)
+        XCTAssertFalse(face.armsDownNear, "a face-to-face walker keeps his walking arms")
+    }
 }

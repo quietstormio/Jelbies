@@ -177,9 +177,11 @@ extension BlobBrain {
         if var x = e {
             if !x.frozen {
                 if planted(self), planted(p), simd_distance(position, p.position) < 1.9 { x.d = raw; x.frozen = true }          // (standing AND close: a pair planted at the start of the session, 3 m apart, has not arrived yet)
-                else if sideBySide ? !feet.active : true {
-                    // side by side the outline across the walker's travel swings +-8 cm with the arms over a stride: sampled between steps only (double support, one gait phase), at once. Face to face the front reach does not swing: the live value, low-passed.
-                    let a: Float = sideBySide ? ContactTuning.stableTouchAlpha : 0.12, cl: Float = sideBySide ? 0.4 : 0.03
+                else {
+                    // side by side the outline across the walker's travel swings +-8 cm over a stride (the jelly shears with the steps): it is AVERAGED over about a stride (a slow low-pass of every tick - sampling it
+                    // "between steps" froze a value from 3 m away when the walker was never in double support, nuzzle: stop 9 cm short then a push back). The arms are lowered for the last 1.5 m (stanceArmsDown), so the
+                    // average is that of the pose he stops in. Face to face the front reach does not swing: the live value, low-passed faster.
+                    let a: Float = sideBySide ? (armWalkWant > 0 ? 0.5 : ContactTuning.sideTouchAlpha) : 0.12, cl: Float = sideBySide ? 0.1 : 0.03
                     x.d = max(0.55, min(1.6, x.d + max(-cl, min(cl, (raw - x.d) * a))))
                 }          // (sampled only BETWEEN steps - double support: the outline swings +-8 cm over a stride, a sample at a fixed gait phase does not)          // (the live value, low-passed: side-on the pair touches at ~1.4 m, facing each other at ~0.75 m - the first sample is not the stance's)
             }

@@ -1360,7 +1360,7 @@ final class BlobBrain {
                 }
             }
             gaitPose(sway: waddleRoll, bob: 0.12)
-            armWalkWant = 1
+            armWalkWant = stanceArmsDown(target) ? 0 : 1
 
         case .turn(let to, let then):
             poseOn = true; ensureFeet(sim)
@@ -2094,6 +2094,14 @@ final class BlobBrain {
         }
         return (aF, bC, Float(BobForm.armTopR) + (Float(W.r1) - Float(BobForm.armTopR)) * l,
                 r2F, Float(BobForm.armFlatten) + (1 - Float(BobForm.armFlatten)) * l)
+    }
+
+    /// A side-by-side stance walker lowers his arms for the last stretch (r4-standing-r3): the walk lifts them out to the sides (reach 78 - 81 cm toward the partner, 66 - 70 once they hang), the
+    /// stop drops them - so a destination derived from the walking outline stopped the pair 12 cm short and the lean and a shuffle step closed it. With the arms hanging while he arrives, the outline
+    /// the last stride is planned on is the one he stops in.
+    func stanceArmsDown(_ target: SIMD2<Float>) -> Bool {
+        guard social != nil, ContactTouchMemory.exact.contains(steerID), let s = social, ContactStance.entry(s.kind)?.facing == .camera else { return false }
+        return simd_distance(position, target) < ContactTuning.armDropDistance
     }
 
     func driveArms(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {

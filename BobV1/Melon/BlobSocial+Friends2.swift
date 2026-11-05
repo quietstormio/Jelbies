@@ -441,7 +441,7 @@ extension BlobBrain {
     }
     private func noseBoopHit(booped: BlobBrain) {
         let booper = booped === self ? (socialPartner ?? self) : self
-        booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, 2.2)
+        booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, impactKick(2.2))
         booper.contactBoopFallback(booped)
         booped.onSocial?(.makeUp(partner: booper.steerID)); onSocial?(.makeUp(partner: booped.steerID))
         booper.contactCueFallback(booped, .boop, 0.8)
@@ -471,7 +471,7 @@ extension BlobBrain {
                 socialBook.wantRoll = worldLean(1) * 0.07 * sw * sinf(2 * .pi * (ft - 1.0) / 2.6)
                 if isA, !s.impacted, ft > 1.0 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0)
+                    jellyKick = max(jellyKick, impactKick(1.0)); o.jellyKick = max(o.jellyKick, impactKick(1.0))
                     contactBoopFallback(o)
                     AudioHub.shared.chirp(jelly: steerID, .happy)
                 }
@@ -498,7 +498,7 @@ extension BlobBrain {
         if isA {
             if !s.impacted, ft > 0.9 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
+                jellyKick = max(jellyKick, impactKick(1.2)); o.jellyKick = max(o.jellyKick, impactKick(1.2))
                 contactBoopFallback(o)
                 contactCueFallback(o, .squish, 0.5)
             }
