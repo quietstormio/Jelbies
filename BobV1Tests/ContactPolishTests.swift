@@ -109,6 +109,8 @@ final class ContactPolishTests: XCTestCase {
     /// The contact sounds (SFX raw values) the catalogue talks about.
     static let contactSounds: Set<String> = ["squish", "boop", "wobble", "highfive_boop", "emote_spinhug", "conga_tick", "ring_chime"]
     static let touchOn: Float = 0.01, touchOff: Float = 0.03
+    /// A step BACK after the first touch is >= ~10 cm; the stance's own approach step opens the skins by up to ~4 cm by design (measured: hum 3.5-4.3, nuzzle 3.7). Past 5 cm the pair has really parted and walks in again.
+    static let retreatMax: Float = 0.05
     /// The emotes whose HAND must end on the partner's skin (user rule 2): the hand-tip gap is measured for these.
     static let handKinds: Set<SocialKind> = [.boop, .highFive, .cheekSquish, .whisperGiggle]
     /// The hand gap of a frame: the least over every ordered pair (tip of i against the whole drawn skin of j) of `BruteForceContactMetric.handGap`; `farApart` when no hand is near anybody.
@@ -293,6 +295,8 @@ final class ContactPolishTests: XCTestCase {
     /// Runs one emote for one cast. `plan`: when set, the frames to shoot (the strip) with the shooter.
     func run(_ e: ContactEntry, cast: [Int], castName: String, plan: [Int]? = nil, device: MTLDevice? = nil) -> (Result, [UIImage]) {
         setProps(e.props)
+        // ORDER INDEPENDENCE (round 3): tag measured -0.9 cm alone and -25.2 cm after cheekSquish in the same process, because the previous run's profiles (keyed by steerID) and clip eggs were still in the statics. Every run starts clean.
+        ContactField.reset(); FeatureClip.eggs = []
         let n = cast.count
         var res = Result(); res.momentary = e.momentary; res.name = e.name; res.cast = castName; res.stance = e.stance
         var positions: [SIMD2<Float>]? = nil
@@ -596,9 +600,9 @@ final class ContactPolishTests: XCTestCase {
             if r.touchGaps.isEmpty { f.append("never touches") }
             else if let lo = r.touchGaps.min(), let hi = r.touchGaps.max(), lo < -0.01 || hi > 0.005 { f.append("touch at \(cm(lo))..\(cm(hi))") }
         } else if r.holdGaps.count < Result.minHold { if r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { f.append("no hold (\(r.holdGaps.count) touching frames)") } }
-        if r.retreat > 0.03 { f.append("touched, backed off \(cm(r.retreat)) cm and came back (stutter-step arrival)") }
+        if r.retreat > Self.retreatMax { f.append("touched, backed off \(cm(r.retreat)) cm and came back (stutter-step arrival)") }
         if r.arrivalCm == nil, !r.momentary, r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { f.append("never stood still on arrival") }
-        else if let m = r.holdMedian, abs(m) > 0.005 { f.append("hold \(cm(m))") }
+        else if !r.momentary, let m = r.holdMedian, abs(m) > 0.005 { f.append("hold \(cm(m))") }
         if max(r.featClip, r.limbClip) > 0.005 { f.append("feature inside \(dcm(max(r.featClip, r.limbClip)))") }
         if r.episodes == 0 { f.append("never touches") }
         for s in r.sndInEpisode where s != 1 { f.append("\(s) sounds in a touch"); break }
@@ -661,7 +665,8 @@ final class ContactPolishTests: XCTestCase {
                 for why in Self.handFails(r) { XCTAssertTrue(false, "\(who): \(why)") }
                 if r.momentary { for g in r.touchGaps { XCTAssertTrue(g >= -0.01 && g <= 0.005, "\(who): a momentary touch fired at \(Self.cm(g)) cm (want -1 ... +0.5)") } }
                 else if r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { XCTAssertGreaterThanOrEqual(r.holdGaps.count, Result.minHold, "\(who): never held a touch (\(r.holdGaps.count) frames in the hold step from the first touch on)") }
-                if let m = r.holdMedian { XCTAssertLessThanOrEqual(abs(m), 0.005, "\(who): the hold sits \(Self.cm(m)) cm from touching (want 0 +- 0.5) over \(r.holdGaps.count) frames") }
+                XCTAssertLessThanOrEqual(r.retreat, Self.retreatMax, "\(who): touched, then backed off \(Self.cm(r.retreat)) cm before the hold (stutter-step arrival)")
+                if !r.momentary, let m = r.holdMedian { XCTAssertLessThanOrEqual(abs(m), 0.005, "\(who): the hold sits \(Self.cm(m)) cm from touching (want 0 +- 0.5) over \(r.holdGaps.count) frames") }
                 XCTAssertGreaterThan(r.episodes, 0, "\(who): never touches")
                 for (k, s) in r.sndInEpisode.enumerated() { XCTAssertEqual(s, 1, "\(who): touch \(k) fired \(s) contact sounds (want exactly 1)") }
                 XCTAssertEqual(r.sndOutside, 0, "\(who): \(r.sndOutside) contact sounds fired while the skins were not touching")
@@ -706,6 +711,7 @@ final class ContactPolishTests: XCTestCase {
         r.arrivalCm = 0.01; XCTAssertFalse(Self.barFails(r).contains { $0.hasPrefix("arrival") })
         r.arrivalCm = -0.02; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("arrival") }, "sunk in by 2 cm on arrival fails too")
         r.retreat = 0.55; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("touched, backed off") }, "touch, back off 55 cm, walk in again = the stutter-step arrival fails the bar")
+        r.retreat = 0.04; XCTAssertFalse(Self.barFails(r).contains { $0.hasPrefix("touched, backed off") }, "the stance's own 4 cm opening is not a retreat")
         r.retreat = 0.012; XCTAssertFalse(Self.barFails(r).contains { $0.hasPrefix("touched, backed off") }, "the near step's 1 cm separation is not a retreat"); r.retreat = 0
         r.arrivalCm = nil; XCTAssertTrue(Self.barFails(r).contains("never stood still on arrival"))
         r.arrivalCm = 0.0; r.holdGaps = [0.001]; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("no hold") }, "never a hold from one frame")
