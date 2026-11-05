@@ -102,7 +102,7 @@ struct ContactStance: Sendable {
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 1, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
-        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true, walks: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
+        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
         .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
         .circleDance: .holding(from: 2, walk0: false, features: true),

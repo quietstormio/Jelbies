@@ -26,7 +26,7 @@ enum ContactTuning {
     /// The per-tick blend of the live touch distance into the stable one: the outline swings +-8 cm over a stride (arms, legs), so the destination follows its average over about a stride (~0.8 s), not a sample.
     nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.7
     /// The destination of a stance walk is locked this close to it (m): late enough that the averaged touch distance has settled, early enough that the last two steps are planned on a fixed spot.
-    nonisolated(unsafe) static var lockDistance: Float = Float(ProcessInfo.processInfo.environment["LOCK_DIST"] ?? "") ?? 0.45
+    nonisolated(unsafe) static var lockDistance: Float = Float(ProcessInfo.processInfo.environment["LOCK_DIST"] ?? "") ?? 0.8
     nonisolated(unsafe) static var armCalmDistance: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM_DIST"] ?? "") ?? 1.0
     nonisolated(unsafe) static var armCalmSweep: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM"] ?? "") ?? 0.2
     /// A stance walk's steps within this distance (m) of the decided spot are planned without the partner wall (the last two strides).
