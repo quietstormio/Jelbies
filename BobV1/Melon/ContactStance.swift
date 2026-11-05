@@ -57,6 +57,8 @@ struct ContactStance: Sendable {
     /// A stance walk aims this much SHORT of the touch (total; a meeting pair shares it): a walk's last step lands up to ~6 cm off its target (measured overshoots: 7 - 15 cm for two walkers) (planWalkStep's arrival radius) and a walker cannot step backward without turning round,
     /// so a short stop is closed by a forward shuffle / the lean, an overshoot is not.
     static let walkShort: Float = 0.0
+    /// Where a walk that ends in a SIT stands (skin gap): the seated outline is ~4 cm wider than the standing one (measured, sitTogether: the pair that stood at the 1.2 cm approach sat at -3.9 cm), so the walk stops that much further out.
+    static let seated: Float = near + 0.04
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
 
@@ -92,7 +94,7 @@ struct ContactStance: Sendable {
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
         .nuzzle: .holding(from: 2, facing: .camera),
-        .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
+        .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: seated, onlySeparate: true, walks: true), Step(from: 2, target: hold)], features: true),          // (the stance owns the walk-up, aimed with the SEATED outline: sitting widens each body by ~2 cm toward the partner, the settle's lean closes the rest)
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
