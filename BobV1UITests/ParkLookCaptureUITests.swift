@@ -18,8 +18,8 @@ final class ParkLookCaptureUITests: XCTestCase {
         app.launchArguments += ["-SetRoster", "bob", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES",
                                 "-BlobDrops.v1", "1024", "-BlobNoWander", "1", "-ClockHour", "12", "-StartPark", "1"]
         app.launch()
-        for k in 0..<4 {
-            sleep(5)
+        for k in 0..<8 {
+            sleep(4)
             try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/park_\(k + 1).png"))
         }
         app.terminate()

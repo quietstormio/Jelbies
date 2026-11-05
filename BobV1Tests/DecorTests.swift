@@ -49,7 +49,7 @@ final class DecorTests: XCTestCase {
 
     func testCatalogueSellsEveryNonRetiredDecorItemInTheRightPriceBand() {
         let items = StoreCatalog.items(.decor)
-        let sold = DecorKind.allCases.count - 3 - DecorKind.retired.count          // (the 3 park-only toys and the retired sit-on furniture are not sold)
+        let sold = DecorKind.allCases.count - 2 - DecorKind.retired.count          // (the 2 park-only toys and the retired sit-on furniture are not sold)
         XCTAssertEqual(items.count, sold)
         XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, sold, "every piece is on exactly one tab")
         XCTAssertFalse(items.contains { $0.id == "decor-eggchair" }, "the swing replaces the egg chair")
