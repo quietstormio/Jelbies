@@ -201,12 +201,12 @@ extension GameCare {
             dining.tableSkin = { n in FoodMeshes.mesh(id: "cafetable_\(n)") }
             let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
             let n = max(diners.count, 1)
-            let layout = DiningLayout.make(n: n, row: true)
+            let layout = DiningLayout.make(n: n)
             // the table sits well back (portrait) or to the left (landscape) so the order card never covers the Jelbies
             let aspect = GameCamera.aspect
             let want: [SIMD2<Float>] = aspect < 1 ? [SIMD2(0, -1.35), SIMD2(0, -0.9), SIMD2(0, -0.4)] : [SIMD2(-2.1, 0.2), SIMD2(-1.8, 0.4), SIMD2(-1.5, 0.6), SIMD2(-1.2, 0.9)]
             book.origin = want.first { DiningSpot.isClear(origin: $0, layout: layout, of: SIMD2(99, 99), aspect: aspect) } ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: layout)
-            dining.spawn(serving: CafePlate.emptyTable, n: n, bobAt: SIMD2(99, 99), forcedOrigin: book.origin, row: true)
+            dining.spawn(serving: CafePlate.emptyTable, n: n, bobAt: SIMD2(99, 99), forcedOrigin: book.origin)
             book.tableOut = true
             let order: [Int] = n == 3 ? [1, 0, 2] : Array(0..<n)          // left, middle, right
             book.stands = [:]

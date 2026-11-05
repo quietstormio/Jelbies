@@ -127,9 +127,9 @@ final class LineupTests: XCTestCase {
         _ = rig(count: 3)
         var offered: [SIMD2<Float>] = []
         DiningSpot.pickOpen = { offered = $0; return $0.first }
-        _ = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: 3), layoutFor: { DiningLayout.make(n: 3, side: DiningLayout.side(for: $0)) })
+        _ = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: 3))
         XCTAssertFalse(offered.isEmpty, "some spot is offered")
-        for o in offered { for p in DiningLayout.make(n: 3, side: DiningLayout.side(for: o)).places { XCTAssertTrue(DiningSpot.placeReachable(o + p.rel, slack: DiningSpot.exactSlack), "tray \(o): the place at \(o + p.rel) is reachable (exactly)") } }
+        for o in offered { for p in DiningLayout.make(n: 3).places { XCTAssertTrue(DiningSpot.placeReachable(o + p.rel), "tray \(o): the place at \(o + p.rel) is reachable") } }
         XCTAssertFalse(DiningSpot.placeReachable(SIMD2(1.31, 0.76)), "a stand beyond the walkable width is not a place")
         XCTAssertFalse(DiningSpot.placeReachable(SIMD2(-1.31, 0.76)))
         XCTAssertTrue(DiningSpot.placeReachable(SIMD2(1.11, 0.76)), "the centre column's side stand is")
@@ -146,7 +146,6 @@ final class LineupTests: XCTestCase {
         var secs: Float = 0
         let done = run(r, 14, track: &tr) { secs += 1 / 60; return r.care.group.state == .serving }
         print("LINEUP meal \(name) done=\(done) time=\(secs) minDist=\(tr.minDist) places=\(r.care.group.placeOf)")
-        if !done { for i in 0..<3 { let b = r.actors[i].brain!; print("LINEUPDBG \(i) floor=\(r.actors[i].floor) approach=\(r.care.group.placeOf.indices.contains(i) ? r.care.group.approachPoint(blob: i) : .zero) act=\(b.activity) tray=\(r.care.dining.phase) origin=\(r.care.dining.origin) state=\(r.care.group.state)") } }
         XCTAssertTrue(done, "\(name): the meal line-up completes")
         XCTAssertLessThan(secs, 8.0, "\(name): in under 8 s")
         XCTAssertGreaterThanOrEqual(tr.minDist, 0.9 * DiningGroup.diningGap * 1.2, "\(name): nobody passed through anybody")

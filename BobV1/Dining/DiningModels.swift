@@ -97,11 +97,7 @@ nonisolated struct TrayLayout {
 }
 
 nonisolated enum DiningLayout {
-    /// The side the third diner stands on for a tray at `origin` (+1 = right/+x, -1 = left): toward the middle of the floor, so his stand stays inside the walkable width.
-    static func side(for origin: SIMD2<Float>) -> Float { origin.x > 0.01 ? -1 : 1 }
-    /// `row: true` = the café's preset table (and the old row for the tests that pin it): a straight row, its spot fixed by the room.
-    /// Otherwise 2 diners stand 1.40 apart (the measured gap at 1.60 was +0.06..+0.30) and 3 stand AROUND the tray (see `triangle`).
-    static func make(n n0: Int, row: Bool = false, side sd: Float = 1) -> TrayLayout {
+    static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
         switch n {
         case 1:
@@ -113,31 +109,15 @@ nonisolated enum DiningLayout {
         case 2:
             // 17 % wider than before (0.95 -> 1.11); the stands move out with it and back to clear the near rim by his real belly
             return TrayLayout(n: 2, scale: s, half: SIMD2(1.11, 0.46),
-                              places: [TrayPlace(rel: SIMD2(row ? -0.93 : -0.70, -0.96), yaw: 0.32), TrayPlace(rel: SIMD2(row ? 0.93 : 0.70, -0.96), yaw: -0.32)],
+                              places: [TrayPlace(rel: SIMD2(-0.93, -0.96), yaw: 0.32), TrayPlace(rel: SIMD2(0.93, -0.96), yaw: -0.32)],
                               colliderHalf: SIMD2(0.5, 0.26), berryAngles: [.pi, 0])
         default:
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
-            if row {
-                return TrayLayout(n: 3, scale: s, half: SIMD2(1.0, 0.6),
-                                  places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-1.11, -1.07), yaw: 0.25),
-                                           TrayPlace(rel: SIMD2(1.11, -1.07), yaw: -0.25)],
-                                  colliderHalf: SIMD2(0.55, 0.3), berryAngles: [-.pi / 2, 150 * .pi / 180, 30 * .pi / 180])
-            }
-            // 2026-11-05: three diners AROUND the tray, not in a row (a 1.11 row of 1.40-wide bodies sank them 0.35-0.52 m into each other). Two stand at the tray's back corners facing the
-            // camera side (bodies standing straight touch at the smallest root distance, 1.40, measured by TrayObstacleTests.testTouchTableForTheTriangle: toed in they need 1.50-1.55),
-            // the third beside the tray's front corner (mirrored for a tray left of the middle), facing the plate. The whole triangle must fit the floor's walkable width at the tray
-            // (about 2.0): ax 0.725 -> the back pair 1.45 apart (+0.05); the third 0.31 outside the back-right one's x (his belly clears the 0.45 bed and its handle: the tray is a 0.9 x 1.24 near-square) and 1.27 forward: root distance 1.31
-            // against a measured touch distance of about 1.27 for that diagonal.
-            let ax: Float = 0.725, bz: Float = -1.07, tx: Float = ax + 0.31, tz: Float = bz + 1.27
-            let yawB: Float = 0, yawT = atan2f(-tx, -tz)          // the back pair faces the camera; the third faces the plate
-            func ang(_ x: Float, _ z: Float) -> Float { atan2f(z, x) }          // plate angle of the diner's side (berries sit on the ring toward him)
-            let m = sd
-            return TrayLayout(n: 3, scale: s, half: SIMD2(0.45, 0.62),
-                              places: [TrayPlace(rel: SIMD2(-m * ax, bz), yaw: m * yawB), TrayPlace(rel: SIMD2(m * ax, bz), yaw: -m * yawB),
-                                       TrayPlace(rel: SIMD2(m * tx, tz), yaw: m * yawT)],
-                              colliderHalf: SIMD2(0.4, 0.3),
-                              berryAngles: m > 0 ? [ang(-ax, bz), ang(ax, bz), ang(tx, tz)] : [.pi - ang(-ax, bz), .pi - ang(ax, bz), .pi - ang(tx, tz)])
+            return TrayLayout(n: 3, scale: s, half: SIMD2(1.0, 0.6),
+                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-1.11, -1.07), yaw: 0.25),
+                                       TrayPlace(rel: SIMD2(1.11, -1.07), yaw: -0.25)],
+                              colliderHalf: SIMD2(0.55, 0.3), berryAngles: [-.pi / 2, 150 * .pi / 180, 30 * .pi / 180])
         }
     }
 }

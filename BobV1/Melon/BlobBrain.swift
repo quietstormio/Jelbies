@@ -2295,10 +2295,7 @@ final class BlobBrain {
             if r.miss < bestMiss { bestMiss = r.miss; dine.side = side; dine.reach = r.pose }
         }
         dine.miss = bestMiss
-        if let c = dineLeanCap { dine.reach.twist = max(-c.twist, min(c.twist, dine.reach.twist)); dine.reach.roll = max(-c.roll, min(c.roll, dine.reach.roll)) }          // (a group meal: no swing into the neighbour)
     }
-    /// A group meal caps the eat / sip lean's sideways parts (DiningGroup.leanCap); nil = the solved reach as it is.
-    var dineLeanCap: (twist: Float, roll: Float)?
 
     func applyDine(_ sim: SoftBody, _ skinner: Skinner, pose: ReachPose, mouth: Float, eyes: Float, pulse: Float) {
         dine.cur = pose
