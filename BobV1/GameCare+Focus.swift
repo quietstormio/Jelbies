@@ -149,6 +149,7 @@ extension GameCare {
         guard focus.phase == .roaming, !bath.active, !tripActive else { return }
         var ids = Array(Set(requested.filter { jellies.indices.contains($0) })).sorted()
         if ids.isEmpty { ids = [0] }                  // an id outside the roster (a selection of a Jelly this game does not have): Bob
+        for id in ids { AudioHub.shared.contextVoice(jelly: id, .mmhmm, chance: 0.5) }          // (the player called)
         greeting = false
         select.cancel()
         // a close-up that has just ended hands the paused Jellies' wandering back one brain per step (`driveFocus`); a call landing inside that window used

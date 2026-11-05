@@ -328,6 +328,7 @@ final class DiningSet {
         phase = .popping; t = 0; scale = 0
         puffNow()
         AudioHub.shared.play(.setdown)          // the plate / cup lands on the floor
+        AudioHub.shared.contextVoice(jelly: 0, .ooh, chance: 0.6)
         refreshColliders(); dirty = true
         return true
     }

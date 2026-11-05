@@ -144,6 +144,7 @@ extension GameCare {
         touchPlay?.spawnHeart(now: now)
         for r in actors where r.id != 0 { bubbleHub.spawnHeart(for: r.id, now: now) }
         AudioHub.shared.chirp(jelly: a.id, .happy)
+        for r in actors where r.id != a.id && r.id != 0 { AudioHub.shared.contextVoice(jelly: r.id, .hello, chance: 0.8) }
         g.welcomeAt = now
     }
 

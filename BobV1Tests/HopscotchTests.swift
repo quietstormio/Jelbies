@@ -100,20 +100,12 @@ final class HopscotchTests: XCTestCase {
     func testEveryNewParkPieceHasAStandSpot() {
         let lab = parkLab(n: 1)
         let b = lab.rigs[0].brain
-        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.playtunnel, .decorPeek), (.seesaw, .decorSit), (.sandbox, .decorSit)] {
+        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit), (.sandbox, .decorSit)] {
             let f = DecorField.shared.feet.first { $0.kind == kind }!
             b.decorIgnore = f.uid
             XCTAssertNotNil(b.decorStand(move, f, from: SIMD2(0, 0.5)), "\(kind) has a stand spot in the park")
         }
-        // the tunnel is entered by a real mouth from either side (not the peek-from-beside fallback)
-        let tun = DecorField.shared.feet.first { $0.kind == .playtunnel }!
-        let reach = tun.kind.spec.half.x + 0.8, ax = tun.turned(SIMD2(1, 0))
-        let mouths = [tun.centre + ax * reach, tun.centre - ax * reach]
-        for from in [SIMD2<Float>(0.9, -1.0), SIMD2<Float>(0.9, 4.0)] {
-            b.decorIgnore = tun.uid
-            let e = b.tunnelEntry(tun, from: from)
-            XCTAssertTrue(e.map { p in mouths.contains { simd_distance($0, p) < 0.15 } } ?? false, "tunnel mouth reachable from \(from): got \(String(describing: e)), mouths \(mouths)")
-        }
+        XCTAssertFalse(DecorField.shared.feet.contains { $0.kind == .playtunnel }, "the park has no play tunnel")
     }
 
     // MARK: release
@@ -122,11 +114,10 @@ final class HopscotchTests: XCTestCase {
         _ = parkLab(n: 1)
         let f = DecorField.shared
         for id in 0..<3 { f.use(uid, by: id); HopscotchLine.shared.enroll(uid, id) }
-        f.use(ParkToys.tunnelUID, by: 5); f.tunnelDir[ParkToys.tunnelUID] = 1; f.progress[ParkToys.tunnelUID] = [5: 0.3]
         f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.sandUID, seat: 1, by: 7)
         XCTAssertTrue(HopscotchLine.shared.active)
         f.set([PlacedDecor(uid: 1, kind: .beanbag, x: 0, z: 0, turns: nil)])          // (the room again)
-        for u in [ParkToys.seesawUID, ParkToys.sandUID, uid, ParkToys.slideUID, ParkToys.tunnelUID] {
+        for u in [ParkToys.seesawUID, ParkToys.sandUID, uid, ParkToys.slideUID] {
             XCTAssertNil(f.occupant[u], "occupant \(u)"); XCTAssertNil(f.coUsers[u], "coUsers \(u)"); XCTAssertNil(f.seatOccupant[u], "seats \(u)")
             XCTAssertNil(f.progress[u], "progress \(u)"); XCTAssertNil(f.tunnelDir[u], "tunnelDir \(u)")
         }
@@ -197,30 +188,32 @@ final class HopscotchTests: XCTestCase {
         XCTAssertTrue(DecorField.shared.coUsers[uid] == nil && DecorField.shared.occupant[uid] == nil, "the court is released")
     }
 
-    // MARK: the tunnel
+    // MARK: the slide is solid
 
-    /// One Jelbie goes in at the near mouth of the park's play tunnel, walks through and comes out of the far one; the tunnel is released afterwards.
-    func testJelbieGoesThroughTheParkTunnel() {
-        let lab = parkLab(n: 1)
-        let r = lab.rigs[0], b = r.brain
-        let tun = DecorField.shared.foot(ParkToys.tunnelUID)!
-        let reach = tun.kind.spec.half.x + 0.8, ax = tun.turned(SIMD2(1, 0))
-        let mouths = [tun.centre + ax * reach, tun.centre - ax * reach]
-        r.sim.teleport(toXZ: SIMD2(0.9, -1.3)); for _ in 0..<60 { r.sim.step() }
-        b.currentPose(r.sim)
-        b.idleForced = true
-        XCTAssertTrue(b.decorStart(.decorPeek, r.sim, only: .playtunnel, uid: nil), "the tunnel is started")
-        let entry = mouths.min { simd_distance($0, b.position) < simd_distance($1, b.position) }!
-        let exitMouth = mouths.first { $0 != entry }!
-        var nearExit = Float.infinity, wasInside = false
-        for _ in 0..<(60 * 40) {
-            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
-            nearExit = min(nearExit, simd_distance(b.position, exitMouth))
-            if tun.distance(b.position) < 0.2 { wasInside = true }
-            if b.idleState.kind == nil, nearExit < 2 { break }
+    /// The park has no tunnel, and over a long soak (many seeds) nobody has a root inside the slide's footprint except while really using it (the ladder, the platform, the ride, getting up).
+    func testNoOneStandsInsideTheParkSlide() {
+        XCTAssertFalse(ParkToys.placed.contains { $0.kind == .playtunnel }, "no tunnel in the park")
+        var longest: Float = 0, where_ = ""
+        let sf = DecorField.shared.foot(ParkToys.slideUID) ?? { _ = parkLab(n: 1); return DecorField.shared.foot(ParkToys.slideUID)! }()
+        let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))
+        XCTAssertLessThanOrEqual(landing.y + 0.5, GameCamera.roamRect.max.y, "the chute's end (\(landing)) leaves floor for a body")
+        XCTAssertGreaterThan(sf.distance(landing), 0.3, "the rider lands clear of the footprint")
+        for seed in UInt64(1)...6 {
+            let lab = parkLab(n: 3, seed: seed)
+            for r in lab.rigs { r.brain.autonomy = true }
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            if seed % 2 == 1 { lab.rigs[0].brain.idleForced = true; _ = lab.rigs[0].brain.decorStart(.decorSlide, lab.rigs[0].sim, only: .slide, uid: nil) }          // (odd seeds: someone really rides)
+            var inside = [Float](repeating: 0, count: 3)
+            for i in 0..<(60 * 60) {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                for (k, r) in lab.rigs.enumerated() {
+                    let using = r.brain.idleState.kind == .decorSlide && r.brain.idleState.decorUID == ParkToys.slideUID
+                    if !using, sl.distance(r.brain.position) < -0.15 { inside[k] += 1.0 / 60 } else { inside[k] = 0 }
+                    if inside[k] > longest { longest = inside[k]; where_ = "seed \(seed) rig \(k) t=\(Float(i) / 60) kind \(String(describing: r.brain.idleState.kind)) ignore \(String(describing: r.brain.decorIgnore)) pending \(String(describing: r.brain.pending)) held \(r.brain.held) sl \(r.brain.sleepLocked) insT \(r.brain.insideDecorT) free \(String(describing: r.brain.decorFreeSpot(near: r.brain.position))) script \(r.brain.script) auton \(r.brain.autonomy) at \(r.brain.position) depth \(sl.distance(r.brain.position))" }
+                }
+            }
         }
-        XCTAssertLessThan(nearExit, 0.9, "he came out of the far mouth (closest \(nearExit); mouths \(mouths))")
-        XCTAssertTrue(wasInside, "he was inside the tunnel")
-        XCTAssertNil(DecorField.shared.coUsers[ParkToys.tunnelUID]); XCTAssertNil(DecorField.shared.progress[ParkToys.tunnelUID])
+        // (a rider lands at the chute's end and walks out: nobody is inside it unless riding)
+        XCTAssertLessThan(longest, 1.5, "someone stood inside the slide without using it for \(longest) s: \(where_)")
     }
 }

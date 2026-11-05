@@ -72,8 +72,10 @@ struct SleepFidget {
     var twU: Float = -1, twSide = 0, twFoot = false    // twitch progress (-1 = none)
     var halfU: Float = -1                              // half-wake progress (-1 = none)
     var halfAmp: Float = 0
-    var rollW: Float { rollOff + (kind == 1 ? wigAmp * sinf(.pi * u) * sinf(2 * .pi * 2 * u) : 0) }
-    var active: Bool { kind != 0 || twU >= 0 || halfU >= 0 || yawOff != yawGoal || rollOff != rollGoal }
+    var rollFrom: Float = 0                            // where the toss in hand started (rollOff is eased from here to rollGoal)
+    /// The side tilt now: the side he lies on, plus a slow one-way lean and back while a wiggle is in hand (no oscillation: nothing here moves faster than a breath).
+    var rollW: Float { rollOff + (kind == 1 ? wigAmp * powf(sinf(.pi * min(u, 1)), 2) : 0) }          // (sin^2: zero velocity at both ends; a plain sin started with a 5 rad/s^2 kick)
+    var active: Bool { kind != 0 || halfU >= 0 || rollOff != 0 }
 }
 
 enum SleepMode { case plain, hold, cuddle }
@@ -122,9 +124,12 @@ enum SleepTuning {
     /// The breathing ripple (was 0.5: too faint to read).
     static let breathKick: Float = 0.9
     /// Sleep fidgets: a shift every `shiftEvery` s, a twitch every `twitchEvery`, a half-wake every `halfEvery` (Reduce Motion: smaller and x2.5 rarer).
-    static let shiftEvery: ClosedRange<Float> = 20...60, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
+    static let shiftEvery: ClosedRange<Float> = 20...45, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
     // (2026-11-04: the turn used to wander up to +-0.5 rad at 0.12 rad/s and read as a slow clockwise spin; now small, slow, alternating and always back to centre)
-    static let maxRoll: Float = 0.22, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
+    static let maxRoll: Float = 0.30, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
+    /// A toss / turn eases (smoothstep, so it starts and ends at rest) over this long; nothing a sleeper does is faster. (2026-11-05: they "twitch": the old toss
+    /// popped back to flat the frame its constant-rate chase arrived, and there were 0.45 s arm / foot twitches. Both gone.)
+    static let tossTime: ClosedRange<Float> = 1.8...3.0
     static let driftMax: Float = 0.22, driftMaxBed: Float = 0.07
     /// A finger on him for less than this wakes him gently; longer = a real pick up (the sleep is dropped and the touch play takes over).
     static let tapTime: Float = 0.9
@@ -533,26 +538,20 @@ extension BlobBrain {
         let T = SleepTuning.self
         if sleep.fid.nextShift <= 0 {
             sleep.fid.nextShift = rand(T.shiftEvery.lowerBound, T.shiftEvery.upperBound) * gap
-            sleep.fid.nextTwitch = rand(T.twitchEvery.lowerBound, T.twitchEvery.upperBound) * gap
             sleep.fid.nextHalf = rand(T.halfEvery.lowerBound, T.halfEvery.upperBound) * gap
             sleep.fid.home = position
         }
-        // the slow offsets chase their goals at a gentle fixed rate, and snap exactly (so the body can settle and skip its step again)
         var f = sleep.fid
-        func chase(_ v: inout Float, _ g: Float, _ rate: Float) {
-            let d = g - v
-            if abs(d) <= rate * dt { v = g } else { v += d > 0 ? rate * dt : -rate * dt }
-        }
-        chase(&f.yawOff, f.yawGoal, T.yawRate * (small ? 0.5 : 1))
-        chase(&f.rollOff, f.rollGoal, T.rollRate * (small ? 0.5 : 1))
-        // the shift in hand
+        // the shift in hand: every move is eased (smoothstep) so velocity starts and ends at zero
         if f.kind != 0 {
             f.u += dt / f.dur
+            let e = smooth01(min(f.u, 1))
+            if f.kind == 3 { f.rollOff = f.rollFrom + (f.rollGoal - f.rollFrom) * e }
             if f.kind == 4 {
-                let e = smooth01(min(f.u, 1))
                 px = f.from.x + (f.to.x - f.from.x) * e; pz = f.from.y + (f.to.y - f.from.y) * e
             }
             if f.u >= 1 {
+                if f.kind == 3 { f.rollOff = f.rollGoal }
                 if f.kind == 4 { px = f.to.x; pz = f.to.y; sleep.spot = f.to }
                 f.kind = 0; f.u = 0; f.wigAmp = 0
             }
@@ -562,18 +561,6 @@ extension BlobBrain {
                 f.nextShift = rand(T.shiftEvery.lowerBound, T.shiftEvery.upperBound) * gap
                 sleep.fid = f
                 sleepStartShift(&f, sc)
-            }
-        }
-        // a twitch (a foot is a tiny jelly flutter, an arm lifts a touch)
-        if f.twU >= 0 {
-            f.twU += dt / 0.45
-            if f.twU >= 1 { f.twU = -1 }
-        } else {
-            f.nextTwitch -= dt
-            if f.nextTwitch <= 0 {
-                f.nextTwitch = rand(T.twitchEvery.lowerBound, T.twitchEvery.upperBound) * gap
-                f.twU = 0; f.twSide = rand() < 0.5 ? 0 : 1; f.twFoot = rand() < 0.5
-                if f.twFoot { jellyKick = max(jellyKick, 0.3 * sc) }
             }
         }
         // a half-wake: the eyes open a crack, slowly, and close again
@@ -590,28 +577,23 @@ extension BlobBrain {
         sleep.fid = f
     }
 
-    /// Picks one shift: wiggle, nuzzle, roll to the other side, or a slight drift (toward a sleeping friend when there is one).
+    /// Picks one shift: a toss onto the other side, a slow lean and back, or a slight drift (toward a sleeping friend when there is one). All eased, none with a kick.
     private func sleepStartShift(_ f: inout SleepFidget, _ sc: Float) {
         let T = SleepTuning.self
         let r = rand()
         f.u = 0
-        if r < 0.3 {          // wiggle and settle
-            f.kind = 1; f.dur = rand(2.2, 3.4); f.wigAmp = 0.07 * sc
-            jellyKick = max(jellyKick, 0.35 * sc)
-        } else if r < 0.55 {  // nuzzle in: a small turn
-            // a slight turn one way, then back to centre, then the other way: the sign alternates and every turn is undone, so there is no net rotation
-            if f.yawGoal != 0 || abs(f.yawOff) > 0.02 { f.yawGoal = 0 }
-            else { f.yawGoal = f.ySign * rand(0.5, 1) * T.maxYaw * sc; f.ySign = -f.ySign }
-            f.kind = 0         // (the offset itself is the move)
-        } else if r < 0.75 {  // roll over onto the other side
-            // a slight lean onto one side and back, then onto the other side and back (alternating, bounded, no net turn)
-            if f.rollGoal != 0 || abs(f.rollOff) > 0.02 { f.rollGoal = 0 }
-            else { f.rollGoal = f.rSign * rand(0.6, 1) * T.maxRoll * sc; f.rSign = -f.rSign }
-            jellyKick = max(jellyKick, 0.2 * sc)
+        if r < 0.45 {         // toss: roll over onto the other side (alternating, bounded, slow) and stay there
+            f.kind = 3; f.dur = rand(T.tossTime.lowerBound, T.tossTime.upperBound)
+            f.rollFrom = f.rollOff
+            let side: Float = f.rollOff > 0.02 ? -1 : (f.rollOff < -0.02 ? 1 : f.rSign)
+            f.rSign = -side
+            f.rollGoal = side * rand(0.6, 1) * T.maxRoll * sc
+        } else if r < 0.7 {   // a slow lean to one side and back
+            f.kind = 1; f.dur = rand(2.6, 3.6); f.wigAmp = (rand() < 0.5 ? -1 : 1) * 0.08 * sc
         } else if sleep.bed < 0 || r < 0.9 {  // a slight change of where he lies
             sleepPlanDrift(&f, sc)
         } else {
-            f.kind = 1; f.dur = 2.6; f.wigAmp = 0.05 * sc
+            f.kind = 1; f.dur = 3.0; f.wigAmp = 0.05 * sc
         }
     }
 
@@ -656,10 +638,12 @@ extension BlobBrain {
         } else if sleep.holdForce { sleep.holdSide = 1 }
         let leanSign: Float = sleep.holdSide == 1 ? 1 : -1
         let fid = sleep.fid, fa = fid.active && sleep.stage == 3
+        // the side he lies on carries through the wake, fading with the lie blend (never a pop back to flat)
+        let rollScale: Float = sleep.stage == 3 ? 1 : (sleep.stage == 4 ? max(0, min(sleep.k, 1)) : 0)
         let q0 = yawQuat(yaw) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
         // (user 2026-11-04: belly-up he must NEVER spin like a clock hand. The heading offset is gone, and the side roll turns about his own head-to-foot
         //  axis, body y after the pitch back, so he rocks onto a side and back. It used to turn about body z, which points at the sky when lying, so it was a spin.)
-        let q = fa && (fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW, axis: SIMD3(0, 1, 0)) : q0
+        let q = (rollScale > 0 && fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW * rollScale, axis: SIMD3(0, 1, 0)) : q0
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
         else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
@@ -691,14 +675,6 @@ extension BlobBrain {
             armDirW = smooth01(sleep.holdW)
             armDirEl = sleep.holdSide == 1 ? [rest, SleepTuning.holdEl] : [SleepTuning.holdEl, rest]
             armDirSa = sleep.holdSide == 1 ? [restSa, 0] : [0, restSa]
-            armDirOut = 0.07
-        } else if fa, fid.twU >= 0, !fid.twFoot {
-            // a dream twitch: one arm lifts a touch and drops (the same stub, capped like every arm)
-            let rest = ArmPath.armWalkElevation(ArmPath.armWalkCentreDeg), restSa = ArmPath.armWalkCentreDeg * .pi / 180
-            armWalkWant = 1
-            armDirW = sinf(.pi * fid.twU)
-            armDirEl = fid.twSide == 1 ? [rest, SleepTuning.holdEl] : [SleepTuning.holdEl, rest]
-            armDirSa = fid.twSide == 1 ? [restSa, 0] : [0, restSa]
             armDirOut = 0.07
         }
         driveBeansRigid(sim, skinner, dt, tuck: 0)

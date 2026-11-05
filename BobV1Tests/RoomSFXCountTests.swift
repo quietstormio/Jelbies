@@ -83,6 +83,49 @@ final class RoomSFXCountTests: XCTestCase {
         // NEWONLY-END
     }
 
+    /// What gets PAST the guards (muted / duck / 2.2 s voice gap / emote-voice hush / per-sfx min gap) and reaches the speaker path, per kind, over the same seeded soak
+    /// with an unmuted hub on the sim clock. The request taps above are blind to those cuts (the 2026-11-05 "they don't make sound in the room" report).
+    /// Baseline: scripts/baseline-played.txt (generated on the last build the user heard, 47eb511); each family must keep >= 90 %.
+    func testPlayedRoomSounds() {
+        let hub = AudioHub.shared
+        hub._openForTest(); AudioHub.dryRun = true
+        var simNow = 10_000.0; AudioHub.clock = { simNow }
+        var played: [String: Int] = [:]
+        AudioHub.firedTap = { n in
+            var k = n; if let r = k.range(of: #"_\d+$"#, options: .regularExpression) { k.removeSubrange(r) }
+            played["played:" + k, default: 0] += 1
+        }
+        defer { AudioHub.firedTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() } }
+        let cueSink = RecordingHapticSink(); HapticDriver.room = HapticDriver(sinks: [cueSink]); HapticDriver.roomBusy = nil; HapticDriver.jitter = { 1 }
+        HapticDriver.clock = { simNow }; HapticDriver.after = { _, f in f() }
+        defer { HapticDriver.room = nil; HapticDriver.clock = { CACurrentMediaTime() }; HapticDriver.after = { d, f in DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }; HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) } }
+        _ = hub
+        for seed in Self.seeds {
+            let lab = SocialTests.Lab(n: 3, quiet: false, seed: seed)
+            for (i, r) in lab.rigs.enumerated() { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i) }
+            for _ in 0..<(180 * 60) { lab.tick(); simNow += 1.0 / 60 }
+            simNow += 60          // (the gaps of the previous run are over)
+        }
+        let line = "PLAYED " + played.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        print(line)
+        try? line.write(toFile: ProcessInfo.processInfo.environment["PLAYED_OUT"] ?? NSTemporaryDirectory() + "played_last.txt", atomically: true, encoding: .utf8)
+        let voices = played.filter { $0.key.hasPrefix("played:") && ($0.key.contains("chirp") || $0.key.contains("babble") || $0.key.contains("happy") || $0.key.contains("voice")) }.values.reduce(0, +)
+        print("PLAYED voices-ish \(voices)")
+        let path = ProcessInfo.processInfo.environment["PLAYED_BASELINE"] ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("scripts/baseline-played.txt").path
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { print("no played baseline at \(path)"); return }
+        let base = Self.parse(text)
+        func sum(_ d: [String: Int], _ f: (String) -> Bool) -> Int { d.filter { f($0.key) }.values.reduce(0, +) }
+        let isOld: (String) -> Bool = { $0.hasPrefix("played:chirp_jelly") || $0.hasPrefix("played:babble_jelly") }
+        // per-kind counts are chaotic (+-30 %), the families are not: the old chirps + babbles keep >= 90 %, the whole vocal family (old + the emote voices + the context voices) is 1.15x or more but not a chatterbox
+        let isVoice: (String) -> Bool = { k in isOld(k) || k.hasPrefix("played:emote_") && !["emote_bow", "emote_pat", "emote_wiggle"].contains(where: { k.hasSuffix($0) }) || JellyVoice.allCases.contains { $0.isContext && k.hasPrefix("played:\($0.rawValue)_jelly") } }
+        let (o, bo) = (sum(played, isOld), sum(base, isOld)), (v, bv) = (sum(played, isVoice), sum(base, isVoice))
+        print("PLAYED families old \(o) vs \(bo); vocal \(v) vs \(bv) (\(Double(v) / Double(max(bv, 1))))")
+        XCTAssertGreaterThanOrEqual(Double(o), 0.9 * Double(bo), "old chirps + babbles: \(o) vs \(bo)")
+        XCTAssertGreaterThanOrEqual(Double(v), 1.15 * Double(bv), "vocal family: \(v) vs \(bv)")
+        XCTAssertLessThanOrEqual(Double(v), 1.8 * Double(bv), "not a chatterbox: \(v) vs \(bv)")
+        for k in ["played:footstep", "played:jump", "played:zoomies"] { XCTAssertGreaterThanOrEqual(Double(played[k, default: 0]), 0.9 * Double(base[k, default: 0]), "\(k): \(played[k, default: 0]) vs \(base[k, default: 0])") }
+    }
+
     /// An unmuted hub that is started plays the room's cues past every guard (not just the request taps above).
     func testStartedHubLetsRoomCuesThrough() {
         let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
@@ -100,5 +143,64 @@ final class RoomSFXCountTests: XCTestCase {
         let q = MelonController.keepApart(SIMD3(0.3, 0, 0), id: 1, peers: peers)
         let d = simd_length(SIMD2(q.x, q.z))
         XCTAssertLessThan(d, MelonController.jellyGap * ContactTuning.contactFrac, "pressed pair reaches contact distance (d=\(d))")
+    }
+}
+
+/// Sleep sounds that reach the speaker path: three napping Jelbies for 10 simulated minutes (a hub with its own schedulers, the sim clock, no real audio).
+@MainActor
+final class SleepSoundPlayedTests: XCTestCase {
+    func testSleepersSnoreAndCooEveryFewSeconds() {
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub._openForTest(); AudioHub.dryRun = true
+        var now = 20_000.0; AudioHub.clock = { now }
+        var log: [(Double, String)] = []
+        AudioHub.firedTap = { log.append((now, $0)) }
+        defer { AudioHub.firedTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() } }
+        for _ in 0..<(600 * 30) { hub.situation(napping: [true, true, true], playing: false, xs: [-1, 0, 1], moods: [.okay, .okay, .okay]); now += 1.0 / 30 }
+        let snores = log.filter { $0.1.hasPrefix("snore_") }.count, coos = log.filter { $0.1.hasPrefix("sleep_coo_") }.count
+        print("SLEEPPLAYED snores=\(snores) coos=\(coos) per sleeper per minute=\(Double(snores + coos) / 30)")
+        // each sleeper makes a sound every 8-15 s on average (4-7.5 per minute), alternating snore / coo, and none overlap
+        let perMin = Double(snores + coos) / 30
+        XCTAssertGreaterThan(perMin, 4.0); XCTAssertLessThan(perMin, 8.5)
+        XCTAssertGreaterThan(snores, 0); XCTAssertGreaterThan(coos, 0)
+        let ts = log.map { $0.0 }; for (a, b) in zip(ts, ts.dropFirst()) { XCTAssertGreaterThanOrEqual(b - a, 2.4, "two sleep sounds overlap") }
+    }
+}
+
+/// What really reaches the speaker (AudioHub.playedTap): a clip fired every 1.1 s (a voice is under 1 s, so a free player always exists) keeps playing (no player leaked in the async fire path).
+@MainActor
+final class AudioPlaybackSoakTests: XCTestCase {
+    override func tearDown() { AudioHub.playedTap = nil }
+    func testRepeatedFireKeepsPlaying() async throws {
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub.start()
+        var played: [String: Int] = [:]
+        AudioHub.playedTap = { played[$0, default: 0] += 1 }
+        let names = [AudioHub.voiceFile(slot: 0, .happy), AudioHub.voiceFile(slot: 1, .babble), "footstep_1"]
+        let calls = 40
+        for _ in 0..<calls {
+            for n in names { hub._fire(n) }
+            try await Task.sleep(nanoseconds: 1_100_000_000)
+        }
+        try await Task.sleep(nanoseconds: 500_000_000)
+        print("PLAYEDSOAK \(played)")
+        for n in names { XCTAssertGreaterThanOrEqual(played[n, default: 0], Int(Double(calls) * 0.9), "\(n) played \(played[n, default: 0]) of \(calls)") }
+    }
+}
+
+/// Every voice a character can ask for is bundled (all 7 sets x every kind x its variants), and each species gets its own set.
+@MainActor
+final class VoiceFilesBundledTests: XCTestCase {
+    func testEveryVoiceFileExists() {
+        let app = Bundle.main, b = Bundle(for: VoiceFilesBundledTests.self)
+        func has(_ n: String) -> Bool { app.url(forResource: n, withExtension: "m4a") != nil || b.url(forResource: n, withExtension: "m4a") != nil }
+        for c in 0..<7 { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
+            let n = JellyVoiceSet.file(character: c, v, variant: k)
+            XCTAssertTrue(has(n), "character \(c) \(v) variant \(k): \(n)")
+        } } }
+        XCTAssertEqual(JellyVoiceSet.file(character: 4, .happy), "chirp_jelly5_happy")
+        XCTAssertEqual(JellyVoiceSet.file(character: 6, .babble), "babble_jelly7")
+        XCTAssertEqual(JellyVoiceSet.file(character: 5, .wheee), "wheee_jelly4", "Pearl borrows Lavender's batch-B voice")
+        XCTAssertEqual(JellyVoiceSet.snoreFile(character: 6, roll: 0.9), "snore_jelly4_1", "snores stay Lavender's for the newer species")
     }
 }

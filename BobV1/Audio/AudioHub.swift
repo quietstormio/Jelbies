@@ -31,7 +31,7 @@ final class AudioHub {
     /// The sound panel's now-playing row (observed; assigned only when it changes).
     private(set) var nowPlaying = NowPlaying.initial
     /// `-Mute 1` or running under XCTest: no session, no players.
-    let muted: Bool
+    private(set) var muted: Bool
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var duck = DuckState()
@@ -274,7 +274,7 @@ final class AudioHub {
         input.playing = playing
         raceScene = scene
         input.scene = scene != .none ? scene : townScene
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
             snore(jelly: i, x: i < xs.count ? xs[i] : 0)
             onSnore?(i)
@@ -455,6 +455,11 @@ final class AudioHub {
             guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
             p.prepareToPlay(); pool[name] = [p]
         } }
+        for c in 0..<JellyVoiceSet.voiceSets { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
+            let name = JellyVoiceSet.file(character: c, v, variant: k)
+            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
+            p.enableRate = true; p.prepareToPlay(); pool[name] = [p]
+        } } }
         for s in SFX.allCases where s != .snore {
             for v in 1...max(variants(s), 1) {
                 let name = "\(s.rawValue)_\(v)"
@@ -505,7 +510,18 @@ final class AudioHub {
     @ObservationIgnored private var queuedPlayers = Set<ObjectIdentifier>()
     @ObservationIgnored private var creating: [String: Int] = [:]
 
+    /// Test seam: called on main for every clip that really started playing (`play()` returned true), by file name. The request taps fire before the guards; this one does not.
+    /// Test seams: the clock the voice / effect gaps read (a sim soak runs it at sim time), `firedTap` = a request that got past every guard and reached `fire`,
+    /// `dryRun` = `fire` stops after the tap (a soak must not play real audio at 100x), `_openForTest` = an unmuted, started hub without the audio session.
+    nonisolated(unsafe) static var clock: () -> Double = { CACurrentMediaTime() }
+    nonisolated(unsafe) static var firedTap: ((String) -> Void)?
+    nonisolated(unsafe) static var dryRun = false
+    func _openForTest() { muted = false; started = true; active = true }
+    nonisolated(unsafe) static var playedTap: ((String) -> Void)?
+    func _fire(_ name: String, volume: Float = 0.7) { fire(name, volume: volume, pan: 0) }
     private func fire(_ name: String, volume: Float, pan: Float, rate: Float = 1) {
+        Self.firedTap?(name)
+        if Self.dryRun { return }
         guard let u = url(name) else { return }
         let q0 = PerfProbe.begin()
         let ps = pool[name] ?? []
@@ -516,8 +532,8 @@ final class AudioHub {
             Self.playQueue.async { [weak self] in
                 guard let np = try? AVAudioPlayer(contentsOf: u) else { DispatchQueue.main.async { self?.creating[name, default: 1] -= 1 }; return }
                 np.enableRate = true; np.prepareToPlay()
-                np.volume = volume; np.pan = pan; np.rate = rate; np.currentTime = 0; np.play()
-                DispatchQueue.main.async { guard let self else { return }; self.creating[name, default: 1] -= 1; self.pool[name, default: []].append(np) }
+                np.volume = volume; np.pan = pan; np.rate = rate; np.currentTime = 0; let ok = np.play()
+                DispatchQueue.main.async { guard let self else { return }; self.creating[name, default: 1] -= 1; self.pool[name, default: []].append(np); if ok { Self.playedTap?(name) } }
             }
             Ears.shared.noteAppSound()
         }
@@ -529,8 +545,8 @@ final class AudioHub {
             p.pan = pan
             p.rate = rate
             p.currentTime = 0
-            p.play()
-            DispatchQueue.main.async { self?.queuedPlayers.remove(id) }
+            let ok = p.play()
+            DispatchQueue.main.async { self?.queuedPlayers.remove(id); if ok { Self.playedTap?(name) } }
         }
         let q4 = PerfProbe.begin()
         Ears.shared.noteAppSound()
@@ -548,7 +564,7 @@ final class AudioHub {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         let key = jelly.map { "\(sfx.rawValue)#\($0)" } ?? sfx.rawValue
         if let j = jelly, [.emoteHic, .emoteAchoo, .emoteWoozy, .emoteSpinHug, .emoteStarSigh, .emoteTilt, .emoteWelcome, .emoteCheckIn].contains(sfx) { lastEmoteVoice[min(max(j, 0), 2)] = now }
         if let l = lastPlay[key], now - l < sfx.minGap { return }
@@ -566,9 +582,11 @@ final class AudioHub {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         let key = "snore#\(jelly)"
         if let l = lastPlay[key], now - l < SFX.snore.minGap { return }
+        if now - lastSleepAny < 2.5 { return }          // two sleepers never overlap
+        lastSleepAny = now
         lastPlay[key] = now
         let name = JellyVoiceSet.snoreFile(character: JellyRoster.character(jelly), roll: Double.random(in: 0..<1))
         fire(name, volume: min(1, SFX.snore.gain * level * AudioMix.sfxMaster), pan: panFor(x: x))
@@ -580,9 +598,11 @@ final class AudioHub {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         let key = "sleepsound#\(jelly)"
         if let l = lastPlay[key], now - l < 3 { return }
+        if now - lastSleepAny < 2.5 { return }
+        lastSleepAny = now
         lastPlay[key] = now
         let c = JellyRoster.character(jelly)
         switch kind {
@@ -705,7 +725,7 @@ final class AudioHub {
         Self.requestTap?("step")
         guard !muted, started else { return }
         let i = min(max(jelly, 0), 2)
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         if now - lastFoot[i] < (running ? 0.16 : 0.26) { return }
         lastFoot[i] = now
         play(.footstep, jelly: i, x: x, volume: running ? 1.2 : 0.8)
@@ -722,13 +742,36 @@ final class AudioHub {
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
         let i = min(max(jelly, 0), 2)
-        let now = CACurrentMediaTime()
-        if now - lastVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush { return }
+        let now = Self.clock()
+        if now - lastVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush || now - lastContextVoice[i] < 0.5 { return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
         if UserDefaults.standard.bool(forKey: "AudioLog") { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
+
+    @ObservationIgnored private var lastSleepAny: Double = -100
+    @ObservationIgnored private var lastContextVoice: [Double] = [-100, -100, -100]
+    /// The context voices (curious / ooh / hum / giggle / hello / yawn / yay / uhoh): a short call that fits what the Jelbie is doing, in the home room only. They ADD variety:
+    /// they wait for the ambient voice's gap (1 s) and their own (2.2 s), and an ambient chirp waits 0.5 s after one, so a Jelbie never plays two voices at once.
+    func contextVoice(jelly: Int, _ v: JellyVoice, chance: Double = 1, x: Float = 0) {
+        Self.requestTap?("voice:\(v.rawValue)")
+        guard v.isContext, !muted, started, active, director.scene == .none, raceScene == .none else { return }
+        let level = settings.sfxLevel * duck.gain
+        guard level > 0.01 else { return }
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        if now - lastVoice[i] < 1.0 || now - lastContextVoice[i] < 2.2 || now - lastEmoteVoice[i] < Self.emoteVoiceHush { return }
+        guard Double.random(in: 0..<1) < chance else { return }
+        lastContextVoice[i] = now
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
+        let c = JellyRoster.character(jelly), j = min(max(jelly, 0), 2)
+        var variant = 1
+        if v.hasVariants { repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[j][v.rawValue] ?? 0 }          // (a repeat of the same voice differs)
+        lastVariant[j][v.rawValue] = variant
+        fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: 0.7 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, v))
+    }
+    @ObservationIgnored private var lastVariant: [[String: Int]] = [[:], [:], [:]]
 
     @ObservationIgnored private var lastRegularVoice: Double = 0
     /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
@@ -736,7 +779,7 @@ final class AudioHub {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
-        let now = CACurrentMediaTime()
+        let now = Self.clock()
         if now - lastRegularVoice < 2.2 { return }
         lastRegularVoice = now
         fire(JellyVoiceSet.file(character: character, v), volume: 0.6 * level, pan: 0)

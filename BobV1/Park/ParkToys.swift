@@ -10,14 +10,13 @@ import Foundation
 
 nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
-    static let seesawUID = 9001, sandUID = 9003, hopscotchUID = 9005, slideUID = 9006, tunnelUID = 9007
+    static let seesawUID = 9001, sandUID = 9003, hopscotchUID = 9005, slideUID = 9006
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
         PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.7, z: -2.3, turns: nil),
         PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.9, z: -1.5, turns: nil),
-        // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide and play tunnel on the right / middle front (lane for the queue behind the court's back)
+        // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right front (no play tunnel in the park: removed 2026-11-05)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
-        PlacedDecor(uid: slideUID, kind: .slide, x: 2.7, z: 2.3, turns: nil),
-        PlacedDecor(uid: tunnelUID, kind: .playtunnel, x: 0.9, z: 1.5, turns: 1),
+        PlacedDecor(uid: slideUID, kind: .slide, x: 2.7, z: 1.7, turns: nil)          // (z 1.7: the chute ends 2.19 in front of the centre; the rider lands there and a body needs ~0.5 of floor, the roam rect ends at z 4.5. At z 2.3 he landed on the clamp, INSIDE the slide's footprint, and walked out through it),
     ]
     static var placed: [PlacedDecor] { layout }
 }

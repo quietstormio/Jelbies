@@ -307,7 +307,7 @@ extension GameCare {
     /// Back in the room: the other Jellies waddle over to the returner, who hops (everybody bounces together if he won).
     func raceWelcomeHome(_ id: Int, won: Bool) {
         let book = raceBook
-        if won { selectBrain(id)?.proudStrutCue() }       // (batch-2 emote: he struts when he is next free)
+        if won { AudioHub.shared.contextVoice(jelly: id, .yay, chance: 1); selectBrain(id)?.proudStrutCue() }       // (batch-2 emote: he struts when he is next free)
         if won { store.awardMedal() }                     // a first place on the Circuit earns the winner medal (wearable from the Bag; never sold)
         book.returner = id; book.won = won; book.homeAge = 0; book.returnerHopped = false; book.celebrated = false
         greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 })

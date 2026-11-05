@@ -642,6 +642,7 @@ final class GameCare {
     func endMeal() {
         notice = nil
         standDownEater()
+        AudioHub.shared.contextVoice(jelly: 0, .tasty, chance: 0.7)          // (after eating)
         dining.despawn()
         meal = nil; mealRequested = false; idleT = 0
     }
