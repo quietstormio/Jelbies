@@ -48,12 +48,13 @@ final class PeakDriveTests: XCTestCase {
         XCTAssertLessThanOrEqual(b.maxOut, 0)
     }
 
-    /// The ring hop moves along a chord: mid-hop the pair is closer by cos(hop / 2). The ring radius for the widest touch keeps even that moment clear.
-    func testRingRadiusClearsTheChord() {
-        let touch: Float = 1.445
-        let r = (touch + 0.06) / (2 * cosf(Friends2Tuning.ringHop / 2))
-        XCTAssertGreaterThanOrEqual(2 * r * cosf(Friends2Tuning.ringHop / 2), touch)
-        XCTAssertEqual(Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 15, "1.5 turns of 36 degree hops")
+    /// The ring hop moves along a chord: mid-hop the pair is closer by cos(hop / 2). The ring is the FACE-TO-FACE touch (~0.8 m, the pair faces each other all the way round) + a margin, and the hop is small enough that the chord
+    /// pulls the pair in by under 2 cm (a 36 degree hop pulled 4 cm: the ring clears the chord only when the hop is short, not by a wide ring).
+    func testRingHopChordDipIsUnderTwoCentimetres() {
+        let touch: Float = 0.80
+        let dip = (touch + Friends2Tuning.ringFaceMargin) * (1 - cosf(Friends2Tuning.ringHop / 2))
+        XCTAssertLessThan(dip, 0.02)
+        XCTAssertEqual(Int((Friends2Tuning.ringTurns * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 16, "one turn of 22.5 degree hops (the dance keeps its old length)")
     }
 
     /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak) may open the gap by a wind-up only 1.5 cm; the squabble keeps the 4.5 cm.
