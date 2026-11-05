@@ -106,7 +106,6 @@ struct LobbyJelbiePicker: View {
             .overlay(shape.strokeBorder(SK.ink.opacity(0.14), lineWidth: 2))
             .frame(maxWidth: Self.maxRow)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowW = $0 }
-            .onAppear { HeadPortraitCache.shared.prewarm(care: care) }
             // one fixed slot under the strip, on every lobby: the hint, or the blocker in its place (with the way out beside it). Nothing below it ever moves.
             HStack(spacing: 8) {
                 Text(blocker ?? footnote ?? " ").font(SK.font(12, .bold)).foregroundStyle(theme.subheading).lineLimit(2).minimumScaleFactor(0.75)

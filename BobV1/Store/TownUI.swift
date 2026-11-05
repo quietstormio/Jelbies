@@ -117,7 +117,9 @@ struct TownFlow: View {
             }
         }
         .transition(.opacity)
-        .onAppear { HeadPortraitCache.shared.prewarm(care: care) }          // the stage is paused behind the Town: draw every lobby picture now
+        .onAppear { HeadPortraitCache.shared.prewarm(care: care) }          // the stage is paused behind the Town: draw every lobby picture now (one at a time, see prewarm)
+        .onDisappear { HeadPortraitCache.shared.cancelPrewarm() }
+        .simultaneousGesture(TapGesture().onEnded { HeadPortraitCache.shared.cancelPrewarm() })          // a tap: the player is busy, no more hitches from the warm-up
     }
 }
 

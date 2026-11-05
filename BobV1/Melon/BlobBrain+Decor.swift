@@ -592,7 +592,6 @@ extension BlobBrain {
             DecorField.shared.rock(uid, on ? 1 : 0.35)
             seatFollow(f)
             if f.kind == .seesaw, f.kind.standsOn { roll += DecorModels.seesawAngle(DecorField.shared.anim[uid] ?? DecorAnim()) }          // (the plank tilts under his feet about its z axis = his roll)
-            if f.kind == .springrider { pitch += DecorModels.springAngle(DecorField.shared.anim[uid] ?? DecorAnim()) * 0.9 }
         }
         if f.kind.rockRide {
             // astride the horse / rocket: it rocks on its runners and carries him; he leans with it (about the piece's z axis, which is his pitch: he faces its nose)

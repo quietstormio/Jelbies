@@ -96,12 +96,20 @@ nonisolated final class Skinner {
         // the swell: the egg's own lower-back vertices near the tail root are pushed out along the tail's start direction (Gaussian falloff, lower back only:
         // TailBean.swellWeight), so the back flows into the tail root as one surface instead of a tube meeting a wall
         let limit = cap.firstVertex.min() ?? rm.vertexCount
+        // every Jelbie of a roster shares one render mesh: the swell is worked out once per mesh, not once per body
+        var h = Hasher(); h.combine(limit); h.combine(rm.rest)
+        let sig = h.finalize()
+        Skinner.bumpLock.lock(); defer { Skinner.bumpLock.unlock() }
+        if let c = Skinner.bumpCache, c.sig == sig { tailBump = c.bump; return }
         tailBump = []
         for v in 0..<min(limit, rm.rest.count / 3) {
             let d = TailBean.swellVector(SIMD3(rm.rest[3 * v], rm.rest[3 * v + 1], rm.rest[3 * v + 2]))
             if simd_length(d) > 0.003 { tailBump.append((v, d)) }
         }
+        Skinner.bumpCache = (sig, tailBump)
     }
+    private nonisolated(unsafe) static var bumpCache: (sig: Int, bump: [(Int, SIMD3<Float>)])?
+    private static let bumpLock = NSLock()
     private var tailBump: [(Int, SIMD3<Float>)] = []
     private var tailRotLast = matrix_identity_float3x3
     /// After the normal pass: pull the root rings' normals toward the egg's own normal there, so the shading flows from the back into the tail with no tonal step.

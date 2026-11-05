@@ -268,7 +268,7 @@ extension GameCare {
             for i in book.racers.indices {
                 guard let a = body(i), let b = a.brain else { continue }
                 b.raceKeepAlive()
-                if race.kind == .race { race.setMeasured(i, dist: b.raceProgress) }          // his arc length along his lane (pz - startZ on the straight)
+                if race.kind == .race { race.setMeasured(i, dist: b.raceProgress(sim: a.sim)) }          // his arc length along his lane (pz - startZ on the straight)
             }
         }
         let events = race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },

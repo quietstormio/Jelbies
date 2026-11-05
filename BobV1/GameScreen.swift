@@ -691,7 +691,7 @@ struct GameScreen: View {
                 for t in [CourseTier.puddle, .ripple] { care.race.progress.record(tier: t, place: 1); care.race.trophies.recordRace(character: c, tier: t, place: 1) }
                 _ = care.chooseCourse(.ripple)
             }
-            if m.contains("blocked") { care.feed("berries") }
+            if m.contains("blocked") { care.store.grant("berries"); care.feed("berries") }          // (foods are fed from the bag now: one berry in it)
         }
         // capture aid: -GroomAuto picker|visit (the Jelly Spa picker after 4 s; visit also picks the Royal Pamper for everybody and goes, with 300 Drops)
         if let m = d.string(forKey: "GroomAuto") {

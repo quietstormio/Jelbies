@@ -28,6 +28,10 @@ nonisolated enum HurdleTuning {
     static let recover: Float = 0.55
     /// Which part of the flight clears the bar: 20% ... 80% of the air time (the sole is above the bar's top there).
     static let clearWindow: ClosedRange<Float> = 0.2...0.8
+    /// How far before the bar's contact point (`contactLead` before his centre reaches the bar) a planned jump takes off (u). The hop carries him `hopDistance` over the flight, so
+    /// the contact falls at (lead / hopDistance) of the flight: 0.42...0.50 puts it at 56...67 % when he leaves at once and at ~40 % when the feet needed 0.15 s to be planted,
+    /// inside the clear window (20...80 %) either way and near the apex. (It was 0.5...0.6: 67...80 % of the flight, the edge of the window, so a short wait for the feet made it a hit.)
+    static let takeoffLead: ClosedRange<Float> = 0.42...0.50
     /// His front reaches the bar this far before his centre does (u).
     static let contactLead: Float = 0.2
     /// A Jump press waits this long for his feet to be planted.

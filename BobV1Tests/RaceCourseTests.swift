@@ -310,7 +310,7 @@ final class CourseModelTests: XCTestCase {
         for t in Self.tiers {
             let f = RaceFlow()
             f.cue = { _ in }; f.drillCue = { _ in }; f.autoRate = 6
-            f.progress.records[.puddle] = CourseProgress.Record(races: 9, wins: 9, topTwo: 9); f.progress.records[.ripple] = f.progress.records[.puddle]; f.progress.records[.splash] = f.progress.records[.puddle]
+            f.progress.records[.puddle] = CourseProgress.Record(races: 9, wins: 9, topTwo: 9); f.progress.records[.ripple] = f.progress.records[.puddle]; f.progress.records[.splash] = f.progress.records[.puddle]; f.progress.records[.wave] = f.progress.records[.puddle]
             f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.9, focus: 1), playerTint: JellyRoster.tint(0), rivalCount: 2, seed: 3, course: t)
             var sawRace = false, sawFinal = false, finalAt: Float?
             for _ in 0..<(60 * 120) {
@@ -336,10 +336,11 @@ final class CourseProgressionTests: XCTestCase {
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .ripple) }, [350, 190, 100])
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .splash) }, [500, 275, 150])
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .wave) }, [750, 400, 225])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .tsunami) }, [1500, 825, 450])
         for p in 1...3 { for t in CourseTier.allCases.dropFirst() { XCTAssertGreaterThan(RaceTuning.drops(place: p, tier: t), RaceTuning.drops(place: p, tier: t.below!)) } }
         XCTAssertEqual(RaceTuning.drops(place: 7, tier: .wave), 225)
-        XCTAssertEqual(CourseTier.allCases.map(\.className), ["Starter", "Rookie", "Pro", "Champion"])
-        XCTAssertEqual(CourseTier.wave.below, .splash); XCTAssertNil(CourseTier.puddle.below); XCTAssertNil(CourseTier.wave.above)
+        XCTAssertEqual(CourseTier.allCases.map(\.className), ["Starter", "Rookie", "Pro", "Champion", "Legend"])
+        XCTAssertEqual(CourseTier.wave.below, .splash); XCTAssertNil(CourseTier.puddle.below); XCTAssertEqual(CourseTier.wave.above, .tsunami); XCTAssertNil(CourseTier.tsunami.above)
     }
 
     func testUnlocksByAWinOrThreeTopTwos() {
@@ -357,7 +358,9 @@ final class CourseProgressionTests: XCTestCase {
         XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple, .splash], "a win opens the next course at once")
         XCTAssertEqual(p.record(.ripple).wins, 1); XCTAssertEqual(p.record(.ripple).topTwo, 1); XCTAssertEqual(p.record(.puddle).races, 4)
         p.record(tier: .splash, place: 1)
-        XCTAssertEqual(p.unlockedTiers, CourseTier.allCases)
+        XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple, .splash, .wave], "a win on the Splash opens the Wave")
+        p.record(tier: .wave, place: 1)
+        XCTAssertEqual(p.unlockedTiers, CourseTier.allCases, "a win on the Wave opens the Tsunami")
     }
 
     func testProgressSavesAndDecodesAndAnEmptySaveIsThePuddle() {
@@ -401,12 +404,14 @@ final class CourseProgressionTests: XCTestCase {
         XCTAssertEqual(f.unlockedNow, .ripple, "and opened the Ripple")
         f.courseTier = .ripple
         run(f)
-        XCTAssertEqual(f.progress.record(.ripple).wins, 1); XCTAssertEqual(w.count, 12 + 15, "the Ripple pays 15 for a win")
+        XCTAssertEqual(f.progress.record(.ripple).wins, 1); XCTAssertEqual(w.count, 250 + 350, "the Ripple pays 350 for a win")
         XCTAssertEqual(f.unlockedNow, .splash)
         run(f, course: .splash)
-        XCTAssertEqual(w.count, 12 + 15 + 18); XCTAssertEqual(f.unlockedNow, .wave)
+        XCTAssertEqual(w.count, 250 + 350 + 500); XCTAssertEqual(f.unlockedNow, .wave)
         run(f, course: .wave)
-        XCTAssertEqual(w.count, 12 + 15 + 18 + 22); XCTAssertNil(f.unlockedNow, "nothing left to open")
+        XCTAssertEqual(w.count, 250 + 350 + 500 + 750); XCTAssertEqual(f.unlockedNow, .tsunami)
+        run(f, course: .tsunami)
+        XCTAssertEqual(w.count, 250 + 350 + 500 + 750 + 1500); XCTAssertNil(f.unlockedNow, "nothing left to open")
         XCTAssertEqual(f.progress.unlockedTiers, CourseTier.allCases)
         // GameCare's pick refuses a locked course and takes an open one
         let care = GameCare(jellyCount: 1, persistent: false)

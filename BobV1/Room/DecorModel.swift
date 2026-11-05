@@ -33,7 +33,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     // batch 4 (2026-10-27, Room/DecorKind+Batch4.swift): more toys
     case beachball, playtunnel, ringstacker, toyrocket, plushdino, kickscooter
     // Park-only (2026-10-25, Park/ParkToys.swift): never sold; placed permanently in the Park
-    case seesaw, springrider, sandbox
+    case seesaw, sandbox
     // batch 5 (2026-11-04, Room/DecorKind+Batch5.swift): sport toys
     case footbag, frisbee, skateboard, hoop
 
@@ -44,7 +44,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     enum Category: String, Sendable { case furniture, toys }
     var category: Category {
         switch self {
-        case .seesaw, .springrider, .sandbox, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
+        case .seesaw, .sandbox, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
         default: return Self.batch3Toys.contains(self) || Self.batch4Toys.contains(self) || Self.batch5Toys.contains(self) ? .toys : .furniture
         }
     }
@@ -71,7 +71,6 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         switch self {
         case .loveseat, .swing, .rockingchair, .armchair, .pouf, .diningset, .petbed, .slide: return Self.bigScale
         case .seesaw: return 1.4          // (Park toys are drawn and measured bigger so they read next to the Jelbies)
-        case .springrider: return 1.35
         case .sandbox: return 1.15
         default: return 1
         }
@@ -239,7 +238,7 @@ extension DecorKind {
         case .bouncymat: return .decorHop
         case .slide: return .decorSlide
         case .soccerball: return .soccerKick
-        case .seesaw, .springrider, .sandbox: return .decorSit
+        case .seesaw, .sandbox: return .decorSit
         case .petbed, .rug, .nightlight, .divider, .floorlamp, .minigoal: return nil          // (the goal is shot at through the soccer ball's own behaviour)
         default: return batch3Interaction
         }

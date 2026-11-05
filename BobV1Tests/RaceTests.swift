@@ -246,16 +246,16 @@ final class RaceModelTests: XCTestCase {
         XCTAssertEqual(sim.placings.map(\.place), [1, 2, 3])
         XCTAssertEqual(sim.placings.first?.isPlayer, true, "the quick one is first")
         XCTAssertEqual(sim.playerPlace, 1)
-        XCTAssertEqual(w.count, 12, "1st pays 12 Drops")
+        XCTAssertEqual(w.count, 250, "1st pays 250 Drops")
         let times = sim.placings.compactMap(\.time)
         XCTAssertGreaterThanOrEqual(times.count, 1); XCTAssertEqual(times, times.sorted(), "finishers are in time order, ahead of the ones still running")
         XCTAssertNotNil(sim.placings.first?.time)
         XCTAssertGreaterThan(win.earned, 0)
-        // a slow Jelly against quick rivals comes last: 3rd pays 4
+        // a slow Jelly against quick rivals comes last: 3rd pays 75
         let w2 = DropsWallet(persists: false)
         let lose = raceToResults(player: RacerStats(waddle: 0.1, focus: 1), rivals: RacerStats(waddle: 0.95, focus: 1), wallet: w2)
         XCTAssertEqual(lose.sim?.playerPlace, 3)
-        XCTAssertEqual(w2.count, 4)
+        XCTAssertEqual(w2.count, 75)
         XCTAssertEqual(lose.sim?.placings.last?.isPlayer, true)
         // the sum of times: a faster Jelly is quicker
         XCTAssertLessThan(win.sim!.player.finishTime!, lose.sim!.player.finishTime!)
@@ -267,7 +267,7 @@ final class RaceModelTests: XCTestCase {
         XCTAssertEqual(sim.phase, .results)
         XCTAssertEqual(sim.playerPlace, 2)
         XCTAssertNil(sim.placings.last?.time)
-        XCTAssertEqual(sim.playerDrops, 7)
+        XCTAssertEqual(sim.playerDrops, 140)
     }
 
     func testStatsGrowAfterARace() {
@@ -433,7 +433,7 @@ final class RaceBodyRig {
             while tapsPerSecond > 0, tapT >= 1 / tapsPerSecond { tapT -= 1 / tapsPerSecond; sim.playerTap(foot: foot); foot = 1 - foot }
             if let e = stumbleEvery, sinceStumble >= e { sinceStumble = 0; sim.playerTap(foot: foot); sim.playerTap(foot: foot) }
         }
-        if sim.phase != .countdown { sim.setMeasured(0, dist: course == nil ? rig.brain.pz - startZ : rig.brain.raceProgress) }
+        if sim.phase != .countdown { sim.setMeasured(0, dist: course == nil ? rig.brain.pz - startZ : rig.brain.raceProgress(sim: rig.sim)) }
         sim.tick(dt: dt, bodyFree: { [rig] _ in rig.brain.raceStepFree }, bodyReady: { [rig] _ in rig.brain.raceBodyReady }, bodyBetween: { [rig] _ in rig.brain.raceBetweenSteps })
         for e in sim.takeEvents() { rig.brain.raceApply(e, sim: rig.sim) }
         rig.brain.raceKeepAlive()

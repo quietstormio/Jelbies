@@ -15,7 +15,7 @@ final class RetiredDecorTests: XCTestCase {
         XCTAssertFalse(StoreCatalog.items(.decor).contains { $0.decor?.isRetired == true })
         XCTAssertEqual(Set(DecorKind.retiredPrices.keys), DecorKind.retired)
         // every home piece with a seat is retired (the park-only seesaw / spring rider / sandbox stay: they live in the Park)
-        for k in DecorKind.allCases where k.hopSit && ![.seesaw, .springrider, .sandbox].contains(k) { XCTAssertTrue(k.isRetired, "\(k) has a seat") }
+        for k in DecorKind.allCases where k.hopSit && ![.seesaw, .sandbox].contains(k) { XCTAssertTrue(k.isRetired, "\(k) has a seat") }
     }
 
     func testMigrationRefundsOwnedAndPlacedOnceAndEmptiesEveryRoom() {
