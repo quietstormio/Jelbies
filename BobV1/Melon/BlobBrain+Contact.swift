@@ -30,6 +30,8 @@ enum ContactTuning {
     nonisolated(unsafe) static var armCalmSweep: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM"] ?? "") ?? 0.2
     /// A stance walk's steps within this distance (m) of the decided spot are planned without the partner wall (the last two strides).
     nonisolated(unsafe) static var wallExemptDistance: Float = Float(ProcessInfo.processInfo.environment["WALL_EXEMPT"] ?? "") ?? 0.35
+    /// A side-by-side stance walk starts its turn into the pose this many strides before the n it needs (so the body has finished turning - its outline is the final one - before it is within contact range).
+    nonisolated(unsafe) static var finalTurnExtra: Float = Float(ProcessInfo.processInfo.environment["FINAL_TURN_EXTRA"] ?? "") ?? 4
     static let rearmHold: Float = 0          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
