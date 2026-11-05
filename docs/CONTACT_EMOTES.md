@@ -349,3 +349,15 @@ Results columns added in r4-measure-r2 (results_*.tsv, after `bar`): `minGapBody
 `worst_frames.tsv` is now written at the end of every `finish()` (plus `worst_frames_<cast>.tsv`). `socialfeet.tsv` has a header and one row per (stance, ContactPolishTests cast).
 Hand gap definitions: lab = `BruteForceContactMetric.handGap` (the arm capsule's first vertex, the pole of the tip sphere, against the other body's drawn skin along the line tip -> its root, 3 cm lateral strip, 5 cm height band; negative = inside);
 app = `ContactField.handGap` (the tip, recorded by `ContactField.build` from the arm block, against the other body's profile outline, radial). The `.demolog` tick line has `hand[i-j:cm]`, the SUMMARY `minHand` / `medHoldHand`.
+
+### 5.10b Adding an interactive emote (the checklist; user rule 3, 2026-11-04: ONE formula for every interactive emote)
+
+The formula: the meeting spot is decided once at session start; one continuous walk whose last step lands there; the hold is at skin contact (the hum Moss+Lavender belly press: skin gap 0 +- 0.5 cm, never deeper than -1 cm, never a visible gap); tail / wings / spikes / daisy / ears / hands never inside the partner; exactly one touch sound per touch; every lunge, bounce, turn and hop peaks AT contact, never past it (the peak is sized from the live skin gap, see `BlobSocial+Peak.swift`).
+
+1. **Kind**: add the case to `SocialKind` (BlobSocial.swift) and the drive.
+2. **Row**: add an explicit `ContactStance.table` row (ContactStance.swift). There is no default; `ContactTableTests.testEveryKindHasAnExplicitRowAndIsMeasured` fails without it.
+3. **Class**: `touching` (skins meet: `.holding` for a held contact, `.pressing` for a strike) or `proximity` (they stand close, never overlap). A hand emote (boop, highFive, pat) is touching with the hand as the contact: the bodies stand at hand reach and the hand ends ON the partner's skin.
+4. **Flags**: `features:` true if wings / tail / spikes / daisy can reach the partner (Pip's tail: `socialTailCurl`); `facing:` .each (face to face) or .camera (side by side); `anchor:` for the one who does not move; `sound:` / `haptic:` (one per touch, fired by `contactTick`); `walk0:` false only when the drive owns its own walk-up.
+5. **Harness**: add an entry to `ContactPolishTests.pairEntries` or `groupEntries` (the same test enforces it), with its class and any prop.
+6. **Capture scene**: add a row to `scripts/contact_scenes.tsv` for a real-app clip (perp + top) and WATCH the sheet.
+7. **Suites**: ContactPolishTests (all five pair casts + groups, CONTACT_ENFORCE=1), SocialFeetTests ENGINE=1 for the kind, ContactSettleTests, ContactProfileTests, ContactTableTests, RoomSFXCountTests.

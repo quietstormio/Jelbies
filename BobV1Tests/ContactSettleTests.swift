@@ -316,7 +316,7 @@ final class ContactSettleTests: XCTestCase {
         }
         for k in [SocialKind.nuzzle, .sitTogether, .cheekSquish, .bellyBounce, .cuddleLean, .whisperGiggle, .swayHug, .backToBack] { XCTAssertEqual(ContactStance.entry(k)?.facing, .camera, "\(k) ends side by side") }
         for k in [SocialKind.boop, .bump, .chestBump, .hum, .noseBoop] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
-        XCTAssertFalse(ContactStance.entry(.squabble)?.steps.first?.retargets ?? true); XCTAssertFalse(ContactStance.entry(.tag)?.steps.first?.retargets ?? true)
+        XCTAssertTrue(ContactStance.entry(.squabble)?.steps.first?.retargets ?? false, "squabble owns its walk-up since drive round 2 (arrival -7.4 cm -> -1.0 cm)"); XCTAssertFalse(ContactStance.entry(.tag)?.steps.first?.retargets ?? true)
     }
 
     /// A walk-up reaches the touch exactly (the stance walk plants its last step within 1 cm of the destination, no shuffle) and the pair stands at skin contact: gap within [-1, +2] cm at the end of the walk-up phase.
