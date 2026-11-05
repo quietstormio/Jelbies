@@ -757,6 +757,8 @@ final class BlobBrain {
     /// 48 + 40 candidates, each a floor-rules `resolve` and a reachability check, no longer have to fit one step. Infinity outside a pick.
     var pickDeadline: CFTimeInterval = .infinity
     var pickTimedOut = false
+    /// Goal searches run / stopped by the budget since the stage last logged them (plain Ints; MelonStage's perf line sums and resets them).
+    var pickCount = 0, pickTimeoutCount = 0
     /// Test seam (default unchanged): tests that need a repeatable pick set `.infinity` in setUp and restore `defaultPickBudgetSeconds` in tearDown.
     static let defaultPickBudgetSeconds: CFTimeInterval = 0.0015
     nonisolated(unsafe) static var pickBudgetSeconds: CFTimeInterval = BlobBrain.defaultPickBudgetSeconds
@@ -765,7 +767,7 @@ final class BlobBrain {
     func pickAutonomous(_ sim: SoftBody) {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickAutonomous", probe) }
         pickDeadline = CACurrentMediaTime() + Self.pickBudgetSeconds; pickTimedOut = false
-        defer { pickDeadline = .infinity; pickTimedOut = false }
+        defer { pickCount += 1; if pickTimedOut { pickTimeoutCount += 1 }; pickDeadline = .infinity; pickTimedOut = false }
         planBudget = 12; defer { planBudget = 99 }          // (the per-step probe budget, not this count, now bounds the cost; 2 left Jelly 0 short of the front in testRoomCoveragePortrait)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
