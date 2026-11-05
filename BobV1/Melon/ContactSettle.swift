@@ -24,8 +24,8 @@ nonisolated enum ContactSettleTuning {
     nonisolated(unsafe) static var overlapBand: Float = ContactSettleTuning.env("SETTLE_OVL", 0.001)
     /// The urgent way out of an overlap pushes this share of the (predicted) error per step, not all of it: the full error overshot 1.6 - 2.6x (leanPerMetre 3.2 rad/m against the measured reach) and the way back in is slow.
     nonisolated(unsafe) static var urgentShare: Float = ContactSettleTuning.env("SETTLE_URGENT", 0.5)
-    /// The lean limiter (BlobBrain.contactApplyLean) leaves a skin gap this much under the hold alone (m): trim and limiter both acting on the same few mm was the second integrator of the cycle.
-    nonisolated(unsafe) static var limiterBand: Float = ContactSettleTuning.env("SETTLE_LIM", 0.003)
+    /// The lean limiter (BlobBrain.contactApplyLean) leaves a skin gap this much under the hold alone (m), to the settle's trim. MEASURED (r4-engine-settle, Bob+Teddy): 0.3 cm made every hold's min gap 0.2 - 0.3 cm deeper (cuddleLean -0.8 -> -1.0, swayHug -0.8 -> -1.1, cheekSquish -1.1 -> -1.4) with no better hold median, so it is 0 (off).
+    nonisolated(unsafe) static var limiterBand: Float = ContactSettleTuning.env("SETTLE_LIM", 0)
     /// BACK-OFF (r4-engine-settle): a planted body whose lean trim stays pinned at -budget (measured: a step itself shakes the skin +-5 cm for 0.3 s - the legs swing, the body shears - so it is the LAST resort, for what the two leans cannot take, ~13 cm) while the skins still overlap by more than `backoffGap` for `backoffDwell` s steps AWAY once (no turn, startStep with a root
     /// displacement), `backoffMin ... backoffMax` m, then waits `backoffCooldown` s. 0 = off (A/B: env SETTLE_BACKOFF=0).
     nonisolated(unsafe) static var backoffOn = ProcessInfo.processInfo.environment["SETTLE_BACKOFF"] != "0"
