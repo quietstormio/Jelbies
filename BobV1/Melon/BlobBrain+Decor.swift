@@ -53,13 +53,13 @@ extension BlobBrain {
                 let d = out - position, len = simd_length(d)
                 let m = len > 0.02 ? d / len * min(len, 1.3 * dt) : SIMD2<Float>.zero
                 if len > 0.02, !steerPeers().contains(where: { simd_distance($0.pos, position + m) < peerGap }) {          // (never into a friend)
-                    px += m.x; pz += m.y
-                    feet.pos[0] += m; feet.pos[1] += m
+                    unstickNudge(m, maxStep: StuckWatchdog.nudgeSpeed * dt)          // (through resolve, stepRoot0 and the feet together: the leash never has to pull a foot back)
                     yaw = atan2f(d.x, d.y)
                 }
             }
             if insideDecorT > 1.2, !held, !sleepLocked, pending == nil, let out = decorFreeSpot(near: position) {
                 insideDecorT = -1.5
+                insideStuckT = 0          // (the walk-out has started: the ease-out waits for a fresh 3 s)
                 decorIgnore = f.uid
                 requestNow(.goTo(out))
             }
