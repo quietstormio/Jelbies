@@ -496,22 +496,19 @@ final class GameCare {
     /// Eating stands a little FARTHER back than the layout's stand (negative = away from the tray): measured, the berries are reached with less miss.
     static let eatCloser: Float = -0.03
     func obstacle(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> { dining.obstacle(p, radius: radius * RoomLayout.lowPropRadiusScale) }
-    /// How much of a body's footprint radius (0.7: base disc about 0.84 wide -> belly 0.42) must clear the DRAWN tray.
-    static let trayBellyScale: Float = 0.6
-    /// A passer-by (not eating) keeps a little more than his belly off the tray: his root moves in whole steps (a straight chord between two points that each clear it can clip a corner) and
+    /// A passer-by (not eating) keeps a little more than his belly (0.6 of the 0.7 footprint = 0.42) off the whole drawn tray: his root moves in whole steps (a straight chord between two points that each clear it can clip a corner) and
     /// the drawn body trails its root by up to ~0.25.
     static let trayPasserScale: Float = 0.7
     /// Is Jelbie `id` eating from the tray right now (a single serving for him, or a seat at the group's sitting)? Only he may stand at its rim.
     func isDiner(_ id: Int) -> Bool {
         if group.isActive || groupWanted != nil { return group.memberIDs.contains(id) }
-        return (wanted != nil || meal != nil || trayOut) && mealJelly == id
+        return (wanted != nil || meal != nil) && mealJelly == id
     }
-    /// The tray as an obstacle for Jelbie `id` whose footprint radius is `r`: everybody keeps his belly (`trayBellyScale` of `r`) off the drawn tray; the diner of a
-    /// drink stands `sipCloser` nearer (his belly may overlap the rim by that much: the same allowance `footprint` gives him).
+    /// The tray as an obstacle for Jelbie `id` whose footprint radius is `r`: a passer-by keeps `trayPasserScale` of `r` off the whole drawn tray (bed, rim, handles);
+    /// the diner is left to the thin collider (see `DiningSet.drawnBox`).
     func trayObstacle(_ p: SIMD3<Float>, radius r: Float, id: Int) -> SIMD3<Float> {
-        let sip = servingKind == .drink
-        let diner = isDiner(id)
-        return dining.obstacle(p, radius: diner ? (sip ? (r - Self.sipCloser * 1.5) * RoomLayout.lowPropRadiusScale : r * Self.trayBellyScale) : r * Self.trayPasserScale)
+        guard isDiner(id) else { return dining.obstacleDrawn(dining.obstacle(p, radius: r * RoomLayout.lowPropRadiusScale), radius: r * Self.trayPasserScale) }
+        return obstacle(p, radius: footprint(r))          // a diner: the thin collider, half his footprint (the sip allowance for a drink), as ever
     }
     /// The footprint the brain's resolver uses while a drink is out is a little smaller (the room's own tray collider is in `base`).
     private func footprint(_ r: Float) -> Float { r - (servingKind == .drink ? Self.sipCloser * 1.5 : 0) }

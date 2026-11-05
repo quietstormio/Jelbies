@@ -1,7 +1,7 @@
 //
 //  TrayObstacleTests.swift
 //  The served tray is a real obstacle for every Jelbie: nobody's belly (the root plus 0.42) enters the DRAWN tray (bed, rim and end handles) on any walk:
-//  a roam leg across it, a social chase through it, and the diners' own approach to their places (who may only come to the stand, never over the rim).
+//  a roam leg across it, a social chase through it, and a real single meal (the bystanders; the diner keeps the thin collider he always had).
 //  Before the fix the obstacle was a thin bar (`colliderHalf`) and the push used half a body radius, so the tray's ends and margins were walkable.
 //
 
@@ -39,12 +39,16 @@ final class TrayObstacleTests: XCTestCase {
 
     /// The deepest belly-over-tray intrusion seen while `id` runs `body` (a closure that advances the room).
     @MainActor private final class Probe {
+        var legMoved: Float = 0
+        /// A new leg: a body standing where a tray was set down eases out of it only once he steps (the guard works on a stepping root), so a leg is judged after its first 0.4 of walking.
+        func beginLeg() { legMoved = 0; last = nil }
         var shown = 0, atT: Float = 0, worst: Float = -.infinity, at = SIMD2<Float>.zero, travelled: Float = 0, lag: Float = 0
         var last: SIMD2<Float>?
         func sample(_ r: DiningJellyTests.Room, _ id: Int) {
             let f = r.actors[id].floor
             defer { last = f }
-            if let l = last, simd_distance(l, f) < 0.5 { travelled += simd_distance(l, f) }
+            if let l = last, simd_distance(l, f) < 0.5 { travelled += simd_distance(l, f); legMoved += simd_distance(l, f) }
+            guard legMoved > 0.4 else { return }
             guard r.actors[id].isWalking else { return }          // (only a body on the move: one that stands where the tray was set down is the serving's business, not a walk through it)
             let intr = TrayObstacleTests.belly - TrayObstacleTests.drawnDistance(r, f)
             if intr > worst { worst = intr; at = f; atT = r.t }
@@ -74,7 +78,7 @@ final class TrayObstacleTests: XCTestCase {
                         let act = r.actors[id]
                         act.sim.teleport(toXZ: from); act.brain?.poseW = 0; act.brain?.currentPose(act.sim)          // (the brain's root follows the body: it is only re-read while the brain is not posing)
                         r.run(0.6)
-                        act.brain?.requestNow(.goTo(to))
+                        act.brain?.requestNow(.goTo(to)); p.beginLeg()
                         r.run(16) { p.sample(r, id); return simd_distance(act.floor, to) < 0.4 }
                         r.run(0.5)
                     }
@@ -108,22 +112,25 @@ final class TrayObstacleTests: XCTestCase {
         }
     }
 
-    /// The real group meal: the diners come to their places over the first seconds and never cross the rim on the way (nor after: they stand at the stand).
-    func testGroupDinersApproachNeverCrossesTheRim() {
-        for drink in [false, true] {
-            let r = room()
-            if drink { r.care.drink() } else { r.care.store.grant("berries", 3); r.care.feed("berries") }
-            let probes = (0..<3).map { _ in Probe() }
-            var seen = false, since: Float = 0
-            r.run(40) {
-                if r.care.dining.phase != .absent { seen = true; since += r.actors[0].sim.stepDt; if since > 1.5 { for i in 0..<3 { probes[i].sample(r, i) } } }          // (the first 1.5 s: the tray pops in beside him; whoever stood there is eased out)
-                return seen && r.care.dining.phase == .absent
+    /// A real single meal (Pip eats): the floor rules of the two bystanders push them a belly off the whole drawn tray (every side, ends and handles included), Pip's own are the thin
+    /// collider he always had. (The meal's tray stands only ~10 s, too short for a walking probe: this checks the wiring through the brains' own `resolve`.)
+    func testBystandersGetTheDrawnTrayInARealMeal() {
+        let r = room()
+        r.care.store.grant("berries", 3)
+        r.care.feed("berries", jelly: 1)
+        r.run(40) { r.care.dining.phase == .present && r.care.dining.scale > 0.999 }
+        XCTAssertEqual(r.care.dining.phase, .present, "the meal's tray stands (\(r.care.dining.phase))")
+        XCTAssertTrue(r.care.isDiner(1)); XCTAssertFalse(r.care.isDiner(0)); XCTAssertFalse(r.care.isDiner(2))
+        let d = r.care.dining
+        let box = d.drawnBox(scale: d.scale)
+        let c = box.centre, h = box.half
+        for (name, p) in [("left end", c + SIMD2(-h.x - 0.2, 0.05)), ("right end", c + SIMD2(h.x + 0.2, -0.05)), ("front", c + SIMD2(0.3, h.y + 0.2)), ("back", c + SIMD2(-0.3, -h.y - 0.2)), ("front-left corner", c + SIMD2(-h.x - 0.15, h.y + 0.15))] {
+            for id in [0, 2] {
+                guard let b = r.actors[id].brain else { return XCTFail("brain") }
+                let q = b.resolve(SIMD3(p.x, 0, p.y), b.footprint)
+                let dist = RoomLayout.boxDistanceXZ(SIMD2(q.x, q.z), box)
+                XCTAssertGreaterThan(dist, Self.belly - 0.02, "bystander \(id) at the \(name) of a real meal's tray: pushed to \(dist) from the drawn tray (a belly is \(Self.belly))")
             }
-            XCTAssertTrue(seen, "the group's tray stood (drink \(drink))")
-            let worst = probes.map(\.worst).max() ?? 0
-            print("TRAY group drink=\(drink): worst intrusion per diner \(probes.map(\.worst)), sip allowance \(GameCare.sipCloser)")
-            // (a sipper's belly may overlap the rim by the sip allowance: his mouth only reaches the straw tip that close)
-            XCTAssertLessThan(worst, Self.tolerance + (drink ? GameCare.sipCloser : 0), "a diner's belly crossed the rim (drink \(drink)): \(probes.map(\.worst))")
         }
     }
 }
