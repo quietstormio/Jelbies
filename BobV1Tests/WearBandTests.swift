@@ -313,4 +313,56 @@ final class WearBandTests: XCTestCase {
         XCTAssertLessThanOrEqual(walkNear, 0.01, "the arm-clearance bulge changes by \(walkNear) m in one frame of a walk")
         XCTAssertLessThanOrEqual(walkAll, 0.01, "the arm-clearance bulge changes by \(walkAll) m in 0.1 s of a walk")
     }
+
+    /// Chains stay in one piece (the "split chain" report): neighbouring links / gems / pearls stay within 1.5x of their drawn rest spacing in every frame, and a run of links near an arm
+    /// takes ONE mode (a link never goes pass-behind while its neighbour bulges). WEARBAND_LEVEL=off runs the same check on the old code.
+    func testChainsStayConnected() throws {
+        WearLevel.record = true; defer { WearLevel.record = false }
+        var report = ""
+        var worst: Float = 0, worstMode = 0
+        for (look, prefix) in [(WearLook.chainGold, "link"), (.diamondJ, "gem"), (.pearls, "pearl")] {
+            guard let a = WearMeshes.art(look) else { continue }
+            var parts: [(first: Int, count: Int)] = []
+            var base = 0
+            for part in a.parts { if part.name.hasPrefix(prefix) { parts.append((base, part.positions.count)) }; base += part.positions.count }
+            for m in motions() where ["walk", "run", "hop", "jacks", "lean", "squish"].contains(m.name) {
+                for id in [0, 1] {
+                    let lab = makeLab(id); let r = lab.rigs[0]
+                    let s = WornSet(); s.body = WearBody.shared; s.soundOn = false; Self.keep.append(s)
+                    func tick() { lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); s.tick(id: 0, brain: r.brain, sim: r.sim, outfit: [look.slot: look], role: .none, hideAll: false, dt: 1.0 / 60) }
+                    for _ in 0..<70 { tick() }
+                    func centres() -> [SIMD3<Float>]? {
+                        s.syncCarry(0, sim: r.sim)
+                        let sk = skin(lab)
+                        let f = sk.withUnsafeBufferPointer { q in s.frame(theme: RoomTheme(), time: 0.4) { _ in q.baseAddress } }
+                        guard let last = parts.last, f.opaque.vertices.count >= last.first + last.count else { return nil }
+                        return parts.map { p in var c = SIMD3<Float>.zero; for v in p.first..<(p.first + p.count) { let q = f.opaque.vertices[v]; c += SIMD3(q.pos.x, q.pos.y, q.pos.z) }; return c / Float(p.count) }
+                    }
+                    guard let rest = centres() else { continue }
+                    m.start(lab)
+                    var wm: Float = 0, modeBad = 0
+                    for step in 0..<Int(m.seconds * 60) {
+                        tick()
+                        guard step % 3 == 0, let c = centres() else { continue }
+                        for k in 0..<(c.count - 1) {
+                            let e0 = simd_distance(rest[k], rest[k + 1])
+                            guard e0 > 0.005 else { continue }
+                            wm = max(wm, simd_distance(c[k], c[k + 1]) / e0)
+                            if WearLevel.record, parts[k].first < WearLevel.recBulge.count, parts[k + 1].first < WearLevel.recBulge.count {
+                                let b0 = WearLevel.recBulge[parts[k].first], b1 = WearLevel.recBulge[parts[k + 1].first]
+                                let r0 = WearLevel.recRaw[parts[k].first], r1 = WearLevel.recRaw[parts[k + 1].first]
+                                if (b0 < 0.001 && r0 >= WearLevel.bulgeNone && b1 > 0.01) || (b1 < 0.001 && r1 >= WearLevel.bulgeNone && b0 > 0.01) { modeBad += 1 }
+                            }
+                        }
+                    }
+                    worst = max(worst, wm); worstMode += modeBad
+                    report += String(format: "%@ %@ %@: worst neighbour spacing %.2fx rest, pass-behind/bulge mixed pairs %d\n", look.rawValue, ["Bob", "Pip"][id], m.name, wm, modeBad)
+                }
+            }
+        }
+        print("BANDCHAIN\n" + report)
+        if let d = ProcessInfo.processInfo.environment["BAND_DIR"] { try? report.write(toFile: d + "/chain_\(ProcessInfo.processInfo.environment["BAND_TAG"] ?? "run").txt", atomically: true, encoding: .utf8) }
+        XCTAssertLessThanOrEqual(worst, 1.5, "a neighbouring pair of chain links is \(worst)x its rest spacing apart")
+        XCTAssertEqual(worstMode, 0, "a link goes pass-behind while its neighbour bulges")
+    }
 }
