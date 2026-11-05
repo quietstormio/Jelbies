@@ -154,7 +154,14 @@ extension BlobBrain {
             if phT >= 1.3 && !feet.active && idleState.steps >= 2 {
                 idleState.k = 0; sitPose(skinner, 0, slump: false)
                 currentPose(sim)
+                // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
+                // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
+                let out = decorFreeSpot(near: position)
                 idleFinish(skinner)
+                if let out {
+                    insideDecorT = -1.5; insideStuckT = 0; decorIgnore = f.uid
+                    requestNow(.goTo(out))
+                }
             }
         default: break
         }

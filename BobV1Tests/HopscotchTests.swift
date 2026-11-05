@@ -216,4 +216,39 @@ final class HopscotchTests: XCTestCase {
         // (a rider lands at the chute's end and walks out: nobody is inside it unless riding)
         XCTAssertLessThan(longest, 1.5, "someone stood inside the slide without using it for \(longest) s: \(where_)")
     }
+
+    /// The room slide's ride ends with him walking on to clear floor: 1 s after the script ends he is outside the footprint, and `decorExitCheck` never had to ease him out.
+    func testRoomSlideRideEndsClearOfTheSlide() throws {
+        _ = OnePieceInvariantTests.configured
+        ToyTuning.settle = 0
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        defer { DecorField.shared.clear() }
+        guard let base = LegsDrawnAuditTests.fromMove("decor2: climb the slide, sit, ride, exit") else { return XCTFail("no slide scenario") }
+        var report = ""
+        for c in 0..<OnePieceInvariantTests.characters.count {
+            var sc = base
+            var need: Float = 0.5          // (decorExitCheck's own "inside": footprint * reach - 0.05)
+            var ended: Float?, clock: Float = 0, rode = false, maxStuck: Float = 0, depthAfter: Float?, edgeAtEnd: Float = 0, clearAt: Float?
+            sc.each = { r in
+                clock += r.sim.stepDt
+                let k = r.brain.idleState.kind
+                if k == .decorSlide { rode = true }
+                guard rode, let f = DecorField.shared.foot(7) else { return }
+                maxStuck = max(maxStuck, r.brain.insideStuckT)
+                need = r.brain.footprint * f.spec.reach - 0.05
+                if let e = ended, clearAt == nil, f.distance(r.brain.position) >= need { clearAt = clock - e }
+                if k == nil, ended == nil { ended = clock; edgeAtEnd = f.distance(r.brain.position) }
+                if let e = ended, depthAfter == nil, clock >= e + 1 { depthAfter = f.distance(r.brain.position) }
+            }
+            _ = OnePieceInvariantTests.run(sc, char: c, shoes: false, pacing: .hz60, seed: 3)
+            let who = OnePieceInvariantTests.characters[c].0
+            XCTAssertTrue(rode, "\(who): rode the slide")
+            XCTAssertNotNil(ended, "\(who): the script ended")
+            guard let d = depthAfter else { XCTFail("\(who): ran out of time before 1 s after the ride"); continue }
+            report += String(format: "%@: at script end %.2f from the footprint edge, 1 s later %.2f (clear after %.2f s, maxStuckT %.2f)\n", who, edgeAtEnd, d, clearAt ?? -1, maxStuck)
+            XCTAssertGreaterThanOrEqual(d, need, "\(who): 1 s after the ride he is still inside the slide's footprint (\(d) from its edge, needs \(need))")
+            XCTAssertLessThan(maxStuck, 3, "\(who): decorExitCheck had to ease him out (insideStuckT \(maxStuck))")
+        }
+        print("ROOMSLIDE\n" + report)
+    }
 }
