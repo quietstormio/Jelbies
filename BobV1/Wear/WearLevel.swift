@@ -25,7 +25,7 @@ nonisolated enum WearLevel {
     static let window: Float = 0.62, reachY: Float = 0.16
     /// Radius (m) over which the skin radius is dilated and averaged; a clearance up to `bulgeFull` is bulged around fully, beyond `bulgeNone` the limb is left to pass (an arm
     /// pointing straight out would need a tent as long as the arm): the amount fades smoothly between them.
-    static let neighbourhood: Float = 0.045, bulgeFull: Float = 0.045, bulgeNone: Float = 0.10
+    static let neighbourhood: Float = 0.045, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
 
     static let bins = 36, minBins = 24, maxSpan: Float = 0.21
 
@@ -84,7 +84,7 @@ nonisolated enum WearLevel {
             p.clusterLevel[k] = true; p.clusterDir[k] = r.dir; p.clusterExcess[k] = r.excess; p.clusterLvBind[k] = r.bind; p.clusterY0[k] = c.y
         }
         // the nodes: levelled vertices outside the rigid small parts, plus each rigid small part's centre
-        p.nodeVertex = []; p.nodeCluster = []; p.nodeBind = []; p.nodeY0 = []; p.nodeDir = []
+        p.nodeVertex = []; p.nodeCluster = []; p.nodeBind = []; p.nodeY0 = []; p.nodeDir = []; p.nodeRho0 = []
         p.lvNode = [Int32](repeating: -1, count: p.rest.count); p.clusterNode = [Int32](repeating: -1, count: p.partNames.count)
         var pos: [SIMD3<Float>] = []
         for k in p.partNames.indices where p.clusterLevel[k] {
@@ -97,6 +97,7 @@ nonisolated enum WearLevel {
             p.lvNode[i] = Int32(p.nodeBind.count)
             p.nodeVertex.append(Int32(i)); p.nodeCluster.append(-1); p.nodeBind.append(p.lvBind[i]); p.nodeY0.append(p.lvY0[i]); p.nodeDir.append(p.lvDir[i]); pos.append(p.rest[i])
         }
+        for b in p.nodeBind { let f = body.restFoot(b); p.nodeRho0.append(simd_length(SIMD2(f.x, f.z - zc))) }          // (the rest skin radius under each node)
         // neighbours (a uniform grid on the authored positions)
         let R = neighbourhood
         p.nodeNbr = [[Int32]](repeating: [], count: pos.count)
@@ -137,10 +138,14 @@ nonisolated enum WearLevel {
             }
             raw[j] = rho
         }
-        var dil = raw
-        for j in 0..<n { var m = raw[j]; for k in p.nodeNbr[j] { m = max(m, raw[Int(k)]) }; dil[j] = m }
+        // what is smoothed is the CHANGE of the skin's radius from its rest value (so the rest shape is exact and a steep wall - the head - is not flared): dilated (never under any
+        // neighbour's skin) then averaged over the neighbours
+        var delta = raw
+        for j in 0..<n { delta[j] = raw[j] - p.nodeRho0[j] }
+        var dil = delta
+        for j in 0..<n { var m = delta[j]; for k in p.nodeNbr[j] { m = max(m, delta[Int(k)]) }; dil[j] = m }
         var out = dil
-        for j in 0..<n { var s: Float = 0; for k in p.nodeNbr[j] { s += dil[Int(k)] }; out[j] = s / Float(max(p.nodeNbr[j].count, 1)) }
+        for j in 0..<n { var s: Float = 0; for k in p.nodeNbr[j] { s += dil[Int(k)] }; out[j] = p.nodeRho0[j] + s / Float(max(p.nodeNbr[j].count, 1)) }
         return out
     }
 

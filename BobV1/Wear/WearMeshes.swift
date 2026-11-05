@@ -36,7 +36,7 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// The nodes whose skin radius is read each frame (WearLevel): every levelled vertex that is not part of a rigid small part, and the centre of every levelled small part. Each node
     /// keeps the vertex (or part) it stands for, its skin point / height / azimuth, and the nodes within `WearLevel.neighbourhood` of it (the skin radius is dilated and averaged over
     /// them, so the loop does not follow the skin's ripple).
-    var nodeVertex: [Int32] = [], nodeCluster: [Int32] = [], nodeBind: [SurfaceBind] = [], nodeY0: [Float] = [], nodeDir: [SIMD2<Float>] = [], nodeNbr: [[Int32]] = []
+    var nodeVertex: [Int32] = [], nodeCluster: [Int32] = [], nodeBind: [SurfaceBind] = [], nodeY0: [Float] = [], nodeDir: [SIMD2<Float>] = [], nodeNbr: [[Int32]] = [], nodeRho0: [Float] = []
     var lvNode: [Int32] = [], clusterNode: [Int32] = []
     /// The same for the small rigid parts (pearl, link, knot, dot): per part, centre height / azimuth / excess (valid where `clusterLevel`).
     var clusterLevel: [Bool] = [], clusterY0: [Float] = [], clusterDir: [SIMD2<Float>] = [], clusterExcess: [Float] = []

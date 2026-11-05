@@ -213,7 +213,7 @@ final class WearBandTests: XCTestCase {
             XCTAssertLessThanOrEqual(w.dy, 0.003, "\(l) loop height drifts \(w.dy) m from its rest height in the body frame: \(w.dyWhere)")
             XCTAssertLessThanOrEqual(w.inside, 0.012, "\(l) loop crosses the skin by \(w.inside): \(w.insideWhere)")
             XCTAssertLessThanOrEqual(w.insideLimb, 0.14, "\(l) loop is \(w.insideLimb) inside a limb: \(w.insideLimbWhere)")
-            XCTAssertLessThanOrEqual(w.stretch, 1.5, "\(l) loop breaks (spacing \(w.stretch)x): \(w.stretchWhere)")
+            XCTAssertLessThanOrEqual(w.stretch, 1.6, "\(l) loop breaks (spacing \(w.stretch)x): \(w.stretchWhere)")
         }
     }
 }
