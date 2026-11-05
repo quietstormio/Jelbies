@@ -120,7 +120,8 @@ extension GameCare {
         guard !stands.isEmpty else { return }
         let here = Self.floorPos(brain, sim)
         let reach = MelonController.jellyGap + 0.1
-        func near(_ p: SIMD2<Float>) -> Float { stands.map { min(simd_distance(p, $0), simd_distance(p, SIMD2($0.x, $0.y - Self.approachBack))) }.min() ?? 9 }
+        let approaches = group.approachNow
+        func near(_ p: SIMD2<Float>) -> Float { (stands + approaches).map { simd_distance(p, $0) }.min() ?? 9 }
         guard near(here) < reach || group.trayDistance(here) < DiningGroup.trayClearance else { return }          // (or on the rectangle the tray is about to be drawn on)
         let centre = stands.reduce(SIMD2<Float>.zero, +) / Float(stands.count)
         let spots: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)].map { centre + $0 }

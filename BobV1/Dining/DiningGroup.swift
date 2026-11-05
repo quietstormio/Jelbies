@@ -86,20 +86,19 @@ final class DiningGroup {
     var peerGapNow: Float? { isActive ? Self.diningGap : nil }
     /// The diners' stands while a sitting runs (GameCare+Group moves the Jellies who are NOT at this sitting off them).
     var standsNow: [SIMD2<Float>] { isActive ? stands : [] }
+    var approachNow: [SIMD2<Float>] { isActive ? approachPoints : [] }
 
+    /// The tray's layout at its spot: the café keeps its preset row; the room's tray puts three AROUND it (the third diner on the side toward the middle of the floor).
+    private var layoutNow: TrayLayout { DiningLayout.make(n: n, row: forcedOrigin != nil, side: DiningLayout.side(for: origin)) }
+    private func facing(_ p: TrayPlace) -> SIMD2<Float> { SIMD2(sinf(p.yaw), cosf(p.yaw)) }
+    /// A place's stand as the brain walks it: eating stands a little farther back, sipping a little nearer, ALONG the way he faces.
+    private func standPoint(_ p: TrayPlace, origin o: SIMD2<Float>, sip: Bool) -> SIMD2<Float> { o + p.rel + facing(p) * (sip ? GameCare.sipCloser : GameCare.eatCloser) }
     private var stands: [SIMD2<Float>] { // the tray-less stand of each place (eating / sipping offset included)
-        let layout = DiningLayout.make(n: n)
-        return layout.places.map { p in
-            var s = origin + p.rel
-            s.y += serving.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
-            return s
-        }
+        layoutNow.places.map { standPoint($0, origin: origin, sip: serving.eatStyle == .sip) }
     }
+    private var approachPoints: [SIMD2<Float>] { stands.map { SIMD2($0.x, $0.y - GameCare.approachBack) } }
     /// Where Blob `i` first walks to: 0.25 behind his own place.
-    func approachPoint(blob i: Int) -> SIMD2<Float> {
-        let s = stands[placeOf[i]]
-        return SIMD2(s.x, s.y - GameCare.approachBack)
-    }
+    func approachPoint(blob i: Int) -> SIMD2<Float> { approachPoints[placeOf[i]] }
 
     /// Spots are NOT assigned per Jelly: every diner takes the free spot nearest to him. Greedy over all (Jelly, spot) pairs by distance (his floor
     /// position to the spot's approach point): the closest pair claims first, so a nearer Jelly keeps a spot two are heading for and the other
@@ -113,8 +112,6 @@ final class DiningGroup {
         return out
     }
 
-    /// The approach points of all places, by place index.
-    private var approachPoints: [SIMD2<Float>] { stands.map { SIMD2($0.x, $0.y - GameCare.approachBack) } }
 
     /// Smart line-up: re-read who should take which place while the diners come (the nearest to the middle takes it, the others the free slot on their side, no walk
     /// across another, none through a standing diner). A diner within 1 u of his approach point is settled for good.
@@ -126,7 +123,7 @@ final class DiningGroup {
         guard committed.contains(false) else { return }
         let from = brains.indices.map { floor($0) }
         let locked: [Int?] = brains.indices.map { committed[$0] ? placeOf[$0] : nil }
-        let plan = Lineup.best(from: from, slots: approachPoints, locked: locked, centre: n == 3 ? 0 : nil, current: placeOf)
+        let plan = Lineup.best(from: from, slots: approachPoints, locked: locked, centre: nil, current: placeOf)
         guard plan != placeOf else { return }
         for i in brains.indices where plan[i] != placeOf[i] && !committed[i] {
             placeOf[i] = plan[i]; replans += 1
@@ -138,15 +135,12 @@ final class DiningGroup {
         guard state == .idle, dining.phase == .absent || (forcedOrigin != nil && dining.phase != .poofing), !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
+        let nn = n, rowLayout = forcedOrigin != nil
+        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }, layoutFor: { DiningLayout.make(n: nn, row: rowLayout, side: DiningLayout.side(for: $0)) })
         // nearest free spot for everybody (first claim wins by distance)
-        let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
-            var s = origin + p.rel
-            s.y += c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
-            return SIMD2(s.x, s.y - GameCare.approachBack)
-        }
+        let spots = approachPoints
         committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0
-        placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
+        placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: nil)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -183,11 +177,13 @@ final class DiningGroup {
     var bystanders: () -> [SIMD2<Float>] = { [] }
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
+    /// The most the eat / sip lean may turn (twist) and tilt (roll) a diner, rad: he reaches forward, not sideways into the next diner (his stand already faces the plate).
+    static let leanCap: (twist: Float, roll: Float) = (0.45, 0.12)
     static let gatherCap: Float = 12
     /// A bystander closer than this to the tray's rectangle holds the pop-in back (his belly + a margin), for at most 4 s past the cap.
     static let trayClearance: Float = 0.7
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
-    func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
+    func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: layoutNow) }
     private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
@@ -210,7 +206,7 @@ final class DiningGroup {
             }
             return
         }
-        guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
+        guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin, row: forcedOrigin != nil) else { return }
         for i in brains.indices {
             paid[i] = 0
             if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
@@ -229,6 +225,7 @@ final class DiningGroup {
         settlePay()
         if !keepTable { dining.despawn() }
         state = .idle; requested = false
+        for b in brains { b.dineLeanCap = nil }
         for (i, b) in brains.enumerated() where i < savedFinished.count {
             b.peerGap = savedGap[i]
             if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)
@@ -255,6 +252,7 @@ final class DiningGroup {
     }
     /// Hooks, plan (from his tier) and request for blob `i` (the first serve, a retry and a re-serve).
     private func startSitting(_ i: Int) {
+        brains[i].dineLeanCap = n > 1 && forcedOrigin == nil ? Self.leanCap : nil          // (his neighbour stands a skin's width away: the reach may not swing him into it)
         brains[i].dineHooks = GameCare.hooks(for: serving, tray: dining, place: placeOf[i])
         if tierOf != nil {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
