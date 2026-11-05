@@ -276,7 +276,13 @@ final class DiningSet {
         guard registersCollider else { return }
         guard phase != .absent, phase != .poofing else { RoomLayout.dynamicBoxes = []; return }         // the collider goes the moment the tray starts to poof
         let s = max(scale, 0.001)
-        RoomLayout.dynamicBoxes = [.init(centre: origin, half: layout.colliderHalf * s, height: (DiningDims.trayTop + DiningDims.trayRim) * s)]
+        RoomLayout.dynamicBoxes = [drawnBox(scale: s)]
+    }
+    /// The tray as DRAWN, floor footprint: the bed with its rim and both end handles (the mesh is built in `DiningModels.tray` and shifted `trayCentreZ`). This is
+    /// the obstacle the walk resolver keeps bodies off, so no belly crosses a rim or a handle (it was the thin `colliderHalf` bar before: the tray's ends and
+    /// its near and far margins were walkable and Jelbies strolled through them). The diners' own stands clear it by their belly (>= 0.43, measured per layout).
+    func drawnBox(scale s: Float) -> RoomLayout.FlatBox {
+        .init(centre: origin + SIMD2(0, layout.trayCentreZ * s), half: SIMD2(layout.half.x + DiningDims.handleReach, layout.half.y) * s, height: (DiningDims.trayTop + DiningDims.trayRim) * s)
     }
 
     /// Floor obstacle for a sphere (same math the walk resolver uses).

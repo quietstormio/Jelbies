@@ -13,6 +13,8 @@ import Foundation
 /// (+-0.55, 0.46, 0.06), so its underside is at 0.31 and a forward pitch of ~25 degrees plus a small crouch brings it below the tray top).
 nonisolated enum DiningDims {
     static let trayTop: Float = 0.25
+    /// How far the tray's end handles stand out past its bed (x), see `DiningModels.tray`: the bed's side rim ends at `half.x`, the handle's outer edge is at `half.x + 0.185`.
+    static let handleReach: Float = 0.185
     static let trayRim: Float = 0.04
     static let plateRadius: Float = 0.27
     static var plateFloorY: Float { trayTop + 0.024 }

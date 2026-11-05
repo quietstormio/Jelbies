@@ -496,6 +496,23 @@ final class GameCare {
     /// Eating stands a little FARTHER back than the layout's stand (negative = away from the tray): measured, the berries are reached with less miss.
     static let eatCloser: Float = -0.03
     func obstacle(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> { dining.obstacle(p, radius: radius * RoomLayout.lowPropRadiusScale) }
+    /// How much of a body's footprint radius (0.7: base disc about 0.84 wide -> belly 0.42) must clear the DRAWN tray.
+    static let trayBellyScale: Float = 0.6
+    /// A passer-by (not eating) keeps a little more than his belly off the tray: his root moves in whole steps (a straight chord between two points that each clear it can clip a corner) and
+    /// the drawn body trails its root by up to ~0.25.
+    static let trayPasserScale: Float = 0.7
+    /// Is Jelbie `id` eating from the tray right now (a single serving for him, or a seat at the group's sitting)? Only he may stand at its rim.
+    func isDiner(_ id: Int) -> Bool {
+        if group.isActive || groupWanted != nil { return group.memberIDs.contains(id) }
+        return (wanted != nil || meal != nil || trayOut) && mealJelly == id
+    }
+    /// The tray as an obstacle for Jelbie `id` whose footprint radius is `r`: everybody keeps his belly (`trayBellyScale` of `r`) off the drawn tray; the diner of a
+    /// drink stands `sipCloser` nearer (his belly may overlap the rim by that much: the same allowance `footprint` gives him).
+    func trayObstacle(_ p: SIMD3<Float>, radius r: Float, id: Int) -> SIMD3<Float> {
+        let sip = servingKind == .drink
+        let diner = isDiner(id)
+        return dining.obstacle(p, radius: diner ? (sip ? (r - Self.sipCloser * 1.5) * RoomLayout.lowPropRadiusScale : r * Self.trayBellyScale) : r * Self.trayPasserScale)
+    }
     /// The footprint the brain's resolver uses while a drink is out is a little smaller (the room's own tray collider is in `base`).
     private func footprint(_ r: Float) -> Float { r - (servingKind == .drink ? Self.sipCloser * 1.5 : 0) }
 
@@ -699,14 +716,24 @@ final class GameCare {
     /// The floor rules every Jelly's brain walks by: the visible floor, plus the meal tray as an obstacle.
     func wireWorld(_ brain: BlobBrain, isBob: Bool) {
         let base = brain.resolve
+        // the served tray again, every tick of a step (a step's chord can dip into the keep-out between two clear end points): BlobBrain.advanceGait
+        brain.rootGuard = { [weak self, weak brain] p in
+            guard let self, let brain, self.dining.isPresent else { return p }
+            let id = isBob ? 0 : brain.steerID
+            if self.outing.lifted.contains(id) || (self.bath.fenceLifted && self.bath.targetID == id) { return p }
+            let q = self.trayObstacle(SIMD3(p.x, 0, p.y), radius: brain.footprint, id: id)
+            let d = SIMD2(q.x - p.x, q.z - p.y), l = simd_length(d)
+            return l > 0.15 ? p + d / l * 0.15 : SIMD2(q.x, q.z)          // (a snap bigger than 0.15 in one tick is an artefact: ease out of a tray that was set down on him)
+        }
         brain.resolve = { [weak self, weak brain] p, r in
             if self?.outing.lifted.contains(isBob ? 0 : (brain?.steerID ?? -1)) == true { return p }          // (an outing run-out: the Jelbie leaves the room toward the camera)
             if self?.bath.fenceLifted == true, self?.bath.targetID == (isBob ? 0 : brain?.steerID) { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase, only for the Jelly being washed
             let rr = self?.footprint(r) ?? r
-            if self?.focusGroup.rowOpen == true, let me = self { return me.obstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: rr) }       // the wide close-up row stands past the roaming floor's sides
+            let id = isBob ? 0 : (brain?.steerID ?? 0)
+            if self?.focusGroup.rowOpen == true, let me = self { return me.trayObstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: r, id: id) }       // the wide close-up row stands past the roaming floor's sides
             let q = base(p, rr)
-            let q2 = self?.applyKeepOut(q, id: isBob ? 0 : (brain?.steerID ?? 0), brain: brain, radius: rr) ?? q          // (the close-up's keep-out wedge: GameCare+FocusKeepOut.swift)
-            return self?.obstacle(q2, radius: rr) ?? q2
+            let q2 = self?.applyKeepOut(q, id: id, brain: brain, radius: rr) ?? q          // (the close-up's keep-out wedge: GameCare+FocusKeepOut.swift)
+            return self?.trayObstacle(q2, radius: r, id: id) ?? q2
         }
     }
 

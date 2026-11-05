@@ -46,6 +46,9 @@ final class BlobBrain {
     var mouthOpen: Float = 0
     /// Floor position resolver (point, radius) -> corrected point. Default identity; the game passes RoomLayout.resolve.
     var resolve: (SIMD3<Float>, Float) -> SIMD3<Float> = { p, _ in p }
+    /// Per-tick keep-out for the root while a step is running (GameCare.wireWorld sets it: the served tray). `resolve` only ever sees a step's END point, so a long step's straight
+    /// chord could cut through a keep-out zone between two clear points; this re-checks the root itself every tick. nil = none.
+    var rootGuard: ((SIMD2<Float>) -> SIMD2<Float>)?
     /// Wander area (disk) used to pick idle targets and as the default bounds.
     var wanderCenter = SIMD2<Float>(0, 0)
     var wanderRadius: Float = 2.5
@@ -974,6 +977,7 @@ final class BlobBrain {
         if stepLive {
             let u = feet.stepU
             px = stepRoot0.x + stepRootD.x * u; pz = stepRoot0.y + stepRootD.y * u
+            if let g = rootGuard { let q = g(SIMD2(px, pz)); px = q.x; pz = q.y }
             yaw = wrapAngle(stepYaw0 + stepYawD * u)
             if !feet.active { stepLive = false }
         }
