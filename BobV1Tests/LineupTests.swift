@@ -17,6 +17,7 @@ final class LineupTests: XCTestCase {
     /// The meal's tray spot is a system-random pick among the free spots (DiningSpot.choose), which made the meal tests flake: the test takes the free spot nearest the
     /// preferred front spot instead.
     override func setUp() {
+        GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)          // (the walkable width must not depend on a suite that ran before)
         BlobBrain.pickBudgetSeconds = .infinity
         DiningSpot.pickOpen = { $0.min { simd_distance($0, DiningSpot.preferred) < simd_distance($1, DiningSpot.preferred) } }
     }
