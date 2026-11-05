@@ -1394,12 +1394,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         room.raceVisible = false
         renderer.showVisible = false
         room.showVisible = false
-        if let pi = hp?.pose, let b = a.brain {          // the Studio's action shot: his arms posed (SnapshotPose.swift), put back after the draw
-            let saved = b.saveArmState(a.skinner)
-            restoreArms = { b.restoreArmState(saved, a.skinner) }
-            let posed = b.poseArmsForSnapshot(SnapshotArmPose.pose(pi), sim: a.sim, skinner: a.skinner)
-            NSLog("[portrait] action pose %d arms %@", pi, posed ? "posed" : "NOT posed")
-        }
+        // (the Studio's action shot keeps his arms at rest, as in the room: a posed arm deformed the skin the neck cord and the tutu are bound to, and they rode up it. `pose` only turns the camera.)
         if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
@@ -1421,7 +1416,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             fs.syncCarry(id, sim: a.sim)
             featureMesh = fs.frame { renderer.skinPointer(body: $0) }
         }
+        // the action shot is a still picture with his arms at rest: the limb push (which shoves a worn strand out of a swinging arm's way) only kinks the neck cord and the tutu round the arm roots, so it is off for this draw
+        let limbPush = WearLimbs.enabled
+        if hp?.pose != nil { WearLimbs.enabled = false }
         var f = w.frame(theme: room.theme, time: 0.4) { renderer.skinPointer(body: $0) }
+        WearLimbs.enabled = limbPush
         if !featureMesh.vertices.isEmpty {
             let base = UInt32(f.opaque.vertices.count)
             f.opaque.vertices += featureMesh.vertices
@@ -1448,8 +1447,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
                 let floorY = a.sim.floorY
-                span = max((topY - floorY) * 1.55, 1.3)          // room above the raised hands and the hat, and the shoes under the skirt
-                focusY = floorY + span * 0.5 - span * 0.06
+                span = max((topY - floorY) * 1.42, 1.3)          // room above the hat
+                // the camera aims so the floor under him lands at `actionFloorFraction` of the picture's height (solved for the pitch and the aspect: the same in either orientation)
+                let thA = tanf(GameCamera.fovY / 2), m = min(thA, thA * Float(W) / Float(H)), pt = HeadPortraitKey.actionPitch
+                let k = Float(2 * HeadPortraitKey.actionFloorFraction - 1)
+                focusY = floorY + (k * span / 2) / (cosf(pt) - k * sinf(pt) * m)
             }
         }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
@@ -1460,7 +1462,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if hp != nil {          // looking down like the room camera (where the face was approved), so the latitude-curved brows read flat, not slanted
             let down = GameCamera.baseEye - GameCamera.baseTarget          // the base pose, not the aspect-widened one: the portrait frames the same in either orientation
             var pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
-            if hp?.pose != nil { pitch = min(pitch, 0.16) }          // the action shot looks from a low 3/4 front, so the feet and shoes show under the skirt
+            if hp?.pose != nil { pitch = HeadPortraitKey.actionPitch }          // the action shot: a little above level, so the tutu reads as a skirt and the shoes still show
             eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
         }
         var cam = CameraState()
@@ -1499,7 +1501,20 @@ final class MelonController: NSObject, MTKViewDelegate {
                   CGContext(data: p.baseAddress, width: W, height: H, bitsPerComponent: 8, bytesPerRow: W * 4, space: cs,
                             bitmapInfo: alpha | CGBitmapInfo.byteOrder32Little.rawValue)?.makeImage() }),
               let part = full.cropping(to: CGRect(x: (W - side) / 2, y: (H - side) / 2, width: side, height: side)) else { return nil }
-        return UIImage(cgImage: part)
+        let img = UIImage(cgImage: part)
+        if hp?.pose != nil {          // the action shot: where his lowest drawn pixel is (fraction of the picture's height), so the podium can be put exactly under his feet
+            let x0 = (W - side) / 2, y0 = (H - side) / 2
+            var low = 0
+            px.withUnsafeBytes { p in
+                for y in stride(from: y0 + side - 1, through: y0, by: -1) {
+                    var hit = false
+                    for x in stride(from: x0, to: x0 + side, by: 2) where p[(y * W + x) * 4 + 3] > 40 { hit = true; break }
+                    if hit { low = y - y0; break }
+                }
+            }
+            img.feetFraction = CGFloat(low + 1) / CGFloat(side)
+        }
+        return img
     }
 
     private static func thermalName(_ t: ProcessInfo.ThermalState) -> String {

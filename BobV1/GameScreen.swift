@@ -831,6 +831,13 @@ struct GameScreen: View {
             if !dressed.contains(.neck), let bow = WearLook.allCases.first(where: { $0.slot == .neck && $0.tags.contains(theme.friend) }) { care.store.wear(bow, on: 0) }
             care.bath.wallet.add(max(0, 106 - care.bath.wallet.count), silent: true)
         }
+        // capture aid: -WearList "bowtieSky,tutuPink,beanieHoney" -WearWho 0 owns and dresses that Jelbie (only those pieces) in exactly these looks
+        if let list = d.string(forKey: "WearList") {
+            let care = model.care
+            let who = d.integer(forKey: "WearWho")
+            for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
+            for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { _ = care.store.wear(l, on: who) } }
+        }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()
