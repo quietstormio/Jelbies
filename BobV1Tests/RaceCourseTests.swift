@@ -201,7 +201,10 @@ final class CourseModelTests: XCTestCase {
             let mean = times.reduce(0, +) / Float(times.count)
             print("COURSE time \(t): mean \(mean) s, \(times)")
             XCTAssertGreaterThan(mean, 25, "\(t): about 25-45 s with average taps (\(mean))")
-            XCTAssertLessThan(mean, 45, "\(t): about 25-45 s with average taps (\(mean))")
+            // The Wave's six hurdles each cost a jump (crouch 0.13 + flight 0.37 + landing 0.55 s, 0.75 u of hop): measured mean 46.1 s over these 6 seeds, so its bound is 50 s
+            // (the 25-45 s bound predates the hurdles). Ripple and Splash keep 45.
+            let upper: Float = t == .wave ? 50 : 45
+            XCTAssertLessThan(mean, upper, "\(t): about 25-\(Int(upper)) s with average taps (\(mean))")
         }
         let (p, _) = PuddleGoldenTests.race(seed: 1, course: .puddle)
         XCTAssertLessThan(p.player.finishTime!, 20, "the Puddle is the sprint it was")
