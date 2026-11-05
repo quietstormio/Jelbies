@@ -99,7 +99,7 @@ enum ParkScenery {
         roundTree(b, x: 6.8, z: -1.2, trunk: 1.0, radius: 1.4, canopy: S.srgb(0.97, 0.74, 0.80), shape: .round, rng: &r)
 
         // ---- flowering bushes at the edges, a couple of low blossom patches ----
-        let blush = S.srgb(0.98, 0.72, 0.80), butter = S.srgb(0.99, 0.90, 0.55), cream = S.srgb(0.99, 0.96, 0.88), lilac = S.srgb(0.80, 0.70, 0.95)
+        let blush = S.srgb(0.98, 0.62, 0.74), butter = S.srgb(0.99, 0.90, 0.55), cream = S.srgb(0.99, 0.96, 0.88), lilac = S.srgb(0.80, 0.70, 0.95)
         floweringBush(b, x: -3.5, z: -4.3, scale: 1.25, bloom: blush, rng: &r)
         floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: butter, rng: &r)
         floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: lilac, rng: &r)

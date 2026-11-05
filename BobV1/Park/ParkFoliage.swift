@@ -22,7 +22,7 @@ extension ParkScenery {
     /// One leaf clump: an ellipsoid whose surface is broken up by noise, hand-lit (sunlit top, shaded underside, darker where it faces the canopy's inside and in the
     /// noise crevices). `tree` is the whole canopy's (centre, bottom y, top y) so every lobe shares one vertical gradient.
     static func leafLobe(_ b: RoomMeshBuilder, _ c: V3, rx: Float, ry: Float, rz: Float, color: V3, tree: (centre: V3, y0: Float, y1: Float),
-                         seed: Float, bump: Float = 0.12, segments: Int = 12, rings: Int = 6) {
+                         seed: Float, bump: Float = 0.06, segments: Int = 16, rings: Int = 8) {
         var ids: [[UInt32]] = []
         for i in 0...rings {
             let el = -Float.pi / 2 + Float.pi * Float(i) / Float(rings)
@@ -32,7 +32,7 @@ extension ParkScenery {
                 let d = V3(cosf(el) * cosf(az), sinf(el), cosf(el) * sinf(az))
                 let n0 = leafNoise(c + d * 0.9, seed)
                 let p = c + V3(d.x * rx, d.y * ry, d.z * rz) * (1 + bump * n0)
-                let wob = V3(leafNoise(p * 1.7, seed + 3), leafNoise(p * 1.7, seed + 5), leafNoise(p * 1.7, seed + 7)) * bump * 1.3
+                let wob = V3(leafNoise(p * 1.7, seed + 3), leafNoise(p * 1.7, seed + 5), leafNoise(p * 1.7, seed + 7)) * bump * 0.6
                 let nrm = simd_normalize(V3(d.x / rx, d.y / ry, d.z / rz) * min(rx, ry, rz) + wob)
                 let sun = max(-0.5, simd_dot(nrm, sunDir))
                 let h = max(0, min(1, (p.y - tree.y0) / max(0.01, tree.y1 - tree.y0)))
@@ -41,9 +41,10 @@ extension ParkScenery {
                 let facingIn = max(0, simd_dot(V3(d.x, 0, d.z), inward))
                 var shade = (0.58 + 0.30 * h) + 0.30 * sun
                 shade *= 1 - 0.16 * facingIn
-                shade *= 0.90 + 0.10 * n0          // crevices darker, bumps brighter
+                shade *= 0.93 + 0.07 * n0
+                let vary = V3(1 + 0.06 * leafNoise(p * 2.3, seed + 11), 1 + 0.07 * leafNoise(p * 2.1, seed + 13), 1 + 0.06 * leafNoise(p * 2.5, seed + 17))          // crevices darker, bumps brighter
                 let warm = max(0, sun) * 0.12 * (0.4 + h)          // sunlit tops lean yellow-green
-                let col = V3(color.x * shade * (1 + warm * 1.1), color.y * shade * (1 + warm * 0.5), color.z * shade * (1 - warm * 0.6))
+                let col = V3(color.x * shade * (1 + warm * 1.1), color.y * shade * (1 + warm * 0.5), color.z * shade * (1 - warm * 0.6)) * vary
                 row.append(b.vertex(p, nrm, ao: 1, color: col))
             }
             ids.append(row)
@@ -91,18 +92,18 @@ extension ParkScenery {
                 let first = b.mesh.vertices.count
                 let tcol = tcol0 * (1 + 0.10 * f)
                 b.lathe(cx: x, cz: z, profile: [
-                    PP(r: 0, y: y0 - rb * 0.1, nr: 0, ny: -1, ao: 0.55), PP(r: rb, y: y0, nr: 0.35, ny: -0.9, ao: 0.6),
-                    PP(r: rb * 0.97, y: y0 + 0.04, nr: 0.9, ny: 0.45, ao: 0.85), PP(r: rb * 0.5, y: (y0 + tip) * 0.5 + 0.03, nr: 0.85, ny: 0.55, ao: 0.95),
-                    PP(r: 0, y: tip, nr: 0.4, ny: 0.9, ao: 1)], segments: 11, color: tcol)
+                    PP(r: 0, y: y0 - rb * 0.1, nr: 0, ny: -1, ao: 0.55), PP(r: rb * 0.8, y: y0 - rb * 0.03, nr: 0.3, ny: -0.95, ao: 0.6), PP(r: rb, y: y0 + 0.02, nr: 0.8, ny: -0.3, ao: 0.7),
+                    PP(r: rb * 0.9, y: y0 + 0.12, nr: 0.9, ny: 0.4, ao: 0.85), PP(r: rb * 0.5, y: (y0 + tip) * 0.5 + 0.03, nr: 0.85, ny: 0.55, ao: 0.95),
+                    PP(r: 0, y: tip, nr: 0.4, ny: 0.9, ao: 1)], segments: 18, color: tcol)
                 let ph = r.unit() * 6.28
                 for i in first..<b.mesh.vertices.count {
                     var p = b.mesh.vertices[i].pos
                     let n = b.mesh.vertices[i].normal
                     let dx = p.x - x, dz = p.z - z, rad = sqrtf(dx * dx + dz * dz), ang = atan2f(dz, dx)
-                    let wob = 1 + 0.13 * sinf(ang * 3 + ph) * min(1, rad / max(0.01, rb)) + 0.07 * sinf(ang * 7 + ph * 2)
+                    let wob = 1 + 0.09 * sinf(ang * 3 + ph) * min(1, rad / max(0.01, rb)) + 0.03 * sinf(ang * 5 + ph * 2)
                     p.x = x + dx * wob; p.z = z + dz * wob
                     let sun = max(-0.5, simd_dot(simd_normalize(V3(n.x, n.y, n.z)), sunDir))
-                    let k = 0.62 + 0.55 * max(0, sun + 0.2) + (n.y < -0.3 ? -0.1 : 0)
+                    let k = (0.64 + 0.5 * max(0, sun + 0.2) - 0.1 * max(0, -n.y)) * (1 + 0.05 * sinf(ang * 4 + p.y * 3))
                     b.mesh.vertices[i].pos = p
                     b.mesh.vertices[i].color = SIMD4(tcol.x * k, tcol.y * k * (1 + 0.05 * max(0, sun)), tcol.z * k, 1)
                 }
@@ -136,7 +137,7 @@ extension ParkScenery {
             let a = off + 1.3 + Float(i) * 2.9 + r.unit()
             let rr = R * (0.30 + 0.12 * r.unit())
             leafLobe(b, V3(x + cosf(a) * R * 0.3, cy + R * (0.60 + 0.14 * r.unit()), z + sinf(a) * R * 0.28), rx: rr, ry: rr * 0.85, rz: rr,
-                     color: leaf * 1.06, tree: tree, seed: seed + 9 + Float(i), segments: 10, rings: 5)
+                     color: leaf * 1.06, tree: tree, seed: seed + 9 + Float(i), segments: 14, rings: 7)
         }
     }
 
@@ -144,8 +145,8 @@ extension ParkScenery {
 
     /// A leafy mound of 6-8 irregular clumps (varied size, hue and height), with blossom clusters sitting on the foliage.
     static func floweringBush(_ b: RoomMeshBuilder, x: Float, z: Float, scale s0: Float, bloom: V3, rng r: inout ParkRandom) {
-        let s = s0 * (0.92 + 0.16 * r.unit())
-        let leaf = S.srgb(0.36, 0.60, 0.32) * V3(0.95 + 0.1 * r.unit(), 0.96 + 0.08 * r.unit(), 0.94 + 0.12 * r.unit())
+        let s = s0 * 1.3 * (0.92 + 0.16 * r.unit())
+        let leaf = S.srgb(0.46, 0.74, 0.38) * V3(0.95 + 0.1 * r.unit(), 0.96 + 0.08 * r.unit(), 0.94 + 0.12 * r.unit())
         let seed = r.unit() * 40
         let tree = (centre: V3(x, 0.4 * s, z), y0: Float(0), y1: 0.95 * s)
         var lobes: [(V3, Float)] = [(V3(0, 0.42, 0), 0.52)]
@@ -156,25 +157,26 @@ extension ParkScenery {
         }
         for (i, l) in lobes.enumerated() {
             let c = V3(x, 0, z) + l.0 * s
-            leafLobe(b, c, rx: l.1 * s, ry: l.1 * s * 0.82, rz: l.1 * s * 0.92, color: leaf * (0.92 + 0.16 * r.unit()), tree: tree, seed: seed + Float(i) * 2.3, bump: 0.14, segments: 10, rings: 5)
+            leafLobe(b, c, rx: l.1 * s, ry: l.1 * s * 0.82, rz: l.1 * s * 0.92, color: leaf * (0.92 + 0.16 * r.unit()), tree: tree, seed: seed + Float(i) * 2.3, bump: 0.08, segments: 14, rings: 7)
         }
         // blossoms: little clusters resting on the upper, outward half of random lobes
-        for _ in 0..<11 {
+        for _ in 0..<15 {
             let l = lobes[min(lobes.count - 1, Int(r.unit() * Float(lobes.count)))]
             let az = r.unit() * 6.28, el = 0.2 + r.unit() * 1.0
             let d = V3(cosf(el) * cosf(az), sinf(el), cosf(el) * sinf(az))
             let base = V3(x, 0, z) + l.0 * s + d * (l.1 * s)
             for _ in 0..<(2 + Int(r.unit() * 2)) {
                 let o = V3(r.unit() - 0.5, r.unit() * 0.4, r.unit() - 0.5) * 0.11 * s
-                S.ball(b, base + o + d * 0.01, 0.05 * s * (0.8 + 0.4 * r.unit()), bloom * (0.92 + 0.14 * r.unit()), segments: 6, rings: 3)
+                S.ball(b, base + o + d * 0.01, 0.075 * s * (0.8 + 0.4 * r.unit()), bloom * (0.92 + 0.14 * r.unit()), segments: 7, rings: 4)
             }
         }
     }
 
     /// A small tuft of grass blades (two-sided, dark at the foot and bright at the tip) with short-stemmed blossoms among them.
-    static func flowerPatch(_ b: RoomMeshBuilder, x: Float, z: Float, scale s: Float, bloom: V3, rng r: inout ParkRandom) {
-        let g0 = S.srgb(0.24, 0.48, 0.24), g1 = S.srgb(0.50, 0.76, 0.38), gm = simd_mix(g0, g1, SIMD3(repeating: 0.5))
-        for _ in 0..<26 {
+    static func flowerPatch(_ b: RoomMeshBuilder, x: Float, z: Float, scale s0: Float, bloom: V3, rng r: inout ParkRandom) {
+        let s = s0 * 1.7
+        let g0 = S.srgb(0.34, 0.62, 0.30), g1 = S.srgb(0.62, 0.86, 0.44), gm = simd_mix(g0, g1, SIMD3(repeating: 0.5))
+        for _ in 0..<38 {
             let a = r.unit() * 6.28, d = sqrtf(r.unit()) * 0.5 * s
             let p0 = V3(x + cosf(a) * d * 1.15, 0, z + sinf(a) * d * 0.85)
             let hgt = (0.16 + 0.20 * r.unit()) * s * (1.1 - 0.5 * d / (0.5 * s))
@@ -191,11 +193,11 @@ extension ParkScenery {
                 b.quad(va, vb, vd, vc); b.triangle(vc, vd, ve)
             }
         }
-        for k in 0..<6 {
-            let a = Float(k) / 6 * 2 * .pi + r.unit() * 0.6, d = (k == 0 ? 0.05 : 0.18 + 0.2 * r.unit()) * s
+        for k in 0..<9 {
+            let a = Float(k) / 9 * 2 * .pi + r.unit() * 0.6, d = (k == 0 ? 0.05 : 0.18 + 0.2 * r.unit()) * s
             let fx = x + cosf(a) * d, fz = z + sinf(a) * d * 0.8, fh = (0.20 + 0.10 * r.unit()) * s
             S.stem(b, x: fx, z: fz, y0: 0, y1: fh, r: 0.008 * s, color: g0 * 1.2, segments: 4)
-            S.ball(b, V3(fx, fh + 0.015, fz), 0.052 * s, bloom * (0.94 + 0.12 * r.unit()), segments: 7, rings: 4)
+            S.ball(b, V3(fx, fh + 0.015, fz), 0.07 * s, bloom * (0.94 + 0.12 * r.unit()), segments: 7, rings: 4)
             S.ball(b, V3(fx, fh + 0.03, fz), 0.02 * s, S.srgb(0.99, 0.85, 0.35), segments: 5, rings: 3)
         }
     }
