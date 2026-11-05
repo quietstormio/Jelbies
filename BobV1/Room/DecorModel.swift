@@ -33,7 +33,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     // batch 4 (2026-10-27, Room/DecorKind+Batch4.swift): more toys
     case beachball, playtunnel, ringstacker, toyrocket, plushdino, kickscooter
     // Park-only (2026-10-25, Park/ParkToys.swift): never sold; placed permanently in the Park
-    case seesaw, sandbox
+    case seesaw, sandbox, hopscotch
     // batch 5 (2026-11-04, Room/DecorKind+Batch5.swift): sport toys
     case footbag, frisbee, skateboard, hoop
 
@@ -44,7 +44,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
     enum Category: String, Sendable { case furniture, toys }
     var category: Category {
         switch self {
-        case .seesaw, .sandbox, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
+        case .seesaw, .sandbox, .hopscotch, .ball, .bouncymat, .duck, .blocks, .spintop, .toycar, .yarnball, .drum, .soccerball, .minigoal: return .toys
         default: return Self.batch3Toys.contains(self) || Self.batch4Toys.contains(self) || Self.batch5Toys.contains(self) ? .toys : .furniture
         }
     }
@@ -239,6 +239,7 @@ extension DecorKind {
         case .slide: return .decorSlide
         case .soccerball: return .soccerKick
         case .seesaw, .sandbox: return .decorSit
+        case .hopscotch: return .decorHopscotch
         case .petbed, .rug, .nightlight, .divider, .floorlamp, .minigoal: return nil          // (the goal is shot at through the soccer ball's own behaviour)
         default: return batch3Interaction
         }
@@ -629,6 +630,8 @@ final class DecorField {
         }
         anim = a
         coUsers = coUsers.filter { a[$0.key] != nil }
+        progress = progress.filter { a[$0.key] != nil }; tunnelDir = tunnelDir.filter { a[$0.key] != nil }          // (a park exit must not leave a leader's progress / direction behind)
+        HopscotchLine.shared.prune(keeping: Set(a.keys))
         occupant = occupant.filter { o in a[o.key] != nil && list.first(where: { $0.uid == o.key })?.kind == oldKinds[o.key] }
         seatOccupant = seatOccupant.filter { so in a[so.key] != nil && list.first(where: { l in l.uid == so.key })?.kind == oldKinds[so.key] }
         RoomLayout.decorFeet = feet

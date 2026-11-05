@@ -61,7 +61,7 @@ enum DecorModels {
         case .toybox: toybox(p, lift, a, time, b)
         case .nightlight: nightlight(p, lift, b)
         case .bouncymat: bouncymat(p, lift, a, b)
-        case .seesaw, .sandbox: addParkToy(kind, at: p, anim: a, time: time, uid: uid, into: b)
+        case .seesaw, .sandbox, .hopscotch: addParkToy(kind, at: p, anim: a, time: time, uid: uid, into: b)
         default: break          // (the second batch has no procedural fallback: it is only drawn from its art)
         }
     }

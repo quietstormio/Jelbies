@@ -30,7 +30,7 @@ extension DecorKind {
     /// Pieces he sits on and rocks with on their runners (the rocking horse, the toy rocket): the seat follows the arc, he faces the nose.
     var rockRide: Bool { self == .rockinghorse || self == .toyrocket }
     /// How many Jelbies use it at once (the tunnel: one follows another through; the plush toys: two hug together).
-    var maxUsers: Int { self == .playtunnel || self == .plushdino || self == .plushbear ? 2 : 1 }
+    var maxUsers: Int { self == .hopscotch ? HopscotchTuning.maxPlayers : self == .playtunnel || self == .plushdino || self == .plushbear ? 2 : 1 }
     /// How long a Jelbie waits for a turn at it before giving up (a ride lasts much longer than a boop).
     var queueTimeout: Float {
         switch self {

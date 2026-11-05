@@ -61,6 +61,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case decorHop      // walks onto the bouncy mat and bounces on it (the happy bounce)
     case decorPeek     // goes to the toy box and leans over to peek in
     case decorSlide    // (batch 2) climbs the slide's steps, sits on the platform, rides down and exits with a squash
+    case decorHopscotch  // (Park) hops square to square along the hopscotch court, a wiggle at the end; friends queue and follow (BlobBrain+Hopscotch.swift)
     // mid-walk flourishes + the jump for joy + two reaction moves (2026-10-20): BlobBrain+Flourish.swift
     case skipHop, hopscotch, legSpin, trot, stopLook, joy, giggle, startle
     case sigh          // a slow inhale, a long exhale and a slump, sleepy / worried face
@@ -663,7 +664,7 @@ extension BlobBrain {
             script = .walk(target: spot, then: .none); activity = .walking
         case .sleep:
             return sleepBegin(sim, night: idleNight > SleepTuning.nightEdge || idleDeepNight > 0.5)
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick:
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorHopscotch, .soccerKick:
             return decorStart(kind, sim)
         case .skipHop, .hopscotch, .legSpin, .trot, .stopLook:
             return flourishStart(kind, resume: nil, sim, nil)
@@ -750,6 +751,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
+        case .decorHopscotch: runHopscotch(sim, skinner, dt)
         case .soccerKick: runSoccer(sim, skinner, dt)
         case .tossBump: runTossBump(sim, skinner, dt)
         case .yawn, .stretch: runYawn(sim, skinner, dt)
@@ -1045,6 +1047,7 @@ extension BlobBrain {
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
+        if hopscotchBodyTick(sim, skinner, dt) { return true }
         guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .tossHeader || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
