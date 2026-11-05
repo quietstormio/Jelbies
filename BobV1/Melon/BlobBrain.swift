@@ -74,6 +74,8 @@ final class BlobBrain {
     var decorIgnore: Int?
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
+    /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
+    var insideStuckT: Float = 0
     /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).
