@@ -433,7 +433,7 @@ final class RaceBodyRig {
             while tapsPerSecond > 0, tapT >= 1 / tapsPerSecond { tapT -= 1 / tapsPerSecond; sim.playerTap(foot: foot); foot = 1 - foot }
             if let e = stumbleEvery, sinceStumble >= e { sinceStumble = 0; sim.playerTap(foot: foot); sim.playerTap(foot: foot) }
         }
-        if sim.phase != .countdown { sim.setMeasured(0, dist: course == nil ? rig.brain.pz - startZ : rig.brain.raceProgress) }
+        if sim.phase != .countdown { sim.setMeasured(0, dist: course == nil ? rig.brain.pz - startZ : rig.brain.raceProgress(sim: rig.sim)) }
         sim.tick(dt: dt, bodyFree: { [rig] _ in rig.brain.raceStepFree }, bodyReady: { [rig] _ in rig.brain.raceBodyReady }, bodyBetween: { [rig] _ in rig.brain.raceBetweenSteps })
         for e in sim.takeEvents() { rig.brain.raceApply(e, sim: rig.sim) }
         rig.brain.raceKeepAlive()

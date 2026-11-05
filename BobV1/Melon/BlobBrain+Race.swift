@@ -218,5 +218,13 @@ extension BlobBrain {
 
     /// How far he is along his lane now (arc length), and how far off its line (positive = to the right). For the glue's progress and the tests.
     var raceProgress: Float { race.course.progress(of: SIMD2(px, pz), lane: race.lane, near: race.lastS) }
+    /// The same, measured for the race flow: through a hurdle jump (take-off to the end of the landing) the brain's own root (px, pz) is not moved by the hop
+    /// (the hop carries the body, not the root), so the arc length is read from the body itself. Without this the race's distance stood still for the whole
+    /// flight, the bar was "reached" only after the landing and every jump (rivals' too) counted as a hit.
+    func raceProgress(sim: SoftBody) -> Float {
+        guard race.jumping else { return raceProgress }
+        let c = sim.centroid()
+        return race.course.progress(of: SIMD2(c.x, c.z), lane: race.lane, near: race.lastS)
+    }
     var raceLateral: Float { race.course.lateral(of: SIMD2(px, pz), lane: race.lane, at: raceProgress) }
 }
