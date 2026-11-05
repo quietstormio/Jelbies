@@ -82,7 +82,7 @@ struct ContactStance: Sendable {
         // press / bump kinds: stand a few cm apart, touch when the move presses
         .boop: .pressing(from: 1, press: 2, anchor: .b, sound: .squish, volume: 0.5),
         .squabble: .pressing(from: 1, press: 1, walk0: false, until: 2, sound: .squish, volume: 0.5),
-        .bump: .pressing(from: 1, press: 2, sound: .boop, volume: 0.9),
+        .bump: .pressing(from: 1, press: 2, until: 4, sound: .boop, volume: 0.9),          // (phase 4 = the happy bounces AFTER the bump: the pair may part and hop)
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
         .highFive: .pressing(from: 1, press: 2, until: 3, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),

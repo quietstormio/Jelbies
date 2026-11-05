@@ -93,3 +93,14 @@ extension BlobBrain {
     /// The jelly's contact wobble is a skin displacement: a big kick at a bump / hug moves the drawn skin 2-3 cm into the partner for a frame or two. The hop / lunge kinds scale their impact kicks down to what the skin can take at contact.
     func impactKick(_ v: Float) -> Float { min(v, PeakTuning.kickMax) }
 }
+
+extension BlobBrain {
+    /// A hop that lands where the body IS. `startHopPlay` eases the body from the sim's centroid to the brain's root (+ the distance): a pair standing skin to skin has its meshes 5-8 cm off the roots (the lean / shear that closes the
+    /// last centimetres), so a hop "on the spot" to the root moved both bodies 7 cm apart at take-off (measured: 12 cm gap from 0 in one tick). Aim the hop at the centroid instead (its component along the facing; the hop goes the way he faces).
+    func hopOnTheSpot(_ sim: SoftBody) {
+        let c = sim.bodyPose(iterations: 6).centroid
+        let fwd = SIMD2<Float>(sinf(yaw), cosf(yaw))
+        let d = simd_dot(SIMD2(c.x, c.z) - position, fwd)
+        startHopPlay(sim: sim, distance: max(0.0001, min(0.25, d)))
+    }
+}

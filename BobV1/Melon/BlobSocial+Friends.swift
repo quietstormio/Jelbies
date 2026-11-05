@@ -161,15 +161,14 @@ extension BlobBrain {
         }
         let t = s.phaseT
         switch s.phase {
-        case 2:    // both hop on the spot (b a hair later); the bellies meet at the top
-            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || t >= 0.06 {
-                socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil
-                startHopPlay(sim: sim, distance: 0.0001)
-            }
+        case 2:    // both crouch, rise (a stretch up = the "jump") and meet bellies at the top, then settle: the pair keeps its skin contact through the move (a scripted hop on the spot moved a touching pair 7-14 cm apart
+            // at take-off / landing - Locomotion eases the body from the sim centroid to the root - and the stance then walked it out and back; the real hop is the cheer after the bump)
+            faceEach(o)
+            socialBook.hopStarted = true
             let m = t - 0.16
             socialBook.wantPitch = 0.20 * pulse(m, up: 0.12, down: 0.20) - 0.12 * pulse(m - 0.26, up: 0.10, down: 0.30)
             socialBook.wantRoll = (isA ? 1 : -1) * 0.06 * pulse(m - 0.26, up: 0.10, down: 0.30)
-            socialBook.wantSquash = 1 - 0.12 * pulse(m - 0.10, up: 0.08, down: 0.26)
+            socialBook.wantSquash = 1 - 0.12 * pulse(m - 0.10, up: 0.08, down: 0.26) + 0.05 * pulse(m - 0.34, up: 0.08, down: 0.22)
             if isA {
                 if !s.impacted, t >= 0.34 {
                     s.impacted = true
@@ -177,9 +176,10 @@ extension BlobBrain {
                     contactBoopFallback(o)
                     contactCueFallback(o, .squish, 0.9)
                 }
-                if t > 0.6, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil {
+                if t > 1.0, o.socialBook.hopStarted {
                     s.round += 1
-                    if s.round >= 2 { s.setPhase(3) } else { s.setPhase(1) }
+                    // (round 2 bumps again from where they stand: going back through phase 1 re-squared the pair, a turn step at contact whose parting retreat opened the gap 20 cm before the second bump)
+                    if s.round >= 2 { s.setPhase(3) } else { s.setPhase(2); s.impacted = false }
                 } else if t > 4 { s.finish(.aborted) }
             }
         default:    // a happy hop each and a cheer
