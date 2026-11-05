@@ -127,6 +127,16 @@ nonisolated enum DiningSpot {
         for j in jellies { d = min(d, distance(from: j, origin: o, layout: L)) }
         return d
     }
+    /// Test seam: how the tray spot is picked among the free ones. The game picks at random; tests that need a repeatable meal set a fixed pick (and restore this).
+    nonisolated(unsafe) static var pickOpen: ([SIMD2<Float>]) -> SIMD2<Float>? = { $0.randomElement() }
+    /// A place the floor rules would push sideways by `placeReachSlack` or more (a side place beyond the walkable width of a phone in portrait; the diner's footprint is
+    /// 0.7) is not a place: its diner never gets there, and with a neighbour standing at his own spot the last diner is shut out for good (LineupTests nearMiddle,
+    /// tray at x +-0.2: the side stand at x 1.31 resolves to 1.0). The centre column (stands at +-1.11) is within the slack.
+    static let placeReachSlack: Float = 0.2
+    static func placeReachable(_ p: SIMD2<Float>) -> Bool {
+        let q = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.7, lowPropScale: RoomLayout.lowPropRadiusScale)
+        return abs(q.x - p.x) < placeReachSlack
+    }
     static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6
@@ -135,12 +145,12 @@ nonisolated enum DiningSpot {
             while cz <= maxZ + 1e-4 {
                 let o = SIMD2<Float>(cx, cz)
                 if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
-                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) }) { open.append(o) }
+                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }) { open.append(o) }
                 cz += 0.2
             }
             cx += 0.2
         }
-        if let pick = open.randomElement() { return pick }
+        if let pick = pickOpen(open) { return pick }
         if !jellies.isEmpty {          // crowded: the on-screen, decor-free spot farthest from every Jelbie
             var bestO: SIMD2<Float>?, bestD: Float = -1
             var fx: Float = -1.6

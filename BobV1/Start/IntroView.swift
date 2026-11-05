@@ -19,7 +19,7 @@ enum IntroClip {
     /// The last frame is held (paused) this long, then the intro cross-fades into the menu over `fadeSeconds` (-IntroHold / -IntroFade scale them on the simulator for captures).
     /// "Skip" shows this long after the clip starts; after a skip the last frame is held for the preloads for at most `loadWaitCap` seconds.
     static let skipAppearsAfter: Double = 1.0
-    static let loadWaitCap: Double = 0.6          // (user 11-04: the blank page sat ~3 s before the menu; the menu itself needs none of the warm-up, which keeps running behind it)
+    static let loadWaitCap: Double = 2.5          // (user 11-04: 0.6 s let the fade overlap the warm-up and the video stuttered: hold until it is done, up to 2.5 s)
     static var holdSeconds: Double { simOverride("IntroHold") ?? 0.3 }
     static var fadeSeconds: Double { simOverride("IntroFade") ?? 0.7 }
     private static func simOverride(_ key: String) -> Double? {

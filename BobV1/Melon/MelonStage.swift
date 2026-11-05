@@ -1427,7 +1427,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let c = pose.centroid
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
-        let yaw: Float = hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5)
+        let yaw: Float = hp?.pose.map { [-0.55, 0, 0.55][min(max($0, 0), 2)] } ?? (hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5))
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
         var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
@@ -1439,6 +1439,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             while k < a.sim.x.count { topY = max(topY, a.sim.x[k]); k += 3 }
             span = HeadPortraitKey.span
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
+            if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
+                let floorY = a.sim.floorY
+                span = max((topY - floorY) * 1.32, 1.2)
+                focusY = floorY + span * 0.5 - span * 0.035
+            }
         }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
         let th = tanf(GameCamera.fovY / 2)

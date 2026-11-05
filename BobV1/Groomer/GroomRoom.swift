@@ -217,7 +217,7 @@ enum GroomScenery {
         // the sign: a slim charcoal-lettered plate on the wall, a tiny brass droplet mark to the left of the name
         box(b, V3(0, 3.6, Z + 0.1), V3(1.9, 0.5, 0.05), r: 0.06, color: wood)
         box(b, V3(0, 3.6, Z + 0.16), V3(1.82, 0.42, 0.04), r: 0.05, color: plaster)
-        text(b, "Jelly Spa", cx: 0.22, baseline: 3.44, height: 0.46, z: Z + 0.3, color: signInk, weight: 0.19, bounce: 0.06, tilt: 0.09, shadow: signShadow)
+        text(b, "Jelly Spa", cx: 0.22, baseline: 3.44, height: 0.46, z: Z + 0.3, color: signInk, weight: 0.19, shadow: signShadow)          // (user 11-04: no per-letter bob or lean: the word must sit level)
         droplet(b, V3(-1.52, 3.6, Z + 0.3), 0.15, color: brass)
 
         // the solid sage awning (a clean sloping canopy over the window and door, plain front lip)

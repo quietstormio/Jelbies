@@ -20,8 +20,8 @@ final class GroomCardCaptureUITests: XCTestCase {
         app.launch()
         sleep(5)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        for k in 0..<6 {
-            sleep(3)
+        for k in 0..<12 {          // (12 x 2 s: the street fades in at a different moment on a busy Mac; pick a settled frame)
+            sleep(2)
             try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/street_\(k + 1).png"))
         }
         app.terminate()
