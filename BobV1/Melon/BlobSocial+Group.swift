@@ -31,7 +31,13 @@ enum GroupTuning {
     static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
     static let touch: Float = 0.78, loose: Float = 1.15
-    static let steps = 8, stepAngle: Float = .pi / 4.5
+    /// The walk-in is over when everybody is this near his place (m); the places are the touch, so a loose 0.45 m radius started the hold with bodies still walking into each other.
+    static let arriveRadius: Float = 0.2
+    /// A packed ring is planned this far (skin gap, m) OUTSIDE the touch: the hold's press closes the last millimetres.
+    static let ringReady: Float = 0.012
+    /// The break-apart hop of a huddle / ring lands this far further out from the middle (m).
+    static let breakSpread: Float = 0.3
+    static let steps = 12, stepAngle: Float = .pi / 9          // (20 degree hops: one hop pulls neighbours only 1.5% closer in the air; 40 degrees pulled them 6% = 7 cm into each other)
     static let cheers = 3
 }
 
@@ -85,12 +91,32 @@ extension BlobBrain {
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
 
+    /// The widest root distance at which two ring NEIGHBOURS' skins just touch when everybody stands on his slot facing the middle (the support reaches of both toward each other, wings / tail / ears / arms counted,
+    /// each outline turned from its yaw now to its yaw then). nil before the first skin pass.
+    func ringFacingTouch(_ members: [BlobBrain], ang: [Int: Float]) -> Float? {
+        let order = members.sorted { (ang[$0.steerID] ?? 0) < (ang[$1.steerID] ?? 0) }
+        let n = order.count
+        var w: Float = 0
+        for k in 0..<n where n > 2 || k == 0 {
+            let a = order[k], b = order[(k + 1) % n]
+            guard let aa = ang[a.steerID], let ab = ang[b.steerID] else { return nil }
+            let d = SIMD2(sinf(aa) - sinf(ab), cosf(aa) - cosf(ab))          // (from b to a)
+            let L = simd_length(d)
+            guard L > 1e-4 else { continue }
+            let u = d / L
+            let ya = atan2f(-sinf(aa), -cosf(aa)), yb = atan2f(-sinf(ab), -cosf(ab))          // (facing the middle)
+            let d1 = wrapAngle(ya - a.yaw), d2 = wrapAngle(yb - b.yaw)
+            guard let ea = ContactField.supportExt(a.steerID, rotXZ(-u, -d1)), let eb = ContactField.supportExt(b.steerID, rotXZ(u, -d2)) else { return nil }
+            w = max(w, ea + eb)
+        }
+        return w > 0 ? w : nil
+    }
+
     // MARK: starting
 
     /// Plan a ring for `members` (the initiator first): centre, a spot and an angle each. nil = no room anywhere near.
     private func groupPlan(_ members: [BlobBrain], chord: Float, packed: Bool) -> (c: SIMD2<Float>, r: Float, ang: [Int: Float], spots: [Int: SIMD2<Float>])? {
         let n = members.count
-        let r = max(chord / (2 * sinf(.pi / Float(n))), peerGap * 0.4)
         let cen = members.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(n)
         // the slots: members sorted round the centre take equally spaced angles (the base angle is the circular mean of their offsets)
         let phis = members.map { atan2f($0.position.x - cen.x, $0.position.y - cen.y) }
@@ -100,6 +126,9 @@ extension BlobBrain {
         let base = atan2f(sx, sy)
         var ang = [Int: Float]()
         for (k, i) in order.enumerated() { ang[members[i].steerID] = base + 2 * .pi * Float(k) / Float(n) }
+        // (a packed ring is sized for the POSTURE the huddle stands in - everybody facing the middle - not for the widest compass touch of the bodies as they stand now)
+        var r = max(chord / (2 * sinf(.pi / Float(n))), peerGap * 0.4)
+        if packed, let t = ringFacingTouch(members, ang: ang) { r = max(peerGap * 0.4, (t + GroupTuning.ringReady) / (2 * sinf(.pi / Float(n)))) }
         let wasPass = socialBook.passThrough
         socialBook.passThrough = true          // (the floor rules only: the members' own bodies are not obstacles for their places)
         defer { socialBook.passThrough = wasPass }
@@ -152,7 +181,7 @@ extension BlobBrain {
             s = st
         default: return false
         }
-        for m in crew { m.socialBook.passThrough = (kind == .groupHug || kind == .circleDance); m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }
+        for m in crew { m.socialBook.passThrough = false; m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }          // (the skin wall is ON the whole session)
         for m in crew { m.varietyNoteSocial(kind, with: nil) }
         return true
     }
@@ -168,7 +197,7 @@ extension BlobBrain {
             m.socialBook.drought = 0; m.socialBook.invite = nil
             m.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1)
             m.socialBook.wakeGreet = -1
-            m.socialBook.glanceDone = false; m.socialBook.apartStarted = false; m.socialBook.sheepishStarted = false; m.socialBook.hopStarted = false; m.socialBook.hopStarted2 = false
+            m.socialBook.glanceDone = false; m.socialBook.apartStarted = false; m.socialBook.sheepishStarted = false; m.socialBook.hopStarted = false; m.socialBook.hopStarted2 = false; m.socialBook.slotRefined = false
             m.socialBook.roundSeen = -1
             m.socialBook.groupIdle = 0
             if let x = crew.first(where: { $0 !== m }) { m.onSocial?(.began(kind, partner: x.steerID)) }
@@ -212,7 +241,7 @@ extension BlobBrain {
             }
             if scriptIsNone, idleState.kind == nil { faceCentre(s) }
             if isA {
-                let arrived = everyone(mem) { $0.socialBook.hopStarted && $0.fxFree && simd_distance($0.position, $0.slot(s)) < 0.45 }
+                let arrived = everyone(mem) { $0.socialBook.hopStarted && $0.fxFree && simd_distance($0.position, $0.slot(s)) < GroupTuning.arriveRadius }
                 if arrived, s.phaseT > 0.3 { s.setPhase(1) }
                 else if s.phaseT > 16 { s.finish(.aborted) }
             }
@@ -220,18 +249,41 @@ extension BlobBrain {
         case 1:
             faceCentre(s)
             socialBook.wantSquash = 1 - 0.04 * smooth01(s.phaseT / 0.4) * socialGentle
-            if isA, s.phaseT > settle, everyone(mem, { $0.turnedTo($0.yawTo(s.home0), tol: 0.2) }) || s.phaseT > settle + 2.5 { s.setPhase(2) }
+            // The packed ring is re-sized ONCE from the settled outlines (everybody stands on his first place, facing the middle, arms down): the plan-time reaches were measured mid-stride and came out ~30 cm
+            // too wide, and a hold that has to WALK 30 cm in turns the bodies through each other (trace: yaw swings of 100 degrees in 0.2 s, wall pushes of 25-90 cm). Each member walks the short way to his
+            // refined place now, with the wall on; the hold (walks: false) only presses.
+            if isA, !s.ready, s.phaseT > 0.4, s.kind == .groupHug || s.kind == .circleDance {
+                s.ready = true
+                if let t = ringFacingTouch(mem, ang: s.slotAng) {
+                    let r2 = (t + GroupTuning.ringReady) / (2 * sinf(.pi / Float(mem.count)))
+                    if r2 < s.ringR - 0.02 {
+                        s.ringR = r2
+                        for m in mem { if let a = s.slotAng[m.steerID] { s.slotSpot[m.steerID] = s.home0 + SIMD2(sinf(a), cosf(a)) * r2 } }
+                    } else { for m in mem { m.socialBook.slotRefined = true } }
+                } else { for m in mem { m.socialBook.slotRefined = true } }
+            }
+            if s.ready, !socialBook.slotRefined, fxFree, scriptIsNone {
+                socialBook.slotRefined = true
+                if simd_distance(position, slot(s)) > 0.09 { socialWalk(to: slot(s), sim) }
+            }
+            let placed = (s.kind != .groupHug && s.kind != .circleDance) || (s.ready && mem.allSatisfy { $0.socialBook.slotRefined && $0.scriptIsNone })
+            if isA, placed, s.phaseT > settle, everyone(mem, { $0.turnedTo($0.yawTo(s.home0), tol: 0.2) }) || s.phaseT > settle + 4 { s.setPhase(2) }
             return true
         default: return false
         }
     }
 
     /// A joy hop for each member at its own beat (`stagger` seconds apart); true when everyone has hopped and landed.
-    func joyHop(_ s: SocialSession, _ mem: [BlobBrain], _ sim: SoftBody, key: Int, stagger: Float, face f: Bool = true) -> Bool {
+    func joyHop(_ s: SocialSession, _ mem: [BlobBrain], _ sim: SoftBody, key: Int, stagger: Float, face f: Bool = true, spread: Float = 0) -> Bool {
         stepKey(key)
         if !socialBook.apartStarted, fxFree, s.phaseT >= Float(myIndex) * stagger {
             socialBook.apartStarted = true
-            hopJoy(sim, joy: f)
+            if spread > 0 {          // (a huddle breaks apart OUTWARD: the hop lands `spread` further from the middle, so the landing squash / stretch of one body never meets its neighbour's skin)
+                let out = position - s.home0, L = simd_length(out)
+                letGo()
+                startHopTo(sim, position + (L > 1e-3 ? out / L : SIMD2(0, 1)) * spread)
+                if f { face(.joyArc, hold: 1.0) }
+            } else { hopJoy(sim, joy: f) }
             AudioHub.shared.chirp(jelly: steerID, myIndex % 2 == 0 ? .happy : .babble)
         }
         if !socialBook.apartStarted { faceCentre(s) }
@@ -283,7 +335,7 @@ extension BlobBrain {
             }
         default:   // break apart with a little happy hop each
             socialBook.passThrough = false
-            if joyHop(s, mem, sim, key: 1500, stagger: 0.12), isA { endGroup(s, mem) }
+            if joyHop(s, mem, sim, key: 1500, stagger: 0.12, spread: GroupTuning.breakSpread), isA { endGroup(s, mem) }
             else if isA, s.phaseT > 6 { endGroup(s, mem) }
         }
     }
@@ -396,7 +448,6 @@ extension BlobBrain {
         let t = s.phaseT
         switch s.phase {
         case 2:    // everyone hops to the next place round the ring, facing the middle (the ring turns)
-            socialBook.passThrough = true
             stepKey(1800 + s.round)
             if !socialBook.hopStarted { if fxFree { faceCentre(s) } }
             if !socialBook.hopStarted, fxFree, t > (s.round == 0 ? 0.3 : 0.1), turnedTo(yawTo(s.home0), tol: 0.2) {
@@ -405,7 +456,10 @@ extension BlobBrain {
                 let k = Float(s.round < GroupTuning.steps / 2 ? s.round + 1 : GroupTuning.steps - s.round - 1)
                 let ang = (s.slotAng[steerID] ?? 0) + dir * k * GroupTuning.stepAngle
                 letGo()
-                startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.ringR)
+                // (the place I hop to is my neighbour's place a moment ago, he leaves it in the same beat: only the PLAN of this one hop ignores the bodies, the wall is back at once)
+                socialBook.passThrough = true
+                startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.ringR, facing: ang + .pi)          // (lands facing the middle: no turn on the spot at contact)
+                socialBook.passThrough = false
                 if myIndex == 0 { jellyKick = max(jellyKick, 0.6); if s.round % 3 == 0 { AudioHub.shared.chirp(jelly: steerID, .happy) } }
                 if myIndex == 1, s.round % 3 == 1 { AudioHub.shared.chirp(jelly: steerID, .babble) }
             }
@@ -417,7 +471,7 @@ extension BlobBrain {
             }
         default:    // let go: a joy hop each, hearts
             socialBook.passThrough = false
-            if joyHop(s, mem, sim, key: 1850, stagger: 0.1), isA { endGroup(s, mem) }
+            if joyHop(s, mem, sim, key: 1850, stagger: 0.1, spread: GroupTuning.breakSpread), isA { endGroup(s, mem) }
             else if isA, s.phaseT > 6 { endGroup(s, mem) }
         }
     }

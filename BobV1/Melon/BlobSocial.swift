@@ -114,6 +114,8 @@ struct SocialBook {
     var squinting = false
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
+    /// Group rings: this member has walked to his REFINED place (the ring re-sized from the settled, facing-the-middle outlines at the start of phase 1).
+    var slotRefined = false
     /// ringAround: this one has walked out to his spot on the ring.
     var ringSpread = false
     var started: [SocialKind: Int] = [:]
