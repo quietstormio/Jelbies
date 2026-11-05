@@ -75,13 +75,13 @@ extension BlobBrain {
         if isA {
             if !s.impacted, ft > 0.8 {
                 s.impacted = true
-                jellyKick = max(jellyKick, impactKick(1.6)); o.jellyKick = max(o.jellyKick, impactKick(1.6))
+                jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 1.6)
                 contactBoopFallback(o)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                 contactCueFallback(o, .squish, 0.55)
                 face(.joyArc, hold: 1.4); o.face(.joyArc, hold: 1.4)
             }
-            if s.passes == 0, ft > 2.4 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy); jellyKick = max(jellyKick, impactKick(1.0)); o.jellyKick = max(o.jellyKick, impactKick(1.0)) }
+            if s.passes == 0, ft > 2.4 { s.passes = 1; AudioHub.shared.chirp(jelly: steerID, .happy); jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0) }
             if s.passes == 1, ft > 3.8 { s.passes = 2; AudioHub.shared.chirp(jelly: o.steerID, .babble); onSocial?(.makeUp(partner: o.steerID)) }
             if ft > s.duration { finishHappy(s, o) }
         }

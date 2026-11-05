@@ -27,10 +27,6 @@ enum ContactTuning {
     nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.7
     /// The destination of a stance walk is locked this close to it (m): late enough that the averaged touch distance has settled, early enough that the last two steps are planned on a fixed spot.
     nonisolated(unsafe) static var lockDistance: Float = Float(ProcessInfo.processInfo.environment["LOCK_DIST"] ?? "") ?? 0.8
-    /// The per-tick blend of the live touch distance into the stable one for a side-by-side walk whose arms are down: ~0.4 s, a stride's sway averaged out (ContactSettle.contactStableTouch).
-    nonisolated(unsafe) static var sideTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["SIDE_ALPHA"] ?? "") ?? 0.04
-    /// A side-by-side stance walker lowers his arms this far (m) from the destination (BlobBrain.stanceArmsDown).
-    nonisolated(unsafe) static var armDropDistance: Float = Float(ProcessInfo.processInfo.environment["ARM_DROP"] ?? "") ?? 1.5
     nonisolated(unsafe) static var armCalmDistance: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM_DIST"] ?? "") ?? 1.0
     nonisolated(unsafe) static var armCalmSweep: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM"] ?? "") ?? 0.2
     /// A stance walk's steps within this distance (m) of the decided spot are planned without the partner wall (the last two strides).
