@@ -13,6 +13,18 @@ final class LineupTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var debug = false
 
+    /// The sim must not depend on the wall clock: the autonomous goal search stops at a wall-clock budget (BlobBrain.pickBudgetSeconds), so a loaded machine could change a pick.
+    /// The meal's tray spot is a system-random pick among the free spots (DiningSpot.choose), which made the meal tests flake: the test takes the free spot nearest the
+    /// preferred front spot instead.
+    override func setUp() {
+        BlobBrain.pickBudgetSeconds = .infinity
+        DiningSpot.pickOpen = { $0.min { simd_distance($0, DiningSpot.preferred) < simd_distance($1, DiningSpot.preferred) } }
+    }
+    override func tearDown() {
+        BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
+        DiningSpot.pickOpen = { $0.randomElement() }
+    }
+
     /// Closest two bodies over a run (only samples where at least one of the pair walks), and the path each one took.
     struct Track {
         var minDist: Float = .infinity
@@ -108,6 +120,21 @@ final class LineupTests: XCTestCase {
     func testRowFromAllOnOneSide() { rowCheck("oneSide", starts: [SIMD2(-1.0, 0.0), SIMD2(-1.0, 1.6), SIMD2(-1.0, -1.6)]) }
 
     // MARK: the group meal
+
+    /// The tray is never offered where a side diner cannot reach his place. Before: with the tray at x +-0.2 (z 1.6...2.0) the far side stand (x +-1.31) lies outside the
+    /// walkable width (the floor rules move it to +-1.0), the side diner stopped 0.5 short and the line-up never finished (done=false, 14 s) in 6 of the 14 spots.
+    func testTrayNeverOffersAnUnreachableSidePlace() {
+        _ = rig(count: 3)
+        var offered: [SIMD2<Float>] = []
+        DiningSpot.pickOpen = { offered = $0; return $0.first }
+        _ = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: 3))
+        XCTAssertFalse(offered.isEmpty, "some spot is offered")
+        for o in offered { for p in DiningLayout.make(n: 3).places { XCTAssertTrue(DiningSpot.placeReachable(o + p.rel), "tray \(o): the place at \(o + p.rel) is reachable") } }
+        XCTAssertFalse(DiningSpot.placeReachable(SIMD2(1.31, 0.76)), "a stand beyond the walkable width is not a place")
+        XCTAssertFalse(DiningSpot.placeReachable(SIMD2(-1.31, 0.76)))
+        XCTAssertTrue(DiningSpot.placeReachable(SIMD2(1.11, 0.76)), "the centre column's side stand is")
+        XCTAssertTrue(DiningSpot.placeReachable(SIMD2(-1.11, 0.76)))
+    }
 
     private func mealCheck(_ name: String, starts: [SIMD2<Float>]) {
         let r = rig(clearTray: false)
