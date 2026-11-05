@@ -152,7 +152,7 @@ final class SleepBackTests: XCTestCase {
         for i in 0..<3 {
             let others = (0..<3).filter { $0 != i }.map { simd_distance(ps[i], ps[$0]) }
             XCTAssertGreaterThan(others.min()!, 1.5, "touching but not inside each other")
-            XCTAssertLessThan(others.min()!, 2.0, "snuggled: against a neighbour")
+            XCTAssertLessThan(others.min()!, 2 * SleepTuning.footHalfLen + 0.4, "snuggled: against a neighbour")          // (a row spot is ~1.7 away; one in front of / behind a sleeper lies the full footprint length, 2 * footHalfLen, away: SleepPileNoOverlapTests)
             XCTAssertLessThan(others.max()!, 3.6, "one cluster")
         }
         XCTAssertGreaterThan(minGap, 1.45)
