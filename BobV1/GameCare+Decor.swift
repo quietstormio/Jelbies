@@ -27,6 +27,7 @@ extension GameCare {
         let hide = cafe.hidesDecor || park.hidesDecor || volley.hidesDecor || groom.inScene          // in the café (or the park) the room's furniture is away (it is not that room)
         let pv = dragPreview
         if store.revision != decorDrawn.storeRevision || hide != decorDrawn.cafeHidden || pv?.at != decorDrawn.preview || (pv?.uid ?? -1) != decorDrawn.previewUID {
+            if !hide, !park.inScene, dragPreview == nil, store.refitSlides() { return }          // (a saved slide whose landing is off the floor moved: draw again with the new revision)
             decorDrawn.storeRevision = store.revision; decorDrawn.cafeHidden = hide
             decorDrawn.preview = pv?.at; decorDrawn.previewUID = pv?.uid ?? -1
             var list = store.placedDecor

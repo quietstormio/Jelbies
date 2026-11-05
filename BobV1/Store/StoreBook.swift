@@ -280,6 +280,14 @@ final class StoreBook {
         save()
         return p
     }
+    /// Load-time fix-up: slides saved at a spot the rules now refuse move to the nearest valid one. True = something moved.
+    @discardableResult
+    func refitSlides() -> Bool {
+        guard let list = saved.placedAt, let fixed = DecorPlacement.refitSlides(list) else { return false }
+        saved.placedAt = fixed
+        save()
+        return true
+    }
     /// Moves a placed piece to `at` when the spot is valid (the finger's drag); false = not there.
     @discardableResult
     func move(_ uid: Int, to at: SIMD2<Float>) -> Bool {
