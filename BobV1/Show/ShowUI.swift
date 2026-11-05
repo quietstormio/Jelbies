@@ -127,56 +127,48 @@ struct JelbiePortrait: View {
     }
 }
 
-/// The Studio's contestant: a big full-body action shot (the Jelbie alone, in his outfit, on a clear backdrop; MelonStage.headSnapshot with `pose`), standing on the stage floor and hopping
-/// in three poses (ta-da, proud lean, cheer: arms posed by SnapshotPose.swift) played hop by hop. Fills the stage card; the chips and buttons sit over its edges.
+/// The Studio's contestant: a big full-body action shot (the Jelbie alone, in his outfit; MelonStage.headSnapshot with `pose`) STANDING on a round podium in the stage's purple, a soft
+/// contact shadow under his feet. No hop: he breathes slowly (a gentle swell from the floor up; only the front view, pose 0, is drawn). The picture is square
+/// and the renderer pins the floor at `HeadPortraitKey.actionFloorFraction` of its height (either orientation), so the disc top sits exactly there.
 struct JelbieActionShot: View {
     let care: GameCare
     var who: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frames: [UIImage?] = [nil, nil, nil]
-    @State private var viewIndex = 0          // which of `order` is showing (stepped once per hop by the task below: no per-frame SwiftUI work)
-    @State private var up = false             // the hop: a render-server driven autoreversing animation (nothing redraws on the main thread while it runs)
+    @State private var breathe = false        // a slow render-server driven autoreversing swell
     private func key(_ pose: Int) -> HeadPortraitKey { HeadPortraitKey(jelly: who, colour: nil, wear: nil, pose: pose) }
-    /// The poses in hop order (SnapshotArmPose.all): ta-da (both arms up), proud (a lean, one arm up), cheer (arms flung wide), proud again.
-    private static let order = [0, 1, 2, 1]
-    private static let period = 0.9
 
     var body: some View {
         GeometryReader { g in
-            let h = g.size.height, S = h * 0.9
-            let hop: CGFloat = up && !reduceMotion ? 1 : 0          // 0 on the floor, 1 at the top of the hop
-            let view = Self.order[viewIndex % Self.order.count]
-            let img = frames[view] ?? frames[0] ?? frames.compactMap { $0 }.first
-            let lean = reduceMotion ? 0 : SnapshotArmPose.pose(view).leanDeg
+            let h = g.size.height, S = h * 0.86
+            let floorY = h * 0.80                                  // the disc's top-centre, in the card
+            let discW = S * 0.64, discH = discW * 0.30, rimH = discH * 0.42
+            let x = g.size.width / 2
             ZStack {
-                Ellipse().fill(.black.opacity(0.28 - 0.12 * hop)).frame(width: S * (0.46 - 0.10 * hop), height: S * 0.07).position(x: g.size.width / 2, y: h * 0.9)
-                if let img {
+                ActionPodium(width: discW, topH: discH, rim: rimH).position(x: x, y: floorY + rimH / 2)
+                Ellipse().fill(RadialGradient(colors: [.black.opacity(0.42), .black.opacity(0)], center: .center, startRadius: 0, endRadius: discW * 0.26))
+                    .frame(width: discW * 0.58, height: discH * 0.62).position(x: x, y: floorY)
+                if let img = frames[0] {
                     Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
-                        .scaleEffect(x: 1 + 0.03 * (1 - hop), y: 1 - 0.03 * (1 - hop), anchor: .bottom)
-                        .rotationEffect(.degrees(lean), anchor: .bottom)
-                        .position(x: g.size.width / 2, y: h * 0.885 - S * 0.885 + S / 2 - h * 0.08 * hop)
-                } else { ProgressView().tint(ShowUI.light).position(x: g.size.width / 2, y: h * 0.5) }
+                        .scaleEffect(x: 1 + 0.008 * (breathe && !reduceMotion ? 1 : 0), y: 1 + 0.014 * (breathe && !reduceMotion ? 1 : 0), anchor: UnitPoint(x: 0.5, y: img.feetFraction ?? HeadPortraitKey.actionFloorFraction))
+                        .position(x: x, y: floorY + discH * 0.08 - S * (img.feetFraction ?? HeadPortraitKey.actionFloorFraction) + S / 2)
+                } else { ProgressView().tint(ShowUI.light).position(x: x, y: h * 0.5) }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: Self.period / 2).repeatForever(autoreverses: true), value: up)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
         }
         .accessibilityLabel("\(care.jelly(who)?.name ?? "Jelbie") on the stage")
         .accessibilityIdentifier("studio-action-shot")
         .task(id: "\(who)-\(care.store.revision)") { await load() }
         .task(id: reduceMotion) {
-            guard !reduceMotion else { up = false; return }
-            up = true
-            while !Task.isCancelled {                 // one view change per hop, on the hop's own beat
-                try? await Task.sleep(nanoseconds: UInt64(Self.period * 1_000_000_000))
-                if Task.isCancelled { break }
-                viewIndex += 1
-            }
+            guard !reduceMotion else { breathe = false; return }
+            breathe = true
         }
     }
 
     private func load() async {
         let t0 = CACurrentMediaTime()
         frames = [HeadPortraitCache.shared.cached(key(0), care: care), nil, nil]
-        for pose in [0, 1, 2] {
+        for pose in [0] {
             if frames[pose] != nil { continue }
             guard let img = await HeadPortraitCache.shared.image(key(pose), care: care) else { return }
             frames[pose] = img
@@ -926,3 +918,22 @@ struct TrophiesSheet: View {
 }
 
 // (the Show lobby is in ShowLobby.swift)
+
+/// The stage's podium: a round disc (top ellipse with a bright edge) on a rim in a deeper purple, the adoption picker's pedestal in the Show's palette.
+struct ActionPodium: View {
+    var width: CGFloat, topH: CGFloat, rim: CGFloat
+    var body: some View {
+        ZStack(alignment: .top) {
+            ZStack(alignment: .top) {
+                Ellipse().frame(width: width, height: topH).offset(y: rim)
+                Rectangle().frame(width: width, height: rim).offset(y: topH / 2)
+            }
+            .foregroundStyle(LinearGradient(colors: [Color(hex: 0x6E5AA6), Color(hex: 0x3B2D63)], startPoint: .top, endPoint: .bottom))
+            Ellipse().fill(LinearGradient(colors: [ShowUI.lilacPale, ShowUI.lilac], startPoint: .top, endPoint: .bottom)).frame(width: width, height: topH)
+            Ellipse().fill(RadialGradient(colors: [.white.opacity(0.35), .clear], center: .center, startRadius: 0, endRadius: width * 0.36)).frame(width: width, height: topH)
+            Ellipse().strokeBorder(.white.opacity(0.75), lineWidth: 1.2).frame(width: width, height: topH)
+        }
+        .frame(width: width, height: topH + rim)
+        .accessibilityHidden(true)
+    }
+}

@@ -21,7 +21,7 @@ struct SnapshotArmPose {
 
     /// ta-da (both arms up), a proud side lean (one arm up, one out), a wide cheer (arms flung out and up).
     static let all: [SnapshotArmPose] = [
-        SnapshotArmPose(el: [1.05, 1.05], sa: [0.12, 0.12], out: 0.07, yaw: 0.0, leanDeg: 0, title: "ta-da"),
+        SnapshotArmPose(el: [1.05, 1.05], sa: [0.12, 0.12], out: 0.07, yaw: 0.22, leanDeg: 0, title: "ta-da"),
         SnapshotArmPose(el: [1.15, 0.15], sa: [0.10, 0.45], out: 0.06, yaw: 0.28, leanDeg: 5, title: "proud"),
         SnapshotArmPose(el: [0.62, 0.62], sa: [0.55, 0.55], out: 0.06, yaw: -0.28, leanDeg: -4, title: "cheer"),
     ]
