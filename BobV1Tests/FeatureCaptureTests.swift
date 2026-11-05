@@ -363,7 +363,7 @@ final class FeatureCaptureTests: XCTestCase {
         DayClock.shared.forcedHour = 12
         let sets: [[Char]] = [
             [Char(id: 1, outfit: [.body: .capeHero, .face: .sunglassesStar, .feet: .sneakerSun]), Char(id: 2, outfit: [.head: .bucketHatPink, .neck: .bowtiePink, .feet: .rainBoots]), Char(id: 3, outfit: [.body: .backpackSky, .face: .glassesRound, .feet: .balletPink])],
-            [Char(id: 1, outfit: [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .feet: .sneakerLightup]), Char(id: 2, outfit: [.head: .partyHat, .body: .tutuPink, .neck: .pearls, .feet: .glitterShoes]), Char(id: 3, outfit: [.head: .beaniePink, .neck: .scarfSky, .hands: .gloveSky, .feet: .frogBoots])],
+            [Char(id: 1, outfit: [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .feet: .sneakerLightup]), Char(id: 2, outfit: [.head: .partyHat, .body: .tutuPink, .neck: .pearls, .feet: .glitterShoes]), Char(id: 3, outfit: [.head: .beaniePink, .neck: .scarfSky, .feet: .frogBoots])],
         ]
         let labels = ["Alt 1: Pip cape+shades | Moss bucket hat+bow tie | Lavender backpack+glasses (wings up)",
                       "Alt 2: Pip sweatband+whistle | Moss party hat+tutu+pearls | Lavender beanie+scarf (wings low)"]

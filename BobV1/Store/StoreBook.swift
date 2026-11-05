@@ -42,6 +42,8 @@ final class StoreBook {
         var staplesGiven: Bool? = nil
         /// The retired sit-on furniture was removed and refunded (once; StoreBook+RetiredDecor.swift).
         var retiredDecorRefunded: Bool? = nil
+        /// The retired gloves (Pink / Sky mittens, Boxing mitts) were removed and refunded (once; StoreBook+RetiredGloves.swift).
+        var glovesRefunded: Bool? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -64,6 +66,8 @@ final class StoreBook {
             // 2026-11-01: the Roll trick is gone from the game; a bought Roll page is dropped silently and its 55 JellyCoins go back to the wallet
             let (noSeats, seatRefund) = Self.dropRetiredDecor(saved)
             if noSeats.retiredDecorRefunded != saved.retiredDecorRefunded { saved = noSeats; if seatRefund > 0 { wallet.add(seatRefund, silent: true) }; save() }
+            let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
+            if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
         if persists { defaults.removeObject(forKey: "Garden.v1") }          // the removed Garden's plots

@@ -856,7 +856,7 @@ struct GameScreen: View {
             care.store.awardMedal()
             care.bath.wallet.add(max(0, 400 - care.bath.wallet.count), silent: true)
             if d.integer(forKey: "WearSeed") == 2 {
-                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .glovePink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .tutuPink, .balletPink]]
+                let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .tutuPink, .balletPink]]
                 for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
             }
         }

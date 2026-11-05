@@ -18,7 +18,7 @@ import json, struct, sys, os, shutil
 TITLES = {  # store names (the art titles repeat across colourways)
     "bandana_coral": "Coral bandana", "bandana_mint": "Mint bandana", "beanie_honey": "Honey pom-pom beanie", "beanie_pink": "Pink pom-pom beanie",
     "bib_pink": "Pink jersey bib", "bib_sky": "Sky jersey bib", "bowtie_pink": "Pink bow tie", "bowtie_sky": "Sky bow tie",
-    "cap_team_pink": "Pink team cap", "cap_team_sky": "Sky team cap", "glove_pink": "Pink mittens", "glove_sky": "Sky mittens",
+    "cap_team_pink": "Pink team cap", "cap_team_sky": "Sky team cap",
     "sash_pink": "Pink racing sash", "sash_sky": "Sky racing sash", "bucket_hat": "Mint bucket hat", "bucket_hat_pink": "Pink bucket hat",
     "scarf_cosy": "Coral cosy scarf", "scarf_sky": "Sky cosy scarf", "wristbands_sky": "Sky wristbands",
 }

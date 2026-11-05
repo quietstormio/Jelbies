@@ -152,14 +152,14 @@ final class WearCaptureTests: XCTestCase {
     private func write(_ img: UIImage, _ path: String) throws { try img.pngData()!.write(to: URL(fileURLWithPath: path)) }
 
     /// The outfits of outfits.png / outfits_2.png (Bob / Pip / Moss).
-    static let setA: [Outfit] = [[.head: .capTeamPink, .body: .bibPink, .hands: .glovePink, .feet: .sneakerCoral],
+    static let setA: [Outfit] = [[.head: .capTeamPink, .body: .bibPink, .feet: .sneakerCoral],
                                  [.head: .flowerCrown, .neck: .bowtieSky, .feet: .glitterShoes],
                                  [.head: .beaniePink, .neck: .bandanaCoral]]
-    static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .boxingMitts, .feet: .hightopRed],
+    static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .wristbandsSky, .feet: .hightopRed],
                                  [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
                                  [.head: .crownGold, .neck: .pearls, .body: .tutuPink, .feet: .balletPink]]
     static let setC: [Outfit] = [[.head: .witchHat, .face: .gogglesAviator, .body: .capeHero, .feet: .rainBoots],
-                                 [.head: .bucketHatPink, .neck: .scarfSky, .hands: .gloveSky, .feet: .rainBoots],
+                                 [.head: .bucketHatPink, .neck: .scarfSky, .feet: .rainBoots],
                                  [.head: .catEars, .face: .heartShades, .body: .backpackSky, .neck: .medalGold]]
 
     /// The part of a room frame around the three Jellies (2x render), cropped so the outfits read.
@@ -268,7 +268,7 @@ final class WearCaptureTests: XCTestCase {
         let lab = setUpLab(xs.map { SIMD2($0, z) }, seed: 4)
         let (ren, target) = try renderer(lab)
         let roles: [WearRaceRole] = [.rival(team: .lavender, number: 3), .player(team: .sky, number: WearTeam.playerNumber(roster: 0)), .rival(team: .coral, number: 9)]
-        let outfits: [Outfit] = [[:], [.head: .capTeamSky, .hands: .gloveSky, .feet: .sneakerMint], [:]]
+        let outfits: [Outfit] = [[:], [.head: .capTeamSky, .feet: .sneakerMint], [:]]
         let sets = dress(lab, outfits, roles: roles)
         W = 603 * 2; H = 1311 * 2
         let (ren2, target2) = try renderer(lab)
@@ -276,7 +276,7 @@ final class WearCaptureTests: XCTestCase {
         let r = CGRect(x: 0.12 * Double(W), y: 0.50 * Double(H), width: 0.76 * Double(W), height: 0.18 * Double(H))
         let crop = img.cgImage()!.cropping(to: r).map { UIImage(cgImage: $0) }!
         _ = (ren, target)
-        try write(labelled(crop, "Jelly Circuit: racers with numbered bibs + jersey bands (lavender #3, player sky #7 with cap / mittens / sneakers, coral #9)"), d + "/race_bibs.png")
+        try write(labelled(crop, "Jelly Circuit: racers with numbered bibs + jersey bands (lavender #3, player sky #7 with cap / sneakers, coral #9)"), d + "/race_bibs.png")
     }
 
     func testCaptureSleepHats() throws {

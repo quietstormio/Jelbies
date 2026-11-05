@@ -23,10 +23,10 @@ final class FeaturePerfTests: XCTestCase {
         let room = try XCTUnwrap(s.ren.room)
         WearBody.install(MotionRig.renderMesh)
         let outfits: [[WearSlot: WearLook]] = [
-            [.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .body: .capeHero, .hands: .boxingMitts, .feet: .hightopRed],
-            [.head: .catEars, .face: .heartShades, .neck: .pearls, .body: .tutuPink, .hands: .gloveSky, .feet: .sneakerLightup],
+            [.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .body: .capeHero, .hands: .wristbandsSky, .feet: .hightopRed],
+            [.head: .catEars, .face: .heartShades, .neck: .pearls, .body: .tutuPink, .hands: .wristbandsSky, .feet: .sneakerLightup],
             [.head: .beanieHoney, .face: .gogglesAviator, .neck: .whistleCoach, .body: .heroPatch, .hands: .wristbandsSky, .feet: .balletPink],
-            [.face: .glassesRound, .body: .backpackSky, .hands: .glovePink, .feet: .rainBoots]]          // (a hat or a neck item with the backpack folds the wings: the lab's intersection rule)
+            [.face: .glassesRound, .body: .backpackSky, .hands: .wristbandsSky, .feet: .rainBoots]]          // (a hat or a neck item with the backpack folds the wings: the lab's intersection rule)
         let set = WornSet(); set.body = WearBody.shared; set.soundOn = false; Self.keep.append(set)
         let feats = FeatureSet(); feats.body = WearBody.shared; Self.keep.append(feats)
         for a in s.actors where a.brain == nil {
