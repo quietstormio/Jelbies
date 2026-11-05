@@ -28,6 +28,20 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// centre + (current frame x rest frame^-1) x (rest - centre), so a pearl stays a pearl however hard the skin under it shears (a bump, a collar, a spin).
     var clusterCentre: [SIMD3<Float>] = [], clusterBind: [SurfaceBind] = [], clusterFrame0: [simd_float3x3] = []
     var hasClusters = false
+    /// LEVELLED vertices (WearLevel): an encircling part (a band, string, wrap, collar ...) and everything of its piece that hangs on it keep their authored HEIGHT and their azimuth
+    /// round the body axis in the body's own frame; only the radius follows the skin (`lvExcess` = how far outside the skin's foot point the authored vertex stands).
+    var lvBind: [SurfaceBind] = [], clusterLvBind: [SurfaceBind] = []
+    var level: [Bool] = [], lvY0: [Float] = [], lvDir: [SIMD2<Float>] = [], lvExcess: [Float] = []
+    var levelPiece = false
+    /// The vertices of the thin encircling ring parts (a collar, hem, band, string): the limb bulge moves them even where a garment's authored cover would leave them on the skin.
+    var lvRing: [Bool] = []
+    /// The nodes whose skin radius is read each frame (WearLevel): every levelled vertex that is not part of a rigid small part, and the centre of every levelled small part. Each node
+    /// keeps the vertex (or part) it stands for, its skin point / height / azimuth, and the nodes within `WearLevel.neighbourhood` of it (the skin radius is dilated and averaged over
+    /// them, so the loop does not follow the skin's ripple).
+    var nodeVertex: [Int32] = [], nodeCluster: [Int32] = [], nodeBind: [SurfaceBind] = [], nodeY0: [Float] = [], nodeDir: [SIMD2<Float>] = [], nodeNbr: [[Int32]] = [], nodeRho0: [Float] = []
+    var lvNode: [Int32] = [], clusterNode: [Int32] = []
+    /// The same for the small rigid parts (pearl, link, knot, dot): per part, centre height / azimuth / excess (valid where `clusterLevel`).
+    var clusterLevel: [Bool] = [], clusterY0: [Float] = [], clusterDir: [SIMD2<Float>] = [], clusterExcess: [Float] = []
     var partNames: [String] = [], partOfVertex: [UInt8] = []
     /// Vertices the jewellery twinkles on (the top vertex of every part named gem*): WornSet.emit pops 4-point star glints there.
     var sparkleSites: [Int] = []
@@ -143,9 +157,11 @@ nonisolated enum WearMeshes {
                 if let b = body.bind(p.rest[i]) { p.bind[i] = b; p.anyBound = true } else { p.w[i] = 0 }
             }
         } else { for i in p.w.indices { p.w[i] = 0 } }
-        if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l) { raise(p, body: body, by: lift) } }
-        if let body, !isArm, l.slot == .neck, WearLimbs.enabled { seat(p, body: body) }
+        if let body, !isArm { WearLevel.classify(p, body: body) }
+        if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l), !p.levelPiece { raise(p, body: body, by: lift) } }
+        if let body, !isArm, l.slot == .neck, WearLimbs.enabled, !p.levelPiece { seat(p, body: body) }          // (a levelled loop is not lifted up the wall: it takes its radius from the skin at its own height, WearLevel.finalize)
         markLimbFree(p, body: body, authoredCover: l.slot != .neck, clusters: WearLimbs.enabled && (l.slot == .neck || l.slot == .body))
+        if let body, !isArm { WearLevel.finalize(p, body: body) }
         return p
     }
 

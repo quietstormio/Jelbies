@@ -181,6 +181,8 @@ nonisolated final class WearBody: @unchecked Sendable {
     let limbBlocks: [(first: Int, around: Int, rings: Int)]
     /// The egg vertices of the head cap (the highest ones): what a hat's crown must always enclose (CrownFit).
     let capIndices: [Int]
+    /// The vertical axis (x = 0, z = axisZ, rest space) the encircling parts are levelled about (WearLevel): the mean z of the rest egg.
+    let axisZ: Float
     private let cell: Float = 0.08
     private let lo: SIMD3<Float>
     private let dim: SIMD3<Int>
@@ -202,6 +204,8 @@ nonisolated final class WearBody: @unchecked Sendable {
         eggVertexLimit = rm.armCapsule?.firstVertex.min() ?? rm.vertexCount
         limbBlocks = WearLimbs.blocks(rm)
         restLimbs = WearLimbs.restArms()
+        let eggN = max(1, min(rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, p.count))
+        axisZ = (0..<eggN).reduce(Float(0)) { $0 + p[$1].z } / Float(eggN)
         let eggTop = (0..<min(eggVertexLimit, p.count)).map { p[$0].y }.max() ?? 0
         capIndices = (0..<min(eggVertexLimit, p.count)).filter { p[$0].y > eggTop - 0.16 }
         var mn = SIMD3<Float>(repeating: .infinity), mx = SIMD3<Float>(repeating: -.infinity)
@@ -321,6 +325,25 @@ nonisolated final class WearBody: @unchecked Sendable {
         let q = a * s.bary.x + b * s.bary.y + c * s.bary.z
         let f = frame(a, b, N(s.tri.x), N(s.tri.y), N(s.tri.z), s.bary)
         return (q + f.t * s.off.x + f.b * s.off.y + f.n * s.off.z, f.n)
+    }
+    /// Where the radial line at height `y` and azimuth direction `dir` (x, z about the body axis) meets the REST egg: the bind of that surface point and its radius. nil if the line misses the egg.
+    func radialHit(dir: SIMD2<Float>, y: Float) -> (bind: SurfaceBind, rho: Float)? {
+        func at(_ r: Float) -> SurfaceBind? { bind(SIMD3(dir.x * r, y, axisZ + dir.y * r)) }
+        var lo: Float = 0.02, hi: Float = 1.2
+        guard let a = at(lo), a.off.z < 0, let b = at(hi), b.off.z > 0 else { return nil }
+        for _ in 0..<16 { let m = (lo + hi) / 2; if let t = at(m), t.off.z < 0 { lo = m } else { hi = m } }
+        let r = (lo + hi) / 2
+        guard var out = at(r) else { return nil }
+        out.off = .zero
+        return (out, r)
+    }
+    /// The foot point of a bind on the REST egg (the surface point under a bound vertex, without its offset).
+    func restFoot(_ s: SurfaceBind) -> SIMD3<Float> { pos[Int(s.tri.x)] * s.bary.x + pos[Int(s.tri.y)] * s.bary.y + pos[Int(s.tri.z)] * s.bary.z }
+    /// The foot point of a bind on the skinned body (no frame, no offset).
+    @inline(__always)
+    static func footPoint(_ s: SurfaceBind, skin: UnsafePointer<Float>) -> SIMD3<Float> {
+        @inline(__always) func P(_ i: UInt32) -> SIMD3<Float> { let o = 6 * Int(i); return SIMD3(skin[o], skin[o + 1], skin[o + 2]) }
+        return P(s.tri.x) * s.bary.x + P(s.tri.y) * s.bary.y + P(s.tri.z) * s.bary.z
     }
     /// The bound point plus the skin's frame there (columns T, B, N) at the foot point.
     @inline(__always)
