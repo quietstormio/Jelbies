@@ -111,6 +111,7 @@ extension BlobBrain {
         // the free arm hangs relaxed, a little forward
         armDirEl[other] = -0.25; armDirSa[other] = 0.35
         var elT = q.el, saT: Float = 0
+        if goal == 0 { elT = socialBook.handEl[si]; saT = socialBook.handSa[si] }          // (letting go: the arm goes down from where it is, it is not re-aimed)
         let sg: Float = si == 0 ? -1 : 1
         if goal > 0, let o = socialBrain(q.partner), let osim = o.simRef {
             let sh = HandReach.shoulder, sgP = -sg
@@ -142,7 +143,9 @@ extension BlobBrain {
                 var hq = HandReach.pole(el: o.socialBook.handEl[1 - si], sa: o.socialBook.handSa[1 - si], out: o.socialBook.handOut * o.socialBook.handW); hq.x *= sgP
                 hisPole = orgo + RSo * hq
             }
-            if walking {
+            // (the last 0.8 m of a stance walk are LOCKED - the destination no longer follows the outline - so from there the arm is free to give; until then it keeps its canonical pose)
+            var locked = false; if case .walk(let wt, _) = script, simd_distance(position, wt) < 0.8 { locked = true }
+            if walking && !locked {
                 saT = q.seek ? HandReach.saNub : 0
                 socialBook.handOut = 0; socialBook.handPrevD = 0
                 let rate: Float = 6 * dt
