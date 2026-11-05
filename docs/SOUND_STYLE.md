@@ -36,13 +36,14 @@ Rules learned: say "creature" and "coo/hum", never "sigh/sneeze/breath/giggle/la
 - Only change what the user flags: the cuddle wobble/squish originals were liked and are restored; only the bath polish swipe was redone.
 
 ## Loudness targets (m4a, AAC 96 kbps mono 44.1 kHz, fades of 5 ms in / 40 ms out)
-- Voice chirps/babbles about -11 to -16 LUFS integrated, peak -3 dBFS (the game plays them with a gain); short emote vocals -15 to -19 LUFS; snores -32 LUFS (peak -23 dBFS); storm sigh -24 LUFS; touch sounds -20 to -28 LUFS; peaks never above -3 dBFS.
+- Voice chirps/babbles about -11 to -16 LUFS integrated, peak -3 dBFS (the game plays them with a gain); short emote vocals -15 to -19 LUFS; snores -22 LUFS (peak -14 dBFS; were -32, inaudible with the 0.12 gain: 2026-11-05 now +10 dB in the file and gain 0.55, about -28 LUFS at the speaker), sleep coos -22 LUFS; storm sigh -24 LUFS; touch sounds -20 to -28 LUFS; peaks never above -3 dBFS.
 - Clips under about 0.4 s read -70 LUFS on the meter; match those by peak (-3.5 to -6 dBFS).
 
 ## Which voice each character uses
-`JellyVoiceSet.file(character:)` (AudioCatalog.swift) picks `chirp_jelly{n}_*`, `babble_jelly{n}`, `snore_jelly{n}_*` with n = min(character, 3) + 1, via the character in the slot (`JellyRoster.character(slot)`):
-- Bob (0) -> jelly1; Pip (1) -> jelly2; Moss (2) -> jelly3; Lavender (3) -> jelly4.
-- Teddy (4), Pearl (5) and Panda (6) all clamp to jelly4 (`min(character, 3)`), so they share Lavender's voice (Panda confirmed 2026-11-03: shared for now, no new clips). Suggestion: give Teddy (round, light brown, ears) and Pearl (white, winged) their own voice sets (jelly5/jelly6: extend `JellyVoiceSet.count`, generate chirp/babble/snore with `voice_synth.py`, e.g. Teddy lower and rounder than Bob, about 380 Hz; Pearl soft and airy near 580 Hz). Not done; ask the user.
+`JellyVoiceSet.file(character:_:variant:)` (AudioCatalog.swift) picks `chirp_jelly{n}_{happy|sad}`, `babble_jelly{n}` and the context voices `<type>_jelly{n}[_v2|_v3]` with n = min(character, 6) + 1, via the character in the slot (`JellyRoster.character(slot)`):
+- Bob (0) -> jelly1; Pip (1) -> jelly2; Moss (2) -> jelly3; Lavender (3) -> jelly4; Teddy (4) -> jelly5 (about 380 Hz, round); Pearl (5) -> jelly6 (airy, 580 Hz); Panda (6) -> jelly7 (about 340 Hz). The three newer species got their own chirp, babble and round-1 context voices on 2026-11-05.
+- Context voices (`JellyVoice`, played by `AudioHub.contextVoice`, home room only, through the same gap and hush as the ambient chirp so they add variety rather than volume): curious, ooh, hum, giggle, hello, yawn, yay, uhoh (each with _v2/_v3 for the four base voices, picked so a repeat differs), and batch B: hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo. Batch B exists for the first four only: Teddy borrows Bob's (played at rate 0.87), Pearl Lavender's, Panda Moss's.
+- Snores and sleep coos (`snore_jelly{n}_*`, `sleep_coo_jelly{n}_*`) exist for the first four only (`JellyVoiceSet.count`); Teddy, Pearl and Panda use Lavender's (`baseIndex`). Rendered by new_voices_synth.py / round2_synth.py (AAC 96 kbps mono 44.1 kHz).
 
 ## Where this applies
 New vocal in the emotes: `emote_hic_1`, `emote_achoo_1`, `emote_woozy_1`, and `storm_relief_sigh` follow this guide (redone 2026-11-02). `cheer_small_*` (older crowd cheer, centroid 1.2-1.8 kHz) was not part of the new batch.

@@ -40,7 +40,7 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     var gain: Float {
         switch self {
         case .footstep: return 0.45
-        case .snore: return 0.12            // was 0.5, then 0.175: "the snoring is too loud", then "ensure it's quieter" (the soft per-character snores, -32 LUFS)
+        case .snore: return 0.55            // 2026-11-05: the files are now -22 LUFS (were -32) and this was 0.12 (effective -51 LUFS: inaudible on the phone speaker): now about -28 LUFS at the speaker, under the chirps (-25)
         case .slurp: return 0.51            // was 0.85 (default): 0.6x, "a little more quiet"
         case .countdownBeep: return 0.55
         case .raceGo: return 0.65
@@ -126,23 +126,65 @@ nonisolated struct SoundGate: Sendable {
     }
 }
 
-nonisolated enum JellyVoice: String, Sendable { case happy, sad, babble }
+nonisolated enum JellyVoice: String, Sendable, CaseIterable {
+    case happy, sad, babble
+    /// The context voices (2026-11-05): a short call that fits the moment, <type>_jelly{n}.m4a, rendered by the same synth as the chirps.
+    case curious, ooh, hum, giggle, hello, yawn, yay, uhoh
+    /// Round 2, batch B (2026-11-05): hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo. Only the four base voices have them; Teddy / Pearl / Panda borrow the nearest.
+    case hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo
+    var isContext: Bool { switch self { case .happy, .sad, .babble: return false; default: return true } }
+    /// Batch B: no per-character set for the three newer species, and no _v2 / _v3.
+    var isBatchB: Bool { switch self { case .hmm, .wheee, .tasty, .aww, .huh, .pfft, .lala, .eep, .mmhmm, .nyoo: return true; default: return false } }
+    /// Round 1's eight have two more variants (_v2, _v3) for the four base voices, so a repeat differs.
+    var hasVariants: Bool { isContext && !isBatchB }
+}
 
-/// The voice set of a CHARACTER (0 Bob, 1 Pip, 2 Moss, 3 Lavender): files chirp_jelly{c+1}_happy/_sad, babble_jelly{c+1}.
+/// The voice set of a CHARACTER (0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl, 6 Panda): files chirp_jelly{c+1}_happy/_sad, babble_jelly{c+1}, <type>_jelly{c+1}[_v2|_v3].
+/// Snores and sleep coos exist for the first four only (`count`); Teddy, Pearl and Panda use Lavender's.
 nonisolated enum JellyVoiceSet {
     static let count = 4
-    static func index(character c: Int) -> Int { min(max(c, 0), count - 1) + 1 }
-    static func file(character c: Int, _ v: JellyVoice) -> String {
-        v == .babble ? "babble_jelly\(index(character: c))" : "chirp_jelly\(index(character: c))_\(v.rawValue)"
+    static let voiceSets = 7
+    static func index(character c: Int) -> Int { min(max(c, 0), voiceSets - 1) + 1 }
+    /// The snore / coo set: the first four characters' (Teddy, Pearl and Panda share Lavender's).
+    static func baseIndex(character c: Int) -> Int { min(max(c, 0), count - 1) + 1 }
+    /// Batch-B voices for the newer species: Teddy -> Bob, Pearl -> Lavender, Panda -> Moss (and a pitch trim for Teddy, who is lower than Bob).
+    static func borrowed(_ n: Int) -> Int { n <= 4 ? n : (n == 5 ? 1 : (n == 6 ? 4 : 3)) }
+    static func rate(character c: Int, _ v: JellyVoice) -> Float { v.isBatchB && index(character: c) == 5 ? 0.87 : 1 }
+    /// `variant` 1...3 (2 and 3 exist for the base four's round-1 types only; anything else plays the first).
+    static func file(character c: Int, _ v: JellyVoice, variant: Int = 1) -> String {
+        let n = index(character: c)
+        switch v {
+        case .babble: return "babble_jelly\(n)"
+        case .happy, .sad: return "chirp_jelly\(n)_\(v.rawValue)"
+        default:
+            let m = v.isBatchB ? borrowed(n) : n
+            return "\(v.rawValue)_jelly\(m)" + (v.hasVariants && m <= 4 && variant > 1 ? "_v\(min(variant, 3))" : "")
+        }
     }
 }
 
 extension JellyVoiceSet {
+    /// The context voice (and the chance of it) for the start of an idle move: look / peek -> curious, sit / lie / sway -> hum, the playful ones -> giggle, the yawn -> yawn, a stumble / startle -> uh-oh.
+    static func contextVoice(forIdle kind: IdleKind, mood: IdleMood = .happy) -> (voice: JellyVoice, chance: Double)? {
+        switch kind {
+        case .look, .peek, .decorPeek, .window, .stopLook: return (Bool.random() ? .curious : .hmm, 0.15)
+        case .sit, .decorSit, .lieDown, .sway, .stretch: return (.hum, 0.15)
+        case .slump: return (Bool.random() ? .pfft : .nyoo, 0.2)
+        case .zoomies, .run: return (Bool.random() ? .wheee : .giggle, 0.18)
+        case .skipHop, .bounce, .decorHop, .decorSlide, .slide, .joy, .giggle, .jacks, .trot: return (.giggle, 0.15)
+        case .yawn: return (.yawn, 0.4)
+        case .stumble: return (.uhoh, 0.4)
+        case .startle: return (Bool.random() ? .eep : .huh, 0.4)
+        case .sigh, .tailHug: return (.aww, 0.2)
+        case .wander: return mood == .happy ? (.lala, 0.05) : (mood == .grumpy ? (.pfft, 0.05) : nil)
+        default: return nil
+        }
+    }
     /// A chance of the bubble-pop variant (snore_jelly{c}_2) over the plain snore (_1).
     static let snorePopChance: Double = 0.3
     /// The snore file of a CHARACTER: snore_jelly{c+1}_{1|2}. `roll` in 0..<1 picks the variant (2 = ends in a tiny bubble pop).
     static func snoreFile(character c: Int, roll: Double) -> String {
-        "snore_jelly\(index(character: c))_\(roll < snorePopChance ? 2 : 1)"
+        "snore_jelly\(baseIndex(character: c))_\(roll < snorePopChance ? 2 : 1)"
     }
 }
 
@@ -215,9 +257,9 @@ nonisolated struct Fader: Equatable, Sendable {
 /// When the sleeping Jellies snore: one snore per Jelly every 20...40 s, and never two Jellies within `hubGap` of each other
 /// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
 nonisolated struct SnoreScheduler: Sendable {
-    static let interval: ClosedRange<Double> = 20...40        // was 6...10: rarer, softer snores
+    static let interval: ClosedRange<Double> = 13...24        // was 6...10, then 20...40 (inaudible): with the coos a sound every 8-15 s per sleeper
     static let firstDelay: ClosedRange<Double> = 5...12
-    static let hubGap: Double = 6
+    static let hubGap: Double = 3.5
     private(set) var next: [Double] = [0, 0, 0]
     private(set) var lastAny: Double = -100
 
@@ -243,7 +285,7 @@ extension JellyVoiceSet {
     static let sleepCooVariants = 3
     /// sleep_coo_jelly{c}_{1...3}: a soft hummed "oo" in the character's voice. `roll` in 0..<1 picks the variant.
     static func sleepCooFile(character c: Int, roll: Double) -> String {
-        "sleep_coo_jelly\(index(character: c))_\(min(Int(roll * Double(sleepCooVariants)), sleepCooVariants - 1) + 1)"
+        "sleep_coo_jelly\(baseIndex(character: c))_\(min(Int(roll * Double(sleepCooVariants)), sleepCooVariants - 1) + 1)"
     }
 }
 
@@ -252,12 +294,12 @@ nonisolated enum SleepSound: Equatable, Sendable { case coo, softSnore }
 /// Extra sleeping sounds per napping Jelly: a coo about every 9...18 s, now and then (`softSnoreChance`) a quiet snore in its place, and no two
 /// Jellies within `hubGap` of each other. Pure: the hub feeds it the clock and a random source.
 nonisolated struct SleepSoundScheduler: Sendable {
-    static let interval: ClosedRange<Double> = 9...18
+    static let interval: ClosedRange<Double> = 13...24          // (alternates with the snore scheduler: a snore or a coo about every 8-15 s per sleeper)
     static let firstDelay: ClosedRange<Double> = 3...8
     static let hubGap: Double = 3
-    static let softSnoreChance: Double = 0.2
+    static let softSnoreChance: Double = 0
     static let softSnoreGain: Float = 0.6
-    static let cooGain: Float = 0.08
+    static let cooGain: Float = 0.55
     private(set) var next: [Double] = [0, 0, 0]
     private(set) var lastAny: Double = -100
 
