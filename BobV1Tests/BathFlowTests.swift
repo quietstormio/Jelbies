@@ -154,7 +154,7 @@ final class BathFlowTests: XCTestCase {
         for _ in 0..<600 { g.step(dt: 1, travelled: 0) }
         XCTAssertEqual(g.dirt, 0, "no dirt while he stands still")
         g.step(dt: 0.1, travelled: GrimeTuning.roamUnitsPer5Min)
-        XCTAssertEqual(g.dirt, GrimeTuning.dirtPer5Min, accuracy: 1e-5, "0.02 per 5 min of normal roaming")
+        XCTAssertEqual(g.dirt, GrimeTuning.dirtPer5Min, accuracy: 1e-5, "0.014 per 5 min of normal roaming")
         for _ in 0..<400 { g.step(dt: 0.1, travelled: GrimeTuning.roamUnitsPer5Min) }
         XCTAssertEqual(g.dirt, 1, "capped at 1")
         XCTAssertEqual(g.coat, .filthy)
@@ -185,9 +185,9 @@ final class BathFlowTests: XCTestCase {
         g.step(dt: GrimeTuning.sparkleFade / 2, travelled: 0)
         XCTAssertEqual(g.sparkle, 0.5, accuracy: 0.01, "fades slowly on its own")
         XCTAssertEqual(g.coat, .beautiful)
-        g.step(dt: 1, travelled: GrimeTuning.roamUnitsPer5Min * 0.5)        // 0.01 dirt: still clean, still sparkling
+        g.step(dt: 1, travelled: GrimeTuning.roamUnitsPer5Min * 0.5)        // 0.007 dirt: still clean, still sparkling
         XCTAssertGreaterThan(g.sparkle, 0.4)
-        g.step(dt: 1, travelled: GrimeTuning.roamUnitsPer5Min * 2.5)        // past the clean line
+        g.step(dt: 1, travelled: GrimeTuning.roamUnitsPer5Min * 3.5)        // 0.056 total, past the 0.05 clean line (dirtPer5Min 0.014)
         XCTAssertEqual(g.sparkle, 0, "enough dirt ends the sparkle at once")
         XCTAssertEqual(g.coat, .normal)
         g.sparkle = 1

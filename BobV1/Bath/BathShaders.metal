@@ -200,10 +200,18 @@ static float bSmearBody(float3 sd, float3 d, float3 dir, float ang, float len, f
     return bSmearAt(sd, d, r, ang + on * (bjit(seed + 0.37, ps) - 0.5) * 1.2, len, wid, Q, seed + ps * 31.0);
 }
 
-/// A face smear placed for this Jelly (ps = 0: the original, exactly).
+/// Fade-in start of face smear j (0-based) for this Jelly: the six starts sorted ascending, rotated per Jelly so each one shows a different spot first.
+/// ps = 1 -> left cheek first, 2 -> chin, 3 -> brow, 4 -> beside right eye, 5 -> beside left eye, 6 -> right cheek.
+static float bFaceStart(int j, float ps) {
+    const float S[6] = {0.05, 0.26, 0.30, 0.34, 0.40, 0.42};
+    int shift = int(floor(ps + 0.5) * 5.0) % 6;
+    return S[(j + shift) % 6];
+}
+
+/// A face smear placed for this Jelly (ps >= 1 for every real Jelbie; ps = 0 is the old original).
 static float bSmearFace(float2 fp, float2 c, float ang, float len, float wid, float3 Q, float seed, float ps) {
     float on = ps > 0.5 ? 1.0 : 0.0;
-    float2 j = on * float2(bjit(seed, ps) - 0.5, bjit(seed + 0.21, ps) - 0.5) * float2(0.09, 0.06);
+    float2 j = on * float2(bjit(seed, ps) - 0.5, bjit(seed + 0.21, ps) - 0.5) * float2(0.13, 0.08);
     return bSmear(fp, c + j, ang + on * (bjit(seed + 0.37, ps) - 0.5) * 1.3, len, wid, Q, seed + ps * 31.0);
 }
 
@@ -280,7 +288,7 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     // feet like settled dust, plus (when quite dirty) one or two very faint soft cheek / belly smudges. The 12 x 24 grid is ONLY the wash
     // mask (1 = still dusty), sampled bilinearly; nothing here has cells. His colour stays his colour: <= ~10 % darker, ~15 % desaturated at 1.0.
     float dirtK = clamp(bp.a.w, 0.0, 1.0);
-    float ps = bp.centre.w;                                                                            // per-Jelly soot placement seed (Bob = 0)
+    float ps = bp.centre.w;                                                                            // per-Jelly soot placement seed (Jelbie id + 1)
     float sootHere = 0.0;
     float3 sd = Q - bp.centre.xyz;
     float wash = smoothstep(0.0, 0.7, bSootAt(bp, sd));
@@ -300,12 +308,12 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
         float2 fp = Q.xy;
         float front = smoothstep(0.22, 0.6, d.z);
         float field = 0.0;
-        field += smoothstep(0.05, 0.28, dirtK) * bSmearFace(fp, float2( 0.15, 0.655), -0.38, 0.150, 0.034, Q, 1.0, ps);       // right cheek wipe
-        field += smoothstep(0.26, 0.50, dirtK) * bSmearFace(fp, float2(-0.16, 0.620), 0.20, 0.140, 0.032, Q, 2.0, ps);       // left cheek wipe
-        field += smoothstep(0.30, 0.52, dirtK) * 0.9 * bSmearFace(fp, float2(0.04, 0.445), 0.45, 0.140, 0.030, Q, 3.0, ps);   // chin smear
-        field += smoothstep(0.40, 0.62, dirtK) * 0.8 * bSmearFace(fp, float2(-0.03, 0.985), 0.08, 0.190, 0.032, Q, 4.0, ps);  // brow / forehead
-        field += smoothstep(0.34, 0.58, dirtK) * 0.7 * bSmearFace(fp, float2( 0.115, 0.775), 1.25, 0.075, 0.024, Q, 5.0, ps); // beside the right eye / nose
-        field += smoothstep(0.42, 0.66, dirtK) * 0.7 * bSmearFace(fp, float2(-0.105, 0.760), 1.75, 0.070, 0.024, Q, 6.0, ps); // beside the left eye
+        field += smoothstep(bFaceStart(0, ps), bFaceStart(0, ps) + 0.23, dirtK) * bSmearFace(fp, float2( 0.15, 0.655), -0.38, 0.150, 0.034, Q, 1.0, ps);       // right cheek wipe
+        field += smoothstep(bFaceStart(1, ps), bFaceStart(1, ps) + 0.23, dirtK) * bSmearFace(fp, float2(-0.16, 0.620), 0.20, 0.140, 0.032, Q, 2.0, ps);       // left cheek wipe
+        field += smoothstep(bFaceStart(2, ps), bFaceStart(2, ps) + 0.23, dirtK) * 0.9 * bSmearFace(fp, float2(0.04, 0.445), 0.45, 0.140, 0.030, Q, 3.0, ps);   // chin smear
+        field += smoothstep(bFaceStart(3, ps), bFaceStart(3, ps) + 0.23, dirtK) * 0.8 * bSmearFace(fp, float2(-0.03, 0.985), 0.08, 0.190, 0.032, Q, 4.0, ps);  // brow / forehead
+        field += smoothstep(bFaceStart(4, ps), bFaceStart(4, ps) + 0.23, dirtK) * 0.7 * bSmearFace(fp, float2( 0.115, 0.775), 1.25, 0.075, 0.024, Q, 5.0, ps); // beside the right eye / nose
+        field += smoothstep(bFaceStart(5, ps), bFaceStart(5, ps) + 0.23, dirtK) * 0.7 * bSmearFace(fp, float2(-0.105, 0.760), 1.75, 0.070, 0.024, Q, 6.0, ps); // beside the left eye
         float n2 = 0.6 * bvnoise(Q * 7.0 + 11.0 + ps * 17.0) + 0.4 * bvnoise(Q * 16.0 + 3.0 + ps * 17.0);
         float faceMask = smoothstep(0.42, 0.55, fp.y) * (1.0 - smoothstep(0.98, 1.1, fp.y));
         field += 0.55 * smoothstep(0.1, 0.5, dirtK) * smoothstep(0.38, 0.78, n2) * faceMask;                      // uneven dusting
@@ -541,7 +549,7 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     // feet like settled dust, plus (when quite dirty) one or two very faint soft cheek / belly smudges. The 12 x 24 grid is ONLY the wash
     // mask (1 = still dusty), sampled bilinearly; nothing here has cells. His colour stays his colour: <= ~10 % darker, ~15 % desaturated at 1.0.
     float dirtK = clamp(bp.a.w, 0.0, 1.0);
-    float ps = bp.centre.w;                                                                            // per-Jelly soot placement seed (Bob = 0)
+    float ps = bp.centre.w;                                                                            // per-Jelly soot placement seed (Jelbie id + 1)
     float sootHere = 0.0;
     float3 sd = Q - bp.centre.xyz;
     float wash = smoothstep(0.0, 0.7, bSootAt(bp, sd));
@@ -561,12 +569,12 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
         float2 fp = Q.xy;
         float front = smoothstep(0.22, 0.6, d.z);
         float field = 0.0;
-        field += smoothstep(0.05, 0.28, dirtK) * bSmearFace(fp, float2( 0.15, 0.655), -0.38, 0.150, 0.034, Q, 1.0, ps);       // right cheek wipe
-        field += smoothstep(0.26, 0.50, dirtK) * bSmearFace(fp, float2(-0.16, 0.620), 0.20, 0.140, 0.032, Q, 2.0, ps);       // left cheek wipe
-        field += smoothstep(0.30, 0.52, dirtK) * 0.9 * bSmearFace(fp, float2(0.04, 0.445), 0.45, 0.140, 0.030, Q, 3.0, ps);   // chin smear
-        field += smoothstep(0.40, 0.62, dirtK) * 0.8 * bSmearFace(fp, float2(-0.03, 0.985), 0.08, 0.190, 0.032, Q, 4.0, ps);  // brow / forehead
-        field += smoothstep(0.34, 0.58, dirtK) * 0.7 * bSmearFace(fp, float2( 0.115, 0.775), 1.25, 0.075, 0.024, Q, 5.0, ps); // beside the right eye / nose
-        field += smoothstep(0.42, 0.66, dirtK) * 0.7 * bSmearFace(fp, float2(-0.105, 0.760), 1.75, 0.070, 0.024, Q, 6.0, ps); // beside the left eye
+        field += smoothstep(bFaceStart(0, ps), bFaceStart(0, ps) + 0.23, dirtK) * bSmearFace(fp, float2( 0.15, 0.655), -0.38, 0.150, 0.034, Q, 1.0, ps);       // right cheek wipe
+        field += smoothstep(bFaceStart(1, ps), bFaceStart(1, ps) + 0.23, dirtK) * bSmearFace(fp, float2(-0.16, 0.620), 0.20, 0.140, 0.032, Q, 2.0, ps);       // left cheek wipe
+        field += smoothstep(bFaceStart(2, ps), bFaceStart(2, ps) + 0.23, dirtK) * 0.9 * bSmearFace(fp, float2(0.04, 0.445), 0.45, 0.140, 0.030, Q, 3.0, ps);   // chin smear
+        field += smoothstep(bFaceStart(3, ps), bFaceStart(3, ps) + 0.23, dirtK) * 0.8 * bSmearFace(fp, float2(-0.03, 0.985), 0.08, 0.190, 0.032, Q, 4.0, ps);  // brow / forehead
+        field += smoothstep(bFaceStart(4, ps), bFaceStart(4, ps) + 0.23, dirtK) * 0.7 * bSmearFace(fp, float2( 0.115, 0.775), 1.25, 0.075, 0.024, Q, 5.0, ps); // beside the right eye / nose
+        field += smoothstep(bFaceStart(5, ps), bFaceStart(5, ps) + 0.23, dirtK) * 0.7 * bSmearFace(fp, float2(-0.105, 0.760), 1.75, 0.070, 0.024, Q, 6.0, ps); // beside the left eye
         float n2 = 0.6 * bvnoise(Q * 7.0 + 11.0 + ps * 17.0) + 0.4 * bvnoise(Q * 16.0 + 3.0 + ps * 17.0);
         float faceMask = smoothstep(0.42, 0.55, fp.y) * (1.0 - smoothstep(0.98, 1.1, fp.y));
         field += 0.55 * smoothstep(0.1, 0.5, dirtK) * smoothstep(0.38, 0.78, n2) * faceMask;                      // uneven dusting

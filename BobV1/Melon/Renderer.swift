@@ -569,7 +569,7 @@ final class MelonRenderer {
         let a = SIMD4<Float>(look.wet, look.sparkle, slot.foamAny ? 1 : 0, look.dirt)
         let p = slot.bathParamsBuf.contents()                 // this frame's copy (ring): written whole, ~2.3 KB
         p.storeBytes(of: a, toByteOffset: 0, as: SIMD4<Float>.self)
-        p.storeBytes(of: SIMD4<Float>(BathSet.bodyCentre, look.sootStyle), toByteOffset: 16, as: SIMD4<Float>.self)      // .w = this Jelly's soot placement (0 = Bob)
+        p.storeBytes(of: SIMD4<Float>(BathSet.bodyCentre, look.sootStyle), toByteOffset: 16, as: SIMD4<Float>.self)      // .w = this Jelly's soot placement (Jelbie id + 1)
         let nf = min(look.foam.count, BathLook.rows * BathLook.cols)
         look.foam.withUnsafeBytes { src in memcpy(p + MelonBathParams.foamOffset, src.baseAddress!, nf * MemoryLayout<Float>.size) }
         let ns = min(look.soot.count, BathLook.rows * BathLook.cols)

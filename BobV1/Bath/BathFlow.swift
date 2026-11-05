@@ -159,7 +159,7 @@ final class BathFlow {
         if jelly != 0, let g {
             targetID = jelly; bobGrime = grime; savedBobLook = look
             grime = g
-            var nl = l ?? BathLook(); nl.sootStyle = Float(jelly); nl.dirt = g.dirt; nl.sparkle = g.sparkle
+            var nl = l ?? BathLook(); nl.sootStyle = BathLook.sootSeed(jelly: jelly); nl.dirt = g.dirt; nl.sparkle = g.sparkle
             nl.soot = BathLook.sootSeed(dirt: g.dirt)
             look = nl; sootSeededFor = g.dirt
         } else { targetID = 0 }

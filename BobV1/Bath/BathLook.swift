@@ -34,8 +34,9 @@ struct BathLook: Equatable {
     /// 0...1 soot per cell, same 12 x 24 rest-frame layout as `foam`. Seeded from `dirt` (`sootSeed`); soaping greys the suds over it,
     /// rinsing a foamed spot washes it off, shining wipes it. Drawn in the room AND the bath.
     var soot: [Float] = Array(repeating: 0, count: rows * cols)
-    /// Per-Jelly soot placement (0 = Bob's own spots, 1 / 2 = other streak placements): rides in `MelonBathParams.centre.w`. Strength and style never change.
+    /// Per-Jelly soot placement seed (Jelbie id + 1, so never 0; 0 is only the legacy placement): rides in `MelonBathParams.centre.w`. Decides which face smear shows first and where. Strength never changes.
     var sootStyle: Float = 0
+    static func sootSeed(jelly: Int) -> Float { Float(jelly + 1) }
     var tool: BathTool = .none
     var toolAt: SIMD3<Float>? = nil           // world point where the held tool mesh is drawn (soap bar / cloth); rinse still uses `spray`
     static let dry = BathLook()
