@@ -32,7 +32,7 @@ extension ParkScenery {
             for i in 0..<part.positions.count {
                 let p = part.positions[i], n = part.normals[i]
                 var col = part.colors[i] * t
-                if leafy { let l = simd_dot(col, V3(0.2126, 0.7152, 0.0722)); col = simd_mix(col, hue * l, V3(repeating: desat)) }
+                if leafy { let l = simd_dot(col, V3(0.2126, 0.7152, 0.0722)); col = simd_mix(col, hue * l * 0.86, V3(repeating: desat)) }          // (a touch darker: the street's muted sage, not lime)
                 b.mesh.vertices.append(RoomVertex(pos: SIMD4(o + rot(V3(p.x * k, p.y * ky, p.z * k)), mat), normal: SIMD4(rot(n), part.ao[i]), color: SIMD4(col, 1)))
             }
             for i in stride(from: 0, to: part.indices.count, by: 3) { b.triangle(base + part.indices[i], base + part.indices[i + 1], base + part.indices[i + 2]) }
@@ -50,7 +50,7 @@ extension ParkScenery {
         let ratio = canopy * hue / leafRef
         // a muted canopy colour (the groomer street's sage trees) pulls the baked greens toward that hue instead of just tinting them
         let sat = (max(canopy.x, canopy.y, canopy.z) - min(canopy.x, canopy.y, canopy.z)) / max(0.001, max(canopy.x, canopy.y, canopy.z))
-        let desat = min(1, max(0, (0.6 - sat) / 0.4)) * 0.8, lum = max(0.001, simd_dot(canopy, V3(0.2126, 0.7152, 0.0722)))
+        let desat = min(1, max(0, (0.6 - sat) / 0.4)) * 1.0, lum = max(0.001, simd_dot(canopy, V3(0.2126, 0.7152, 0.0722)))
         let tint = ["leaf": simd_clamp(simd_mix(V3(repeating: 1), ratio, V3(repeating: 0.55)) * 1.05, V3(repeating: 0.3), V3(repeating: 1.8))]
         if conifer, !Art.pines.isEmpty {
             let a = Art.pines[min(Art.pines.count - 1, Int(pick * Float(Art.pines.count)))]
