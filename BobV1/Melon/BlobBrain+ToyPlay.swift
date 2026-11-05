@@ -52,7 +52,7 @@ extension BlobBrain {
     }
 
     /// Does the toy take several players at once (so everyone present joins at once)?
-    static func toyTakesMany(_ k: DecorKind) -> Bool { k.sitPoints.count > 1 || k.isBallLike || k == .bubblemachine }
+    static func toyTakesMany(_ k: DecorKind) -> Bool { k == .hopscotch || k.sitPoints.count > 1 || k.isBallLike || k == .bubblemachine }
 
     /// Weight multiplier of a decor behaviour: the pull of the best piece that offers it (1 when the room has none).
     func toyWeight(_ k: IdleKind) -> Float {
@@ -133,6 +133,7 @@ extension BlobBrain {
     private func toyShouldNotice(_ n: ToyNews) -> Bool {
         let f = DecorField.shared
         guard let foot = f.foot(n.uid) else { return false }
+        if foot.kind == .hopscotch { return HopscotchLine.shared.invitation(foot.uid, steerID, roll: rand()) }          // (a line started: each free Jelbie rolls once for joining it)
         // the goal stands for its ball
         var uid = n.uid, kind = foot.kind
         if kind == .minigoal, let ball = f.feet.first(where: { $0.kind == .soccerball }) { uid = ball.uid; kind = .soccerball }

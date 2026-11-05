@@ -126,6 +126,7 @@ final class FeetAttachTests: XCTestCase {
         ("decor2: kick the toy car", .toycar, SIMD2(0.9, 0.9), .decorKick, 14, false, nil, nil),
         ("decor2: kick the yarn ball", .yarnball, SIMD2(0.9, 0.9), .decorKick, 14, false, nil, nil),
         ("decor2: climb the slide, sit, ride, exit", .slide, SIMD2(1.0, 1.2), .decorSlide, 30, true, nil, nil),
+        ("park: hop along the hopscotch court, wiggle, walk off", .hopscotch, SIMD2(0.2, 1.4), .decorHopscotch, 26, true, nil, nil),
         // soccer (BlobBrain+Soccer.swift): the stomp kick, a dribble to the goal's kick spot and the shot, the shot and the celebration bounce, a stuck ball's rescue
         ("soccer: stomp-kick the ball", .soccerball, SIMD2(0.9, 0.9), .soccerKick, 16, true, 0, nil),
         ("soccer: dribble the ball to the goal and shoot", .soccerball, SIMD2(0.9, 1.4), .soccerKick, 34, true, 1, SIMD2(0.0, -1.6)),

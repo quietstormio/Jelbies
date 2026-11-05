@@ -51,6 +51,12 @@ extension GameCare {
     #if targetEnvironment(simulator)
     nonisolated(unsafe) static var startParkPending = UserDefaults.standard.integer(forKey: "StartPark") != 0
     nonisolated(unsafe) static var startParkFrames = 0
+    /// Capture aid: `-StartHopscotch 1` has the first Jelbie who came start the hopscotch ~4 s into the park, `-StartSlide 1` / `-StartTunnel 1` the slide / the play tunnel.
+    nonisolated(unsafe) static var demoToys: [(key: String, kind: DecorKind, move: IdleKind)] = {
+        let all: [(key: String, kind: DecorKind, move: IdleKind)] = [("StartHopscotch", DecorKind.hopscotch, IdleKind.decorHopscotch), ("StartSlide", DecorKind.slide, IdleKind.decorSlide), ("StartTunnel", DecorKind.playtunnel, IdleKind.decorPeek)]
+        return all.filter { UserDefaults.standard.integer(forKey: $0.key) != 0 }
+    }()
+    nonisolated(unsafe) static var demoToyFrames = 0
     #endif
 
     /// The Town's Park row: blocked = a friendly toast; else the picker (who comes along) opens.
@@ -106,6 +112,17 @@ extension GameCare {
         guard park.phase == .playing || park.phase == .arriveIn else { return }
         tickVisitors(dt: dt)
         tickFriends(actors, dt: dt)
+        #if targetEnvironment(simulator)
+        if !Self.demoToys.isEmpty, park.phase == .playing {
+            Self.demoToyFrames += 1
+            if Self.demoToyFrames == 240, let k = book.comers.sorted().first, k < actors.count, let b = actors[k].brain {
+                let d = Self.demoToys.removeFirst(); Self.demoToyFrames = 0
+                b.anticsEnabled = true; b.idleState.cooldown = 0
+                if UserDefaults.standard.integer(forKey: "HopscotchJoin") != 0 { HopscotchTuning.joinChance = 1 }          // (a sure line for the capture)
+                _ = b.startCommandedDecor(d.move, only: d.kind, actors[k].sim, actors[k].skinner)
+            }
+        }
+        #endif
         work.saveT += dt
         if work.saveT >= ParkTuning.saveEvery { work.saveT = 0; book.save() }
         if park.phase == .playing, isBedtimeHours { park.say("It is getting late. Time to go home!"); park.goHome() }
