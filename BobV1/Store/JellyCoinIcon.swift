@@ -39,6 +39,11 @@ struct JellyCoinIcon: View {
     }
 }
 
+extension Int {
+    /// A JellyCoin amount with a thousands separator ("1,000") for prize and price text.
+    var coinText: String { formatted(.number.grouping(.automatic)) }
+}
+
 /// A coin and a number (a price or a payout), the common pairing.
 struct CoinAmount: View {
     let amount: Int
@@ -46,6 +51,6 @@ struct CoinAmount: View {
     var font: Font = SK.font(15, .black)
     var color: Color = SK.ink
     var body: some View {
-        HStack(spacing: size * 0.25) { JellyCoinIcon(size: size); Text("\(amount)").font(font).foregroundStyle(color).monospacedDigit() }
+        HStack(spacing: size * 0.25) { JellyCoinIcon(size: size); Text(amount.coinText).font(font).foregroundStyle(color).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8).fixedSize() }
     }
 }

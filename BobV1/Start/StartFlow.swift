@@ -201,13 +201,13 @@ struct GameHost: View {
     var body: some View { GameScreen().id(session) }
 }
 
-/// Adoption prices (Drops). Rationale: a race pays 12-22 for a win, so 120 is about 6-8 wins (a couple of sessions), above the dearest trick page
-/// (55) and decor piece (90); the third costs more, so the room fills over weeks. The first Jelbie of a new game is free.
+/// Adoption prices (Drops). Rationale: a race pays 250-1500 for a win, so the second Jelbie (500) is about two Puddle wins and the third (800) a few more, well above the dearest trick page
+/// (55) and decor piece (90), so the room fills over weeks. A rare Jelly Spring colour (an exclusive mutation) costs +300 on top, so the most anyone pays is 1,100. The first Jelbie of a new game is free.
 enum AdoptionPrice {
-    static let second = 120, third = 180
-    /// Cost of the next Jelbie when `home` are in the room (nil = the room is full).
-    static func next(home: Int) -> Int? {
-        switch home { case ..<1: return 0; case 1: return second; case 2: return third; default: return nil }
+    static let second = 500, third = 800, rareSurcharge = 300
+    /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
+    static func next(home: Int, rare: Bool = false) -> Int? {
+        switch home { case ..<1: return 0; case 1: return second + (rare ? rareSurcharge : 0); case 2: return third + (rare ? rareSurcharge : 0); default: return nil }
     }
 }
 

@@ -95,9 +95,9 @@ final class ShowModelTests: XCTestCase {
     // MARK: payouts and ranks
 
     func testPayoutTable() {
-        let want: [ShowRank: [Int]] = [.puddle: [12, 7, 4, 2], .pond: [15, 9, 5, 3], .lagoon: [18, 11, 7, 4], .ocean: [22, 13, 8, 5]]
+        let want: [ShowRank: [Int]] = [.puddle: [250, 140, 75, 30], .pond: [400, 220, 120, 50], .lagoon: [700, 385, 210, 90], .ocean: [1500, 825, 450, 180]]
         for (r, row) in want { for p in 1...4 { XCTAssertEqual(r.drops(place: p), row[p - 1], "\(r) \(p)") } }
-        XCTAssertEqual(ShowRank.ocean.drops(place: 9), 5, "past 4th pays 4th")
+        XCTAssertEqual(ShowRank.ocean.drops(place: 9), 180, "past 4th pays 4th")
         XCTAssertEqual(ShowRank.allCases.map(\.slots), [2, 3, 4, 6]); XCTAssertEqual(ShowRank.allCases.map(\.promptCount), [16, 20, 24, 28])
         XCTAssertEqual(ShowRank.allCases.map(\.title), ["Puddle", "Pond", "Lagoon", "Ocean"])
         XCTAssertTrue(ShowRank.puddle.kindTiming && ShowRank.pond.kindTiming && !ShowRank.lagoon.kindTiming && !ShowRank.ocean.kindTiming)

@@ -1,7 +1,7 @@
 //
 //  StoreCatalog.swift
 //  The store's goods as DATA: id, name, kind, price in Drops, perk, description. Drops are earned only (races now, more games later), never bought
-//  with money, so there is no purchase code anywhere. Prices: a race pays 12 / 7 / 4, so about two races buy a treat, a week of play a big decor piece.
+//  with money, so there is no purchase code anywhere. Prices: a race pays 250 / 140 / 75, so about two races buy a treat, a week of play a big decor piece.
 //
 //  Kinds: food and treat (hand-held snacks fed from the inventory through the normal toss-into-the-mouth dining), supply (soaps and sprays used in
 //  Clean), trick page (unlocks a voice trick), shoes (a wearable look, no speed effect), decor (part B: placeable room pieces Jellies play with; each
@@ -53,8 +53,8 @@ nonisolated enum StoreTuning {
     /// The beanbag's modest room perk ("Cozy-lite"): while one is placed, attention (love) drains at this fraction. Like every slowing perk the strongest
     /// wins (it does not stack with the Cozy snack's x0.5), and it applies while the game runs, not to the time away.
     static let beanbagAttentionDrain = 0.85
-    /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 12 and a Wave win 22, adoption costs 120 / 180 / 240 and the
-    /// loveseat 120, so a room is a long-term goal: about 15 to 25 race wins.
+    /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 250 and a Wave win 750, adoption costs 500 / 800 (+300 for a rare colour) and the
+    /// loveseat 120, so a room is a long-term goal: about 1 to 2 race wins (the room prices are due a rebalance against the bigger prizes).
     static let roomPrices: [RoomID: Int] = [.loft: 300, .cabin: 400]
 }
 

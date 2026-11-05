@@ -1,7 +1,7 @@
 //
 //  StoreCatalog+Food4.swift
 //  Store sweep 4 (2026-10-27): eight new foods and treats and the new Drinks tab (boba milk tea, berry smoothie, pink lemonade, hot cocoa).
-//  Prices follow the JellyCoins economy (a race pays 12 / 7 / 4): foods 13-18, treats 11-14, drinks 11-14. Every perk is an existing PerkKind.
+//  Prices follow the JellyCoins economy (a race pays 250 / 140 / 75): foods 13-18, treats 11-14, drinks 11-14. Every perk is an existing PerkKind.
 //  The Consumable each one feeds is in Dining/StoreFoods+Food4.swift and Dining/StoreDrinks.swift.
 //
 

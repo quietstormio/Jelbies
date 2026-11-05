@@ -156,7 +156,7 @@ final class StoreTests: XCTestCase {
 
     func testRaceIsAnIncomeAndTheStoreIsASink() {
         let (b, w) = book(0)
-        XCTAssertEqual(RaceTuning.drops(place: 1), 12)
+        XCTAssertEqual(RaceTuning.drops(place: 1), 250)
         w.add(RaceTuning.drops(place: 1) + RaceTuning.drops(place: 2), silent: true)
         XCTAssertEqual(b.buy("cookie"), .bought, "about two races buy a treat")
     }

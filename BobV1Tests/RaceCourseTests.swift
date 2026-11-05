@@ -64,7 +64,7 @@ final class PuddleGoldenTests: XCTestCase {
                 XCTAssertEqual(sim.course.tier, .puddle)
             }
         }
-        XCTAssertEqual(RaceTuning.drops(place: 1), 12); XCTAssertEqual(RaceTuning.drops(place: 2), 7); XCTAssertEqual(RaceTuning.drops(place: 3), 4)
+        XCTAssertEqual(RaceTuning.drops(place: 1), 250); XCTAssertEqual(RaceTuning.drops(place: 2), 140); XCTAssertEqual(RaceTuning.drops(place: 3), 75)
         XCTAssertEqual(RaceCourse.puddle.timeout, RaceTuning.timeout)
         XCTAssertEqual(RaceCourse.puddle.stragglerGrace, 2 * RaceTuning.finishGrace, "the Puddle's straggler window is the pre-course 10 s")
         for t in [CourseTier.ripple, .splash, .wave] { XCTAssertGreaterThan(RaceCourse.course(t).stragglerGrace, 2 * RaceTuning.finishGrace, "\(t): a longer course waits longer for a slow starter") }
@@ -332,12 +332,12 @@ final class CourseModelTests: XCTestCase {
 @MainActor
 final class CourseProgressionTests: XCTestCase {
     func testPrizesRisePerTier() {
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .puddle) }, [12, 7, 4])
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .ripple) }, [15, 9, 5])
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .splash) }, [18, 11, 7])
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .wave) }, [22, 13, 8])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .puddle) }, [250, 140, 75])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .ripple) }, [350, 190, 100])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .splash) }, [500, 275, 150])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .wave) }, [750, 400, 225])
         for p in 1...3 { for t in CourseTier.allCases.dropFirst() { XCTAssertGreaterThan(RaceTuning.drops(place: p, tier: t), RaceTuning.drops(place: p, tier: t.below!)) } }
-        XCTAssertEqual(RaceTuning.drops(place: 7, tier: .wave), 8)
+        XCTAssertEqual(RaceTuning.drops(place: 7, tier: .wave), 225)
         XCTAssertEqual(CourseTier.allCases.map(\.className), ["Starter", "Rookie", "Pro", "Champion"])
         XCTAssertEqual(CourseTier.wave.below, .splash); XCTAssertNil(CourseTier.puddle.below); XCTAssertNil(CourseTier.wave.above)
     }
@@ -397,7 +397,7 @@ final class CourseProgressionTests: XCTestCase {
         f.courseTier = .wave
         run(f)
         XCTAssertEqual(f.progress.record(.puddle).wins, 1, "Wave was locked: the race ran on the Puddle")
-        XCTAssertEqual(w.count, 12, "paid the Puddle's prize")
+        XCTAssertEqual(w.count, 250, "paid the Puddle's prize")
         XCTAssertEqual(f.unlockedNow, .ripple, "and opened the Ripple")
         f.courseTier = .ripple
         run(f)

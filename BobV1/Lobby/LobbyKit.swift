@@ -228,7 +228,7 @@ struct LobbyPill: View {
         HStack(spacing: 5) {
             Text(label).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
             JellyCoinIcon(size: 16)
-            Text("\(amount)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit()
+            Text(amount.coinText).font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8).fixedSize()
         }
         .padding(.horizontal, 10).frame(minHeight: 30)
         .background(Capsule().fill(gold ? theme.accent : theme.tile))

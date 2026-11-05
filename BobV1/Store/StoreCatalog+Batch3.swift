@@ -1,7 +1,7 @@
 //
 //  StoreCatalog+Batch3.swift
 //  The third batch of shop decor (2026-10-24): 7 furniture pieces and 6 toys (Room/DecorKind+Batch3.swift has their prices and symbols; the 8 new wearables are rows in
-//  Wear/WearGenerated.swift and join the shop through `wearItems`). Prices fit the earn-only Drops economy: a race pays 12 / 7 / 4, a Wave win 22.
+//  Wear/WearGenerated.swift and join the shop through `wearItems`). Prices fit the earn-only Drops economy: a race pays 250 / 140 / 75, a Wave win 750.
 //
 
 import Foundation

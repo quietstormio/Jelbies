@@ -257,7 +257,8 @@ struct RacePlacingsCard: View {
             }
             HStack(spacing: 8) {
                 JellyCoinIcon(size: 22)
-                Text("+\(race.ui.earned) JellyCoins")
+                Text("+\(race.ui.earned.coinText) JellyCoins")
+                    .lineLimit(1).minimumScaleFactor(0.8)
                     .playFont(20, .bold)
                     .foregroundStyle(CareMenu.brown)
             }

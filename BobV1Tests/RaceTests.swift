@@ -236,7 +236,7 @@ final class RaceModelTests: XCTestCase {
     }
 
     func testPlacingsAndDropsPayout() {
-        XCTAssertEqual(RaceTuning.drops(place: 1), 12); XCTAssertEqual(RaceTuning.drops(place: 2), 7); XCTAssertEqual(RaceTuning.drops(place: 3), 4)
+        XCTAssertEqual(RaceTuning.drops(place: 1), 250); XCTAssertEqual(RaceTuning.drops(place: 2), 140); XCTAssertEqual(RaceTuning.drops(place: 3), 75)
         XCTAssertGreaterThan(RaceTuning.drops(place: 1), RaceTuning.drops(place: 2)); XCTAssertGreaterThan(RaceTuning.drops(place: 2), RaceTuning.drops(place: 3))
         // a quick Jelly against slow rivals wins; the Drops land in the wallet once
         let w = DropsWallet(persists: false)
@@ -723,7 +723,7 @@ final class RaceTripTests: XCTestCase {
         room.run(40, until: { care.race.hasResults })
         XCTAssertTrue(care.race.hasResults)
         XCTAssertEqual(care.race.sim?.playerPlace, 1, "the quick player won")
-        XCTAssertEqual(care.bath.wallet.count - dropsBefore, 12, "1st pays 12 Drops")
+        XCTAssertEqual(care.bath.wallet.count - dropsBefore, 250, "1st pays 250 Drops")
         XCTAssertGreaterThan(care.jelly(1)!.stats.waddle, waddleBefore, "the race made him a little quicker")
         XCTAssertEqual(care.jelly(1)!.stats.races, 1)
         // card, then home under the white

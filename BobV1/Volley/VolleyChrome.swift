@@ -376,7 +376,7 @@ struct VolleyResultsCard: View {
                 Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
                 HStack(spacing: 8) {
                     JellyCoinIcon(size: 22)
-                    Text("+\(volley.earned) JellyCoins").playFont(20, .bold).foregroundStyle(CareMenu.brown)
+                    Text("+\(volley.earned.coinText) JellyCoins").lineLimit(1).minimumScaleFactor(0.8).playFont(20, .bold).foregroundStyle(CareMenu.brown)
                 }
                 if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
                 if !volley.awards.isEmpty {

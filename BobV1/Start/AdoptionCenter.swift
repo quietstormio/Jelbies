@@ -69,7 +69,7 @@ struct AdoptionCenter: View {
         if mode == .more, JellyRoster.savedIDs().contains(character) { return }          // an owned Jelbie keeps his own (saved) colour
         JellyVariants.setPreview(character, offer(mode: mode, character: character))
     }
-    private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count) }
+    private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: variant?.rare == true) }
     private var isHome: Bool { home.contains(pick) }
     private var canAdopt: Bool { !isHome && (price.map { $0 <= wallet.count } ?? false) }
 
@@ -418,7 +418,7 @@ struct AdoptionCenter: View {
         else if let p = price {
             if mode == .first { Text("Choose \(info.name)") }
             else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
-            else { HStack(spacing: 8) { Text("Adopt for"); JellyCoinIcon(size: 28); Text("\(p)") } }
+            else { HStack(spacing: 8) { Text("Adopt for"); JellyCoinIcon(size: 28); Text(p.coinText) } }
         } else { Text("Your room is full: 3 Jelbies") }
     }
 
