@@ -28,6 +28,8 @@ enum Friends2Tuning {
     static let ringHop: Float = .pi / 8          // (22.5 degrees: the chord of a hop pulls the pair only 1.9% closer in the air - a 36 degree hop 4.9% = 4 cm into each other)
     /// ringAround: the diameter is the face-to-face touch + this (m); the chord of a hop is the rest.
     static let ringFaceMargin: Float = 0.012
+    /// ringAround: turns of the dance (16 hops of 22.5 degrees ~ the old 15 hops of 36 degrees in length).
+    static let ringTurns: Float = 1.0
     static let tagRounds = 3
 }
 
@@ -522,7 +524,7 @@ extension BlobBrain {
     private func driveRing(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if s.phase < 2 { socialBook.ringSpread = false; if openFaceToFace(s, o, isA, settle: 0.5) { return } }
         let t = s.phaseT
-        let steps = Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded())          // (1.5 turns)
+        let steps = Int((Friends2Tuning.ringTurns * 2 * Float.pi / Friends2Tuning.ringHop).rounded())          // (one turn of 22.5 degree hops = 16 hops: the old 1.5 turns of 36 degrees were 15)
         switch s.phase {
         case 2:
             if isA, !s.ready, scriptIsNone, o.scriptIsNone, !feet.active, !o.feet.active, s.phaseT > 0.3 {          // the circle: centre between us, radius half the distance - drawn once BOTH STAND (not while they are still walking in)

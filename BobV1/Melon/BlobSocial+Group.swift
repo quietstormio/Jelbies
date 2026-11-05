@@ -128,7 +128,11 @@ extension BlobBrain {
         for (k, i) in order.enumerated() { ang[members[i].steerID] = base + 2 * .pi * Float(k) / Float(n) }
         // (a packed ring is sized for the POSTURE the huddle stands in - everybody facing the middle - not for the widest compass touch of the bodies as they stand now)
         var r = max(chord / (2 * sinf(.pi / Float(n))), peerGap * 0.4)
-        if packed, let t = ringFacingTouch(members, ang: ang) { r = max(peerGap * 0.4, (t + GroupTuning.ringReady) / (2 * sinf(.pi / Float(n)))) }
+        if packed {
+            // (no skin pass yet - a rig that never skins, the Lab: the documented huddle chord, GroupTuning.touch of the usual gap; not the 1.445 compass fallback of `ringChord`, which is a profile-less worst case)
+            let c = ringFacingTouch(members, ang: ang).map { $0 + GroupTuning.ringReady } ?? peerGap * GroupTuning.touch
+            r = max(peerGap * 0.4, c / (2 * sinf(.pi / Float(n))))
+        }
         let wasPass = socialBook.passThrough
         socialBook.passThrough = true          // (the floor rules only: the members' own bodies are not obstacles for their places)
         defer { socialBook.passThrough = wasPass }
@@ -256,7 +260,7 @@ extension BlobBrain {
                 s.ready = true
                 if let t = ringFacingTouch(mem, ang: s.slotAng) {
                     let r2 = (t + GroupTuning.ringReady) / (2 * sinf(.pi / Float(mem.count)))
-                    if r2 < s.ringR - 0.02 {
+                                if r2 < s.ringR - 0.02 {
                         s.ringR = r2
                         for m in mem { if let a = s.slotAng[m.steerID] { s.slotSpot[m.steerID] = s.home0 + SIMD2(sinf(a), cosf(a)) * r2 } }
                     } else { for m in mem { m.socialBook.slotRefined = true } }

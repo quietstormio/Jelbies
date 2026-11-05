@@ -54,7 +54,7 @@ final class PeakDriveTests: XCTestCase {
         let touch: Float = 0.80
         let dip = (touch + Friends2Tuning.ringFaceMargin) * (1 - cosf(Friends2Tuning.ringHop / 2))
         XCTAssertLessThan(dip, 0.02)
-        XCTAssertEqual(Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 24, "1.5 turns of 22.5 degree hops")
+        XCTAssertEqual(Int((Friends2Tuning.ringTurns * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 16, "one turn of 22.5 degree hops (the dance keeps its old length)")
     }
 
     /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak) may open the gap by a wind-up only 1.5 cm; the squabble keeps the 4.5 cm.
