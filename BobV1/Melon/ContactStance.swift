@@ -91,14 +91,14 @@ struct ContactStance: Sendable {
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
-        .nuzzle: .holding(from: 1, facing: .camera),
+        .nuzzle: .holding(from: 2, facing: .camera),
         .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
         .cheekSquish: .holding(from: 1, facing: .camera, sound: .squish, volume: 0.7),          // (one continuous press: the second squish is a lean + squash, not a back-off and a second touch)
         .backToBack: .holding(from: 3, facing: .camera, features: true),
-        .cuddleLean: .holding(from: 1, facing: .camera, sound: .squish, volume: 0.5),
+        .cuddleLean: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 1, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
