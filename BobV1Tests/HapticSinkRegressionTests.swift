@@ -6,8 +6,8 @@ import XCTest
 @MainActor
 final class HapticSinkRegressionTests: XCTestCase {
     var saved: Any?
-    override func setUp() { saved = UserDefaults.standard.object(forKey: HapticSettings.key) }
-    override func tearDown() { if let v = saved { UserDefaults.standard.set(v, forKey: HapticSettings.key) } else { UserDefaults.standard.removeObject(forKey: HapticSettings.key) } }
+    override func setUp() { super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; saved = UserDefaults.standard.object(forKey: HapticSettings.key) }
+    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; if let v = saved { UserDefaults.standard.set(v, forKey: HapticSettings.key) } else { UserDefaults.standard.removeObject(forKey: HapticSettings.key) } }
 
     func testTouchAndCuddleHapticsReachTheSink() {
         UserDefaults.standard.removeObject(forKey: HapticSettings.key)          // a fresh / old save: the key was never written

@@ -1316,10 +1316,12 @@ final class MelonController: NSObject, MTKViewDelegate {
             let el = now - dbgStart
             let f = Double(dbgFrames)
             let g = renderer.takeGPUStats()
+            let picks = actors.reduce(0) { $0 + ($1.brain?.pickCount ?? 0) }, pickTimeouts = actors.reduce(0) { $0 + ($1.brain?.pickTimeoutCount ?? 0) }
             lastCPUMs = (dbgCPU - dbgWait) / f * 1000
-            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms",
+            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms | picks %d, timed out %d",
                          (dbgCPU - dbgWait) / f * 1000, dbgWait / f * 1000, g.avgMs, dbgSim / f * 1000,
-                         dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000))
+                         dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000, picks, pickTimeouts))
+            for a in actors { a.brain?.pickCount = 0; a.brain?.pickTimeoutCount = 0 }
             NSLog("%@", String(format: "[melon] env: thermal %@, lowPower %@, drawable %dx%d @ %.2fx (native %.0fx), fps pref %d (display max %d, measured %.1f), focus %@, adaptive %@ (%d changes), gpu mem %.1f MB, target rebuilds %d | gfx: %@%@",
                                Self.thermalName(ProcessInfo.processInfo.thermalState), ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off",
                                Int(view.drawableSize.width), Int(view.drawableSize.height), Double(stage.contentScaleFactor), Double(stage.window?.screen.scale ?? 0),
