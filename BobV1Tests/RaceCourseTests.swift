@@ -28,6 +28,7 @@ final class PuddleGoldenTests: XCTestCase {
     static func race(seed: UInt64, player: RacerStats = RacerStats(waddle: 0.5, focus: 0.5), taps: Float = 4, course: RaceCourse? = nil, rivals rs: [Rival]? = nil) -> (sim: RaceSim, parts: [String]) {
         let rivals = rs ?? LocalRivalSource().rivals(count: 2, player: player, playerTint: JellyRoster.tint(0), seed: seed)
         var sim = course.map { RaceSim(player: player, playerName: "P", rivals: rivals, seed: seed, course: $0) } ?? RaceSim(player: player, playerName: "P", rivals: rivals, seed: seed)
+        sim.autoJumpPlayer = true          // (the player takes the bars like a rival with his plan: these races measure training, taps and corners, not the Jump button; a never-jumping player trips on every bar by design, RaceFeetTests)
         var parts: [String] = []
         var tapT: Float = 0, foot = 0, tick = 0
         let dt: Float = 1 / 60
@@ -209,8 +210,8 @@ final class CourseModelTests: XCTestCase {
     /// placed from where he stands after the plain 10 s, as on the Puddle.
     func testATappingStragglerFinishesAndAStoppedOneIsPlacedAfterTenSeconds() {
         let fast = [Rival(name: "A", tint: .one, stats: RacerStats(waddle: 1, focus: 1)), Rival(name: "B", tint: .one, stats: RacerStats(waddle: 1, focus: 1))]
-        let slow = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 3, course: .wave, rivals: fast).sim
-        XCTAssertNotNil(slow.player.finishTime, "a slow tapping starter crosses the line")
+        let slowRun = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 3, course: .wave, rivals: fast), slow = slowRun.sim
+        XCTAssertNotNil(slow.player.finishTime, "a slow tapping starter crosses the line (clock \(slow.clock), dist \(slow.player.dist)/\(slow.course.length), trips \(slow.player.tap.trips), hurdles hit \(slow.player.hurdlesHit) cleared \(slow.player.hurdlesCleared), firstFinish \(slow.firstFinishAt.map { "\($0)" } ?? "nil"), grace \(slow.course.stragglerGrace), timeout \(slow.course.timeout)); last events \(slowRun.parts.filter { !$0.contains("racer: 1") && !$0.contains("racer: 2") }.suffix(25))")
         XCTAssertEqual(slow.phase, .results)
         // stops tapping at GO: the race is called 2 x finishGrace after the first finisher, not stragglerGrace later
         let stopped = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 0.0001, course: .wave, rivals: fast).sim
