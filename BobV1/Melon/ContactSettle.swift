@@ -97,6 +97,18 @@ extension BlobBrain {
         }
         let airborne = gaitAir || flapHop.active || airBothFeet
         if airborne {
+            // THE WARP IS BOUNDED (r4-park-fix): the urgent settle pushes a hopping body out of a neighbour's skin 5 cm a step, and the hop's own landing spot moves with it (`gait.nudge`), so in a ring hop (the
+            // bodies cross side on, gaps -30 ... -110 cm) the push never ends: on the park's open floor a member was carried 4 m out of the ring (the room's walls hid it). A scripted ring / circle hop
+            // (`startHopTo` records its segment) may be warped at most `hopWarpMax` off its own line; a push that would carry it farther is dropped (the lean / shuffle take the rest).
+            if let seg = socialBook.hopSeg, let s = social, s.t - seg.t < 1.6, s.t >= seg.t - 0.001 {
+                func off(_ p: SIMD2<Float>) -> Float {
+                    let e = seg.to - seg.from, L2 = simd_length_squared(e)
+                    let u = L2 > 1e-6 ? max(0, min(1, simd_dot(p - seg.from, e) / L2)) : 0
+                    return simd_distance(p, seg.from + e * u)
+                }
+                let here = off(position), there = off(position + d)
+                if there > ContactTuning.hopWarpMax, there > here { if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air|capped" } }; return }
+            }
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air" } }
             px += d.x; pz += d.y
             stepRoot0 += d

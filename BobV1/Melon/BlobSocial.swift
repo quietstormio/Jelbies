@@ -140,6 +140,8 @@ struct SocialBook {
     var contactPrev: [Int: Float] = [:]
     var settleEMA: [Int: Float] = [:]          // per other body: the slow average of the gap (ContactSettle's fine trim)
     var settleGap: [Int: Float] = [:]          // per other body: the error ContactSettle measured last
+    /// The segment of the scripted ring / circle hop in flight (`startHopTo`: from, aimed landing spot, session clock at the start): the settle's rigid warp of an airborne body may not carry it farther than `ContactTuning.hopWarpMax` from it (r4-park-fix).
+    var hopSeg: (from: SIMD2<Float>, to: SIMD2<Float>, t: Float)?
     var leanTrim: Float = 0, trimPartner = -1, shuffleReq = 0          // the settle's output for a planted body: lean toward the partner (rad), and a request for one shuffle step
     var shiftPending = SIMD2<Float>.zero          // the settle's root nudges not yet applied to the sim body (ContactSettle.swift)
     var contactAwayT: [Int: Float] = [:]          // per other body: seconds the skins have been > 3 cm apart (the re-arm of the touch sound)
