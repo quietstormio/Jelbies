@@ -121,6 +121,21 @@ final class LineupTests: XCTestCase {
 
     // MARK: the group meal
 
+    /// The tray is never offered where a side diner cannot reach his place. Before: with the tray at x +-0.2 (z 1.6...2.0) the far side stand (x +-1.31) lies outside the
+    /// walkable width (the floor rules move it to +-1.0), the side diner stopped 0.5 short and the line-up never finished (done=false, 14 s) in 6 of the 14 spots.
+    func testTrayNeverOffersAnUnreachableSidePlace() {
+        _ = rig(count: 3)
+        var offered: [SIMD2<Float>] = []
+        DiningSpot.pickOpen = { offered = $0; return $0.first }
+        _ = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: 3))
+        XCTAssertFalse(offered.isEmpty, "some spot is offered")
+        for o in offered { for p in DiningLayout.make(n: 3).places { XCTAssertTrue(DiningSpot.placeReachable(o + p.rel), "tray \(o): the place at \(o + p.rel) is reachable") } }
+        XCTAssertFalse(DiningSpot.placeReachable(SIMD2(1.31, 0.76)), "a stand beyond the walkable width is not a place")
+        XCTAssertFalse(DiningSpot.placeReachable(SIMD2(-1.31, 0.76)))
+        XCTAssertTrue(DiningSpot.placeReachable(SIMD2(1.11, 0.76)), "the centre column's side stand is")
+        XCTAssertTrue(DiningSpot.placeReachable(SIMD2(-1.11, 0.76)))
+    }
+
     private func mealCheck(_ name: String, starts: [SIMD2<Float>]) {
         let r = rig(clearTray: false)
         for (i, s) in starts.enumerated() { r.place(i, at: s) }
