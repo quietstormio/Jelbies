@@ -23,9 +23,13 @@ enum ContactTuning {
     static let leanPerMetre: Float = 3.2          // rad per metre to close (measured 2026-11-04: a lean of 1 rad moves the skin contact ~ 0.22 m)
     nonisolated(unsafe) static var finalStepRate: Float = Float(ProcessInfo.processInfo.environment["FINAL_STEP_RATE"] ?? "") ?? 0.6          // the last stride of a stance walk runs at this share of the normal step rate (brakes into the touch)
     /// The per-tick blend of the live touch distance into the stable one: the outline swings +-8 cm over a stride (arms, legs), so the destination follows its average over about a stride (~0.8 s), not a sample.
-    nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.5
+    nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.7
     /// The destination of a stance walk is locked this close to it (m): late enough that the averaged touch distance has settled, early enough that the last two steps are planned on a fixed spot.
     nonisolated(unsafe) static var lockDistance: Float = Float(ProcessInfo.processInfo.environment["LOCK_DIST"] ?? "") ?? 0.45
+    nonisolated(unsafe) static var armCalmDistance: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM_DIST"] ?? "") ?? 1.0
+    nonisolated(unsafe) static var armCalmSweep: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM"] ?? "") ?? 0.2
+    /// A stance walk's steps within this distance (m) of the decided spot are planned without the partner wall (the last two strides).
+    nonisolated(unsafe) static var wallExemptDistance: Float = Float(ProcessInfo.processInfo.environment["WALL_EXEMPT"] ?? "") ?? 0.35
     static let rearmHold: Float = 0          // seconds apart before the next touch counts
     static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round

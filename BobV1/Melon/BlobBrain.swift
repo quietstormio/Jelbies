@@ -350,6 +350,7 @@ final class BlobBrain {
     var stepYaw0: Float = 0, stepYawD: Float = 0
     /// Set only around the planning call of a stance walk's final step: `contactPartnerIDs` then tells the room's peer wall to skip the session partner (encoded as -(id+1)).
     var stanceStepFree = false
+    var armCalm: Float = 1          // 1 = the walk's full arm swing; less while a stance walker closes the last metre
     var walkFinal = false            // the step in progress squares his feet and ends the walk
     var pivotSide: Int?              // pivot the pose on this foot (wave: its planted spot; gait: its nominal spot under the root)
     var pivotNominal = false
@@ -1280,7 +1281,7 @@ final class BlobBrain {
         let cand = root + rootD
         // THE FINAL STEP OF A STANCE WALK lands on the spot the stance decided (the touch distance for the posture the pair ENDS in). The room's peer wall measures the partner at the walker's CURRENT, mid-turn
         // outline (80 deg off the final yaw: 10 cm wider than the pose he lands in) and used to cut the step 9 cm short, which the lean then closed (stop-turn-lean). So this one planning call does not see the partner.
-        stanceStepFree = exact && walkFinal
+        stanceStepFree = exact && (walkFinal || D < ContactTuning.wallExemptDistance)
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
@@ -2117,7 +2118,11 @@ final class BlobBrain {
         prepareArms(skinner)
         let ph = stridePhase
         armGaitW = ArmPath.armShiftStep(shiftW: armGaitW, target: gaitW, phase: ph, dt: dt)
-        let sweep: Float = (armWalkWant >= 1 ? 1 : 0.5) * (1 + Self.runArmGain * runW)
+        // A stance walker's arms quiet down for the last metre (the swing reaches 7 cm toward the partner every stride: it read as the skin sinking -6 cm and made the touch distance a moving target)
+        var calmGoal: Float = 1
+        if social != nil, ContactTouchMemory.exact.contains(steerID), case .walk(let wt, _) = script, simd_distance(position, wt) < ContactTuning.armCalmDistance { calmGoal = ContactTuning.armCalmSweep }
+        armCalm += max(-dt / 0.3, min(dt / 0.3, calmGoal - armCalm))
+        let sweep: Float = (armWalkWant >= 1 ? 1 : 0.5) * (1 + Self.runArmGain * runW) * armCalm
         if armScratch[0].count != ArmCapsule.vertexCount {
             armScratch = [[SIMD3<Float>](repeating: .zero, count: ArmCapsule.vertexCount), [SIMD3<Float>](repeating: .zero, count: ArmCapsule.vertexCount)]
             armStartScratch = armScratch

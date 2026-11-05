@@ -1,0 +1,62 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration Release ENABLE_TESTABILITY=YES -destination id=B6446724-BA17-4946-9672-7EB21951E6E9 -derivedDataPath /Users/dmarshall94/Desktop/BobV1/.claude/worktrees/dd_r4-arrivalA-r2 -parallel-testing-enabled NO "-only-testing:BobV1Tests/ContactPolishTests/testPairs1_BobTeddy"
+
+Build settings from command line:
+    ENABLE_TESTABILITY = YES
+
+2026-11-04 22:18:40.184 xcodebuild[62506:14890623] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+2026-11-04 22:18:45.287089-0500 BobV1[62645:14891602] [melon] launch: app init at +0.000 s
+2026-11-04 22:18:45.422306-0500 BobV1[62645:14892581] [AudioConverter]     AudioConverterOOP.cpp:1156  Failed to prepare AudioConverterService: -304
+2026-11-04 22:18:45.491853-0500 BobV1[62645:14891602] [plugin] AddInstanceForFactory: No factory registered for id <CFUUID 0x108dec700> F8BB1C28-BAE8-11D6-9C31-00039315CD46
+2026-11-04 22:18:45.506601-0500 BobV1[62645:14891602] [AVAudioSession Hang Risk]     AVAudioSession_iOS.mm:978   __delegate_identifier__:Performance Diagnostics__:::____message__:This method can lead to UI unresponsiveness if called on the main thread. Consider using the asynchronous activate/deactivate API instead for calls from the main thread.
+2026-11-04 22:18:45.604361-0500 BobV1[62645:14892715] [player] <<<< FigFilePlayer >>>> signalled err=-12843 at <>:22740
+2026-11-04 22:18:45.620484-0500 BobV1[62645:14892715] [] (Fig) signalled err=-12900 at <>:1250
+2026-11-04 22:18:45.620574-0500 BobV1[62645:14892715] [] (Fig) signalled err=-12900 at <>:1250
+2026-11-04 22:18:45.625955-0500 BobV1[62645:14891602] [melon] launch: intro: clip ready at +0.345 s
+Test Suite 'Selected tests' started at 2026-11-04 22:18:45.631.
+Test Suite 'BobV1Tests.xctest' started at 2026-11-04 22:18:45.632.
+Test Suite 'ContactPolishTests' started at 2026-11-04 22:18:45.632.
+Test Case '-[BobV1Tests.ContactPolishTests testPairs1_BobTeddy]' started.
+2026-11-04 22:18:47.252170-0500 BobV1[62645:14891602] [melon] arm path 'wave' precompute: 659 ms (33 keyframes)
+2026-11-04 22:18:47.938680-0500 BobV1[62645:14891602] [melon] arm path 'nubToMouth' precompute: 686 ms (33 keyframes)
+CONTACT boop	Bob+Teddy	touching	yes	4.1	-1.8	2.4	Bob-Teddy	boop/ph0/idle -	-0.4	19	34	2	1,1	0	2,2	0	-1.1..0.3	4	-	-	-	-	1.7	squishx2 stepx14	event:boopx4	-1.1	2.4	-1.1	1	-0.3	32	26	-1.1,-0.3	-1.8	81.2	16.2	minGap -1.8; arrival -1.1; touch at -1.1..-0.3
+CONTACT nuzzle	Bob+Teddy	touching	yes	6.7	-6.6	2.0	Bob-Teddy	nuzzle/ph0/idle -	-0.5	104	129	1	1	0	2	0	-1.4..-1.4	2	-	-	-	-	5.5	squishx1 stepx9	event:boopx2	-1.0	2.4	-1.0	1	-0.5	104	104	-5.5	-6.6	82.8	15.6	minGap -6.6
+CONTACT hum	Bob+Teddy	touching	yes	6.1	-0.8	2.3	Bob-Teddy	hum/ph0/idle -	-0.4	97	106	2	1,1	0	2,2	0	-0.8..0.3	4	-	-	-	-	0.8	squishx2 stepx14	event:boopx4	1.2	2.4	1.2	1	-0.4	96	96	-0.8,-0.4	-	-	-	pass
+CONTACT cheekSquish	Bob+Teddy	touching	yes	5.7	-6.6	2.0	Bob-Teddy	cheekSquish/ph0/idle -	-0.4	72	99	1	1	0	2	0	-1.4..-1.4	2	-	-	-	-	5.5	squishx1 stepx9	event:boopx2	-1.0	2.4	-1.0	1	-0.4	75	70	-5.5	-6.6	82.8	15.6	minGap -6.6
+CONTACT noseBoop	Bob+Teddy	touching	yes	6.8	-1.1	6.7	Bob-Teddy	-/ph-1/idle -	-0.4	87	119	2	1,1	0	2,2	0	-0.8..-0.1	4	-	-	-	-	0.8	boopx1 squishx1 stepx14	event:boopx4	1.2	2.4	1.2	1	-0.4	112	99	-0.8,-0.1	-1.1	71.0	15.6	minGap -1.1
+CONTACT swayHug	Bob+Teddy	touching	yes	7.1	-6.6	2.0	Bob-Teddy	swayHug/ph0/idle -	-0.5	117	141	1	1	0	2	0	-1.4..-1.4	2	-	-	-	-	5.5	squishx1 stepx9	event:boopx2	-1.0	2.4	-1.0	1	-0.5	117	114	-5.5	-6.6	82.7	15.6	minGap -6.6
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:497: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.0177657") is less than ("-0.01") - boop [Bob+Teddy]: the skins overlap by 1.8 cm at 2.3666666 s (Bob-Teddy, boop/ph0/idle -)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:501: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.010924697") is less than ("-0.01") - boop [Bob+Teddy]: arrives 1.1 cm sunk in (want <= 1)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:502: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertTrue failed - boop [Bob+Teddy]: a momentary touch fired at -1.1 cm (want -1 ... +0.5)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:497: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.06559336") is less than ("-0.01") - nuzzle [Bob+Teddy]: the skins overlap by 6.6 cm at 1.9666667 s (Bob-Teddy, nuzzle/ph0/idle -)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:497: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.06559217") is less than ("-0.01") - cheekSquish [Bob+Teddy]: the skins overlap by 6.6 cm at 1.9666667 s (Bob-Teddy, cheekSquish/ph0/idle -)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:497: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.011321187") is less than ("-0.01") - noseBoop [Bob+Teddy]: the skins overlap by 1.1 cm at 6.733333 s (Bob-Teddy, -/ph-1/idle -)
+/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/r4-arrivalA-r2/BobV1Tests/ContactPolishTests.swift:497: error: -[BobV1Tests.ContactPolishTests testPairs1_BobTeddy] : XCTAssertGreaterThanOrEqual failed: ("-0.065640986") is less than ("-0.01") - swayHug [Bob+Teddy]: the skins overlap by 6.6 cm at 1.9666667 s (Bob-Teddy, swayHug/ph0/idle -)
+Test Case '-[BobV1Tests.ContactPolishTests testPairs1_BobTeddy]' failed (40.472 seconds).
+Test Suite 'ContactPolishTests' failed at 2026-11-04 22:19:26.105.
+	 Executed 1 test, with 7 failures (0 unexpected) in 40.472 (40.473) seconds
+Test Suite 'BobV1Tests.xctest' failed at 2026-11-04 22:19:26.106.
+	 Executed 1 test, with 7 failures (0 unexpected) in 40.472 (40.474) seconds
+Test Suite 'Selected tests' failed at 2026-11-04 22:19:26.106.
+	 Executed 1 test, with 7 failures (0 unexpected) in 40.472 (40.474) seconds
+2026-11-04 22:19:26.106771-0500 BobV1[62645:14891602] [melon] launch: intro: clip shown at +40.826 s
+2026-11-04 22:19:26.108028-0500 BobV1[62645:14891602] [melon] launch: intro: clip end at +40.828 s
+2026-11-04 22:19:35.090 xcodebuild[62506:14890623] [MT] IDETestOperationsObserverDebug: 54.857 elapsed -- Testing started completed.
+2026-11-04 22:19:35.090 xcodebuild[62506:14890623] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-11-04 22:19:35.090 xcodebuild[62506:14890623] [MT] IDETestOperationsObserverDebug: 54.858 sec, +54.857 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/dmarshall94/Desktop/BobV1/.claude/worktrees/dd_r4-arrivalA-r2/Logs/Test/Test-BobV1-2026.11.04_22-18-40--0500.xcresult
+
+Failing tests:
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+	ContactPolishTests.testPairs1_BobTeddy()
+
+** TEST EXECUTE FAILED **
+
+Testing started

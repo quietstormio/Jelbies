@@ -349,4 +349,44 @@ final class ContactSettleTests: XCTestCase {
             if st.cls == .touching { XCTAssertFalse(st.steps.isEmpty, "\(k): a touching row needs steps") }
         }
     }
+
+    /// The final step of a stance walk is planned with the session partner exempt from the room's peer wall (the wall measures him at the walker's mid-turn outline and cut the step 9 cm short):
+    /// `contactPartnerIDs()` carries -(id+1) only while `stanceStepFree`, and `keepApart` then leaves the position alone.
+    func testStanceFinalStepIsNotCutByThePartnerWall() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.none, .none], seed: 5)
+        d.place([SIMD2(0, -0.1), SIMD2(0, 1.3)])
+        d.live = true
+        for _ in 0..<10 { d.tick() }
+        let a = d.lab.rigs[0].brain, b = d.lab.rigs[1].brain
+        XCTAssertTrue(a.socialStart(.nuzzle, with: b, d.lab.rigs[0].sim))
+        for _ in 0..<5 { d.tick() }
+        XCTAssertTrue(a.contactPartnerIDs().contains(b.steerID))
+        XCTAssertFalse(a.contactPartnerIDs().contains(-(b.steerID + 1)), "the wall is on for ordinary steps")
+        a.stanceStepFree = true
+        XCTAssertTrue(a.contactPartnerIDs().contains(-(b.steerID + 1)), "and off for the final step")
+        a.stanceStepFree = false
+        let r0 = ContactField.root(0)
+        let peers: [(pos: SIMD2<Float>, walking: Bool)] = [(r0, false), (ContactField.root(1), false)]
+        let p = SIMD3<Float>(r0.x, 0, r0.y + 0.4)          // (well inside the skins)
+        let walled = MelonController.keepApart(p, id: 1, peers: peers, gap: 1.0, partners: [0])
+        let free = MelonController.keepApart(p, id: 1, peers: peers, gap: 1.0, partners: [0, -1])
+        XCTAssertGreaterThan(simd_distance(SIMD2(walled.x, walled.z), r0), 0.5, "the wall pushes a body inside the skin out")
+        XCTAssertEqual(free.z, p.z, accuracy: 1e-5, "the exempt partner is not seen")
+    }
+
+    /// A side-by-side stance walk (nuzzle) lands its last step at the touch: the gap at the end of the walk-up phase is within [-1.5, +2] cm (it used to plant 9 cm short and lean the rest).
+    func testNuzzleWalkUpArrivesAtTheTouch() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: 31)
+        d.live = true
+        for _ in 0..<3 { d.tick() }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        XCTAssertTrue(a.brain.socialStart(.nuzzle, with: b.brain, a.sim))
+        var arrival: Float?
+        for _ in 0..<(60 * 12) {
+            d.tick()
+            if (a.brain.social?.phase ?? 0) >= 1, arrival == nil, !a.brain.feet.active, let g = ContactField.gap(0, 1) { arrival = g }
+        }
+        guard let g = arrival else { return XCTFail("the walk-up ends") }
+        XCTAssertLessThan(g, 0.02, "no gap on arrival"); XCTAssertGreaterThan(g, -0.015, "and never inside him")
+    }
 }

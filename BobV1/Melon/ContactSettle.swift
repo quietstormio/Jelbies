@@ -156,13 +156,18 @@ extension BlobBrain {
         guard let s = social, let raw = (ContactStance.entry(s.kind).flatMap { touchRadiusFacing(p, along: u, $0.facing) } ?? touchRadius(p, along: u)) else { return nil }
         let key = steerID &* 4096 &+ p.steerID
         let sid = ObjectIdentifier(s)
+        let sideBySide = ContactStance.entry(s.kind)?.facing == .camera
         func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
         var e = ContactTouchMemory.store[key]
         if let x = e, x.session != sid || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 || s.t + 0.001 < x.clock { e = nil }
         if var x = e {
             if !x.frozen {
                 if planted(self), planted(p), simd_distance(position, p.position) < 1.9 { x.d = raw; x.frozen = true }          // (standing AND close: a pair planted at the start of the session, 3 m apart, has not arrived yet)
-                else if !feet.active { x.d = max(0.55, min(1.6, x.d + max(-0.05, min(0.05, (raw - x.d) * ContactTuning.stableTouchAlpha)))) }          // (sampled only BETWEEN steps - double support: the outline swings +-8 cm over a stride, a sample at a fixed gait phase does not)          // (the live value, low-passed: side-on the pair touches at ~1.4 m, facing each other at ~0.75 m - the first sample is not the stance's)
+                else if sideBySide ? !feet.active : true {
+                    // side by side the outline across the walker's travel swings +-8 cm with the arms over a stride: sampled between steps only (double support, one gait phase), at once. Face to face the front reach does not swing: the live value, low-passed.
+                    let a: Float = sideBySide ? ContactTuning.stableTouchAlpha : 0.12, cl: Float = sideBySide ? 0.4 : 0.03
+                    x.d = max(0.55, min(1.6, x.d + max(-cl, min(cl, (raw - x.d) * a))))
+                }          // (sampled only BETWEEN steps - double support: the outline swings +-8 cm over a stride, a sample at a fixed gait phase does not)          // (the live value, low-passed: side-on the pair touches at ~1.4 m, facing each other at ~0.75 m - the first sample is not the stance's)
             }
             x.clock = s.t
             ContactTouchMemory.store[key] = x
@@ -248,7 +253,7 @@ extension BlobBrain {
                 }
             }
         }
-        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ContactTuning.lockDistance, ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
+        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ((social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera) ? ContactTuning.lockDistance : 0.8), ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
             ContactTouchMemory.locked[steerID] = (t, p.position)
         }
         if ContactTrace.on, socialBook.shuffleReq != 0 {
