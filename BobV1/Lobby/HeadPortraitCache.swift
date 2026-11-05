@@ -57,7 +57,7 @@ final class HeadPortraitCache {
             let t0 = CACurrentMediaTime(), budget = 6.0
             var drawn = 0
             outer: for j in care.jellies.prefix(3) {
-                for pose in [nil, 1] as [Int?] {
+                for pose in [nil, 0] as [Int?] {
                     try? await Task.sleep(nanoseconds: 120_000_000)                 // let the run loop serve whatever the player just did
                     if Task.isCancelled || CACurrentMediaTime() - t0 > budget { break outer }
                     let key = HeadPortraitKey(jelly: j.id, colour: nil, wear: nil, pose: pose)

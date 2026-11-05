@@ -1378,9 +1378,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         // a lobby avatar is the same picture at any hour, in any mood and after any romp: noon light, no sleep tuck, a clean body (no dirt / lint / shine, mouth shut) and the plain rest face
         let liveHour = renderer.dayHourOverride, liveTuck = renderer.tuckAmount
         var restoreBody: () -> Void = {}
+        var restoreArms: () -> Void = {}          // the action shot's posed arms, put back
         if hp != nil { renderer.cutout = true; renderer.dayHourOverride = 12; renderer.tuckAmount = 0; restoreBody = renderer.neutralBody(id) }
         defer {
-            if hp != nil { renderer.cutout = model.cutout; renderer.dayHourOverride = liveHour; renderer.tuckAmount = liveTuck; restoreBody() }
+            if hp != nil { renderer.cutout = model.cutout; renderer.dayHourOverride = liveHour; renderer.tuckAmount = liveTuck; restoreBody(); restoreArms() }
             if visitorPalette != nil { renderer.setRacePalette(care.racePalette(for: id), own: a.appearance, body: id) }
             care.store.fitting = nil
             room.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); room.setShoes(RoomMesh())
@@ -1393,6 +1394,12 @@ final class MelonController: NSObject, MTKViewDelegate {
         room.raceVisible = false
         renderer.showVisible = false
         room.showVisible = false
+        if let pi = hp?.pose, let b = a.brain {          // the Studio's action shot: his arms posed (SnapshotPose.swift), put back after the draw
+            let saved = b.saveArmState(a.skinner)
+            restoreArms = { b.restoreArmState(saved, a.skinner) }
+            let posed = b.poseArmsForSnapshot(SnapshotArmPose.pose(pi), sim: a.sim, skinner: a.skinner)
+            NSLog("[portrait] action pose %d arms %@", pi, posed ? "posed" : "NOT posed")
+        }
         if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
@@ -1427,7 +1434,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let c = pose.centroid
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
-        let yaw: Float = hp?.pose.map { [-0.55, 0, 0.55][min(max($0, 0), 2)] } ?? (hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5))
+        let yaw: Float = hp?.pose.map { SnapshotArmPose.pose($0).yaw } ?? (hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5))
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
         var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
@@ -1441,8 +1448,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
                 let floorY = a.sim.floorY
-                span = max((topY - floorY) * 1.32, 1.2)
-                focusY = floorY + span * 0.5 - span * 0.035
+                span = max((topY - floorY) * 1.55, 1.3)          // room above the raised hands and the hat, and the shoes under the skirt
+                focusY = floorY + span * 0.5 - span * 0.06
             }
         }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
@@ -1452,7 +1459,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         var eye = target + dir * dist + SIMD3(0, dist * 0.12, 0)
         if hp != nil {          // looking down like the room camera (where the face was approved), so the latitude-curved brows read flat, not slanted
             let down = GameCamera.baseEye - GameCamera.baseTarget          // the base pose, not the aspect-widened one: the portrait frames the same in either orientation
-            let pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
+            var pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
+            if hp?.pose != nil { pitch = min(pitch, 0.16) }          // the action shot looks from a low 3/4 front, so the feet and shoes show under the skirt
             eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
         }
         var cam = CameraState()

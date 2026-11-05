@@ -128,7 +128,7 @@ struct JelbiePortrait: View {
 }
 
 /// The Studio's contestant: a big full-body action shot (the Jelbie alone, in his outfit, on a clear backdrop; MelonStage.headSnapshot with `pose`), standing on the stage floor and hopping
-/// with a little sway: three views (left, front, right) played hop by hop. Fills the stage card; the chips and buttons sit over its edges.
+/// in three poses (ta-da, proud lean, cheer: arms posed by SnapshotPose.swift) played hop by hop. Fills the stage card; the chips and buttons sit over its edges.
 struct JelbieActionShot: View {
     let care: GameCare
     var who: Int
@@ -137,8 +137,8 @@ struct JelbieActionShot: View {
     @State private var viewIndex = 0          // which of `order` is showing (stepped once per hop by the task below: no per-frame SwiftUI work)
     @State private var up = false             // the hop: a render-server driven autoreversing animation (nothing redraws on the main thread while it runs)
     private func key(_ pose: Int) -> HeadPortraitKey { HeadPortraitKey(jelly: who, colour: nil, wear: nil, pose: pose) }
-    /// The views in hop order: front, left, front, right.
-    private static let order = [1, 0, 1, 2]
+    /// The poses in hop order (SnapshotArmPose.all): ta-da (both arms up), proud (a lean, one arm up), cheer (arms flung wide), proud again.
+    private static let order = [0, 1, 2, 1]
     private static let period = 0.9
 
     var body: some View {
@@ -146,12 +146,14 @@ struct JelbieActionShot: View {
             let h = g.size.height, S = h * 0.9
             let hop: CGFloat = up && !reduceMotion ? 1 : 0          // 0 on the floor, 1 at the top of the hop
             let view = Self.order[viewIndex % Self.order.count]
-            let img = frames[view] ?? frames[1] ?? frames.compactMap { $0 }.first
+            let img = frames[view] ?? frames[0] ?? frames.compactMap { $0 }.first
+            let lean = reduceMotion ? 0 : SnapshotArmPose.pose(view).leanDeg
             ZStack {
                 Ellipse().fill(.black.opacity(0.28 - 0.12 * hop)).frame(width: S * (0.46 - 0.10 * hop), height: S * 0.07).position(x: g.size.width / 2, y: h * 0.9)
                 if let img {
                     Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
                         .scaleEffect(x: 1 + 0.03 * (1 - hop), y: 1 - 0.03 * (1 - hop), anchor: .bottom)
+                        .rotationEffect(.degrees(lean), anchor: .bottom)
                         .position(x: g.size.width / 2, y: h * 0.885 - S * 0.885 + S / 2 - h * 0.08 * hop)
                 } else { ProgressView().tint(ShowUI.light).position(x: g.size.width / 2, y: h * 0.5) }
             }
@@ -173,12 +175,12 @@ struct JelbieActionShot: View {
 
     private func load() async {
         let t0 = CACurrentMediaTime()
-        frames = [nil, HeadPortraitCache.shared.cached(key(1), care: care), nil]
-        for pose in [1, 0, 2] {
+        frames = [HeadPortraitCache.shared.cached(key(0), care: care), nil, nil]
+        for pose in [0, 1, 2] {
             if frames[pose] != nil { continue }
             guard let img = await HeadPortraitCache.shared.image(key(pose), care: care) else { return }
             frames[pose] = img
-            if pose == 1 { NSLog("[portrait] action shot %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000) }
+            if pose == 0 { NSLog("[portrait] action shot %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000) }
         }
     }
 }
