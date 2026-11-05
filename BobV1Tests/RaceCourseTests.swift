@@ -72,7 +72,8 @@ final class PuddleGoldenTests: XCTestCase {
     }
 
     /// The body-driven race on the straight (RaceBodyRig, the game's glue): progress and heading every 30 ticks, recorded before the course model.
-    static let bodyGoldenHash: UInt64 = 0xea4ce5cabf84a496
+    /// Re-recorded 2026-11-05 (was 0xea4ce5cabf84a496, 2026-10-20): the body's pz / yaw transcript drifted with the brain changes since; `bodyGoldenLast` (steps / trips / finish) is unchanged.
+    static let bodyGoldenHash: UInt64 = 0x562ed28029459960
     static let bodyGoldenLast = "S44/1/1097893964"
 
     static func bodyRun(course: RaceCourse? = nil) -> [String] {
