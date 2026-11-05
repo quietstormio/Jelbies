@@ -81,7 +81,7 @@ struct ContactStance: Sendable {
     static let table: [SocialKind: ContactStance] = [
         // press / bump kinds: stand a few cm apart, touch when the move presses
         .boop: .pressing(from: 1, press: 2, anchor: .b, sound: .squish, volume: 0.5),
-        .squabble: .pressing(from: 1, press: 1, walk0: false, until: 2, sound: .squish, volume: 0.5),
+        .squabble: .pressing(from: 1, press: 1, walk0: true, until: 2, sound: .squish, volume: 0.5),
         .bump: .pressing(from: 1, press: 2, sound: .boop, volume: 0.9),
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
@@ -91,16 +91,16 @@ struct ContactStance: Sendable {
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
-        .nuzzle: .holding(from: 2, facing: .camera),
+        .nuzzle: .holding(from: 1, facing: .camera),
         .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
-        .cheekSquish: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.7, pulses: [(2, 1.2, 1.7)]),
+        .cheekSquish: .holding(from: 1, facing: .camera, sound: .squish, volume: 0.7),          // (one continuous press: the second squish is a lean + squash, not a back-off and a second touch)
         .backToBack: .holding(from: 3, facing: .camera, features: true),
-        .cuddleLean: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.5),
+        .cuddleLean: .holding(from: 1, facing: .camera, sound: .squish, volume: 0.5),
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
-        .whisperGiggle: .holding(from: 2, facing: .camera),
+        .whisperGiggle: .holding(from: 1, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
@@ -111,6 +111,8 @@ struct ContactStance: Sendable {
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
+        // (explicit rows for the rest: a new interactive SocialKind with no row fails ContactTableTests.testEveryKindHasAnExplicitRowAndIsMeasured)
+        .look: .proximity(), .zoomies: .proximity(), .pass: .proximity(),
     ]
     static func entry(_ k: SocialKind) -> ContactStance? { table[k] }
 }

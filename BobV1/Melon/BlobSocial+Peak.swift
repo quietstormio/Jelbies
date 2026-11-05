@@ -15,7 +15,7 @@ enum PeakTuning {
     static let log = ProcessInfo.processInfo.environment["PEAK_LOG"] != nil
     nonisolated(unsafe) static var enabled = ProcessInfo.processInfo.environment["PEAK_OFF"] != "1"
     /// The press / strike moves whose lean is the move itself (the hold kinds - sways, cuddles, hugs - close the last centimetres with the engine's own lean, so the guard leaves them alone: measured, it left them 3-4 cm short).
-    static let strikeKinds: Set<SocialKind> = [.bump, .chestBump, .noseBoop, .highFive, .bellyBounce, .squabble, .sneak]
+    static let strikeKinds: Set<SocialKind> = [.bump, .chestBump, .noseBoop, .highFive, .bellyBounce, .squabble, .sneak, .cheekSquish, .whisperGiggle]
     /// A/B switches of the two mechanisms (env PEAK_NOGUARD / PEAK_NOARM = 1).
     nonisolated(unsafe) static var guardOn = ProcessInfo.processInfo.environment["PEAK_NOGUARD"] != "1"
     nonisolated(unsafe) static var armOn = ProcessInfo.processInfo.environment["PEAK_NOARM"] != "1"
@@ -31,12 +31,15 @@ enum PeakTuning {
     /// the strike's visible lean stays inside the few cm the approach gap leaves.
     nonisolated(unsafe) static var leanCap: Float = env("PEAK_CAP", 0.08)
     /// The skin gap the lean may close to (the stance's plush rest).
+    /// Kinds whose hold is a standing contact the eye reads as a gap the moment it opens (squabble: the face-off stays pressed, the shoves are a lean + a jelly kick, not a step back): a tighter wind-up / recoil opening (m).
+    static let openCapByKind: [SocialKind: Float] = [.squabble: 0.012]
     static let rest: Float = -0.006          // (a hair deeper than the stance's -0.4 cm: the approach is asymptotic, and the touch gate fires at +0.5 cm)
 
     /// The range the drive's toward-partner lean (rad, excluding the engine's own `trim`) may take when the body now leans `now` rad toward the partner with the live skin gap `gap` (m): in at most up to
     /// contact (`rest`), away at most up to `openCap`. Both bodies lean, so the skin travel per radian is twice `reachPerRad`.
-    static func leanBounds(now: Float, trim: Float, gap: Float) -> (maxOut: Float, maxIn: Float) {
+    static func leanBounds(now: Float, trim: Float, gap: Float, openCap open: Float? = nil) -> (maxOut: Float, maxIn: Float) {
         let per = reachPerRad * 2
+        let openCap = open ?? Self.openCap
         // (relaxing back to neutral is never blocked: the away bound only stops a lean that is already away from going further)
         return (min(0, now - gain * max(0, openCap - gap) / per - trim), now + gain * max(0, gap - rest) / per - trim)
     }
@@ -64,7 +67,7 @@ extension BlobBrain {
         let book = socialBook
         let wantM = book.wantPitch * uy - book.wantRoll * ux
         let nowM = book.pitch * uy - book.roll * ux
-        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap)
+        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap, openCap: PeakTuning.openCapByKind[s.kind])
         var m = wantM
         if m > b.maxIn { m = b.maxIn }
         if m > PeakTuning.leanCap { m = PeakTuning.leanCap }
