@@ -98,19 +98,19 @@ final class WearTests: XCTestCase {
         let suite = "WearTests.mittens.\(UUID().uuidString)"
         let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
         var saved = StoreBook.Saved()
-        saved.wearables = ["glovePink", "gloveSky", WearLook.beret.rawValue]
-        saved.worn = ["0": ["hands": "glovePink", "head": WearLook.beret.rawValue], "1": ["hands": "gloveSky"]]
+        saved.wearables = ["glovePink", "gloveSky", "boxingMitts", WearLook.beret.rawValue]
+        saved.worn = ["0": ["hands": "glovePink", "head": WearLook.beret.rawValue], "1": ["hands": "gloveSky"], "2": ["hands": "boxingMitts"]]
         d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
         let w = DropsWallet(persists: false)
         let before = w.count
         let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
-        XCTAssertEqual(w.count - before, 70)
+        XCTAssertEqual(w.count - before, 115)
         XCTAssertEqual(b.saved.wearables, [WearLook.beret.rawValue], "not owned")
-        XCTAssertNil(b.worn(0, .hands)); XCTAssertNil(b.worn(1, .hands)); XCTAssertNil(b.saved.worn["0"]?["hands"]); XCTAssertNil(b.saved.worn["1"]?["hands"])
+        XCTAssertNil(b.worn(0, .hands)); XCTAssertNil(b.worn(1, .hands)); XCTAssertNil(b.worn(2, .hands)); XCTAssertNil(WearLook(rawValue: "boxingMitts")); XCTAssertNil(b.saved.worn["0"]?["hands"]); XCTAssertNil(b.saved.worn["1"]?["hands"])
         XCTAssertEqual(b.worn(0, .head), .beret, "other clothes are untouched")
         XCTAssertEqual(b.saved.glovesRefunded, true)
         let b2 = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b2)
-        XCTAssertEqual(w.count - before, 70, "a second load never pays twice")
+        XCTAssertEqual(w.count - before, 115, "a second load never pays twice")
         XCTAssertEqual(StoreBook.dropRetiredGloves(StoreBook.Saved()).refund, 0)
     }
 
@@ -370,7 +370,7 @@ final class WearTests: XCTestCase {
         r.brain.request(.goTo(SIMD2(1.6, 0.4)))
         var samples = 0, worstRadial: Float = 0, worstTip: Float = 0, worstExposed = 0.0
         let slotShell = WornSet.Slot()
-        for look in [WearLook.boxingMitts, .wristbandsSky] {
+        for look in [WearLook.wristbandsSky] {
             guard let p = WearMeshes.prepare(look, body: WearBody.shared) else { XCTFail("\(look)"); continue }
             r.run(7) {
                 guard r.brain.armG > 0.5 else { return }

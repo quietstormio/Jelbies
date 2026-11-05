@@ -470,20 +470,6 @@
 "pipHide": [],
 "slot": "neck"
 },
-"boxing_mitts": {
-"lav": {
-"dy": 0.0,
-"flapMax": 75.0,
-"flapMin": -40.0,
-"rule": "ok",
-"spreadMax": 40.0
-},
-"moss": {
-"rule": "ok"
-},
-"pipHide": [],
-"slot": "hands"
-},
 "bucket_hat": {
 "lav": {
 "dy": -0.2,

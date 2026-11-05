@@ -42,7 +42,7 @@ final class StoreBook {
         var staplesGiven: Bool? = nil
         /// The retired sit-on furniture was removed and refunded (once; StoreBook+RetiredDecor.swift).
         var retiredDecorRefunded: Bool? = nil
-        /// The retired Pink / Sky mittens were removed and refunded (once; StoreBook+RetiredGloves.swift).
+        /// The retired gloves (Pink / Sky mittens, Boxing mitts) were removed and refunded (once; StoreBook+RetiredGloves.swift).
         var glovesRefunded: Bool? = nil
     }
     static let key = "StoreBook.v1"

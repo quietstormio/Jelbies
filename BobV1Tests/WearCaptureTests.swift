@@ -155,7 +155,7 @@ final class WearCaptureTests: XCTestCase {
     static let setA: [Outfit] = [[.head: .capTeamPink, .body: .bibPink, .feet: .sneakerCoral],
                                  [.head: .flowerCrown, .neck: .bowtieSky, .feet: .glitterShoes],
                                  [.head: .beaniePink, .neck: .bandanaCoral]]
-    static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .boxingMitts, .feet: .hightopRed],
+    static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .wristbandsSky, .feet: .hightopRed],
                                  [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
                                  [.head: .crownGold, .neck: .pearls, .body: .tutuPink, .feet: .balletPink]]
     static let setC: [Outfit] = [[.head: .witchHat, .face: .gogglesAviator, .body: .capeHero, .feet: .rainBoots],
