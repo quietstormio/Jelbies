@@ -193,4 +193,31 @@ final class HopscotchTests: XCTestCase {
         XCTAssertFalse(line.active)
         XCTAssertTrue(DecorField.shared.coUsers[uid] == nil && DecorField.shared.occupant[uid] == nil, "the court is released")
     }
+
+    // MARK: the tunnel
+
+    /// One Jelbie goes in at the near mouth of the park's play tunnel, walks through and comes out of the far one; the tunnel is released afterwards.
+    func testJelbieGoesThroughTheParkTunnel() {
+        let lab = parkLab(n: 1)
+        let r = lab.rigs[0], b = r.brain
+        let tun = DecorField.shared.foot(ParkToys.tunnelUID)!
+        let reach = tun.kind.spec.half.x + 0.8, ax = tun.turned(SIMD2(1, 0))
+        let mouths = [tun.centre + ax * reach, tun.centre - ax * reach]
+        r.sim.teleport(toXZ: SIMD2(0.9, -1.3)); for _ in 0..<60 { r.sim.step() }
+        b.currentPose(r.sim)
+        b.idleForced = true
+        XCTAssertTrue(b.decorStart(.decorPeek, r.sim, only: .playtunnel, uid: nil), "the tunnel is started")
+        let entry = mouths.min { simd_distance($0, b.position) < simd_distance($1, b.position) }!
+        let exitMouth = mouths.first { $0 != entry }!
+        var nearExit = Float.infinity, wasInside = false
+        for _ in 0..<(60 * 40) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+            nearExit = min(nearExit, simd_distance(b.position, exitMouth))
+            if tun.distance(b.position) < 0.2 { wasInside = true }
+            if b.idleState.kind == nil, nearExit < 2 { break }
+        }
+        XCTAssertLessThan(nearExit, 0.9, "he came out of the far mouth (closest \(nearExit); mouths \(mouths))")
+        XCTAssertTrue(wasInside, "he was inside the tunnel")
+        XCTAssertNil(DecorField.shared.coUsers[ParkToys.tunnelUID]); XCTAssertNil(DecorField.shared.progress[ParkToys.tunnelUID])
+    }
 }

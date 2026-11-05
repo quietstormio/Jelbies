@@ -200,6 +200,7 @@ final class FeetAttachTests: XCTestCase {
         if move == .soccerKick, r.brain.soccerModeForce == 3 { DecorField.shared.tick(dt: 0); SoccerState.shared.setStuck(7, SoccerTuning.stuckAfter) }          // (a stuck ball: the 20 s have passed)
         r.brain.idleForced = true
         let ok = r.brain.idleStart(move, r.sim)
+        if move == .decorHopscotch { XCTAssertTrue(ok, "hopscotch starts"); XCTAssertEqual(r.brain.idleState.kind, .decorHopscotch) }
         if move == .soccerKick {
             MotionLog.write("DECORSTART soccer mode \(r.brain.soccerModeForce ?? -1) started \(ok) at (\(r.brain.px), \(r.brain.pz)) occupant \(String(describing: DecorField.shared.occupant[7])) ball \(DecorField.shared.anim[7]?.pos ?? .zero) stand \(String(describing: r.brain.soccerStand(DecorField.shared.foot(7)!, from: r.brain.position))) plan \(r.brain.soccerPlan.mode) kind \(String(describing: r.brain.idleState.kind)) openFloor \(String(describing: DecorField.shared.nearestOpenFloor(to: at)))")
             XCTAssertTrue(ok, "soccer mode \(r.brain.soccerModeForce ?? -1) starts")
