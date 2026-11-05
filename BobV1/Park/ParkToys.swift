@@ -16,7 +16,7 @@ nonisolated enum ParkToys {
         PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.9, z: -1.5, turns: nil),
         // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right front (no play tunnel in the park: removed 2026-11-05)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
-        PlacedDecor(uid: slideUID, kind: .slide, x: 2.7, z: 1.8, turns: nil)          // (z 1.8: 0.65 clear of the sandbox (its back edge at z 0.05, the sandbox front at -0.6); the landing floor is the limit - z 1.7: the chute ends 2.19 in front of the centre; the rider lands there and a body needs ~0.5 of floor, the roam rect ends at z 4.5. At z 2.3 he landed on the clamp, INSIDE the slide's footprint, and walked out through it),
+        PlacedDecor(uid: slideUID, kind: .slide, x: 1.8, z: 3.4, turns: 3)          // (turned 3 quarter turns: the chute points LEFT (-x) and the rider lands on the path at (-0.4, 3.4), so the slide can sit well below the sandbox (front edge z -0.6; the turned footprint spans z 2.6...4.2, i.e. 3.2 of lawn between them; the straight slide needed 2.19 of floor in front of it and the roam rect ends at z 4.5. Straight at z 2.3 he landed on the clamp, INSIDE the footprint, and walked out through it),
     ]
     static var placed: [PlacedDecor] { layout }
 }
