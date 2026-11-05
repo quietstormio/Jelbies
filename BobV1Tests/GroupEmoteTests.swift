@@ -10,8 +10,8 @@ import simd
 
 @MainActor
 final class GroupEmoteTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
-    override func tearDown() { EmoteHaptic.requestTap = nil; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    override func setUp() { super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
+    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; EmoteHaptic.requestTap = nil; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     private func lab(n: Int = 3) -> SocialTests.Lab {
         let l = SocialTests.Lab(n: n, positions: Array(SocialTests.starts.prefix(n)), seed: 31)

@@ -5,8 +5,8 @@ import simd
 /// The room's per-Jelbie sound requests over 180 simulated seconds with 3 Jelbies (the 2026-11-01 "they stopped making noise" report).
 @MainActor
 final class RoomSFXCountTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
-    override func tearDown() { AudioHub.requestTap = nil; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    override func setUp() { super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }   // (the goal search stops at a wall-clock budget: a loaded machine would skip runs and lower the counts)
+    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; AudioHub.requestTap = nil; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     static let seeds: [UInt64] = [11, 23, 37, 41, 59]
     /// Where the approved build's counts live (`scripts/regression-gate.sh` regenerates them from the approved commit and passes `SFXCOUNT_BASELINE`).
