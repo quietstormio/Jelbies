@@ -151,6 +151,37 @@ final class EmoteFeetTests: XCTestCase {
         try? covered.joined(separator: "\n").write(toFile: Self.out + "emotes_covered.txt", atomically: true, encoding: .utf8)
     }
 
+    /// 2026-11-05 (hopfeet): the end of a hop re-seeded the planted feet at root + offset - a 7-8 cm jump of both drawn soles in one frame (the frame `feetInit` comes back after the hop).
+    /// The feet are now planted where the soles landed: on that frame the drawn sole moves less than 3 cm.
+    func testHopEndDoesNotSnapTheSoles() throws {
+        _ = OnePieceInvariantTests.configured
+        ToyTuning.settle = 0
+        if ProcessInfo.processInfo.environment["HOPFEET_SEED_OFF"] == "1" { BlobBrain.hopSeedFromSoles = false }          // (proves the test sees the old re-seed: TEST_RUNNER_HOPFEET_SEED_OFF=1)
+        defer { BlobBrain.hopSeedFromSoles = true }
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        for jobName in ["hop", "idle jacks", "idle skipHop"] {
+            guard let job = OnePieceInvariantTests.jobs().first(where: { $0.name == jobName }) else { XCTFail("no move '\(jobName)' in the one-piece job list"); continue }
+            var checked = 0, worst: Float = 0, worstFrame = -1
+            var prevInit = true
+            var prevXZ: [SIMD2<Float>] = [.zero, .zero], prevGap: [Float] = [1, 1]
+            for c in job.chars.prefix(2) {
+                _ = OnePieceInvariantTests.run(job.sc, char: c, shoes: false, pacing: .hz60, seed: 3) { frame, r, _ in
+                    r.render()
+                    let nowInit = r.brain.feetInit
+                    if nowInit && !prevInit {          // (the re-seed frame)
+                        for k in 0..<2 where prevGap[k] < 0.012 && r.renderedFootGap(k) < 0.012 {
+                            let d = simd_distance(prevXZ[k], r.renderedFootXZ(k)); checked += 1
+                            if d > worst { worst = d; worstFrame = frame }
+                        }
+                    }
+                    prevInit = nowInit
+                    for k in 0..<2 { prevXZ[k] = r.renderedFootXZ(k); prevGap[k] = r.renderedFootGap(k) }
+                }
+            }
+            XCTAssertGreaterThan(checked, 0, "\(jobName): no hop end with both soles on the floor was observed (the test checked nothing)")
+            XCTAssertLessThanOrEqual(worst, 0.03, "\(jobName): the drawn sole jumped \(String(format: "%.1f", worst * 100)) cm in one frame at the end of a hop (frame \(worstFrame); limit 3 cm)")
+        }
+    }
     func testJacks() throws { try emote("jacks", "idle jacks") }
     func testHopPlay() throws { try emote("hopPlay", "hop") }
     func testFlip() throws { try emote("flip", "flip") }
