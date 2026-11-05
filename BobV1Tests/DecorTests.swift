@@ -49,7 +49,7 @@ final class DecorTests: XCTestCase {
 
     func testCatalogueSellsEveryNonRetiredDecorItemInTheRightPriceBand() {
         let items = StoreCatalog.items(.decor)
-        let sold = DecorKind.allCases.count - 3 - DecorKind.retired.count          // (the 3 park-only toys and the retired sit-on furniture are not sold)
+        let sold = DecorKind.allCases.count - 2 - DecorKind.retired.count          // (the 2 park-only toys and the retired sit-on furniture are not sold)
         XCTAssertEqual(items.count, sold)
         XCTAssertEqual(StoreCatalog.decorItems(.furniture).count + StoreCatalog.decorItems(.toys).count, sold, "every piece is on exactly one tab")
         XCTAssertFalse(items.contains { $0.id == "decor-eggchair" }, "the swing replaces the egg chair")
@@ -59,8 +59,8 @@ final class DecorTests: XCTestCase {
             XCTAssertEqual(i.roomUnits, i.decor?.spec.units)
             XCTAssertTrue((1...3).contains(i.roomUnits))
         }
-        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting([.seesaw, .springrider, .sandbox]).subtracting(DecorKind.retired), "every kind but the park-only toys and the retired sit-on furniture is sold")
-        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, Set(DecorKind.allCases).subtracting(DecorKind.retired).filter { $0.spec.units == 2 && ![.seesaw, .springrider, .sandbox].contains($0) }.sorted { $0.rawValue < $1.rawValue })
+        XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting([.seesaw, .sandbox]).subtracting(DecorKind.retired), "every kind but the park-only toys and the retired sit-on furniture is sold")
+        XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, Set(DecorKind.allCases).subtracting(DecorKind.retired).filter { $0.spec.units == 2 && ![.seesaw, .sandbox].contains($0) }.sorted { $0.rawValue < $1.rawValue })
         XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .playtunnel, .slide], "the 1.25x slide, play tunnel and pet bed count 3 spots")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys))

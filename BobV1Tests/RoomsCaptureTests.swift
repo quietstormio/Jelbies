@@ -114,7 +114,7 @@ final class RoomsCaptureTests: XCTestCase {
             let f = DecorField.shared
             f.set(ParkToys.placed)
             f.take(ParkToys.sandUID, seat: 0, by: 100); f.take(ParkToys.sandUID, seat: 2, by: 101)
-            for _ in 0..<50 { for u in [ParkToys.seesawUID, ParkToys.riderUID, ParkToys.sandUID] { f.rock(u, 1) }; f.tick(dt: 1.0 / 60) }
+            for _ in 0..<50 { for u in [ParkToys.seesawUID, ParkToys.sandUID] { f.rock(u, 1) }; f.tick(dt: 1.0 / 60) }
             ren.room!.setDecorStatic(DecorModels.build(feet: f.feet, field: f, time: 0.5))
         }
         var feats: [FeatureSet] = []

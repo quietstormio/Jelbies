@@ -161,7 +161,7 @@ final class StandCaptureTests: XCTestCase {
         try img.pngData()?.write(to: URL(fileURLWithPath: dir + "/" + name))
     }
 
-    static let seatPieces: [DecorKind] = [.beanbag, .pouf, .armchair, .loveseat, .diningset, .rockingchair, .swing, .cushionpile, .rockinghorse, .toyrocket, .seesaw, .springrider, .sandbox]
+    static let seatPieces: [DecorKind] = [.beanbag, .pouf, .armchair, .loveseat, .diningset, .rockingchair, .swing, .cushionpile, .rockinghorse, .toyrocket, .seesaw, .sandbox]
 
     /// Every seat piece alone with Bob: part A (home furniture) and part B (toys).
     func testCaptureAllSeats() throws {
@@ -193,11 +193,11 @@ final class StandCaptureTests: XCTestCase {
     func testCaptureCharacters() throws {
         guard dir != nil else { throw XCTSkip("STAND_CAP_DIR not set") }
         var rows: [(String, [(UIImage, String)])] = []
-        for k in [DecorKind.swing, .pouf, .rockinghorse, .springrider] {
+        for k in [DecorKind.swing, .pouf, .rockinghorse] {
             for c in 1...3 { rows.append(("\(k.rawValue) \(JellyRoster.baseNames[c])", try run(k, chars: [c]))) }
         }
         try save(sheet(Array(rows.prefix(6)), title: "Characters [\(tag)] swing, pouf"), "chars1_\(tag).png")
-        try save(sheet(Array(rows.dropFirst(6)), title: "Characters [\(tag)] rocking horse, spring bunny"), "chars2_\(tag).png")
+        try save(sheet(Array(rows.dropFirst(6)), title: "Characters [\(tag)] rocking horse"), "chars2_\(tag).png")
     }
 
     /// Landscape: a few pieces.
