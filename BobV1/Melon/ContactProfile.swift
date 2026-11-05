@@ -41,6 +41,8 @@ nonisolated enum ContactField {
     }()
     /// The HAND TIPS (2026-11-04, user rule 2: a hand must END on the partner's skin): per body two points (x, z relative to the body's root; NaN = that arm is not drawn), the first vertex of each drawn arm capsule
     /// (`ArmCapsule` emits the tip pole first). Recorded by `build` from the blocks it is given (an arm block is the one `ArmCapsule.vertexCount` long), so no caller changes.
+    /// false = `build` does not record the hand tips (the A/B of its cost: ContactProfileTests.testHandRecordingCost).
+    nonisolated(unsafe) static var recordHands = true
     nonisolated(unsafe) static let handStore: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 4); p.initialize(repeating: .nan, count: capacity * 4); return p
     }()
@@ -212,7 +214,7 @@ nonisolated enum ContactField {
         }
         let hs = handStore + id * 4
         for k in 0..<4 { hs[k] = .nan }
-        if let blocks {
+        if recordHands, let blocks {
             var arm = 0
             for r in blocks where r.count == ArmCapsule.vertexCount && arm < 2 && r.lowerBound < count {
                 let o = 6 * r.lowerBound

@@ -388,4 +388,26 @@ final class ContactProfileTests: XCTestCase {
         XCTAssertLessThan(tPairs / Double(n) * 1000, 0.15, "10 uncached pair gaps (a 5-body room has 10 pairs; the frame computes each once, cached per profile)")
         XCTAssertLessThan(tBuild / Double(n) * 1000 + tPairs / Double(n) * 1000 * 0.3, 0.25, "5 bodies: profiles (serial worst case) + the pair checks within 0.25 ms")
     }
+
+    /// The cost of recording the hand tips inside `build` (2026-11-04), A/B in one process, interleaved: the per-body build time with and without. testProfilePerf's 0.03 ms budget is over on a loaded machine with
+    /// untouched code (0.0319 ... 0.0340 measured by four workers); this proves the hand recording is not what moves it: it must add under 1 us (3 % of the budget) a body.
+    func testHandRecordingCost() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6), SIMD2(0, 2.4), SIMD2(0, -1), SIMD2(2.4, 2.4)], features: [.ears, .wings, .spines, .daisy, .none], seed: 5)
+        for _ in 0..<20 { d.tick() }
+        let js = d.jobs()
+        for j in js { j.skinner.update(x: j.sim.x, index: MotionRig.renderMesh.index, into: j.dst) }
+        func time(_ record: Bool) -> Double {
+            ContactField.recordHands = record
+            let n = 200, t0 = CACurrentMediaTime()
+            for _ in 0..<n { for j in js { ContactField.build(id: j.id, dyn: UnsafePointer(j.dst), count: j.skinner.vertexCount, root: j.root, blocks: j.skinner.contactBlocks) } }
+            return (CACurrentMediaTime() - t0) / Double(n) / 5 * 1000
+        }
+        defer { ContactField.recordHands = true }
+        var on: [Double] = [], off: [Double] = []
+        for _ in 0..<7 { off.append(time(false)); on.append(time(true)) }
+        on.sort(); off.sort()
+        let line = String(format: "PROFILE hand recording: build %.4f ms per body with, %.4f without (medians of 7 interleaved rounds); delta %.4f ms", on[3], off[3], on[3] - off[3])
+        print(line); MotionLog.write(line)
+        XCTAssertLessThan(on[3] - off[3], 0.001, "recording the hand tips adds under 1 us a body")
+    }
 }
