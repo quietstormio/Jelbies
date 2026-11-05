@@ -46,7 +46,7 @@ extension BlobBrain {
         case .trot: return 15
         case .stopLook: return 10
         case .giggle, .startle: return 8
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return 25
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorHopscotch, .soccerKick: return 25
         case .sleep: return 0
         default: return 20
         }

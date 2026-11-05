@@ -10,16 +10,20 @@ import Foundation
 
 nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
-    static let seesawUID = 9001, sandUID = 9003
+    static let seesawUID = 9001, sandUID = 9003, hopscotchUID = 9005, slideUID = 9006, tunnelUID = 9007
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
         PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.7, z: -2.3, turns: nil),
         PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.9, z: -1.5, turns: nil),
+        // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide and play tunnel on the right / middle front (lane for the queue behind the court's back)
+        PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
+        PlacedDecor(uid: slideUID, kind: .slide, x: 2.7, z: 2.3, turns: nil),
+        PlacedDecor(uid: tunnelUID, kind: .playtunnel, x: 0.9, z: 1.5, turns: 1),
     ]
     static var placed: [PlacedDecor] { layout }
 }
 
 extension DecorKind {
-    static let parkOnly: [DecorKind] = [.seesaw, .sandbox]
+    static let parkOnly: [DecorKind] = [.seesaw, .sandbox, .hopscotch]
     /// Pieces whose seat is carried by the toy's own motion (the seesaw's plank, the spring rider's bounce).
     var parkRocker: Bool { self == .seesaw }
 
@@ -27,6 +31,7 @@ extension DecorKind {
         switch self {
         case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.30), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
         case .sandbox: return DecorSpec(half: SIMD2(1.25, 0.90), height: 0.22, solid: true, units: 3, corner: 0.25, reach: 1, box: true)
+        case .hopscotch: return DecorSpec(half: HopscotchCourt.slabHalf, height: 0.05, solid: false, units: 3, corner: 0.1, reach: 0.5, box: true)
         default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
         }
     }
@@ -38,12 +43,13 @@ extension DecorKind {
         }
     }
     var parkTitle: String {
-        switch self { case .seesaw: return "Seesaw"; case .sandbox: return "Sandbox"; default: return rawValue.capitalized }
+        switch self { case .seesaw: return "Seesaw"; case .sandbox: return "Sandbox"; case .hopscotch: return "Hopscotch"; default: return rawValue.capitalized }
     }
     var parkUse: String {
         switch self {
         case .seesaw: return "A Park seesaw. Two Jelbies stand on it and ride up and down."
         case .sandbox: return "A Park sandbox. Up to three stand in it and dig."
+        case .hopscotch: return "A Park hopscotch court. Short legs, so they hop square to square, and friends line up behind."
         default: return ""
         }
     }
@@ -130,6 +136,7 @@ extension DecorModels {
                     }
                 }
             }
+        case .hopscotch: addHopscotchCourt(b, at: o)
         default: break
         }
         // the pieces are modelled at 1x about their centre and drawn at `kind.scale`

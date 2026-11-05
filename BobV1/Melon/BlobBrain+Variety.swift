@@ -68,7 +68,7 @@ struct VarietyBook {
 extension BlobBrain {
     static func varietyFamily(_ k: IdleKind) -> VarietyFamily {
         switch k {
-        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick: return .decor
+        case .decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorHopscotch, .soccerKick: return .decor
         case .sit, .slump, .yawn, .flop, .lieDown, .sigh, .sleep, .stretch, .tailHug: return .rest
         case .wander, .run, .stumble, .zoomies, .slide, .scoot, .skipHop, .hopscotch, .trot, .flapHop, .stopLook: return .movement
         default: return .spot

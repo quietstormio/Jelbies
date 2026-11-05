@@ -14,7 +14,7 @@ import Foundation
 import simd
 
 extension BlobBrain {
-    static let decorKinds: Set<IdleKind> = [.decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .soccerKick]
+    static let decorKinds: Set<IdleKind> = [.decorSit, .decorBoop, .decorKick, .decorHop, .decorPeek, .decorSlide, .decorHopscotch, .soccerKick]
 
     /// The interactions the room offers right now (a piece nobody is using).
     static func decorOffers() -> Set<IdleKind> {
@@ -28,6 +28,7 @@ extension BlobBrain {
     func decorRelease() {
         let uid = idleState.decorUID
         if uid >= 0 {
+            HopscotchLine.shared.remove(uid, steerID)
             if let sf = DecorField.shared.foot(uid), sf.kind == .kickscooter { scooterParked(sf) }          // (cut short mid-ride: the scooter is parked again)
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
@@ -169,6 +170,7 @@ extension BlobBrain {
             }
             return nil
         case .soccerKick: return soccerStand(f, from: here)
+        case .decorHopscotch: return hopscotchStand(f)
         case .decorKick where f.kind.isBallLike:
             // balls are solid: he stands just outside its contact circle on the side he comes from (the toe reaches from there: the kick lands inside 1.12)
             let base = simd_length(here - c) > 1e-3 ? simd_normalize(here - c) : SIMD2<Float>(0, 1)
@@ -216,7 +218,7 @@ extension BlobBrain {
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
             decorIgnore = (kind == .decorSit || kind == .decorHop || kind == .decorSlide) ? f.uid : exiting
             guard let stand = decorStand(kind, f, from: here, seat: seat),
-                  simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
+                  simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   reachable(here, stand) else { decorIgnore = exiting; continue }
             idleBegin(kind)
             idleState.decorUID = f.uid; idleState.decorGo = true; idleState.decorKicked = false; idleState.decorBooped = false
@@ -227,6 +229,7 @@ extension BlobBrain {
             idleState.reps = kind == .decorKick && f.kind.rolls ? 1 + (rand() < 0.5 ? 1 : 0) : 0
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
             if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
+            if f.kind == .hopscotch { hopscotchCommit(f) }
             script = .walk(target: stand, then: .none); activity = .walking
             return true
         }
@@ -277,6 +280,7 @@ extension BlobBrain {
             script = .walk(target: idleState.target, then: .none); activity = .walking
             return
         }
+        if kind == .decorHopscotch { hopscotchWalkDone(f, skinner); return }
         if kind == .decorPeek, f.kind == .playtunnel, idleState.slideStage == 30 { idleState.decorGo = false; tunnelEnd(skinner); return }          // (out the other end)
         idleState.decorGo = false
         idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.steps = 0
@@ -409,8 +413,8 @@ extension IdleTable {
     static func decorWeights(_ m: IdleMood, offers: Set<IdleKind>) -> [(kind: IdleKind, weight: Float)] {
         let table: [(IdleKind, Float)]
         switch m {
-        case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.soccerKick, 2.6)]
-        case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.soccerKick, 1.1)]
+        case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.decorHopscotch, 2.4), (.soccerKick, 2.6)]
+        case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.decorHopscotch, 1.2), (.soccerKick, 1.1)]
         case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)]
         }
         // a stuck soccer ball (20 s against a wall / under furniture) wants rescuing: the soccer pick dominates until it is out

@@ -126,6 +126,7 @@ enum HapticCue: Hashable, Sendable {
         case .decorKick: return CueSpec(i: 0.31, s: 0.26, n: 2, gap: 0.06, decay: 0.4)
         case .decorHop: return CueSpec(i: 0.28, s: 0.12, n: 4, gap: 0.15, decay: 0.85)
         case .decorPeek: return CueSpec(i: 0.10, s: 0.12, n: 2, gap: 0.16, decay: 0.7)
+        case .decorHopscotch: return CueSpec(i: 0.24, s: 0.12, n: 3, gap: 0.2, decay: 0.85)
         case .decorSlide: return CueSpec(i: 0.23, s: 0.07, n: 6, gap: 0.09, decay: 0.85)
         case .skipHop: return CueSpec(i: 0.25, s: 0.18, n: 2, gap: 0.2, decay: 0.9)
         case .hopscotch: return CueSpec(i: 0.26, s: 0.19, n: 3, gap: 0.18, decay: 0.9)
