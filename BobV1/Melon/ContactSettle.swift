@@ -162,7 +162,7 @@ extension BlobBrain {
         if var x = e {
             if !x.frozen {
                 if planted(self), planted(p), simd_distance(position, p.position) < 1.9 { x.d = raw; x.frozen = true }          // (standing AND close: a pair planted at the start of the session, 3 m apart, has not arrived yet)
-                else { x.d = max(0.55, min(1.6, x.d + max(-0.03, min(0.03, (raw - x.d) * 0.12)))) }          // (the live value, low-passed: side-on the pair touches at ~1.4 m, facing each other at ~0.75 m - the first sample is not the stance's)
+                else if !feet.active { x.d = max(0.55, min(1.6, x.d + max(-0.05, min(0.05, (raw - x.d) * ContactTuning.stableTouchAlpha)))) }          // (sampled only BETWEEN steps - double support: the outline swings +-8 cm over a stride, a sample at a fixed gait phase does not)          // (the live value, low-passed: side-on the pair touches at ~1.4 m, facing each other at ~0.75 m - the first sample is not the stance's)
             }
             x.clock = s.t
             ContactTouchMemory.store[key] = x
@@ -248,7 +248,7 @@ extension BlobBrain {
                 }
             }
         }
-        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < 0.8, ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
+        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ContactTuning.lockDistance, ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
             ContactTouchMemory.locked[steerID] = (t, p.position)
         }
         if ContactTrace.on, socialBook.shuffleReq != 0 {
