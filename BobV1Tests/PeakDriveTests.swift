@@ -55,4 +55,21 @@ final class PeakDriveTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(2 * r * cosf(Friends2Tuning.ringHop / 2), touch)
         XCTAssertEqual(Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 15, "1.5 turns of 36 degree hops")
     }
+
+    /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak) may open the gap by a wind-up only 1.5 cm; the squabble keeps the 4.5 cm.
+    func testPressKindsHaveATightWindUp() {
+        XCTAssertEqual(PeakTuning.openCap(for: .bump), 0.015, accuracy: 1e-6)
+        XCTAssertEqual(PeakTuning.openCap(for: .highFive), 0.015, accuracy: 1e-6)
+        XCTAssertEqual(PeakTuning.openCap(for: .squabble), PeakTuning.openCap, accuracy: 1e-6)
+        let tight = PeakTuning.leanBounds(now: 0, trim: 0, gap: 0.0, openCap: PeakTuning.openCap(for: .bump)).maxOut
+        let wide = PeakTuning.leanBounds(now: 0, trim: 0, gap: 0.0, openCap: PeakTuning.openCap(for: .squabble)).maxOut
+        XCTAssertGreaterThan(tight, wide, "the press kinds' lean-away room is smaller (less negative)")
+    }
+
+    /// The impact kick (a skin displacement into the partner) is capped for the touching drives.
+    func testImpactKickIsCapped() {
+        let b = BlobBrain()
+        XCTAssertEqual(b.impactKick(3.0), PeakTuning.kickMax, accuracy: 1e-6)
+        XCTAssertEqual(b.impactKick(0.2), 0.2, accuracy: 1e-6)
+    }
 }
