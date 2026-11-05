@@ -158,6 +158,9 @@ extension BlobBrain {
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
                 let out = decorFreeSpot(near: position)
                 idleFinish(skinner)
+                // the ride's hops left the beans placed on the fitted body pose (`beanFitUsed`, set by `driveBeansRigid`; only that call ever refreshes it). The walk places them on world foot
+                // paths and the post-step refit would keep carrying them rigidly with the body: the planted foot rode up with the walk's stretch (stance foot 3 cm off the floor, the neck open).
+                beanFitUsed = nil; beanFitHold = 0
                 if let out {
                     insideDecorT = -1.5; insideStuckT = 0; decorIgnore = f.uid
                     requestNow(.goTo(out))
