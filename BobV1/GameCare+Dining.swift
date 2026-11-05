@@ -88,14 +88,16 @@ extension GameCare {
         let approach = SIMD2(stand.x, stand.y - Self.approachBack)
         let here = Self.floorPos(brain, sim)
         let reach = MelonController.jellyGap + 0.1
-        guard simd_distance(here, stand) < reach || simd_distance(here, approach) < reach else { return }
+        let layout1 = DiningLayout.make(n: 1), trayOrigin = dining.isPresent ? dining.origin : (wantedOrigin ?? DiningSpot.preferred)
+        func trayD(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: trayOrigin, layout: layout1) }          // (and off the tray's own rectangle, where it lands)
+        guard simd_distance(here, stand) < reach || simd_distance(here, approach) < reach || trayD(here) < DiningGroup.trayClearance else { return }
         // the room is narrow: try a few spots round the place and take the one the floor rules leave farthest from it
         let spots: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)].map { stand + $0 }
         var best: (d: Float, p: SIMD2<Float>)?
         for c in spots {
             let q = brain.resolve(SIMD3(c.x, 0, c.y), 0.6)
             let p = SIMD2(q.x, q.z)
-            let d = min(simd_distance(p, stand), simd_distance(p, approach)) - 0.2 * simd_distance(p, here)
+            let d = min(simd_distance(p, stand), simd_distance(p, approach), trayD(p) + 0.5) - 0.2 * simd_distance(p, here)
             if best == nil || d > best!.d { best = (d, p) }
         }
         if let best { brain.requestNow(.goTo(best.p)) }

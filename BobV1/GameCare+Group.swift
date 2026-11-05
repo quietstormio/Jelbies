@@ -95,6 +95,7 @@ extension GameCare {
             }
             return
         }
+        group.bystanders = { actors.filter { !self.group.memberIDs.contains($0.id) && $0.brain != nil }.map { Self.floorPos($0.brain!, $0.sim) } }
         for a in actors {
             guard let b = a.brain else { continue }
             if group.memberIDs.contains(a.id) { if group.isHolding(a.id) { b.idleBlocked = true; continue } }          // (a diner who is done is released on his own: he is a free Jelly again)
@@ -120,14 +121,14 @@ extension GameCare {
         let here = Self.floorPos(brain, sim)
         let reach = MelonController.jellyGap + 0.1
         func near(_ p: SIMD2<Float>) -> Float { stands.map { min(simd_distance(p, $0), simd_distance(p, SIMD2($0.x, $0.y - Self.approachBack))) }.min() ?? 9 }
-        guard near(here) < reach else { return }
+        guard near(here) < reach || group.trayDistance(here) < DiningGroup.trayClearance else { return }          // (or on the rectangle the tray is about to be drawn on)
         let centre = stands.reduce(SIMD2<Float>.zero, +) / Float(stands.count)
         let spots: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)].map { centre + $0 }
         var best: (d: Float, p: SIMD2<Float>)?
         for c in spots {
             let q = brain.resolve(SIMD3(c.x, 0, c.y), 0.6)
             let p = SIMD2(q.x, q.z)
-            let d = near(p) - 0.2 * simd_distance(p, here)
+            let d = min(near(p), group.trayDistance(p) + 0.5) - 0.2 * simd_distance(p, here)
             if best == nil || d > best!.d { best = (d, p) }
         }
         if let best { brain.requestNow(.goTo(best.p)) }
