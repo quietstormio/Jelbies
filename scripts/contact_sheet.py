@@ -6,7 +6,11 @@ dur=float(subprocess.check_output(["ffprobe","-v","error","-show_entries","forma
 n=8; ts=[dur*(i+0.5)/n for i in range(n)]
 d=tempfile.mkdtemp(); ims=[]
 for i,t in enumerate(ts):
-    f=f"{d}/{i}.png"; subprocess.run(["ffmpeg","-loglevel","error","-y","-ss",f"{t:.3f}","-i",mp4,"-frames:v","1",f,],stdin=subprocess.DEVNULL); ims.append(Image.open(f).convert("RGB"))
+    f=f"{d}/{i}.png"
+    for back in (0.0,0.15,0.4,0.8):          # (a clip of a few frames: a seek past the last frame writes nothing; step back until a frame comes, else repeat the previous one)
+        subprocess.run(["ffmpeg","-loglevel","error","-y","-ss",f"{max(t-back,0):.3f}","-i",mp4,"-frames:v","1",f,],stdin=subprocess.DEVNULL)
+        if os.path.exists(f): break
+    ims.append(Image.open(f).convert("RGB") if os.path.exists(f) else ims[-1].copy())
 w=700; ims=[im.resize((w,int(im.height*w/im.width))) for im in ims]; h=ims[0].height
 cols=2; rows=4; sh=Image.new("RGB",(cols*w,rows*h),"white")
 try: font=ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc",28)

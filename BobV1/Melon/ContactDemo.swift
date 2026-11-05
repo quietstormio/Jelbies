@@ -74,7 +74,7 @@ enum ContactDemo {
     @MainActor final class GapLog {
         let brains: [BlobBrain]
         var pairs: [(Int, Int)] = []
-        struct Sample { var touching: Bool; var ph: Int; var withF: [Float]; var body: [Float] }
+        struct Sample { var touching: Bool; var ph: Int; var withF: [Float]; var body: [Float]; var hand: [Float] }
         var samples: [Sample] = []
         init(_ b: [BlobBrain]) { brains = b; for i in 0..<b.count { for j in (i + 1)..<b.count { pairs.append((i, j)) } } }
         func cm(_ v: Float?) -> Float { v.map { $0 * 100 } ?? .nan }
@@ -82,8 +82,13 @@ enum ContactDemo {
         func sample(ph: Int, dmin: Float) -> String {
             let f = pairs.map { cm(ContactField.gap(brains[$0.0].steerID, brains[$0.1].steerID, features: true)) }
             let b = pairs.map { cm(ContactField.gap(brains[$0.0].steerID, brains[$0.1].steerID, features: false)) }
-            samples.append(Sample(touching: dmin <= 1.55, ph: ph, withF: f, body: b))
-            return " gaps[" + pairs.enumerated().map { String(format: "%d-%d:%.1f/%.1f", $1.0, $1.1, f[$0], b[$0]) }.joined(separator: " ") + "]cm(feat/body)"
+            // the hand gap (user rule 2): the least, over both directions, of a drawn hand tip to the other body's skin outline (+ hovers, 0 rests on the skin, - inside); nan = no arm drawn
+            let h: [Float] = pairs.map { p in
+                let x = [ContactField.handGap(brains[p.0].steerID, against: brains[p.1].steerID), ContactField.handGap(brains[p.1].steerID, against: brains[p.0].steerID)].compactMap { $0 }
+                return x.isEmpty ? Float.nan : (x.min()! * 100)
+            }
+            samples.append(Sample(touching: dmin <= 1.55, ph: ph, withF: f, body: b, hand: h))
+            return " gaps[" + pairs.enumerated().map { String(format: "%d-%d:%.1f/%.1f", $1.0, $1.1, f[$0], b[$0]) }.joined(separator: " ") + "]cm(feat/body) hand[" + pairs.enumerated().map { String(format: "%d-%d:%.1f", $1.0, $1.1, h[$0]) }.joined(separator: " ") + "]cm"
         }
         /// The scene's summary, per pair: min gap over the touching ticks, median over the hold ticks, both with and without features. The hold ticks are the ticks in a HOLD step of the stance table
         /// (`isHold(phase)`, from ContactStance: the step whose target is the plush press), not the phase with the most touching ticks (a long walk-in phase used to win that); without a table
@@ -100,8 +105,8 @@ enum ContactDemo {
             func med(_ a: [Float]) -> Float { let v = a.filter { !$0.isNaN }.sorted(); return v.isEmpty ? .nan : v[v.count / 2] }
             func mn(_ a: [Float]) -> Float { a.filter { !$0.isNaN }.min() ?? .nan }
             for (k, p) in pairs.enumerated() {
-                ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d (%@) minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm", p.0, p.1, touch.count, holdPh ?? -1, hold.count, isHold == nil ? "most-touching-phase" : "stance-table-hold",
-                                 mn(touch.map { $0.withF[k] }), mn(touch.map { $0.body[k] }), med(hold.map { $0.withF[k] }), med(hold.map { $0.body[k] }))
+                ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d (%@) minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm minHand=%.1f medHoldHand=%.1f cm(hand tip to the other skin, - = inside)", p.0, p.1, touch.count, holdPh ?? -1, hold.count, isHold == nil ? "most-touching-phase" : "stance-table-hold",
+                                 mn(touch.map { $0.withF[k] }), mn(touch.map { $0.body[k] }), med(hold.map { $0.withF[k] }), med(hold.map { $0.body[k] }), mn(touch.map { $0.hand[k] }), med(hold.map { $0.hand[k] }))
             }
         }
     }
@@ -176,7 +181,7 @@ enum ContactDemo {
             return
         }
         guard let kind = SocialKind(rawValue: name), let a = cast.first, let ab = a.brain, let bb = cast[1].brain else { note(" unknown kind %@", name); return }
-        if kind == .groupHug || kind == .circleDance || kind == .groupCheer {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
+        if kind.isGroup {          // (a group: everyone else in the cast joins; socialStart(kind, with: one) only finds the near ones)
             let ok = ab.socialStartGroup(kind, with: cast.dropFirst().compactMap(\.brain), a.sim)
             note(" %@ started=%d crew=%d", name, ok ? 1 : 0, cast.count)
             await logSpan(ok, ab, cast.compactMap(\.brain), kind: kind)
