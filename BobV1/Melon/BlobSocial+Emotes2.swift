@@ -11,7 +11,7 @@ import simd
 
 enum SpinHugTuning {
     static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.68...0.80, legs = 8
-    static let swayMargin: Float = 0.20
+    static let swayMargin: Float = 0.32
 }
 
 extension BlobBrain {
