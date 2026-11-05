@@ -732,6 +732,9 @@ extension BlobBrain {
 
     func runIdle(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let kind = idleState.kind else { script = .none; return }
+        // the tick a hop took off in (idleStart -> idleScootHop / idleStartHop): the hop owns the body from now on. Raising the pose and re-seeding the feet at the root's nominal spot
+        // here put the beans back at root + offset while the soles stood on the leaned spot (a ~4 cm jump of the drawn sole in one frame)
+        if hopStartedThisTick { hopStartedThisTick = false; if Self.hopFromSoles && gait.isHopping { idleState.phaseT += dt; return } }
         poseOn = true; ensureFeet(sim)
         idleState.phaseT += dt
         let hf = amplitude
@@ -1016,10 +1019,11 @@ extension BlobBrain {
     /// One bunny hop of the scoot: a small low hop toward the goal.
     func idleScootHop(_ sim: SoftBody) {
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
+        let takeoff = hopTakeoff()          // (before the feet are released: where the soles stand now)
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         let pose = sim.bodyPose(iterations: 6)
-        let here = SIMD2(pose.centroid.x, pose.centroid.z)
+        let here = takeoff ?? SIMD2(pose.centroid.x, pose.centroid.z)
         let d = idleState.target - here
         let dl = simd_length(d)
         var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader) ? 0 : min(Self.scootHop, dl)
@@ -1036,13 +1040,15 @@ extension BlobBrain {
         let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
         gait.hopApex = apex
         gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
-        gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
+        gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false, takeoff: takeoff)
+        hopStartedThisTick = true
         idleState.landT = 0
     }
     static let scootHop: Float = 0.34, scootApex: Float = 0.07, bounceApex: Float = 0.12
 
     /// Belly slide and scoot, ticked each step while they run (true = this tick is fully handled).
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        hopStartedThisTick = false
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
         guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .tossHeader || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
@@ -1082,7 +1088,7 @@ extension BlobBrain {
         if done {
             gait.basePitch = 0
             gait.hopApex = 0.10; gait.hopDuration = 0.26
-            currentPose(sim)
+            endHopPose(sim)
             armDirW = 0; armDirOut = 0
             idleFinish(skinner)
         }
@@ -1096,16 +1102,19 @@ extension BlobBrain {
 
     private func idleStartHop(_ sim: SoftBody, final: Bool) {
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.7)
+        let takeoff = hopTakeoff()
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         gait.facingYaw = yaw
         let pose = sim.bodyPose(iterations: 6)
-        gait.home = SIMD2(pose.centroid.x, pose.centroid.z)
+        let here = takeoff ?? SIMD2(pose.centroid.x, pose.centroid.z)
+        gait.home = here
         poseW = 0; poseOn = false
         // BODY-LED: the jacks' hop is higher (the body does the work; the arms are only little thumbs that flap), ballistic duration for the apex
         gait.hopApex = Self.jacksApex
         gait.hopDuration = 0.26 * sqrtf(Self.jacksApex / 0.10)
-        gait.hop(sim, to: SIMD2(pose.centroid.x, pose.centroid.z), reduceMotion: final || amplitude < 0.7)
+        gait.hop(sim, to: here, reduceMotion: final || amplitude < 0.7, takeoff: takeoff)
+        hopStartedThisTick = true
         idleState.landT = 0
     }
 
@@ -1132,7 +1141,7 @@ extension BlobBrain {
         }
         if idleState.hop >= total && !gait.isBusy {
             gait.basePitch = 0
-            currentPose(sim)
+            endHopPose(sim)
             armDirW = 0; armDirOut = 0
             idleState.jackA = 0
             idleFinish(skinner)

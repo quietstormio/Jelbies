@@ -86,6 +86,10 @@ struct GaitDriver {
     private var seed: UInt64 = 0x9E3779B97F4A7C15
 
     var isBusy: Bool { phase != .idle }
+    /// A plain hop is running (crouch, air or landing; not a flip or the belly slide, which have their own bean handling).
+    var isHopping: Bool { move == .hop && (phase == .crouch || phase == .air || phase == .land) }
+    /// The ramp (0...1) of the hop's stiff sole targets: in over `footGrip` s of the flight, out over the same at the start of the landing (the flip's `flipFootGrip` does the same).
+    static let hopFootGrip: Float = 0.06
     /// The contact settle moves the root while a hop / slide runs: the move's start and end points slide with it (else the move's own anchor undoes the nudge).
     mutating func nudge(_ d: SIMD2<Float>) { from += d; to += d }
     /// The settle during the CROUCH (soles planted): only the landing spot moves; the take-off stays where the soles are.
@@ -179,11 +183,13 @@ struct GaitDriver {
     }
 
     /// One scripted hop to the ground point `target` (x, z). Ignored while a move is running.
-    mutating func hop(_ sim: SoftBody, to target: SIMD2<Float>, reduceMotion: Bool = false, chained: Bool = false) {
+    /// `takeoff`: the point the crouch rights the body over (the brain passes the one that stands it over its planted soles, so a body leaned into a partner
+    /// does not slide its centroid-over-feet offset away in one tick); nil = over where the centroid is now.
+    mutating func hop(_ sim: SoftBody, to target: SIMD2<Float>, reduceMotion: Bool = false, chained: Bool = false, takeoff: SIMD2<Float>? = nil) {
         guard phase == .idle || phase == .recover || phase == .glide || phase == .land else { return }
         reduce = reduceMotion
         let pose = sim.bodyPose(iterations: 6)
-        from = SIMD2(pose.centroid.x, pose.centroid.z)
+        from = takeoff ?? SIMD2(pose.centroid.x, pose.centroid.z)
         var d = target - from
         let dl = simd_length(d)
         if dl > maxHop { to = from + d / dl * maxHop } else { to = target }
@@ -379,8 +385,8 @@ struct GaitDriver {
             let ge = groundTo >= groundFrom ? 1 - (1 - u) * (1 - u) : u * u
             let gOff = groundFrom + (groundTo - groundFrom) * ge - sim.floorY
             setUpright(sim, xz: xz, yaw: yawNow, squash: sy, lift: h + gOff, strength: kHop)
-            tuckFeet(sim, u: u, amp: amp)
-            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0 }
+            tuckFeet(sim, u: u, amp: amp, ramp: Self.hopTuckRamps ? smooth(t / Self.hopFootGrip) : 1)
+            if t >= T { phase = .land; t = 0; tuck = 0; if !Self.hopTuckRamps { sim.targets = [] } }
 
         case .land:
             let amp2 = amp
@@ -390,6 +396,9 @@ struct GaitDriver {
             let yawNow = yaw1 + wrap(facingYaw - yaw1) * faceT
             let k = kHop * (1 - smooth((t - 0.4) / 0.25))
             setUpright(sim, xz: to, yaw: yawNow, squash: sy, lift: 0, strength: k)
+            if Self.hopTuckRamps {          // the stiff sole targets of the flight fade out over the first 0.06 s of the landing (they were dropped in one frame)
+                if t < Self.hopFootGrip, move == .hop { tuckFeet(sim, u: 0, amp: 0, ramp: 1 - smooth(t / Self.hopFootGrip)) } else if !sim.targets.isEmpty { sim.targets = [] }
+            }
             if chained, t >= 0.1 {
                 let here = to
                 let rem = home - here
@@ -446,6 +455,7 @@ struct GaitDriver {
     }
 
     /// Feet tucked up toward the belly while he is in the air (the only time both feet may leave the floor).
+    nonisolated(unsafe) static var hopTuckRamps = true          // (false = the old one-frame on / off: before / after captures)
     private mutating func tuckFeet(_ sim: SoftBody, u: Float, amp: Float, ramp: Float = 1) {
         tuck = tuckHeight * amp * sinf(.pi * min(1, max(0, u)))
         let simTuck = min(tuck, simTuckCap)
