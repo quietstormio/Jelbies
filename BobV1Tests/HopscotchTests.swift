@@ -20,6 +20,9 @@ final class HopscotchTests: XCTestCase {
     override func tearDown() {
         DecorField.shared.clear(); ToyTuning.settle = 5; HopscotchTuning.joinChance = 0.35
         GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        // leave the process-wide room state as a fresh launch has it (one-Jelly camera and floor, the home room's colliders): endPark(3) keeps the wide 3-Jelly camera and the park's
+        // layout, which widened every later suite's walkable width (LineupTests testTrayNeverOffersAnUnreachableSidePlace failed after HopscotchTests)
+        GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }
 
     func parkLab(n: Int, seed: UInt64 = 5) -> SocialTests.Lab {
