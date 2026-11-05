@@ -256,3 +256,25 @@ final class TouchPetTests: XCTestCase {
         try r.rec.csv.write(toFile: path, atomically: true, encoding: .utf8)
     }
 }
+
+/// Regression (the "no hearts / buzz / purr when cuddling" report): a 3 s one-Jelbie stroke through TouchPlay must build the ramp and give
+/// hearts, haptic intensity and the purr, with no touch cancel in between.
+@MainActor
+final class CuddleStrokeRegressionTests: XCTestCase {
+    func testThreeSecondStrokeGivesHeartsBuzzAndPurr() {
+        let run = TouchPetTests.Run()
+        let eye = SIMD3<Float>(0, 0.9, 6)
+        var hearts = 0, purr: Float = 0
+        var t: Float = 0
+        while t < 3 {
+            run.frame(run.ray(localX: 0.38 + 0.12 * sinf(2 * .pi * 1.2 * t), localY: 0.15, eye: eye))
+            hearts = max(hearts, run.play.hearts.count); purr = max(purr, run.play.purrLevel)
+            t += 1.0 / 60
+        }
+        let buzz = run.rec.events.map { $0.intensity }.max() ?? 0
+        print("CUDDLE hearts \(hearts) purr \(purr) buzz \(buzz) love \(run.play.love)")
+        XCTAssertGreaterThan(hearts, 0, "hearts")
+        XCTAssertGreaterThan(buzz, 0, "haptic intensity")
+        XCTAssertGreaterThan(purr, 0, "purr")
+    }
+}
