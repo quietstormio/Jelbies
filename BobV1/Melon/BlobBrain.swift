@@ -714,7 +714,7 @@ final class BlobBrain {
     func endHopPose(_ sim: SoftBody) {
         let free = poseW <= 0
         currentPose(sim)
-        if free && Self.hopFromSoles { hopSeedSoles = true }
+        if free { hopSeedSoles = true }
     }
 
     func faceCameraYaw() -> Float {
@@ -905,17 +905,16 @@ final class BlobBrain {
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.8)
         // the stepping feet were held by stiff world targets: release them (and the rigid render feet) before the hop owns the body, or the
         // pinned soles drag it around (that was the hop "face-plant": the old resting spots stayed pinned while he squashed and travelled)
-        let takeoff = hopTakeoff()          // (before the feet are released: where the soles stand now)
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         gait.facingYaw = yaw
         gait.home = SIMD2(px, pz)
         // hops go along the way he is facing (no turning on the spot mid-hop, he stays upright and keeps facing the same way)
         let fwd: Float = distance ?? (rand() < 0.5 ? 0.45 : 0)
-        var t = (takeoff ?? SIMD2(px, pz)) + SIMD2(sinf(yaw), cosf(yaw)) * (fwd > 0 ? fwd : 0.0001)
+        var t = SIMD2(px, pz) + SIMD2(sinf(yaw), cosf(yaw)) * (fwd > 0 ? fwd : 0.0001)
         let rv = resolve(SIMD3(t.x, 0, t.y), footprint); t = SIMD2(rv.x, rv.z)
         poseW = 0
-        gait.hop(sim, to: t, reduceMotion: amplitude < 0.7, takeoff: takeoff)
+        gait.hop(sim, to: t, reduceMotion: amplitude < 0.7)
         script = .hopPlay; activity = .playing
     }
 
@@ -951,7 +950,7 @@ final class BlobBrain {
         idleReset(skinner)
         armActive = false; armBlend = 0; armPathName = ArmPath.wave.name; waveFootOff = false
         armWalkWant = 0
-        feet.reset(); feetInit = false; stepLive = false; walkFinal = false; pivotSide = nil; nubOverride = false; beanHold = 0; nubEnv = 0; nubTarget = 0; nubPhi = [0, 0]
+        feet.reset(); feetInit = false; stepLive = false; walkFinal = false; pivotSide = nil; nubOverride = false; beanHold = 0; nubEnv = 0; nubTarget = 0; nubPhi = [0, 0]; hopSeedSoles = false
         poseW = 0; poseOn = false
         script = .none
         job = nil
@@ -960,17 +959,9 @@ final class BlobBrain {
 
     // MARK: gait helpers
 
-    /// The hop's take-off point (the root that stands the upright body over the planted soles): nil unless the feet are world-planted right now.
-    /// A body leaned into a partner pivots on its soles; the crouch rights it over THEM instead of over the leaned centroid.
-    func hopTakeoff() -> SIMD2<Float>? {
-        guard Self.hopFromSoles, feetInit, geom.valid else { return nil }
-        return (feet.pos[0] + feet.pos[1]) * 0.5 - rotXZ(geom.midOff, yaw)
-    }
-    /// The hop is over: the next `ensureFeet` plants the feet where the sim soles are (set by `currentPose` after a hop).
+    /// The hop is over: the next `ensureFeet` plants the feet where the sim soles are (set by `endHopPose`).
     var hopSeedSoles = false
-    /// idleScootHop / idleStartHop ran this tick (runIdle then leaves the take-off tick to the hop).
-    var hopStartedThisTick = false
-    nonisolated(unsafe) static var hopFromSoles = true          // (false = the old take-off over the centroid / re-seed at root + offset: before / after captures)
+    nonisolated(unsafe) static var hopSeedFromSoles = true          // (false = the old re-seed at root + offset, a 7-8 cm jump of both soles in one frame at the end of every hop: before / after captures)
     /// Mean xz of each sim foot's lowest particles (the sole that is drawn when no bean is out).
     static func simSoleXZ(_ sim: SoftBody, _ g: FootGeom) -> [SIMD2<Float>]? {
         guard g.valid else { return nil }
@@ -990,7 +981,7 @@ final class BlobBrain {
     func ensureFeet(_ sim: SoftBody) {
         if !geom.valid { geom = FootGeom(sim: sim) }
         guard geom.valid, !feetInit else { return }
-        if hopSeedSoles, let soles = Self.simSoleXZ(sim, geom) {          // (the end of a hop: the feet are planted where the drawn soles stand, not at root + offset)
+        if hopSeedSoles, Self.hopSeedFromSoles, let soles = Self.simSoleXZ(sim, geom) {          // (the end of a hop: the feet are planted where the sim soles stand, not at root + offset)
             for k in 0..<2 { feet.pos[k] = soles[k]; feet.yaw[k] = yaw }
         } else {
             for k in 0..<2 { feet.pos[k] = SIMD2(px, pz) + rotXZ(geom.off[k], yaw); feet.yaw[k] = yaw }
@@ -1730,7 +1721,7 @@ final class BlobBrain {
                 if skinner.beanStart[s].count == FootBean.vertexCount { for i in 0..<FootBean.vertexCount { skinner.beanStart[s][i] = now.centroid + dq.act(skinner.beanStart[s][i] - old.centroid) } }
                 attachBean(sim, now, lifted: now.tilt > 0.3 || (skinner.beanPos[s].map(\.y).min() ?? 0) - sim.floorY > 0.02, &skinner.beanPos[s])
                 attachBean(sim, now, lifted: true, &skinner.beanPos[s])
-                if (beanForceLast || beanFitHold > 0 || (Self.hopBeansFitted && gait.isHopping)) && Self.forceLegsFix { Self.liftOntoFloor(&skinner.beanPos[s], floorY: sim.floorY) } else { for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) } }
+                if (beanForceLast || beanFitHold > 0) && Self.forceLegsFix { Self.liftOntoFloor(&skinner.beanPos[s], floorY: sim.floorY) } else { for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) } }
                 beanCorr[s] = .zero
                 continue
             }
@@ -1828,8 +1819,7 @@ final class BlobBrain {
             splay += max(-Self.splayOut, min(Self.splayIn, target - splay))
             beanSplay = splay
         } else if scale != 1 { splay = 0 }
-        let hopping = Self.hopBeansFitted && gait.isHopping          // the whole hop (crouch / flight / landing) on the fitted pose: no one-frame switch to the attractor pose at the 0.1 m / 0.12 gates, no snap at touch-down
-        let useFit = beanForce || beanFitHold > 0 || fitNeeded || hopping
+        let useFit = beanForce || beanFitHold > 0 || fitNeeded
         let fitted: BodyPose? = useFit ? fit : nil
         if scale == 1 { beanFitUsed = fitted }
         for s in 0..<2 {
@@ -1851,8 +1841,7 @@ final class BlobBrain {
             // 2026-10-28 (legs stay legs): in a flip (`beanForce`) the foot keeps its boot shape (`forceMorphCap`: no round bun pressed on the body) and a landing
             // squash that drives the fitted bean below the floor LIFTS the whole bean onto the floor instead of clamping every vertex to it (which flattened the foot into a
             // sliver / wedge under the belly: half of its vertices on the floor plane). Every other move keeps the per-vertex clamp, so the walk is untouched.
-            let flipShape = (beanForce || beanFitHold > 0) && Self.forceLegsFix && scale == 1          // (the flip's boot shape: also caps the ball morph)
-            let keepShape = flipShape || (hopping && Self.forceLegsFix && scale == 1)          // (a hop keeps each bean's shape and lifts it onto the floor, but rounds into the ball in the air as before)
+            let keepShape = (beanForce || beanFitHold > 0) && Self.forceLegsFix && scale == 1
             var lo = Float.infinity
             for i in 0..<FootBean.vertexCount {
                 var w = place(i, 0)
@@ -1862,7 +1851,7 @@ final class BlobBrain {
             }
             // off the floor (hop, jacks, flip, held in the air): the foot rounds into the ball
             var mo = scale == 1 ? Self.beanMorph(clearance: lo - sim.floorY) : 0
-            if flipShape { mo = min(mo, Self.forceMorphCap) }
+            if keepShape { mo = min(mo, Self.forceMorphCap) }
             if scale == 1 { beanMorphLast[s] = mo }
             if mo > 0 {
                 for i in 0..<FootBean.vertexCount { var w = place(i, mo); if !keepShape { w.y = max(w.y + tuck, sim.floorY) } else { w.y += tuck }; dst[s][i] = w }
@@ -1876,7 +1865,6 @@ final class BlobBrain {
     }
 
     /// The foot of a flip while it is out: boot at the floor, rounded no further than this (0 = boot, 1 = ball).
-    nonisolated(unsafe) static var hopBeansFitted = true          // (false = the old attractor-pose beans in a hop: before / after captures)
     static let forceMorphCap: Float = 0.25
     static let splayAngle: Float = 1.15, splayStretch: Float = 0.25, splayIn: Float = 0.17, splayOut: Float = 0.11
     /// The top of the leg (the buried crown) in bean-local coordinates: the hip the V pivots about.
