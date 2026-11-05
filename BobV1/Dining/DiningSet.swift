@@ -280,13 +280,15 @@ final class DiningSet {
     func nextPiece(place i: Int) -> Int { DiningTiming.bitesPerServing - bitesLeft[i] }
     var totalBitesLeft: Int { bitesLeft.reduce(0, +) }
 
-    /// The café's regulars' little tables do not register a floor collider (the global list belongs to the player's table).
+    /// The café's regulars' little tables register their collider in `RoomLayout.tableBoxes` (one entry per table); the player's tray owns `RoomLayout.dynamicBoxes`.
     var registersCollider = true
+    private var tableKey: Int { ObjectIdentifier(self).hashValue }
+    private func clearColliders() { if registersCollider { RoomLayout.dynamicBoxes = [] } else { RoomLayout.tableBoxes[tableKey] = nil } }
     private func refreshColliders() {
-        guard registersCollider else { return }
-        guard phase != .absent, phase != .poofing else { RoomLayout.dynamicBoxes = []; return }         // the collider goes the moment the tray starts to poof
+        guard phase != .absent, phase != .poofing else { clearColliders(); return }         // the collider goes the moment the tray starts to poof
         let s = max(scale, 0.001)
-        RoomLayout.dynamicBoxes = [.init(centre: origin, half: layout.colliderHalf * s, height: (DiningDims.trayTop + DiningDims.trayRim) * s)]          // (the DINERS' collider: they come in over the bed's rim by design, see `drawnBox`)
+        let box = RoomLayout.FlatBox(centre: origin, half: layout.colliderHalf * s, height: (DiningDims.trayTop + DiningDims.trayRim) * s)          // (the DINERS' collider: they come in over the bed's rim by design, see `drawnBox`)
+        if registersCollider { RoomLayout.dynamicBoxes = [box] } else { RoomLayout.tableBoxes[tableKey] = box }
     }
     /// The tray as DRAWN, floor footprint: the bed with its rim and both end handles (the mesh is built in `DiningModels.tray` and shifted `trayCentreZ`). The DINERS keep to the thin
     /// `colliderHalf` bar above on purpose (the stands lie behind the tray, and on a floor about as wide as the tray the only way to them is over its ends); everybody ELSE
@@ -349,7 +351,7 @@ final class DiningSet {
         guard phase == .popping || phase == .present else { return }
         startScale = scale
         phase = .poofing; t = 0
-        RoomLayout.dynamicBoxes = []                                  // the collider is gone at once
+        clearColliders()                                  // the collider is gone at once
         puffNow()
         pieceInHand = Array(repeating: nil, count: n); piecePose = Array(repeating: nil, count: n)
         for i in 0..<n where forkPhase[i] != 0 && forkPhase[i] != 3 { poofFork(place: i) }          // a fork still in hand goes with the tray
@@ -363,7 +365,7 @@ final class DiningSet {
         forkBite = Array(repeating: false, count: n); biteFlying = Array(repeating: false, count: n); biteFlight = Array(repeating: nil, count: n)
         forkT = Array(repeating: 0, count: n); forkPhase = Array(repeating: 0, count: n)
         puffs.reset()
-        RoomLayout.dynamicBoxes = []
+        clearColliders()
         dirty = true
     }
 

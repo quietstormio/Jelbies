@@ -177,11 +177,25 @@ final class DiningGroup {
         beginApproach()
     }
 
+    // MARK: gather first, then the tray
+
+    /// Floor spots of the Jelbies who are NOT at this sitting (GameCare sets it every tick): the tray pops in only where none of them stands.
+    var bystanders: () -> [SIMD2<Float>] = { [] }
+    /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
+    /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
+    static let gatherCap: Float = 12
+    /// A bystander closer than this to the tray's rectangle holds the pop-in back (his belly + a margin), for at most 4 s past the cap.
+    static let trayClearance: Float = 0.7
+    /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
+    func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
+    private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
+    private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
+
     private func beginApproach() {
         state = .approaching; requested = false; settle = 0
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
-        spawnTray()
+        if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
         for i in brains.indices where !released[i] { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
         requested = true
@@ -274,7 +288,7 @@ final class DiningGroup {
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
         case .approaching:
-            if !trayOut { spawnTray() }
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) { spawnTray() }
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }

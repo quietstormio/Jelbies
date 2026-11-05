@@ -42,21 +42,16 @@ final class TrayObstacleTests: XCTestCase {
         var legMoved: Float = 0
         /// A new leg: a body standing where a tray was set down eases out of it only once he steps (the guard works on a stepping root), so a leg is judged after its first 0.4 of walking.
         func beginLeg() { legMoved = 0; last = nil }
-        var shown = 0, atT: Float = 0, worst: Float = -.infinity, at = SIMD2<Float>.zero, travelled: Float = 0, lag: Float = 0
+        var onlyWalking = true, atT: Float = 0, worst: Float = -.infinity, at = SIMD2<Float>.zero, travelled: Float = 0, lag: Float = 0
         var last: SIMD2<Float>?
         func sample(_ r: DiningJellyTests.Room, _ id: Int) {
             let f = r.actors[id].floor
             defer { last = f }
             if let l = last, simd_distance(l, f) < 0.5 { travelled += simd_distance(l, f); legMoved += simd_distance(l, f) }
-            guard legMoved > 0.4 else { return }
-            guard r.actors[id].isWalking else { return }          // (only a body on the move: one that stands where the tray was set down is the serving's business, not a walk through it)
+            guard legMoved > 0.4 || !onlyWalking else { return }
+            guard !onlyWalking || r.actors[id].isWalking else { return }          // (only a body on the move: one that stands where the tray was set down is the serving's business, not a walk through it)
             let intr = TrayObstacleTests.belly - TrayObstacleTests.drawnDistance(r, f)
             if intr > worst { worst = intr; at = f; atT = r.t }
-            if intr > TrayObstacleTests.tolerance, shown < 3, let b = r.actors[id].brain {
-                shown += 1
-                let c = r.actors[id].sim.centroid()
-                print("TRAYDIAG id=\(id) t=\(r.t) intr=\(intr) floor=\(f) root=\(b.position) centroid=\(SIMD2(c.x, c.z)) poseW=\(b.poseW) act=\(b.activity) drawnDist=\(TrayObstacleTests.drawnDistance(r, f)) rootDist=\(TrayObstacleTests.drawnDistance(r, b.position))")
-            }
             let c = r.actors[id].sim.centroid()
             lag = max(lag, simd_distance(SIMD2(c.x, c.z), f))          // the drawn body against its root
         }
@@ -90,9 +85,10 @@ final class TrayObstacleTests: XCTestCase {
         }
     }
 
-    /// A tag chase between two Jelbies whose play floor has the tray in the middle (a social walk-up and the runs after it use the same floor rules).
-    func testSocialChaseAcrossTheTrayNeverEntersIt() {
-        for kind in [SocialKind.chase, .follow] {
+    /// Social walk-ups and runs between two Jelbies whose play floor has the tray in the middle (they use the same floor rules): the pair meets on the far side, through the tray if it let them.
+    func testSocialWalkUpsAcrossTheTrayNeverEnterIt() {
+        var startedKinds: [SocialKind] = []
+        for kind in [SocialKind.follow, .sneak, .bump, .boop, .chase] {
             let r = room()
             standTray(r, n: 3, origin: SIMD2(0, 0.9))
             let d = r.care.dining
@@ -104,11 +100,59 @@ final class TrayObstacleTests: XCTestCase {
             guard let ab = a.brain, let bb = b.brain else { return XCTFail("brains") }
             let started = ab.socialStart(kind, with: bb, a.sim)
             print("TRAY social \(kind): started=\(started)")
+            guard started else { continue }
+            startedKinds.append(kind)
             let pa = Probe(), pb = Probe()
+            pa.beginLeg(); pb.beginLeg()
             r.run(30) { pa.sample(r, 0); pb.sample(r, 2); return false }
             print("TRAY social \(kind): worst intrusion \(pa.worst) / \(pb.worst), walked \(pa.travelled) / \(pb.travelled)")
-            XCTAssertGreaterThan(pa.travelled + pb.travelled, 1, "\(kind): they really moved")
+            XCTAssertGreaterThan(pa.travelled + pb.travelled, 3, "\(kind): they really moved")
             XCTAssertLessThan(max(pa.worst, pb.worst), Self.tolerance, "\(kind): a body went into the drawn tray: \(pa.worst) at \(pa.at), \(pb.worst) at \(pb.at)")
+        }
+        XCTAssertGreaterThanOrEqual(startedKinds.count, 2, "at least two social kinds started (\(startedKinds))")
+    }
+
+    /// A hop toward the tray from its front edge does not land in it or carry the body over it.
+    func testHopTowardTheTrayStaysOut() {
+        let r = room()
+        standTray(r, n: 1, origin: SIMD2(0, 0.6))
+        let d = r.care.dining, box = d.drawnBox(scale: d.scale)
+        let a = r.actors[0]
+        a.sim.teleport(toXZ: SIMD2(0, box.centre.y + box.half.y + 0.7)); a.brain?.poseW = 0; a.brain?.currentPose(a.sim)
+        a.brain?.yaw = .pi          // (facing -z: toward the tray)
+        r.run(1)
+        let p = Probe(); p.onlyWalking = false
+        a.brain?.startHopPlay(sim: a.sim, distance: 1.2)
+        r.run(4) { let c = a.sim.centroid(); let intr = Self.belly - Self.drawnDistance(r, SIMD2(c.x, c.z)); if intr > p.worst { p.worst = intr; p.at = SIMD2(c.x, c.z) }; return false }
+        print("TRAY hop: worst belly intrusion \(p.worst) at \(p.at)")
+        XCTAssertLessThan(p.worst, Self.tolerance + 0.1, "a hop toward the tray put the body into it: \(p.worst) at \(p.at)")          // (the hop's body is soft: 0.1 of slack over a walk)
+    }
+
+    /// A real 3-Jelbie meal from scattered starts: the diners gather at their places with no tray out, it is drawn only then, and no diner's belly is ever in it; the line-up is as quick as ever.
+    func testGroupMealDinersNeverEnterTheTray() {
+        for (drink, scatter, limit) in [(false, Float(0), Float(8)), (true, 0, 8), (false, 13, 14), (true, 13, 14)] {
+            let r = DiningJellyTests.Room(count: 3, wander: scatter > 0)
+            DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+            r.run(max(1, scatter))
+            for a in r.actors { a.brain?.autonomy = false }
+            r.run(0.5)
+            r.care.store.grant("berries", 3)
+            if drink { r.care.drink() } else { r.care.feed("berries") }
+            let probes = (0..<3).map { _ in Probe() }
+            for p in probes { p.onlyWalking = false; p.beginLeg(); p.legMoved = 1 }
+            var servedAt: Float?, trayAt: Float?
+            let t0 = r.t
+            r.run(30) {
+                if r.care.dining.phase != .absent { trayAt = trayAt ?? r.t; for i in 0..<3 { probes[i].sample(r, i) } }
+                if r.care.group.state == .serving { servedAt = servedAt ?? r.t; return r.t - (servedAt ?? r.t) > 4 }
+                return false
+            }
+            let worst = probes.map(\.worst)
+            print("TRAY group drink=\(drink) scatter=\(scatter): serving after \((servedAt ?? 99) - t0) s, tray drawn after \((trayAt ?? 99) - t0) s, worst diner intrusion \(worst)")
+            XCTAssertNotNil(servedAt, "drink=\(drink) scatter=\(scatter): the meal reaches serving")
+            XCTAssertLessThan((servedAt ?? 99) - t0, limit, "drink=\(drink) scatter=\(scatter): line-up time")
+            // (a sipper stands 0.08 nearer the tray: his belly may overlap the bed by that much)
+            XCTAssertLessThan(worst.max() ?? 0, Self.tolerance + (drink ? GameCare.sipCloser : 0), "drink=\(drink) scatter=\(scatter): a diner's belly was in the drawn tray: \(worst)")
         }
     }
 

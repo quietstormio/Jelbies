@@ -501,7 +501,7 @@ final class GameCare {
     static let trayPasserScale: Float = 0.7
     /// Is Jelbie `id` eating from the tray right now (a single serving for him, or a seat at the group's sitting)? Only he may stand at its rim.
     func isDiner(_ id: Int) -> Bool {
-        if group.isActive || groupWanted != nil { return group.memberIDs.contains(id) }
+        if group.isActive || groupWanted != nil { return group.isHolding(id) }          // (a diner who is done is a passer-by again)
         return (wanted != nil || meal != nil) && mealJelly == id
     }
     /// The tray as an obstacle for Jelbie `id` whose footprint radius is `r`: a passer-by keeps `trayPasserScale` of `r` off the whole drawn tray (bed, rim, handles);
@@ -668,8 +668,9 @@ final class GameCare {
     static let approachBack: Float = 0.25
     /// After a walk to the stand he stands still this long before the tray pops in.
     static let popSettle: Float = 0.45
-    /// The tray pops in as soon as a meal is asked for, wherever he stands (he then walks over and eats).
-    static let trayFirst = true
+    /// false (was true): the tray pops in only once he is at (or behind) his place and no other Jelbie stands where it lands: he walks there with no tray out, so no body ever
+    /// crosses it on the way (`serveWanted`; a group does the same, `DiningGroup.gatherCap`).
+    static let trayFirst = false
 
     /// The tray never pops in where he would have to cross it. The visible floor beside the 1.56-wide tray is only ~0.2 u wide, so there is NO
     /// on-screen way around it for a body 1.4 wide: instead the tray waits until he is at (or behind) his stand line. If he is in front of
@@ -683,6 +684,8 @@ final class GameCare {
         wantedAge += dt
         if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
         if Self.trayFirst || here.y <= stand.y + Self.popTolerance {
+            let busy = jellyFloors.enumerated().contains { $0.offset != mealJelly && DiningSpot.distance(from: $0.element, origin: origin, layout: layout) < DiningGroup.trayClearance }
+            if busy, wantedAge < DiningGroup.gatherCap / 2 { return }          // (somebody stands where it lands: `stepAside` moves him off first)
             // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
             if standRequested {
                 if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }

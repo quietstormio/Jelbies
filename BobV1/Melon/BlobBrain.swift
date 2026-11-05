@@ -666,6 +666,7 @@ final class BlobBrain {
         poseOn = false
         HopDiag.lap(.tkIdle, &ht)
         runScript(sim, skinner, dt)
+        if poseW > 0, let g = rootGuard { let q = g(SIMD2(px, pz)); px = q.x; pz = q.y }          // (every root writer: hops, flips, scooter, sleep moves, decor play ... not just a walk's step)
         HopDiag.lap(.tkScript, &ht)
         toyPoseTick()
         HopDiag.lap(.tkToy, &ht)
