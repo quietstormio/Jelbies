@@ -544,7 +544,7 @@ nonisolated struct RaceSim: Sendable {
                 r.planFor = r.nextHurdle
                 let skill = 0.5 * RaceTuning.clamp01(r.stats.focus) + 0.5 * RaceTuning.clamp01(r.stats.waddle)
                 r.planJump = r.isPlayer || r.rng.next() < HurdleTuning.rivalSuccess(skill: skill)
-                r.planLead = r.rng.range(0.5, 0.6)
+                r.planLead = r.rng.range(HurdleTuning.takeoffLead.lowerBound, HurdleTuning.takeoffLead.upperBound)
             }
             if r.planFor == r.nextHurdle, r.planJump, r.dist >= hs[r.nextHurdle] - HurdleTuning.contactLead - r.planLead { go = true }
         }
