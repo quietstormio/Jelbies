@@ -233,7 +233,7 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t >= 0.12 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
+                    jellyKick = max(jellyKick, impactKick(2.8)); o.jellyKick = max(o.jellyKick, impactKick(2.8))
                     contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }
@@ -243,7 +243,7 @@ extension BlobBrain {
             if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || s.phaseT >= 0.18 {
                 socialBook.hopStarted = true
                 socialBook.hold = false; socialBook.faceYaw = nil
-                jellyKick = max(jellyKick, 2.0)
+                jellyKick = max(jellyKick, impactKick(2.0))
                 if idleStart(.bounce, sim) { idleState.reps = 2 } else { startHopPlay(sim: sim, distance: 0.0001) }
             }
             if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.4, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil { s.finish(.done) }
@@ -273,7 +273,7 @@ extension BlobBrain {
                 socialBook.wantPitch = 0.20 * pulse(t, up: 0.14, down: 0.30)
                 if !s.impacted, t >= 0.12 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 3.0)
+                    jellyKick = max(jellyKick, impactKick(1.6)); o.jellyKick = max(o.jellyKick, impactKick(3.0))
                     contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }

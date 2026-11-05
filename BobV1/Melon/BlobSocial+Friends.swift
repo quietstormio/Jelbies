@@ -77,15 +77,15 @@ extension BlobBrain {
         let d = simd_distance(me, you)
         if kind.isFast, fastOthers(except: [o]) > 0 { return false }
         switch kind {
-        case .cheekSquish, .hopAlong, .highFive:
-            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * (kind == .cheekSquish ? 0.9 : (kind == .highFive ? EmoteTuning.highFiveGap : 1.0))) else { return false }
+        case .cheekSquish, .hopAlong:
+            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * (kind == .cheekSquish ? 0.9 : 1.0)) else { return false }
             let s = newSession(kind, with: o, duration: kind == .cheekSquish ? vDur(3.6) : 0)
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
-        case .chestBump, .hum, .twirl:
+        case .chestBump, .hum, .twirl, .highFive:
             guard d > 0.5, d < 5.5 else { return false }
-            let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : 0.78)
+            let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : (kind == .highFive ? 0.9 : 0.78))
             let away = (me - you) / max(d, 1e-3)
             let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
@@ -161,25 +161,25 @@ extension BlobBrain {
         }
         let t = s.phaseT
         switch s.phase {
-        case 2:    // both hop on the spot (b a hair later); the bellies meet at the top
-            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || t >= 0.06 {
-                socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil
-                startHopPlay(sim: sim, distance: 0.0001)
-            }
+        case 2:    // both crouch, rise (a stretch up = the "jump") and meet bellies at the top, then settle: the pair keeps its skin contact through the move (a scripted hop on the spot moved a touching pair 7-14 cm apart
+            // at take-off / landing - Locomotion eases the body from the sim centroid to the root - and the stance then walked it out and back; the real hop is the cheer after the bump)
+            faceEach(o)
+            socialBook.hopStarted = true
             let m = t - 0.16
             socialBook.wantPitch = 0.20 * pulse(m, up: 0.12, down: 0.20) - 0.12 * pulse(m - 0.26, up: 0.10, down: 0.30)
             socialBook.wantRoll = (isA ? 1 : -1) * 0.06 * pulse(m - 0.26, up: 0.10, down: 0.30)
-            socialBook.wantSquash = 1 - 0.12 * pulse(m - 0.10, up: 0.08, down: 0.26)
+            socialBook.wantSquash = 1 - 0.12 * pulse(m - 0.10, up: 0.08, down: 0.26) + 0.05 * pulse(m - 0.34, up: 0.08, down: 0.22)
             if isA {
                 if !s.impacted, t >= 0.34 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
+                    jellyKick = max(jellyKick, impactKick(3.0)); o.jellyKick = max(o.jellyKick, impactKick(3.0))
                     contactBoopFallback(o)
                     contactCueFallback(o, .squish, 0.9)
                 }
-                if t > 0.6, socialBook.hopStarted, o.socialBook.hopStarted, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil {
+                if t > 1.0, o.socialBook.hopStarted {
                     s.round += 1
-                    if s.round >= 2 { s.setPhase(3) } else { s.setPhase(1) }
+                    // (round 2 bumps again from where they stand: going back through phase 1 re-squared the pair, a turn step at contact whose parting retreat opened the gap 20 cm before the second bump)
+                    if s.round >= 2 { s.setPhase(3) } else { s.setPhase(2); s.impacted = false }
                 } else if t > 4 { s.finish(.aborted) }
             }
         default:    // a happy hop each and a cheer
@@ -200,12 +200,11 @@ extension BlobBrain {
     /// then lean IN together (tilt <= 0.35 rad, from the body: feet planted, the roots do not move) until the cheeks / upper sides meet: a squish (squash + a jelly kick, the contact wobble), the boop, the one haptic tap, happy eyes and hearts;
     /// both spring back with a second jiggle and part. No arm raise at all: the arms just jiggle with the body. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown).
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
-        if openSideBySide(s, o, isA, settle: 0.5) { return }
+        // (2026-11-04: face to face like the chest bump - the pair's stance (ContactStance .highFive, facing .each) walks to ONE meeting spot decided for that posture; the old side by side + 30 deg turn made the
+        // touch distance change while the bodies turned, and the stance walk swung the gap -6 ... +30 cm)
+        if openFaceToFace(s, o, isA, settle: 0.5) { return }
         let t = s.phaseT
-        let cam = faceCameraYaw()
-        let turn: Float = wrapAngle(yawTo(o.position) - cam) >= 0 ? 0.52 : -0.52          // ~30 deg toward the partner
-        let aim = smooth01(t / 0.4)
-        holdFacing(cam + turn * aim)
+        faceEach(o)
         let g = socialGentle
         switch s.phase {
         case 2:
@@ -224,7 +223,7 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t >= 0.95 {          // the cheeks meet
                     s.impacted = true; s.bumpT = t
-                    jellyKick = max(jellyKick, 2.8); o.jellyKick = max(o.jellyKick, 2.8)
+                    jellyKick = max(jellyKick, impactKick(2.8)); o.jellyKick = max(o.jellyKick, impactKick(2.8))
                     contactBoopFallback(o)
                     contactCueFallback(o, .highFiveBoop, 0.85, haptic: .emote("highFive.bump"))
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
@@ -232,7 +231,7 @@ extension BlobBrain {
                 if s.impacted {
                     if s.passes == 0, t - s.bumpT >= 0.42 {          // the second jiggle
                         s.passes = 1
-                        jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
+                        jellyKick = max(jellyKick, impactKick(1.8)); o.jellyKick = max(o.jellyKick, impactKick(1.8))
                         AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                     }
@@ -257,7 +256,7 @@ extension BlobBrain {
         socialBook.wantEyes = 1 - 0.9 * lean                                                  // eyes closed
         socialBook.wantSquash = 1 - 0.022 * lean * (0.6 + 0.4 * sinf(2 * .pi * ft * 1.3))    // the hum, felt as a faint shiver
         // a soft ripple about every 1.1 s, one chirp each (a first, b after), and a heart
-        if lean > 0.6, ft.truncatingRemainder(dividingBy: 1.1) < 0.03 { jellyKick = max(jellyKick, 0.7) }
+        if lean > 0.6, ft.truncatingRemainder(dividingBy: 1.1) < 0.03 { jellyKick = max(jellyKick, impactKick(0.7)) }
         if isA {
             if !s.impacted, ft > 0.7 {
                 s.impacted = true
