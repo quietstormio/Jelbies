@@ -162,7 +162,7 @@ final class SocialFeetTests: XCTestCase {
                         let clr = r.renderedFootGap(s)
                         if clr < Self.planted { xz = r.renderedFootXZ(s); isPlanted = true; res.plantedFloat = max(res.plantedFloat, clr); res.plantedFrames += 1; if r.brain.social?.phase ?? 0 >= 1 { res.plantedInSession += 1 } }
                     }
-                    if tracing, i == 0 { trace.append(String(format: "%d\tfoot%d\tplanted %d\txz %.3f %.3f\tclr %.3f\tph %d\tact %@\tfeetActive %d swinging %d side %d stepLive %d beans %d\troot %.3f %.3f", frame, s, isPlanted ? 1 : 0, r.renderedFootXZ(s).x, r.renderedFootXZ(s).y, r.renderedFootGap(s), r.brain.social?.phase ?? -1, "\(r.brain.activity)", r.brain.feet.active ? 1 : 0, r.brain.feet.swinging ? 1 : 0, r.brain.feet.side, r.brain.stepLive ? 1 : 0, sk.beansActive ? 1 : 0, r.root.x, r.root.y)) }
+                    if tracing, i == 0 { trace.append(String(format: "%d\tfoot%d\tplanted %d\txz %.3f %.3f\tclr %.3f\tph %d\tact %@\tfeetActive %d swinging %d side %d stepLive %d beans %d\troot %.3f %.3f\tfeetInit %d poseW %.3f", frame, s, isPlanted ? 1 : 0, r.renderedFootXZ(s).x, r.renderedFootXZ(s).y, r.renderedFootGap(s), r.brain.social?.phase ?? -1, "\(r.brain.activity)", r.brain.feet.active ? 1 : 0, r.brain.feet.swinging ? 1 : 0, r.brain.feet.side, r.brain.stepLive ? 1 : 0, sk.beansActive ? 1 : 0, r.root.x, r.root.y, r.brain.feetInit ? 1 : 0, r.brain.poseW)) }
                     if isPlanted {
                         let sessNow: Bool = { if case .social = sc { return (r.brain.social?.phase ?? 0) >= 1 }; return frame > 60 }()
                         if start[i][s] != nil, startSess[i][s] != sessNow { endPhase(i, s) }          // (a phase never spans the walk-up and the session)
