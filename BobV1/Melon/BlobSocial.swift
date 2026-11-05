@@ -112,6 +112,10 @@ struct SocialBook {
     var pitch: Float = 0, roll: Float = 0, squash: Float = 1
     var wantPitch: Float = 0, wantRoll: Float = 0, wantSquash: Float = 1, wantEyes: Float = 1
     var squinting = false
+    /// THE HAND REACH (BlobSocial+Hands.swift, user rule 2): what the drive asks of the arms this tick (nil = nothing) and the eased state of the override it drives.
+    var handWant: HandReach?, handLast: HandReach?
+    var handW: Float = 0, handOn = false, handOut: Float = 0, handPrevD: Float = 0
+    var handEl: [Float] = [0.15, 0.15], handSa: [Float] = [0, 0]
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
     /// ringAround: this one has walked out to his spot on the ring.
@@ -342,10 +346,15 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5 else { return false }
             let gap = peerGap
             let away = (me - you) / max(d, 1e-3)
-            let spot = fixed(you + away * standGap(o, along: away, gap))
-            guard simd_distance(spot, you) < gap + 0.3 else { return false }
+            var spot = fixed(you + away * standGap(o, along: away, gap))
+            if kind == .boop {          // (user rule 2: the boop stands SIDE BY SIDE at hand reach - the walk-up comes in along the pair's lateral axis, ContactStance .boop / BlobSocial+Hands.swift)
+                guard let side = sideSpot(of: o, gap: gap) else { return false }
+                spot = side
+            }
+            guard simd_distance(spot, you) < gap + 0.3 || kind == .boop else { return false }
             let s = newSession(kind, with: o, duration: kind == .squabble ? rand(5, 8) : 0)
-            o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me)
+            if kind == .boop { s.goal = spot; o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw() }
+            else { o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me) }
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .follow:
             guard d > peerGap * 0.8, d < 5.5 else { return false }
@@ -541,6 +550,7 @@ extension BlobBrain {
         if !socialBook.pair.isEmpty { for k in socialBook.pair.keys { socialBook.pair[k]! -= dt } }
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
+        socialBook.handWant = nil
 
         if socialBook.stopAll {
             socialBook.stopAll = false
@@ -559,6 +569,7 @@ extension BlobBrain {
             if social == nil { socialGroupWatch(sim, dt) }
             if social == nil { socialTreatWatch(sim, dt) }
         }
+        socialHandsTick(sim, dt)
         // ease the overlays (exactly neutral when nothing asks for them)
         let k = min(1, 16 * dt), b = socialBook
         socialBook.pitch += (b.wantPitch - b.pitch) * k
@@ -583,7 +594,7 @@ extension BlobBrain {
         let s = social
         socialBook.hold = false; socialBook.faceYaw = nil; socialBook.passThrough = false; leapGaitOff(); waveFootOff = false
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
-        if hard { socialBook.pitch = 0; socialBook.roll = 0; socialBook.squash = 1 }
+        if hard { socialBook.pitch = 0; socialBook.roll = 0; socialBook.squash = 1; socialBook.handW = 0 }
         if socialBook.squinting { socialBook.squinting = false; skinner?.setEyeOpenness(1) }
         socialBook.lookPeer = nil; socialBook.lookAway = false
         // (leaving a close partner: the first turns away must not swing the skin into him)
@@ -722,40 +733,27 @@ extension BlobBrain {
     // MARK: boop
 
     private func driveBoop(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        let d = simd_distance(position, o.position)
-        if !isA { // the one being visited stands and watches him come
-            socialBook.hold = true; socialBook.faceYaw = yawTo(o.position)
+        // 2026-11-05 (user rule 2): the pair stands SIDE BY SIDE at hand reach (ContactStance .boop: the bodies keep HandReach.gapBoop apart) and the booper's arm comes up and reaches across the gap; the
+        // hand ends ON the partner's flank (BlobSocial+Hands.swift solves the elevation so the pole of the hand sits on his skin). The bodies never press: the hand is the contact.
+        if openSideBySide(s, o, isA, settle: 0.6) {
+            // (the arm comes up on the way in: the walk-up's touch distance then counts the hand, and the last steps land the HAND on the partner's arm)
+            if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+            return
         }
-        switch s.phase {
-        case 0: // walking up
-            if !isA { return }
-            if scriptIsNone { faceEach(o) }
-            if s.t > 16 { s.finish(.aborted); return }
-            if scriptIsNone && s.phaseT > 0.3 {
-                if d < peerGap + 0.35 { s.setPhase(1) } else { s.finish(.aborted) }
+        let t = s.phaseT
+        socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
+        let tap = pulse(t - 0.10, up: 0.08, down: 0.30)
+        socialBook.wantSquash = 1 - 0.07 * tap
+        if isA {
+            let w: Float = 1          // (the arm goes back down when the session ends: BlobSocial+Hands.swift eases it out)
+            socialBook.handWant = HandReach(side: handSide(toward: o), w: w, el: HandReach.elBoop, seek: true, partner: o.steerID)
+            if !s.impacted && t >= 0.12 {
+                s.impacted = true
+                jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.6)          // (softer than the old bump: the booped one is an arm's length away and a hard kick swings his arm nub into the hand)
+                contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
+                contactBoopFallback(o)
             }
-        case 1: // squaring up
-            faceEach(o)
-            if isA && s.phaseT > 0.5 { s.setPhase(2); s.impacted = false }
-        default: // the bump
-            faceEach(o)
-            let t = s.phaseT
-            if isA { // a (leaning in)
-                socialBook.wantPitch = 0.20 * pulse(t, up: 0.14, down: 0.30)
-            } else { // b (taking it)
-                socialBook.wantPitch = -0.10 * pulse(t - 0.12, up: 0.10, down: 0.35)
-                socialBook.wantRoll = 0.07 * pulse(t - 0.12, up: 0.10, down: 0.35)
-            }
-            socialBook.wantSquash = 1 - 0.08 * pulse(t - 0.10, up: 0.08, down: 0.30)
-            if isA {
-                if !s.impacted && t >= 0.12 {
-                    s.impacted = true
-                    jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 2.6)
-                    contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
-                    contactBoopFallback(o)
-                }
-                if t > 1.1 { s.finish(.done) }
-            }
+            if t > 1.2 { s.finish(.done) }
         }
     }
 

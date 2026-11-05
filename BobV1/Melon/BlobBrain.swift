@@ -280,6 +280,8 @@ final class BlobBrain {
     var armDirEl: [Float] = [0, 0]
     var armDirSa: [Float] = [0, 0]
     var armDirOut: Float = 0
+    /// 1 while a social hand reach drives the arm override (BlobSocial+Hands.swift): the arm is capped by the wave's thumb (ArmCap.maximum), not by the rest nub of the body-led moves, and the capsule is drawn with the body standing still.
+    var armReachW: Float = 0
     /// Body-led weight 0...1: while a body-led move (jacks, flip, any arm override) runs, the arms stay at or below the rest nub even between their flaps (ArmCap).
     var armShortW: Float = 0
     var job: BlobRequest?           // the request being served (for onFinished)
@@ -2070,7 +2072,7 @@ final class BlobBrain {
     /// The idle override: the arm axis turned `w` of the way from the walk direction toward (`dirEl`, `dirSa`) (rad), the whole stub nudged `out` outward.
     func armGeometry(S: Float, lift: Float, dirEl: Float, dirSa: Float, w: Float, out: Float) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
         let el0 = ArmPath.armWalkElevation(S), sa0 = S * .pi / 180
-        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w, bodyLed: w)
+        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w, bodyLed: w * (1 - armReachW))
     }
 
     func armGeometry(el: Float, sa: Float, lift: Float, xShift: Float, bodyLed: Float = 0, capped: Bool = true) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
@@ -2097,13 +2099,13 @@ final class BlobBrain {
     func driveArms(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard beanFirstIdx.count == 2, armFirstIdx.count == 2 else { return }
         // lift axis spring: a smooth lift over ~0.5 s with the sweep at full amplitude from the first step, an under-damped release (2.3 Hz, zeta 0.30)
-        let tgt: Float = armWalkWant > 0 ? 1 : 0
+        let tgt: Float = (armWalkWant > 0 || armReachW > 0) ? 1 : 0
         let om: Float = tgt > 0 ? 9.5 : 2 * .pi * 2.3, ze: Float = tgt > 0 ? 1 : 0.30
         armLiftV += (om * om * (tgt - armLift) - 2 * ze * om * armLiftV) * dt
         armLift += armLiftV * dt
         armLift = min(1.05, max(-0.4, armLift))
         if tgt == 0 && abs(armLift) < 0.004 && abs(armLiftV) < 0.08 { armLift = 0; armLiftV = 0 }
-        let want = armWalkWant > 0 || armLift != 0
+        let want = armWalkWant > 0 || armLift != 0 || armReachW > 0
         if want { if armG <= 0 && armHold <= 0 { armSwapCount += 1 }; armHold = 0.7 } else { armHold = max(0, armHold - dt) }
         let gT: Float = (want || armHold > 0) ? 1 : 0
         armG += max(-dt / 0.12, min(dt / 0.12, gT - armG))
@@ -2113,7 +2115,7 @@ final class BlobBrain {
             return
         }
         guard geom.valid else { return }
-        let shortGoal: Float = (idleState.kind == .jacks || idleState.kind == .zoomies || idleState.kind == .slide || idleState.kind == .scoot || isFlipping || armDirW > 0) ? 1 : 0
+        let shortGoal: Float = (idleState.kind == .jacks || idleState.kind == .zoomies || idleState.kind == .slide || idleState.kind == .scoot || isFlipping || (armDirW > 0 && armReachW == 0)) ? 1 : 0
         armShortW += max(-dt / 0.25, min(dt / 0.15, shortGoal - armShortW))
         prepareArms(skinner)
         let ph = stridePhase
