@@ -102,7 +102,7 @@ struct ContactStance: Sendable {
         .swayHug: .holding(from: 2, facing: .camera, sound: .squish, volume: 0.55),
         .whisperGiggle: .holding(from: 1, facing: .camera),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
-        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
+        .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true, walks: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
         .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
         .circleDance: .holding(from: 2, walk0: false, features: true),
@@ -112,6 +112,7 @@ struct ContactStance: Sendable {
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
         // (explicit rows for the rest: a new interactive SocialKind with no row fails ContactTableTests.testEveryKindHasAnExplicitRowAndIsMeasured)
+        // (explicit since 2026-11-04, user rule 3: EVERY kind has a row - a new emote without one fails ContactSettleTests.testEveryInteractiveKindHasAStanceRow)
         .look: .proximity(), .zoomies: .proximity(), .pass: .proximity(),
     ]
     static func entry(_ k: SocialKind) -> ContactStance? { table[k] }
@@ -130,6 +131,7 @@ extension BlobBrain {
         var r = Set<Int>()
         if let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching { for id in (s.kind.isGroup ? s.crewIDs : [s.idA, s.idB, s.idC]) where id >= 0 && id != steerID { r.insert(id) } }
         for id in socialBook.glow.keys { r.insert(id) }
+        if stanceStepFree { for id in r where id >= 0 { r.insert(-(id + 1)) } }          // (the final step of a stance walk: MelonStage.keepApart skips these partners for this one call)
         return r
     }
 

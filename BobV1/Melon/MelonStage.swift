@@ -484,6 +484,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         var q = p
         let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
+            if !partners.isEmpty, partners.contains(-(j + 1)) { continue }          // (a stance walk's final step: the spot is decided, the wall measures the mid-turn outline - ContactStance.contactPartnerIDs)
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
             let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
             var to = L
