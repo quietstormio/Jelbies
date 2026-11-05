@@ -392,4 +392,29 @@ final class ContactSettleTests: XCTestCase {
         // KNOWN OPEN (r4-arrivalA-r2): in this cold-start scene the first planted frame of phase 1 still reads 3.7 cm; the bar is 1.5. Expected to fail until it is closed - remove the expectation then.
         XCTExpectFailure("nuzzle arrives 3.7 cm apart in the cold-start Duo (bar <= 1.5 cm)", strict: false) { XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar") }
     }
+
+    /// r4-engine-arrival (2026-11-05): the meeting distance of a side-by-side stance walk is derived from the REST outline (the arm capsules are drawn only while lifted), so it is the reach the pair stands in.
+    /// The rest reach recorded while the walker is still lifting his arms must equal (within 1 cm) the live reach read after the arms dropped and the walk ended.
+    func testRestOutlineReachMatchesTheStandingReachAfterTheArmsDrop() {
+        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33)] as [(SocialKind, Int)] {
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
+            d.live = true
+            for _ in 0..<3 { d.tick() }
+            let a = d.lab.rigs[0], b = d.lab.rigs[1]
+            XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim))
+            var restWalking: Float?, liveWalking: Float?, lastStep = -1, armsLifted = false
+            var reachAfter: Float?
+            for f in 0..<(60 * 12) {
+                d.tick()
+                let u = simd_normalize(a.brain.position - b.brain.position + SIMD2(1e-6, 0))
+                let stepping = a.brain.stepLive || a.brain.gait.isBusy || b.brain.stepLive || b.brain.gait.isBusy
+                if stepping { lastStep = f }
+                if a.brain.armWalkWant > 0, a.skinner.armCapsulesActive { armsLifted = true; if let r = a.brain.touchRadiusFacing(b.brain, along: u, .camera) { restWalking = r }; liveWalking = a.brain.touchRadius(b.brain, along: u) }
+                if lastStep >= 0, f == lastStep + 40, !stepping, reachAfter == nil, let live = a.brain.touchRadius(b.brain, along: u) { reachAfter = live }
+            }
+            MotionLog.write(String(format: "REST OUTLINE %@: walking live %.3f, rest %.3f, standing live %.3f (armsLifted %d)", kind.rawValue, liveWalking ?? -1, restWalking ?? -1, reachAfter ?? -1, armsLifted ? 1 : 0))
+            guard let rest = restWalking, let after = reachAfter else { XCTFail("\(kind): no rest/standing sample"); continue }
+            XCTAssertEqual(rest, after, accuracy: 0.01, "\(kind): the rest outline's reach is within 1 cm of the standing reach")
+        }
+    }
 }
