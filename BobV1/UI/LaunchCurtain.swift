@@ -44,6 +44,12 @@ final class LaunchGate {
         minNow = r == .launch ? Self.minShow : Self.resumeMin
         visible = true
     }
+    /// The launch intro clip played to its end: it already covered the launch, so the curtain never shows after it (user 11-04: it flashed in, half-faded, between
+    /// the intro and the menu, since by then `maxShow` had passed and it lifted again at once). A later `hold` (the away-asleep arrival) still shows it.
+    func introCoveredLaunch() {
+        guard visible else { return }
+        visible = false; LaunchTiming.mark("curtain skipped (the intro covered the launch)")
+    }
     /// The stage ran a step (it has built and drawn).
     func stageTicked() {
         guard visible else { return }
