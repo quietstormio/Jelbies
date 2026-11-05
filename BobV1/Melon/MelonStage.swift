@@ -173,7 +173,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
     private func finish(_ touches: Set<UITouch>) {
         for t in touches { controller?.pointerUp(id: ObjectIdentifier(t), time: sane(t.timestamp)) }
         activeTouches = max(0, activeTouches - touches.count)
-        if activeTouches == 0 { release() }
+        if activeTouches == 0 { controller?.endAllSnuggles(); release() }
     }
 
     // MARK: Gestures
@@ -1107,6 +1107,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         runScripted(now: now)
         if game, A11yAssist.active { a11y.tick(now: now) }
         touchTick(dt: dt, now: now)
+        snuggleTick(dt: dt, now: now)
         dbgTouch += CACurrentMediaTime() - tt0
 
         // fixed-step simulation
@@ -1646,6 +1647,80 @@ final class MelonController: NSObject, MTKViewDelegate {
         if mode == .grab { tSim.endGrab(); mode = .none; dragID = nil; second = nil }
     }
 
+    // MARK: snuggle (multi-finger petting, Snuggle.swift)
+
+    /// Extra fingers (up to 2, so 3 in all), each petting a different Jelbie than the first finger's; they never grab, lift or throw.
+    private var snuggles: [SnuggleFinger] = []
+    private var snuggleCredit: Float = 0
+    private var lastSnuggleHaptic: Double = -1
+    private var lastHandCheck: Double = 0
+    private var handCandidate: (id: Int, n: Int)?
+
+    private func snuggleJelly(_ id: Int) -> SnuggleFinger? { snuggles.first { $0.jelly == id } }
+
+    private func releaseSnuggle(_ f: SnuggleFinger) {
+        if f.jelly < actors.count { let a = actors[f.jelly]; f.release(sim: a.sim, skinner: a.skinner, brain: a.brain) }
+        snuggles.removeAll { $0 === f }
+    }
+
+    /// Every extra finger lets go cleanly (lifted, cancelled, focus left, the primary started a grab / cheeks / bath).
+    func endAllSnuggles() { for f in snuggles { releaseSnuggle(f) }; handCandidate = nil }
+
+    /// A swipe: the first finger rubs on, slides onto a neighbour and keeps petting him. Two checks in a row over the other Jelbie hand it over
+    /// (the one it leaves lets go of the touch play; the newcomer gets the full pet reaction and credit). A Jelbie another finger already pets is skipped.
+    private func swipeHandOver(_ p: CGPoint, _ size: CGSize, now: CFTimeInterval) {
+        guard mode == .pet, game, model.care.focus.isFocused, now - lastHandCheck > 0.04 else { return }
+        lastHandCheck = now
+        guard let pk = pickJelly(p, size), pk.id != touchID, snuggleJelly(pk.id) == nil else { handCandidate = nil; return }
+        if let c = handCandidate, c.id == pk.id { handCandidate = (pk.id, c.n + 1) } else { handCandidate = (pk.id, 1) }
+        if let c = handCandidate, c.n >= 2 { handCandidate = nil; routeTouch(to: pk.id); gestureHit = pk.hit }
+    }
+
+    /// The same swipe for an extra finger: it moves to the neighbour (never onto the first finger's Jelbie or another extra's).
+    private func swipeSnuggle(_ f: SnuggleFinger, _ size: CGSize, now: CFTimeInterval) {
+        guard let pk = pickJelly(f.point, size), pk.id != f.jelly, pk.id != touchID, snuggleJelly(pk.id) == nil else { f.handCandidate = nil; return }
+        if let c = f.handCandidate, c.id == pk.id { f.handCandidate = (pk.id, c.n + 1) } else { f.handCandidate = (pk.id, 1) }
+        if let c = f.handCandidate, c.n >= 2 {
+            if f.jelly < actors.count { let a = actors[f.jelly]; f.release(sim: a.sim, skinner: a.skinner, brain: a.brain) }
+            f.retarget(to: pk.id)
+        }
+    }
+
+    /// Once per frame: each extra finger's dent, reaction, hearts, haptic and attention credit.
+    private func snuggleTick(dt: Float, now: CFTimeInterval) {
+        guard !snuggles.isEmpty else { return }
+        let ok = game && model.care.focus.isFocused && !model.paused && !model.care.bath.acceptsTouch && !model.care.tripActive
+            && mode != .grab && mode != .cheeks && model.touch.getUpPhase == .off && touchSize.width > 0
+        if !ok { endAllSnuggles(); return }
+        var buzz: Float = 0
+        for f in snuggles {
+            guard f.jelly < actors.count else { continue }
+            if f.jelly == touchID { releaseSnuggle(f); continue }                     // the first finger swiped onto him: it owns him now
+            let a = actors[f.jelly]
+            let r = unproject(ndc: ndc(f.point, touchSize), invViewProj: lastCam.invViewProj)
+            var hit: BodyEllipsoid.Hit?
+            let egg = BodyEllipsoid(sim: a.sim)
+            if let rs = restSurface {
+                if egg.hit(origin: r.o, dir: r.d, inflate: 1.5) != nil { hit = rs.hit(origin: r.o, dir: r.d, sim: a.sim, pose: a.sim.bodyPose(iterations: 4)) }
+            } else { hit = egg.hit(origin: r.o, dir: r.d) }
+            let out = f.update(dt: dt, now: now, hit: hit, sim: a.sim, skinner: a.skinner, brain: a.brain)
+            f.credit(dt: dt)
+            if out.heart { model.care.bubbleHub.spawnHeart(for: f.jelly, now: now) }
+            buzz = max(buzz, out.haptic)
+        }
+        if now - lastHandCheck > 0.04 { lastHandCheck = now; for f in snuggles { swipeSnuggle(f, touchSize, now: now) } }
+        // one soft pulse for all of them, never more than ~5 a second (the one haptic engine is shared with the first finger)
+        if buzz > 0, now - lastSnuggleHaptic > 0.2 {
+            lastSnuggleHaptic = now
+            model.touch.haptics.transient(now: now, intensity: buzz, sharpness: 0.2)
+        }
+        snuggleCredit += dt
+        if snuggleCredit >= 0.5 {
+            snuggleCredit = 0
+            for f in snuggles where f.owed > 0 { model.care.needs(for: f.jelly).gain(.attention, f.owed); f.owed = 0 }
+        }
+    }
+
     /// The Jelly under a screen point and the point on his body (the rendered mesh first, then the nearest particle within a fingertip), nearest first.
     /// In the close-up only the focused Jellies can be touched (the others are hidden).
     private func pickJelly(_ p: CGPoint, _ size: CGSize) -> (id: Int, hit: SIMD3<Float>)? {
@@ -1951,9 +2026,14 @@ final class MelonController: NSObject, MTKViewDelegate {
             if mode == .none {
                 guard model.touch.getUpPhase == .off, let picked = pickJelly(p, size) else { return }
                 let hit = picked.hit
+                if let e = snuggleJelly(picked.id) { releaseSnuggle(e) }
                 routeTouch(to: picked.id)
                 mode = .pending; dragID = id; last = p; petPoint = p; touchSize = size; gestureHit = hit
                 gesture.down(t: now, p: p, armed: pickArm.touchDown(time: now, point: p))
+            } else if (mode == .pending || mode == .pet), id != dragID, snuggles.count < 2, model.touch.getUpPhase == .off,
+                      let pk = pickJelly(p, size), pk.id != touchID, snuggleJelly(pk.id) == nil {
+                // a second / third finger on ANOTHER Jelbie: it pets him too (Snuggle.swift); it never grabs, lifts or throws
+                snuggles.append(SnuggleFinger(pointer: id, jelly: pk.id, point: p)); touchSize = size
             } else if mode == .pending, id != dragID, pickJelly(p, size)?.id == touchID, !gesture.armed, gesture.secondDown(t: now) {
                 mode = .cheeks; touchSize = size
                 model.touch.releaseContact(sim: tSim)
@@ -1988,6 +2068,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if id == voiceTouch { return }
         if let e = emptyDown, e.id == id, hypot(p.x - e.p.x, p.y - e.p.y) > 20 { emptyDown = nil }       // a drag is not a tap
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
+        if let f = snuggles.first(where: { $0.pointer == id }) { f.point = p; touchSize = size; return }
         if game, id == dragID, model.care.bath.acceptsTouch, mode == .pet { petPoint = p; touchSize = size; last = p; return }
         if game, id == dragID {
             let now = CACurrentMediaTime()
@@ -1998,7 +2079,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 gesture.move(t: now, p: p)
                 if gesture.kind == .pet { mode = .pet }
                 else if gesture.kind == .pickUp { beginPickUp(p, size) }
-            case .pet: petPoint = p; gesture.move(t: now, p: p)
+            case .pet: petPoint = p; gesture.move(t: now, p: p); swipeHandOver(p, size, now: now)
             case .grab: gesture.move(t: now, p: p); applyGrab(p, size)
             default: break
             }
@@ -2029,6 +2110,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if VoiceTranscriptLog.on { NSLog("[voice] gesture up t=%.3f held=%.0f ms", vnow, (vnow - e.t) * 1000) }
             voiceGesture.tapUp(time: vnow, downTime: e.t, point: e.p, hitBlob: false)        // a short tap on empty space arms the gesture
         }
+        if let f = snuggles.first(where: { $0.pointer == id }) { releaseSnuggle(f); return }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
