@@ -270,6 +270,7 @@ final class WornSet {
         let R = simd_float3x3(c.rotation)
         let sxz = 1 / c.squash.squareRoot()
         let M = R * simd_float3x3(diagonal: SIMD3(sxz, c.squash, sxz))
+        let Minv = simd_float3x3(diagonal: SIMD3(1 / sxz, 1 / c.squash, 1 / sxz)) * R.transpose
         let wp = c.centroid + M * (p.pivot - c.restCentroid)
         let base = UInt32(m.vertices.count)
         m.vertices.reserveCapacity(m.vertices.count + p.rest.count)
@@ -279,6 +280,12 @@ final class WornSet {
         var lift: Float = 0, widen: Float = 1, seat: Float = 0
         if p.crownEnclosing, let skin { (lift, widen, seat) = CrownFit.fit(p, carry: c, skin: skin, body: WearBody.shared) }
         let mats = p.mat
+        let lvOn = skin != nil && WearLevel.enabled && p.levelPiece && p.level.count == p.rest.count
+        let zc = WearBody.shared.axisZ
+        /// The outward direction of a levelled point in the world (the body-frame radial direction through the carry).
+        var nodeRho: [Float] = []
+        if lvOn, let skin { nodeRho = WearLevel.skinRadii(p, skin: skin, zc: zc, carry: c, M: M, Minv: Minv) }
+        func radialW(_ d: SIMD2<Float>) -> SIMD3<Float> { simd_normalize(M * SIMD3(d.x, 0, d.y)) }
         let useLimbs = skin != nil && !(limbs?.isEmpty ?? true) && p.limbFree.count == p.rest.count
         if useLimbs { scratchQ.removeAll(keepingCapacity: true); scratchWall.removeAll(keepingCapacity: true) }
         /// One vertex: the carried, skinned and swung world position, and the wall normal under it when the limb push may move it.
@@ -298,12 +305,22 @@ final class WornSet {
                 if k < clusterXf.count, p.clusterRep[k] >= 0 {
                     // a small part rides its centre's skin frame as one rigid piece
                     if clusterXf[k] == nil {
-                        let (cw, f1) = WearBody.worldFrame(p.clusterBind[k], skin: skin)
-                        clusterXf[k] = (cw, f1 * p.clusterFrame0[k].transpose, f1.columns.2)
+                        if lvOn, p.clusterLevel[k] {
+                            // a small part on a levelled loop: its centre keeps the loop's height, the part rides the BODY frame (a rigid pearl / knot on a level string)
+                            let cw = WearLevel.position(rho: nodeRho[Int(p.clusterNode[k])] + p.clusterExcess[k], y: p.clusterY0[k], dir: p.clusterDir[k], zc: zc, carry: c, M: M)
+                            clusterXf[k] = (cw, M, radialW(p.clusterDir[k]))
+                        } else {
+                            let (cw, f1) = WearBody.worldFrame(p.clusterBind[k], skin: skin)
+                            clusterXf[k] = (cw, f1 * p.clusterFrame0[k].transpose, f1.columns.2)
+                        }
                     }
                     let x = clusterXf[k]!
                     q = x.c + x.R * (p.rest[i] - p.clusterCentre[k])
-                    if useLimbs { wall = x.wall }
+                    if useLimbs, !(lvOn && p.clusterLevel[k]) { wall = x.wall }
+                } else if lvOn, p.level[i] {
+                    let yy = p.lvY0[i] + (r.y - p.rest[i].y)                            // (the crown fit's lift moves the whole loop level)
+                    let lq = WearLevel.position(rho: nodeRho[Int(p.lvNode[i])] + p.lvExcess[i], y: yy, dir: p.lvDir[i], zc: zc, carry: c, M: M)
+                    q += (lq - q) * w                                                    // (no wall: the limb push below does not slide a levelled vertex, it bulges it radially)
                 } else {
                     let (wpos, wn) = WearBody.worldWithNormal(p.bind[i], skin: skin)
                     q += (wpos - q) * w
@@ -316,9 +333,43 @@ final class WornSet {
         if useLimbs, let limbs {
             // pass 1: where everything is before the limbs are considered; pass 2: small parts move rigidly out of a limb (they stay round), the rest vertex by vertex
             for i in 0..<p.rest.count { let (q, wall) = place(i); scratchQ.append(q); scratchWall.append(wall ?? .zero) }
+            // levelled loops clear a limb by a smooth radial bulge (never by sliding up or down the wall)
+            var lvDelta = [SIMD3<Float>](repeating: .zero, count: lvOn && WearLevel.bulge ? p.rest.count : 0)
+            var lvClusterDelta = [SIMD3<Float>](repeating: .zero, count: lvOn && WearLevel.bulge ? p.clusterRep.count : 0)
+            if lvOn, WearLevel.bulge {
+                struct Unit { var pos: SIMD3<Float>, dirW: SIMD3<Float>, dir: SIMD2<Float>, y: Float, margin: Float, e: Float; var vertex: Int; var cluster: Int }
+                var units: [Unit] = []
+                func clearance(_ q: SIMD3<Float>, _ d: SIMD3<Float>, _ m: Float) -> Float {
+                    var e: Float = 0
+                    for _ in 0..<5 { let pen = limbs.penetration(q + d * e); if pen > -m { e += max(pen + m, 0.002) } else { break } }
+                    return e * WearLevel.fade(e)
+                }
+                for i in 0..<p.rest.count where p.level[i] && p.limbFree[i] && !(p.clusterRep.indices.contains(Int(p.partOfVertex[i])) && p.clusterRep[Int(p.partOfVertex[i])] >= 0) && p.w[i] > 0.001 {
+                    let d = radialW(p.lvDir[i])
+                    units.append(Unit(pos: scratchQ[i], dirW: d, dir: p.lvDir[i], y: p.lvY0[i], margin: WearLimbs.margin, e: clearance(scratchQ[i], d, WearLimbs.margin) , vertex: i, cluster: -1))
+                }
+                for k in p.clusterRep.indices where p.clusterRep[k] >= 0 && p.clusterLevel[k] {
+                    guard let x = clusterXf[k] else { continue }
+                    let m = p.clusterRadius[k] + WearLimbs.margin
+                    units.append(Unit(pos: x.c, dirW: x.wall, dir: p.clusterDir[k], y: p.clusterY0[k], margin: m, e: clearance(x.c, x.wall, m), vertex: -1, cluster: k))
+                }
+                var src = units.filter { $0.e > 0.0005 }
+                if src.count > 160 { src.sort { $0.e > $1.e }; src = Array(src.prefix(160)) }
+                for u in units {
+                    var e: Float = 0
+                    for s in src {
+                        let az = atan2(u.dir.x * s.dir.y - u.dir.y * s.dir.x, u.dir.x * s.dir.x + u.dir.y * s.dir.y)
+                        let k = WearLevel.bump(az, WearLevel.window)
+                        if k <= 0 { continue }
+                        let ky = WearLevel.bump(u.y - s.y, WearLevel.reachY)
+                        e = max(e, s.e * k * ky)
+                    }
+                    let d = u.dirW * e
+                    if u.vertex >= 0 { lvDelta[u.vertex] = d } else { lvClusterDelta[u.cluster] = d }
+                }
+            }
             // a pushed point goes back down onto the SKIN at its authored height (a slide along the wall's tangent plane would leave the curved wall: the piece would hang in the air)
             let body = WearBody.shared
-            let Minv = simd_float3x3(diagonal: SIMD3(1 / sxz, 1 / c.squash, 1 / sxz)) * R.transpose
             func rehug(_ q: SIMD3<Float>, _ h0: Float) -> SIMD3<Float> {
                 guard WearLimbs.rehugBlend > 0, let skin, let nb = body.bind(Minv * (q - c.centroid) + c.restCentroid) else { return q }
                 var b = nb; b.off = SIMD3(0, 0, h0)
@@ -327,7 +378,7 @@ final class WornSet {
             // units: a small part moves by ONE displacement (its centre's), every other bound vertex by its own
             var delta = [SIMD3<Float>](repeating: .zero, count: p.clusterRep.count)
             var srcPos: [SIMD3<Float>] = [], srcDelta: [SIMD3<Float>] = []
-            for k in p.clusterRep.indices where p.clusterRep[k] >= 0 {
+            for k in p.clusterRep.indices where p.clusterRep[k] >= 0 && !(lvOn && p.clusterLevel[k]) {
                 if let x = clusterXf[k] {
                     let m = p.clusterRadius[k] + WearLimbs.margin, h0 = p.clusterBind[k].off.z
                     var d = limbs.push(x.c, wallNormal: x.wall, margin: m) - x.c
@@ -393,7 +444,7 @@ final class WornSet {
                     } } }
                     return best
                 }
-                for k in p.clusterRep.indices where p.clusterRep[k] >= 0 {
+                for k in p.clusterRep.indices where p.clusterRep[k] >= 0 && !(lvOn && p.clusterLevel[k]) {
                     if let x = clusterXf[k], simd_length_squared(delta[k]) < 1e-5 { delta[k] = share(x.c) }
                 }
                 for i in 0..<p.rest.count where scratchWall[i] != .zero {
@@ -405,7 +456,9 @@ final class WornSet {
             }
             for i in 0..<p.rest.count {
                 let k = Int(p.partOfVertex[i])
-                if k < p.clusterRep.count, p.clusterRep[k] >= 0 { scratchQ[i] += delta[k] } else { scratchQ[i] += own[i] }
+                if k < p.clusterRep.count, p.clusterRep[k] >= 0 {
+                    scratchQ[i] += lvOn && p.clusterLevel[k] ? (lvClusterDelta.isEmpty ? .zero : lvClusterDelta[k]) : delta[k]
+                } else { scratchQ[i] += own[i] + (lvDelta.isEmpty ? .zero : lvDelta[i]) }
             }
         }
         for i in 0..<p.rest.count {

@@ -544,4 +544,69 @@ extension WearCaptureTests {
             }, d + "/shoes4_\(look.rawValue).png")
         }
     }
+
+    // MARK: encircling bands (BAND_CAP_DIR)
+
+    /// Side-on frames of a Jelbie in a bandana + sweatband + tutu waistband walking, hopping and doing jumping-jacks (arms out), every 0.5 s: BAND_CAP_DIR=<dir> (TEST_RUNNER_BAND_CAP_DIR),
+    /// BAND_CAP_TAG names the sub folder, BAND_CAP_SECONDS scales the walk length. WEARBAND_LEVEL=off draws the old behaviour, WEARBAND_MODE=pass lets the loop pass the arm.
+    func testCaptureBands() throws {
+        guard let base = ProcessInfo.processInfo.environment["BAND_CAP_DIR"], !base.isEmpty else { throw XCTSkip("BAND_CAP_DIR not set") }
+        let tag = ProcessInfo.processInfo.environment["BAND_CAP_TAG"] ?? "run"
+        let walkSec = Float(ProcessInfo.processInfo.environment["BAND_CAP_SECONDS"] ?? "") ?? 24
+        let d = base + "/" + tag
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        W = 720; H = 720
+        DayClock.shared.forcedHour = 12
+        let lab = setUpLab([SIMD2(0.2, 0.6)], seed: 5)
+        let r = lab.rigs[0]
+        r.brain.autonomy = false; r.brain.expr.enabled = false
+        let outfit: Outfit = [.neck: .bandanaCoral, .head: .sweatband, .body: .tutuPink]
+        let sets = dress(lab, [outfit])
+        let (ren, target) = try renderer(lab)
+        var shots: [(String, UIImage)] = []
+        func snap(_ name: String, _ n: Int) throws {
+            sets[0].syncCarry(0, sim: r.sim)
+            let c = r.sim.centroid()
+            let cam = Self.lookCamera(target: SIMD3(c.x, 0.55, c.z), dir: simd_normalize(SIMD3(1, 0, 0.12)), dist: 3.4, aspect: 1, lift: 0.05)
+            let img = composite(lab, sets, [outfit], ren, target, cam: cam)
+            let ui = UIImage(cgImage: img.cgImage()!)
+            try write(ui, "\(d)/\(name)_\(String(format: "%03d", n)).png")
+            shots.append((name, ui))
+        }
+        func stepAll() {
+            lab.tick(watching: false)
+            r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+            sets[0].tick(id: 0, brain: r.brain, sim: r.sim, outfit: outfit, role: .none, hideAll: false, dt: 1.0 / 60)
+        }
+        for _ in 0..<60 { stepAll() }
+        // walk (back and forth along z so the camera sees the profile with the near arm swinging)
+        var n = 0, dirZ: Float = 1
+        for step in 0..<Int(walkSec * 60) {
+            if step % 90 == 0 {
+                let p = r.sim.bodyPose(iterations: 3).centroid
+                if abs(p.z) > 1.0 { dirZ = p.z > 0 ? -1 : 1 }
+                r.brain.script = .walk(target: SIMD2(p.x, p.z + dirZ * 2.2), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            }
+            stepAll()
+            if step % 30 == 0 { try snap("walk", n); n += 1 }
+        }
+        for (name, kind, secs) in [("hop", IdleKind.bounce, Float(10)), ("jacks", IdleKind.jacks, Float(8))] {
+            r.brain.idleForced = true; _ = r.brain.idleStart(kind, r.sim)
+            n = 0
+            for step in 0..<Int(secs * 60) { stepAll(); if step % 30 == 0 { try snap(name, n); n += 1 } }
+        }
+        // contact sheets: 8 frames per sheet
+        for name in ["walk", "hop", "jacks"] {
+            let fr = shots.filter { $0.0 == name }.map { $0.1 }
+            guard !fr.isEmpty else { continue }
+            let step = max(1, fr.count / 8)
+            let pick = stride(from: 0, to: fr.count, by: step).prefix(8).map { fr[$0] }
+            let rows = (pick.count + 3) / 4
+            let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+            let sheet = UIGraphicsImageRenderer(size: CGSize(width: 4 * 360, height: rows * 360), format: fmt).image { _ in
+                for (i, im) in pick.enumerated() { im.draw(in: CGRect(x: (i % 4) * 360, y: (i / 4) * 360, width: 360, height: 360)) }
+            }
+            try write(sheet, "\(d)/sheet_\(name).png")
+        }
+    }
 }
