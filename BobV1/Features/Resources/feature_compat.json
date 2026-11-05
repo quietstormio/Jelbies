@@ -776,34 +776,6 @@
 "pipHide": [],
 "slot": "face"
 },
-"glove_pink": {
-"lav": {
-"dy": 0.0,
-"flapMax": 75.0,
-"flapMin": -40.0,
-"rule": "ok",
-"spreadMax": 40.0
-},
-"moss": {
-"rule": "ok"
-},
-"pipHide": [],
-"slot": "hands"
-},
-"glove_sky": {
-"lav": {
-"dy": 0.0,
-"flapMax": 75.0,
-"flapMin": -40.0,
-"rule": "ok",
-"spreadMax": 40.0
-},
-"moss": {
-"rule": "ok"
-},
-"pipHide": [],
-"slot": "hands"
-},
 "goggles_aviator": {
 "lav": {
 "dy": 0.0,
