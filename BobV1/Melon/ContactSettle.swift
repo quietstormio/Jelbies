@@ -17,7 +17,23 @@ nonisolated enum ContactSettleTuning {
     nonisolated(unsafe) static var deadband: Float = 0.005, maxStep: Float = 0.015, gain: Float = 0.15, lead: Float = 3          // lead: frames the skin trails the root (the error is judged where it is going)
     /// Within `fineBand` of the target the gap is trimmed on its slow average (a lying body breathes +-1 cm, a jelly wobbles): 0 = off.
     nonisolated(unsafe) static var stanceUrgent = true          // the stance ticks' fast way out of an overlap. A/B 2026-11-03 with the geometry fixed: OFF is worse everywhere (leapfrog -119, circleDance -57, squabble -29, spinHug -14, tag -18 vs -9 / -18 / -5 / -3 / -4)
-    nonisolated(unsafe) static var fineBand: Float = 0, fineAlpha: Float = 1.0 / 45, fineGain: Float = 0.12
+    nonisolated(unsafe) static var fineBand: Float = ContactSettleTuning.env("SETTLE_FINE", 0.01), fineAlpha: Float = 1.0 / 45, fineGain: Float = 0.12
+    static func env(_ k: String, _ d: Float) -> Float { ProcessInfo.processInfo.environment[k].flatMap { Float($0) } ?? d }
+    /// THE LIMIT CYCLE (r4-engine-settle): the hold used to ring +-1.5 cm because two integrators with lag worked on one error and the dead band was symmetric about the hold (-0.4 cm +- 0.5 = -0.9 ... +0.1 left alone, an
+    /// effective floor of -0.9 cm). The overlap side is now nearly closed (`overlapBand`, 0.1 cm: sinking in is worked on at once), the open side keeps the 0.5 cm `deadband`.
+    nonisolated(unsafe) static var overlapBand: Float = ContactSettleTuning.env("SETTLE_OVL", 0.001)
+    /// The urgent way out of an overlap pushes this share of the (predicted) error per step, not all of it: the full error overshot 1.6 - 2.6x (leanPerMetre 3.2 rad/m against the measured reach) and the way back in is slow.
+    nonisolated(unsafe) static var urgentShare: Float = ContactSettleTuning.env("SETTLE_URGENT", 0.5)
+    /// The lean limiter (BlobBrain.contactApplyLean) leaves a skin gap this much under the hold alone (m): trim and limiter both acting on the same few mm was the second integrator of the cycle.
+    nonisolated(unsafe) static var limiterBand: Float = ContactSettleTuning.env("SETTLE_LIM", 0.003)
+    /// BACK-OFF (r4-engine-settle): a planted body whose lean trim stays pinned at -budget (measured: a step itself shakes the skin +-5 cm for 0.3 s - the legs swing, the body shears - so it is the LAST resort, for what the two leans cannot take, ~13 cm) while the skins still overlap by more than `backoffGap` for `backoffDwell` s steps AWAY once (no turn, startStep with a root
+    /// displacement), `backoffMin ... backoffMax` m, then waits `backoffCooldown` s. 0 = off (A/B: env SETTLE_BACKOFF=0).
+    nonisolated(unsafe) static var backoffOn = ProcessInfo.processInfo.environment["SETTLE_BACKOFF"] != "0"
+    /// Added to the back-off's error (tests provoke an overlap the leans cannot take without a 40 cm warp; 0 in the app).
+    nonisolated(unsafe) static var backoffBias: Float = 0
+    static let backoffGap: Float = 0.006, backoffDwell: Float = 0.3, backoffCooldown: Float = 0.6, backoffMin: Float = 0.03, backoffMax: Float = 0.06
+    /// Group lean hooks (per-neighbour trims, the limiter on the nearest neighbour; env SETTLE_GROUPLEAN=0 = off).
+    nonisolated(unsafe) static var groupLean = ProcessInfo.processInfo.environment["SETTLE_GROUPLEAN"] != "0"
 }
 
 @MainActor
@@ -46,24 +62,28 @@ enum ContactSettle {
         a.socialBook.settleEMA[key] = ema
         var c: Float
         var cap = ContactSettleTuning.maxStep
-        if urgent, e < -ContactSettleTuning.deadband {          // (sunk in during a fast move - a lean, a hop: the way out is quick, 5 cm a step at most; the way in stays gentle)
+        // (the asymmetric band and the average-trimmed near zone are the STANCE ticks' - `urgent`: the lying snuggle's body breathes +-1 cm and keeps the symmetric band, chasing it made the snuggle ring)
+        let ovl = urgent ? ContactSettleTuning.overlapBand : ContactSettleTuning.deadband, openBand = ContactSettleTuning.deadband, fine = urgent ? ContactSettleTuning.fineBand : 0
+        if urgent, e < -ovl {          // (sunk in during a fast move - a lean, a hop: the way out is quick, 5 cm a step at most; the way in stays gentle. Half the predicted error a step: the full error overshot)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
-            c = max(-0.16, min(ePred, e)); cap = 0.08
-        } else if abs(e) > ContactSettleTuning.fineBand {          // far: the fast approach, on the error where it is heading (the skin trails the root)
+            c = max(-0.16, min(0, ePred)) * ContactSettleTuning.urgentShare; cap = 0.08
+            if c == 0 { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "urgent0"; $0.e = e } }; return (gap, false) }
+        } else if abs(e) > fine {          // far: the fast approach, on the error where it is heading (the skin trails the root)
             let ePred = e + ContactSettleTuning.lead * (e - (prev ?? e))
-            if abs(ePred) <= ContactSettleTuning.deadband { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadband"; $0.e = e } }; return (gap, false) }
+            if ePred <= openBand, ePred >= -ovl { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadband"; $0.e = e } }; return (gap, false) }
             c = max(-ContactSettleTuning.maxStep * 2, min(ContactSettleTuning.maxStep * 2, ePred * ContactSettleTuning.gain))
-        } else {          // near: trim the average
-            let eAvg = ema - target
-            if abs(eAvg) <= ContactSettleTuning.deadband * 0.6 { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadbandNear"; $0.e = e } }; return (gap, false) }
+        } else {          // near: trim the average - but never beyond the live error (a lagging average must not push a body that is already in place)
+            var eAvg = ema - target
+            if eAvg * e <= 0 { eAvg = 0 } else if abs(eAvg) > abs(e) { eAvg = e }
+            if eAvg <= openBand * 0.6, eAvg >= -ovl * 0.6 { if ContactTrace.on { ContactTrace.mod(a.steerID) { $0.step = "deadbandNear"; $0.e = e } }; return (gap, false) }
             c = max(-ContactSettleTuning.maxStep * 0.3, min(ContactSettleTuning.maxStep * 0.3, eAvg * ContactSettleTuning.fineGain))
         }
         let axis = simd_normalize(ContactField.root(b.steerID) - ContactField.root(a.steerID) + SIMD2(1e-6, 0))
         let share: Float = (anchoredA || anchoredB) ? 1 : 0.5
         let m = max(-cap, min(cap, c * share))
-        if ContactTrace.on { let kind = (urgent && e < -ContactSettleTuning.deadband) ? "urgent" : (abs(e) > ContactSettleTuning.fineBand ? "far" : "near"); ContactTrace.mod(a.steerID) { $0.step = kind; $0.e = e; $0.c = c; $0.m = m } }
-        if !anchoredA { a.contactNudge(axis * m) }
-        if !anchoredB { b.contactNudge(-axis * m) }
+        if ContactTrace.on { let kind = (urgent && e < -ContactSettleTuning.overlapBand) ? "urgent" : (abs(e) > fine ? "far" : "near"); ContactTrace.mod(a.steerID) { $0.step = kind; $0.e = e; $0.c = c; $0.m = m } }
+        if !anchoredA { a.contactNudge(axis * m, partner: b) }
+        if !anchoredB { b.contactNudge(-axis * m, partner: a) }
         return (gap, true)
     }
 }
@@ -76,7 +96,7 @@ extension BlobBrain {
     ///   AIRBORNE (hop, flap-hop, both feet up)   a rigid warp: root, stepRoot0, soles, the hop's start / end, the winged hop's start and the sim body move together, at once
     ///   PLANTED (standing, sitting, a spin on the spot)   the body LEANS toward / away from the partner with the soles fixed (`leanTrim`, a budget of `leanBudget` rad); a residual beyond it asks the
     ///                                        locomotion for one small shuffle step (`shuffleReq`), the only way feet move
-    func contactNudge(_ d: SIMD2<Float>) {
+    func contactNudge(_ d: SIMD2<Float>, partner: BlobBrain? = nil) {
         let lying = idleState.kind == .sleep || idleState.kind == .lieDown || idleState.kind == .flop
         guard social != nil, !lying else {
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "lying" } }
@@ -122,13 +142,23 @@ extension BlobBrain {
         }
         if case .walk = script { if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "walk" } }; return }          // (walking: the destination carries it)
         // planted: lean. d is along the axis to the partner: its length is the cm to close (+) or give (-); a lean of theta moves the contact point ~ theta/2 m (the cheeks sit ~0.5 m up)
-        guard let pid = socialPartnerID, let o = socialBrain(pid) else { return }
+        let grp = social?.kind.isGroup ?? false
+        guard let pid = (grp && ContactSettleTuning.groupLean ? partner?.steerID : nil) ?? socialPartnerID, let o = socialBrain(pid) else { return }
         let toward = simd_dot(d, simd_normalize(o.position - position + SIMD2(1e-6, 0)))
+        if grp, ContactSettleTuning.groupLean {
+            // a ring member has TWO neighbours: one trim per neighbour (a scalar projected onto the session's first two members leaned him toward the wrong body); contactApplyLean sums them as a vector
+            let key = steerID &* 4096 &+ pid
+            let was = ContactTouchMemory.trims[key] ?? 0
+            ContactTouchMemory.trims[key] = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, was + toward * ContactTuning.leanPerMetre))
+            if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "groupLean" } }
+            return
+        }
+        if ContactTouchMemory.backoff[steerID] != nil, toward < 0 { return }          // (a back-off step is running: its own ramp releases the lean)
         socialBook.trimPartner = pid
         let want = socialBook.leanTrim + toward * ContactTuning.leanPerMetre
         if abs(want) > ContactTuning.leanBudget {          // beyond the budget: one small shuffle step on the locomotion (soles stay put until then)
             socialBook.leanTrim = max(-ContactTuning.leanBudget, min(ContactTuning.leanBudget, want))
-            if socialBook.shuffleReq == 0, toward > 0 { socialBook.shuffleReq = 1 }          // (forward only: a backward step would turn the walker round)
+            if toward > 0 { socialBook.shuffleReq = 1 } else if socialBook.shuffleReq == 0 { socialBook.shuffleReq = -1 }          // (+1 forward shuffle, -1 back-off: contactStanceWalk decides after a dwell)
         } else { socialBook.leanTrim = want }
         if ContactTrace.on { let sr = socialBook.shuffleReq; ContactTrace.mod(steerID) { $0.nudge = (abs(want) > ContactTuning.leanBudget ? "lean+budget" : "lean") + "/req\(sr)"; $0.want = want } }
     }
@@ -138,6 +168,11 @@ extension BlobBrain {
     /// skins already press it is taken back. The drives' lunges (bump, boop, chest bump ...) used to carry the pair 5 - 15 cm into each other at the peak.
     func contactApplyLean() {
         guard let s = social else { return }
+        if s.kind.isGroup {
+            guard ContactSettleTuning.groupLean else { return }
+            contactApplyGroupLean(s)
+            return
+        }
         let pid = socialPartnerID ?? (socialBook.trimPartner >= 0 ? socialBook.trimPartner : -1)
         guard pid >= 0, let o = socialBrain(pid) else { return }
         let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
@@ -146,20 +181,46 @@ extension BlobBrain {
             socialBook.wantRoll += nr * socialBook.leanTrim
             socialBook.wantPitch += np * socialBook.leanTrim
         }
-        guard ContactTuning.leanLimiter, ContactField.enabled, let st = contactStance(with: o), st.cls != .none, !s.kind.isGroup,
+        guard ContactTuning.leanLimiter, ContactField.enabled, let st = contactStance(with: o), st.cls != .none,
               var g = ContactField.gap(steerID, pid, features: st.features) else { return }
         if let sg = ContactField.skinGap(steerID, pid) { g = min(g, sg) }
+        limitLean(toward: o, nr: nr, np: np, gap: g, st: st)
+    }
+
+    /// The lean limiter for one neighbour: the lean toward him (the emote's own lunge + the trim) may grow only by what the skins still have to travel.
+    private func limitLean(toward o: BlobBrain, nr: Float, np: Float, gap g: Float, st: ContactStance) {
         let floor: Float = st.cls == .touching ? ContactStance.hold : ContactStance.near
         let wantToward = socialBook.wantRoll * nr + socialBook.wantPitch * np
         let applied = socialBook.roll * nr + socialBook.pitch * np
         let anchoredPartner = o.held || o.idleState.kind == .sleep || o.idleState.kind == .decorSit
         let share: Float = anchoredPartner ? 1 : 0.5
-        let allowed = applied + (g - floor) * ContactTuning.leanPerMetre * share
+        // (a band under the hold is left to the settle's trim: both acting on the same few mm was the second integrator of the hold's limit cycle)
+        var x = g - floor
+        if x < 0 { x = min(0, x + ContactSettleTuning.limiterBand) }
+        let allowed = applied + x * ContactTuning.leanPerMetre * share
         if wantToward > allowed {
             let ex = wantToward - allowed
             socialBook.wantRoll -= nr * ex; socialBook.wantPitch -= np * ex
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge += "|limit" } }
         }
+    }
+
+    /// A ring / line member: the lean trims of all his neighbours summed as a vector in the body frame, and the limiter on the NEAREST neighbour (the one whose skin he is about to sink into).
+    private func contactApplyGroupLean(_ s: SocialSession) {
+        var nearest: (o: BlobBrain, nr: Float, np: Float, d: Float)?
+        for o in s.members where o !== self {
+            let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
+            let nr = -local.x / ln, np = local.y / ln
+            if let t = ContactTouchMemory.trims[steerID &* 4096 &+ o.steerID], abs(t) > 1e-4 {
+                socialBook.wantRoll += nr * t
+                socialBook.wantPitch += np * t
+            }
+            if nearest == nil || ln < nearest!.d { nearest = (o, nr, np, ln) }
+        }
+        guard ContactTuning.leanLimiter, ContactField.enabled, let n = nearest, let st = contactStance(with: n.o), st.cls != .none,
+              var g = ContactField.gap(steerID, n.o.steerID, features: st.features) else { return }
+        if let sg = ContactField.skinGap(steerID, n.o.steerID) { g = min(g, sg) }
+        limitLean(toward: n.o, nr: n.nr, np: n.np, gap: g, st: st)
     }
 
     /// The pair's touch distance for the walk destination, STABLE (2026-11-04): the live support reach swings 0.39 ... 1.6 m while the legs step, so a destination derived from it every tick jumps and the pair
@@ -272,11 +333,15 @@ extension BlobBrain {
         if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ((social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera) ? ContactTuning.lockDistance : 0.8), ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
             ContactTouchMemory.locked[steerID] = (t, p.position)
         }
-        if ContactTrace.on, socialBook.shuffleReq != 0 {
+        // the shuffle and the back-off belong to a PAIR'S stance walk: a ring member (groups) turned and walked 6.5 - 14 cm toward ONE neighbour every time, which is the seconds-long swing of a group hug
+        let stepsOK = retarget && !(social?.kind.isGroup ?? false)
+        if !stepsOK { socialBook.shuffleReq = 0; ContactTouchMemory.pinnedSince[steerID] = nil }
+        if stepsOK { contactBackOff(partner: p, gapWanted: gapWanted, features: features) }
+        if ContactTrace.on, socialBook.shuffleReq > 0 {
             let why = "blk(script\(scriptIsNone ? "None" : "Busy"),feet\(feet.active ? "Active" : "Idle"),idle\(idleState.kind.map { "\($0)" } ?? "nil"))"
             if !(scriptIsNone && !feet.active && (idleState.kind == nil || idleState.kind == .sit)) { ContactTrace.mod(steerID) { $0.shuffle = why } }
         }
-        if socialBook.shuffleReq != 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
+        if socialBook.shuffleReq > 0, scriptIsNone, !feet.active, idleState.kind == nil || idleState.kind == .sit {
             let u = simd_normalize(p.position - position + SIMD2(1e-6, 0))
             // the residual from the LIVE gap (the lean is released by the step, so its share counts): the step is as long as the error, 3 ... 14 cm
             var step: Float = 0.14, trim = false
@@ -293,7 +358,45 @@ extension BlobBrain {
             let ok = idleState.kind == nil && moved >= 0.5 * abs(step) && moved >= 0.02
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.shuffle = (ok ? "STEP" : "step-dropped") + String(format: "(idle%@,step%.3f,moved%.3f)", idleState.kind.map { "\($0)" } ?? "nil", step, moved) } }
             if ok { socialBook.leanTrim = 0; socialWalk(to: spot, sim); if trim { ContactTouchMemory.shuffling.insert(steerID) } }          // (a big residual is an APPROACH, not a trim: the retarget carries that walk to the stance)
-        } else if socialBook.shuffleReq != 0, !scriptIsNone { socialBook.shuffleReq = 0 }
+        } else if socialBook.shuffleReq > 0, !scriptIsNone { socialBook.shuffleReq = 0 }
+    }
+
+    /// BACK-OFF (r4-engine-settle): there was no way out of an overlap the lean could not take: the trim pins at -`leanBudget` and the pair stays sunk (hum -1.3 ... -2.5 cm). When the trim has been pinned AWAY from the
+    /// partner for `backoffDwell` s and the skins still overlap, the body steps back ONCE, straight away from him (`startStep`, a root displacement with NO turn - `socialWalk` would turn the walker round and sweep the
+    /// wide axis through the partner), `backoffMin ... backoffMax` m, resolved through the floor the way a parting retreat is. The lean trim is released in step with the root (progress of the step), so the lean-away that
+    /// held the overlap off hands over to the step instead of springing the skins back together; then `backoffCooldown` s before the next.
+    func contactBackOff(partner p: BlobBrain, gapWanted: Float, features: Bool) {
+        let mem = ContactTouchMemory.self
+        if let r = mem.backoff[steerID] {          // a back-off in progress: the lean trim follows the root
+            let done = !(stepLive && feet.active)
+            let prog = done ? 1 : max(0, min(1, simd_dot(position - r.start, r.u) / max(r.len, 1e-3)))
+            socialBook.leanTrim = r.trim0 * (1 - prog)
+            if done { mem.backoff[steerID] = nil; socialBook.leanTrim = 0; mem.cooldown[steerID] = (social?.t ?? 0) + ContactSettleTuning.backoffCooldown }
+            return
+        }
+        guard ContactSettleTuning.backoffOn, let s = social, socialBook.trimPartner == p.steerID else { mem.pinnedSince[steerID] = nil; return }
+        let pinned = socialBook.leanTrim <= -ContactTuning.leanBudget + 0.004
+        guard pinned, var g = ContactField.gap(steerID, p.steerID, features: features) else { mem.pinnedSince[steerID] = nil; if socialBook.shuffleReq < 0 { socialBook.shuffleReq = 0 }; return }
+        if let sg = ContactField.skinGap(steerID, p.steerID) { g = min(g, sg) }
+        let e = g - gapWanted + ContactSettleTuning.backoffBias
+        guard e < -ContactSettleTuning.backoffGap else { mem.pinnedSince[steerID] = nil; if socialBook.shuffleReq < 0 { socialBook.shuffleReq = 0 }; return }
+        if s.t < (mem.pinnedSince[steerID] ?? .infinity) { mem.pinnedSince[steerID] = s.t }          // (a clock that ran backwards = a new session)
+        let since = mem.pinnedSince[steerID] ?? s.t
+        mem.pinnedSince[steerID] = since
+        guard s.t - since >= ContactSettleTuning.backoffDwell, s.t >= (mem.cooldown[steerID] ?? 0) || s.t + 1 < (mem.cooldown[steerID] ?? 0),
+              scriptIsNone, feetInit, !feet.active, !gait.isBusy, idleState.kind == nil || idleState.kind == .sit else { return }
+        let u = simd_normalize(position - p.position + SIMD2(1e-6, 0))          // away from him
+        let released = abs(socialBook.leanTrim) / ContactTuning.leanPerMetre          // the skin the lean-away was giving: it comes back as the lean lets go
+        let want = max(ContactSettleTuning.backoffMin, min(ContactSettleTuning.backoffMax, -e + released))
+        let cand = position + u * want
+        let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
+        let got = SIMD2(rv.x, rv.z) - position
+        let along = simd_dot(got, u)
+        socialBook.shuffleReq = 0; mem.pinnedSince[steerID] = nil
+        guard along > 0.5 * want else { mem.cooldown[steerID] = s.t + ContactSettleTuning.backoffCooldown; return }
+        mem.backoff[steerID] = (start: position, u: u, len: along, trim0: socialBook.leanTrim)
+        if ContactTrace.on { ContactTrace.mod(steerID) { $0.shuffle = String(format: "BACKOFF(e%.3f,step%.3f,trim%.3f)", e, along, socialBook.leanTrim) } }
+        startStep(rootD: got, dyaw: 0)
     }
 }
 
@@ -303,6 +406,12 @@ enum ContactTouchMemory {
     struct Entry { var session: ObjectIdentifier; var phase: Int; var axis: SIMD2<Float>; var d: Float; var d0: Float; var frozen: Bool; var clock: Float = 0 }          // (clock: the session time of the last use - a freed session's identifier is reused by the next one, time going backwards = a stale entry)
     /// Bodies whose current walk IS a shuffle step (aimed by the residual, not to be retargeted to the stance spot).
     static var shuffling: Set<Int> = []
+    /// BACK-OFF state per body (BlobBrain.contactBackOff): since when the lean trim has been pinned away while the skins overlap, the running back-off step (start, direction, length, the trim it releases), the earliest next one.
+    static var pinnedSince: [Int: Float] = [:]
+    static var backoff: [Int: (start: SIMD2<Float>, u: SIMD2<Float>, len: Float, trim0: Float)] = [:]
+    static var cooldown: [Int: Float] = [:]
+    /// Group members: one lean trim per (body, neighbour) = body * 4096 + neighbour.
+    static var trims: [Int: Float] = [:]
     /// Bodies whose walk is a stance walk (the destination is the stance spot): planWalkStep arrives within 1 cm and its final step covers exactly the remaining distance.
     static var exact: Set<Int> = []
     /// Bodies whose walk target the stance has rewritten at least once, and the ones whose target is locked for the last 0.8 m (target, the partner's position at the lock).
@@ -323,8 +432,9 @@ enum ContactTouchMemory {
         if clocks.count > 64 { clocks = clocks.filter { $0.key == id } }
     }
     static func purge(_ ids: [Int]) {
-        for i in ids where i >= 0 { shuffling.remove(i); exact.remove(i); finalYaw[i] = nil; locked[i] = nil; rewrote.remove(i) }
+        for i in ids where i >= 0 { pinnedSince[i] = nil; backoff[i] = nil; cooldown[i] = nil; shuffling.remove(i); exact.remove(i); finalYaw[i] = nil; locked[i] = nil; rewrote.remove(i) }
         let set = Set(ids)
+        trims = trims.filter { !(set.contains($0.key / 4096) || set.contains($0.key % 4096)) }
         store = store.filter { !(set.contains($0.key / 4096) || set.contains($0.key % 4096)) }
         meet = meet.filter { !(set.contains($0.key / 4096) || set.contains($0.key % 4096)) }
     }

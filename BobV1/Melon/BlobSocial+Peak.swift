@@ -26,7 +26,7 @@ enum PeakTuning {
     /// The widest the drive's own lean-away (wind-up / recoil) may open the skin gap (m): beyond it the stance's settle walks the pair back together, which is what made the bumps oscillate +-15 cm.
     nonisolated(unsafe) static var openCap: Float = env("PEAK_OPEN", 0.045)
     /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak): the strike stays AT contact - no wind-up gap beyond 1.5 cm, no squash bulge beyond the live gap, a small impact kick.
-    static let pressKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .sneak]
+    static let pressKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .sneak, .whisperGiggle]
     nonisolated(unsafe) static var pressOpenCap: Float = env("PEAK_POPEN", 0.015)
     static func openCap(for k: SocialKind) -> Float { pressKinds.contains(k) ? pressOpenCap : openCap }
     /// The strike of a press / bump move may start once the pair stands this close (skin gap, m) and is planted (a strike fired mid-walk adds its lean to the walk's closing speed).

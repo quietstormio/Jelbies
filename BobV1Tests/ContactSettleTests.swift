@@ -392,4 +392,117 @@ final class ContactSettleTests: XCTestCase {
         // KNOWN OPEN (r4-arrivalA-r2): in this cold-start scene the first planted frame of phase 1 still reads 3.7 cm; the bar is 1.5. Expected to fail until it is closed - remove the expectation then.
         XCTExpectFailure("nuzzle arrives 3.7 cm apart in the cold-start Duo (bar <= 1.5 cm)", strict: false) { XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar") }
     }
+
+    // MARK: r4-engine-settle: the hold's back-off, its band, and the lean calibration
+
+    /// A pair in a side-by-side hold (swayHug: phase 2 holds the touch), run until it has stood planted and settled in phase 2 for 0.5 s. Returns the duo.
+    private func settledHold(_ kind: SocialKind = .swayHug, seed: UInt64 = 31) -> FeatureClipTests.Duo? {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
+        d.live = true
+        for _ in 0..<3 { d.tick() }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { return nil }
+        var held = 0
+        for _ in 0..<(60 * 14) {
+            d.tick()
+            if (a.brain.social?.phase ?? 0) >= 2, !a.brain.feet.active, !b.brain.feet.active { held += 1 } else { held = 0 }
+            if held >= 30 { return d }
+        }
+        return nil
+    }
+
+    /// A hold started AT the band does not step at all: for 3 s of a settled hold neither body lifts a foot (no shuffle, no back-off: the dead band and the hold are not a cycle).
+    func testHoldAtTheBandDoesNotStep() throws {
+        guard let d = settledHold() else { throw XCTSkip("the pair never settled into the hold within 14 s") }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        var steps = 0, prevA = false, prevB = false, lo: Float = 9, hi: Float = -9
+        for _ in 0..<(60 * 3) {
+            d.tick()
+            if a.brain.feet.active && !prevA { steps += 1 }; prevA = a.brain.feet.active
+            if b.brain.feet.active && !prevB { steps += 1 }; prevB = b.brain.feet.active
+            if let g = ContactField.gap(0, 1) { lo = min(lo, g); hi = max(hi, g) }
+        }
+        MotionLog.write(String(format: "HOLD at band: %d steps in 3 s, gap %.2f ... %.2f cm", steps, lo * 100, hi * 100))
+        XCTAssertEqual(steps, 0, "a hold at the band never steps (gap \(lo * 100) ... \(hi * 100) cm)")
+        XCTAssertGreaterThan(lo, -0.01, "never more than 1 cm inside")
+    }
+
+    /// An overlap of `cm` injected into a settled hold (a rigid warp of body A toward B), 4 s watched while the session is still in its hold phase. Returns gaps, the frames a foot lifted, and the hold phase's frames.
+    private func injectOverlap(_ cm: Float) throws -> (gaps: [Float], steps: [Int]) {
+        guard let d = settledHold() else { throw XCTSkip("the pair never settled into the hold within 14 s") }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        let u = simd_normalize(b.brain.position - a.brain.position + SIMD2(1e-6, 0)), w = u * (cm / 100)
+        a.brain.px += w.x; a.brain.pz += w.y; a.brain.stepRoot0 += w; a.brain.feet.nudge(w); a.brain.contactSim?.shift(byXZ: w)
+        var gaps: [Float] = [], steps: [Int] = [], prevA = false, prevB = false
+        for f in 0..<(60 * 4) {
+            d.tick()
+            guard (a.brain.social?.phase ?? 0) == 2 else { break }          // (the hold only: the drive's own ending parts the pair)
+            if (a.brain.feet.active && !prevA) || (b.brain.feet.active && !prevB) { steps.append(f) }; prevA = a.brain.feet.active; prevB = b.brain.feet.active
+            gaps.append(ContactField.gap(0, 1) ?? .nan)
+            if false { MotionLog.write(String(format: "DBG f%d gap %.1f ax %.3f bx %.3f trimA %.3f trimB %.3f walkA %d walkB %d feetA %d feetB %d bo %d", f, gaps.last! * 100, a.brain.px, b.brain.px, a.brain.socialBook.leanTrim, b.brain.socialBook.leanTrim, a.brain.scriptIsNone ? 0 : 1, b.brain.scriptIsNone ? 0 : 1, a.brain.feet.active ? 1 : 0, b.brain.feet.active ? 1 : 0, ContactTouchMemory.backoff.count)) }
+        }
+        MotionLog.write("OVERLAP \(cm) cm: gaps(cm) every 0.25 s " + stride(from: 0, to: gaps.count, by: 15).map { String(format: "%.1f", gaps[$0] * 100) }.joined(separator: " ") + " steps at frames \(steps)")
+        return (gaps, steps)
+    }
+
+    /// The frame after which the gap stays inside +-1.5 cm for the rest of `gaps` (nil: it never does).
+    private func settledFrame(_ gaps: [Float]) -> Int? {
+        guard let last = gaps.lastIndex(where: { !($0 >= -0.015 && $0 <= 0.015) }) else { return 0 }
+        return last + 1 < gaps.count ? last + 1 : nil
+    }
+
+    /// A 3 cm overlap injected into a settled hold is backed out of: inside the band within 1 s, then 3 s with no step and no drift (the two leans take 3 cm; the back-off step is for what they cannot).
+    func testBackOffFromAThreeCentimetreOverlapSettlesWithinASecond() throws {
+        let (gaps, steps) = try injectOverlap(3)
+        guard let k = settledFrame(gaps) else { return XCTFail("never settled inside +-1.5 cm: final \(gaps.last ?? 0)") }
+        XCTAssertLessThanOrEqual(k, 60, "settled inside the band within 1 s (frame \(k))")
+        let after = Array(gaps.dropFirst(k).prefix(180))
+        XCTAssertGreaterThanOrEqual(after.count, 150, "the hold lasts 2.5 s past the settling")
+        XCTAssertGreaterThan(after.min() ?? 0, -0.01, "stays out of the partner")
+        XCTAssertLessThan(after.max() ?? 0, 0.015, "and does not drift apart")
+        XCTAssertTrue(steps.filter { $0 > k }.isEmpty, "no step after it settled: \(steps)")
+    }
+
+    /// The back-off step itself (BlobBrain.contactBackOff), through the session's own tick: the lean trim held pinned at -budget and the error biased 5 cm toward overlap (`backoffBias`: an overlap the lean cannot take). After the 0.3 s dwell the body steps
+    /// back ONCE (3 ... 6.5 cm straight away from the partner, no turn), the trim is released with the root, and the cooldown keeps a second step away for 0.6 s.
+    func testBackOffIsOneStraightStepAfterTheDwell() throws {
+        guard let d = settledHold() else { throw XCTSkip("the pair never settled into the hold within 14 s") }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        let p0 = a.brain.position, yaw0 = a.brain.yaw, u = simd_normalize(p0 - b.brain.position + SIMD2(1e-6, 0))
+        var starts: [Int] = [], prev = false, pinnedFrames = 0
+        ContactSettleTuning.backoffBias = -0.05; defer { ContactSettleTuning.backoffBias = 0 }
+        for f in 0..<60 {
+            if starts.isEmpty { a.brain.socialBook.leanTrim = -ContactTuning.leanBudget; a.brain.socialBook.trimPartner = b.brain.steerID; pinnedFrames += 1 }
+            d.tick()
+            if a.brain.feet.active && !prev { starts.append(f) }; prev = a.brain.feet.active
+        }
+        let moved = simd_dot(a.brain.position - p0, u)
+        MotionLog.write(String(format: "BACKOFF step: starts %@, moved %.1f cm away, yaw change %.3f rad, trim %.3f", "\(starts)", moved * 100, abs(wrapAngle(a.brain.yaw - yaw0)), a.brain.socialBook.leanTrim))
+        XCTAssertEqual(starts.count, 1, "one step (dwell 0.3 s, then cooldown 0.6 s): \(starts)")
+        XCTAssertGreaterThanOrEqual(starts.first ?? 0, 15, "not before the 0.3 s dwell")
+        XCTAssertGreaterThan(moved, 0.025, "the root moved away from him (\(moved) m)"); XCTAssertLessThan(moved, 0.07)
+        XCTAssertLessThan(abs(wrapAngle(a.brain.yaw - yaw0)), 0.05, "and did not turn")
+        XCTAssertGreaterThan(a.brain.socialBook.leanTrim, -0.02, "the trim handed over to the step")
+    }
+
+    /// The lean calibration (ContactTuning.leanPerMetre, rad per metre of skin to close): the skin gap of a standing pair against a pure lean of one body toward the other. Logged; the bound keeps it honest.
+    func testLeanReachPerRadianMatchesTheCalibration() {
+        let d = FeatureClipTests.Duo(positions: [SIMD2(-0.5, 0.6), SIMD2(0.5, 0.6)], features: [.none, .none], seed: 5)
+        d.live = true
+        for _ in 0..<3 { d.tick() }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        let local = rotXZ(b.brain.position - a.brain.position, -a.brain.yaw), ln = max(simd_length(local), 1e-3)
+        let nr = -local.x / ln, np = local.y / ln
+        func gap(_ th: Float) -> Float {
+            for _ in 0..<45 { a.brain.socialBook.roll = nr * th; a.brain.socialBook.pitch = np * th; d.tick() }
+            var g: Float = 0
+            for _ in 0..<15 { a.brain.socialBook.roll = nr * th; a.brain.socialBook.pitch = np * th; d.tick(); g += (ContactField.gap(0, 1) ?? 0) / 15 }
+            return g
+        }
+        let g0 = gap(0), g1 = gap(0.1), g2 = gap(0.2)
+        let reach = (g0 - g2) / 0.2, reach1 = (g0 - g1) / 0.1
+        MotionLog.write(String(format: "LEAN reach: %.3f m/rad (0.1 rad: %.3f, 0.2 rad: %.3f) -> %.2f rad per m; leanPerMetre = %.2f", reach, reach1, reach, 1 / max(reach, 1e-3), ContactTuning.leanPerMetre))
+        XCTAssertGreaterThan(reach, 0.1, "a lean toward him closes skin: \(reach) m/rad")
+        XCTAssertLessThan(abs(1 / max(reach, 1e-3) - ContactTuning.leanPerMetre) / ContactTuning.leanPerMetre, 0.3, "leanPerMetre is within 30% of the measured reach (\(1 / max(reach, 1e-3)) rad/m)")
+    }
 }
