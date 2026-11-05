@@ -127,6 +127,8 @@ nonisolated enum DiningSpot {
         for j in jellies { d = min(d, distance(from: j, origin: o, layout: L)) }
         return d
     }
+    /// Test seam: how the tray spot is picked among the free ones. The game picks at random (default unchanged); a test that needs a repeatable meal sets a fixed pick and restores this.
+    nonisolated(unsafe) static var pickOpen: ([SIMD2<Float>]) -> SIMD2<Float>? = { $0.randomElement() }
     static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6
@@ -140,7 +142,7 @@ nonisolated enum DiningSpot {
             }
             cx += 0.2
         }
-        if let pick = open.randomElement() { return pick }
+        if let pick = pickOpen(open) { return pick }
         if !jellies.isEmpty {          // crowded: the on-screen, decor-free spot farthest from every Jelbie
             var bestO: SIMD2<Float>?, bestD: Float = -1
             var fx: Float = -1.6

@@ -14,8 +14,16 @@ final class LineupTests: XCTestCase {
     nonisolated(unsafe) static var debug = false
 
     /// The sim must not depend on the wall clock: the autonomous goal search stops at a wall-clock budget (BlobBrain.pickBudgetSeconds), so a loaded machine could change a pick.
-    override func setUp() { BlobBrain.pickBudgetSeconds = .infinity }
-    override func tearDown() { BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds }
+    /// The meal's tray spot is a system-random pick among the free spots (DiningSpot.choose), which made the meal tests flake: the test takes the free spot nearest the
+    /// preferred front spot instead.
+    override func setUp() {
+        BlobBrain.pickBudgetSeconds = .infinity
+        DiningSpot.pickOpen = { $0.min { simd_distance($0, DiningSpot.preferred) < simd_distance($1, DiningSpot.preferred) } }
+    }
+    override func tearDown() {
+        BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
+        DiningSpot.pickOpen = { $0.randomElement() }
+    }
 
     /// Closest two bodies over a run (only samples where at least one of the pair walks), and the path each one took.
     struct Track {
