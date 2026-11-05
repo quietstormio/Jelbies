@@ -314,8 +314,8 @@ final class ContactSettleTests: XCTestCase {
             let st = ContactStance.entry(k)
             XCTAssertEqual(st?.steps.first?.retargets, true, "\(k): phase 0 walks up through the stance")
         }
-        for k in [SocialKind.nuzzle, .sitTogether, .cheekSquish, .bellyBounce, .cuddleLean, .whisperGiggle, .swayHug, .backToBack] { XCTAssertEqual(ContactStance.entry(k)?.facing, .camera, "\(k) ends side by side") }
-        for k in [SocialKind.boop, .bump, .chestBump, .hum, .noseBoop] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
+        for k in [SocialKind.nuzzle, .sitTogether, .cheekSquish, .bellyBounce, .cuddleLean, .whisperGiggle, .swayHug, .backToBack, .boop, .highFive] { XCTAssertEqual(ContactStance.entry(k)?.facing, .camera, "\(k) ends side by side") }          // (boop / highFive since 2026-11-05, user rule 2: the stub arm only reaches past a partner who stands BESIDE it - HandReach, BlobSocial+Hands.swift)
+        for k in [SocialKind.bump, .chestBump, .hum, .noseBoop] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
         XCTAssertTrue(ContactStance.entry(.squabble)?.steps.first?.retargets ?? false, "squabble owns its walk-up since drive round 2 (arrival -7.4 cm -> -1.0 cm)"); XCTAssertFalse(ContactStance.entry(.tag)?.steps.first?.retargets ?? true)
     }
 

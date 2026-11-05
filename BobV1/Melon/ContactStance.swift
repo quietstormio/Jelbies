@@ -80,12 +80,14 @@ struct ContactStance: Sendable {
     // MARK: the table
     static let table: [SocialKind: ContactStance] = [
         // press / bump kinds: stand a few cm apart, touch when the move presses
-        .boop: .pressing(from: 1, press: 2, anchor: .b, sound: .squish, volume: 0.5),
+        // boop (user rule 2): side by side at HAND REACH. The booper's arm is up (in its canonical pose) from the first step, so the outline the walk-up measures is hand to the partner's arm and the last steps land the HAND there; the press closes the last cm. The bodies (eggs) never touch: the hand is the contact.
+        .boop: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold)], anchor: .b, sound: .squish, volume: 0.5),
         .squabble: .pressing(from: 1, press: 1, walk0: true, until: 2, sound: .squish, volume: 0.5),
         .bump: .pressing(from: 1, press: 2, until: 4, sound: .boop, volume: 0.9),          // (phase 4 = the happy bounces AFTER the bump: the pair may part and hop)
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        .highFive: .pressing(from: 1, press: 2, until: 3, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 3: the arms go down, they part.
+        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),

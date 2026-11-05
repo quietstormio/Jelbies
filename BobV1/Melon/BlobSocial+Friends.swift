@@ -83,9 +83,16 @@ extension BlobBrain {
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
-        case .chestBump, .hum, .twirl, .highFive:
+        case .highFive:
+            // (user rule 2: side by side, both arms up, the hands meet in the middle - BlobSocial+Hands.swift)
+            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * 0.9) else { return false }
+            let s = newSession(kind, with: o, duration: 0)
+            s.goal = spot
+            o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
+            if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
+        case .chestBump, .hum, .twirl:
             guard d > 0.5, d < 5.5 else { return false }
-            let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : (kind == .highFive ? 0.9 : 0.78))
+            let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : 0.78)
             let away = (me - you) / max(d, 1e-3)
             let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
@@ -196,34 +203,30 @@ extension BlobBrain {
 
     // MARK: high five (the "jelly bump")
 
-    /// 2026-11-02, reworked after the user saw the nub version (the reaching nub poked into the partner): the JELLY BUMP. The two walk up and stand side by side at `highFiveGap` x the gap, each turned ~30 deg toward the other,
-    /// then lean IN together (tilt <= 0.35 rad, from the body: feet planted, the roots do not move) until the cheeks / upper sides meet: a squish (squash + a jelly kick, the contact wobble), the boop, the one haptic tap, happy eyes and hearts;
-    /// both spring back with a second jiggle and part. No arm raise at all: the arms just jiggle with the body. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown).
+    /// 2026-11-05 (user rule 2, replaces the jelly bump of 11-02): the HIGH FIVE. The two stand side by side facing the camera, the arms up from the first step, each raising the arm toward the other (elevation `elFive`, a wave-sized
+    /// thumb, never longer than the wave's) and the hands MEET tip to tip in the middle (the stance holds the hands' gap at a squeeze: hand to hand 0 +- 0.5 cm); a slap: a jelly kick, the boop, the one haptic tap, happy eyes and hearts;
+    /// both spring back with a second jiggle, the arms go down and they part. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown). (The old version leaned the bodies together and raised no arm: the hands hovered 55 cm from the partner.)
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
-        // (2026-11-04: face to face like the chest bump - the pair's stance (ContactStance .highFive, facing .each) walks to ONE meeting spot decided for that posture; the old side by side + 30 deg turn made the
-        // touch distance change while the bodies turned, and the stance walk swung the gap -6 ... +30 cm)
-        if openFaceToFace(s, o, isA, settle: 0.5) { return }
+        let reach = { (w: Float) in self.socialBook.handWant = HandReach(side: self.handSide(toward: o), w: w, el: HandReach.elFive, seek: false, partner: o.steerID) }
+        if openSideBySide(s, o, isA, settle: 0.7) {
+            // the arms come up on the way in (the walk-up's touch distance then counts the hands: the last steps land the HANDS together, not the arm nubs)
+            reach(1)
+            return
+        }
         let t = s.phaseT
-        faceEach(o)
+        socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let g = socialGentle
         switch s.phase {
         case 2:
+            reach(1)
             let sinceBump = s.impacted ? t - s.bumpT : -1
             let press = s.impacted ? pulse(sinceBump, up: 0.07, down: 0.35) : 0
-            // the lean in grows over ~0.9 s to 0.30 rad, the press adds 0.05; after the bump he springs back with a small overshoot the other way
-            let leanIn = smooth01((t - 0.35) / 0.55) * (s.impacted ? 1 - smooth01(sinceBump / 0.3) : 1)
-            let recoil: Float = s.impacted ? -0.05 * sinf(min(max(sinceBump - 0.1, 0), 0.9) * 2 * .pi / 0.45) * (1 - smooth01((sinceBump - 0.1) / 0.9)) : 0
-            // (he is turned ~30 deg toward the partner, so the lean toward him is split between the roll (sideways) and the pitch (forward) by where the partner is in his own frame)
-            let local = rotXZ(o.position - position, -yaw), ln = max(simd_length(local), 1e-3)
-            let amp = (0.30 * leanIn + 0.05 * press + recoil) * g
-            socialBook.wantRoll = -local.x / ln * amp
-            socialBook.wantPitch = local.y / ln * amp
-            socialBook.wantSquash = 1 - 0.07 * press * g
-            socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.3) / 0.5) * (s.impacted ? 0 : 1)
+            socialBook.wantSquash = 1 - 0.025 * press * g          // (a squashed body is wider: the hands are the contact, a 7 % squash drives them into each other)
+            socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4) * (s.impacted ? 0 : 1)
             if isA {
-                if !s.impacted, t >= 0.95 {          // the cheeks meet
+                if !s.impacted, t >= 0.45 {          // the hands meet
                     s.impacted = true; s.bumpT = t
-                    jellyKick = max(jellyKick, impactKick(2.8)); o.jellyKick = max(o.jellyKick, impactKick(2.8))
+                    jellyKick = max(jellyKick, impactKick(2.0)); o.jellyKick = max(o.jellyKick, impactKick(2.0))
                     contactBoopFallback(o)
                     contactCueFallback(o, .highFiveBoop, 0.85, haptic: .emote("highFive.bump"))
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
@@ -238,7 +241,7 @@ extension BlobBrain {
                     if s.passes == 1, t - s.bumpT > 1.2 { s.setPhase(3) }
                 }
             }
-        default:   // the happy look, then they part
+        default:   // the happy look, the arms go down, then they part
             socialBook.wantEyes = 1
             if isA, s.phaseT > 0.6 { finishHappy(s, o) }
         }
@@ -272,13 +275,18 @@ extension BlobBrain {
     // MARK: cheek squish
 
     private func driveCheekSquish(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
+        // 2026-11-05 (user rule 2): the squisher's hand rests ON the partner (the arm comes up on the way in, BlobSocial+Hands.swift): the stub arm cannot reach a cheek from beside him, so it lands on his arm / shoulder where the
+        // skins meet, the pair stands at hand reach and the squish is the lean + squash of the bodies around it.
+        let reaching = isA
+        if reaching { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let ft = s.phaseT
         let lean = smooth01(ft / 0.5) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.6))
         let press = max(pulse(ft - 0.6, up: 0.22, down: 0.30), pulse(ft - 1.7, up: 0.22, down: 0.30))          // two gentle squishes
-        socialBook.wantRoll = leanSign(toward: o.position) * (0.09 * lean + 0.09 * press)
-        socialBook.wantSquash = 1 - 0.07 * press
+        let tilt: Float = 0.3          // (a hand rests between the two: the full lean of two bodies pressed together would swing the arm nub of the one into the hand of the other)
+        socialBook.wantRoll = leanSign(toward: o.position) * (0.09 * lean + 0.09 * press) * tilt
+        socialBook.wantSquash = 1 - 0.04 * press          // (a squashed body is wider: with a hand between them the squish is smaller)
         socialBook.wantEyes = 1 - 0.55 * lean
         if isA {
             if s.bumps == 0, ft > 0.82 { s.bumps = 1; squishBoth(o, first: true) }
@@ -287,7 +295,7 @@ extension BlobBrain {
         }
     }
     private func squishBoth(_ o: BlobBrain, first: Bool) {
-        jellyKick = max(jellyKick, 1.5); o.jellyKick = max(o.jellyKick, 1.5)
+        jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0)          // (softer: the hand is on the partner, a hard kick swings the bodies into each other)
         contactCueFallback(o, .squish, 0.7)
         if first { contactBoopFallback(o) }
         else { face(.joyArc, hold: 1.0); o.face(.joyArc, hold: 1.0) }
