@@ -81,16 +81,22 @@ enum ParkScenery {
         for (x, rx, ry) in [(-14 as Float, 14 as Float, 2.8 as Float), (14, 15, 3.2)] {
             blob(b, SIMD3(x, -0.5, -8.8), rx: rx, ry: ry, rz: 2.2, color: S.srgb(0.52, 0.74, 0.46), segments: 28, rings: 10)
         }
-        let leaf = S.srgb(0.40, 0.68, 0.40), leaf2 = S.srgb(0.46, 0.72, 0.44)
-        var tx: Float = -15
+        let leaf = S.srgb(0.36, 0.64, 0.36), leaf2 = S.srgb(0.44, 0.70, 0.40), far = S.srgb(0.42, 0.66, 0.46), pine = S.srgb(0.26, 0.52, 0.34)
+        // the forest edge: a far row (hazier, taller, with conifers) behind a nearer row of rounded trees, all on jittered spacing
+        var tx: Float = -16
         var k = 0
+        while tx <= 16 {
+            roundTree(b, x: tx + (r.unit() - 0.5) * 1.4, z: -8.7 - 0.3 * r.unit(), trunk: 0.8, radius: 1.5 + 0.7 * r.unit(), canopy: k % 3 == 1 ? pine : far, shape: k % 3 == 1 ? .conifer : .round, rng: &r)
+            tx += 3.1 + 0.6 * r.unit(); k += 1
+        }
+        tx = -15; k = 0
         while tx <= 15 {
-            roundTree(b, x: tx, z: -7.8, trunk: 0.7, radius: 1.7 + 0.25 * Float(k % 3), canopy: k % 2 == 0 ? leaf : leaf2, rng: &r)
-            tx += 3.4; k += 1
+            roundTree(b, x: tx + (r.unit() - 0.5) * 1.2, z: -7.6 + (r.unit() - 0.5) * 0.7, trunk: 0.6 + 0.4 * r.unit(), radius: 1.35 + 0.65 * r.unit(), canopy: k % 2 == 0 ? leaf : leaf2, shape: k % 5 == 3 ? .conifer : .round, rng: &r)
+            tx += 3.3 + 0.9 * r.unit(); k += 1
         }
         // two hero trees at the edges (one soft blush)
-        roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.5, canopy: leaf2, rng: &r)
-        roundTree(b, x: 6.8, z: -1.2, trunk: 1.0, radius: 1.4, canopy: S.srgb(0.97, 0.74, 0.80), rng: &r)
+        roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.5, canopy: leaf2, shape: .round, rng: &r)
+        roundTree(b, x: 6.8, z: -1.2, trunk: 1.0, radius: 1.4, canopy: S.srgb(0.97, 0.74, 0.80), shape: .round, rng: &r)
 
         // ---- flowering bushes at the edges, a couple of low blossom patches ----
         let blush = S.srgb(0.98, 0.72, 0.80), butter = S.srgb(0.99, 0.90, 0.55), cream = S.srgb(0.99, 0.96, 0.88), lilac = S.srgb(0.80, 0.70, 0.95)
