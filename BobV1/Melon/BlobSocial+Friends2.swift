@@ -22,6 +22,11 @@ enum Friends2Tuning {
     /// Where the sides meet: centre distance as a fraction of `peerGap` (a body is ~1.4 wide, so the bodies just touch and squish a little).
     static let sideGap: Float = 0.82, faceGap: Float = 0.76
     static let raceLane: Float = 1.05
+    /// Clear water between the two lanes of a race (m, skin to skin) on top of the stand-apart distance: two runners abreast sway +-12 cm round their path and swing their arms 8 cm - lanes at the touch distance
+    /// overlapped by 4 - 6.5 cm all along the run (measured, littleRace on every cast); 0.30 cleared four casts, Lavender+Pip (wings / Pip tail at the turn-round) still dipped -3.8 cm: the lane is the reach of the widest feature. A race is a PROXIMITY kind: the lanes never touch.
+    static let raceLaneClear: Float = 0.42
+    /// Clear water behind the hider (m) on top of the stand-apart distance: the seeker walks up with his arms swinging 8 - 20 cm and the walk-end quantization is 6 cm (peekaboo: a proximity kind, -6.1 / -12.8 cm in phase 0; 0.15 cleared four casts at +0.7 ... +3.9, Lavender+Pip (wings) still -7.9; 0.28 was WORSE on Bob+Teddy and Pip+Teddy (-1.4 mid walk-up): the remaining overlap is the seeker's path round the hider, not the final stand-off).
+    static let peekClear: Float = 0.15
     /// ringAround: extra centre distance (m) over the skins' touch distance on the hop circle (the 60 degree turn in place between hops swings the skin).
     static let ringMargin: Float = 0.12
     /// Angle (rad) one ring hop turns the pair round their centre: 36 degrees (15 hops = 1.5 turns); the chord of it shortens the mid-air distance by 1.2 %.
@@ -68,7 +73,7 @@ extension BlobBrain {
         switch kind {
         case .littleRace, .leapfrog, .bellyBounce, .cuddleLean, .backToBack:
             let gap: Float = kind == .littleRace ? peerGap * Friends2Tuning.raceLane : (kind == .leapfrog ? peerGap * 0.85 : peerGap * Friends2Tuning.sideGap)
-            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: gap) else { return false }
+            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: gap, extra: kind == .littleRace ? Friends2Tuning.raceLaneClear : 0) else { return false }
             let dur: Float = kind == .cuddleLean ? vDur(5.6) : (kind == .backToBack ? vDur(6.5) : 0)
             let s = newSession(kind, with: o, duration: dur)
             s.goal = spot; s.roles = rand() < 0.5 ? 0 : 1
@@ -90,7 +95,7 @@ extension BlobBrain {
             // behind him, seen from the camera (he stands between the camera and me)
             let cy = o.faceCameraYaw()
             let u = SIMD2(sinf(cy), cosf(cy))
-            let want = you - u * standGap(o, along: -u, peerGap * 0.95)
+            let want = you - u * (standGap(o, along: -u, peerGap * 0.95) + Friends2Tuning.peekClear)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.14, spotFree(spot, besides: [self, o]) else { return false }
             let s = newSession(kind, with: o, duration: 0)

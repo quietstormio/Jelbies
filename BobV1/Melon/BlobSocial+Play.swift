@@ -21,10 +21,10 @@ extension BlobBrain {
     // MARK: choosing
 
     /// A spot beside `o` (along the world x), on the side nearer to me, clear of everybody else.
-    func sideSpot(of o: BlobBrain, gap: Float) -> SIMD2<Float>? {
+    func sideSpot(of o: BlobBrain, gap: Float, extra: Float = 0) -> SIMD2<Float>? {
         let dir: Float = position.x >= o.position.x ? 1 : -1
         for sgn in [dir, -dir] {
-            let p = o.position + SIMD2(sgn * standGap(o, along: SIMD2(sgn, 0), gap), 0)          // (never inside him: the touch distance + the approach margin, ContactStance.swift)
+            let p = o.position + SIMD2(sgn * (standGap(o, along: SIMD2(sgn, 0), gap) + extra), 0)          // (never inside him: the touch distance + the approach margin, ContactStance.swift)
             let q = closeFixed(p)
             if simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) { return q }
         }
