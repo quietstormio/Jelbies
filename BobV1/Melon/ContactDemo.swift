@@ -7,6 +7,7 @@
 //                                                     perp = tracks the cast, side-on (perpendicular to the cast's axis, on the room side), near body height;
 //                                                     top = the same tracking from nearly straight above
 //    -ContactDemoDelay <s>                            wait before it starts (default 4)
+//    -ContactDemoPark 1 (+ -StartPark 1, -ContactDemoVisitors N, -ContactDemoVisitorSpecies wings,daisy,none)   the same in the PARK: cast = the NewGame Jelbie(s) + N chosen visitors
 //  The cast is taken off autonomy so nothing else interrupts the scene. Used by BobV1UITests/ContactCaptureUITests.swift.
 //
 
@@ -126,15 +127,50 @@ enum ContactDemo {
         gl.summary(isHold: table.map { t in { ph in t.step(at: ph)?.target == ContactStance.hold } })
     }
 
+    /// `-ContactDemoPark 1` (needs `-StartPark 1`, the simulator's own go-to-the-park hook): waits for the trip to be on, then swaps the random visitors for `-ContactDemoVisitors N`
+    /// chosen ones (`-ContactDemoVisitorSpecies wings,daisy,none` = pool visitors by signature, in order; yellow/tail/spines has NO pool visitor, so it falls back to a plain one and says so).
+    /// Returns the cast: the room's Jelbie(s) that came, then the visitors. Logs each visitor's species, colour and worn item.
+    @MainActor static func parkCast(care: GameCare, d: UserDefaults) async -> [JellyActor] {
+        for _ in 0..<900 where care.park.phase != .playing { try? await Task.sleep(nanoseconds: 100_000_000) }
+        guard care.park.phase == .playing else { note(" park not reached (phase %@)", "\(care.park.phase)"); return [] }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)          // (everyone placed, the arrival hops done)
+        let book = care.parkBook
+        let n = max(d.integer(forKey: "ContactDemoVisitors"), 1)
+        let want = (d.string(forKey: "ContactDemoVisitorSpecies") ?? "wings,daisy").split(separator: ",").map { String($0).lowercased() }
+        func feature(_ w: String) -> JellyFeature { switch w { case "wings", "purple", "lavender": return .wings; case "daisy", "green": return .daisy; case "spines", "tail", "yellow": return .spines; default: return .none } }
+        var chosen: [ParkVisitor] = []
+        for k in 0..<n {
+            let w = k < want.count ? want[k] : "none", f = feature(w)
+            if let v = book.visitors.first(where: { $0.signature == f && !chosen.map(\.id).contains($0.id) }) { chosen.append(v) }
+            else if let v = book.visitors.first(where: { $0.signature == .none && !chosen.map(\.id).contains($0.id) }) { note(" park: no pool visitor with %@, using plain %@", w, v.name); chosen.append(v) }
+        }
+        book.work.giftState = 0          // (no friend walks over with a present mid-scene)
+        for a in book.actors { care.visitorPutAway(a) }
+        let roster = book.roster.filter { $0.brain != nil }
+        let spots = ParkLayout.spots(count: roster.count + chosen.count).dropFirst(roster.count)
+        book.cast = chosen.map(\.id)
+        book.actors = book.spawn?(chosen, Array(spots)) ?? []
+        for (a, v) in zip(book.actors, chosen) { note(" park visitor body=%d %@ colour=%@ species=%@ wear=%@", a.id, v.name, v.colour.rawValue, "\(v.signature)", v.wear.map { "\($0)" } ?? "none") }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        for a in book.actors { a.brain?.autonomy = false; a.brain?.idleForced = true }
+        return roster + book.actors
+    }
+
     @MainActor static func run(care: GameCare) async {
         let d = UserDefaults.standard
         applyCamera()
         guard let name = d.string(forKey: "ContactDemo"), !name.isEmpty else { return }
         try? await Task.sleep(nanoseconds: UInt64((d.double(forKey: "ContactDemoDelay") > 0 ? d.double(forKey: "ContactDemoDelay") : 4) * 1e9))
-        for _ in 0..<300 where care.raceBook.actors.count < 2 || care.raceBook.actors.contains(where: { $0.brain == nil }) { try? await Task.sleep(nanoseconds: 100_000_000) }          // (the roster may still be loading)
-        let actors = care.raceBook.actors
-        let ids = d.string(forKey: "ContactDemoIds").map { $0.split(separator: ",").compactMap { Int($0) } } ?? Array(actors.indices)
-        let cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
+        let park = d.integer(forKey: "ContactDemoPark") != 0
+        let cast: [JellyActor]
+        if park {
+            cast = await parkCast(care: care, d: d)
+        } else {
+            for _ in 0..<300 where care.raceBook.actors.count < 2 || care.raceBook.actors.contains(where: { $0.brain == nil }) { try? await Task.sleep(nanoseconds: 100_000_000) }          // (the roster may still be loading)
+            let actors = care.raceBook.actors
+            let ids = d.string(forKey: "ContactDemoIds").map { $0.split(separator: ",").compactMap { Int($0) } } ?? Array(actors.indices)
+            cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
+        }
         guard cast.count >= 2 else { note(" cast too small (%d)", cast.count); return }
         for a in cast { a.brain?.autonomy = false; a.brain?.idleForced = true }
         if name != "lieDown" && name != "flop" && name != "sleepPile" { Task { @MainActor in await keepNeedsFull(cast) } }          // (a full-needs Jelbie may not lie down at all)
@@ -142,7 +178,7 @@ enum ContactDemo {
         // side by side across the screen first (a pair along the camera axis hides the touch): spots at z -0.9 (the camera's look-at depth), 2.6 u apart (3: 2.4 u)
         let half: Float = (name == "lieDown" || name == "flop" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
         let xs: [Float] = cast.count == 2 ? [-half, half] : (0..<cast.count).map { (Float($0) - Float(cast.count - 1) / 2) * 1.8 }
-        let spots = xs.map { SIMD2<Float>($0, -0.9) }
+        let spots = xs.map { SIMD2<Float>($0, park ? 1.2 : -0.9) }          // (the park: the middle of its play floor)
         for a in cast { if let b = a.brain { note(" start (%.2f, %.2f)", b.position.x, b.position.y) } }
         for (a, g) in zip(cast, spots) { a.brain?.requestNow(.goTo(g)) }
         for _ in 0..<250 {

@@ -331,3 +331,7 @@ Findings (traced, Release, Bob+Teddy first; numbers are minimum skin gap, cm):
 - **lieDown pair**: the snuggle settles to `hold` on the support gap with the urgent push (was target 0 on the feature gap).
 
 Not fixed (cause known): see the round report. Knobs for A/B in the harness: env `PEAK_OFF=1` (all), `PEAK_NOGUARD=1`, `PEAK_NOARM=1`, `PEAK_K`, `PEAK_GAIN`, `PEAK_OPEN`, `PEAK_ARM`, `PEAK_CAP`, `PEAK_LOG=1`.
+
+### Park capture rows (r4-park-capture)
+
+`ContactDemo` also runs in the PARK: `-StartPark 1` (simulator hook, goes to the park with the NewGame Jelbie) + `-ContactDemoPark 1` waits until the trip is `.playing`, replaces the random visitors with `-ContactDemoVisitors N` chosen pool visitors (`-ContactDemoVisitorSpecies wings,daisy,none`, in order, by signature; the pool has NO yellow/tail visitor, the tail is covered by Pip in the cast), takes the cast off autonomy and forces the kind between the Jelbie and the visitor(s) (trios: Jelbie + 2 visitors) with the same tick log and SUMMARY. The visitors' species / colour / worn item are logged (`park visitor ...`). The perp/top tracking cameras work unchanged. Rows (`scripts/contact_scenes.tsv`, `*_park_*`): ringAround_park_teddy_v, ringAround_park_pip_v, circleDance_park_pearl_vv, groupHug_park_bob_vv, bump_park_bob_v, tag_park_pearl_v, chase_park_teddy_v, highFive_park_moss_v, spinHug_park_lavender_v.

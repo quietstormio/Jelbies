@@ -29,7 +29,14 @@ final class ContactCaptureUITests: XCTestCase {
         app.launch()
         let cont = app.buttons["Continue"]
         if cont.waitForExistence(timeout: 20) { for _ in 0..<6 { if cont.exists, cont.isHittable { cont.tap() }; Thread.sleep(forTimeInterval: 1.5) } }
-        XCTAssertTrue(app.buttons["care-menu"].waitForExistence(timeout: 90), "the room is up")
+        let parkMode = (env["CAPTURE_ARGS"] ?? "").contains("-ContactDemoPark")          // (park rows: the room's care-menu is gone once the trip starts; the scene is up when the demo has swapped in its visitors)
+        if parkMode {
+            let logPath = out + "/" + scene + ".demolog"
+            let t = Date()
+            while Date().timeIntervalSince(t) < 120, !((try? String(contentsOfFile: logPath, encoding: .utf8))?.contains("park visitor") ?? false) { Thread.sleep(forTimeInterval: 0.5) }
+        } else {
+            XCTAssertTrue(app.buttons["care-menu"].waitForExistence(timeout: 90), "the room is up")
+        }
         Thread.sleep(forTimeInterval: 1)
         try? "go".write(toFile: out + "/" + scene + ".mark", atomically: true, encoding: .utf8)          // (the host script starts its video here)
         let t0 = Date()

@@ -36,3 +36,13 @@ swayHug_lavender_teddy	lavender,teddy	swayHug	perp,top,low	-	90
 cheekSquish_pip_teddy	pip,teddy	cheekSquish	perp,top,low	-	90
 chase_bob_teddy	bob,teddy	chase	perp,top,low	-	120
 flop_teddy_pearl	teddy,pearl	flop	perp,top,low	-	120
+# PARK rows: -StartPark 1 goes to the park, -ContactDemoPark 1 swaps its random visitors for N chosen ones (-ContactDemoVisitors, -ContactDemoVisitorSpecies wings|daisy|none; there is no tail/yellow pool visitor) and forces the kind between the cast Jelbie and them
+ringAround_park_teddy_v	teddy	ringAround	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+ringAround_park_pip_v	pip	ringAround	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+circleDance_park_pearl_vv	pearl	circleDance	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies wings,daisy	120
+groupHug_park_bob_vv	bob	groupHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies daisy,wings	120
+bump_park_bob_v	bob	bump	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+tag_park_pearl_v	pearl	tag	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+chase_park_teddy_v	teddy	chase	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+highFive_park_moss_v	moss	highFive	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+spinHug_park_lavender_v	lavender	spinHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
