@@ -180,6 +180,7 @@ final class ContactPolishTests: XCTestCase {
         var momentary = false
         /// The skin gap at the frame each touch event fired (exact frame, not the 2-frame sampling): what a momentary touch (boop) is judged on.
         var touchGaps: [Float] = []
+        var arrivalSettledCm: Float? = nil, bodyArrivalCm: Float? = nil
         var lastPlantCm: Float? = nil, stops = 0          // the gap at the LAST stop before the touch, and how many times the pair stopped (walk-stop-walk = more than one)
         var arrivalFrame = -1, firstTouchFrame = -1
         /// Was the arrival stop a TRUE stop, or a pause before a turn in place? The largest heading change (deg) of either body between the arrival frame and the first touch, and the seconds between them.
@@ -381,8 +382,11 @@ final class ContactPolishTests: XCTestCase {
                     return false
                 }
                 var g: Float? = nil
-                if arrival.wantsGap(anyStepping: stepping) { g = Self.pairMin(d.contactSurfaces(), e: e, n: n).gap }
-                arrival.feed(frame: frame, anyStepping: stepping, gap: g)
+                var bg: Float? = nil, eg: Float? = nil
+                if arrival.wantsGap(anyStepping: stepping) { g = Self.pairMin(d.contactSurfaces(), e: e, n: n).gap; bg = Self.pairMin(d.contactSurfacesNoSkin(bodyOnly: true), e: e, n: n).gap }
+                if arrival.wantsEndGap(anyStepping: stepping) { eg = Self.pairMin(d.contactSurfaces(), e: e, n: n).gap }
+                arrival.feed(frame: frame, anyStepping: stepping, gap: g, bodyGap: bg, endGap: eg)
+                res.arrivalSettledCm = arrival.settledGap; res.bodyArrivalCm = arrival.bodyGap
                 if let ag = arrival.gap { res.arrivalCm = ag; res.arrivalT = Float(arrival.frame ?? frame) / 60; res.arrivalFrame = arrival.frame ?? frame; res.lastPlantCm = arrival.last; res.stops = arrival.settles.count }
             }
             if res.episodes > 0, firstTouchFrame < 0 { firstTouchFrame = frame }
@@ -567,7 +571,7 @@ final class ContactPolishTests: XCTestCase {
     static let header = ["emote", "cast", "stance", "started", "sec", "minGap_cm", "at_s", "pair", "where", "stanceMedian_cm", "stanceN", "touchFrames", "episodes", "snd_per_episode", "snd_outside", "hap_per_episode", "hap_outside",
                          "sndGap_cm(min..max)", "boopEv", "featRaw_cm", "featClip_cm", "limbRaw_cm", "limbClip_cm", "eggPen_cm", "sounds", "haptics",
                          "arrival_cm", "arrival_at_s", "lastPlant_cm", "stops", "holdMedian_cm", "holdN", "holdTouchN", "touchGaps_cm", "footMin_cm", "worstReach_cm", "worstLag_cm", "bar",
-                         "minGapBody_cm", "holdMedianBody_cm", "snd_per_touch", "handMin_cm", "handTouch_cm", "handHoldMedian_cm", "handHand_cm", "bodyTouch_cm", "arrivalTurn_deg", "arrivalToTouch_s", "retreat_cm", "endGap_cm", "phases", "handTips"].joined(separator: "\t")
+                         "minGapBody_cm", "holdMedianBody_cm", "snd_per_touch", "handMin_cm", "handTouch_cm", "handHoldMedian_cm", "handHand_cm", "bodyTouch_cm", "arrivalTurn_deg", "arrivalToTouch_s", "retreat_cm", "endGap_cm", "phases", "handTips", "arrivalSettled_cm", "bodyArrival_cm"].joined(separator: "\t")
     static func row(_ r: Result) -> String {
         let bar = barFails(r)
         let a: [String] = [r.name, r.cast, r.stance.rawValue, r.started ? "yes" : "NO START", String(format: "%.1f", r.seconds), cm(r.minGap), String(format: "%.1f", r.minGapT), r.minGapPair, r.minGapPhase]
@@ -582,7 +586,8 @@ final class ContactPolishTests: XCTestCase {
         let body: [String] = [r.minGapBody.isFinite ? cm(r.minGapBody) : "-", r.holdMedianBody.map(cm) ?? "-", r.sndPerTouch]
         let hand: [String] = [r.handMin.isFinite ? hcm(r.handMin) : "-", r.handTouch.map(hcm).joined(separator: ","), r.handHoldMedian.map(hcm) ?? "-", r.handHand.map(hcm).joined(separator: ","), r.bodyTouch.map(cm).joined(separator: ","), r.arrivalTurnDeg.map { String(format: "%.0f", $0) } ?? "-", r.arrivalToTouchS.map { String(format: "%.1f", $0) } ?? "-",
                               r.retreat > 0 ? cm(r.retreat) : "0",
-                              r.endGap.map { $0 >= 8 ? "far" : cm($0) } ?? "-", r.phases.isEmpty ? "-" : r.phases.sorted().map(String.init).joined(separator: ","), Array(Set(r.handTips)).sorted().joined(separator: " ")]
+                              r.endGap.map { $0 >= 8 ? "far" : cm($0) } ?? "-", r.phases.isEmpty ? "-" : r.phases.sorted().map(String.init).joined(separator: ","), Array(Set(r.handTips)).sorted().joined(separator: " "),
+                              r.arrivalSettledCm.map(cm) ?? "-", r.bodyArrivalCm.map(cm) ?? "-"]
         let all: [String] = a + b + c + [snd, hap] + arr + hold + feet + body + hand
         return all.joined(separator: "\t")
     }

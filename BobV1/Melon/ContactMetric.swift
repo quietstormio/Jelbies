@@ -138,22 +138,32 @@ nonisolated struct ArrivalTracker {
     private(set) var seenStepping = false
     private(set) var settles: [(frame: Int, gap: Float)] = []
     private var candidate: (frame: Int, gap: Float)?
+    private var candBody: Float?
+    private var candEnd: Float?
+    /// Per recorded stop: the body-only gap at the plant frame, and the skin gap at the END of the quiet spell (the standing gap once the arms and the springs have settled).
+    private(set) var bodyGaps: [Float?] = []
+    private(set) var settledGaps: [Float?] = []
     private var quiet = 0
     private var inStop = false
     private(set) var closed = false
     var gap: Float? { settles.first?.gap }
     var frame: Int? { settles.first?.frame }
     var last: Float? { settles.last?.gap }
+    var bodyGap: Float? { bodyGaps.first ?? nil }
+    var settledGap: Float? { settledGaps.first ?? nil }
     mutating func close() { closed = true }
+    /// The tracker wants the end-of-spell skin gap of THIS frame (the last frame of the quiet spell before it counts as a stop).
+    func wantsEndGap(anyStepping: Bool) -> Bool { !closed && seenStepping && !anyStepping && candidate != nil && !inStop && quiet == settleFrames - 1 }
     /// The tracker wants the skin gap of THIS frame (a quiet frame after a step, at the start of a quiet spell): the caller computes it only then.
     func wantsGap(anyStepping: Bool) -> Bool { !closed && seenStepping && !anyStepping && candidate == nil && !inStop }
-    mutating func feed(frame f: Int, anyStepping: Bool, gap g: Float?) {
+    mutating func feed(frame f: Int, anyStepping: Bool, gap g: Float?, bodyGap bg: Float? = nil, endGap eg: Float? = nil) {
         guard !closed else { return }
-        if anyStepping { seenStepping = true; candidate = nil; quiet = 0; inStop = false; return }
+        if anyStepping { seenStepping = true; candidate = nil; candBody = nil; candEnd = nil; quiet = 0; inStop = false; return }
         guard seenStepping, !inStop else { return }
-        if candidate == nil, let g { candidate = (f, g) }
+        if candidate == nil, let g { candidate = (f, g); candBody = bg }
+        if let eg { candEnd = eg }
         quiet += 1
-        if quiet >= settleFrames, let c = candidate { settles.append(c); inStop = true }
+        if quiet >= settleFrames, let c = candidate { settles.append(c); bodyGaps.append(candBody); settledGaps.append(candEnd); inStop = true }
     }
 }
 
