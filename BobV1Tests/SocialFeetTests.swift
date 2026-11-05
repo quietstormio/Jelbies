@@ -29,8 +29,12 @@ final class SocialFeetTests: XCTestCase {
     static let outDir: String = { let d = ProcessInfo.processInfo.environment["SOCIALFEET_OUT"] ?? ""; return d.isEmpty ? "/private/tmp/socialfeet/" : d + "/" }()
     nonisolated(unsafe) static var keep: [AnyObject] = []
     /// 0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl.
-    static let pairCasts: [(String, [Int])] = [("Pip+Bob", [1, 0]), ("Pearl+Teddy", [5, 4])]
-    static let trioCasts: [(String, [Int])] = [("Pip+Bob+Moss", [1, 0, 2]), ("Pearl+Teddy+Lavender", [5, 4, 3])]
+    /// The SAME casts as ContactPolishTests (2026-11-04: the feet harness had its own two pairs, so the acceptance rows of the other casts carried numbers measured on someone else; every acceptance cast now has a feet row).
+    /// SOCIALFEET_CASTS=Bob+Teddy,Lavender+Pip restricts a run to those casts (a spot check).
+    static let castFilter: Set<String>? = { let v = ProcessInfo.processInfo.environment["SOCIALFEET_CASTS"] ?? ""; return v.isEmpty ? nil : Set(v.split(separator: ",").map(String.init)) }()
+    static let pairCasts: [(String, [Int])] = ContactPolishTests.pairs.filter { castFilter?.contains($0.0) ?? true }
+    static let trioCasts: [(String, [Int])] = ContactPolishTests.trios.filter { castFilter?.contains($0.0) ?? true }
+    static let tsvHeader = ["emote", "cast", "end", "sec", "leashFrames", "ringMin", "joinMin_cm", "collarMax_cm", "attachOverlap_m", "soleRise_m", "centreHeight_m", "skateSession_mm", "skateFrame", "skateWalk_mm", "joinSession_cm", "joinWalk_cm", "collarSession_cm", "skateTag", "badSession", "attachTag"].joined(separator: "\t") + "\n"
     static let planted: Float = 0.012          // (m) a sole this close to the floor, on a foot the gait holds, is planted
 
     override func setUp() {
@@ -69,12 +73,21 @@ final class SocialFeetTests: XCTestCase {
     }
 
     enum Scenario { case social(SocialKind), lie(IdleKind), sleepPair }
+    enum Prop { case none, beanbag, loveseat }
+    func setProps(_ p: Prop) {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
+        switch p {
+        case .none: break
+        case .beanbag: DecorField.shared.set([PlacedDecor(uid: 7, kind: .beanbag, x: 0.0, z: 1.3)])
+        case .loveseat: DecorField.shared.set([PlacedDecor(uid: 7, kind: .loveseat, x: 0.0, z: 1.5)])
+        }
+    }
 
     /// Runs one stance for one cast to its end, every frame measured on every rig. Returns the result; asserts the existing thresholds.
     @discardableResult
-    func run(_ name: String, _ sc: Scenario, cast: [Int], castName: String, maxSec: Float = 70, file: StaticString = #filePath, line: UInt = #line) -> Result {
+    func run(_ name: String, _ sc: Scenario, cast: [Int], castName: String, maxSec: Float = 70, props: Prop = .none, file: StaticString = #filePath, line: UInt = #line) -> Result {
         _ = OnePieceInvariantTests.configured
-        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
+        setProps(props)
         let n = cast.count
         var res = Result(); res.name = name; res.cast = castName
         var positions = Array(ContactPolishTests.farStarts.prefix(n))
@@ -198,14 +211,18 @@ final class SocialFeetTests: XCTestCase {
         let row = [name, castName, res.completed ? "done" : "cut", String(format: "%.1f", res.seconds), "\(res.leash)", String(format: "%.2f", res.ratio), String(format: "%.1f", res.join * 100), String(format: "%.1f", res.collar * 100),
                    String(format: "%.3f", res.overlap), String(format: "%.3f", res.soleRise), String(format: "%.3f", res.centre), String(format: "%.1f", sk.worst * 1000), "\(sk.frame)", String(format: "%.1f", res.skateWalk * 1000), String(format: "%.1f", res.joinSess * 100), String(format: "%.1f", res.joinWalk * 100), String(format: "%.1f", res.collarSess * 100), sk.tag, res.badSess, res.overlapTag].joined(separator: "\t") + "\n"
         let path = Self.outDir + "socialfeet.tsv"
+        if !FileManager.default.fileExists(atPath: path) { try? Self.tsvHeader.write(toFile: path, atomically: true, encoding: .utf8) }
         if let h = FileHandle(forWritingAtPath: path) { h.seekToEndOfFile(); h.write(Data(row.utf8)); try? h.close() } else { try? row.write(toFile: path, atomically: true, encoding: .utf8) }
         return res
     }
 
-    private func pair(_ name: String, _ k: SocialKind, sec: Float = 70) { for (label, cast) in Self.pairCasts { run(name, .social(k), cast: cast, castName: label, maxSec: sec) } }
+    private func pair(_ name: String, _ k: SocialKind, sec: Float = 70, props: Prop = .none) { for (label, cast) in Self.pairCasts { run(name, .social(k), cast: cast, castName: label, maxSec: sec, props: props) } }
     private func trio(_ name: String, _ k: SocialKind) { for (label, cast) in Self.trioCasts { run(name, .social(k), cast: cast, castName: label) } }
 
     func testBoop() { pair("boop", .boop) }
+    func testChase() { pair("chase", .chase, sec: 40) }
+    func testBagSit() { pair("bagSit (beanbag)", .bagSit, props: .beanbag) }
+    func testCuddle() { pair("cuddle (loveseat)", .cuddle, props: .loveseat) }
     func testSquabble() { pair("squabble", .squabble) }
     func testBump() { pair("bump", .bump) }
     func testNuzzle() { pair("nuzzle", .nuzzle) }
@@ -227,5 +244,19 @@ final class SocialFeetTests: XCTestCase {
     func testGroupHug() { trio("groupHug", .groupHug) }
     func testCircleDance() { trio("circleDance", .circleDance) }
     func testLieDownPair() { for (label, cast) in Self.pairCasts { run("lieDown pair", .lie(.lieDown), cast: cast, castName: label, maxSec: 8) } }
+    func testFlopPair() { for (label, cast) in Self.pairCasts { run("flop pair", .lie(.flop), cast: cast, castName: label, maxSec: 8) } }
     func testSleepPile() { for (label, cast) in Self.pairCasts { run("sleep pile", .sleepPair, cast: cast, castName: label, maxSec: 45) } }
+
+    /// USER RULE 3: every touching-class kind of the stance table has a feet test here (testX, X = the kind's raw value capitalised; bagSit / cuddle: with their furniture), so a new touching emote
+    /// cannot ship without its planted-sole / join / attach numbers. Fails naming the kinds that have none.
+    func testEveryTouchingKindHasAFeetTest() {
+        let names = SocialFeetTests.defaultTestSuite.tests.map(\.name)
+        func has(_ m: String) -> Bool { names.contains { $0.hasSuffix("\(m)]") || $0.hasSuffix("/\(m)") } }
+        let missing = SocialKind.allCases.filter { ContactStance.entry($0)?.cls == .touching }.filter { k in
+            let cap = k.rawValue.prefix(1).uppercased() + k.rawValue.dropFirst()
+            return !has("test\(cap)")
+        }.map(\.rawValue)
+        XCTAssertTrue(missing.isEmpty, "touching kinds with no SocialFeetTests method: \(missing.joined(separator: ", "))")
+        for m in ["testLieDownPair", "testFlopPair", "testSleepPile"] { XCTAssertTrue(has(m), "no feet test \(m)") }
+    }
 }

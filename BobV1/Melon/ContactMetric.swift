@@ -163,3 +163,33 @@ extension BruteForceContactMetric {
     /// A big difference between the two marks a measurement artefact of the axis, a small one a real overlap.
     static func drawnGap(_ a: ContactSurface, _ b: ContactSurface) -> (support: Float, footprint: Float) { (skinGap(a, b), footprintGap(a, b)) }
 }
+
+extension BruteForceContactMetric {
+    /// THE HAND GAP (2026-11-04, user rule 2): how far a hand TIP (the arm capsule's first vertex, the pole of the tip sphere) is from the other body's drawn skin, in metres. + apart, 0 = the hand
+    /// just rests on the skin, - the tip is inside. Measured along the line from the tip toward the other body's root, over the skin points within `band` of the tip's height and `lateral` of the line
+    /// (a 3 cm strip: on a body of 40 cm radius the curvature error is < 1 mm). Apart: the nearest skin point on the line. Inside: skin points lie on BOTH sides of the tip along the line, and the answer
+    /// is minus the distance to the nearest one behind it. `farApart` when no skin is near the tip's height (a hand held above or below the other body).
+    static func handGap(tip: SIMD3<Float>, against s: ContactSurface, band: Float = 0.05, lateral: Float = 0.03) -> Float {
+        let d = s.root - SIMD2(tip.x, tip.z), dist = simd_length(d)
+        guard dist > 1e-4 else { return -dist }
+        let u = d / dist, v = SIMD2(-u.y, u.x)
+        var front = Float.infinity, behind = -Float.infinity          // nearest skin ahead of the tip (t >= 0) / nearest behind it (t < 0) along the line
+        for p in s.points where abs(p.y - tip.y) <= band {
+            let q = SIMD2(p.x, p.z) - SIMD2(tip.x, tip.z)
+            guard abs(simd_dot(q, v)) <= lateral else { continue }
+            let t = simd_dot(q, u)
+            if t >= 0 { front = min(front, t) } else { behind = max(behind, t) }
+        }
+        if front.isInfinite, behind.isInfinite { return farApart }
+        if behind.isFinite, front.isFinite { return behind }          // skin on both sides: the tip is inside (minus the depth to the near wall)
+        if behind.isFinite { return behind }          // (all the skin is behind: the tip is past it; reads as inside)
+        return front
+    }
+    /// The hand tips (world, drawn) of a Duo body are read by the caller: the arm capsule's FIRST vertex (`ArmCapsule.points` / `fill` emit `b + u * R2` first).
+    /// Hand-on-hand (highFive): the closest approach of this tip to any vertex of the other body's ARM blocks. Unsigned (it cannot read "inside"); the signed handGap against the whole body is the sink check.
+    static func handToHand(tip: SIMD3<Float>, armPoints: [SIMD3<Float>]) -> Float {
+        var best = Float.infinity
+        for p in armPoints { best = min(best, simd_distance(p, tip)) }
+        return best.isFinite ? best : farApart
+    }
+}

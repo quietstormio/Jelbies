@@ -331,3 +331,21 @@ Findings (traced, Release, Bob+Teddy first; numbers are minimum skin gap, cm):
 - **lieDown pair**: the snuggle settles to `hold` on the support gap with the urgent push (was target 0 on the feature gap).
 
 Not fixed (cause known): see the round report. Knobs for A/B in the harness: env `PEAK_OFF=1` (all), `PEAK_NOGUARD=1`, `PEAK_NOARM=1`, `PEAK_K`, `PEAK_GAIN`, `PEAK_OPEN`, `PEAK_ARM`, `PEAK_CAP`, `PEAK_LOG=1`.
+
+### 5.10 Adding an interactive emote (user rule 3, 2026-11-04: ONE formula for every emote where Jelbies meet, now and later)
+
+The formula: the meeting spot is decided once at session start; one continuous walk whose last step lands there; a hold at skin contact (skin gap 0 +- 0.5 cm, never deeper than -1 cm, never a visible gap; the
+`hum Moss+Lavender` frame is the reference); tail, wings, spikes, daisy, ears and hands never inside the partner; exactly one touch sound per touch; a HAND ends ON the partner's skin (hand-tip-to-skin gap 0 +- 0.5 cm).
+It is enforced by tests, not by this note. Checklist for a new `SocialKind`:
+
+1. **Stance row**: add the kind to `ContactStance.table` (ContactStance.swift) with an explicit class (`touching` / `proximity`), `features` (wings, tail, spikes, daisy counted), the walk-up (`walk0`), `facing`, the hold/press step, the sound. No default class exists: `ContactPolishTests.testEveryInteractiveKindHasAStanceRow` FAILS while a kind has none.
+2. **Hand flag**: if a hand must land (a poke, pat, clap, hand-hold) add the kind to `ContactPolishTests.handKinds`; the bar then reads `handMin_cm` / `handTouch_cm` (boop: hand 0 +- 0.5 cm at the touch, bodies at hand reach: `bodyTouch_cm` >= 0; highFive: tips meet, `handHand_cm` <= 0.5).
+3. **Harness entry**: add a curated entry (name, class, props, time cap) to `curatedPairEntries` / `curatedGroupEntries`. A kind without one still runs (`autoEntries`, class from its table row) so it is measured the day it exists, but `testEveryInteractiveKindIsInTheHarness` FAILS until the curated entry is there and agrees with the table's class.
+4. **Feet test**: a `testX` method in SocialFeetTests (`testEveryTouchingKindHasAFeetTest` FAILS naming the kind otherwise): planted-sole drift <= 10 mm per phase, mid-air join, sole rise.
+5. **Scene row**: a row in `scripts/contact_scenes.tsv` (`testEveryTouchingKindHasASceneRow`; furniture kinds are the only exemption) so the real-app clip, sheet and `.demolog` SUMMARY (skin gap, hold median, hand tip) are judged next to the numbers.
+6. **Run** (Release + testability): `ContactPolishTests` with `CONTACT_ENFORCE=1` for all five pair casts + groups (`CONTACT_ONLY=<emote>,boop,hum,swayHug,nuzzle,backToBack` as canaries), `SocialFeetTests` with `SOCIALFEET_ENGINE=1` (and 0 for the baseline), `ContactSettleTests`, `ContactProfileTests`, then `scripts/contact_capture.sh <out> <scene>`.
+
+Results columns added in r4-measure-r2 (results_*.tsv, after `bar`): `minGapBody_cm` / `holdMedianBody_cm` (egg only: no arms, ears, feet), `snd_per_touch` (`1` = every touch exactly one sound, `-` = no touch, else the distinct counts), `handMin_cm`, `handTouch_cm`, `handHoldMedian_cm`, `handHand_cm`, `bodyTouch_cm`.
+`worst_frames.tsv` is now written at the end of every `finish()` (plus `worst_frames_<cast>.tsv`). `socialfeet.tsv` has a header and one row per (stance, ContactPolishTests cast).
+Hand gap definitions: lab = `BruteForceContactMetric.handGap` (the arm capsule's first vertex, the pole of the tip sphere, against the other body's drawn skin along the line tip -> its root, 3 cm lateral strip, 5 cm height band; negative = inside);
+app = `ContactField.handGap` (the tip, recorded by `ContactField.build` from the arm block, against the other body's profile outline, radial). The `.demolog` tick line has `hand[i-j:cm]`, the SUMMARY `minHand` / `medHoldHand`.

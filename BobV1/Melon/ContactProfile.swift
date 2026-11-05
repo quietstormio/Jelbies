@@ -39,6 +39,11 @@ nonisolated enum ContactField {
     nonisolated(unsafe) static let tailDrawn: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity); p.initialize(repeating: 0, count: capacity); return p
     }()
+    /// The HAND TIPS (2026-11-04, user rule 2: a hand must END on the partner's skin): per body two points (x, z relative to the body's root; NaN = that arm is not drawn), the first vertex of each drawn arm capsule
+    /// (`ArmCapsule` emits the tip pole first). Recorded by `build` from the blocks it is given (an arm block is the one `ArmCapsule.vertexCount` long), so no caller changes.
+    nonisolated(unsafe) static let handStore: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 4); p.initialize(repeating: .nan, count: capacity * 4); return p
+    }()
     /// false = no profile is ever read (the legacy centre-distance rules).
     nonisolated(unsafe) static var enabled = true
     /// Vertex count of the egg proper (the limb / ear / tail blocks come after it): the egg is sampled more sparsely than the limbs.
@@ -205,6 +210,15 @@ nonisolated enum ContactField {
                 }
             }
         }
+        let hs = handStore + id * 4
+        for k in 0..<4 { hs[k] = .nan }
+        if let blocks {
+            var arm = 0
+            for r in blocks where r.count == ArmCapsule.vertexCount && arm < 2 && r.lowerBound < count {
+                let o = 6 * r.lowerBound
+                hs[2 * arm] = dyn[o] - root.x; hs[2 * arm + 1] = dyn[o + 2] - root.y; arm += 1
+            }
+        }
         castTable(r2, px, pz, into: b + oRho, fallback: true)
         if drawn {
             if tailState[id] < 1.5 { mergeTail(id) }          // (a body with no feature mesh: the tail is its whole feature polygon)
@@ -330,6 +344,20 @@ nonisolated enum ContactField {
             best = min(best, L - e)
         }
         return best.isFinite ? best : nil
+    }
+
+    /// The drawn hand tips of body `id` relative to its root (x, z); empty when no arm is drawn (or no profile).
+    static func handTips(_ id: Int) -> [SIMD2<Float>] {
+        guard id >= 0, id < capacity, isValid(id) else { return [] }
+        let hs = handStore + id * 4
+        return (0..<2).compactMap { hs[2 * $0].isNaN ? nil : SIMD2(hs[2 * $0], hs[2 * $0 + 1]) }
+    }
+    /// THE HAND GAP in the app (cm-free, metres): the least, over the drawn hand tips of `a`, of the radial distance from the tip to `b`'s skin outline (+ the hand hovers, 0 it rests on the skin,
+    /// - it is inside). The outline is `b`'s body profile (its arms and ears included). nil = no profile or no drawn arm. (The lab's ground truth is BruteForceContactMetric.handGap on the mesh.)
+    static func handGap(_ a: Int, against b: Int) -> Float? {
+        let tips = handTips(a)
+        guard !tips.isEmpty, let g = clearance(of: tips, ownerRoot: root(a), against: b) else { return nil }
+        return g
     }
 
     /// The estimate for hot paths: the roots' rays only, ext(a, dir) + ext(b, -dir) (`dir` unit, from a to b).
