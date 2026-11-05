@@ -221,7 +221,7 @@ extension BlobBrain {
             reach(1)
             let sinceBump = s.impacted ? t - s.bumpT : -1
             let press = s.impacted ? pulse(sinceBump, up: 0.07, down: 0.35) : 0
-            socialBook.wantSquash = 1 - 0.07 * press * g
+            socialBook.wantSquash = 1 - 0.025 * press * g          // (a squashed body is wider: the hands are the contact, a 7 % squash drives them into each other)
             socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4) * (s.impacted ? 0 : 1)
             if isA {
                 if !s.impacted, t >= 0.45 {          // the hands meet
@@ -278,7 +278,7 @@ extension BlobBrain {
         // 2026-11-05 (user rule 2): the squisher's hand rests ON the partner (the arm comes up on the way in, BlobSocial+Hands.swift): the stub arm cannot reach a cheek from beside him, so it lands on his arm / shoulder where the
         // skins meet, the pair stands at hand reach and the squish is the lean + squash of the bodies around it.
         let reaching = isA
-        if reaching { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+        if reaching, s.phase >= 1 { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let ft = s.phaseT

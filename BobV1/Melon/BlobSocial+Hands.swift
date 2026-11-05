@@ -26,9 +26,8 @@ struct HandReach: Sendable {
 }
 
 extension HandReach {
-    nonisolated(unsafe) static var debug = ProcessInfo.processInfo.environment["HAND_DEBUG"] != nil
     static var elBoop: Float { elNub }                   // (the pole at the height of the resting nub's widest point: the hand meets the partner's arm where the footprint says the skins meet)
-    static let elFive: Float = 0.15          // (a small raise: the footprint meets the hands at the SPHERES of the tips, the metric at their poles - the steeper the arm the further apart they are: r2 (1 - cos) each)
+    static let elFive: Float = 0.08          // (a small raise: the footprint meets the hands at the SPHERES of the tips, the metric at their poles - the steeper the arm the further apart they are: r2 (1 - cos) each)
     /// Where the hand-emote stances stand before the press (skin gap): a hair above the 0.5 cm touch window so the touch is the press, under the 1.5 cm arrival bar.
     static let stand: Float = 0.008
     /// The arm of the shoulder at +x/-x, from the walking-arm data (body frame, +x arm).
@@ -60,9 +59,11 @@ extension HandReach {
         return min(BobForm.bodySDF(q), BobForm.armSDF(SIMD3(abs(q.x), q.y, q.z)).d)
     }
     /// How far the hand at `el` (sweep 0) stands out past the resting body's widest point: the walk-up stops this short of the touch (the arm is still down), the raised arm closes it.
-    static func reachBeyondNub(el: Float) -> Float { pole(el: el, sa: 0).x - restHalfWidth }
+    static func reachBeyondNub(el: Float, sa: Float = 0) -> Float { pole(el: el, sa: sa).x - restHalfWidth }
+    /// The sweep that puts the pole level (in z) with the partner's resting arm when both stand side by side facing the camera.
+    static var saNub: Float { asinf(max(-0.9, min(0.5, (restExtreme.z - shoulder.z) / (armLength * cosf(elBoop))))) }
     /// Boop: bodies side by side, the hand across the gap onto the partner's arm.
-    static var gapBoop: Float { reachBeyondNub(el: elBoop) }
+    static var gapBoop: Float { reachBeyondNub(el: elBoop, sa: saNub) }
     /// High five: two hands meet in the middle, so the walk-up stops two reaches short.
     static let gapFive: Float = 2 * reachBeyondNub(el: elFive)
 }
@@ -116,8 +117,14 @@ extension BlobBrain {
             // (until the press everything is judged in the RELAXED frame of both bodies - the pose with the attractor's squash taken out: the walk's landing squash narrows a body ~8 % across for a few steps and he widens again once he
             // stands, which is how a hand that touched at the last step used to end 2 cm inside the partner)
             let settled = (social?.phase ?? 0) >= 2          // (from the press on the squash is the move's own - the giggle, the squish - and the arm follows it: the hand is judged where it IS, not where the body relaxes to)
-            let (RS, org) = settled ? armFrame(sim) : relaxedFrame(sim), (RSo, orgo) = settled ? o.armFrame(osim) : o.relaxedFrame(osim)
-            let u = simd_normalize(o.position - position + SIMD2(1e-6, 0)), n = SIMD2<Float>(-u.y, u.x)
+            var (RS, org) = settled ? armFrame(sim) : relaxedFrame(sim)
+            let (RSo, orgo) = settled ? o.armFrame(osim) : o.relaxedFrame(osim)
+            // A WALKER'S arm stays in its canonical pose until he stands: the touch distance the stance reads (and freezes / locks on the way in) is the outline of the arm, so an arm that sweeps about while he walks - the sweep
+            // that meets the partner from a diagonal is a forward swing - fixes a destination 15 cm short of the hand's reach. Canonical = elevation of the partner's resting arm, sweep that puts the pole level with it (z) when
+            // both stand side by side facing the camera (meet: straight out).
+            var walking = false; if case .walk = script { walking = true }
+            let here = position
+            let u = simd_normalize(o.position - here + SIMD2(1e-6, 0)), n = SIMD2<Float>(-u.y, u.x)
             func poleW(_ el: Float, _ sa: Float, _ out: Float) -> SIMD3<Float> { var p = HandReach.pole(el: el, sa: sa, out: out); p.x *= sg; return org + RS * p }
             let out = socialBook.handOut * socialBook.handW          // (the shoulder slid in: what the arm override applies)
             // THE TARGET across the pair's line (n) and in height: seek = the partner's resting arm at its widest (his skin: restSDF), meet = the spot halfway between the two poles at the same elevation
@@ -135,6 +142,7 @@ extension BlobBrain {
                 var hq = HandReach.pole(el: o.socialBook.handEl[1 - si], sa: o.socialBook.handSa[1 - si], out: o.socialBook.handOut * o.socialBook.handW); hq.x *= sgP
                 hisPole = orgo + RSo * hq
             }
+            if walking { return }          // (a walker's arms are the walk's own: the hand reaches once he stands - see the drives)
             // sweep (the pole's coordinate along n is monotonic in sa)
             func bisect(_ lo: Float, _ hi: Float, _ f: (Float) -> Float) -> Float {
                 var a = lo, b = hi; let fa = f(a), fb = f(b)
@@ -165,15 +173,9 @@ extension BlobBrain {
             if let hisPole { let mp = poleW(elT, saT, out); gapNow = 0.5 * (u.x * (hisPole.x - mp.x) + u.y * (hisPole.z - mp.z)) }
             else { gapNow = Float(HandReach.restSDF(restPoint(of: poleW(elT, saT, out), sim: osim))) }
             let s0 = gapNow - margin - 2 * dt * min(closing, 0.8)
+            // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
-            if HandReach.debug, social?.phase == 2 {
-                let g = armLastGeom[si]; var tipL = g.b + simd_normalize(g.b - g.a) * g.r2; tipL.x *= sg
-                let (RSa, orga) = armFrame(sim), tw = orga + RSa * tipL
-                let go = o.armLastGeom[1 - si]; var tipO = go.b + simd_normalize(go.b - go.a) * go.r2; tipO.x *= sgP
-                let (RSb, orgb) = o.armFrame(osim), two = orgb + RSb * tipO
-                print(String(format: "HANDTIPS id%d mine=(%.3f,%.3f,%.3f) his=(%.3f,%.3f,%.3f) dist=%.3f dy=%.3f dz=%.3f gapNow=%.3f out=%.3f el=%.3f sa=%.3f", steerID, tw.x, tw.y, tw.z, two.x, two.y, two.z, simd_distance(tw, two), tw.y - two.y, tw.z - two.z, gapNow, socialBook.handOut, socialBook.handEl[si], socialBook.handSa[si]))
-            }
         } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0 }
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))

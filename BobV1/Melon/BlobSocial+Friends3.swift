@@ -146,7 +146,7 @@ extension BlobBrain {
         let whisperer = (s.roles == 0) == isA
         // 2026-11-05 (user rule 2): the one who walked up rests a hand ON the partner (his arm / shoulder; the arm comes up on the way in, BlobSocial+Hands.swift) while the whispering goes on (the walker is always the reaching one: the walk-up
         // lands the hand, the partner stands)
-        if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+        if isA, s.phase >= 1 { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.65) { return }
         holdFacing(faceCameraYaw())
         let t = s.phaseT, g = socialGentle

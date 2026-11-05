@@ -736,20 +736,20 @@ extension BlobBrain {
         // 2026-11-05 (user rule 2): the pair stands SIDE BY SIDE at hand reach (ContactStance .boop: the bodies keep HandReach.gapBoop apart) and the booper's arm comes up and reaches across the gap; the
         // hand ends ON the partner's flank (BlobSocial+Hands.swift solves the elevation so the pole of the hand sits on his skin). The bodies never press: the hand is the contact.
         if openSideBySide(s, o, isA, settle: 0.6) {
-            // (the arm comes up on the way in: the walk-up's touch distance then counts the hand, and the last steps land the HAND on the partner's arm)
-            if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+            // (the walk-up is the ordinary walk and stops a reach short; the booper stands and THEN reaches: the arm comes up and across onto the partner's arm)
+            if isA, s.phase >= 1 { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
             return
         }
         let t = s.phaseT
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let tap = pulse(t - 0.10, up: 0.08, down: 0.30)
-        socialBook.wantSquash = 1 - 0.07 * tap
+        socialBook.wantSquash = 1 - 0.025 * tap          // (a squashed body is wider: 3.5 % of 0.7 m is the 2.5 cm that put the partner's arm into the hand)
         if isA {
             let w: Float = 1          // (the arm goes back down when the session ends: BlobSocial+Hands.swift eases it out)
             socialBook.handWant = HandReach(side: handSide(toward: o), w: w, el: HandReach.elBoop, seek: true, partner: o.steerID)
             if !s.impacted && t >= 0.12 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.6)          // (softer than the old bump: the booped one is an arm's length away and a hard kick swings his arm nub into the hand)
+                jellyKick = max(jellyKick, 0.7); o.jellyKick = max(o.jellyKick, 0.9)          // (softer than the old bump: the booped one is an arm's length away and a hard kick swings his arm nub into the hand)
                 contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
                 contactBoopFallback(o)
             }
