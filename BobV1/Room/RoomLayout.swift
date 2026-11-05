@@ -56,6 +56,8 @@ enum RoomLayout {
     struct FlatBox: Equatable { var centre: SIMD2<Float>; var half: SIMD2<Float>; var height: Float; var radius: Float = 0.04 }
     /// Set by DiningSet; empty when no meal set is out, so nothing is left behind.
     nonisolated(unsafe) static var dynamicBoxes: [FlatBox] = []
+    /// The café regulars' little tables (DiningSet with `registersCollider == false`), one box per table: a walk obstacle like the tray, for everybody.
+    nonisolated(unsafe) static var tableBoxes: [Int: FlatBox] = [:]
     /// Decor (Room/DecorModel.swift): the placed pieces. Solid ones are walking obstacles in `resolve`; every one is kept clear of by sleep spots.
     nonisolated(unsafe) static var decorFeet: [DecorFoot] = []
     /// The balls on the floor right now (solid to bodies: DecorField+BallContact.swift).
@@ -139,6 +141,7 @@ enum RoomLayout {
                 }
             }
             for b in dynamicBoxes { pushOut(&p, radius: radius * lowPropScale, box: b) }
+            for b in tableBoxes.values { pushOut(&p, radius: radius * lowPropScale, box: b) }
             for f in decorFeet where f.spec.solid && f.uid != ignoreDecor { pushOut(&p, radius: radius * f.spec.reach, box: f.box) }
             if !ballSpheres.isEmpty { pushOutOfBalls(&p, radius: radius, ignore: ignoreDecor) }
         }
