@@ -396,7 +396,7 @@ final class ContactSettleTests: XCTestCase {
     /// r4-engine-arrival (2026-11-05): the meeting distance of a side-by-side stance walk is derived from the REST outline (the arm capsules are drawn only while lifted), so it is the reach the pair stands in.
     /// The rest reach recorded while the walker is still lifting his arms must equal (within 1 cm) the live reach read after the arms dropped and the walk ended.
     func testRestOutlineReachMatchesTheStandingReachAfterTheArmsDrop() {
-        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33)] as [(SocialKind, Int)] {
+        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33)] as [(SocialKind, UInt64)] {
             let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
             d.live = true
             for _ in 0..<3 { d.tick() }
