@@ -25,8 +25,11 @@ nonisolated enum WearLevel {
     static let window: Float = 0.62, reachY: Float = 0.16
     /// Radius (m) over which the skin radius is dilated and averaged; a clearance up to `bulgeFull` is bulged around fully, beyond `bulgeNone` the limb is left to pass (an arm
     /// pointing straight out would need a tent as long as the arm): the amount fades smoothly between them.
-    static let neighbourhood: Float = 0.045, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
+    static let neighbourhood: Float = 0.06, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
 
+    /// Tests: when set, `emit` records per vertex of the last piece how far the bulge moved it (`recBulge`) and how far the limb would have had to be cleared (`recRaw`; >= `bulgeFull` = an arm swallows it and is drawn over it).
+    nonisolated(unsafe) static var record = false
+    nonisolated(unsafe) static var recBulge: [Float] = [], recRaw: [Float] = []
     static let bins = 36, minBins = 24, maxSpan: Float = 0.21
 
     /// Finds the encircling parts of a prepared piece (before any lift) and flags the vertices to level. Sets `levelPiece`, `level`, `lvY0`.
@@ -37,23 +40,24 @@ nonisolated enum WearLevel {
         p.clusterLevel = [Bool](repeating: false, count: p.partNames.count)
         p.clusterY0 = [Float](repeating: 0, count: p.partNames.count); p.clusterDir = [SIMD2<Float>](repeating: .zero, count: p.partNames.count); p.clusterExcess = [Float](repeating: 0, count: p.partNames.count)
         p.levelPiece = false
-        // (body garments - a coat, hoodie, tutu, vest - are skins that follow the belly down to the steep underside, not loops; their rings stay on the skin bind)
-        guard enabled, p.anyBound, p.look.slot != .body else { return }
+        guard enabled, p.anyBound else { return }
         let zc = body.axisZ
         func bin(_ q: SIMD3<Float>) -> Int { min(bins - 1, Int((atan2(q.x, q.z - zc) + .pi) / (2 * .pi) * Float(bins))) }
         var byPart = [[Int]](repeating: [], count: p.partNames.count)
         for i in 0..<n where Int(p.partOfVertex[i]) < byPart.count { byPart[Int(p.partOfVertex[i])].append(i) }
         var ring = false
         var smallBins = Set<Int>(), smallCount = 0
+        p.lvRing = [Bool](repeating: false, count: n)
         for vs in byPart where vs.count >= 8 {
             guard vs.allSatisfy({ p.w[$0] > 0.99 && p.h[$0] == 0 }) else { continue }
             var c = SIMD3<Float>.zero, lo = Float.infinity, hi = -Float.infinity
             for v in vs { c += p.rest[v]; lo = min(lo, p.rest[v].y); hi = max(hi, p.rest[v].y) }
             c /= Float(vs.count)
             if vs.allSatisfy({ simd_distance(p.rest[$0], c) <= 0.07 }) { smallBins.insert(bin(c)); smallCount += 1; continue }
+            if vs.allSatisfy({ simd_distance(p.rest[$0], c) <= 0.12 }) { smallBins.insert(bin(c)); smallCount += 1 }                  // (a chain link: counts for the chain, is levelled per vertex)
             var b = Set<Int>()
             for v in vs { b.insert(bin(p.rest[v])) }
-            if b.count >= minBins, hi - lo <= maxSpan { ring = true }
+            if b.count >= minBins, hi - lo <= maxSpan { ring = true; for v in vs { p.lvRing[v] = true } }
         }
         let chain = smallCount >= 8 && smallBins.count >= minBins
         guard ring || chain else { return }
@@ -114,7 +118,7 @@ nonisolated enum WearLevel {
                 }
             } } }
             out.sort { $0.0 < $1.0 }
-            p.nodeNbr[j] = out.prefix(40).map { $0.1 }
+            p.nodeNbr[j] = out.prefix(64).map { $0.1 }
             if !p.nodeNbr[j].contains(Int32(j)) { p.nodeNbr[j].append(Int32(j)) }
         }
     }
@@ -132,11 +136,13 @@ nonisolated enum WearLevel {
             // along a ripple, up or down the wall AND sideways round it)
             let nb = M.transpose * nW, d = p.nodeDir[j]
             let nd = nb.x * d.x + nb.z * d.y
-            if abs(nd) > 0.3 {
+            let t = min(max((abs(nd) - 0.15) / 0.25, 0), 1)                          // (blended in smoothly: a plane that is nearly vertical is no use)
+            if t > 0 {
                 let num = nb.x * b.x + nb.z * (b.z - zc) - nb.y * (p.nodeY0[j] - b.y)
-                rho = max(0.5 * rho, min(1.5 * rho, num / nd))
+                let plane = max(-0.07, min(0.07, num / (abs(nd) > 1e-3 ? nd : 1e-3) - rho))
+                rho += t * t * (3 - 2 * t) * plane
             }
-            raw[j] = rho
+            raw[j] = max(p.nodeRho0[j] - 0.06, min(p.nodeRho0[j] + 0.06, rho))          // (a ring never strays more than 6 cm from the rest skin radius: a hem on the steep underside cannot sink)
         }
         // what is smoothed is the CHANGE of the skin's radius from its rest value (so the rest shape is exact and a steep wall - the head - is not flared): dilated (never under any
         // neighbour's skin) then averaged over the neighbours

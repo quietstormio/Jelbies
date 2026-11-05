@@ -267,6 +267,7 @@ final class WornSet {
     /// One rest-anchored piece (rigid + surface-bound + swinging parts) at `scale` about its pivot.
     static func emit(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, skin: UnsafePointer<Float>?, limbs: WearLimbs? = nil, scale: Float, time: Float) {
         let c = s.carry
+        if WearLevel.record { WearLevel.recBulge = [Float](repeating: 0, count: p.rest.count); WearLevel.recRaw = WearLevel.recBulge }
         let R = simd_float3x3(c.rotation)
         let sxz = 1 / c.squash.squareRoot()
         let M = R * simd_float3x3(diagonal: SIMD3(sxz, c.squash, sxz))
@@ -337,28 +338,42 @@ final class WornSet {
             var lvDelta = [SIMD3<Float>](repeating: .zero, count: lvOn && WearLevel.bulge ? p.rest.count : 0)
             var lvClusterDelta = [SIMD3<Float>](repeating: .zero, count: lvOn && WearLevel.bulge ? p.clusterRep.count : 0)
             if lvOn, WearLevel.bulge {
-                struct Unit { var pos: SIMD3<Float>, dirW: SIMD3<Float>, dir: SIMD2<Float>, y: Float, margin: Float, e: Float; var vertex: Int; var cluster: Int }
+                struct Unit { var pos: SIMD3<Float>, dirW: SIMD3<Float>, dir: SIMD2<Float>, y: Float, margin: Float, raw: Float, e: Float; var vertex: Int; var cluster: Int }
                 var units: [Unit] = []
                 func clearance(_ q: SIMD3<Float>, _ d: SIMD3<Float>, _ m: Float) -> Float {
                     var e: Float = 0
+                    let pen0 = limbs.penetration(q)
+                    guard pen0 > -m else { return 0 }
                     for _ in 0..<5 { let pen = limbs.penetration(q + d * e); if pen > -m { e += max(pen + m, 0.002) } else { break } }
-                    return e * WearLevel.fade(e)
+                    let u = min((pen0 + m) / 0.02, 1)                           // (zero at first contact, full 2 cm into the limb: the clearance never jumps as an arm swings by)
+                    return e * u * u * (3 - 2 * u)
                 }
-                for i in 0..<p.rest.count where p.level[i] && p.limbFree[i] && !(p.clusterRep.indices.contains(Int(p.partOfVertex[i])) && p.clusterRep[Int(p.partOfVertex[i])] >= 0) && p.w[i] > 0.001 {
+                for i in 0..<p.rest.count where p.level[i] && (p.limbFree[i] || p.lvRing[i]) && !(p.clusterRep.indices.contains(Int(p.partOfVertex[i])) && p.clusterRep[Int(p.partOfVertex[i])] >= 0) && p.w[i] > 0.001 {
                     let d = radialW(p.lvDir[i])
-                    units.append(Unit(pos: scratchQ[i], dirW: d, dir: p.lvDir[i], y: p.lvY0[i], margin: WearLimbs.margin, e: clearance(scratchQ[i], d, WearLimbs.margin) , vertex: i, cluster: -1))
+                    units.append(Unit(pos: scratchQ[i], dirW: d, dir: p.lvDir[i], y: p.lvY0[i], margin: WearLimbs.margin, raw: 0, e: 0, vertex: i, cluster: -1))
+                    units[units.count - 1].raw = clearance(scratchQ[i], d, WearLimbs.margin); units[units.count - 1].e = units[units.count - 1].raw * WearLevel.fade(units[units.count - 1].raw)
                 }
                 for k in p.clusterRep.indices where p.clusterRep[k] >= 0 && p.clusterLevel[k] {
                     guard let x = clusterXf[k] else { continue }
                     let m = p.clusterRadius[k] + WearLimbs.margin
-                    units.append(Unit(pos: x.c, dirW: x.wall, dir: p.clusterDir[k], y: p.clusterY0[k], margin: m, e: clearance(x.c, x.wall, m), vertex: -1, cluster: k))
+                    units.append(Unit(pos: x.c, dirW: x.wall, dir: p.clusterDir[k], y: p.clusterY0[k], margin: m, raw: 0, e: 0, vertex: -1, cluster: k))
+                    units[units.count - 1].raw = clearance(x.c, x.wall, m); units[units.count - 1].e = units[units.count - 1].raw * WearLevel.fade(units[units.count - 1].raw)
                 }
-                var src = units.filter { $0.e > 0.0005 }
-                if src.count > 160 { src.sort { $0.e > $1.e }; src = Array(src.prefix(160)) }
+                // sources thinned to the strongest per cell of 0.08 rad x 5 cm (the window is far wider than a cell), so the cost stays flat however many vertices a piece has
+                var cellBest: [Int: Unit] = [:]
+                for u in units where u.e > 0.0005 {
+                    let key = Int((atan2(u.dir.x, u.dir.y) + 4) / 0.08) &* 4096 &+ Int((u.y + 1) / 0.05)
+                    if let b = cellBest[key], b.e >= u.e { continue }
+                    cellBest[key] = u
+                }
+                let src = Array(cellBest.values)
+                let cosW = cosf(WearLevel.window)
                 for u in units {
                     var e: Float = 0
                     for s in src {
-                        let az = atan2(u.dir.x * s.dir.y - u.dir.y * s.dir.x, u.dir.x * s.dir.x + u.dir.y * s.dir.y)
+                        let cs = u.dir.x * s.dir.x + u.dir.y * s.dir.y
+                        if cs <= cosW { continue }
+                        let az = atan2(u.dir.x * s.dir.y - u.dir.y * s.dir.x, cs)
                         let k = WearLevel.bump(az, WearLevel.window)
                         if k <= 0 { continue }
                         let ky = WearLevel.bump(u.y - s.y, WearLevel.reachY)
@@ -366,6 +381,10 @@ final class WornSet {
                     }
                     let d = u.dirW * e
                     if u.vertex >= 0 { lvDelta[u.vertex] = d } else { lvClusterDelta[u.cluster] = d }
+                    if WearLevel.record {                                                   // (tests: which vertices the bulge moved, and which an arm swallows - the arm is drawn over those)
+                        if u.vertex >= 0 { WearLevel.recBulge[u.vertex] = e; WearLevel.recRaw[u.vertex] = u.raw }
+                        else { for i in 0..<p.rest.count where Int(p.partOfVertex[i]) == u.cluster { WearLevel.recBulge[i] = e; WearLevel.recRaw[i] = u.raw } }
+                    }
                 }
             }
             // a pushed point goes back down onto the SKIN at its authored height (a slide along the wall's tangent plane would leave the curved wall: the piece would hang in the air)

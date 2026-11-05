@@ -560,7 +560,9 @@ extension WearCaptureTests {
         let lab = setUpLab([SIMD2(0.2, 0.6)], seed: 5)
         let r = lab.rigs[0]
         r.brain.autonomy = false; r.brain.expr.enabled = false
-        let outfit: Outfit = [.neck: .bandanaCoral, .head: .sweatband, .body: .tutuPink]
+        let table: [String: Outfit] = ["bandana": [.neck: .bandanaCoral, .head: .sweatband], "scarf": [.neck: .scarfCosy, .head: .sweatband], "scarfsilk": [.neck: .scarfSilk], "pearls": [.neck: .pearls], "whistle": [.neck: .whistleCoach],
+                                       "chain": [.neck: .chainGold], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "tutu": [.body: .tutuPink], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
+        let outfit: Outfit = table[ProcessInfo.processInfo.environment["BAND_CAP_OUTFIT"] ?? "bandana"] ?? table["bandana"]!
         let sets = dress(lab, [outfit])
         let (ren, target) = try renderer(lab)
         var shots: [(String, UIImage)] = []

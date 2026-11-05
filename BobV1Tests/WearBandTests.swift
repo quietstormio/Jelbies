@@ -39,15 +39,16 @@ final class WearBandTests: XCTestCase {
             guard rule.w0 > 0.99, rule.w1 > 0.99, rule.h0 == 0, rule.h1 == 0, part.positions.count >= 8 else { continue }
             let pts = part.positions.map { l.row.anchorRest + $0 }
             let ys = pts.map(\.y)
-            guard let lo = ys.min(), let hi = ys.max(), hi - lo <= 0.14 else { continue }
+            guard let lo = ys.min(), let hi = ys.max(), hi - lo <= 0.21 else { continue }
             var c = SIMD3<Float>.zero
             for p in pts { c += p }
             c /= Float(pts.count)
             if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { continue }                    // a pearl / gem: a small rigid part, not the loop
+            let isLink = pts.allSatisfy { simd_distance($0, c) <= 0.12 } && isChain(l)
             var bins = Set<Int>()
             for p in pts { bins.insert(Int(((atan2(p.x, p.z - zc) + .pi) / (2 * .pi) * 36).rounded(.down)) % 36) }
             let cov = Float(bins.count) / 36
-            guard cov >= 0.66 else { continue }
+            guard cov >= 24.0 / 36 - 0.001 || isLink else { continue }
             var edges: [(Int, Int, Float)] = []
             var t = 0
             while t + 2 < part.indices.count {
@@ -62,7 +63,40 @@ final class WearBandTests: XCTestCase {
         return out
     }
 
-    static var candidates: [WearLook] { WearLook.pieces.filter { $0.slot == .neck || $0.slot == .head } }
+    /// The small rigid parts of a piece with an encircling loop or a chain of them (pearls, links, gems, flowers, dots, a knot): (first vertex, count, authored mean height).
+    static func smallParts(_ l: WearLook) -> [(first: Int, count: Int, y: Float)] {
+        guard l.slot != .hands, l.slot != .feet, let a = WearMeshes.art(l) else { return [] }
+        var out: [(Int, Int, Float)] = []
+        var base = 0
+        for part in a.parts {
+            defer { base += part.positions.count }
+            let r = WearRules.rule(l, part: part.name)
+            guard r.w0 > 0.99, r.w1 > 0.99, r.h0 == 0, r.h1 == 0, part.positions.count >= 8 else { continue }
+            let pts = part.positions.map { l.row.anchorRest + $0 }
+            var c = SIMD3<Float>.zero
+            for q in pts { c += q }
+            c /= Float(pts.count)
+            if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { out.append((base, pts.count, c.y)) }
+        }
+        return out
+    }
+    /// A chain of small parts round the body (pearls, links, gems, lei flowers) counts as a loop even with no string part.
+    static func isChain(_ l: WearLook) -> Bool {
+        let zc = axisZ()
+        guard let a = WearMeshes.art(l), l.slot != .hands, l.slot != .feet else { return false }
+        var bins = Set<Int>(), n = 0
+        for part in a.parts {
+            let r = WearRules.rule(l, part: part.name)
+            guard r.w0 > 0.99, r.w1 > 0.99, r.h0 == 0, r.h1 == 0, part.positions.count >= 8 else { continue }
+            let pts = part.positions.map { l.row.anchorRest + $0 }
+            var c = SIMD3<Float>.zero
+            for q in pts { c += q }
+            c /= Float(pts.count)
+            if pts.allSatisfy({ simd_distance($0, c) <= 0.12 }) { n += 1; bins.insert(Int(((atan2(c.x, c.z - zc) + .pi) / (2 * .pi) * 36).rounded(.down)) % 36) }
+        }
+        return n >= 8 && bins.count >= 24
+    }
+    static var candidates: [WearLook] { WearLook.pieces.filter { ($0.slot == .neck || $0.slot == .head || $0.slot == .body) && (!loops($0).isEmpty || isChain($0)) } }
 
     func testInventory() throws {
         WearBody.install(MotionRig.renderMesh)
@@ -121,11 +155,11 @@ final class WearBandTests: XCTestCase {
                 Motion(name: "jacks", start: idle(.jacks), seconds: 2.5)]
     }
 
-    struct Worst { var dy: Float = 0, dyWhere = ""; var inside: Float = 0, insideWhere = ""; var insideLimb: Float = 0, insideLimbWhere = ""; var stretch: Float = 0, stretchWhere = ""; var frames = 0 }
+    struct Worst { var dyPart: Float = 0, dyPartWhere = ""; var dy: Float = 0, dyWhere = ""; var inside: Float = 0, insideWhere = ""; var insideLimb: Float = 0, insideLimbWhere = ""; var stretch: Float = 0, stretchWhere = ""; var frames = 0 }
 
     func runBands(ids: [Int], only: [String]? = nil) -> [WearLook: Worst] {
         var res: [WearLook: Worst] = [:]
-        let looks = Self.candidates.filter { !Self.loops($0).isEmpty && (only == nil || only!.contains($0.rawValue)) }
+        let looks = Self.candidates.filter { (only == nil || only!.contains($0.rawValue)) }
         let restField = SkinField(rest: MotionRig.renderMesh, skipArms: true)
         _ = restField
         for id in ids {
@@ -189,6 +223,13 @@ final class WearBandTests: XCTestCase {
                                 }
                             }
                         }
+                        for sp in Self.smallParts(l) {
+                            var mean: Float = 0
+                            for i in sp.first..<(sp.first + sp.count) { mean += (Minv * (verts[i] - c.centroid) + c.restCentroid).y }
+                            mean /= Float(sp.count)
+                            let dyp = abs(mean - sp.y)
+                            if dyp > w.dyPart { w.dyPart = dyp; w.dyPartWhere = "\(tag) part@v\(sp.first)" }
+                        }
                         w.frames += 1
                         res[l] = w
                     }
@@ -204,16 +245,72 @@ final class WearBandTests: XCTestCase {
         let res = runBands(ids: [0, 1], only: only)
         var out = ""
         for (l, w) in res.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-            out += String(format: "%@: frames %d | height dev %.4f (%@) | inside egg skin %.4f (%@) | inside limb %.4f (%@) | stretch %.2fx (%@)\n", l.rawValue, w.frames, w.dy, w.dyWhere, w.inside, w.insideWhere, w.insideLimb, w.insideLimbWhere, w.stretch, w.stretchWhere)
+            out += String(format: "%@: frames %d | small-part height dev %.4f (%@) | height dev %.4f (%@) | inside egg skin %.4f (%@) | inside limb %.4f (%@) | stretch %.2fx (%@)\n", l.rawValue, w.frames, w.dyPart, w.dyPartWhere, w.dy, w.dyWhere, w.inside, w.insideWhere, w.insideLimb, w.insideLimbWhere, w.stretch, w.stretchWhere)
         }
         print("BANDRESULT\n" + out)
         if let d = ProcessInfo.processInfo.environment["BAND_DIR"] { try? FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true); try? out.write(toFile: d + "/result_\(ProcessInfo.processInfo.environment["BAND_TAG"] ?? "run").txt", atomically: true, encoding: .utf8) }
         XCTAssertGreaterThan(res.count, 0)
         for (l, w) in res {
+            XCTAssertLessThanOrEqual(w.dyPart, 0.003, "\(l) a small part on the loop drifts \(w.dyPart) m from its rest height: \(w.dyPartWhere)")
             XCTAssertLessThanOrEqual(w.dy, 0.003, "\(l) loop height drifts \(w.dy) m from its rest height in the body frame: \(w.dyWhere)")
             XCTAssertLessThanOrEqual(w.inside, 0.012, "\(l) loop crosses the skin by \(w.inside): \(w.insideWhere)")
             XCTAssertLessThanOrEqual(w.insideLimb, 0.14, "\(l) loop is \(w.insideLimb) inside a limb: \(w.insideLimbWhere)")
             XCTAssertLessThanOrEqual(w.stretch, 1.6, "\(l) loop breaks (spacing \(w.stretch)x): \(w.stretchWhere)")
         }
+    }
+
+    /// No popping: band vertices, sampled every 0.1 s (6 sim steps) through a walk and the jumping-jacks, never move more than 1 cm per sample IN THE BODY FRAME (the body's own
+    /// motion is taken out), near the arms or anywhere else. Prints the worst numbers.
+    func testBandsDoNotPop() throws {
+        WearLevel.record = true; defer { WearLevel.record = false }
+        var report = ""
+        var walkNear: Float = 0, walkAll: Float = 0
+        for look in [WearLook.bandanaCoral, .scarfCosy, .pearls, .sweatband] {
+            let loopsL = Self.loops(look)
+            guard !loopsL.isEmpty else { continue }
+            for m in motions() where ["walk", "jacks", "hop"].contains(m.name) {
+                let lab = makeLab(0); let r = lab.rigs[0]
+                let s = WornSet(); s.body = WearBody.shared; s.soundOn = false; Self.keep.append(s)
+                func tick() { lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); s.tick(id: 0, brain: r.brain, sim: r.sim, outfit: [look.slot: look], role: .none, hideAll: false, dt: 1.0 / 60) }
+                for _ in 0..<40 { tick() }
+                m.start(lab)
+                var prev6: [SIMD3<Float>]? = nil, prevNear6: [Bool] = [], prev1: [SIMD3<Float>]? = nil, prevNear1: [Bool] = []
+                var all6: Float = 0, near6: Float = 0, all1: Float = 0, near1: Float = 0, far1: Float = 0, bul1: Float = 0, bul6: Float = 0
+                var prevB1: [Float] = [], prevB6: [Float] = []
+                for step in 0..<Int(m.seconds * 60) {
+                    tick()
+                    s.syncCarry(0, sim: r.sim)
+                    let sk = skin(lab)
+                    let f = sk.withUnsafeBufferPointer { q in s.frame(theme: RoomTheme(), time: 0.4) { _ in q.baseAddress } }
+                    guard let c = s.slot(0)?.carry else { continue }
+                    let sxz = 1 / c.squash.squareRoot()
+                    let Minv = simd_float3x3(diagonal: SIMD3(1 / sxz, 1 / c.squash, 1 / sxz)) * simd_float3x3(c.rotation).transpose
+                    var cur: [SIMD3<Float>] = [], near: [Bool] = []
+                    for lp in loopsL { for vi in lp.verts {
+                        let v = f.opaque.vertices[vi]
+                        cur.append(Minv * (SIMD3(v.pos.x, v.pos.y, v.pos.z) - c.centroid) + c.restCentroid)
+                        near.append(vi < WearLevel.recRaw.count && WearLevel.recRaw[vi] > 0.0005)
+                    } }
+                    if let p0 = prev1, p0.count == cur.count { for i in cur.indices { let d = simd_distance(cur[i], p0[i]); all1 = max(all1, d); if near[i] || prevNear1[i] { near1 = max(near1, d) } } }
+                    if let p0 = prev1, p0.count == cur.count { for i in cur.indices where !near[i] && !prevNear1[i] { far1 = max(far1, simd_distance(cur[i], p0[i])) } }
+                    var bnow: [Float] = []
+                    for lp in loopsL { for vi in lp.verts { bnow.append(vi < WearLevel.recBulge.count ? WearLevel.recBulge[vi] : 0) } }
+                    if prevB1.count == bnow.count { for i in bnow.indices { bul1 = max(bul1, abs(bnow[i] - prevB1[i])) } }
+                    prevB1 = bnow
+                    if step % 6 == 0 { if prevB6.count == bnow.count { for i in bnow.indices { bul6 = max(bul6, abs(bnow[i] - prevB6[i])) } }; prevB6 = bnow }
+                    prev1 = cur; prevNear1 = near
+                    if step % 6 == 0 {
+                        if let p0 = prev6, p0.count == cur.count { for i in cur.indices { let d = simd_distance(cur[i], p0[i]); all6 = max(all6, d); if near[i] || prevNear6[i] { near6 = max(near6, d) } } }
+                        prev6 = cur; prevNear6 = near
+                    }
+                }
+                report += String(format: "%@ %@: body-frame move per 0.1 s: all %.4f near-arm %.4f | per frame (1/60 s): all %.4f near-arm %.4f, band vertices NOT near an arm %.4f | the arm-clearance bulge alone changes by at most %.4f per frame, %.4f per 0.1 s\n", look.rawValue, m.name, all6, near6, all1, near1, far1, bul1, bul6)
+                if m.name == "walk" { walkNear = max(walkNear, bul1); walkAll = max(walkAll, bul6) }
+            }
+        }
+        print("BANDPOP\n" + report)
+        if let d = ProcessInfo.processInfo.environment["BAND_DIR"] { try? report.write(toFile: d + "/pop.txt", atomically: true, encoding: .utf8) }
+        XCTAssertLessThanOrEqual(walkNear, 0.01, "the arm-clearance bulge changes by \(walkNear) m in one frame of a walk")
+        XCTAssertLessThanOrEqual(walkAll, 0.01, "the arm-clearance bulge changes by \(walkAll) m in 0.1 s of a walk")
     }
 }

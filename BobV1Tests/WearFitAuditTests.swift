@@ -346,11 +346,12 @@ final class WearFitAuditTests: XCTestCase {
             let part = p.partNames[Int(p.partOfVertex[i])]
             if inside > st.worstIn { st.worstIn = inside; st.whereIn = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > st.worstNew { st.worstNew = newly; st.whereNew = "\(tag) \(part) v\(i) by \(owner)" }
-            if newly > st.worstLimb, owner.hasPrefix("arm") || owner.hasPrefix("foot") || owner.hasPrefix("tail") { st.worstLimb = newly; st.whereLimb = "\(tag) \(part) v\(i) by \(owner)" }
+            let sinkEx = WearLevel.record && i < WearLevel.recRaw.count && WearLevel.recRaw[i] >= WearLevel.bulgeFull, floatEx = WearLevel.record && i < WearLevel.recBulge.count && WearLevel.recBulge[i] > 0.0005
+            if newly > st.worstLimb, !sinkEx, owner.hasPrefix("arm") || owner.hasPrefix("foot") || owner.hasPrefix("tail") { st.worstLimb = newly; st.whereLimb = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > 0.01 { buried += 1 }
             // float: how much further OUT of the drawn body than it was authored to stand (its offset above the skin it is bound to). A small part (a pearl, a gem) counts as a whole:
             // its NEAREST vertex against its authored nearest, so a big round gem is not "floating" by its own size; strings and bands count per vertex.
-            if p.h[i] == 0, p.w[i] > 0.99 {
+            if p.h[i] == 0, p.w[i] > 0.99, !floatEx {
                 let k = Int(p.partOfVertex[i]), off = max(0, p.bind[i].off.z)
                 if k < small.count, small[k] {
                     let e = partFloat[k] ?? (.infinity, .infinity)
@@ -447,10 +448,11 @@ final class WearFitAuditTests: XCTestCase {
         if WearLimbs.enabled { for l in list { for id in 0..<4 { let s = stats[l]![id]; XCTAssertLessThan(s.worstLimb, 0.04, "\(l) \(Self.charNames[id]) is \(s.worstLimb) inside a limb: \(s.whereLimb)") } } }
     }
 
-    /// (2026-11-04, WearLevel: an encircling piece clears an arm by a smooth radial bulge of up to ~15 cm, or passes behind a radially outstretched arm, instead of sliding round it: the sink bound is now an arm radius and the float bound the bulge.)
+    /// (WearLevel: vertices an arm swallows deeper than `WearLevel.bulgeFull` pass behind the arm (it is drawn over them) and vertices the limb bulge moved are exempt from the sink / float bounds; everything else keeps them.)
     /// REGRESSION: a wearable bound to the egg never ends up inside an arm, foot or tail that is out (WearLimbs): Bob, Pip (tail) and Lavender through a walk, a run, a
     /// turn, a joy jump and the jumping-jacks, every neck / chest / back / waist piece, deeper than 7 cm than it was authored; and the pearls / lei / diamond J never stand more than 3 cm farther off the body than they were authored. (The wider audit is testAuditBodyWear.)
     func testBodyWearNeverSinksIntoALimb() throws {
+        WearLevel.record = true; defer { WearLevel.record = false }
         WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
         let list = Self.bodyPieces
         let restField = SkinField(rest: MotionRig.renderMesh, skipArms: true)
@@ -484,8 +486,8 @@ final class WearFitAuditTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(frames, 500)
-        XCTAssertLessThan(worst, 0.14, "a body wearable is \(worst) inside a limb: \(where_)")
-        XCTAssertLessThan(floatWorst, 0.16, "a necklace part floats \(floatWorst) off the body: \(floatWhere)")
+        XCTAssertLessThan(worst, 0.07, "a body wearable is \(worst) inside a limb: \(where_)")
+        XCTAssertLessThan(floatWorst, 0.03, "a necklace part floats \(floatWorst) off the body: \(floatWhere)")
     }
 
     /// What the limb push costs: WornSet.frame for three Jelbies each in a full neck + body outfit, walking (arms out), push on vs off (printed; asserted to stay small).

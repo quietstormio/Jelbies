@@ -33,6 +33,8 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     var lvBind: [SurfaceBind] = [], clusterLvBind: [SurfaceBind] = []
     var level: [Bool] = [], lvY0: [Float] = [], lvDir: [SIMD2<Float>] = [], lvExcess: [Float] = []
     var levelPiece = false
+    /// The vertices of the thin encircling ring parts (a collar, hem, band, string): the limb bulge moves them even where a garment's authored cover would leave them on the skin.
+    var lvRing: [Bool] = []
     /// The nodes whose skin radius is read each frame (WearLevel): every levelled vertex that is not part of a rigid small part, and the centre of every levelled small part. Each node
     /// keeps the vertex (or part) it stands for, its skin point / height / azimuth, and the nodes within `WearLevel.neighbourhood` of it (the skin radius is dilated and averaged over
     /// them, so the loop does not follow the skin's ripple).
