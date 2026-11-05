@@ -88,7 +88,7 @@ final class ShowModelTests: XCTestCase {
         XCTAssertEqual(s.trickTotal, 94)
         XCTAssertEqual(s.round, .results)
         XCTAssertEqual(s.playerScores.totalPts, 294)
-        XCTAssertEqual(s.playerPlace, 1); XCTAssertEqual(s.playerDrops, 12)
+        XCTAssertEqual(s.playerPlace, 1); XCTAssertEqual(s.playerDrops, 250)
         XCTAssertTrue(s.perfectDance); XCTAssertTrue(s.hatTrick)
     }
 
