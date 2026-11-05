@@ -56,7 +56,7 @@ static float pandaEyePatch(float3 Q) {
     const float ca = 0.883, sa = 0.469;                    // 28 degrees, the outer end lower
     float u = p.x * ca - p.y * sa, v = p.x * sa + p.y * ca;
     float d = length(float2(u / 0.130, v / 0.105));
-    return (1.0 - smoothstep(0.78, 1.0, d)) * smoothstep(0.05, 0.20, Q.z);
+    return (1.0 - smoothstep(0.86, 0.92, d)) * smoothstep(0.05, 0.20, Q.z);          // crisp ~7 mm edge (user 11-04: the soft grey rim looked smudged)
 }
 /// The shoulder band: a ring about the body between the chest and the shoulders, high on the back and kept low at the front (under the mouth).
 static float pandaBand(float3 Q) {
@@ -65,7 +65,7 @@ static float pandaBand(float3 Q) {
     float top = mix(0.93, 0.68, smoothstep(-1.0, -0.10, cz));
     float bottom = mix(0.66, 0.40, smoothstep(-1.0, -0.10, cz));
     float edge = smoothstep(bottom - 0.008, bottom + 0.014, Q.y) * (1.0 - smoothstep(top - 0.016, top, Q.y));          // crisp edges: no grey halo on the white body
-    return edge * (1.0 - smoothstep(0.0, 0.10, cz));      // ends at the front of the arms: the chest / tummy stays white (the saddle joins the arms over the shoulders and back)
+    return edge * (1.0 - smoothstep(-0.08, -0.06, cz));          // a crisp end just in front of the arm (user 11-04: the old 5 cm fade left a grey smear beside the arm);  at the front of the arms: the chest / tummy stays white (the saddle joins the arms over the shoulders and back)
 }
 /// Black arms and feet on the egg (the rest-space arm / foot shapes; soft over their fillet into the body).
 static float pandaLimbs(float3 Q) {
@@ -78,7 +78,7 @@ static float pandaLimbs(float3 Q) {
 /// The belly oval: Teddy's B2 belly (Shaders.metal / GfxBodyFast.metal belly block, crisp mode 3) maths 1:1, painted charcoal instead of cream.
 static float pandaBelly(float3 Q) {
     float2 bp2 = float2(Q.x, Q.y - 0.335) / float2(0.335, 0.205);
-    return (1.0 - smoothstep(0.70, 1.0, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
+    return (1.0 - smoothstep(0.82, 0.88, length(bp2))) * smoothstep(0.08, 0.30, Q.z);
 }
 
 /// The whole Panda paint. `col` is the shaded white; bm 1 = the egg, 2 = a black piece. `patch` returns the eye-patch weight (blush stays off it).
