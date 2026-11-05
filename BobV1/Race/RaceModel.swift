@@ -521,7 +521,7 @@ nonisolated struct RaceSim: Sendable {
             let before = t
             t += dt
             if r.measured == nil { r.dist += HurdleTuning.hopDistance * (min(max(t, 0), HurdleTuning.airTime) - min(max(before, 0), HurdleTuning.airTime)) / HurdleTuning.airTime }          // (headless: the hop carries him; with a body it is measured)
-            if t >= HurdleTuning.airTime { r.airT = nil; r.recover = HurdleTuning.recover } else { r.airT = t }
+            if t >= HurdleTuning.airTime { r.airT = nil; r.recover = HurdleTuning.recover; r.sinceStep = 0 } else { r.airT = t }          // (a jump is play, not a stall: the landing starts the "time since he last moved" afresh, as a trip does; otherwise crouch + flight + landing + a look-around passed stragglerStall and a tapping player's window shrank to 10 s)
         } else if r.recover > 0 { r.recover = max(0, r.recover - dt) }
         // the bar: his front reaches it `contactLead` before his centre does
         while r.nextHurdle < hs.count, r.dist >= hs[r.nextHurdle] - HurdleTuning.contactLead {

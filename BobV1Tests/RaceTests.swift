@@ -410,6 +410,7 @@ final class RaceBodyRig {
         sim = course.map { RaceSim(player: RacerStats(waddle: waddle, focus: focus), playerName: "P", rivals: [], seed: seed, course: $0) }
             ?? RaceSim(player: RacerStats(waddle: waddle, focus: focus), playerName: "P", rivals: [], seed: seed)
         self.tapsPerSecond = tapsPerSecond
+        sim.autoJumpPlayer = true          // (the gait tests are about steps, bends and trips: he takes the hurdles' bars with the hands-free plan instead of tripping on every one)
         if let c = course {
             let spot = c.lanePoint(lane, at: 0)
             let here = rig.sim.bodyPose(iterations: 8).centroid                          // where the body stands (the brain's px / pz are not posed yet)

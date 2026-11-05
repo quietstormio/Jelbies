@@ -28,6 +28,7 @@ final class PuddleGoldenTests: XCTestCase {
     static func race(seed: UInt64, player: RacerStats = RacerStats(waddle: 0.5, focus: 0.5), taps: Float = 4, course: RaceCourse? = nil, rivals rs: [Rival]? = nil) -> (sim: RaceSim, parts: [String]) {
         let rivals = rs ?? LocalRivalSource().rivals(count: 2, player: player, playerTint: JellyRoster.tint(0), seed: seed)
         var sim = course.map { RaceSim(player: player, playerName: "P", rivals: rivals, seed: seed, course: $0) } ?? RaceSim(player: player, playerName: "P", rivals: rivals, seed: seed)
+        sim.autoJumpPlayer = true          // (the player takes the bars like a rival with his plan: these races measure training, taps and corners, not the Jump button; a never-jumping player trips on every bar by design, RaceFeetTests)
         var parts: [String] = []
         var tapT: Float = 0, foot = 0, tick = 0
         let dt: Float = 1 / 60
@@ -71,7 +72,8 @@ final class PuddleGoldenTests: XCTestCase {
     }
 
     /// The body-driven race on the straight (RaceBodyRig, the game's glue): progress and heading every 30 ticks, recorded before the course model.
-    static let bodyGoldenHash: UInt64 = 0xea4ce5cabf84a496
+    /// Re-recorded 2026-11-05 (was 0xea4ce5cabf84a496, 2026-10-20): the body's pz / yaw transcript drifted with the brain changes since; `bodyGoldenLast` (steps / trips / finish) is unchanged.
+    static let bodyGoldenHash: UInt64 = 0x562ed28029459960
     static let bodyGoldenLast = "S44/1/1097893964"
 
     static func bodyRun(course: RaceCourse? = nil) -> [String] {
@@ -199,7 +201,10 @@ final class CourseModelTests: XCTestCase {
             let mean = times.reduce(0, +) / Float(times.count)
             print("COURSE time \(t): mean \(mean) s, \(times)")
             XCTAssertGreaterThan(mean, 25, "\(t): about 25-45 s with average taps (\(mean))")
-            XCTAssertLessThan(mean, 45, "\(t): about 25-45 s with average taps (\(mean))")
+            // The Wave's six hurdles each cost a jump (crouch 0.13 + flight 0.37 + landing 0.55 s, 0.75 u of hop): measured mean 46.1 s over these 6 seeds, so its bound is 50 s
+            // (the 25-45 s bound predates the hurdles). Ripple and Splash keep 45.
+            let upper: Float = t == .wave ? 50 : 45
+            XCTAssertLessThan(mean, upper, "\(t): about 25-\(Int(upper)) s with average taps (\(mean))")
         }
         let (p, _) = PuddleGoldenTests.race(seed: 1, course: .puddle)
         XCTAssertLessThan(p.player.finishTime!, 20, "the Puddle is the sprint it was")
@@ -209,8 +214,8 @@ final class CourseModelTests: XCTestCase {
     /// placed from where he stands after the plain 10 s, as on the Puddle.
     func testATappingStragglerFinishesAndAStoppedOneIsPlacedAfterTenSeconds() {
         let fast = [Rival(name: "A", tint: .one, stats: RacerStats(waddle: 1, focus: 1)), Rival(name: "B", tint: .one, stats: RacerStats(waddle: 1, focus: 1))]
-        let slow = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 3, course: .wave, rivals: fast).sim
-        XCTAssertNotNil(slow.player.finishTime, "a slow tapping starter crosses the line")
+        let slowRun = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 3, course: .wave, rivals: fast), slow = slowRun.sim
+        XCTAssertNotNil(slow.player.finishTime, "a slow tapping starter crosses the line (clock \(slow.clock), dist \(slow.player.dist)/\(slow.course.length), trips \(slow.player.tap.trips), hurdles hit \(slow.player.hurdlesHit) cleared \(slow.player.hurdlesCleared), firstFinish \(slow.firstFinishAt.map { "\($0)" } ?? "nil"), grace \(slow.course.stragglerGrace), timeout \(slow.course.timeout)); last events \(slowRun.parts.filter { !$0.contains("racer: 1") && !$0.contains("racer: 2") }.suffix(25))")
         XCTAssertEqual(slow.phase, .results)
         // stops tapping at GO: the race is called 2 x finishGrace after the first finisher, not stragglerGrace later
         let stopped = PuddleGoldenTests.race(seed: 19, player: RacerStats(waddle: 0.2, focus: 0.3), taps: 0.0001, course: .wave, rivals: fast).sim
