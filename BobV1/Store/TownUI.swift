@@ -73,7 +73,7 @@ struct PerkBadgeRow: View {
 
 // MARK: - Town
 
-enum TownScreen: Equatable { case town, shop, track, studio, condition, show, friends, volley }
+enum TownScreen: Equatable { case town, shop, track, studio, condition, friends, volley }
 
 struct TownFlow: View {
     let care: GameCare
@@ -109,15 +109,15 @@ struct TownFlow: View {
             case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
-            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { screen = .show },
+            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) },
                                        practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
-            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .show }, bath: { goHome(); care.clean(jelly: who) })
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) })
             case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k, id in goHome(); care.startVolley(jelly: id, mode: .drill(k)) })
-            case .show: ShowLobby(care: care, who: $who, back: { up(.studio) }, card: { screen = .condition }, start: { r in goHome(); care.startShow(jelly: who, rank: r) })
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
         }
         .transition(.opacity)
+        .onAppear { HeadPortraitCache.shared.prewarm(care: care) }          // the stage is paused behind the Town: draw every lobby picture now
     }
 }
 
