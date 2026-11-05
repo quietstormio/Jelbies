@@ -25,17 +25,26 @@ enum PeakTuning {
     nonisolated(unsafe) static var gain: Float = env("PEAK_GAIN", 0.6)
     /// The widest the drive's own lean-away (wind-up / recoil) may open the skin gap (m): beyond it the stance's settle walks the pair back together, which is what made the bumps oscillate +-15 cm.
     nonisolated(unsafe) static var openCap: Float = env("PEAK_OPEN", 0.045)
+    /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak): the strike stays AT contact - no wind-up gap beyond 1.5 cm, no squash bulge beyond the live gap, a small impact kick.
+    static let pressKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .sneak]
+    nonisolated(unsafe) static var pressOpenCap: Float = env("PEAK_POPEN", 0.015)
+    static func openCap(for k: SocialKind) -> Float { pressKinds.contains(k) ? pressOpenCap : openCap }
     /// The strike of a press / bump move may start once the pair stands this close (skin gap, m) and is planted (a strike fired mid-walk adds its lean to the walk's closing speed).
     nonisolated(unsafe) static var armGap: Float = env("PEAK_ARM", 0.05)
     /// The most the drive may lean a body toward the partner (rad). A lean is GEOMETRY to the contact engine (a body leaning 0.3 rad reaches 25 cm further, so the stance walk backs the pair off, the lean eases, the walk comes back: the high five swung 3 ... 70 cm for 5 s):
     /// the strike's visible lean stays inside the few cm the approach gap leaves.
     nonisolated(unsafe) static var leanCap: Float = env("PEAK_CAP", 0.08)
     /// The skin gap the lean may close to (the stance's plush rest).
+    /// Largest impact kick (JellyJiggle units) a touching drive fires at the moment of contact (env PEAK_KICK).
+    nonisolated(unsafe) static var kickMax: Float = env("PEAK_KICK", 0.8)
+    /// Squash is width: a body squashed by s bulges ~s x its radius at the belly (0.12 sank a bump 2 cm into the partner). The squash the drive may use is `sqBase` + `sqPerM` per metre of live skin gap.
+    nonisolated(unsafe) static var sqBase: Float = env("PEAK_SQ0", 0.015)
+    nonisolated(unsafe) static var sqPerM: Float = env("PEAK_SQK", 1.5)
     static let rest: Float = -0.006          // (a hair deeper than the stance's -0.4 cm: the approach is asymptotic, and the touch gate fires at +0.5 cm)
 
     /// The range the drive's toward-partner lean (rad, excluding the engine's own `trim`) may take when the body now leans `now` rad toward the partner with the live skin gap `gap` (m): in at most up to
     /// contact (`rest`), away at most up to `openCap`. Both bodies lean, so the skin travel per radian is twice `reachPerRad`.
-    static func leanBounds(now: Float, trim: Float, gap: Float) -> (maxOut: Float, maxIn: Float) {
+    static func leanBounds(now: Float, trim: Float, gap: Float, openCap: Float = PeakTuning.openCap) -> (maxOut: Float, maxIn: Float) {
         let per = reachPerRad * 2
         // (relaxing back to neutral is never blocked: the away bound only stops a lean that is already away from going further)
         return (min(0, now - gain * max(0, openCap - gap) / per - trim), now + gain * max(0, gap - rest) / per - trim)
@@ -64,15 +73,23 @@ extension BlobBrain {
         let book = socialBook
         let wantM = book.wantPitch * uy - book.wantRoll * ux
         let nowM = book.pitch * uy - book.roll * ux
-        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap)
+        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap, openCap: PeakTuning.openCap(for: s.kind))
         var m = wantM
         if m > b.maxIn { m = b.maxIn }
         if m > PeakTuning.leanCap { m = PeakTuning.leanCap }
         if m < b.maxOut { m = b.maxOut }
+        // squash: cap the drive's squash depth by the live gap (the squash bulge is part of the strike's travel)
+        let allowed = PeakTuning.sqBase + PeakTuning.sqPerM * max(0, gap + 0.005)
+        if PeakTuning.pressKinds.contains(s.kind), book.wantSquash < 1 - allowed { socialBook.wantSquash = 1 - allowed }
         guard abs(m - wantM) > 1e-5 else { return }
         if PeakTuning.log, PeakTuning.logLines < 600 { PeakTuning.logLines += 1; print(String(format: "[peak] guard %d %@ ph%d gap=%.1fcm want=%.3f now=%.3f trim=%.3f -> %.3f (in<=%.3f out>=%.3f)", steerID, s.kind.rawValue, s.phase, gap * 100, wantM, nowM, book.leanTrim, m, b.maxIn, b.maxOut)) }
         let cut = wantM - m
         socialBook.wantPitch -= cut * uy
         socialBook.wantRoll += cut * ux
     }
+}
+
+extension BlobBrain {
+    /// The jelly's contact wobble is a skin displacement: a big kick at a bump / hug moves the drawn skin 2-3 cm into the partner for a frame or two. The hop / lunge kinds scale their impact kicks down to what the skin can take at contact.
+    func impactKick(_ v: Float) -> Float { min(v, PeakTuning.kickMax) }
 }

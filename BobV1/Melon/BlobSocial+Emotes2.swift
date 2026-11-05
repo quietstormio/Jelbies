@@ -67,7 +67,7 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t > 0.7 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
+                    jellyKick = max(jellyKick, impactKick(1.8)); o.jellyKick = max(o.jellyKick, impactKick(1.8))
                     contactBoopFallback(o)
                     contactCueFallback(o, .emoteSpinHug, 1, haptic: .treat("spinHug.press"))
                     face(.joyArc, hold: 1.2); o.face(.joyArc, hold: 1.2)
@@ -113,7 +113,7 @@ extension BlobBrain {
                 if t > 1.0, s.slotAng[steerID, default: 0] >= around, s.slotAng[o.steerID, default: 0] >= around, fxFree, o.fxFree { s.setPhase(4) }
                 else if t > 22 { s.setPhase(4) }
                 let beat = Int(t / 2.5)
-                if beat != s.passes, t > 1 { s.passes = beat; treatHaptic("spinHug.step"); jellyKick = max(jellyKick, 0.5); o.jellyKick = max(o.jellyKick, 0.5) }
+                if beat != s.passes, t > 1 { s.passes = beat; treatHaptic("spinHug.step"); jellyKick = max(jellyKick, impactKick(0.5)); o.jellyKick = max(o.jellyKick, impactKick(0.5)) }
             }
         default:   // part: a joy squash, hearts
             s.choreo = false

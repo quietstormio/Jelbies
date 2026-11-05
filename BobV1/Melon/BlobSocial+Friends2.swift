@@ -370,7 +370,7 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t >= 0.2 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 3.0); o.jellyKick = max(o.jellyKick, 3.0)
+                    jellyKick = max(jellyKick, impactKick(3.0)); o.jellyKick = max(o.jellyKick, impactKick(3.0))
                     contactBoopFallback(o)
                     contactCueFallback(o, .squish, 0.9)
                     AudioHub.shared.chirp(jelly: steerID, .babble)
