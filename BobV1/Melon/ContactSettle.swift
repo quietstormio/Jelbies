@@ -93,21 +93,23 @@ extension BlobBrain {
         if gait.isBusy, gait.phase == .crouch, !flapHop.active, !airBothFeet {
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "crouch" } }
             gait.nudgeLanding(d)
+            socialBook.airWarp = .zero
             return
         }
         let airborne = gaitAir || flapHop.active || airBothFeet
         if airborne {
-            // THE WARP IS BOUNDED (r4-park-fix): the urgent settle pushes a hopping body out of a neighbour's skin 5 cm a step, and the hop's own landing spot moves with it (`gait.nudge`), so in a ring hop (the
-            // bodies cross side on, gaps -30 ... -110 cm) the push never ends: on the park's open floor a member was carried 4 m out of the ring (the room's walls hid it). A scripted ring / circle hop
-            // (`startHopTo` records its segment) may be warped at most `hopWarpMax` off its own line; a push that would carry it farther is dropped (the lean / shuffle take the rest).
-            if let seg = socialBook.hopSeg, let s = social, s.t - seg.t < 1.6, s.t >= seg.t - 0.001 {
-                func off(_ p: SIMD2<Float>) -> Float {
-                    let e = seg.to - seg.from, L2 = simd_length_squared(e)
-                    let u = L2 > 1e-6 ? max(0, min(1, simd_dot(p - seg.from, e) / L2)) : 0
-                    return simd_distance(p, seg.from + e * u)
-                }
-                let here = off(position), there = off(position + d)
-                if there > ContactTuning.hopWarpMax, there > here { if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air|capped" } }; return }
+            // THE WARP IS BOUNDED (r4-park-fix): the urgent settle pushes a hopping body out of a neighbour's skin 5 cm a step, and the hop's own landing spot moves with it (`gait.nudge`), so in a ring / circle hop
+            // (the bodies cross side on, gaps -30 ... -110 cm) the push never ends: on the park's open floor a member was carried 4 m out of the ring (the room's walls hid it). All the pushes of ONE hop together
+            // may carry the body at most `hopWarpMax` (a new hop starts when the last push is more than 0.2 s old); what is beyond is dropped (the lean / shuffle take the rest).
+            var d = d
+            if let s = social {
+                if s.t - socialBook.airWarpT > 0.2 || s.t < socialBook.airWarpT { socialBook.airWarp = .zero }
+                socialBook.airWarpT = s.t
+                var n = socialBook.airWarp + d
+                let L = simd_length(n)
+                if L > ContactTuning.hopWarpMax { n *= ContactTuning.hopWarpMax / L }
+                d = n - socialBook.airWarp; socialBook.airWarp = n
+                if simd_length(d) < 1e-5 { return }
             }
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "air" } }
             px += d.x; pz += d.y

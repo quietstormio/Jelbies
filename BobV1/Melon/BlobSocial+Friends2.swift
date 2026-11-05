@@ -511,7 +511,6 @@ extension BlobBrain {
         gait.home = SIMD2(px, pz)
         let rv = resolve(SIMD3(spot.x, 0, spot.y), footprint)
         poseW = 0
-        socialBook.hopSeg = social.map { (from: position, to: SIMD2(rv.x, rv.z), t: $0.t) }
         gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7)
         script = .hopPlay; activity = .playing
     }

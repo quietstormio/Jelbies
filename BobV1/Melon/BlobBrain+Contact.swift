@@ -14,7 +14,7 @@ import simd
 enum ContactTuning {
     nonisolated(unsafe) static var lookAhead = true
     nonisolated(unsafe) static var leanLimiter = true          // the lean toward a partner never grows past skin contact (ContactSettle.swift: contactApplyLean)
-    static let hopWarpMax: Float = 0.30          // a scripted ring / circle hop may be warped this far off its own line by the settle (ContactSettle.swift: contactNudge)
+    static let hopWarpMax: Float = 0.35          // the settle may warp one airborne hop this far in all (the sum of its pushes) (ContactSettle.swift: contactNudge)
     static let lookDistance: Float = 2.4          // how far ahead along the leg a Jelly counts
     static let contactFrac: Float = 0.97          // closer than this fraction of the gap = the bodies touch
     static let cooldown: Float = 1.6
