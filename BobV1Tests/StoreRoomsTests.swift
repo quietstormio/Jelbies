@@ -23,12 +23,12 @@ final class StoreRoomsTests: XCTestCase {
     override func tearDown() { RoomLayout.apply(RoomCatalog.home) }
 
     func testBuy() {
-        let (b, w) = book(299, d: suite("buy"))
+        let (b, w) = book(1499, d: suite("buy"))
         XCTAssertEqual(b.buy("room-loft"), .notEnough)
         w.add(1, silent: true)
         XCTAssertEqual(b.buy("room-loft"), .bought)
         XCTAssertEqual(w.count, 0)
-        XCTAssertEqual(StoreTuning.roomPrices[.loft], 300)
+        XCTAssertEqual(StoreTuning.roomPrices[.loft], 1500)
         XCTAssertEqual(b.buy("room-loft"), .alreadyOwned)
         XCTAssertTrue(b.ownsRoom(.loft)); XCTAssertFalse(b.ownsRoom(.cabin)); XCTAssertTrue(b.ownsRoom(.home))
         XCTAssertEqual(b.ownedRooms, [.home, .loft])

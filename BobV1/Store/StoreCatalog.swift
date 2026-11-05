@@ -53,9 +53,10 @@ nonisolated enum StoreTuning {
     /// The beanbag's modest room perk ("Cozy-lite"): while one is placed, attention (love) drains at this fraction. Like every slowing perk the strongest
     /// wins (it does not stack with the Cozy snack's x0.5), and it applies while the game runs, not to the time away.
     static let beanbagAttentionDrain = 0.85
-    /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 250 and a Wave win 750, adoption costs 500 / 800 (+300 for a rare colour) and the
-    /// loveseat 120, so a room is a long-term goal: about 1 to 2 race wins (the room prices are due a rebalance against the bigger prizes).
-    static let roomPrices: [RoomID: Int] = [.loft: 300, .cabin: 400]
+    /// Rooms (bought once with earned Drops; the home room is free). A Puddle win pays 250, a Splash win 500, a Wave win 750 and a championship 1,500; adoption costs
+    /// 500 / 800 (+300 for a rare colour). A room stays a real goal above a Jelbie: the Loft is about three Splash wins or one championship, the Cabin a championship and
+    /// a good win more (user 11-04).
+    static let roomPrices: [RoomID: Int] = [.loft: 1500, .cabin: 2500]
 }
 
 nonisolated struct StoreItem: Identifiable, Sendable {
