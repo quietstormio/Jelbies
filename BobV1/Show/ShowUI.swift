@@ -4,7 +4,7 @@
 //    StudioScreen      the stage card with the Jelbie and his slot chips, the Show-ready bars, Dress up / Practise dance / Enter Jelly Show.
 //    ConditionScreen   the "Jelly Jars": five jars of stat-coloured jelly with numbers, a gold next-rank line, a +1 droplet on jars that just
 //                      grew, the Glow pill with a Bath button, Food diary and Trophies as row buttons, "See today's Jelly Show".
-//    ShowLobby         (ShowLobby.swift) today's theme poster, the rank carousel, the Entrant card, Dress up / Start show.
+//                      (it also picks the rank and shows the theme, the score estimate and its tip; Enter Jelly Show starts the show: there is no second lobby.)
 //  Plus the shared pieces: the Jelbie portrait, the stat chip, the wardrobe sheet (owned wearables, tap to wear), the dance picker.
 //  Everything lays out both ways: portrait stacks, a phone on its side puts the stage / poster beside the cards.
 //
@@ -80,7 +80,7 @@ struct JelbiePortrait: View {
     private var framelessBody: some View {
         let t = JellyRoster.tint(care.jelly(who)?.character ?? who)
         return ZStack {
-            if let image { Image(uiImage: image).resizable().scaledToFit() }
+            if let shown = image ?? HeadPortraitCache.shared.cached(key, care: care) { Image(uiImage: shown).resizable().scaledToFit() }
             else if tried { Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).padding(size * 0.2) }
             else { ProgressView().tint(SK.muted) }
         }
@@ -90,15 +90,16 @@ struct JelbiePortrait: View {
         .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") { await loadHead() }
     }
     private func loadHead() async {
-        image = nil; tried = false
-        try? await Task.sleep(nanoseconds: 350_000_000)
-        for _ in 0..<40 {
-            await Task.yield()
-            if let img = care.headProvider?(key) { image = img; return }
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if Task.isCancelled { return }
+        let t0 = CACurrentMediaTime()
+        let hit = HeadPortraitCache.shared.cached(key, care: care)
+        image = hit; tried = false
+        if hit != nil { NSLog("[portrait] tile %d from cache", who); return }
+        if let img = await HeadPortraitCache.shared.image(key, care: care) {
+            image = img
+            NSLog("[portrait] tile %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000)
+            return
         }
-        tried = true
+        if !Task.isCancelled { tried = true }
     }
     private var framedBody: some View {
         ZStack {
@@ -122,6 +123,54 @@ struct JelbiePortrait: View {
                 if Task.isCancelled { return }
             }
             tried = true
+        }
+    }
+}
+
+/// The Studio's contestant: a big full-body action shot (the Jelbie alone, in his outfit, on a clear backdrop; MelonStage.headSnapshot with `pose`), standing on the stage floor and hopping
+/// with a little sway: three views (left, front, right) played hop by hop. Fills the stage card; the chips and buttons sit over its edges.
+struct JelbieActionShot: View {
+    let care: GameCare
+    var who: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var frames: [UIImage?] = [nil, nil, nil]
+    private func key(_ pose: Int) -> HeadPortraitKey { HeadPortraitKey(jelly: who, colour: nil, wear: nil, pose: pose) }
+    /// The views in hop order: front, left, front, right.
+    private static let order = [1, 0, 1, 2]
+
+    var body: some View {
+        GeometryReader { g in
+            let h = g.size.height, S = h * 0.9
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { tl in
+                let period = 0.9
+                let t = reduceMotion ? 0 : tl.date.timeIntervalSinceReferenceDate
+                let phase = (t / period).truncatingRemainder(dividingBy: 1)
+                let hop = reduceMotion ? 0 : abs(sin(phase * .pi))          // 0 on the floor, 1 at the top of the hop
+                let view = Self.order[Int((t / period).rounded(.down)) % Self.order.count]
+                let img = frames[view] ?? frames[1] ?? frames.compactMap { $0 }.first
+                ZStack {
+                    Ellipse().fill(.black.opacity(0.28 - 0.12 * hop)).frame(width: S * (0.46 - 0.10 * hop), height: S * 0.07).position(x: g.size.width / 2, y: h * 0.9)
+                    if let img {
+                        Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
+                            .scaleEffect(x: 1 + 0.03 * (1 - hop), y: 1 - 0.03 * (1 - hop), anchor: .bottom)
+                            .position(x: g.size.width / 2, y: h * 0.885 - S * 0.885 + S / 2 - h * 0.08 * hop)
+                    } else { ProgressView().tint(ShowUI.light).position(x: g.size.width / 2, y: h * 0.5) }
+                }
+            }
+        }
+        .accessibilityLabel("\(care.jelly(who)?.name ?? "Jelbie") on the stage")
+        .accessibilityIdentifier("studio-action-shot")
+        .task(id: "\(who)-\(care.store.revision)") { await load() }
+    }
+
+    private func load() async {
+        let t0 = CACurrentMediaTime()
+        frames = [nil, HeadPortraitCache.shared.cached(key(1), care: care), nil]
+        for pose in [1, 0, 2] {
+            if frames[pose] != nil { continue }
+            guard let img = await HeadPortraitCache.shared.image(key(pose), care: care) else { return }
+            frames[pose] = img
+            if pose == 1 { NSLog("[portrait] action shot %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000) }
         }
     }
 }
@@ -292,6 +341,7 @@ struct StudioScreen: View {
     @State private var wardrobeOpen = false
     @State private var danceOpen = false
     @State private var howOpen = false
+    @State private var rankHint: String?
     private var compact: Bool { vsc == .compact }
     private var day: Int { GameCare.showDay }
     private var theme: ShowTheme { ShowSchedule.theme(dayKey: day) }
@@ -304,8 +354,9 @@ struct StudioScreen: View {
             LobbyScreen(header: AnyView(LobbyHeader(title: "Studio", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })),
                         why: blocker, whyID: "studio-why") {
                 VStack(alignment: .leading, spacing: 0) {
-                    LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.main.title)").accessibilityIdentifier("studio-theme")
+                    LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.title)").accessibilityIdentifier("studio-theme")
                     stageCard
+                    rankRow.padding(.top, 6)
                     LobbyPlaceInfo(text: rank.lobbyBlurb, textID: "studio-blurb", prizes: LobbyPrize.places((1...3).map { rank.drops(place: $0) }), prizeID: "studio-prizes")
                 }
             } right: {
@@ -346,6 +397,8 @@ struct StudioScreen: View {
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
 
+    static func stageHeight(_ compact: Bool) -> CGFloat { compact ? 160 : 192 }
+
     /// The stage card: the Jelbie under a spotlight, the day's theme, his slot chips either side.
     private var stageCard: some View {
         let outfit = care.store.outfit(who)
@@ -353,18 +406,18 @@ struct StudioScreen: View {
         let left = Array(slots.prefix((slots.count + 1) / 2)), right = Array(slots.dropFirst((slots.count + 1) / 2))
         return ZStack {
             StageBackdrop()
+            JelbieActionShot(care: care, who: who).padding(.top, 0)
             HStack(spacing: 0) {
                 VStack(spacing: 10) { ForEach(left, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme, caption: false) { wardrobeOpen = true } } }.frame(width: 56)
-                Spacer(minLength: 0)
-                JelbiePortrait(care: care, who: who, size: 92)
                 Spacer(minLength: 0)
                 VStack(spacing: 10) { ForEach(right, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme, caption: false) { wardrobeOpen = true } } }.frame(width: 56)
             }
             .padding(.horizontal, 16)
             VStack {
+                HStack(spacing: 5) { themeChip(theme.main, ""); themeChip(theme.friend, "+ ") }.padding(.top, 6)
                 Spacer()
                 HStack(alignment: .bottom) {
-                    Text("Gold edge = matches \(theme.main.title)").font(SK.font(13, .heavy)).foregroundStyle(ShowUI.gold).jLine(1, scale: 0.7)
+                    Text("Gold edge =\nmatches \(theme.main.title)").font(SK.font(12.5, .heavy)).foregroundStyle(ShowUI.gold).lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 104, alignment: .leading)
                     Spacer(minLength: 6)
                     Button { AudioHub.shared.uiTap(); wardrobeOpen = true } label: {
                         Text("Dress up").font(SK.font(14, .black)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 7).background(Capsule().fill(ShowUI.light))
@@ -377,9 +430,47 @@ struct StudioScreen: View {
             }
             .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, minHeight: 152, maxHeight: 152)          // as tall as the Course / Court cards, so the lines under it sit where they do on the other lobbies
+        .frame(maxWidth: .infinity, minHeight: Self.stageHeight(compact), maxHeight: Self.stageHeight(compact))          // tall: the contestant is a big action shot
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .accessibilityElement(children: .contain).accessibilityIdentifier("studio-stage")
+    }
+
+    private func themeChip(_ t: WearTag, _ prefix: String) -> some View {
+        Text("\(prefix)\(t.title)").font(SK.font(12, .black)).foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: 22).background(Capsule().fill(ShowUI.tag(t)))
+    }
+
+    /// The rank to enter: one pill per rank (locked ones say what opens them).
+    private var rankRow: some View {
+        let prog = care.show.progress
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                ForEach(ShowRank.allCases, id: \.rawValue) { r in
+                    let open = prog.unlocked(r), picked = r == rank
+                    Button {
+                        AudioHub.shared.uiTap()
+                        if open { _ = care.chooseShowRank(r); rankHint = nil }
+                        else { rankHint = prog.requirement(r) ?? "Win at \(r.below?.title ?? "")" }
+                    } label: {
+                        HStack(spacing: 3) {
+                            if !open { Image(systemName: "lock.fill").font(.system(size: 10, weight: .black)) }
+                            Text(r.title).font(SK.font(13.5, .black)).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        .foregroundStyle(picked && open ? SK.ink : open ? ShowUI.light : ShowUI.lilac)
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .background(Capsule().fill(picked && open ? ShowUI.gold : Color.white.opacity(open ? 0.14 : 0.06)))
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(open ? "\(r.title) rank" : "\(r.title) rank, locked. \(prog.requirement(r) ?? "Win at \(r.below?.title ?? "")")")
+                    .accessibilityAddTraits(picked ? .isSelected : [])
+                    .accessibilityIdentifier("rank-\(r.rawValue)")
+                }
+            }
+            .padding(.vertical, -6)
+            if let rankHint { Text(rankHint).font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale).lineLimit(2).accessibilityIdentifier("studio-rank-hint") }
+        }
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .contain).accessibilityIdentifier("studio-ranks")
     }
 
     /// "Show ready": Look / Shine / Diet / Dance, each with a word on what to do.
@@ -393,14 +484,22 @@ struct StudioScreen: View {
         let main = p?.stats.condition(theme.main.condition) ?? 0, friend = p?.stats.condition(theme.friend.condition) ?? 0
         let dances = p?.stats.knownDances.count ?? 0
         let skill = p?.stats.bestDance.map { p!.stats.proficiency($0) } ?? 0
+        let fc = care.showForecast(jelly: who, rank: rank, theme: theme)
         return LobbyStatsCard(title: "Show ready", groups: [LobbyStatGroup(id: "studio-stats", rows: [
             LobbyStatRow(label: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme"),
             LobbyStatRow(label: "Shine", value: glow, color: SK.sky, note: glow > 0.8 ? "Bathed recently" : glow > 0.3 ? "Glow \(ShowUI.glowOf5(glow)) of 5" : "A Clean would help"),
             LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
             LobbyStatRow(label: "Dance", value: skill, color: Color(hex: 0xB58BDB), note: dances == 0 ? "No dance yet" : "\(dances) dance\(dances == 1 ? "" : "s") learned"),
+            LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nrivals about \(fc.rivals)"),
         ])], id: "studio-ready", trailing: {
             Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
                 .buttonStyle(.plain).padding(.vertical, -10).accessibilityIdentifier("studio-card")
+        }, footer: {
+            HStack(spacing: 7) {
+                LobbyIcon(kind: .bulb, color: SK.ink).frame(width: 22, height: 22).background(Circle().fill(SK.honeyDeep.opacity(0.45)))
+                Text(fc.tip).font(SK.font(13, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine).accessibilityIdentifier("studio-tip")
         })
     }
 }

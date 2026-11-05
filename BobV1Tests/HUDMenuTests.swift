@@ -122,7 +122,7 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(HUDMenu.perform(.decor, .group, care: care), .bag(.furniture, who: 0))
         XCTAssertEqual(HUDMenu.perform(.compete, .individual(2), care: care), .competeChips)
         XCTAssertEqual(HUDMenu.compete(.track, id: 2), .town(.track, who: 2))
-        XCTAssertEqual(HUDMenu.compete(.show, id: 2), .town(.show, who: 2))
+        XCTAssertEqual(HUDMenu.compete(.studio, id: 2), .town(.studio, who: 2))
         XCTAssertEqual(HUDMenu.perform(.feed, .group, care: care), .picker(.food))
         XCTAssertEqual(HUDMenu.perform(.drink, .group, care: care), .picker(.drink))
     }

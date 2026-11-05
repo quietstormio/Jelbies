@@ -1,6 +1,6 @@
 //
 //  ShowLobbyUITests.swift
-//  The Jelly Show lobby's states a still capture cannot reach (the locked-card hint, the blocker line) and the room-after-lobby check (the portrait path flips renderer state and puts it back).
+//  The Studio lobby's (the Jelly Show's only lobby) states a still capture cannot reach (the locked-card hint, the blocker line) and the room-after-lobby check (the portrait path flips renderer state and puts it back).
 //  Screenshots go to SHOW_OUT (TEST_RUNNER_SHOW_OUT).
 //
 
@@ -25,7 +25,7 @@ final class ShowLobbyUITests: XCTestCase {
     func testLockedHintAndStartAreThere() {
         let app = launch()
         XCTAssertTrue(el(app, "rank-pond").waitForExistence(timeout: 40))
-        for id in ["show-start", "show-dress", "show-help", "show-rivals", "show-tip", "show-entrant", "show-estimate", "show-theme", "show-ranks", "show-prizes", "show-card", "show-back"] { XCTAssertTrue(el(app, id).exists, id) }
+        for id in ["studio-show", "studio-dress", "studio-help", "studio-ready", "studio-tip", "studio-theme", "studio-theme-tags", "studio-ranks", "studio-prizes", "studio-card", "studio-back"] { XCTAssertTrue(el(app, id).exists, id) }
         sleep(6)
         el(app, "rank-pond").tap(); sleep(1)
         save("s1_hint")
@@ -34,9 +34,9 @@ final class ShowLobbyUITests: XCTestCase {
     @MainActor
     func testBlockedState() {
         let app = launch(seed: "reset dress blocked")
-        XCTAssertTrue(el(app, "show-why").waitForExistence(timeout: 50), "a meal is out: the reason shows")
+        XCTAssertTrue(el(app, "studio-why").waitForExistence(timeout: 50), "a meal is out: the reason shows")
         sleep(2)
-        XCTAssertFalse(el(app, "show-start").isEnabled)
+        XCTAssertFalse(el(app, "studio-show").isEnabled)
         save("s2_blocked")
     }
 
@@ -47,9 +47,8 @@ final class ShowLobbyUITests: XCTestCase {
                 var app = launch(roster: roster, hour: hour, auto: nil)
                 sleep(25); save("\(tag)_\(hour)_before"); app.terminate()
                 app = launch(roster: roster, hour: hour)
-                XCTAssertTrue(el(app, "show-back").waitForExistence(timeout: 40)); sleep(10)
-                el(app, "show-back").tap()                     // back goes to the Studio
-                if el(app, "studio-back").waitForExistence(timeout: 20) { sleep(3); el(app, "studio-back").tap() }
+                XCTAssertTrue(el(app, "studio-back").waitForExistence(timeout: 40)); sleep(10)
+                el(app, "studio-back").tap()
                 if el(app, "town-home").waitForExistence(timeout: 20) { el(app, "town-home").tap() }
                 sleep(8); save("\(tag)_\(hour)_after_show")
                 app.terminate()

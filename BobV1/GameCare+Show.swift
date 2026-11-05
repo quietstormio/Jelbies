@@ -332,6 +332,6 @@ extension GameCare {
         greetOthers = [:]
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
         if id != 0 { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
-        if again { requestTown(.show) }
+        if again { requestTown(.studio) }
     }
 }

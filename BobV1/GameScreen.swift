@@ -785,7 +785,7 @@ struct GameScreen: View {
         switch t {
         case nil: return .none
         case .shop?: return .shop
-        case .studio?, .condition?, .show?: return .studio
+        case .studio?, .condition?: return .studio
         default: return .town
         }
     }
@@ -795,7 +795,7 @@ struct GameScreen: View {
         switch UserDefaults.standard.string(forKey: "LobbyAuto") {
         case "volley", "volleyTrain", "volleyHow": return .volley
         case "track", "trackHow": return .track
-        case "show", "showHow": return .show
+        case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
@@ -804,7 +804,7 @@ struct GameScreen: View {
         case "track": return .track
         case "studio": return .studio
         case "condition": return .condition
-        case "show": return .show
+        case "show": return .studio
         default: return nil
         }
     }
@@ -1097,7 +1097,7 @@ struct CareMenu: View {
     private var competeChips: some View {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         let opts: [(String, String, TownScreen, Bool, String)] = [("Track", Self.raceSymbol, .track, care.canRace(jelly: id), "hud-compete-track"),
-                                                                    ("Jelly Show", "sparkles", .show, care.canShow(jelly: id), "hud-compete-show"),
+                                                                    ("Jelly Show", "sparkles", .studio, care.canShow(jelly: id), "hud-compete-show"),
                                                                     ("Volleyball", UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", .volley, care.canVolley(jelly: id), "hud-compete-volley")]
         return HStack(spacing: 10) {
             ForEach(Array(opts.enumerated()), id: \.offset) { i, o in

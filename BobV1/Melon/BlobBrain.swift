@@ -749,7 +749,9 @@ final class BlobBrain {
     /// 48 + 40 candidates, each a floor-rules `resolve` and a reachability check, no longer have to fit one step. Infinity outside a pick.
     var pickDeadline: CFTimeInterval = .infinity
     var pickTimedOut = false
-    static let pickBudgetSeconds: CFTimeInterval = 0.0015
+    /// Test seam (default unchanged): tests that need a repeatable pick set `.infinity` in setUp and restore `defaultPickBudgetSeconds` in tearDown.
+    static let defaultPickBudgetSeconds: CFTimeInterval = 0.0015
+    nonisolated(unsafe) static var pickBudgetSeconds: CFTimeInterval = BlobBrain.defaultPickBudgetSeconds
     @inline(__always) var pickOver: Bool { if CACurrentMediaTime() > pickDeadline { pickTimedOut = true; return true }; return false }
 
     func pickAutonomous(_ sim: SoftBody) {
