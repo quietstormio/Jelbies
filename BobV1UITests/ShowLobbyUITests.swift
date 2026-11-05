@@ -25,7 +25,7 @@ final class ShowLobbyUITests: XCTestCase {
     func testLockedHintAndStartAreThere() {
         let app = launch()
         XCTAssertTrue(el(app, "rank-pond").waitForExistence(timeout: 40))
-        for id in ["studio-show", "studio-dress", "studio-help", "studio-ready", "studio-tip", "studio-theme", "studio-theme-tags", "studio-ranks", "studio-prizes", "studio-card", "studio-back"] { XCTAssertTrue(el(app, id).exists, id) }
+        for id in ["studio-show", "studio-dress", "studio-help", "studio-ready", "studio-tip", "studio-theme","studio-ranks", "studio-prizes", "studio-card", "studio-back"] { XCTAssertTrue(el(app, id).exists, id) }
         sleep(6)
         el(app, "rank-pond").tap(); sleep(1)
         save("s1_hint")

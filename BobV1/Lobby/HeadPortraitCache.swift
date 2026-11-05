@@ -48,18 +48,29 @@ final class HeadPortraitCache {
         return nil
     }
 
-    /// Every roster head (and the Studio's front action shot), one after the other, so the lobbies find them waiting. Called when the Town opens.
+    /// Every roster head (and the Studio's front action shot), drawn one at a time while the Town is open so the lobbies find them waiting. Called when the Town opens.
+    /// Cooperative: each render is its own main-actor turn with a pause before it (taps, lists and the lobbies' own pictures never queue behind more than one render), it never
+    /// polls (a stage that is not ready yet ends the pass; the next Town open starts another), it stops after `budget` seconds, and `cancelPrewarm()` ends it at once.
     func prewarm(care: GameCare) {
         guard Self.enabled, warming == nil else { return }
         warming = Task { @MainActor [weak self] in
-            let t0 = CACurrentMediaTime()
-            for j in care.jellies.prefix(3) {
-                _ = await self?.image(HeadPortraitKey(jelly: j.id, colour: nil, wear: nil), care: care)
-                _ = await self?.image(HeadPortraitKey(jelly: j.id, colour: nil, wear: nil, pose: 1), care: care)
-                if Task.isCancelled { break }
+            let t0 = CACurrentMediaTime(), budget = 6.0
+            var drawn = 0
+            outer: for j in care.jellies.prefix(3) {
+                for pose in [nil, 1] as [Int?] {
+                    try? await Task.sleep(nanoseconds: 120_000_000)                 // let the run loop serve whatever the player just did
+                    if Task.isCancelled || CACurrentMediaTime() - t0 > budget { break outer }
+                    let key = HeadPortraitKey(jelly: j.id, colour: nil, wear: nil, pose: pose)
+                    if self?.cached(key, care: care) != nil { continue }
+                    guard self?.render(key, care: care) != nil else { break outer }        // stage not ready: stop, never retry in a loop
+                    drawn += 1
+                }
             }
-            NSLog("[portrait] prewarmed %d jellies in %.0f ms", min(care.jellies.count, 3), (CACurrentMediaTime() - t0) * 1000)
+            NSLog("[portrait] prewarmed %d pictures in %.0f ms", drawn, (CACurrentMediaTime() - t0) * 1000)
             self?.warming = nil
         }
     }
+
+    /// The player touched something (or the Town closed): the rest of the pass is not worth a hitch.
+    func cancelPrewarm() { warming?.cancel(); warming = nil }
 }

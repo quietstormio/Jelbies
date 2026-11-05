@@ -225,14 +225,16 @@ nonisolated enum TailBean {
     }
     /// (test-only PIPBACK=fillet:k) Smooth-union fillet against the round tail tube: b = distance from the rest point to the tube surface (centre-line table, radius profile);
     /// the displacement is (k - b)^2 / 4k for 0 <= b < k and k/4 inside the tube, expressed as swellHeight (k/4) * ((k - b) / k)^2 clamped to 0...1.
+    /// radius(t) at every table sample, computed once (the radius profile is a pure function of t; evaluating it per query made a Debug launch take half a minute)
+    private static let tubeRadii: [Double] = { let s = shape; return (0..<s.table.count).map { s.radius(Double($0) * s.step) } }()
     static func tubeDistance(_ q: SIMD3<Float>) -> Double {
-        let s = shape, qd = SIMD3<Double>(Double(q.x), Double(q.y), Double(q.z))
+        let s = shape, radii = tubeRadii, qd = SIMD3<Double>(Double(q.x), Double(q.y), Double(q.z))
         var b = Double.infinity
         var i = 0
         while i < s.table.count - 1 {                                                  // every 2nd sample (8 mm)
             let t = Double(i) * s.step
             if t > s.length { break }
-            b = min(b, simd_distance(qd, s.table[i]) - s.radius(t))
+            b = min(b, simd_distance(qd, s.table[i]) - radii[i])
             i += 2
         }
         return b
