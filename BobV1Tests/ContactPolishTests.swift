@@ -134,7 +134,7 @@ final class ContactPolishTests: XCTestCase {
         e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("hum", .hum, .touching), e("cheekSquish", .cheekSquish, .touching),
         e("bellyBounce", .bellyBounce, .touching), e("noseBoop", .noseBoop, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
         e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .touching), e("spinHug", .spinHug, .touching),
-        e("tag", .tag, .touching), e("chase", .chase, .touching, sec: 40),
+        ContactEntry(name: "tag", scenario: .social(.tag), stance: .touching, momentary: true), ContactEntry(name: "chase", scenario: .social(.chase), stance: .touching, maxSec: 40, momentary: true),          // (tag / chase: the emote IS a soft bump in a run: its hold step is the chase itself, so a "hold median" read 59-94 cm of running; judged at the touch frames like a boop)
         ContactEntry(name: "greet", scenario: .social(.greet), stance: .proximity, near: true), e("look", .look, .proximity), e("follow", .follow, .proximity), e("zoomies", .zoomies, .proximity, sec: 40), e("dance", .dance, .proximity),
         e("keepAway", .keepAway, .proximity, sec: 30), e("line", .line, .proximity), e("twirl", .twirl, .proximity), e("hopAlong", .hopAlong, .proximity), e("littleRace", .littleRace, .proximity),
         e("leapfrog", .leapfrog, .proximity), e("peekaboo", .peekaboo, .proximity), e("mirrorDance", .mirrorDance, .proximity), e("danceOff", .danceOff, .proximity), e("shyWave", .shyWave, .proximity),
@@ -155,6 +155,11 @@ final class ContactPolishTests: XCTestCase {
     static let curatedKinds: Set<SocialKind> = Set((curatedPairEntries + curatedGroupEntries).compactMap { if case .social(let k) = $0.scenario { return k }; return nil })
     static let autoEntries: [ContactEntry] = SocialKind.allCases.filter { !curatedKinds.contains($0) }.map { k in
         e(k.rawValue, k, ContactStance.entry(k)?.cls == .touching ? .touching : .proximity)
+    }
+    /// A HOLDING stance (the pair stays pressed from the hold step on: hum, nuzzle, cheekSquish ...) as opposed to a pressing one (a bump / boop: approach, press, part): from the table, never a list here.
+    static func holdsStance(_ e: ContactEntry) -> Bool {
+        guard !e.momentary, let k = kindOf(e), let st = ContactStance.entry(k), st.cls == .touching else { return false }
+        return st.steps.contains { $0.target == ContactStance.hold } && !st.steps.contains { $0.target == ContactStance.ready && !$0.onlySeparate }          // (`near` and `ready` are both 1.2 cm: the pressing approach is the step that is not onlySeparate)
     }
     static func kindOf(_ e: ContactEntry) -> SocialKind? { if case .social(let k) = e.scenario { return k }; return nil }
     static let pairEntries: [ContactEntry] = curatedPairEntries + autoEntries.filter { !($0.scenario.kind?.isGroup ?? false) }
@@ -181,6 +186,13 @@ final class ContactPolishTests: XCTestCase {
         var worstReach: Float = 0, worstLag: Float = 0          // at the worst overlap frame: the longest reach of a drawn body from its centroid, the largest sim-centroid vs brain-root distance (m)
         var footMin: Float = .infinity                  // the least FOOTPRINT gap over the frames where the support gap read an overlap (what the eye sees; support is the strict lower bound)
         var touchFrames = 0
+        /// WHAT THE RUN SAW (round 3): the skin gap at the LAST sampled frame (a proximity emote whose min is the start distance still shows where the pair ended up: stalled, drifted closer or apart) and the session phases reached
+        /// (a follow / line whose trailing phase never ran shows as one phase). Both are context columns: no bar reads them.
+        var endGap: Float? = nil
+        /// STUTTER-STEP ARRIVAL (holding stances only): after the skins first touched and before the hold began, the largest skin gap the pair reached (m). A pair that touches, backs off and walks in again (cheekSquish: touches at
+        /// 1.6 s in the drive's own walk-up, then the stance walk opens 55 cm and returns) reads as a bug even when the hold itself is perfect. 0 = never backed off.
+        var retreat: Float = 0
+        var phases: Set<Int> = []
         /// The BODY-ONLY support gap (the egg: no arms / ears / feet beans), the min over the run, the hold step's frames, and at each touch-event frame. The whole-skin `minGap` includes the arms: a pair can read
         /// touching on a hand or a tail while the bodies stand apart (backToBack on Pip), and boop's bodies must stand at hand reach.
         var minGapBody: Float = .infinity
@@ -192,6 +204,8 @@ final class ContactPolishTests: XCTestCase {
         var handTouch: [Float] = []
         var handHold: [Float] = []
         var handHand: [Float] = []
+        /// How many drawn hand tips each body has at the touch frames, per body ("2,0"): a body whose arms are not drawn as capsules at that moment (Teddy's rest pose) has no hand to measure, so its hand gap is Bob-side only.
+        var handTips: [String] = []
         var episodes = 0, sndInEpisode: [Int] = [], hapInEpisode: [Int] = [], sndOutside = 0, hapOutside = 0
         var sndGapMin: Float = .infinity, sndGapMax: Float = -.infinity
         var boopEvents = 0
@@ -330,7 +344,8 @@ final class ContactPolishTests: XCTestCase {
         defer { ContactTrace.on = false }
         var arrival = ArrivalTracker()
         let handKind: Bool = { if case .social(let k) = e.scenario { return Self.handKinds.contains(k) }; return false }()
-        var holdTouched = false
+        var holdTouched = false, touchedPre = false, firstHoldFrame = -1
+        let holds = Self.holdsStance(e)
         var firstTouchFrame = -1
         var yawHist: [[Float]] = []
         var wasWalking = [Bool](repeating: false, count: n)
@@ -367,7 +382,8 @@ final class ContactPolishTests: XCTestCase {
                 if let ag = arrival.gap { res.arrivalCm = ag; res.arrivalT = Float(arrival.frame ?? frame) / 60; res.arrivalFrame = arrival.frame ?? frame; res.lastPlantCm = arrival.last; res.stops = arrival.settles.count }
             }
             if res.episodes > 0, firstTouchFrame < 0 { firstTouchFrame = frame }
-            if firstTouchFrame >= 0, frame >= firstTouchFrame + 60 { arrival.close() }          // (1 s after the first touch the approach is over: a stop that CONFIRMS later is the hold, not the arrival; the last plant usually comes <= 0.4 s before the touch)
+            let closeRef = holds ? firstHoldFrame : firstTouchFrame          // (a holding stance's arrival ends 1 s into its HOLD: a first touch in the drive's own walk-up that is then backed off from is the stutter, `retreat`, not the arrival)
+            if closeRef >= 0, frame >= closeRef + 60 { arrival.close() }          // (1 s after the first touch the approach is over: a stop that CONFIRMS later is the hold, not the arrival; the last plant usually comes <= 0.4 s before the touch)
             // THE touch event: the gate's own (contactTick: fires at skin gap <= +0.5 cm, re-armed past +3 cm). One episode per event; its sound / haptic are the ones requested in the same frame.
             let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }
             evDelta = evNow - evPrev; evPrev = evNow
@@ -381,6 +397,11 @@ final class ContactPolishTests: XCTestCase {
                     if res.firstTouchFrame < 0 { res.firstTouchFrame = frame }
                     if let hg { res.handTouch.append(hg) }
                     if let hh { res.handHand.append(hh) }
+                    if handKind { res.handTips.append((0..<n).map { String(d.contactHandTips($0).count) }.joined(separator: ",")) }
+                    if handKind, Self.traced.contains(e.name) {          // (the hand numbers of the touch frame, to tell a hand that is not reaching from a measuring artefact)
+                        let tips = (0..<n).map { d.contactHandTips($0) }, arms = (0..<n).map { d.contactArmPoints($0).count }
+                        MotionLog.write("CONTACT handdebug \(e.name) \(castName) f\(frame) tips=\(tips.map { $0.map { String(format: "(%.2f,%.2f,%.2f)", $0.x, $0.y, $0.z) } }) armPts=\(arms) roots=\(rigs.prefix(n).map { String(format: "(%.2f,%.2f)", $0.root.x, $0.root.y) }) hg=\(hg.map { String($0) } ?? "-") hh=\(hh.map { String($0) } ?? "-")")
+                    }
                 }
             }
             if evDelta > 0 { for _ in 0..<evDelta { res.episodes += 1; res.sndInEpisode.append(0); res.hapInEpisode.append(0) }; curEpisode = res.episodes - 1 }
@@ -414,6 +435,7 @@ final class ContactPolishTests: XCTestCase {
                 let hg: Float? = handKind ? Self.handGapNow(d, S, n: n) : nil
                 let pm = Self.pairMin(S, e: e, n: n)
                 let mg = pm.gap, mp = pm.pair.map { "\(Self.names[cast[$0.0]])-\(Self.names[cast[$0.1]])" } ?? ""
+                if sampled { res.endGap = mg; if let ph = a.brain.social?.phase { res.phases.insert(ph) } }
                 if sampled, mg < -0.01 {          // a support overlap: what does the footprint (the eye's view) say about the same frame?
                     let T = d.contactSurfaces(triangles: true)
                     var fm = Float.infinity
@@ -432,11 +454,12 @@ final class ContactPolishTests: XCTestCase {
                         res.minGapPhase = "\(a.brain.socialKind.map { $0.rawValue } ?? "-")/ph\(a.brain.social?.phase ?? -1)/idle \(a.brain.idleState.kind.map { "\($0)" } ?? "-")" }
                     if Self.traced.contains(e.name) { trace.append(String(format: "%.2f\t%d\t%.1f\t%.3f\t%d\t%@", Float(frame) / 60, a.brain.social?.phase ?? -1, mg * 100, simd_distance(a.root, b.root), still ? 1 : 0, tap.sounds.suffix(1).map { $0.1 }.joined()) + Self.traceExtra(rigs, S, n) + (Self.traceCols ? Self.traceRow(rigs, d.lab, preRoots, arriveEv, mg) : "")) ; if Self.traceCols { arriveEv = [String](repeating: "", count: n) } }
                     if mg <= Self.touchOn { res.touchFrames += 1 }
+                    if holds, !holdTouched { if mg <= 0.005 { touchedPre = true } else if touchedPre { res.retreat = max(res.retreat, mg) } }
                     if still, inSession, activePhase, mg < 2.2 { res.stance01.append(mg) }
                     // the REAL hold: inside the table's hold step, from the first frame the skins touch (<= +0.5 cm) to the end of the step. (The hold step of a press is entered while the walker is still
                     // closing in: those frames are the arrival, not the hold.)
                     if inSession, activePhase, case .social(let k) = e.scenario, ContactStance.entry(k)?.cls == .touching {
-                        if mg <= 0.005 { holdTouched = true }
+                        if mg <= 0.005 { if !holdTouched { firstHoldFrame = frame }; holdTouched = true }
                         if holdTouched { res.holdGaps.append(mg); res.holdGapsBody.append(mgb); if let hg, hg < 8 { res.handHold.append(hg) } }
                     }
                     // episodes
@@ -540,7 +563,7 @@ final class ContactPolishTests: XCTestCase {
     static let header = ["emote", "cast", "stance", "started", "sec", "minGap_cm", "at_s", "pair", "where", "stanceMedian_cm", "stanceN", "touchFrames", "episodes", "snd_per_episode", "snd_outside", "hap_per_episode", "hap_outside",
                          "sndGap_cm(min..max)", "boopEv", "featRaw_cm", "featClip_cm", "limbRaw_cm", "limbClip_cm", "eggPen_cm", "sounds", "haptics",
                          "arrival_cm", "arrival_at_s", "lastPlant_cm", "stops", "holdMedian_cm", "holdN", "holdTouchN", "touchGaps_cm", "footMin_cm", "worstReach_cm", "worstLag_cm", "bar",
-                         "minGapBody_cm", "holdMedianBody_cm", "snd_per_touch", "handMin_cm", "handTouch_cm", "handHoldMedian_cm", "handHand_cm", "bodyTouch_cm", "arrivalTurn_deg", "arrivalToTouch_s"].joined(separator: "\t")
+                         "minGapBody_cm", "holdMedianBody_cm", "snd_per_touch", "handMin_cm", "handTouch_cm", "handHoldMedian_cm", "handHand_cm", "bodyTouch_cm", "arrivalTurn_deg", "arrivalToTouch_s", "retreat_cm", "endGap_cm", "phases", "handTips"].joined(separator: "\t")
     static func row(_ r: Result) -> String {
         let bar = barFails(r)
         let a: [String] = [r.name, r.cast, r.stance.rawValue, r.started ? "yes" : "NO START", String(format: "%.1f", r.seconds), cm(r.minGap), String(format: "%.1f", r.minGapT), r.minGapPair, r.minGapPhase]
@@ -553,7 +576,9 @@ final class ContactPolishTests: XCTestCase {
         let hold: [String] = [r.holdMedian.map(cm) ?? "-", "\(r.holdGaps.count)", "\(r.holdTouchN)", r.touchGaps.map(cm).joined(separator: ",")]
         let feet: [String] = [r.footMin.isFinite ? cm(r.footMin) : "-", r.worstReach > 0 ? cm(r.worstReach) : "-", r.worstReach > 0 ? cm(r.worstLag) : "-", bar.isEmpty ? "pass" : bar.joined(separator: "; ")]
         let body: [String] = [r.minGapBody.isFinite ? cm(r.minGapBody) : "-", r.holdMedianBody.map(cm) ?? "-", r.sndPerTouch]
-        let hand: [String] = [r.handMin.isFinite ? hcm(r.handMin) : "-", r.handTouch.map(hcm).joined(separator: ","), r.handHoldMedian.map(hcm) ?? "-", r.handHand.map(hcm).joined(separator: ","), r.bodyTouch.map(cm).joined(separator: ","), r.arrivalTurnDeg.map { String(format: "%.0f", $0) } ?? "-", r.arrivalToTouchS.map { String(format: "%.1f", $0) } ?? "-"]
+        let hand: [String] = [r.handMin.isFinite ? hcm(r.handMin) : "-", r.handTouch.map(hcm).joined(separator: ","), r.handHoldMedian.map(hcm) ?? "-", r.handHand.map(hcm).joined(separator: ","), r.bodyTouch.map(cm).joined(separator: ","), r.arrivalTurnDeg.map { String(format: "%.0f", $0) } ?? "-", r.arrivalToTouchS.map { String(format: "%.1f", $0) } ?? "-",
+                              r.retreat > 0 ? cm(r.retreat) : "0",
+                              r.endGap.map { $0 >= 8 ? "far" : cm($0) } ?? "-", r.phases.isEmpty ? "-" : r.phases.sorted().map(String.init).joined(separator: ","), Array(Set(r.handTips)).sorted().joined(separator: " ")]
         let all: [String] = a + b + c + [snd, hap] + arr + hold + feet + body + hand
         return all.joined(separator: "\t")
     }
@@ -571,6 +596,7 @@ final class ContactPolishTests: XCTestCase {
             if r.touchGaps.isEmpty { f.append("never touches") }
             else if let lo = r.touchGaps.min(), let hi = r.touchGaps.max(), lo < -0.01 || hi > 0.005 { f.append("touch at \(cm(lo))..\(cm(hi))") }
         } else if r.holdGaps.count < Result.minHold { if r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { f.append("no hold (\(r.holdGaps.count) touching frames)") } }
+        if r.retreat > 0.03 { f.append("touched, backed off \(cm(r.retreat)) cm and came back (stutter-step arrival)") }
         if r.arrivalCm == nil, !r.momentary, r.kind != "lieDown", r.kind != "flop", r.kind != "sleep" { f.append("never stood still on arrival") }
         else if let m = r.holdMedian, abs(m) > 0.005 { f.append("hold \(cm(m))") }
         if max(r.featClip, r.limbClip) > 0.005 { f.append("feature inside \(dcm(max(r.featClip, r.limbClip)))") }
@@ -590,7 +616,7 @@ final class ContactPolishTests: XCTestCase {
             else if let lo = r.handTouch.min(), let hi = r.handTouch.max(), lo < -0.005 || hi > 0.005 { f.append("hand at touch \(hcm(lo))..\(hcm(hi))") }
             if let lo = r.bodyTouch.min(), lo < -0.001 { f.append("bodies pressed \(cm(lo)) (want >= 0: hand reach)") }
         }
-        if k == .highFive, let hi = r.handHand.max(), hi > 0.005 { f.append("hands apart \(hcm(hi))") }
+        if k == .highFive, let hi = r.handHand.max(), hi > 0.005 { f.append(hi >= 8 ? "hands apart: far (a body draws no arm capsule at the touch: hand-on-hand unmeasurable, see handTips)" : "hands apart \(hcm(hi))") }
         return f
     }
     static func write(_ rows: [Result], file: String) {
@@ -679,6 +705,8 @@ final class ContactPolishTests: XCTestCase {
         XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("arrival") }, "6.2 cm apart on arrival fails the bar (<= 1.5)")
         r.arrivalCm = 0.01; XCTAssertFalse(Self.barFails(r).contains { $0.hasPrefix("arrival") })
         r.arrivalCm = -0.02; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("arrival") }, "sunk in by 2 cm on arrival fails too")
+        r.retreat = 0.55; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("touched, backed off") }, "touch, back off 55 cm, walk in again = the stutter-step arrival fails the bar")
+        r.retreat = 0.012; XCTAssertFalse(Self.barFails(r).contains { $0.hasPrefix("touched, backed off") }, "the near step's 1 cm separation is not a retreat"); r.retreat = 0
         r.arrivalCm = nil; XCTAssertTrue(Self.barFails(r).contains("never stood still on arrival"))
         r.arrivalCm = 0.0; r.holdGaps = [0.001]; XCTAssertTrue(Self.barFails(r).contains { $0.hasPrefix("no hold") }, "never a hold from one frame")
         var b = Result(); b.name = "boop"; b.stance = .touching; b.kind = "boop"; b.started = true; b.momentary = true; b.episodes = 1; b.sndInEpisode = [1]; b.touchGaps = [-0.002]; b.bodyTouch = [0.02]; b.handTouch = [0.002]; b.handMin = -0.001
@@ -697,6 +725,14 @@ final class ContactPolishTests: XCTestCase {
         XCTAssertEqual(hh.count, rr.count)
         XCTAssertEqual(rr[hh.firstIndex(of: "snd_per_touch")!], "1")
         XCTAssertEqual(rr[hh.firstIndex(of: "bodyTouch_cm")!], "2.0")
+    }
+
+    /// tag / chase are judged at their touch frames (a soft bump inside a run), the holding stances (hum ...) are the ones whose arrival / retreat apply, the pressing ones (bump ...) are not.
+    func testHoldsStanceClassification() {
+        func entry(_ k: SocialKind) -> ContactEntry { (Self.pairEntries + Self.groupEntries).first { Self.kindOf($0) == k }! }
+        for k in [SocialKind.hum, .nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .whisperGiggle, .groupHug] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
+        for k in [SocialKind.boop, .bump, .highFive, .tag, .chase, .look, .follow] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
+        XCTAssertTrue(entry(.tag).momentary && entry(.chase).momentary, "tag / chase: judged at the touch")
     }
 
     // MARK: the formula is enforced, not noted (user rule 3)
@@ -726,14 +762,15 @@ final class ContactPolishTests: XCTestCase {
         for e in Self.pairEntries { XCTAssertFalse(Self.kindOf(e)?.isGroup ?? false, "\(e.name) is a group kind in the pair list") }
         for e in Self.groupEntries { XCTAssertTrue(Self.kindOf(e)?.isGroup ?? true, "\(e.name) is a pair kind in the group list") }
     }
-    /// Every touching-class kind has a real-app scene row in scripts/contact_scenes.tsv, so its clip is captured and judged next to the numbers (the furniture ones, bagSit and cuddle, need a prop ContactDemo cannot place).
+    /// EVERY interactive kind (touching AND proximity: round 2's judges flagged littleRace / ringDance / look ... as "no scene row, nothing to look at") has a real-app scene row in scripts/contact_scenes.tsv, so its clip is
+    /// captured and judged next to the numbers (the prop ones, bagSit / cuddle / pass, need furniture or a ball ContactDemo cannot place).
     func testEveryTouchingKindHasASceneRow() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         guard let text = try? String(contentsOf: root.appendingPathComponent("scripts/contact_scenes.tsv"), encoding: .utf8) else { throw XCTSkip("scripts/contact_scenes.tsv not readable from the test host") }
         let demoKinds = Set(text.split(separator: "\n").filter { !$0.hasPrefix("#") }.compactMap { $0.split(separator: "\t", omittingEmptySubsequences: false).dropFirst(2).first.map(String.init) })
-        let needsFurniture: Set<SocialKind> = [.bagSit, .cuddle]
-        let missing = SocialKind.allCases.filter { ContactStance.entry($0)?.cls == .touching && !needsFurniture.contains($0) && !demoKinds.contains($0.rawValue) }.map(\.rawValue)
-        XCTAssertTrue(missing.isEmpty, "touching kinds with no scene row in scripts/contact_scenes.tsv: \(missing.joined(separator: ", "))")
+        let needsFurniture: Set<SocialKind> = [.bagSit, .cuddle, .pass]
+        let missing = SocialKind.allCases.filter { !needsFurniture.contains($0) && !demoKinds.contains($0.rawValue) }.map(\.rawValue)
+        XCTAssertTrue(missing.isEmpty, "interactive kinds with no scene row in scripts/contact_scenes.tsv: \(missing.joined(separator: ", "))")
         for extra in ["lieDown", "flop", "sleepPile"] { XCTAssertTrue(demoKinds.contains(extra), "no scene row for \(extra)") }
     }
 

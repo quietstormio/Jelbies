@@ -54,3 +54,20 @@ tag_park_pearl_v	pearl	tag	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 
 chase_park_teddy_v	teddy	chase	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
 highFive_park_moss_v	moss	highFive	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
 spinHug_park_lavender_v	lavender	spinHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+look_bob_teddy	bob,teddy	look	perp,top	-	90
+follow_teddy_pearl	teddy,pearl	follow	perp,top	-	90
+zoomies_moss_pearl	moss,pearl	zoomies	perp,top	-	90
+greet_bob_pip	bob,pip	greet	perp,top	-	90
+dance_lavender_teddy	lavender,teddy	dance	perp,top	-	90
+keepAway_pip_moss	pip,moss	keepAway	perp,top	-	90
+line_bob_teddy_pearl	bob,teddy,pearl	line	perp,top	-	90
+twirl_pip_teddy	pip,teddy	twirl	perp,top	-	90
+hopAlong_moss_lavender	moss,lavender	hopAlong	perp,top	-	90
+littleRace_bob_pearl	bob,pearl	littleRace	perp,top	-	90
+peekaboo_teddy_pearl	teddy,pearl	peekaboo	perp,top	-	90
+mirrorDance_lavender_pip	lavender,pip	mirrorDance	perp,top	-	90
+danceOff_bob_moss	bob,moss	danceOff	perp,top	-	90
+shyWave_pearl_teddy	pearl,teddy	shyWave	perp,top	-	90
+groupCheer_bob_teddy_pearl	bob,teddy,pearl	groupCheer	perp,top	-	90
+conga_pip_lavender_teddy	pip,lavender,teddy	conga	perp,top	-	90
+congaLine_pip_pearl_moss	pip,pearl,moss	congaLine	perp,top	-	90

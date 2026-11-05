@@ -108,6 +108,8 @@ enum ContactDemo {
             for (k, p) in pairs.enumerated() {
                 ContactDemo.note(" summary pair=%d-%d touchTicks=%d holdPh=%d holdTicks=%d (%@) minGapFeat=%.1f minGapBody=%.1f medHoldFeat=%.1f medHoldBody=%.1f cm minHand=%.1f medHoldHand=%.1f cm(hand tip to the other skin, - = inside)", p.0, p.1, touch.count, holdPh ?? -1, hold.count, isHold == nil ? "most-touching-phase" : "stance-table-hold",
                                  mn(touch.map { $0.withF[k] }), mn(touch.map { $0.body[k] }), med(hold.map { $0.withF[k] }), med(hold.map { $0.body[k] }), mn(touch.map { $0.hand[k] }), med(hold.map { $0.hand[k] }))
+                // the WHOLE run, not only the ticks where the root distance said "touching" (round 2: leapfrog's summary read -0.2 while its own ticks went to -7.0, because the overlapping ticks were not "touching" ticks)
+                ContactDemo.note(" summaryAll pair=%d-%d ticks=%d minAllFeat=%.1f minAllBody=%.1f minAllHand=%.1f cm(every tick of the scene)", p.0, p.1, samples.count, mn(samples.map { $0.withF[k] }), mn(samples.map { $0.body[k] }), mn(samples.map { $0.hand[k] }))
             }
         }
     }
@@ -199,6 +201,18 @@ enum ContactDemo {
             _ = cast[0].brain?.idleStart(.sleep, cast[0].sim); cast[0].brain?.sleep.hold = 600
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             for a in cast.dropFirst() { let ok = a.brain?.idleStart(.sleep, a.sim) ?? false; a.brain?.sleep.hold = 600; note(" sleepPile join=%d", ok ? 1 : 0) }
+            // (round 2: the sleep pile's demolog was 113 bytes, no ticks and no SUMMARY, so nothing could be read from the real app) every 0.5 s for 40 s, then the same summary the other scenes print
+            note(" startEpoch=%.3f", Date().timeIntervalSince1970)
+            let bs = cast.compactMap(\.brain)
+            let gl = GapLog(bs)
+            for i in 0..<80 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                var dmin: Float = 99
+                for (x, p) in bs.enumerated() { for q in bs[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
+                note(" sleep t=%.1f %@%@", Double(i + 1) * 0.5, bs.map { String(format: "[%@ ph=%d]", "\($0.idleState.kind.map { "\($0)" } ?? "none")", $0.idleState.phase) }.joined(separator: " "), gl.sample(ph: bs.first?.idleState.phase ?? -1, dmin: dmin))
+            }
+            note(" endEpoch=%.3f", Date().timeIntervalSince1970)
+            gl.summary()
             return
         }
         if name == "lieDown" || name == "flop" {          // (flop = the quick plop-down pair; both go through the lie-down clearance)

@@ -41,5 +41,8 @@ print(f"{scene}: {len(sel)} frames, {dur:.1f} s real time (kept {lo/1000:.1f}..{
 try:
     for m in re.finditer(r" summary (pair=\S+) touchTicks=(\d+) holdPh=(-?\d+) holdTicks=(\d+) \((\S+)\) minGapFeat=(\S+) minGapBody=(\S+) medHoldFeat=(\S+) medHoldBody=(\S+) cm(?: minHand=(\S+) medHoldHand=(\S+) cm)?", open(f"{out}/{scene}.demolog").read()):
         print(f"{scene} SUMMARY {m[1]}: min gap over touching {m[6]} cm with features / {m[7]} body only; median over the hold ({m[5]}, phase {m[3]}, {m[4]} ticks at 0.2 s, of {m[2]} touching) {m[8]} / {m[9]} cm" + (f"; hand tip to skin: min over touching {m[10]} cm, hold median {m[11]} cm (- = inside)" if m[10] else ""))
+    # the whole run (every tick, not only the "touching" ones): the number that catches an overlap the touching filter skipped
+    for m in re.finditer(r" summaryAll (pair=\S+) ticks=(\d+) minAllFeat=(\S+) minAllBody=(\S+) minAllHand=(\S+) cm", open(f"{out}/{scene}.demolog").read()):
+        print(f"{scene} SUMMARY-ALL {m[1]}: min over all {m[2]} ticks {m[3]} cm with features / {m[4]} body only; hand tip {m[5]} cm")
 except Exception as ex:
     print("no gap summary:", ex)
