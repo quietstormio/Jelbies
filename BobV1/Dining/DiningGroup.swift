@@ -149,7 +149,7 @@ final class DiningGroup {
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
-        reserves = 0; gaveUp = false; age = 0
+        reserves = 0; gaveUp = false; age = 0; gatherT = 0
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
         savedFinished = brains.map { $0.onFinished }; savedGap = brains.map { $0.peerGap }; savedPeers = brains.map { $0.peers }
         for (i, b) in brains.enumerated() {
@@ -188,7 +188,10 @@ final class DiningGroup {
     static let trayClearance: Float = 0.7
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
     func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
-    private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
+    /// Every diner stands still ON his approach point as the floor rules leave it (not just near it: `ready` allows 0.5, which left the neighbours up to a metre off their spacing when the tray popped).
+    private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (simd_distance(floor($0), brains[$0].fixed(approachPoint(blob: $0))) < Self.gatherTol && isIdle(brains[$0])) } }
+    static let gatherTol: Float = 0.15, gatherSettle: Float = 0.3
+    private var gatherT: Float = 0
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
     private func beginApproach() {
@@ -288,7 +291,8 @@ final class DiningGroup {
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) { spawnTray() }
+            gatherT = gathered ? gatherT + dt : 0          // (all of them standing on their points for a moment)
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gatherT >= Self.gatherSettle && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) { spawnTray() }
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }

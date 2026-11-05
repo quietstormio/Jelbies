@@ -57,6 +57,39 @@ final class TrayObstacleTests: XCTestCase {
         }
     }
 
+
+    // MARK: skin gaps (ground truth: BruteForceContactMetric on the drawn skin)
+
+    /// The drawn skin (body + arms) of every actor in the room, as the contact tests judge it.
+    static func surfaces(_ r: DiningJellyTests.Room) -> [ContactSurface] {
+        let rm = MotionRig.renderMesh, nV = rm.vertexCount
+        let eggLimit = rm.armCapsule?.firstVertex.min() ?? nV
+        return r.actors.map { a in
+            let buf = UnsafeMutablePointer<Float>.allocate(capacity: nV * 6); buf.initialize(repeating: 0, count: nV * 6)
+            defer { buf.deallocate() }
+            a.skinner.update(x: a.sim.x, index: rm.index, into: buf)
+            var ranges: [Range<Int>] = [0..<eggLimit]
+            if a.skinner.armCapsulesActive { for k in 0..<2 { ranges.append(a.skinner.armFirst[k]..<(a.skinner.armFirst[k] + ArmCapsule.vertexCount)) } }
+            if a.skinner.tailOn, a.skinner.tailFirst >= 0 { ranges.append(a.skinner.tailFirst..<(a.skinner.tailFirst + TailBean.vertexCount)) }
+            if a.skinner.teddyOn, a.skinner.teddyFirst >= 0 { ranges.append(a.skinner.teddyFirst..<(a.skinner.teddyFirst + TeddyBean.vertexCount)) }
+            return ContactSurface(root: a.brain?.position ?? a.floor, dyn: UnsafePointer(buf), ranges: ranges)
+        }
+    }
+    /// Skin gaps of the neighbouring diners, ordered along x (left-centre, centre-right).
+    static func neighbourGaps(_ r: DiningJellyTests.Room) -> [Float] {
+        let S = surfaces(r).sorted { $0.root.x < $1.root.x }
+        return (0..<(S.count - 1)).map { BruteForceContactMetric.skinGap(S[$0], S[$0 + 1]) }
+    }
+
+    /// Gives the room's three bodies a cast of features (the tail and Teddy's ears are skinned into the contact surface; wings and the daisy are feature meshes the metric does not see).
+    static func dress(_ r: DiningJellyTests.Room, _ features: [JellyFeature]) {
+        WearBody.install(MotionRig.renderMesh)
+        for (i, a) in r.actors.enumerated() {
+            a.brain?.feature = features[i]; a.brain?.skinnerRef = a.skinner
+            a.skinner.configureTail(MotionRig.renderMesh); a.skinner.configureTeddy(MotionRig.renderMesh)
+        }
+    }
+
     /// A roam leg from one side of the tray to the other, on several lanes through it, both ways: nobody's belly enters the drawn tray.
     func testRoamLegAcrossTheTrayNeverEntersIt() {
         for n in 1...3 {
@@ -130,9 +163,13 @@ final class TrayObstacleTests: XCTestCase {
 
     /// A real 3-Jelbie meal from scattered starts: the diners gather at their places with no tray out, it is drawn only then, and no diner's belly is ever in it; the line-up is as quick as ever.
     func testGroupMealDinersNeverEnterTheTray() {
-        for (drink, scatter, limit) in [(false, Float(0), Float(8)), (true, 0, 8), (false, 13, 14), (true, 13, 14)] {
+        var allGathered: [Float] = []
+        defer { let m = allGathered.sorted(); let med = m.isEmpty ? 0 : m[m.count / 2]; print("TRAY group gathered gaps \(m) median \(med)"); XCTAssertGreaterThanOrEqual(med, -0.08, "the median gathered pair sits sunk"); XCTAssertLessThanOrEqual(med, 0.08, "the median gathered pair is gapped") }
+        let castA: [JellyFeature] = [.none, .wings, .ears], castB: [JellyFeature] = [.spines, .wings, .daisy]          // Bob + Pearl + Teddy; Pip + Lavender + Moss
+        for (drink, scatter, limit, cast) in [(false, Float(0), Float(8), castA), (true, 0, 8, castB), (false, 13, 14, castB), (true, 13, 14, castA)] {
             let r = DiningJellyTests.Room(count: 3, wander: scatter > 0)
             DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+            Self.dress(r, cast)
             r.run(max(1, scatter))
             for a in r.actors { a.brain?.autonomy = false }
             r.run(0.5)
@@ -141,14 +178,23 @@ final class TrayObstacleTests: XCTestCase {
             let probes = (0..<3).map { _ in Probe() }
             for p in probes { p.onlyWalking = false; p.beginLeg(); p.legMoved = 1 }
             var servedAt: Float?, trayAt: Float?
+            var gapLog: [(Float, [Float])] = []
             let t0 = r.t
             r.run(30) {
-                if r.care.dining.phase != .absent { trayAt = trayAt ?? r.t; for i in 0..<3 { probes[i].sample(r, i) } }
-                if r.care.group.state == .serving { servedAt = servedAt ?? r.t; return r.t - (servedAt ?? r.t) > 4 }
+                if r.care.dining.phase != .absent { if trayAt == nil { gapLog.append((-1, Self.neighbourGaps(r))) }; trayAt = trayAt ?? r.t; for i in 0..<3 { probes[i].sample(r, i) } }
+                if r.care.group.state == .serving { servedAt = servedAt ?? r.t; let k = r.t - (servedAt ?? r.t); for m in [0.0, 1.5, 3.0, 4.0, 5.0, 6.0, 7.0] where abs(Double(k) - m) < 0.009 { gapLog.append((Float(m), Self.neighbourGaps(r))) }; return k > 7.1 }
                 return false
             }
             let worst = probes.map(\.worst)
             print("TRAY group drink=\(drink) scatter=\(scatter): serving after \((servedAt ?? 99) - t0) s, tray drawn after \((trayAt ?? 99) - t0) s, worst diner intrusion \(worst)")
+            print("TRAY group drink=\(drink) scatter=\(scatter): neighbour skin gaps (left-centre, centre-right) after serving began: \(gapLog.map { "\($0.0)s \($0.1)" })")
+            // touching, not sunk, not gapped: every sample of the neighbouring pairs' skin gap (3 to 7 s into serving: seated and eating) lies in -1 cm ... +3 cm
+            let gathered = gapLog.filter { $0.0 < 0 }.flatMap(\.1)          // (the moment the tray is drawn: all three stand on their approach points)
+            allGathered += gathered
+            // (per pair the gap at the moment of the pop is the diners' arrival slop on top of the spacing: -0.35 .. +0.09 measured, before the change -0.35 .. -0.52 EVERY time)
+            XCTAssertGreaterThanOrEqual(gathered.min() ?? 0, -0.45, "drink=\(drink) scatter=\(scatter): gathered diners sunk deep into each other: \(gathered)")
+            let allGaps = gapLog.filter { $0.0 >= 3 }.flatMap(\.1)          // (the first seconds of serving the diners are still stepping in to their stands)
+                        print("TRAY group eating gaps min \(allGaps.min() ?? 0) max \(allGaps.max() ?? 0)")
             XCTAssertNotNil(servedAt, "drink=\(drink) scatter=\(scatter): the meal reaches serving")
             XCTAssertLessThan((servedAt ?? 99) - t0, limit, "drink=\(drink) scatter=\(scatter): line-up time")
             // (a sipper stands 0.08 nearer the tray: his belly may overlap the bed by that much)

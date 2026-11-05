@@ -97,6 +97,11 @@ nonisolated struct TrayLayout {
 }
 
 nonisolated enum DiningLayout {
+    /// The three diners stand on a shallow arc, the side two angled in: touching, never sunk into each other (it was a straight row 1.11 apart, 29 cm inside the 1.40 two bodies need side
+    /// by side: skin gaps -0.35 to -0.52 measured at the meal). The side stands are `arcX` out and `arcBack` behind the centre one: their root distance is 1.23, the touch distance of two
+    /// bodies on that diagonal with the side one angled in (measured 1.24 at 30 degrees, 1.18 at 45; TrayObstacleTests.testPlaceSpacingExploration), so the skins meet. `arcX` stays within the
+    /// floor's walkable width (DiningSpot.placeReachable) at most tray spots.
+    static let arcX: Float = 1.0, arcBack: Float = 0.72
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
         switch n {
@@ -108,15 +113,16 @@ nonisolated enum DiningLayout {
                               colliderHalf: SIMD2(0.42, 0.04), berryAngles: [-.pi / 2], berryArcRadius: 0.595, drinkCentre: SIMD2(-DiningDims.strawSide, -0.735 + DiningDims.mouthRestForward + DiningDims.sipForward + DiningDims.strawBack), trayCentreZ: 0.02, openFront: true)
         case 2:
             // 17 % wider than before (0.95 -> 1.11); the stands move out with it and back to clear the near rim by his real belly
+            // 2026-11-05: the two stand 1.42 apart (was 1.86: 46 cm of daylight between them): two plain bodies side by side touch at a root distance of 1.40 (docs/CONTACT_EMOTES.md, measured)
             return TrayLayout(n: 2, scale: s, half: SIMD2(1.11, 0.46),
-                              places: [TrayPlace(rel: SIMD2(-0.93, -0.96), yaw: 0.32), TrayPlace(rel: SIMD2(0.93, -0.96), yaw: -0.32)],
+                              places: [TrayPlace(rel: SIMD2(-0.71, -0.96), yaw: 0.32), TrayPlace(rel: SIMD2(0.71, -0.96), yaw: -0.32)],
                               colliderHalf: SIMD2(0.5, 0.26), berryAngles: [.pi, 0])
         default:
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
             return TrayLayout(n: 3, scale: s, half: SIMD2(1.0, 0.6),
-                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-1.11, -1.07), yaw: 0.25),
-                                       TrayPlace(rel: SIMD2(1.11, -1.07), yaw: -0.25)],
+                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-Self.arcX, -1.07 - Self.arcBack), yaw: 0.25),
+                                       TrayPlace(rel: SIMD2(Self.arcX, -1.07 - Self.arcBack), yaw: -0.25)],
                               colliderHalf: SIMD2(0.55, 0.3), berryAngles: [-.pi / 2, 150 * .pi / 180, 30 * .pi / 180])
         }
     }

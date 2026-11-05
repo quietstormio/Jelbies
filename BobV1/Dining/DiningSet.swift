@@ -133,24 +133,29 @@ nonisolated enum DiningSpot {
     /// 0.7) is not a place: its diner never gets there, and with a neighbour standing at his own spot the last diner is shut out for good (LineupTests nearMiddle,
     /// tray at x +-0.2: the side stand at x 1.31 resolves to 1.0). The centre column (stands at +-1.11) is within the slack.
     static let placeReachSlack: Float = 0.2
-    static func placeReachable(_ p: SIMD2<Float>) -> Bool {
+    /// A group's stands must be reached EXACTLY (`exactSlack`): the diners' spacing is what makes their skins touch (DiningLayout.arcX), and a stand the floor pushes sideways by up to 0.2 sank two
+    /// of them into each other (skin gaps -0.2 .. +0.35 measured).
+    static let exactSlack: Float = 0.03
+    static func placeReachable(_ p: SIMD2<Float>, slack: Float = placeReachSlack) -> Bool {
         let q = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.7, lowPropScale: RoomLayout.lowPropRadiusScale)
-        return abs(q.x - p.x) < placeReachSlack
+        return abs(q.x - p.x) < slack
     }
     static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
-        var open: [SIMD2<Float>] = []
+        var open: [SIMD2<Float>] = [], loose: [SIMD2<Float>] = []
         var cx: Float = -1.6
         while cx <= 1.6001 {
             var cz: Float = 0.6
             while cz <= maxZ + 1e-4 {
                 let o = SIMD2<Float>(cx, cz)
                 if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
-                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }) { open.append(o) }
+                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel, slack: L.n > 1 ? exactSlack : placeReachSlack) && (L.n == 1 || placeReachable(o + $0.rel + SIMD2(0, -GameCare.approachBack), slack: exactSlack)) }) { open.append(o) }
+                else if L.n > 1, isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
+                        L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }) { loose.append(o) }          // (reachable only within the old slack: used when no exact spot is free)
                 cz += 0.2
             }
             cx += 0.2
         }
-        if let pick = pickOpen(open) { return pick }
+        if let pick = pickOpen(open) ?? pickOpen(loose) { return pick }
         if !jellies.isEmpty {          // crowded: the on-screen, decor-free spot farthest from every Jelbie
             var bestO: SIMD2<Float>?, bestD: Float = -1
             var fx: Float = -1.6
