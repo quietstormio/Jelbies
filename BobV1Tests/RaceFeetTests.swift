@@ -14,6 +14,61 @@ final class RaceFeetTests: XCTestCase {
 
     private func empty() -> FeetAttachTests.FootFrame { .init(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity) }
 
+
+    /// Leg stretch of one body this frame: in the fitted body frame (rest coords, standing sole = 0) the lowest foot point (`sole`, + = foot lifted up
+    /// into the body), the highest foot point (`top`), the foot centre's horizontal offset from the body axis (`off`), and in the world how far the body
+    /// centroid is lifted above its standing height (`body`) and the lowest foot point above the floor (`foot`): body - foot is how far the legs trail the body.
+    struct Leg { var sole: Float = -.infinity, top: Float = -.infinity, off: Float = 0, body: Float = -.infinity, foot: Float = -.infinity, trail: Float = -.infinity }
+    static func leg(sim: SoftBody, ids: [[Int32]], dyn: [Float], standY: Float) -> Leg {
+        let pose = sim.bodyPose(iterations: 4), c0 = sim.restCentroid
+        var l = Leg(); l.body = sim.centroid().y - standY
+        var lowW = Float.infinity
+        for sd in 0..<2 where !ids[sd].isEmpty {
+            var lo = Float.infinity, hi = -Float.infinity, cx: Float = 0, cz: Float = 0
+            for id in ids[sd] {
+                let o = 6 * Int(id), p = SIMD3(dyn[o], dyn[o + 1], dyn[o + 2])
+                let q = c0 + pose.rotation.inverse.act(p - pose.centroid)
+                lo = min(lo, q.y); hi = max(hi, q.y); cx += q.x; cz += q.z; lowW = min(lowW, p.y)
+            }
+            let m = Float(ids[sd].count)
+            l.sole = max(l.sole, lo); l.top = max(l.top, hi); l.off = max(l.off, hypotf(cx / m, cz / m))
+        }
+        l.foot = lowW - sim.floorY; l.trail = l.body - l.foot
+        return l
+    }
+    final class LegStats { var by: [String: Leg] = [:]
+        func add(_ phase: String, _ l: Leg) {
+            var w = by[phase] ?? Leg()
+            w.sole = max(w.sole, l.sole); w.top = max(w.top, l.top); w.off = max(w.off, l.off); w.body = max(w.body, l.body); w.foot = max(w.foot, l.foot); w.trail = max(w.trail, l.trail)
+            by[phase] = w }
+        func dump(_ title: String) { for k in by.keys.sorted() { let w = by[k]!; MotionLog.write(String(format: "LEGSTRETCH %@ | %@ | max sole-in-body %.3f, max foot top %.3f, max foot offset from axis %.3f, max body lift %.3f, max foot lift %.3f, max body-minus-foot (trail) %.3f", title, k, w.sole, w.top, w.off, w.body, w.foot, w.trail)) } }
+    }
+
+    /// Reference: the hops the user already likes, in the room rig, same metrics.
+    func testLegStretchReferenceRoomHops() {
+        let moves: [(String, Float, (MotionRig) -> Void)] = [
+            ("room hop (startHopPlay)", 3, { $0.brain.startHopPlay(sim: $0.sim) }),
+            ("room hopscotch", 5, { $0.brain.idleForced = true; _ = $0.brain.idleStart(.hopscotch, $0.sim) }),
+            ("room skipHop", 4, { $0.brain.idleForced = true; _ = $0.brain.idleStart(.skipHop, $0.sim) }),
+            ("room bounce", 4, { $0.brain.idleForced = true; _ = $0.brain.idleStart(.bounce, $0.sim) }),
+            ("room walk", 6, { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) })]
+        for (name, secs, start) in moves {
+            let r = MotionRig(game: true); Self.keep.append(r); r.renderSamples = false
+            let standY = r.sim.centroid().y
+            let stats = LegStats()
+            start(r)
+            let ids = (0..<2).map { _ in [Int32]() }
+            _ = ids
+            r.run(secs) {
+                r.render()
+                let beans = r.skinner.beansActive && r.skinner.beanBlend > 0.05
+                let l = Self.leg(sim: r.sim, ids: beans ? r.bean : r.core, dyn: r.dyn, standY: standY)
+                stats.add("\(r.brain.gait.phase)\(beans ? " beans" : " embedded")", l)
+            }
+            stats.dump(name)
+        }
+    }
+
     /// What the stage does per fixed step with the race running (RaceTripTests.Room.step) plus what it does per frame: the bean refit and the skin pass
     /// (leash / tether observer armed), then the FeetAttachTests measurement of the DRAWN feet of each racer.
     private func race(_ name: String, course tier: CourseTier, seed: UInt64, taps: Float, jump: Bool, trip: Bool = false) {
@@ -29,6 +84,7 @@ final class RaceFeetTests: XCTestCase {
         care.race.courseTier = tier
         care.race.rivalSource = LocalRivalSourceFixed(waddle: 0.7)
         care.race.autoRate = nil
+        let legs = (0..<3).map { _ in LegStats() }, standY = room.actors.map { $0.sim.centroid().y }
         var dyn = room.actors.map { _ in [Float](repeating: 0, count: rm.vertexCount * 6) }
         let bean: [[[Int32]]] = room.actors.map { _ in [-1, 1].map { side in let f = rm.armCapsule!.beanFirst(side: side); return (f..<(f + FootBean.vertexCount)).map { Int32($0) } } }
         let core: [[[Int32]]] = room.actors.map { a in (0..<2).map { a.brain!.footCoreVertices($0, sim: a.sim, skinner: a.skinner) } }
@@ -78,6 +134,10 @@ final class RaceFeetTests: XCTestCase {
                     }
                 }
                 let slot = k + (beans ? 0 : 3)
+                do {
+                    let ph = b.race.stumbleT > 0 ? "trip (stumble)" : jumping ? "hop \(b.gait.phase)" : b.race.jumpQueued ? "jump queued" : "run/stand"
+                    legs[k].add("\(ph)\(beans ? " beans" : " embedded")", Self.leg(sim: a.sim, ids: beans ? bean[k] : core[k], dyn: dyn[k], standY: standY[k]))
+                }
                 if beans { run[k] = 0 } else { run[k] += 1; if run[k] > longest[k] { longest[k] = run[k]; longestAt[k] = String(format: "ends t=%.2f script=%@ gait=%@ jumping=%d stumbleT=%.2f", Float(n) * dt, "\(b.script)", "\(b.gait.phase)", jumping ? 1 : 0, b.race.stumbleT) } }
                 if f.overlap > worst[slot].overlap || f.soleRise > worst[slot].soleRise {
                     note[k] = String(format: "t=%.2f racer %d jumping=%d script=%@ gait=%@ sole %.3f centre %.3f radius %.3f overlap %.3f stretch %.2f beans=%d", Float(n) * dt, k, jumping ? 1 : 0, "\(b.script)", "\(b.gait.phase)", f.soleRise, f.centreHeight, f.radius, f.overlap, f.stretch, beans ? 1 : 0)
@@ -88,6 +148,7 @@ final class RaceFeetTests: XCTestCase {
         }
         jumps = care.race.sim?.racers[0].hurdlesCleared ?? 0; trips = care.race.sim?.racers[0].hurdlesHit ?? 0; kicks = 0
         MotionLog.write("RACEFEET \(name): player cleared \(jumps) hit \(trips); rivals cleared \((care.race.sim?.racers.dropFirst().map { $0.hurdlesCleared })  ?? []) hit \((care.race.sim?.racers.dropFirst().map { $0.hurdlesHit }) ?? [])")
+        for k in 0..<3 { legs[k].dump("\(name) racer \(k)") }
         for k in 0..<3 {
             MotionLog.write("RACEFEET \(name) racer \(k): longest feet-in run \(longest[k]) steps (\(Float(longest[k]) * dt) s) \(longestAt[k]); guard hits \(guardHits[k]) (\(guardNote[k])); worst frame: \(note[k])")
             XCTAssertEqual(guardHits[k], 0, "\(name) racer \(k): the leash / tether moved a foot piece (\(guardNote[k]))")
