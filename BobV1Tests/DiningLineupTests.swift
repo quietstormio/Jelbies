@@ -20,6 +20,7 @@ final class DiningLineupTests: XCTestCase {
         for a in r.actors { a.brain?.autonomy = false }
         r.run(0.5)
         let startAt = r.actors.map { $0.floor }
+        r.care.store.grant("berries", 3)          // (berries are a bag food: feed() returns early without one)
         if drink { r.care.drink() } else { r.care.feed() }
         var seen: [[Int]] = []
         var servedAt: Float?

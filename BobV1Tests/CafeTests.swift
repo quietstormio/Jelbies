@@ -100,7 +100,7 @@ final class CafeTests: XCTestCase {
         r.care.arranging = true
         XCTAssertEqual(r.care.cafeBlocker(), .arranging)
         r.care.arranging = false
-        r.care.feed(); step(r, 0.2)
+        r.care.store.grant("berries", 3); r.care.feed(); step(r, 0.2)          // (berries are a bag food: feed() returns early without one)
         XCTAssertEqual(r.care.cafeBlocker(), .meal)
         r.care.cancelGroup(); step(r, 3) { !r.care.trayOut && r.care.cafeBlocker() == nil }
         // a sleeper
