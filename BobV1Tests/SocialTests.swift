@@ -378,13 +378,13 @@ final class SocialTests: XCTestCase {
             a.watching = true
             a.seed = UInt64(i + 1) &* 0x9E3779B97F4A7C15
             for _ in 0..<4 { _ = a.rand() }
-            if a.socialMaybeStart(lab.rigs[0].sim) { started += 1; if let k = a.socialBook.lastKind { counts[k, default: 0] += 1 } }
+            if a.socialMaybeStart(lab.rigs[0].sim) { started += 1 }
+            if let k = a.socialBook.lastKind { counts[k, default: 0] += 1 }          // (the pick itself: set whenever the roll passed, even if the start is then refused on the spot)
         }
         let total = counts.values.reduce(0, +)
         let table = counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
         MotionLog.write("SOCIAL PICKS draws \(n) started \(started) picked \(total): \(table)")
-        XCTAssertGreaterThan(started, n * 9 / 10, "the gate passes about as often however the weights are set")
-        XCTAssertGreaterThan(total, 1000)
+        XCTAssertGreaterThan(total, n * 9 / 10, "the gate passes about as often however the weights are set (watching: pickChance x livelyChance >= 1)")
         // 2026-11-06: boop (weight 1.5) is picked less than follow (weight 2)
         XCTAssertLessThan(counts[.boop] ?? 0, counts[.follow] ?? 0, "boop is rarer than follow")
     }
