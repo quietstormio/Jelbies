@@ -21,7 +21,7 @@ grep -v '^#' scripts/contact_scenes.tsv | while IFS=$'\t' read -r NAME CAST KIND
     rm -f $OUT/$S.mark $OUT/$S.mov
     TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_NAME=$NAME TEST_RUNNER_CAPTURE_CAST=$CAST TEST_RUNNER_CAPTURE_KIND=$KIND TEST_RUNNER_CAPTURE_ANGLE=$ANGLE \
       TEST_RUNNER_CAPTURE_ARGS="$ARGS" TEST_RUNNER_CAPTURE_SECS=$SECS xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG \
-      -destination "$DEST" -derivedDataPath $DD -only-testing:BobV1UITests/ContactCaptureUITests/testScene </dev/null >$OUT/xcodebuild_$S.log 2>&1 &
+      -destination "$DEST" -derivedDataPath $DD -parallel-testing-enabled NO -only-testing:BobV1UITests/ContactCaptureUITests/testScene </dev/null >$OUT/xcodebuild_$S.log 2>&1 &
     TPID=$!
     # real video: recordVideo starts when the test writes <scene>.mark, stopped with SIGINT to its OWN pid (never pkill / killall)
     for i in {1..900}; do [ -f $OUT/$S.mark ] && break; kill -0 $TPID 2>/dev/null || break; sleep 0.5; done
