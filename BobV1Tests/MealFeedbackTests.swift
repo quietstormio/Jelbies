@@ -58,7 +58,8 @@ final class MealFeedbackTests: XCTestCase {
     func testRefusedTapsAnswerAtOnce() {
         let r = room([4, 6])
         let c = r.care
-        // empty bag
+        // empty bag (the rig stocks every food)
+        for _ in 0..<40 { c.store.use("pizza") }
         c.feed("pizza", jelly: nil)
         XCTAssertEqual(c.notice, "No Pizza left in the bag")
         XCTAssertFalse(c.trayOut)
