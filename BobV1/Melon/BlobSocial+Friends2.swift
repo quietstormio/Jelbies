@@ -46,7 +46,8 @@ extension BlobBrain {
     func closeFixed(_ p: SIMD2<Float>) -> SIMD2<Float> { socialBook.closePending = true; defer { socialBook.closePending = false }; return fixed(p) }
     var inCloseSocial: Bool { socialBook.closePending || (social?.closeOK == true && social?.end == nil) }
     /// The leapfrog hop is a big slow one (over a crouched partner): a longer, higher hop than the locked little hop, put back afterwards.
-    func leapGaitOn() { gait.hopDuration = 0.62; gait.hopApex = 0.66; gait.maxHop = 3.2 }
+    /// Apex 1.0 (was 0.66): the vaulter's centroid must clear the crouched partner (top ~0.5 m) by his own half height; airtime 0.26 sqrt(apex / 0.10) like every ballistic hop.
+    func leapGaitOn() { gait.hopDuration = 0.26 * sqrtf(1.0 / 0.10); gait.hopApex = 1.0; gait.maxHop = 3.2 }
     func leapGaitOff() { gait.hopDuration = 0.26; gait.hopApex = 0.10; gait.maxHop = 1.6 }
     func letGo() { socialBook.hold = false; socialBook.faceYaw = nil }
     /// Resets the one-shot flags when the step changes.
