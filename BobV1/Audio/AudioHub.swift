@@ -684,7 +684,7 @@ final class AudioHub {
     }
 
     /// A sleeper's quiet sleep-talk (hum / hmm / ooh, rarely a giggle): an existing clip in its own voice at low gain, logged `voice:<v>@sleep`.
-    /// It reads the other sleep sounds' times but changes none of them (no shared hush is set), so the snores and coos keep their rate.
+    /// It reads the other sleep sounds' times but changes none of them (no shared hush is read or set: only the SAME sleeper's own snore / coo is kept clear, in the scheduler), so the snores and coos keep their rate.
     func sleepMurmur(_ v: JellyVoice, jelly: Int, x: Float = 0) {
         let what = "voice:\(v.rawValue)@sleep"
         Self.requestSrcTap?(what, jelly)
@@ -692,7 +692,6 @@ final class AudioHub {
         let level = settings.sfxLevel * duck.gain
         let i = min(max(jelly, 0), 2)
         let now = Self.clock()
-        if now - lastSleepAny < 2.5 { diag(what, jelly, "hush sleepAny"); return }
         if now - lastVoice[i] < 2.2 || now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush voice"); return }
         if let l = lastPlay["murmur#\(jelly)"], now - l < 10 { diag(what, jelly, "minGap"); return }
         diag(what, jelly, nil, v: SleepMurmurTuning.gain * level)

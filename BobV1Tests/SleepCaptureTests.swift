@@ -203,4 +203,56 @@ final class SleepCaptureTests: XCTestCase {
         }
         try img.pngData()!.write(to: URL(fileURLWithPath: dir + "/antics_sheet.png"))
     }
+
+    /// 2026-11-06 contact sheet of the roll-over: one sleeper (the other two awake) at fixed roll states, 2x render cropped around him, game camera:
+    /// flat, rolling (u = 0.5), rolled onto a side, swinging over (u = 0.75), the other side. BEDS_CAP_DIR as above; output sleep_roll_sheet.png.
+    func testCaptureSleepRollSheet() throws {
+        guard let dir = ProcessInfo.processInfo.environment["BEDS_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("BEDS_CAP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        W = 603 * 2; H = 1311 * 2
+        defer { W = 603; H = 1311 }
+        let lab = setUpLab([SIMD2(-0.2, 0.3), SIMD2(2.2, 1.9), SIMD2(-2.3, 1.7)])
+        let (ren, target) = try renderer(device, lab)
+        let s = lab.rigs[0]
+        s.brain.idleForced = true
+        XCTAssertTrue(s.brain.idleStart(.sleep, s.sim)); s.brain.sleep.hold = 5000
+        var steps = 0
+        var lastStage = 0
+        func tick(_ n: Int) { for _ in 0..<n { lab.tick(watching: false); for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }; steps += 1
+            if s.brain.sleep.stage != lastStage || s.brain.idleState.kind != .sleep { lastStage = s.brain.sleep.stage; print("SLEEPROLLSHEET step \(steps): stage \(lastStage) kind \(String(describing: s.brain.idleState.kind)) wakeAsked \(s.brain.sleep.wakeAsked) t \(s.brain.sleep.t) hold \(s.brain.sleep.hold) morning \(s.brain.idleMorning)") } } }
+        while !s.brain.isNapping && steps < 60 * 20 { tick(1) }
+        tick(120)
+        s.brain.sleep.fid.nextShift = 1e6; s.brain.sleep.fid.nextHalf = 1e6; s.brain.sleep.fid.kind = 0
+        let maxR = SleepTuning.maxRoll
+        func toss(_ from: Float, _ to: Float, dur: Float = 4) { var f = s.brain.sleep.fid; f.kind = 3; f.u = 0; f.dur = dur; f.rollFrom = from; f.rollOff = from; f.rollGoal = to; s.brain.sleep.fid = f }
+        func settle() { var f = s.brain.sleep.fid; f.kind = 0; f.rollOff = f.rollGoal; s.brain.sleep.fid = f }
+        var cells: [(String, LockImage)] = []
+        let cam = GameCamera.camera(aspect: Float(603) / Float(1311), focus: 0)
+        func snap(_ label: String) {
+            let img = composite(lab, ren, target, hour: 15)
+            cells.append((String(format: "%@  (roll %+.2f rad, t = %.1f sim s)", label, s.brain.sleep.fid.rollOff, Float(steps) / 60), img))
+        }
+        snap("flat on his back")
+        toss(0, maxR); tick(120); snap("rolling over (halfway)")
+        tick(160); settle(); tick(120); snap("rolled onto one side")
+        toss(maxR, -maxR, dur: 6); tick(270); snap("swinging over to the other side")
+        tick(120); settle(); tick(120); snap("rolled onto the other side")
+        print("SLEEPROLLSHEET covered \(steps) steps = \(Float(steps) / 60) simulated seconds")
+        let c = s.sim.centroid()
+        let clip = cam.viewProj * SIMD4<Float>(c.x, c.y, c.z, 1)
+        let sx = (clip.x / clip.w * 0.5 + 0.5) * Float(W), sy = (1 - (clip.y / clip.w * 0.5 + 0.5)) * Float(H)
+        let cw = 520, ch = 520, bar = 52
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let sheet = UIGraphicsImageRenderer(size: CGSize(width: cw * cells.count, height: ch + bar), format: fmt).image { _ in
+            UIColor(white: 0.1, alpha: 1).setFill(); UIRectFill(CGRect(x: 0, y: 0, width: cw * cells.count, height: ch + bar))
+            for (k, cell) in cells.enumerated() {
+                if let cg = cell.1.cgImage(), let part = cg.cropping(to: CGRect(x: Int(sx) - cw / 2, y: Int(sy) - ch / 2 + 20, width: cw, height: ch)) {
+                    UIImage(cgImage: part).draw(in: CGRect(x: k * cw, y: bar, width: cw, height: ch))
+                }
+                (cell.0 as NSString).draw(in: CGRect(x: k * cw + 8, y: 6, width: cw - 12, height: bar - 6), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 16), .foregroundColor: UIColor.white])
+            }
+        }
+        try sheet.pngData()!.write(to: URL(fileURLWithPath: dir + "/sleep_roll_sheet.png"))
+    }
 }

@@ -342,8 +342,9 @@ nonisolated enum SleepMurmurTuning {
     }
 }
 
-/// When a napping Jelly murmurs. Pure like the other two: the hub feeds the clock, a random source and, per Jelly, when its own snore / coo is next due
-/// (`nextOwn`, 0 = unknown) and when it last made one (`lastOwn`), so a murmur never lands in the same Jelly's snore or coo (one voice per Jelbie).
+/// When a napping Jelly murmurs. Pure like the other two: the hub feeds the clock, a random source and, per Jelly, when ITS OWN next snore / coo is due
+/// (`nextOwn`, 0 = unknown) and when it last made one (`lastOwn`). A murmur waits (retries in 1...2.5 s) until it is clear of both, so it never lands in the same
+/// Jelbie's snore or coo (one voice per Jelbie). (A global "clear of every sleeper's sound" was tried: three sleepers snore / coo so often it starved the murmurs.)
 nonisolated struct SleepMurmurScheduler: Sendable {
     private(set) var next: [Double] = [0, 0, 0]
 
@@ -354,7 +355,7 @@ nonisolated struct SleepMurmurScheduler: Sendable {
             if next[i] == 0 { next[i] = now + random(SleepMurmurTuning.firstDelay) + Double(i) * 2.1 }
             guard now >= next[i] else { continue }
             let n = i < nextOwn.count ? nextOwn[i] : 0, l = i < lastOwn.count ? lastOwn[i] : -100
-            if (n > 0 && n - now < SleepMurmurTuning.clearBefore) || now - l < SleepMurmurTuning.clearAfter { next[i] = now + random(1.0...2.5); continue }          // (try again a moment later)
+            if (n > 0 && n - now < SleepMurmurTuning.clearBefore) || now - l < SleepMurmurTuning.clearAfter { next[i] = now + random(1.0...2.5); continue }
             next[i] = now + random(SleepMurmurTuning.interval)
             out.append((i, SleepMurmurTuning.pick(random: random)))
         }
