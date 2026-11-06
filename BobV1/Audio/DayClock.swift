@@ -99,6 +99,9 @@ nonisolated struct TimeLapse: Equatable, Sendable {
 nonisolated enum GameClockTuning {
     /// Real seconds that make one game hour while the app is open and in the foreground (60 -> a full day is 24 real minutes).
     static let realSecondsPerGameHour: Double = 60
+    /// While the player is OUT (a Town screen, race / show / volleyball lobby or game, café, park, groomer / spa) game time runs this many times faster
+    /// (2026-11-06, user: "make days go by a little faster when I go out somewhere"). 2.0: a game hour passes in 30 real seconds instead of 60, noticeable but gentle.
+    static let outingRateMul: Double = 2.0
     /// A brand-new game starts here, on Day 1.
     static let newGameHour: Double = 8
     /// Away at least this long (real seconds): the next launch / return starts at `freshMorningHour` on a new day.
@@ -135,6 +138,8 @@ final class DayClock {
     private var lastUptime: Double
     private var lastSaveUptime: Double
     private var paused = false
+    /// The player is out somewhere (see `setOutingRate`); only ever speeds the game clock (never the real-clock / forced / test modes).
+    private(set) var outing = false
     private(set) var offsetHours: Double
     private var offsetPhase: DayPhase?
     private(set) var lapse: TimeLapse?
@@ -202,7 +207,17 @@ final class DayClock {
         guard !followReal, forcedHour == nil else { return nil }
         var d = 7.5 - hour
         if d <= 0 { d += 24 }
-        return d * GameClockTuning.realSecondsPerGameHour
+        return d * GameClockTuning.realSecondsPerGameHour / effectiveRateMul
+    }
+
+    /// 1 at home, `outingRateMul` while out; always 1 when following the real clock or forced by `-ClockHour` (which is also what XCTest does).
+    var effectiveRateMul: Double { outing && !followReal && forcedHour == nil ? GameClockTuning.outingRateMul : 1 }
+
+    /// The player went out (true) or came home (false). The clock is advanced at the OLD rate first, so no elapsed time is mis-scaled.
+    func setOutingRate(_ on: Bool) {
+        guard on != outing else { return }
+        advance()
+        outing = on
     }
 
     /// The game clock's running time (game hours) while the game clock runs the day; nil when following the real clock or forced by `-ClockHour`.
@@ -229,7 +244,7 @@ final class DayClock {
         let u = uptime()
         defer { lastUptime = u }
         guard !followReal, !paused, forcedHour == nil else { return }
-        gameTime += min(max(u - lastUptime, 0), 1) / GameClockTuning.realSecondsPerGameHour
+        gameTime += min(max(u - lastUptime, 0), 1) * effectiveRateMul / GameClockTuning.realSecondsPerGameHour
         if u - lastSaveUptime >= 5 { save() }
     }
     private func save() {

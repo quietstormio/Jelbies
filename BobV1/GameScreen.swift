@@ -35,6 +35,11 @@ struct GameScreen: View {
     @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
     @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
     private var focus: BlobFocus { model.care.focus }
+    /// Out somewhere (a Town screen, a race / show / volleyball, the café, the park, the groomer): the game clock runs faster (DayClock.setOutingRate).
+    private var outing: Bool {
+        let c = model.care
+        return town != nil || c.race.active || c.show.active || c.volley.active || c.cafe.active || c.park.active || c.groom.active
+    }
     /// Town / Shop / Track, the gear's Settings and the Studio cover the whole game (the sheets leave part of it visible, so they do not count).
     private var covered: Bool { town != nil || settingsOpen || showStudio }
     /// Tells the close-up camera which part of the screen the Train card leaves free (GameCamera.trainFrame), as fractions of the whole screen.
@@ -371,8 +376,9 @@ struct GameScreen: View {
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
         .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: outing) { _, on in DayClock.shared.setOutingRate(on) }
         .onChange(of: covered) { _, c in model.coverUp = c }          // a full-screen screen hides the room: the stage renders at 5 fps until it closes (MelonController.applyFrameRate)
-        .onAppear { model.coverUp = covered }
+        .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
         .overlay { GuestArrivalOverlay(care: model.care) }
