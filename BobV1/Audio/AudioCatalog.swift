@@ -321,7 +321,7 @@ nonisolated struct SleepSoundScheduler: Sendable {
     }
 }
 
-// MARK: - sleep murmurs (2026-11-06): quiet sleep-talk from the EXISTING hum / hmm / ooh (and, rarely, giggle) clips, ON TOP of the snores and coos
+// MARK: - sleep murmurs (2026-11-06): quiet sleep-talk from the EXISTING hum / ooh (and, rarely, giggle) clips, ON TOP of the snores and coos
 
 nonisolated enum SleepMurmurTuning {
     /// Off = exactly the snores + coos of before (a test turns it off for the "before" numbers).
@@ -337,11 +337,11 @@ nonisolated enum SleepMurmurTuning {
     /// A murmur never starts within this long BEFORE the same sleeper's next snore / coo (it would be a second voice), nor this long after one.
     static let clearBefore: Double = 3.5, clearAfter: Double = 3.0
     static let giggleChance: Double = 0.06
-    /// hum / hmm / ooh (the cuddly ones, 40 / 30 / 30 %), and now and then a tiny giggle.
+    /// hum / ooh (50 / 50 %), and now and then a tiny giggle. NEVER .hmm or .mmhmm (user 2026-11-06: the hmm clip "sounds like a ghost").
     static func pick(random: (ClosedRange<Double>) -> Double) -> JellyVoice {
         if random(0...1) < giggleChance { return .giggle }
         let r = random(0...1)
-        return r < 0.4 ? .hum : (r < 0.7 ? .hmm : .ooh)
+        return r < 0.5 ? .hum : .ooh
     }
 }
 

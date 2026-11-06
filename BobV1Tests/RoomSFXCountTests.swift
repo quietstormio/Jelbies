@@ -207,7 +207,7 @@ final class SleepSoundPlayedTests: XCTestCase {
         let ts = log.filter { !Self.isMurmur($0.1) }.map { $0.0 }; for (a, b) in zip(ts, ts.dropFirst()) { XCTAssertGreaterThanOrEqual(b - a, 2.4, "two sleep sounds overlap") }
     }
 
-    static func isMurmur(_ n: String) -> Bool { ["hum_", "hmm_", "ooh_", "giggle_"].contains { n.hasPrefix($0) } }
+    static func isMurmur(_ n: String) -> Bool { ["hum_", "ooh_", "giggle_"].contains { n.hasPrefix($0) } }
 
     /// One run of `minutes` simulated minutes: the PLAYED sounds (past every guard) per kind, and the (jelly, time) of every PLAYED sleep sound via the drop tap.
     private func playedRun(minutes: Int, snoreSpeedUp: Double, murmurs: Bool) -> (snores: Int, coos: Int, murmurs: Int, hum: Int, hmm: Int, ooh: Int, giggle: Int, minMurmurGap: Double) {
@@ -227,7 +227,7 @@ final class SleepSoundPlayedTests: XCTestCase {
         print("SLEEPPLAYED-DETAIL speedUp=\(snoreSpeedUp) murmurs=\(murmurs): requests \(req.sorted { $0.key < $1.key }) played \(played.sorted { $0.key < $1.key }) @sleep req=\(sleepReq) played=\(sleepPlayed)")
         XCTAssertEqual(sleepPlayed, m.count, "every fired murmur is a PLAYED @sleep request")
         return (log.filter { $0.1.hasPrefix("snore_") }.count, log.filter { $0.1.hasPrefix("sleep_coo_") }.count, m.count,
-                m.filter { $0.1.hasPrefix("hum_") }.count, m.filter { $0.1.hasPrefix("hmm_") }.count, m.filter { $0.1.hasPrefix("ooh_") }.count, m.filter { $0.1.hasPrefix("giggle_") }.count, 0)
+                m.filter { $0.1.hasPrefix("hum_") }.count, m.filter { $0.1.hasPrefix("hmm_") || $0.1.hasPrefix("mmhmm_") }.count, m.filter { $0.1.hasPrefix("ooh_") }.count, m.filter { $0.1.hasPrefix("giggle_") }.count, 0)
     }
 
     /// BEFORE (r1058: snore x1.35, no murmurs) vs AFTER (snore x1.35*1.08, murmurs): PLAYED counts over 60 simulated minutes of three sleepers.
@@ -241,7 +241,7 @@ final class SleepSoundPlayedTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Double(after.snores), 0.9 * Double(before.snores), "snores keep >= 90 % of their prior rate")
         XCTAssertGreaterThanOrEqual(Double(after.coos), 0.88 * Double(before.coos), "coos keep ~90 % of their prior rate (0.88 = the 60 min random noise on 0.90)")
         XCTAssertGreaterThan(after.murmurs, 60 * 3 / 2, "murmurs: about one per sleeper per 45 s")
-        XCTAssertGreaterThan(after.hum, 0); XCTAssertGreaterThan(after.hmm, 0); XCTAssertGreaterThan(after.ooh, 0)
+        XCTAssertGreaterThan(after.hum, 0); XCTAssertGreaterThan(after.ooh, 0); XCTAssertEqual(after.hmm, 0, "never the hmm clip (user: sounds like a ghost)")
         XCTAssertLessThan(after.giggle, after.murmurs / 4, "the giggle is rare")
     }
 
