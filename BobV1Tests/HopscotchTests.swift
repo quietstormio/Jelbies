@@ -188,6 +188,44 @@ final class HopscotchTests: XCTestCase {
         XCTAssertTrue(DecorField.shared.coUsers[uid] == nil && DecorField.shared.occupant[uid] == nil, "the court is released")
     }
 
+    // MARK: the Go home pill is cut out of the park's roam floor
+
+    /// Both orientations: no free front-row spot has a body under the Go home pill, the floor still reaches the new front edge at the sides, and the slide's rider lands on free floor.
+    func testParkRoamFloorKeepsOffTheGoHomePillAndHoldsTheSlideLanding() {
+        RoomLayout.apply(RoomCatalog.park)
+        for (label, aspect) in [("portrait", Float(393.0 / 852.0)), ("landscape", Float(852.0 / 393.0))] {
+            GameCamera.configurePark()
+            guard let rf = GameCamera.refreshRoam(aspect: aspect) else { return XCTFail("\(label): no roam floor") }
+            let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
+            let cam = GameCamera.camera(aspect: aspect)
+            let pill = [HUDLayout.parkHomeRect(aspect: aspect)]
+            XCTAssertGreaterThanOrEqual(rf.maxZ, 5.75,  // (the cap is 6.0; the polygon's rows are 0.25 apart and end at 5.78)
+                                   "\(label): the floor reaches the front edge")
+            var hits = 0, freeFront = 0
+            for (i, z) in rf.zs.enumerated() where z >= 4.0 {
+                for span in rf.free[i] {
+                    var x = span.lowerBound
+                    while x <= span.upperBound {
+                        freeFront += 1
+                        if HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: size, rails: pill) { hits += 1 }
+                        x += 0.1
+                    }
+                }
+            }
+            XCTAssertEqual(hits, 0, "\(label): \(hits) free spots have a body under the Go home pill")
+            XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front")
+            // the sides of the front row stay reachable
+            XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
+            // the slide's rider lands inside a free span, with a body clear of the pill
+            DecorField.shared.set(ParkToys.placed)
+            let sf = DecorField.shared.foot(ParkToys.slideUID)!
+            let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))
+            let row = rf.zs.indices.min { abs(rf.zs[$0] - landing.y) < abs(rf.zs[$1] - landing.y) }!
+            XCTAssertTrue(rf.free[row].contains { $0.contains(landing.x) }, "\(label): landing \(landing) is not in a free span of row z \(rf.zs[row])")
+            XCTAssertFalse(HUDLayout.bodyHitsRail(x: landing.x, z: landing.y, viewProj: cam.viewProj, size: size, rails: pill), "\(label): the rider lands under the Go home pill")
+        }
+    }
+
     // MARK: the slide is solid
 
     /// The park has no tunnel, and over a long soak (many seeds) nobody has a root inside the slide's footprint except while really using it (the ladder, the platform, the ride, getting up).
