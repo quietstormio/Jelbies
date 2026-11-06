@@ -85,6 +85,7 @@ final class AudioHub {
     @ObservationIgnored private var lastFoot: [Double] = [0, 0, 0]
     @ObservationIgnored private var snores = SnoreScheduler()
     @ObservationIgnored private var sleepSounds = SleepSoundScheduler()
+    @ObservationIgnored private var murmurs = SleepMurmurScheduler()
     /// Called for the Jelly that snores now (the sleep z's ride it).
     @ObservationIgnored var onSnore: ((Int) -> Void)?
     /// The silence filler spoke for this slot (the brain opens its mouth a moment): AmbientVoice.swift.
@@ -326,6 +327,13 @@ final class AudioHub {
         }
         for (i, kind) in sleepSounds.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
             sleepSound(kind, jelly: i, x: i < xs.count ? xs[i] : 0)
+        }
+        if SleepMurmurTuning.enabled {          // (sleep-talk, sleepers only, ON TOP of the snores / coos: they keep their own schedules and hush)
+            let lastOwn = (0..<3).map { max(lastPlay["snore#\($0)"] ?? -100, lastPlay["sleepsound#\($0)"] ?? -100) }
+            let nextOwn = (0..<3).map { j in [snores.next[j], sleepSounds.next[j]].filter { $0 > 0 }.min() ?? 0 }
+            for (i, v) in murmurs.due(napping: napping, now: now, nextOwn: nextOwn, lastOwn: lastOwn, random: { Double.random(in: $0) }) {
+                sleepMurmur(v, jelly: i, x: i < xs.count ? xs[i] : 0)
+            }
         }
         for i in moods.indices {
             if let old = lastMood[i], old != moods[i] {
@@ -673,6 +681,25 @@ final class AudioHub {
         case .softSnore:
             fire(JellyVoiceSet.snoreFile(character: c, roll: 0.99), volume: min(1, SFX.snore.gain * SleepSoundScheduler.softSnoreGain * level * AudioMix.sfxMaster), pan: panFor(x: x))
         }
+    }
+
+    /// A sleeper's quiet sleep-talk (hum / hmm / ooh, rarely a giggle): an existing clip in its own voice at low gain, logged `voice:<v>@sleep`.
+    /// It reads the other sleep sounds' times but changes none of them (no shared hush is set), so the snores and coos keep their rate.
+    func sleepMurmur(_ v: JellyVoice, jelly: Int, x: Float = 0) {
+        let what = "voice:\(v.rawValue)@sleep"
+        Self.requestSrcTap?(what, jelly)
+        if let w = gateWhy() { diag(what, jelly, w); return }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        if now - lastSleepAny < 2.5 { diag(what, jelly, "hush sleepAny"); return }
+        if now - lastVoice[i] < 2.2 || now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush voice"); return }
+        if let l = lastPlay["murmur#\(jelly)"], now - l < 10 { diag(what, jelly, "minGap"); return }
+        diag(what, jelly, nil, v: SleepMurmurTuning.gain * level)
+        lastPlay["murmur#\(jelly)"] = now
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
+        let c = JellyRoster.character(jelly)
+        fire(JellyVoiceSet.file(character: c, v, variant: Int.random(in: 1...3)), volume: min(1, SleepMurmurTuning.gain * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, v))
     }
 
     func raceCountdownBeep() { play(.countdownBeep) }

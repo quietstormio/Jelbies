@@ -258,7 +258,8 @@ nonisolated struct Fader: Equatable, Sendable {
 /// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
 nonisolated struct SnoreScheduler: Sendable {
     /// 2026-11-06 "play more often": the snore pace is 13...24 s and 5...12 s first, divided by `speedUp` (a test sets it to 1 for the "before").
-    nonisolated(unsafe) static var speedUp: Double = 1.35
+    /// 2026-11-06 (again): x1.3 more on top (user: "little snoring"), so 1.35 * 1.3.
+    nonisolated(unsafe) static var speedUp: Double = 1.35 * 1.3
     static var interval: ClosedRange<Double> { (13 / speedUp)...(24 / speedUp) }        // was 6...10, then 20...40 (inaudible), then 13...24
     static var firstDelay: ClosedRange<Double> { (5 / speedUp)...(12 / speedUp) }
     static let hubGap: Double = 3.5
@@ -315,6 +316,47 @@ nonisolated struct SleepSoundScheduler: Sendable {
             next[i] = now + random(Self.interval)
             lastAny = now
             out.append((i, random(0...1) < Self.softSnoreChance ? .softSnore : .coo))
+        }
+        return out
+    }
+}
+
+// MARK: - sleep murmurs (2026-11-06): quiet sleep-talk from the EXISTING hum / hmm / ooh (and, rarely, giggle) clips, ON TOP of the snores and coos
+
+nonisolated enum SleepMurmurTuning {
+    /// Off = exactly the snores + coos of before (a test turns it off for the "before" numbers).
+    nonisolated(unsafe) static var enabled = true
+    /// The snore pace of r1058 was x1.35; 2026-11-06 "a little more snoring": x1.3 more (applied in `SnoreScheduler.speedUp`; a test sets it back for the "before").
+    static let snoreBoost: Double = 1.3
+    /// One murmur per sleeper about every 30...60 s (the first 12...30 s after he falls asleep). Quiet: well under a voice's usual 0.7.
+    static let interval: ClosedRange<Double> = 30...60, firstDelay: ClosedRange<Double> = 12...30
+    static let gain: Float = 0.3
+    /// A murmur never starts within this long BEFORE the same sleeper's next snore / coo (it would be a second voice), nor this long after one.
+    static let clearBefore: Double = 3.5, clearAfter: Double = 3.0
+    static let giggleChance: Double = 0.06
+    /// hum / hmm / ooh (the cuddly ones, 40 / 30 / 30 %), and now and then a tiny giggle.
+    static func pick(random: (ClosedRange<Double>) -> Double) -> JellyVoice {
+        if random(0...1) < giggleChance { return .giggle }
+        let r = random(0...1)
+        return r < 0.4 ? .hum : (r < 0.7 ? .hmm : .ooh)
+    }
+}
+
+/// When a napping Jelly murmurs. Pure like the other two: the hub feeds the clock, a random source and, per Jelly, when its own snore / coo is next due
+/// (`nextOwn`, 0 = unknown) and when it last made one (`lastOwn`), so a murmur never lands in the same Jelly's snore or coo (one voice per Jelbie).
+nonisolated struct SleepMurmurScheduler: Sendable {
+    private(set) var next: [Double] = [0, 0, 0]
+
+    mutating func due(napping: [Bool], now: Double, nextOwn: [Double], lastOwn: [Double], random: (ClosedRange<Double>) -> Double) -> [(jelly: Int, voice: JellyVoice)] {
+        var out: [(jelly: Int, voice: JellyVoice)] = []
+        for i in napping.indices where i < next.count {
+            guard napping[i] else { next[i] = 0; continue }
+            if next[i] == 0 { next[i] = now + random(SleepMurmurTuning.firstDelay) + Double(i) * 2.1 }
+            guard now >= next[i] else { continue }
+            let n = i < nextOwn.count ? nextOwn[i] : 0, l = i < lastOwn.count ? lastOwn[i] : -100
+            if (n > 0 && n - now < SleepMurmurTuning.clearBefore) || now - l < SleepMurmurTuning.clearAfter { next[i] = now + random(1.0...2.5); continue }          // (try again a moment later)
+            next[i] = now + random(SleepMurmurTuning.interval)
+            out.append((i, SleepMurmurTuning.pick(random: random)))
         }
         return out
     }

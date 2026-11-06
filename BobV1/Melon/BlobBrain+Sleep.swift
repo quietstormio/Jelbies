@@ -131,12 +131,17 @@ enum SleepTuning {
     /// The breathing ripple (was 0.5: too faint to read).
     static let breathKick: Float = 0.9
     /// Sleep fidgets: a shift every `shiftEvery` s, a twitch every `twitchEvery`, a half-wake every `halfEvery` (Reduce Motion: smaller and x2.5 rarer).
-    static let shiftEvery: ClosedRange<Float> = 20...45, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
+    static let shiftEvery: ClosedRange<Float> = 9...22, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
     // (2026-11-04: the turn used to wander up to +-0.5 rad at 0.12 rad/s and read as a slow clockwise spin; now small, slow, alternating and always back to centre)
-    static let maxRoll: Float = 0.30, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
+    // (2026-11-06 "rolling over like a kid in bed": maxRoll 0.30 -> `maxRoll` below, shifts about 2.2x as often, and 60 % of them are roll-overs; see `rollRateMax`)
+    static let maxRoll: Float = 0.75, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
     /// A toss / turn eases (smoothstep, so it starts and ends at rest) over this long; nothing a sleeper does is faster. (2026-11-05: they "twitch": the old toss
     /// popped back to flat the frame its constant-rate chase arrived, and there were 0.45 s arm / foot twitches. Both gone.)
     static let tossTime: ClosedRange<Float> = 1.8...3.0
+    /// A roll-over is never faster than this many rad/s of smoothstep-AVERAGE speed (peak = 1.5x): a swing of d rad takes at least d / rollRateMax s, so a big roll
+    /// from one side to the other (up to 2 * maxRoll = 1.5 rad) takes 6 s and a roll from the back onto a side (0.45...0.75 rad) 1.8...3 s. Peak 0.375 rad/s =
+    /// 0.0063 rad per 60 Hz frame, peak angular acceleration 6 * 1.5 / 6^2 = 0.25 rad/s^2: far calmer than the old toss (1.1) and the SleepCalmTests bounds.
+    static let rollRateMax: Float = 0.25
     static let driftMax: Float = 0.22, driftMaxBed: Float = 0.07
     /// A finger on him for less than this wakes him gently; longer = a real pick up (the sleep is dropped and the touch play takes over).
     static let tapTime: Float = 0.9
@@ -619,12 +624,17 @@ extension BlobBrain {
         let T = SleepTuning.self
         let r = rand()
         f.u = 0
-        if r < 0.45 {         // toss: roll over onto the other side (alternating, bounded, slow) and stay there
-            f.kind = 3; f.dur = rand(T.tossTime.lowerBound, T.tossTime.upperBound)
+        if r < 0.6 {          // roll over: from the back onto a random side; from a side back onto the back or over onto the other side (random, then he stays a while)
+            f.kind = 3
             f.rollFrom = f.rollOff
-            let side: Float = f.rollOff > 0.02 ? -1 : (f.rollOff < -0.02 ? 1 : f.rSign)
-            f.rSign = -side
-            f.rollGoal = side * rand(0.6, 1) * T.maxRoll * sc
+            let amp = rand(0.6, 1) * T.maxRoll * sc
+            if abs(f.rollOff) < 0.02 {
+                f.rollGoal = (rand() < 0.5 ? -1 : 1) * amp
+            } else {
+                let side: Float = f.rollOff > 0 ? 1 : -1
+                f.rollGoal = rand() < 0.45 ? 0 : -side * amp
+            }
+            f.dur = max(rand(T.tossTime.lowerBound, T.tossTime.upperBound), abs(f.rollGoal - f.rollFrom) / T.rollRateMax)
         } else if r < 0.7 {   // a slow lean to one side and back
             f.kind = 1; f.dur = rand(2.6, 3.6); f.wigAmp = (rand() < 0.5 ? -1 : 1) * 0.08 * sc
         } else if sleep.bed < 0 || r < 0.9 {  // a slight change of where he lies
