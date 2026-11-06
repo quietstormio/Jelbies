@@ -1,32 +1,54 @@
 //
 //  FriendsUI.swift
 //  Asking a friend over (2026-10-25): the Town's Friends page (one card per visitor who is a Friend of the Jelbies: who they are, which of the player's Jelbies
-//  they know and how well, and ONE "Invite over" button: they come in the evening and go home in the morning), the invite button that a visitor's card at the
-//  Park shares, and the guest's own card at home (a tap on him). Rules: Park/GameCare+Guest.swift. Views only.
+//  they know and how well, and the two buttons "Play date" and "Sleepover": a sleepover friend comes in the evening and goes home in the morning), the invite
+//  chooser that a visitor's card at the Park shares, and the guest's own card at home (a tap on him). Rules: Park/GameCare+Guest.swift. Views only.
 //
 
 import SwiftUI
 
-/// "Invite over": ONE button (they come in the evening, go home in the morning). Used on a visitor's card.
+/// "Invite over": one button that opens the two choices (Play date / Sleepover). Used on a visitor's card.
 struct InviteChooser: View {
     let care: GameCare
     let visitorID: Int
     var after: () -> Void = {}
+    @State private var choosing = false
 
     var body: some View {
+        if !choosing {
+            Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.2)) { choosing = true } } label: {
+                HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Invite over") }
+                    .font(SK.font(16, .black)).foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 46)
+                    .background(Capsule().fill(SK.pinkStrong))
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("invite-over")
+        } else {
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    choice(.playDate)
+                    choice(.sleepover)
+                }
+                Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.2)) { choosing = false } } label: {
+                    Text("Not now").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("invite-cancel")
+            }
+        }
+    }
+
+    private func choice(_ kind: GuestVisit.Kind) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            if care.inviteFriend(visitorID) { after() }
+            if care.inviteFriend(visitorID, kind: kind) { after() }
         } label: {
-            VStack(spacing: 1) {
-                HStack(spacing: 8) { Image(systemName: GuestVisit.Kind.sleepover.symbol); Text(GuestVisit.Kind.sleepover.title) }
-                    .font(SK.font(16, .black))
-                Text(GuestVisit.Kind.sleepover.blurb).font(SK.font(11, .bold)).opacity(0.85)
+            VStack(spacing: 2) {
+                HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }.font(SK.font(15, .black))
+                Text(kind == .playDate ? "10 to 15 minutes" : "Until morning").font(SK.font(11, .bold)).opacity(0.75)
             }
-            .foregroundStyle(.white).frame(maxWidth: .infinity, minHeight: 46)
-            .background(Capsule().fill(SK.pinkStrong))
+            .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.honey))
         }
-        .buttonStyle(.plain).accessibilityLabel("Invite over").accessibilityHint(GuestVisit.Kind.sleepover.blurb).accessibilityIdentifier("invite-over")
+        .buttonStyle(.plain).accessibilityLabel(kind.title).accessibilityHint(kind.blurb).accessibilityIdentifier("invite-\(kind.rawValue)")
     }
 }
 
@@ -104,7 +126,7 @@ struct FriendsScreen: View {
                 Circle().fill(tint(v.colour)).frame(width: 40, height: 40).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(line).font(SK.font(17, .black)).foregroundStyle(SK.ink)
-                    Text(GuestVisit.Kind.sleepover.blurb).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text(cur.kind.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 4)
                 if !cur.arrived {
@@ -144,20 +166,23 @@ struct FriendsScreen: View {
                     ForEach(care.jellies, id: \.id) { j in chip(j, level: v.level(with: j.character), friend: v.name) }
                 }
             }
-            Button {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                if care.inviteFriend(v.id) { goHome() }
-            } label: {
-                VStack(spacing: 1) {
-                    HStack(spacing: 6) { Image(systemName: GuestVisit.Kind.sleepover.symbol); Text(GuestVisit.Kind.sleepover.title) }.font(SK.font(15, .black))
-                    Text(GuestVisit.Kind.sleepover.blurb).font(SK.font(11, .bold)).opacity(0.8)
+            HStack(spacing: 8) {
+                ForEach([GuestVisit.Kind.playDate, .sleepover], id: \.self) { kind in
+                    Button {
+                        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                        if care.inviteFriend(v.id, kind: kind) { goHome() }
+                    } label: {
+                        VStack(spacing: 1) {
+                            HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }.font(SK.font(15, .black))
+                            Text(kind.subtitle).font(SK.font(11, .bold)).opacity(0.8)
+                        }
+                        .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46).padding(.vertical, 3)
+                        .background(Capsule().fill(SK.honey.opacity(free ? 1 : 0.4)))
+                    }
+                    .buttonStyle(.plain).disabled(!free)
+                    .accessibilityLabel("\(kind.title) with \(v.name)").accessibilityHint(kind.blurb).accessibilityIdentifier("friends-\(kind.rawValue)-\(v.id)")
                 }
-                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(SK.honey.opacity(free ? 1 : 0.4)))
             }
-            .buttonStyle(.plain).disabled(!free)
-            .accessibilityLabel("Invite \(v.name) over").accessibilityHint(GuestVisit.Kind.sleepover.blurb).accessibilityIdentifier("friends-invite-\(v.id)")
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
@@ -169,7 +194,7 @@ struct FriendsScreen: View {
         let t = JellyRoster.tint(j.character)
         return HStack(spacing: 5) {
             Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 14, height: 14)
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 1.5))
+                .overlay(Circle().strokeBorder(SK.muted.opacity(0.45), lineWidth: 1.5))
             Text(j.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
             if level == .stranger {
                 Text("not yet").font(SK.font(11, .bold)).foregroundStyle(SK.muted)

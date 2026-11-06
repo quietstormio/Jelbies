@@ -107,7 +107,7 @@ extension GameCare {
             j.refreshLook(force: false)
         }
         // a sleepover guest leaves with the morning: the usual goodbye
-        if let v = guestBook.visit, v.arrived { guestBook.endNow(now: Date().timeIntervalSince1970) }
+        if let v = guestBook.visit, v.arrived, v.kind == .sleepover { guestBook.endNow(now: Date().timeIntervalSince1970) }
         nightSkip.skips += 1
     }
 

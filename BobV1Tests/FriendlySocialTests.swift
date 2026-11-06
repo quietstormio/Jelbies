@@ -1,7 +1,7 @@
 //
 //  FriendlySocialTests.swift
 //  The six "we like each other" socials (BlobSocial+Friends.swift) each start, run to the end and let go, with both on the floor; the guest's clock rules
-//  (Park/GuestBook.swift): every visit ends the next morning, a visit that ended long ago has "gone home", one that ended a moment ago is waved off.
+//  (Park/GuestBook.swift): the sleepover ends the next morning, a visit that ended long ago has "gone home", one that ended a moment ago is waved off.
 //
 
 import XCTest
@@ -39,11 +39,12 @@ final class FriendlySocialTests: XCTestCase {
     func testGuestClockRules() {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
         let evening = cal.date(from: DateComponents(year: 2026, month: 10, day: 24, hour: 19, minute: 0))!
-        let end = GuestRules.endsAt(arrival: evening, calendar: cal)
+        let end = GuestRules.endsAt(.sleepover, arrival: evening, calendar: cal)
         XCTAssertEqual(cal.dateComponents([.day, .hour, .minute], from: end), DateComponents(day: 25, hour: 7, minute: 30))
         let late = cal.date(from: DateComponents(year: 2026, month: 10, day: 25, hour: 2, minute: 0))!
-        XCTAssertEqual(cal.component(.day, from: GuestRules.endsAt(arrival: late, calendar: cal)), 25)
-        // (the 10...15 minute play date is gone: an old "playDate" save ends in the morning like the rest, see GuestEveningTests)
+        XCTAssertEqual(cal.component(.day, from: GuestRules.endsAt(.sleepover, arrival: late, calendar: cal)), 25)
+        let play = GuestRules.endsAt(.playDate, arrival: evening, calendar: cal, roll: 0.5)
+        XCTAssertEqual(play.timeIntervalSince(evening), 750, accuracy: 1)
 
         var v = GuestVisit(visitor: 1, kind: .sleepover, invitedAt: 100)
         XCTAssertEqual(GuestRules.verdict(v, now: 200), .stay, "invited, not here yet")
@@ -52,10 +53,9 @@ final class FriendlySocialTests: XCTestCase {
         XCTAssertEqual(GuestRules.verdict(v, now: 900), .stay)
         XCTAssertEqual(GuestRules.verdict(v, now: 1000 + 600), .goodbye, "the app is back in the morning: the goodbye")
         XCTAssertEqual(GuestRules.verdict(v, now: 1000 + GuestTuning.graceAfterSleepover + 1), .wentHome)
-        XCTAssertEqual(GuestRules.note("Poppy"), "Poppy went home this morning")
+        XCTAssertEqual(GuestRules.note("Poppy", .sleepover), "Poppy went home after the sleepover")
         v.kind = .playDate
-        XCTAssertEqual(GuestRules.verdict(v, now: 1000 + 600), .goodbye, "an old playDate save is judged like the evening visit")
-        XCTAssertEqual(GuestRules.verdict(v, now: 1000 + GuestTuning.graceAfterSleepover + 1), .wentHome)
+        XCTAssertEqual(GuestRules.verdict(v, now: 1000 + GuestTuning.graceAfterPlayDate + 1), .wentHome)
     }
 
     func testGuestBookKeepsOneVisitAcrossRelaunch() {

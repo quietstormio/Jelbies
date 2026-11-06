@@ -486,7 +486,7 @@ struct GameScreen: View {
             care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
             for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
             NSLog("[arrival] invite")
-            care.inviteFriend(vid)
+            care.inviteFriend(vid, kind: .playDate)
         }
         // capture aid: -NeedsDemo bubble (the bubble pops, its tap opens Feed, he eats, it poofs) | roster (open it, tap Bob's card)
         if let demo = d.string(forKey: "NeedsDemo") {

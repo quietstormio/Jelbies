@@ -1,8 +1,9 @@
 //
 //  GuestBook.swift
 //  A friend over (2026-10-25): from a visitor's card at the Park, or the Town's Friends page, the player invites ONE friend (Friend level or better).
-//  Since 2026-11-05 every visit is the same: the friend comes in the EVENING (17:00 on) and goes home the next morning (7:30). `GuestVisit.Kind` keeps
-//  both old cases so an old save decodes; nothing reads the kind any more. While he is coming or here the Jelly Wash is closed. This file is the data and the rules; the
+//  Two kinds (as before): a Play date (comes at any hour after the knock, stays 10...15 minutes) and a Sleepover. Since 2026-11-05 a Sleepover only COMES in the
+//  evening (17:00 on, GuestRules.canArrive; invited earlier it waits for the evening) and goes home the next morning (7:30, judged on the game clock). While a friend
+//  is coming or here the Jelly Wash is closed. This file is the data and the rules; the
 //  body, the walk-in, the sleep and the goodbye are GameCare+Guest.swift. Everything is saved on the device (UserDefaults) so a visit survives closing the
 //  app; the clock is the wall clock, so time away is handled by the same rules (see `GuestRules.verdict`): a guest whose time ran out while the app was
 //  closed has "gone home" (a short note), unless the app comes back soon enough to see the goodbye.
@@ -13,11 +14,11 @@ import Observation
 
 nonisolated struct GuestVisit: Codable, Equatable, Sendable {
     enum Kind: String, Codable, Sendable {
-        /// `playDate` is only kept so old saves decode; it is treated exactly like `sleepover` (the evening visit).
         case playDate, sleepover
-        var title: String { "Invite over" }
-        var blurb: String { "Comes in the evening, goes home in the morning" }
-        var symbol: String { "moon.stars.fill" }
+        var title: String { self == .playDate ? "Play date" : "Sleepover" }
+        var blurb: String { self == .playDate ? "A little while to play" : "Comes in the evening, goes home in the morning" }
+        var subtitle: String { self == .playDate ? "a little while" : "evening \u{2192} morning" }
+        var symbol: String { self == .playDate ? "figure.play" : "moon.zzz.fill" }
     }
     /// The visitor's pool id.
     var visitor: Int
@@ -33,13 +34,16 @@ nonisolated struct GuestVisit: Codable, Equatable, Sendable {
 }
 
 nonisolated enum GuestTuning {
-    /// A friend never comes before this hour of the day (evening starts at 17:00; the hours up to midnight count, 0...17 wait for the evening).
+    /// A play date lasts this long (seconds), drawn at the arrival.
+    static let playDate: ClosedRange<Double> = 600...900
+    /// A sleepover friend never comes before this hour of the day (evening starts at 17:00; the hours up to midnight count, 0...17 wait for the evening).
     static let eveningHour = 17.0
     /// A sleepover ends at this local time the next morning (the brain's own morning wake is about 07:10).
     static let morningHour = 7, morningMinute = 30
     /// An arrival before this local hour ends the same morning (a late-night invitation).
     static let lateNightHour = 6
     /// The app comes back this long after the end: the goodbye is still shown (the guest is still there, waves and leaves); later he has "gone home".
+    static let graceAfterPlayDate: Double = 30 * 60
     static let graceAfterSleepover: Double = 3 * 3600
     /// The same grace on the game clock (game hours).
     static let graceGameHours: Double = 3
@@ -62,13 +66,18 @@ nonisolated enum GuestRules {
         if h < GuestTuning.lateNightHour { return today }
         return c.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
     }
-    /// The end of a visit that begins at `arrival`: the next morning. `sleepoverSeconds`: on the game clock that is 7:30 GAME time (`DayClock.secondsToSleepoverEnd`); nil = the phone clock's 07:30.
-    static func endsAt(arrival: Date, calendar: Calendar = .current, sleepoverSeconds: Double? = nil) -> Date {
-        sleepoverSeconds.map { arrival.addingTimeInterval($0) } ?? morningEnd(after: arrival, calendar: calendar)
+    /// `sleepoverSeconds`: on the game clock a sleepover lasts until 7:30 GAME time (`DayClock.secondsToSleepoverEnd`); nil = the phone clock's 07:30.
+    static func endsAt(_ kind: GuestVisit.Kind, arrival: Date, calendar: Calendar = .current, roll: Double = Double.random(in: 0..<1), sleepoverSeconds: Double? = nil) -> Date {
+        switch kind {
+        case .playDate:
+            let r = GuestTuning.playDate
+            return arrival.addingTimeInterval(r.lowerBound + roll * (r.upperBound - r.lowerBound))
+        case .sleepover: return sleepoverSeconds.map { arrival.addingTimeInterval($0) } ?? morningEnd(after: arrival, calendar: calendar)
+        }
     }
 
-    /// An invited friend may be at the door from 17:00 until midnight; before 17:00 (and after midnight) he waits for the evening.
-    static func canArrive(hour: Double) -> Bool { DayMath.wrap(hour) >= GuestTuning.eveningHour }
+    /// A play date comes whenever; a sleepover friend may be at the door from 17:00 until midnight (before 17:00 and after midnight he waits for the evening).
+    static func canArrive(_ kind: GuestVisit.Kind, hour: Double) -> Bool { kind == .playDate || DayMath.wrap(hour) >= GuestTuning.eveningHour }
     /// "this evening" / "tonight" for the notes and the Friends screen.
     static func when(hour: Double) -> String { DayMath.wrap(hour) >= 21 ? "tonight" : "this evening" }
 
@@ -89,9 +98,12 @@ nonisolated enum GuestRules {
         if now - v.endsAt > GuestTuning.staleAfter { return .wentHome }
         if !isOver(v, now: now, gameNow: gameNow) { return .stay }
         if let g = v.endsGame, let gn = gameNow { return gn - g <= GuestTuning.graceGameHours ? .goodbye : .wentHome }
-        return now - v.endsAt <= GuestTuning.graceAfterSleepover ? .goodbye : .wentHome
+        let grace = v.kind == .sleepover ? GuestTuning.graceAfterSleepover : GuestTuning.graceAfterPlayDate
+        return now - v.endsAt <= grace ? .goodbye : .wentHome
     }
-    static func note(_ name: String, _ kind: GuestVisit.Kind = .sleepover) -> String { "\(name) went home this morning" }
+    static func note(_ name: String, _ kind: GuestVisit.Kind) -> String {
+        kind == .sleepover ? "\(name) went home after the sleepover" : "\(name) went home after the play date"
+    }
 }
 
 @MainActor
@@ -165,8 +177,8 @@ final class GuestBook {
     func markArrived(now: Double, calendar: Calendar = .current, sleepoverSeconds: Double? = nil, endsGame: Double? = nil) {
         guard var v = visit, !v.arrived else { return }
         v.arrivedAt = now
-        v.endsAt = GuestRules.endsAt(arrival: Date(timeIntervalSince1970: now), calendar: calendar, sleepoverSeconds: sleepoverSeconds).timeIntervalSince1970
-        v.endsGame = endsGame
+        v.endsAt = GuestRules.endsAt(v.kind, arrival: Date(timeIntervalSince1970: now), calendar: calendar, sleepoverSeconds: sleepoverSeconds).timeIntervalSince1970
+        v.endsGame = v.kind == .sleepover ? endsGame : nil
         visit = v; save()
     }
     /// The player says goodbye early: the visit is over now.

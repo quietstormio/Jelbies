@@ -1,7 +1,7 @@
 //
 //  GuestEveningTests.swift
-//  2026-11-05: a friend only comes in the evening, goes home in the morning (also across a time skip / a closed app), an old "playDate" save still loads, the
-//  Jelly Wash is closed while a friend is coming or here, and visitor names are unique (the generator, the writer's check and the save migration).
+//  2026-11-05: a SLEEPOVER friend only comes in the evening and goes home in the morning (also across a time skip / a closed app); a play date is unchanged (any hour,
+//  10...15 minutes); the Jelly Wash is closed while either is coming or here; visitor names are unique (the generator, the writer's check and the save migration).
 //
 
 import XCTest
@@ -14,9 +14,12 @@ final class GuestEveningTests: XCTestCase {
 
     // MARK: when he comes
 
-    func testArrivalOnlyFromTheEvening() {
-        for h in [0.0, 2.0, 5.9, 6, 8, 11, 12, 16.99] { XCTAssertFalse(GuestRules.canArrive(hour: h), "\(h): a morning / day / small-hours invitation waits for the evening") }
-        for h in [17.0, 18.5, 20.99, 21, 22.5, 23.99] { XCTAssertTrue(GuestRules.canArrive(hour: h), "\(h): evening (and the night before midnight) he comes") }
+    func testSleepoverArrivalOnlyFromTheEveningPlayDateAnytime() {
+        for h in [0.0, 2.0, 5.9, 6, 8, 11, 12, 16.99] {
+            XCTAssertFalse(GuestRules.canArrive(.sleepover, hour: h), "\(h): a morning / day / small-hours sleepover waits for the evening")
+            XCTAssertTrue(GuestRules.canArrive(.playDate, hour: h), "\(h): a play date comes at any hour")
+        }
+        for h in [17.0, 18.5, 20.99, 21, 22.5, 23.99] { XCTAssertTrue(GuestRules.canArrive(.sleepover, hour: h), "\(h): evening (and the night before midnight) he comes") }
         XCTAssertEqual(GuestRules.when(hour: 9), "this evening")
         XCTAssertEqual(GuestRules.when(hour: 18), "this evening")
         XCTAssertEqual(GuestRules.when(hour: 22), "tonight")
@@ -30,54 +33,65 @@ final class GuestEveningTests: XCTestCase {
         XCTAssertNil(care.guestStatusText())
         let name = care.parkBook.visitor(0)!.name
         XCTAssertTrue(care.guestBook.invite(visitor: 0, kind: .sleepover, now: 1000))
-        XCTAssertEqual(care.guestStatusText(hour: 10), "\(name) will come over this evening")
-        XCTAssertEqual(care.guestStatusText(hour: 1), "\(name) will come over this evening")
+        XCTAssertEqual(care.guestStatusText(hour: 10), "\(name) is coming for a sleepover this evening")
+        XCTAssertEqual(care.guestStatusText(hour: 1), "\(name) is coming for a sleepover this evening")
         XCTAssertEqual(care.guestStatusText(hour: 18), "\(name) is on the way", "invited in the evening: soon, after the knock")
         XCTAssertEqual(care.guestStatusText(hour: 22), "\(name) is on the way", "at night before midnight he still comes")
         care.guestBook.markArrived(now: 2000)
         XCTAssertEqual(care.guestStatusText(hour: 19), "\(name) is visiting")
+        care.guestBook.finish()
+        XCTAssertTrue(care.guestBook.invite(visitor: 0, kind: .playDate, now: 1000))
+        XCTAssertEqual(care.guestStatusText(hour: 10), "\(name) is on the way", "a play date does not wait for the evening")
     }
 
     // MARK: when he goes
 
-    func testEveryVisitEndsNextMorning() {
+    func testPlayDateTimingUnchangedSleepoverEndsNextMorning() {
         let cal = utc
         let evening = cal.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 19))!
-        let end = GuestRules.endsAt(arrival: evening, calendar: cal)
+        let end = GuestRules.endsAt(.sleepover, arrival: evening, calendar: cal)
         XCTAssertEqual(cal.dateComponents([.day, .hour, .minute], from: end), DateComponents(day: 6, hour: 7, minute: 30))
         let night = cal.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 23, minute: 30))!
-        XCTAssertEqual(cal.component(.day, from: GuestRules.endsAt(arrival: night, calendar: cal)), 6)
-        for kind in [GuestVisit.Kind.playDate, .sleepover] {
-            let book = GuestBook(defaults: suite())
-            XCTAssertTrue(book.invite(visitor: 1, kind: kind, now: evening.timeIntervalSince1970 - 60))
-            book.markArrived(now: evening.timeIntervalSince1970, calendar: cal)
-            XCTAssertEqual(book.visit?.endsAt, end.timeIntervalSince1970, "\(kind): the same morning end, no 10 minute play date")
-        }
+        XCTAssertEqual(cal.component(.day, from: GuestRules.endsAt(.sleepover, arrival: night, calendar: cal)), 6)
+        XCTAssertEqual(GuestRules.endsAt(.playDate, arrival: evening, calendar: cal, roll: 0.5).timeIntervalSince(evening), 750, accuracy: 1)
+        XCTAssertEqual(GuestRules.endsAt(.playDate, arrival: evening, calendar: cal, roll: 0).timeIntervalSince(evening), 600, accuracy: 1)
+        XCTAssertEqual(GuestRules.endsAt(.playDate, arrival: evening, calendar: cal, roll: 1).timeIntervalSince(evening), 900, accuracy: 1)
+        // a play date never records a game-clock end; a sleepover does
+        let pd = GuestBook(defaults: suite())
+        _ = pd.invite(visitor: 1, kind: .playDate, now: 1)
+        pd.markArrived(now: 1000, endsGame: 31.5)
+        XCTAssertNil(pd.visit?.endsGame)
+        XCTAssertLessThanOrEqual(pd.visit!.endsAt - 1000, 900)
+        let so = GuestBook(defaults: suite())
+        _ = so.invite(visitor: 1, kind: .sleepover, now: 1)
+        so.markArrived(now: 1000, sleepoverSeconds: 750, endsGame: 31.5)
+        XCTAssertEqual(so.visit?.endsGame, 31.5)
+        XCTAssertEqual(so.visit!.endsAt, 1750)
+        // the grace after a play date is still 30 minutes
+        var v = GuestVisit(visitor: 1, kind: .playDate, invitedAt: 1)
+        v.arrivedAt = 1000; v.endsAt = 1700
+        XCTAssertEqual(GuestRules.verdict(v, now: 1700 + GuestTuning.graceAfterPlayDate + 1), .wentHome)
+        XCTAssertEqual(GuestRules.verdict(v, now: 1700 + 60), .goodbye)
+        XCTAssertEqual(GuestRules.note("Poppy", .sleepover), "Poppy went home after the sleepover")
+        XCTAssertEqual(GuestRules.note("Poppy", .playDate), "Poppy went home after the play date")
     }
 
     func testMorningIsJudgedOnTheGameClockAcrossASkip() {
         // arrived at 19:00 game time (day 1 = 19.0), ends 7:30 the next game day (31.5); the wall end is only 750 s later
         var v = GuestVisit(visitor: 1, kind: .sleepover, invitedAt: 100)
         v.arrivedAt = 1000; v.endsAt = 1750; v.endsGame = 31.5
-        // the app sat in the background 20 real minutes: the wall clock is past the end, but it is still evening in the game
         XCTAssertEqual(GuestRules.verdict(v, now: 1750 + 1200, gameNow: 19.2), .stay)
         XCTAssertFalse(GuestRules.isOver(v, now: 1750 + 1200, gameNow: 19.2))
-        // closed overnight: the game clock comes back at the fresh morning 7:00 (31.0): not yet 7:30, he is still there
         XCTAssertEqual(GuestRules.verdict(v, now: 1000 + 9 * 3600, gameNow: 31.0), .stay)
-        // 7:30 reached: the goodbye; long after (a skip to the next day): gone home
         XCTAssertEqual(GuestRules.verdict(v, now: 1000 + 9 * 3600, gameNow: 31.6), .goodbye)
         XCTAssertEqual(GuestRules.verdict(v, now: 1000 + 9 * 3600, gameNow: 31.5 + GuestTuning.graceGameHours + 1), .wentHome)
-        // the app was closed for days: over for good
         XCTAssertEqual(GuestRules.verdict(v, now: 1750 + GuestTuning.staleAfter + 1, gameNow: 19.2), .wentHome)
-        // following the real clock (no game time): the wall clock, as before
         XCTAssertEqual(GuestRules.verdict(v, now: 1700, gameNow: nil), .stay)
         XCTAssertEqual(GuestRules.verdict(v, now: 1800, gameNow: nil), .goodbye)
         XCTAssertEqual(GuestRules.verdict(v, now: 1750 + GuestTuning.graceAfterSleepover + 1, gameNow: nil), .wentHome)
-        // "say goodbye" ends it now on either clock
         let book = GuestBook(defaults: suite())
         _ = book.invite(visitor: 1, kind: .sleepover, now: 100)
         book.markArrived(now: 1000, sleepoverSeconds: 750, endsGame: 31.5)
-        XCTAssertEqual(book.visit?.endsGame, 31.5)
         book.endNow(now: 1100)
         XCTAssertNil(book.visit?.endsGame)
         XCTAssertTrue(GuestRules.isOver(book.visit!, now: 1100, gameNow: 19.5))
@@ -102,10 +116,9 @@ final class GuestEveningTests: XCTestCase {
         XCTAssertEqual(book.visit?.visitor, 2)
         XCTAssertEqual(book.visit?.kind, .playDate)
         XCTAssertNil(book.visit?.endsGame)
-        XCTAssertFalse(GuestRules.canArrive(hour: 12), "waits for the evening like any other")
+        XCTAssertTrue(GuestRules.canArrive(book.visit!.kind, hour: 12), "an old play date still comes at any hour")
         book.markArrived(now: 1_800_000_000, calendar: utc)
-        let end = Date(timeIntervalSince1970: book.visit!.endsAt)
-        XCTAssertEqual(utc.component(.hour, from: end), 7); XCTAssertEqual(utc.component(.minute, from: end), 30)
+        XCTAssertLessThanOrEqual(book.visit!.endsAt - 1_800_000_000, 900, "and stays its short time")
         // an arrived old save (short end stored, no game end) is judged on the wall clock as before
         let arrived = Data(#"{"invitedAt":1,"visitor":2,"kind":"playDate","arrivedAt":100,"endsAt":900}"#.utf8)
         d.set(arrived, forKey: GuestBook.key)
@@ -133,6 +146,11 @@ final class GuestEveningTests: XCTestCase {
         XCTAssertEqual(care.groomBlocker(), "Not while \(name) is visiting", "here: closed")
         care.guestBook.finish()
         XCTAssertNil(care.groomGuestBlocker, "he went home: open again")
+        // a play date closes it too, on the way and here
+        XCTAssertTrue(care.guestBook.invite(visitor: 0, kind: .playDate, now: 1000))
+        XCTAssertEqual(care.groomBlocker(), "Not while \(name) is visiting")
+        care.guestBook.markArrived(now: 2000)
+        XCTAssertEqual(care.groomBlocker(), "Not while \(name) is visiting")
     }
 
     // MARK: names
