@@ -36,6 +36,8 @@ nonisolated final class WearPrepared: @unchecked Sendable {
     /// A necklace-class piece (WearLevel.tilts): its loop sits on the TILTED plane (front low, over the arm tops, higher on the back) instead of a level one; set before finalize.
     var tilted = false
     var tiltFrontY: Float = 0
+    /// This piece's side loop height (WearLevel.sideY).
+    var tiltSide: Float = 0.645
     /// The vertices of the thin encircling ring parts (a collar, hem, band, string): the limb bulge moves them even where a garment's authored cover would leave them on the skin.
     var lvRing: [Bool] = []
     /// The nodes whose skin radius is read each frame (WearLevel): every levelled vertex that is not part of a rigid small part, and the centre of every levelled small part. Each node
@@ -164,7 +166,7 @@ nonisolated enum WearMeshes {
         if let body, !isArm { CrownFit.prepare(p, body: body); if let lift = WearRules.neckLift(l), !p.levelPiece { raise(p, body: body, by: lift) } }
         if let body, !isArm, l.slot == .neck, WearLimbs.enabled, !p.levelPiece { seat(p, body: body) }          // (a levelled loop is not lifted up the wall: it takes its radius from the skin at its own height, WearLevel.finalize)
         markLimbFree(p, body: body, authoredCover: l.slot != .neck, clusters: WearLimbs.enabled && (l.slot == .neck || l.slot == .body))
-        p.tilted = WearLevel.tilts(l)
+        p.tilted = WearLevel.tilts(l); p.tiltSide = WearLevel.sideY(l)
         if let body, !isArm { WearLevel.finalize(p, body: body) }
         return p
     }
