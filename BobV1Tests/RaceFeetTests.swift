@@ -182,4 +182,61 @@ final class RaceFeetTests: XCTestCase {
     func testRacersKeepTheirFeetOverHurdlesSplashJumping() { race("splash jumping", course: .splash, seed: 5, taps: 3, jump: true) }
     func testRacersKeepTheirFeetOverHurdlesWaveJumping() { race("wave jumping", course: .wave, seed: 9, taps: 3, jump: true) }
     func testRacersKeepTheirFeetWhenTheyHitHurdlesWave() { race("wave tripping", course: .wave, seed: 9, taps: 7, jump: false, trip: true) }
+
+    /// "The legs come off at every hurdle" (user, 2026-11-05): the DRAWN soles of the player's Jelbie across every hurdle jump, from the crouch to 20 steps after the script
+    /// is handed back to the race. The window is latched on the race model's airT (race.jumping is cleared in the very tick the feet are re-planted, which hid that frame).
+    /// Per frame: each drawn sole's world xz (mean of the foot's vertices) and how far it moved since the last frame, in the take-off, flight, landing and hand-back phases.
+    /// A planted sole (crouch, landing, back on the track) may not jump more than a stride-free 2 cm in one frame.
+    func testHurdleJumpSolesDoNotSnap() {
+        let room = RaceTripTests.Room()
+        Self.keep.append(room)
+        let care = room.care, rm = MotionRig.renderMesh
+        for b in CourseTier.allCases where b.index < CourseTier.splash.index { care.race.progress.records[b] = CourseProgress.Record(races: 1, wins: 1, topTwo: 1) }
+        care.race.courseTier = .splash
+        care.race.rivalSource = LocalRivalSourceFixed(waddle: 0.7)
+        care.race.autoRate = nil
+        let a = room.actors[0]
+        var dyn = [Float](repeating: 0, count: rm.vertexCount * 6)
+        let bean: [[Int32]] = [-1, 1].map { side in let f = rm.armCapsule!.beanFirst(side: side); return (f..<(f + FootBean.vertexCount)).map { Int32($0) } }
+        let core: [[Int32]] = (0..<2).map { a.brain!.footCoreVertices($0, sim: a.sim, skinner: a.skinner) }
+        care.startRace(jelly: 0, seed: 5)
+        var n = 0, foot = 0, tapT: Float = 0, tail = 0, was = false, jumpNo = 0
+        let dt = a.sim.stepDt
+        var prev: [SIMD2<Float>]? = nil, prevBeans = true
+        var worst: [String: (Float, String)] = [:]
+        func note(_ ph: String, _ d: Float, _ line: String) { if d > (worst[ph]?.0 ?? -1) { worst[ph] = (d, line) } }
+        while n < 60 * 60, care.race.active, !(care.race.hasResults && n > 0) {
+            n += 1
+            if let sim = care.race.sim, care.race.phase == .racing, sim.phase == .running || sim.phase == .finishing {
+                care.race.sim?.autoJumpPlayer = true
+                tapT += dt; while tapT >= 1 / 3 { tapT -= 1 / 3; _ = care.race.tap(foot: foot); foot = 1 - foot }
+            }
+            room.step()
+            a.brain?.refitBeans(a.sim, a.skinner)
+            guard care.race.sim?.phase == .running || care.race.sim?.phase == .finishing, let b = a.brain, b.race.active, let r0 = care.race.sim?.racers[0] else { continue }
+            let inAir = r0.airT != nil || b.race.jumping
+            if inAir { if !was { jumpNo += 1 }; was = true; tail = 20 } else if tail > 0 { tail -= 1 } else { was = false; prev = nil; continue }
+            a.skinner.update(x: a.sim.x, index: rm.index, into: &dyn)
+            let beans = a.skinner.beansActive && a.skinner.beanBlend > 0.05
+            var cur: [SIMD2<Float>] = []
+            for sd in 0..<2 {
+                let ids = beans ? bean[sd] : core[sd]
+                var m = SIMD2<Float>.zero
+                for id in ids { let o = 6 * Int(id); m += SIMD2(dyn[o], dyn[o + 2]) }
+                cur.append(m / Float(max(ids.count, 1)))
+            }
+            let ph = b.race.jumping ? "hop \(b.gait.phase)" : (inAir ? "queued/airT" : (b.feet.active ? "stepping" : "handed back"))
+            if let p = prev, prevBeans == beans {
+                let d = max(simd_distance(p[0], cur[0]), simd_distance(p[1], cur[1]))
+                let l = String(format: "jump %d t=%.2f %@ beans=%d d=%.4f feetInit=%d script=%@", jumpNo, Float(n) * dt, ph, beans ? 1 : 0, d, b.feetInit ? 1 : 0, "\(b.script)")
+                MotionLog.write("SOLEFRAME " + l)
+                note(ph, d, l)
+            }
+            prev = cur; prevBeans = beans
+        }
+        for k in worst.keys.sorted() { MotionLog.write(String(format: "SOLEWORST %@ %.4f | %@", k, worst[k]!.0, worst[k]!.1)) }
+        XCTAssertGreaterThan(jumpNo, 0, "the player jumped")
+        // (before the fix, b96d71d1: crouch 0.21 (the planted soles pop to the body-rigid spots at take-off), landing 0.054 (bean pose flicker), hand-back 0.073 (re-seed at root + offset))
+        for (k, lim) in [("hop crouch", Float(0.10)), ("hop land", 0.03), ("handed back", 0.02)] { XCTAssertLessThan(worst[k]?.0 ?? 0, lim, "drawn sole moved \(worst[k]?.0 ?? 0) in one frame in \(k): \(worst[k]?.1 ?? "")") }
+    }
 }
