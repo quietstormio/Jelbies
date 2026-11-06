@@ -665,6 +665,10 @@ final class BlobBrain {
             gait.basePitch = pitchBase
             gait.tick(sim, held: false, reduce: amplitude < 0.7)
             driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
+            // The walking arms are capsules drawn in WORLD space from the fitted body pose of THIS tick (driveArms). A hop used to return before they were driven, so a capsule that was out
+            // (racing: the arms are always out) stayed where it was at take-off while the body hopped away under it: both stubs floated off the body for the whole jump (race, 2026-11-06).
+            // Driven from the hop's own attractor every tick, the arm roots ride the body through crouch, air and landing, exactly as they do in the walk.
+            driveArms(sim, skinner, dt)
             if !gait.isBusy { currentPose(sim); gait.basePitch = 0; finishScript(sim, after: false) }
             return
         default: break

@@ -4,6 +4,7 @@
 //  A whole race with hurdles, three bodies, the glue exactly as the game does it (like RaceFeetTests), and in EVERY frame of the countdown, the sprint, the jump and the landing the
 //  DRAWN arm of each racer is measured against the DRAWN body skin: the root pole of the arm capsule (the deepest point of the buried end) must lie inside the drawn skin by at least
 //  ArmCapTests' bound (1.5 cm: "the arm base stays buried in the body (fused, no gap)"). A pole outside the drawn skin is a stub floating off the body.
+//  Before the fix (BlobBrain's hopPlay branch returned without driving the arms) the pole was 40-46 cm OUTSIDE the skin through every hurdle jump; Panda shares Teddy's body (feature .ears).
 //
 
 import XCTest
@@ -66,11 +67,6 @@ final class RaceArmsTests: XCTestCase {
                 guard let sim = care.race.sim, care.raceBook.racers.contains(k), let b = a.brain, b.race.active, sim.phase != .results else { continue }
                 a.skinner.update(x: a.sim.x, index: rm.index, into: &dyn[k])
                 let phase = sim.phase == .countdown ? "countdown" : b.race.jumping ? "jump \(b.gait.phase)" : b.race.jumpQueued ? "jump queued" : "sprint"
-                if k == 0, name.hasPrefix("wave Bob"), n % 6 == 0, n < 900 {
-                    let ds = (0..<2).map { Self.poleDepth(a, dyn: dyn[k], side: $0).map { String(format: "%.1f", $0 * 100) } ?? "-" }
-                    let g = b.armLastGeom
-                    MotionLog.write(String(format: "ARMSERIES n=%d %@ pole depth cm L %@ R %@ | armG %.2f lift %.2f gaitW %.2f | geom a(%.2f %.2f %.2f) b(%.2f %.2f %.2f) | att.squash %.2f", n, phase, ds[0], ds[1], b.armG, b.armLift, b.armGaitW, g[0].a.x, g[0].a.y, g[0].a.z, g[0].b.x, g[0].b.y, g[0].b.z, a.sim.attractor.squash))
-                }
                 for side in 0..<2 {
                     guard let d = Self.poleDepth(a, dyn: dyn[k], side: side) else { continue }
                     var w = worst[k][phase] ?? Worst()
