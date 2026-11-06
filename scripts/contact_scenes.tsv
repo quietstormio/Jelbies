@@ -71,3 +71,4 @@ shyWave_pearl_teddy	pearl,teddy	shyWave	perp,top	-	90
 groupCheer_bob_teddy_pearl	bob,teddy,pearl	groupCheer	perp,top	-	90
 conga_pip_lavender_teddy	pip,lavender,teddy	conga	perp,top	-	90
 congaLine_pip_pearl_moss	pip,pearl,moss	congaLine	perp,top	-	90
+sitDiag_pip_pearl	pip,pearl	sitTogether	perp	-ContactDemoDiag 1	60

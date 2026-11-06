@@ -127,7 +127,7 @@ enum ContactDemo {
                 let ph = lead.social?.phase ?? -1
                 note(" tick t=%.2f ph=%d d=%.2f%@", Date().timeIntervalSince1970, ph, dmin, gl.sample(ph: ph, dmin: dmin))
                 if ProcessInfo.processInfo.environment["CONTACT_PARK_DIAG"] != nil || UserDefaults.standard.integer(forKey: "ContactDemoDiag") != 0 {
-                    note(" diag %@", cast.map { b in String(format: "[id%d (%.2f,%.2f) valid=%d partners=%@ pass=%d scr=%@ act=%@]", b.steerID, b.position.x, b.position.y, ContactField.isValid(b.steerID) ? 1 : 0, "\(b.contactPartnerIDs().sorted())", b.socialBook.passThrough ? 1 : 0, "\(b.script)", "\(b.activity)") }.joined(separator: " "))
+                    note(" diag %@", cast.map { b in String(format: "[id%d (%.2f,%.2f) valid=%d partners=%@ pass=%d scr=%@ act=%@", b.steerID, b.position.x, b.position.y, ContactField.isValid(b.steerID) ? 1 : 0, "\(b.contactPartnerIDs().sorted())", b.socialBook.passThrough ? 1 : 0, "\(b.script)", "\(b.activity)") + String(format: " idle=%@ lean=%.3f roll=%.3f shuf=%d gait=%@ yaw=%.0f]", "\(b.idleState.kind.map { "\($0)" } ?? "nil")", b.socialBook.leanTrim, b.socialBook.roll, b.socialBook.shuffleReq, "\(b.gait.phase)", b.yaw * 57.3) }.joined(separator: " "))
                 }
             }
             try? await Task.sleep(nanoseconds: 100_000_000); i += 1

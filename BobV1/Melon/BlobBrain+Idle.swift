@@ -895,7 +895,7 @@ extension BlobBrain {
         squash *= 1 - (slump ? 0.27 : 0.32) * k + (slump ? 0.008 : 0.016) * breath * k
         pitch += (slump ? 0.34 : -0.06) * k
         if idleState.kind == .sway { roll += 0.10 * k * sinf(2 * .pi * t / 1.7) }          // sways to the music
-        else if !slump {
+        else if !slump, !(social != nil && socialPartnerID != nil) {          // (beside a partner in a session the sit holds still: the look-around roll swung the skins +-3 cm and the contact lean chased it: sitTogether / backToBack sank -3..-5 cm)
             let win = max(0, sinf(2 * .pi * t / 8.0)); roll += 0.055 * k * win * win * sinf(2 * .pi * t / 3.2)
         }
         skinner.setEyeOpenness(1 - (slump ? 0.62 : (napping ? 0.93 : 0.5)) * k)

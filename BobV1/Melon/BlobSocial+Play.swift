@@ -176,10 +176,11 @@ extension BlobBrain {
                 if idleStart(.sit, sim) { idleState.hold = s.duration; socialBook.hopStarted = true }
                 else { s.finish(.aborted) }
             }
-            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5 { s.setPhase(2) }
+            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5, idleState.kind == .sit, o.idleState.kind == .sit, idleState.phase >= 2, o.idleState.phase >= 2 { s.setPhase(2) }          // (the hold's lean starts once both are DOWN: it chased the lowering bodies and sank them -2.5 cm)
             else if isA, s.phaseT > 8 { s.finish(.aborted) }
         default:
-            if idleState.kind == .sit || idleState.kind == .sleep { socialBook.wantRoll = leanSign(toward: o.position) * 0.05 }
+            if isA, s.phase == 2, (idleState.kind == .sit && idleState.phase >= 3) || (o.idleState.kind == .sit && o.idleState.phase >= 3) { s.setPhase(3) }          // (the get-up: the stance lets go - the hold's lean chased the rising bodies and sank them -4 cm)
+            if s.phase < 3, idleState.kind == .sit || idleState.kind == .sleep { socialBook.wantRoll = leanSign(toward: o.position) * 0.05 }
             if isA, idleState.kind == nil, o.idleState.kind == nil, s.phaseT > 1 { s.finish(.done) }
             else if isA, s.phaseT > s.duration + 8 { s.finish(.done) }
         }

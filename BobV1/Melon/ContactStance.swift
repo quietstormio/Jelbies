@@ -94,7 +94,7 @@ struct ContactStance: Sendable {
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
         .nuzzle: .holding(from: 2, facing: .camera),
-        .sitTogether: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold)], features: true),
+        .sitTogether: .holding(from: 2, facing: .camera, until: 3, features: true),          // (r4-standing: the stance owns the walk-up like nuzzle: the drive's own spot left the pair 7 cm apart standing, and a SEATED body cannot shuffle, its lean (budget 3.4 cm) saturated: room gap 5.5 cm for the whole sit)
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .hum: .holding(from: 2),
