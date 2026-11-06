@@ -185,6 +185,40 @@ final class SleepBackTests: XCTestCase {
         XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.idleState.kind != .sleep }, "up in the morning: \(lab.rigs.map { String(describing: $0.brain.idleState.kind) })")
     }
 
+    /// 2026-11-06 `-SleepNow 1` (with `-ClockHour 3`): the launch order is the normal goodnight; everybody is asleep within about 10 sim-s (hold = until morning),
+    /// and the SnoreScheduler on those sleepers has PLAYED snores within 60 sim-s.
+    func testSleepNowEverybodyAsleepAndSnoringWithinASecondsBudget() {
+        XCTAssertFalse(NightRestTuning.sleepNow, "off unless -SleepNow 1")
+        let lab = SocialTests.Lab(quiet: false, seed: 21)
+        for r in lab.rigs {
+            r.brain.sleepEnabled = true; r.brain.watching = true
+            r.brain.idleNight = 1; r.brain.idleDeepNight = 1          // (-ClockHour 3)
+            r.brain.idleState.cooldown = 0; r.brain.restTimer = 0.5; r.brain.socialBook.cooldown = 1e6
+        }
+        for _ in 0..<120 { lab.tick(watching: false) }
+        NightRestTuning.sendToBed(lab.rigs.map(\.brain))          // exactly what GameCare.tickNightRest does for SleepNow
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub._openForTest(); AudioHub.dryRun = true
+        var now = 90_000.0; AudioHub.clock = { now }
+        var snores = 0
+        AudioHub.firedTap = { if $0.hasPrefix("snore_") { snores += 1 } }
+        defer { AudioHub.firedTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() } }
+        var allAsleepAt: Double?, firstSnoreAt: Double?
+        for t in 0..<(60 * 60) {
+            lab.tick(watching: false); now += 1.0 / 60
+            if t % 6 == 0 {
+                let nap = lab.rigs.map { $0.brain.isNapping }
+                if allAsleepAt == nil, nap.allSatisfy({ $0 }) { allAsleepAt = Double(t) / 60 }
+                hub.situation(napping: nap, playing: false, xs: lab.rigs.map { $0.brain.px }, moods: lab.rigs.map { _ in .okay })
+                if firstSnoreAt == nil, snores > 0 { firstSnoreAt = Double(t) / 60 }
+            }
+        }
+        print("SLEEPNOW all asleep at \(String(describing: allAsleepAt)) sim-s, first PLAYED snore at \(String(describing: firstSnoreAt)), snores in 60 s: \(snores)")
+        XCTAssertNotNil(allAsleepAt)
+        XCTAssertLessThanOrEqual(allAsleepAt ?? 999, 10, "everybody asleep within ~10 sim-s")
+        XCTAssertGreaterThan(snores, 0, "PLAYED snores within 60 sim-s")
+    }
+
     func testNappingMeansTheNeedsDrainScaleAndMusicRule() {
         let r = sleeper(hold: 500)
         XCTAssertFalse(r.brain.isNapping)

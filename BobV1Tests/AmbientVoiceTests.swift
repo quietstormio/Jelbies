@@ -7,35 +7,36 @@ import XCTest
 final class AmbientVoiceTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
     override func tearDown() {
-        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
-        HomeVoiceTuning.enabled = true; SnoreScheduler.speedUp = 1.35; IdleTuning.treatGap = (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp)
+        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; HomeVoiceTuning.contextFloor = 0.6; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
+        HomeVoiceTuning.enabled = true; HomeVoiceTuning.floorEnabled = true; AmbientVoiceTuning.newDaySet = true; SnoreScheduler.speedUp = 1.35; IdleTuning.treatGap = (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp)
         AudioHub.shared.atHome = false
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
     /// (below 10_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 10_000 and a LATER-than-that gap stamp would hush every sound there)
     nonisolated(unsafe) static var clockBase = 1_000.0
-    struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
+    struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0, ctxReq = 0; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
 
     /// One soak: `n` Jelbies (features from `chars`), 3 seeds x 3 min, `situation` fed every 6 steps like the stage does (10 Hz).
-    func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false) -> Result {
+    func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false, floor: Bool = true) -> Result {
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
         var simNow = Self.clockBase; AudioHub.clock = { simNow }          // (one shared clock across soaks: the hub's per-sound gaps must see time only move forward)
         defer { Self.clockBase = simNow + 120 }
-        AmbientVoiceTuning.enabled = ambient; HomeVoiceTuning.enabled = ambient          // (the whole home-voice boost: filler, context chance x1.3, emote treat gap, snore pace)
+        AmbientVoiceTuning.enabled = ambient; HomeVoiceTuning.enabled = ambient; HomeVoiceTuning.floorEnabled = ambient && floor; AmbientVoiceTuning.newDaySet = ambient && floor        // (the whole home-voice boost: filler, context chance x1.3, emote treat gap, snore pace)
         IdleTuning.treatGap = ambient ? (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp) : 200...380
         SnoreScheduler.speedUp = ambient ? 1.35 : 1
         let seeds = night ? Array(RoomSFXCountTests.seeds.prefix(1)) : Array(RoomSFXCountTests.seeds.prefix(3))          // (3 seeds x 3 min; the night soak 1)
         var res = Result()
         var lastByChar: [String: Double] = [:], lastAnyByChar: [String: Double] = [:]
+        AudioHub.requestTap = { if $0.hasPrefix("voice:") { res.ctxReq += 1 } }
         AudioHub.firedTap = { name in
             var k = name; if let r = k.range(of: #"_\d+$"#, options: .regularExpression) { k.removeSubrange(r) }
             res.played[k, default: 0] += 1
             let isVoice = name.hasPrefix("chirp_") || name.hasPrefix("babble_")
             let isContext = JellyVoice.allCases.contains { $0.isContext && name.hasPrefix("\($0.rawValue)_jelly") }
             if isVoice || isContext { res.voices += 1 }
-            if ["giggle_", "curious_", "ooh_", "hum_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
+            if ["giggle_", "curious_", "ooh_", "hum_", "hmm_", "wheee_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
             if isVoice || isContext, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (any voice of one Jelbie: the design floor is the 1.0 s context gap)
                 let who = String(name[r]); if let l = lastAnyByChar[who] { res.minAnyGap = min(res.minAnyGap, simNow - l) }; lastAnyByChar[who] = simNow
             }
@@ -99,6 +100,37 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(perA, 1.3 * perB, "\(label): vocals per Jelbie per minute \(perA) vs \(perB)")
         XCTAssertGreaterThanOrEqual(after.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps / babbles of one Jelbie within 2.2 s")
         XCTAssertEqual(before.ambientTags, 0)
+    }
+
+    /// 2026-11-06: context voices at home (floor 0.45 + the 50 % day mix) vs the 2230db85 behaviour (filler + x1.3, no floor, old mix), same seeds.
+    func reportFloor(_ label: String, n: Int, chars: [Int]?) {
+        let prev = soak(n: n, chars: chars, ambient: true, floor: false), now = soak(n: n, chars: chars, ambient: true, floor: true)
+        let perPrev = Double(prev.newVoices) / Double(n) / prev.minutes, perNow = Double(now.newVoices) / Double(n) / now.minutes
+        let totPrev = Double(prev.voices) / Double(n) / prev.minutes, totNow = Double(now.voices) / Double(n) / now.minutes
+        let isV: (String) -> Bool = { n in n.hasPrefix("chirp_") || n.hasPrefix("babble_") || JellyVoice.allCases.contains { v in v.isContext && n.hasPrefix("\(v.rawValue)_jelly") } }
+        let sumP = prev.played.filter { !isV($0.key) }.values.reduce(0, +), sumN = now.played.filter { !isV($0.key) }.values.reduce(0, +)
+        print("CTXFLOOR \(label): context voices (giggle+curious+hmm+hum+wheee+ooh) per Jelbie per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
+        print("CTXFLOOR \(label): all vocals per Jelbie per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
+        XCTAssertGreaterThanOrEqual(perNow, 2 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
+        XCTAssertGreaterThan(totNow, totPrev, "\(label): total vocals still rise")
+        XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
+        XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie too close")
+        XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelbie within 2.2 s")
+    }
+    func testContextFloorDefaultRoster() { reportFloor("default3", n: 3, chars: nil) }
+    func testContextFloorTeddyPanda() { reportFloor("teddy+panda", n: 2, chars: [JellyRoster.teddyID, JellyRoster.pandaID]) }
+    /// (Sleepers get no ambient / day voices: testNoAmbientWhileAsleep below runs the night soak with the floor and the new mix on.)
+    func testFloorMath() {
+        XCTAssertEqual(HomeVoiceTuning.contextFloor, 0.6, "0.45 measured only x1.65 on the soak (x2.35 at 0.6)")
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.15), 0.6)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.18), 0.6)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.4), 0.6, accuracy: 1e-9)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.05), 0.065, accuracy: 1e-9, "wander lala / pfft stay at x1.3")
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.9), 1)
+        var rnd = SystemRandomNumberGenerator(); var hush = 0
+        for _ in 0..<2000 { if AmbientVoiceTuning.pick(night: 0, grumpy: false, random: { Double.random(in: $0, using: &rnd) }) == .hmm { hush += 1 } }
+        XCTAssertGreaterThan(hush, 0)
+        for _ in 0..<500 { XCTAssertNotEqual(AmbientVoiceTuning.pick(night: 0, grumpy: true, random: { Double.random(in: $0, using: &rnd) }), .giggle) }
     }
 
     func testHomeVocalsRiseDefaultRoster() { report("default3", n: 3, chars: nil) }

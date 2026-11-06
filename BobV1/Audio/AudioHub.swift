@@ -831,7 +831,7 @@ final class AudioHub {
         if now - lastVoice[i] < 1.0 { diag(what, jelly, "hush lastVoice"); return }
         if now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush context"); return }
         if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
-        let p = atHome && HomeVoiceTuning.enabled ? min(1, chance * HomeVoiceTuning.contextChanceMul) : chance          // (at home every context voice's chance x1.3, one central place)
+        let p = atHome && HomeVoiceTuning.enabled ? HomeVoiceTuning.homeChance(chance) : chance          // (at home every context voice's chance x1.3, at least 0.45 when its base is >= 0.1; one central place)
         guard Double.random(in: 0..<1) < p else { diag(what, jelly, "chance"); return }
         diag(what, jelly, nil)
         lastContextVoice[i] = now
