@@ -374,7 +374,9 @@ final class SocialTests: XCTestCase {
         for x in [a, b] { x.anticsEnabled = true; x.sleepEnabled = true }          // (as the stage in a room: the play kinds + variety scaling are in the pick)
         MotionLog.write("SOCIAL PICKS setup: free \(a.socialFree)/\(b.socialFree) deepNight \(a.idleDeepNight) d \(simd_distance(a.position, b.position)) peerGap \(a.peerGap) drought \(a.socialBook.drought) enabled \(a.socialBook.enabled)")
         for i in 0..<n {
-            for x in [a, b] { x.socialAbort(nil); x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
+            for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
+            if i < 3 { MotionLog.write("SOCIAL PICKS draw \(i): free \(a.socialFree)/\(b.socialFree) social \(a.social == nil)/\(b.social == nil) idle \(String(describing: a.idleState.kind))/\(String(describing: b.idleState.kind)) cd \(a.socialBook.cooldown)/\(b.socialBook.cooldown)") }
+            for x in [a, b] { x.socialAbort(nil); x.idleState.kind = nil; x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
             a.watching = true
             a.seed = UInt64(i + 1) &* 0x9E3779B97F4A7C15
             for _ in 0..<4 { _ = a.rand() }
