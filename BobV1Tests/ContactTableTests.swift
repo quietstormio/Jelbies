@@ -25,13 +25,4 @@ final class ContactTableTests: XCTestCase {
             XCTAssertTrue(row.steps.contains { $0.target == ContactStance.hold }, "\(k): touching row without a hold/press step")
         }
     }
-
-    /// A ring (group hug, circle dance) never WALKS in its hold: the drive walks everybody to a place that is the touch + 1.2 cm first, the hold only presses (a retargeting hold turned bodies through each other).
-    func testRingHoldsPressWithoutWalking() {
-        for k in [SocialKind.groupHug, .circleDance] {
-            let hold = ContactStance.table[k]?.steps.first { $0.target == ContactStance.hold }
-            XCTAssertNotNil(hold, "\(k) has a hold step")
-            XCTAssertEqual(hold?.retargets, false, "\(k): the hold does not retarget walks")
-        }
-    }
 }

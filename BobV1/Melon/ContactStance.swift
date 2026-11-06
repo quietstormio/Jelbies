@@ -106,9 +106,8 @@ struct ContactStance: Sendable {
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups
-        // (a ring never WALKS in its hold: GroupSocial's phase 1 walks everybody to a place that is the touch + 1.2 cm, the hold only presses - a hold that retargets walks bodies in through each other while they turn)
-        .groupHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true, walks: false), Step(from: 2, target: hold, walks: false)], features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
-        .circleDance: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true, walks: false), Step(from: 2, target: hold, walks: false)], features: true),
+        .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
+        .circleDance: .holding(from: 2, walk0: false, features: true),
         // proximity
         .twirl: .proximity(from: 1), .hopAlong: .proximity(from: 1), .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),

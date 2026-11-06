@@ -30,11 +30,7 @@ enum Friends2Tuning {
     /// ringAround: extra centre distance (m) over the skins' touch distance on the hop circle (the 60 degree turn in place between hops swings the skin).
     static let ringMargin: Float = 0.12
     /// Angle (rad) one ring hop turns the pair round their centre: 36 degrees (15 hops = 1.5 turns); the chord of it shortens the mid-air distance by 1.2 %.
-    static let ringHop: Float = .pi / 8          // (22.5 degrees: the chord of a hop pulls the pair only 1.9% closer in the air - a 36 degree hop 4.9% = 4 cm into each other)
-    /// ringAround: the diameter is the face-to-face touch + this (m); the chord of a hop is the rest.
-    static let ringFaceMargin: Float = 0.012
-    /// ringAround: turns of the dance (16 hops of 22.5 degrees ~ the old 15 hops of 36 degrees in length).
-    static let ringTurns: Float = 1.0
+    static let ringHop: Float = .pi / 5
     static let tagRounds = 3
 }
 
@@ -529,7 +525,7 @@ extension BlobBrain {
     private func driveRing(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if s.phase < 2 { socialBook.ringSpread = false; if openFaceToFace(s, o, isA, settle: 0.5) { return } }
         let t = s.phaseT
-        let steps = Int((Friends2Tuning.ringTurns * 2 * Float.pi / Friends2Tuning.ringHop).rounded())          // (one turn of 22.5 degree hops = 16 hops: the old 1.5 turns of 36 degrees were 15)
+        let steps = Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded())          // (1.5 turns)
         switch s.phase {
         case 2:
             if isA, !s.ready, scriptIsNone, o.scriptIsNone, !feet.active, !o.feet.active, s.phaseT > 0.3 {          // the circle: centre between us, radius half the distance - drawn once BOTH STAND (not while they are still walking in)
@@ -542,11 +538,7 @@ extension BlobBrain {
                 // (the hop moves each body along the CHORD of its 36 degree arc, so the pair comes 1 - cos(18 deg) closer in mid-air than at the ends: the radius is the face-to-face touch distance
                 //  (support reach of both, wings / tail / spikes counted) over 2 cos(18 deg), so even the closest moment of the hop leaves the skins just apart - no passThrough needed to hide it)
                 // (the hop turns the body toward its chord, so mid-hop the pair stands SIDE ON: the widest touch of the compass, not the face-to-face one)
-                // (2026-11-05: the pair stands FACING each other on the ring all the way round - the hop is locked to the landing facing - so the diameter is the FACE-TO-FACE touch (the outlines turned to face each other), not the widest
-                //  compass touch: that one put the pair 1.6-1.9 m apart with 40-110 cm of floor between them for the whole dance. + a 1.2 cm margin: the chord of a hop pulls the pair 1 - cos(hop/2) closer in the air.)
-                let u = (position - o.position) / max(simd_distance(position, o.position), 1e-3)
-                let face = touchRadiusFacing(o, along: u, .each) ?? ringTouch(o)
-                r = max(0.3, min(1.0, (face + Friends2Tuning.ringFaceMargin) / 2))
+                r = max(0.3, min(1.0, (ringTouch(o) + 0.06) / (2 * cosf(Friends2Tuning.ringHop / 2))))
                 if PeakTuning.log { print(String(format: "[peak] ring radius %.3f (brain dist %.3f)", r, dBrain)) }
                 s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))          // (radius, A's angle)
             }

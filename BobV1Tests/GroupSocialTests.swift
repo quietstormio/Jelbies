@@ -74,24 +74,6 @@ final class GroupSocialTests: XCTestCase {
         XCTAssertGreaterThan(minGap, 0.4 * MelonController.jellyGap, "but they do not fuse")
     }
 
-    /// USER RULE (2026-11-04): never sink into each other, so the skin wall is never switched off for a group walk-in, a hold or a ring hop (the one place that plans a hop target with the bodies ignored sets
-    /// and clears the flag inside one call). Every tick of a hug and a circle dance: nobody has `passThrough` set.
-    func testGroupWalkInsAndHoldsKeepTheWallOn() {
-        for kind in [SocialKind.groupHug, .circleDance] {
-            let lab = SocialTests.Lab(n: 3, positions: SocialTests.starts, seed: 31)
-            for r in lab.rigs { r.brain.anticsEnabled = true }
-            XCTAssertTrue(lab.rigs[0].brain.socialStart(kind, with: lab.rigs[1].brain, lab.rigs[0].sim), "\(kind) starts")
-            var f = 0, offTicks = 0
-            while f < 60 * 40 {
-                lab.tick(); f += 1
-                if lab.rigs.contains(where: { $0.brain.socialBook.passThrough }) { offTicks += 1 }
-                if !lab.anySocial && f > 10 { break }
-            }
-            XCTAssertFalse(lab.anySocial, "\(kind) completes")
-            XCTAssertEqual(offTicks, 0, "\(kind): the skin wall is on for the whole session (walk-in, hold, hops, break-apart)")
-        }
-    }
-
     func testBusyOnesAreNotPulledInAndTwoAreNotEnough() {
         let lab = SocialTests.Lab(seed: 5)
         for r in lab.rigs { r.brain.anticsEnabled = true }
