@@ -76,6 +76,8 @@ final class BlobBrain {
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
     var insideStuckT: Float = 0
+    /// Where the last walk-out started: `insideStuckT` restarts only once that walk has really moved him (a walk-out that cannot route must not postpone the ease-out forever).
+    var walkOutFrom: SIMD2<Float>?
     /// He is on top of a beanbag: his floor is its top (`applyBagFloor`); false everywhere else, so no behaviour can leave him on a phantom floor.
     var bagFloorOn = false
     /// The height of the slide's step / chute under him while he rides it (`applyBagFloor`).

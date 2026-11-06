@@ -120,6 +120,13 @@ enum SleepTuning {
     static let pileSpacing: Float = 1.66
     /// Squash while lying (a little flatter and wider: relaxed).
     static let lieSquash: Float = 0.94
+    /// A lying body's footprint, as an ellipse about its spot (half-length along the heading, half-width across it), measured on the DRAWN body in the real
+    /// sim (2026-11-05, Release, three sleepers, 120 s with every fidget): the skin reaches +-0.70 along the heading and +-0.76 across it about the soft-body
+    /// centroid, and the centroid itself swings up to 0.24 off the spot in the flop and the toss, mostly along the heading (the pitch back). So across the row
+    /// the footprint is 0.76 + a little sway, along the heading it is 0.72 + the whole flop swing. No two footprints may intersect (`footMargin` m to spare).
+    static let footHalfLen: Float = 0.95, footHalfWid: Float = 0.83, footMargin: Float = 0.03
+    /// Hand-holding pairs lie skin to skin on purpose (the stub arms must meet): the measured across-reach 0.76, no margin.
+    static let holdHalfWid: Float = 0.77
     static let breathPeriod: Float = 3.6
     /// The breathing ripple (was 0.5: too faint to read).
     static let breathKick: Float = 0.9
@@ -181,11 +188,34 @@ extension BlobBrain {
         guard L.decorDistance(p, solidOnly: true) > solid, L.decorDistance(p) > flat else { return false }          // never lain on or under decor
         return true
     }
-    /// ... and not under another Jelly (`mates` may be close: they are the pile).
-    func sleepSpotOK(_ p: SIMD2<Float>, mates: [BlobBrain] = [], relaxed: Bool = false) -> Bool {
+    /// ... and not under another Jelly (`mates` may be close: they are the pile, but their lying footprints are never overlapped: the elliptical clash below).
+    func sleepSpotOK(_ p: SIMD2<Float>, mates: [BlobBrain] = [], relaxed: Bool = false, hold: Bool = false) -> Bool {
         guard sleepFloorOK(p, relaxed: relaxed) else { return false }
-        for o in socialOthers() where o !== self && !mates.contains(where: { $0 === o }) && simd_distance(o.position, p) < peerGap * 0.9 { return false }
+        let myYaw = idleState.kind == .sleep ? sleep.lieYaw : faceCameraYaw()
+        for o in socialOthers() where o !== self {
+            if !mates.contains(where: { $0 === o }) && simd_distance(o.position, p) < peerGap * 0.9 { return false }
+            if o.idleState.kind == .sleep, o.sleep.stage <= 4 {          // (a lying body is longer along its heading than it is wide: never a round test)
+                if Self.lieClash(p - o.sleep.spot, yawA: myYaw, yawB: o.sleep.lieYaw, hold: hold) || Self.lieClash(p - o.position, yawA: myYaw, yawB: o.sleep.lieYaw, hold: hold) { return false }
+            }
+        }
         return true
+    }
+
+    /// Do two lying footprints (ellipses, `footHalfLen` along the heading, `footHalfWid` across, + `footMargin`) whose centres are `d` apart intersect?
+    /// Judged in each body's own heading frame (the pile shares one heading, so the two agree there); either frame saying "inside" is a clash.
+    static func lieClash(_ d: SIMD2<Float>, yawA: Float, yawB: Float, hold: Bool = false) -> Bool {
+        let hw = hold ? SleepTuning.holdHalfWid : SleepTuning.footHalfWid, k = hold ? 2 : 2 + SleepTuning.footMargin / SleepTuning.footHalfWid
+        for y in [yawA, yawB] {
+            let l = SIMD2(simd_dot(d, SIMD2(cosf(y), -sinf(y))) / hw, simd_dot(d, SIMD2(sinf(y), cosf(y))) / SleepTuning.footHalfLen)
+            if simd_length(l) < k { return true }
+        }
+        return false
+    }
+    /// The centre distance at which two footprints just clear each other (+ margin) in direction `dir` (world xz) for a pair with heading `yaw`.
+    static func lieReach(_ dir: SIMD2<Float>, yaw: Float) -> Float {
+        let u = simd_length(dir) > 1e-4 ? dir / simd_length(dir) : SIMD2<Float>(1, 0)
+        let a = simd_dot(u, SIMD2(cosf(yaw), -sinf(yaw))) / SleepTuning.footHalfWid, b = simd_dot(u, SIMD2(sinf(yaw), cosf(yaw))) / SleepTuning.footHalfLen
+        return 1.004 * (2 + SleepTuning.footMargin / SleepTuning.footHalfWid) / max((a * a + b * b).squareRoot(), 1e-4)          // (a hair over, so the spot is never exactly on the clash line)
     }
 
     /// The other Jellies that sleep or are on their way to sleep (the pile).
@@ -195,7 +225,7 @@ extension BlobBrain {
     func handSpacing() -> Float {
         let g = armGeometry(el: SleepTuning.holdEl, sa: 0, lift: 1, xShift: 0.07, bodyLed: 1)
         let reach = (g.b.x + g.r2) / (1 - (1 - SleepTuning.lieSquash)).squareRoot()
-        return min(max(2 * reach - 0.05, SleepTuning.minGap), 2.2)
+        return min(max(2 * reach - 0.05, SleepTuning.minGap, 2 * SleepTuning.holdHalfWid + 0.01), 2.2)
     }
 
     /// Where he lies down: beside the pile if there is one, else here when this is a good spot, else the nearest good spot on the rug.
@@ -210,32 +240,39 @@ extension BlobBrain {
                 let sp = handSpacing()
                 for m in mates where m.sleep.partner == nil && m.sleep.mode == .plain && m.sleep.stage <= 3 {
                     for sgn in [Float(-1), 1] {
-                        let p = m.sleep.spot + SIMD2(sgn * sp, 0)
+                        let p = m.sleep.spot + SIMD2(cosf(m.sleep.lieYaw), -sinf(m.sleep.lieYaw)) * (sgn * sp)          // (a side-by-side row, along the body's own width)
                         var clash = false
-                        for o in mates where simd_distance(o.sleep.spot, p) < SleepTuning.minGap { clash = true }
-                        guard !clash, sleepSpotOK(p, mates: mates), reachable(here, p) else { continue }
+                        for o in mates where simd_distance(o.sleep.spot, p) < SleepTuning.minGap || Self.lieClash(p - o.sleep.spot, yawA: m.sleep.lieYaw, yawB: o.sleep.lieYaw, hold: true) { clash = true }
+                        guard !clash, sleepSpotOK(p, mates: mates, hold: true), reachable(here, p) else { continue }
                         let d = simd_distance(here, p)
                         if bestH == nil || d < bestH!.2 { bestH = (p, m, d) }
                     }
                 }
                 if let b = bestH { return (b.0, b.1.sleep.lieYaw, true, b.1) }
             }
-            // a snug place against the sleepers: a ring of spots one body width round each of them (a row, then a triangle); the one touching most and nearest wins
+            // a snug place against the sleepers: a ring of spots one footprint round each of them; the side-by-side row (a = 0, pi in the lie frame) is tried
+            // first and only when every row spot is taken does he lie in front of / behind a sleeper (at the full footprint length), or in a triangle spot
             var best: (SIMD2<Float>, Float)?
-            for m in mates {
-                for k in 0..<12 {
-                    let a = Float(k) * (.pi / 6)
-                    let p = m.sleep.spot + SIMD2(cosf(a), sinf(a)) * SleepTuning.pileSpacing
-                    var touching = 0, clash = false
-                    for o in mates {
-                        let d = simd_distance(o.sleep.spot, p)
-                        if d < SleepTuning.pileSpacing * 0.93 { clash = true }
-                        if d < SleepTuning.pileSpacing * 1.12 { touching += 1 }
+            for rowOnly in [true, false] {
+                for m in mates {
+                    for k in 0..<12 {
+                        let isRow = k == 0 || k == 6
+                        if isRow != rowOnly { continue }
+                        let a = Float(k) * (.pi / 6)
+                        let dir = SIMD2(cosf(ly), -sinf(ly)) * cosf(a) + SIMD2(sinf(ly), cosf(ly)) * sinf(a)          // (lie frame: right, then along the heading)
+                        let p = m.sleep.spot + dir * Self.lieReach(dir, yaw: ly)
+                        var touching = 0, clash = false
+                        for o in mates {
+                            let d = p - o.sleep.spot
+                            if Self.lieClash(d, yawA: ly, yawB: o.sleep.lieYaw) { clash = true }
+                            if simd_length(d) < Self.lieReach(d, yaw: ly) * 1.12 { touching += 1 }
+                        }
+                        guard !clash, sleepSpotOK(p, mates: mates), reachable(here, p) else { continue }
+                        let score = simd_distance(here, p) - 1.2 * Float(touching)
+                        if best == nil || score < best!.1 { best = (p, score) }
                     }
-                    guard !clash, sleepSpotOK(p, mates: mates), reachable(here, p) else { continue }
-                    let score = simd_distance(here, p) - 1.2 * Float(touching) + 0.4 * abs(sinf(a))          // (a row along x is the neatest)
-                    if best == nil || score < best!.1 { best = (p, score) }
                 }
+                if best != nil { break }
             }
             if let b = best { return (b.0, ly, true, nil) }
         }
@@ -603,7 +640,7 @@ extension BlobBrain {
         var to = position
         if sleep.bed < 0, sleep.mode != .hold, let o = sleep.partner, o.isNapping {
             let d = o.position - position, len = simd_length(d)
-            let want = T.pileSpacing + 0.04
+            let want = Self.lieReach(d, yaw: sleep.lieYaw) + 0.04
             if len > want + 0.05 { to = position + d / len * min(0.3 * sc, len - want) }
         }
         if to == position {
@@ -613,9 +650,9 @@ extension BlobBrain {
             if simd_distance(to, f.home) > cap { return }
         }
         if sleep.bed < 0 {
-            guard sleepSpotOK(to, mates: mates.filter { $0 === sleep.partner }, relaxed: true) else { return }
+            guard sleepSpotOK(to, mates: mates.filter { $0 === sleep.partner }, relaxed: true, hold: sleep.mode == .hold) else { return }
             guard sleepFloorOK(to, relaxed: true) else { return }
-            for o in mates where simd_distance(o.position, to) < T.minGap { return }
+            for o in mates where simd_distance(o.position, to) < T.minGap || Self.lieClash(to - o.position, yawA: sleep.lieYaw, yawB: o.sleep.lieYaw, hold: sleep.mode == .hold) { return }
         }
         f.kind = 4; f.from = position; f.to = to
         f.dur = max(3, simd_distance(position, to) / 0.05)

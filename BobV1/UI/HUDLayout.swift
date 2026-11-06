@@ -28,6 +28,17 @@ enum HUDLayout {
         CGRect(x: 1 - (16 + 4 + 72 + 4) / 393, y: 1 - railRightHeightFraction, width: (16 + 4 + 72 + 4) / 393, height: railRightHeightFraction),
     ]
 
+    /// The park's bottom-centre "Go home" pill (Park/ParkChrome.swift: capsule minHeight 54, 26 pt side padding, font 19, 24 pt bottom padding above the safe area) as a screen
+    /// rectangle (fractions, top-left origin), a little oversized and reaching the bottom edge. Reference phone: 393 x 852 portrait (34 pt bottom safe area), 852 x 393 landscape (21 pt).
+    static func parkHomeRect(aspect: Float) -> CGRect {
+        let portrait = aspect < 1
+        let w: CGFloat = portrait ? 393 : 852, h: CGFloat = portrait ? 852 : 393, safe: CGFloat = portrait ? 34 : 21
+        let pillW: CGFloat = 176, pillH: CGFloat = 54, margin: CGFloat = 10
+        let top = (h - safe - 24 - pillH - margin) / h
+        let halfW = (pillW / 2 + margin) / w
+        return CGRect(x: 0.5 - halfW, y: top, width: 2 * halfW, height: 1 - top)
+    }
+
     /// True when a Jelbie centred at floor (x, z) has its body box (the same one the roam margins use) overlapping a rail rectangle on screen.
     static func bodyHitsRail(x: Float, z: Float, viewProj: simd_float4x4, size: CGSize, rails: [CGRect]) -> Bool {
         guard !rails.isEmpty else { return false }

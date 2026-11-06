@@ -152,7 +152,7 @@ final class SleepBackTests: XCTestCase {
         for i in 0..<3 {
             let others = (0..<3).filter { $0 != i }.map { simd_distance(ps[i], ps[$0]) }
             XCTAssertGreaterThan(others.min()!, 1.5, "touching but not inside each other")
-            XCTAssertLessThan(others.min()!, 2.0, "snuggled: against a neighbour")
+            XCTAssertLessThan(others.min()!, 2 * SleepTuning.footHalfLen + 0.4, "snuggled: against a neighbour")          // (a row spot is ~1.7 away; one in front of / behind a sleeper lies the full footprint length, 2 * footHalfLen, away: SleepPileNoOverlapTests)
             XCTAssertLessThan(others.max()!, 3.6, "one cluster")
         }
         XCTAssertGreaterThan(minGap, 1.45)
@@ -237,7 +237,7 @@ final class SleepBackTests: XCTestCase {
 
     func testSlurpAndSnoreGains() {
         XCTAssertEqual(SFX.slurp.gain, 0.85 * 0.6, accuracy: 0.001, "slurp is 0.6x its old gain")
-        XCTAssertEqual(SFX.snore.gain, 0.12, accuracy: 0.001, "\"ensure it's quieter\": down from 0.175")
+        XCTAssertEqual(SFX.snore.gain, 0.55, accuracy: 0.001, "audible under music on a phone speaker (2026-11-05 user: asked 5+ times for little snores)")
     }
 
     func testSnoresAreSparseAndNeverTwoAtOnce() {
@@ -251,26 +251,30 @@ final class SleepBackTests: XCTestCase {
         }
         var all: [Double] = []
         for (i, t) in times.enumerated() {
-            XCTAssertGreaterThan(t.count, 25, "jelly \(i) does snore (about every 30 s)")
-            XCTAssertLessThan(t.count, 62, "jelly \(i) snores rarely")
+            XCTAssertGreaterThan(t.count, Int(1200 / SnoreScheduler.interval.upperBound * 0.8), "jelly \(i) does snore (about every \(SnoreScheduler.interval) s)")
+            XCTAssertLessThan(t.count, Int(1200 / SnoreScheduler.interval.lowerBound + 2), "jelly \(i) snores sparsely")
             XCTAssertGreaterThanOrEqual(t[0] - 1000, SnoreScheduler.firstDelay.lowerBound - 0.11, "the first snore waits at least firstDelay")
-            for k in 1..<t.count { XCTAssertGreaterThanOrEqual(t[k] - t[k - 1], 20 - 0.11, "at most one snore every 20 s per Jelly") }
+            for k in 1..<t.count { XCTAssertGreaterThanOrEqual(t[k] - t[k - 1], SnoreScheduler.interval.lowerBound - 0.11, "at most one snore per interval per Jelly") }
             all += t
         }
         all.sort()
         for k in 1..<all.count { XCTAssertGreaterThanOrEqual(all[k] - all[k - 1], SnoreScheduler.hubGap - 0.11, "never two Jellies snoring at the same instant") }
-        XCTAssertEqual(SnoreScheduler.interval, 20...40)
+        XCTAssertEqual(SnoreScheduler.interval, 13...24)
         XCTAssertEqual(SnoreScheduler.firstDelay, 5...12)
-        XCTAssertEqual(SnoreScheduler.hubGap, 6)
-        // the stagger: with the shortest delay, Jelly 0 is due at 5 s, and Jelly 1 is held back by the hub gap (6 s) after it
+        XCTAssertEqual(SnoreScheduler.hubGap, 3.5)
+        // the stagger: with the shortest delays, Jelly 0 is due at 5 s and Jelly 1 at 5 + 1.3 = 6.3 s, but that is inside the hub gap (3.5 s),
+        // so Jelly 1 is pushed to 5 + 3.5 + 0.2 = 8.7 s; then each repeats after the shortest interval (13 s): Jelly 0 at 18 s, Jelly 1 at 21.7 s
         var s3 = SnoreScheduler()
         var due: [(Double, Int)] = []
         var t = 0.0
         while t < 30 { for i in s3.due(napping: [true, true, false], now: t, random: { $0.lowerBound }) { due.append((t, i)) }; t += 0.1 }
-        XCTAssertEqual(due.first?.1, 0)
-        XCTAssertEqual(due.first!.0, 5, accuracy: 0.11)
-        XCTAssertEqual(due.count, 3, "Jelly 0 at 5 s, Jelly 1 at about 11 s, Jelly 0 again at 25 s")
-        XCTAssertGreaterThanOrEqual(due[1].0 - due[0].0, 6 - 0.11, "Jelly 1 waits its turn")
+        XCTAssertEqual(due.count, 4, "Jelly 0 at 5 s, Jelly 1 at about 8.7 s, Jelly 0 at 18 s, Jelly 1 at about 21.7 s")
+        XCTAssertEqual(due.map { $0.1 }, [0, 1, 0, 1])
+        XCTAssertEqual(due[0].0, 5, accuracy: 0.11)
+        // (relative to each Jelly's own previous snore, so the 0.1 s sampling step does not accumulate into the checks)
+        XCTAssertEqual(due[1].0 - due[0].0, SnoreScheduler.hubGap + 0.2, accuracy: 0.11, "Jelly 1 waits its turn: hubGap + 0.2 after Jelly 0")
+        XCTAssertEqual(due[2].0 - due[0].0, SnoreScheduler.interval.lowerBound, accuracy: 0.11, "Jelly 0 repeats after the shortest interval")
+        XCTAssertEqual(due[3].0 - due[1].0, SnoreScheduler.interval.lowerBound, accuracy: 0.11, "Jelly 1 repeats after the shortest interval")
         // a Jelly that wakes forgets his schedule
         var s2 = SnoreScheduler()
         _ = s2.due(napping: [true, false, false], now: 5, random: { $0.lowerBound })

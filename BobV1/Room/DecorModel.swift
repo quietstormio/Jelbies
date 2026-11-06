@@ -417,6 +417,9 @@ enum DecorPlacement {
         if kind == .slide {
             let ap = p + turn(SIMD2(0, -DecorKind.slideApproach), q)          // (where a Jelly stands to climb it)
             // (the same bounds the stand spot is clamped to in `BlobBrain.decorStand`, so a placement the player is allowed never leaves the slide without a climb spot)
+            // the rider comes off the chute's end (turned with the piece) and walks on: a body's radius plus a margin beyond it has to be walkable floor too, else he lands off the floor and is dragged out through the slide
+            let lp = p + turn(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z + 0.55 + 0.15), q)
+            if lp.y > min(GameCamera.walkMaxZ, GameCamera.roamRect.max.y, GameCamera.roamMaxZ) || lp.y < GameCamera.walkMinZ { return false }
             if ap.y < GameCamera.walkMinZ + 0.1 || ap.y > min(GameCamera.walkMaxZ, GameCamera.roamRect.max.y) - 0.15 || abs(ap.x) > GameCamera.roamRectWide.max.x - 0.2 || abs(ap.x) > max(0, GameCamera.visibleHalfWidthAtBody(z: ap.y) * 0.93 - 0.2) { return false }
         }
         guard sofaClearance(kind, at: p, quarter: q) > gap else { return false }
@@ -463,6 +466,23 @@ enum DecorPlacement {
     /// The feet the room and the Jellies see for a list of placed pieces (items fully on the rug are lifted).
     static func feet(_ placed: [PlacedDecor]) -> [DecorFoot] {
         placed.map { p in DecorFoot(uid: p.uid, kind: p.kind, centre: p.at, lift: rugLift(p.kind, at: p.at, others: placed, ignoring: p.uid), quarter: p.quarter) }
+    }
+    /// Saved rooms: any slide that fails the placement rules (e.g. its landing is off the walkable floor) moves to the nearest valid spot, searching outward. Only slides are touched.
+    /// Returns the fixed list, nil when nothing changed.
+    static func refitSlides(_ list: [PlacedDecor]) -> [PlacedDecor]? {
+        var out = list, changed = false
+        for i in out.indices where out[i].kind == .slide {
+            let s = out[i]
+            if isValid(.slide, at: s.at, among: out, ignoring: s.uid, quarter: s.quarter) { continue }
+            var best: (SIMD2<Float>, Float)?
+            for a in -80...80 { for b in -80...80 {
+                let c = s.at + SIMD2(Float(a), Float(b)) * 0.1, d = simd_length(c - s.at)
+                if best.map({ d >= $0.1 }) ?? false { continue }
+                if isValid(.slide, at: c, among: out, ignoring: s.uid, quarter: s.quarter) { best = (c, d) }
+            } }
+            if let b = best?.0 { out[i].x = b.x; out[i].z = b.y; changed = true }
+        }
+        return changed ? out : nil
     }
     /// The spot nearest `p` (within 1.5) where the piece fits after a turn to `q` quarters, nil when none does.
     static func spotAfterTurn(_ kind: DecorKind, at p: SIMD2<Float>, quarter q: Int, among others: [PlacedDecor], ignoring uid: Int) -> SIMD2<Float>? {

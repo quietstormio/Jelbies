@@ -137,7 +137,7 @@ extension GameCamera {
     //   * BOTTOM: the front of the Jelbie (feet + shadow, `roamBodyDepth` in front of its centre) must stay `roamBottomMargin` of the screen height above the bottom edge.
     //   * BACK: the sofa, plant and side table, with `roamFurnitureClearance` between the body's centre and their edges (the body just touches them), and the back wall;
     //     the rows reach `roamMinZ` and the free spans of each row exclude the furniture, so the pockets beside the sofa are walkable and the strip in front of it is.
-    //   In PORTRAIT the two bottom-corner button rails (`HUDLayout.railRects`) are cut out of the free spans, so no body sits under a button (2026-10-22: the rails stay at the bottom, the Jelbies keep out); the middle front stays usable. Landscape: none.
+    //   In the PARK, in both orientations, the bottom-centre "Go home" pill (`HUDLayout.parkHomeRect`) is cut out the same way. In PORTRAIT the two bottom-corner button rails (`HUDLayout.railRects`) are cut out of the free spans, so no body sits under a button (2026-10-22: the rails stay at the bottom, the Jelbies keep out); the middle front stays usable. Landscape: none.
 
     /// How much of the screen width stays clear between the Jelbie's widest point and each side edge.
     static let roamSideMargin: Float = 0.04
@@ -164,7 +164,7 @@ extension GameCamera {
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect)
-        let rails = aspect < 1 ? HUDLayout.railRects : []          // (portrait: keep bodies out from under the bottom-corner button rails)
+        let rails = (aspect < 1 ? HUDLayout.railRects : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
         let minZ = RoomLayout.minZ + c
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
         var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]]()

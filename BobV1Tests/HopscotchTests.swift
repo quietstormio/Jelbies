@@ -100,7 +100,7 @@ final class HopscotchTests: XCTestCase {
     func testEveryNewParkPieceHasAStandSpot() {
         let lab = parkLab(n: 1)
         let b = lab.rigs[0].brain
-        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit), (.sandbox, .decorSit)] {
+        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit)] {
             let f = DecorField.shared.feet.first { $0.kind == kind }!
             b.decorIgnore = f.uid
             XCTAssertNotNil(b.decorStand(move, f, from: SIMD2(0, 0.5)), "\(kind) has a stand spot in the park")
@@ -114,10 +114,10 @@ final class HopscotchTests: XCTestCase {
         _ = parkLab(n: 1)
         let f = DecorField.shared
         for id in 0..<3 { f.use(uid, by: id); HopscotchLine.shared.enroll(uid, id) }
-        f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.sandUID, seat: 1, by: 7)
+        f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.seesawUID, seat: 1, by: 7)
         XCTAssertTrue(HopscotchLine.shared.active)
         f.set([PlacedDecor(uid: 1, kind: .beanbag, x: 0, z: 0, turns: nil)])          // (the room again)
-        for u in [ParkToys.seesawUID, ParkToys.sandUID, uid, ParkToys.slideUID] {
+        for u in [ParkToys.seesawUID, uid, ParkToys.slideUID] {
             XCTAssertNil(f.occupant[u], "occupant \(u)"); XCTAssertNil(f.coUsers[u], "coUsers \(u)"); XCTAssertNil(f.seatOccupant[u], "seats \(u)")
             XCTAssertNil(f.progress[u], "progress \(u)"); XCTAssertNil(f.tunnelDir[u], "tunnelDir \(u)")
         }
@@ -188,6 +188,52 @@ final class HopscotchTests: XCTestCase {
         XCTAssertTrue(DecorField.shared.coUsers[uid] == nil && DecorField.shared.occupant[uid] == nil, "the court is released")
     }
 
+    // MARK: the Go home pill is cut out of the park's roam floor
+
+    /// Both orientations: no free front-row spot has a body under the Go home pill, the floor still reaches the new front edge at the sides, and the slide's rider lands on free floor.
+    func testParkRoamFloorKeepsOffTheGoHomePillAndHoldsTheSlideLanding() {
+        RoomLayout.apply(RoomCatalog.park)
+        for (label, aspect) in [("portrait", Float(393.0 / 852.0)), ("landscape", Float(852.0 / 393.0))] {
+            GameCamera.configurePark()
+            guard let rf = GameCamera.refreshRoam(aspect: aspect) else { return XCTFail("\(label): no roam floor") }
+            let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
+            let cam = GameCamera.camera(aspect: aspect)
+            let pill = [HUDLayout.parkHomeRect(aspect: aspect)]
+            XCTAssertGreaterThanOrEqual(rf.maxZ, 4.25,  // (the cap is 4.5; the polygon's rows are 0.25 apart and end at 4.28)
+                                   "\(label): the floor reaches the front edge")
+            var hits = 0, freeFront = 0
+            for (i, z) in rf.zs.enumerated() where z >= 4.0 {
+                for span in rf.free[i] {
+                    var x = span.lowerBound
+                    while x <= span.upperBound {
+                        freeFront += 1
+                        if HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: size, rails: pill) { hits += 1 }
+                        x += 0.1
+                    }
+                }
+            }
+            XCTAssertEqual(hits, 0, "\(label): \(hits) free spots have a body under the Go home pill")
+            XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front")
+            // the sides of the front row stay reachable
+            XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
+            // the slide (where the sandbox was) is off the pond, and the spot behind it where a Jelbie climbs is a body's width off the water
+            DecorField.shared.set(ParkToys.placed)
+            let slideF = DecorField.shared.foot(ParkToys.slideUID)!, hs = DecorKind.slide.spec(quarter: slideF.quarter).half
+            let nearest = SIMD2(min(max(ParkScenery.pondCentre.x, slideF.centre.x - hs.x), slideF.centre.x + hs.x), min(max(ParkScenery.pondCentre.y, slideF.centre.y - hs.y), slideF.centre.y + hs.y))
+            XCTAssertGreaterThanOrEqual(simd_distance(nearest, ParkScenery.pondCentre) - 1.0, 0.3, "\(label): the slide is at least 0.3 off the pond")
+            let climb = slideF.centre + slideF.turned(SIMD2(0, -DecorKind.slideApproach))
+            XCTAssertGreaterThanOrEqual(simd_distance(climb, ParkScenery.pondCentre), 1.5, "\(label): the climb spot is off the water")
+            XCTAssertTrue(DecorPlacement.isValid(.slide, at: slideF.centre, among: [], quarter: slideF.quarter), "\(label): the placement rules accept the slide")
+            XCTAssertFalse(DecorField.shared.feet.contains { $0.kind == .sandbox }, "\(label): the park has no sandbox")
+            // the slide's rider lands inside a free span, with a body clear of the pill
+            let sf = DecorField.shared.foot(ParkToys.slideUID)!
+            let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))
+            let row = rf.zs.indices.min { abs(rf.zs[$0] - landing.y) < abs(rf.zs[$1] - landing.y) }!
+            XCTAssertTrue(rf.free[row].contains { $0.contains(landing.x) }, "\(label): landing \(landing) is not in a free span of row z \(rf.zs[row])")
+            XCTAssertFalse(HUDLayout.bodyHitsRail(x: landing.x, z: landing.y, viewProj: cam.viewProj, size: size, rails: pill), "\(label): the rider lands under the Go home pill")
+        }
+    }
+
     // MARK: the slide is solid
 
     /// The park has no tunnel, and over a long soak (many seeds) nobody has a root inside the slide's footprint except while really using it (the ladder, the platform, the ride, getting up).
@@ -215,5 +261,40 @@ final class HopscotchTests: XCTestCase {
         }
         // (a rider lands at the chute's end and walks out: nobody is inside it unless riding)
         XCTAssertLessThan(longest, 1.5, "someone stood inside the slide without using it for \(longest) s: \(where_)")
+    }
+
+    /// The room slide's ride ends with him walking on to clear floor: 1 s after the script ends he is outside the footprint, and `decorExitCheck` never had to ease him out.
+    func testRoomSlideRideEndsClearOfTheSlide() throws {
+        _ = OnePieceInvariantTests.configured
+        ToyTuning.settle = 0
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0)
+        defer { DecorField.shared.clear() }
+        guard let base = LegsDrawnAuditTests.fromMove("decor2: climb the slide, sit, ride, exit") else { return XCTFail("no slide scenario") }
+        var report = ""
+        for c in 0..<OnePieceInvariantTests.characters.count {
+            var sc = base
+            var need: Float = 0.5          // (decorExitCheck's own "inside": footprint * reach - 0.05)
+            var ended: Float?, clock: Float = 0, rode = false, maxStuck: Float = 0, depthAfter: Float?, edgeAtEnd: Float = 0, clearAt: Float?
+            sc.each = { r in
+                clock += r.sim.stepDt
+                let k = r.brain.idleState.kind
+                if k == .decorSlide { rode = true }
+                guard rode, let f = DecorField.shared.foot(7) else { return }
+                maxStuck = max(maxStuck, r.brain.insideStuckT)
+                need = r.brain.footprint * f.spec.reach - 0.05
+                if let e = ended, clearAt == nil, f.distance(r.brain.position) >= need { clearAt = clock - e }
+                if k == nil, ended == nil { ended = clock; edgeAtEnd = f.distance(r.brain.position) }
+                if let e = ended, depthAfter == nil, clock >= e + 1 { depthAfter = f.distance(r.brain.position) }
+            }
+            _ = OnePieceInvariantTests.run(sc, char: c, shoes: false, pacing: .hz60, seed: 3)
+            let who = OnePieceInvariantTests.characters[c].0
+            XCTAssertTrue(rode, "\(who): rode the slide")
+            XCTAssertNotNil(ended, "\(who): the script ended")
+            guard let d = depthAfter else { XCTFail("\(who): ran out of time before 1 s after the ride"); continue }
+            report += String(format: "%@: at script end %.2f from the footprint edge, 1 s later %.2f (clear after %.2f s, maxStuckT %.2f)\n", who, edgeAtEnd, d, clearAt ?? -1, maxStuck)
+            XCTAssertGreaterThanOrEqual(d, need, "\(who): 1 s after the ride he is still inside the slide's footprint (\(d) from its edge, needs \(need))")
+            XCTAssertLessThan(maxStuck, 3, "\(who): decorExitCheck had to ease him out (insideStuckT \(maxStuck))")
+        }
+        print("ROOMSLIDE\n" + report)
     }
 }
