@@ -170,7 +170,7 @@ extension GameCare {
 
     // MARK: body
 
-    private func guestRemove() {
+    func guestRemove() {
         let g = guestBook
         if let a = g.actor { visitorPutAway(a); parkBook.clear?() }
         g.actor = nil

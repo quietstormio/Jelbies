@@ -18,6 +18,7 @@ final class RaceThreeTests: XCTestCase {
         let care: GameCare
         let actors: [JellyActor]
         var park: [JellyActor] = []
+        var withPark = false          // tick the park/guest glue too (a friend over)
         let sm = MotionRig.simMesh, rm = MotionRig.renderMesh
         init(count: Int) {
             let d = UserDefaults(suiteName: "RaceThree.\(UUID().uuidString)")!
@@ -70,6 +71,7 @@ final class RaceThreeTests: XCTestCase {
             care.tick(brain: actors[0].brain!, renderer: nil, dt: dt, sim: actors[0].sim)
             care.tickOthers(actors, dt: dt)
             care.tickRace(actors, dt: dt)
+            if withPark { care.tickPark(actors, dt: dt) }
             for a in actors + park { a.sim.step() }
         }
         func run(_ s: Float, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { step(); if let u = until, u() { break } } }
@@ -152,4 +154,47 @@ final class RaceThreeTests: XCTestCase {
         XCTAssertTrue(care.raceBook.extra.isEmpty, "quit: no bodies left")
         XCTAssertTrue(room.park.isEmpty)
     }
+
+    // MARK: a friend is over
+
+    /// A roster of `n` with a guest at home (the play date is on, his body is standing in the room), then the race.
+    private func guestRace(roster n: Int, quit: Bool) {
+        let room = Room(count: n)
+        Self.keep.append(room)
+        room.withPark = true
+        let care = room.care
+        care.race.rivalSource = LocalRivalSourceFixed(waddle: 0.2)
+        care.race.autoRate = 8; care.race.autoReturnAfter = 0.5
+        care.guestBook.finish()          // (the book reads the device's defaults: no visit left over from another run)
+        defer { care.guestBook.finish() }
+        XCTAssertTrue(care.guestBook.invite(visitor: 3, kind: .playDate, now: Date().timeIntervalSince1970))
+        care.guestBook.markArrived(now: Date().timeIntervalSince1970)
+        let visit = care.guestBook.visit
+        room.run(20) { care.guestBook.actor != nil }
+        if care.guestBook.actor == nil {          // (the room was not quiet in a headless test: the guest's body is put in like guestSpawn does)
+            care.guestSpawn(room.actors, care.parkBook.visitor(3)!, visit!, overdue: true)
+        }
+        XCTAssertNotNil(care.guestBook.actor, "roster \(n): a friend is at home")
+        XCTAssertNil(care.raceBlocker(jelly: 0), "roster \(n): a friend over never blocks the race")
+        care.startRace(jelly: 0, seed: 11)
+        XCTAssertTrue(care.race.active, "roster \(n): the race started")
+        room.run(6) { care.race.trackVisible && care.raceBook.racers.count == 3 }
+        XCTAssertEqual(care.race.rivals.count, 2)
+        XCTAssertEqual(care.raceBook.racers.count, 3, "roster \(n): three on the track")
+        XCTAssertEqual(care.raceBook.extra.count, 3 - n)
+        XCTAssertEqual(care.raceBook.extra.first?.brain?.feature, care.parkBook.visitor(3)!.signature, "the guest's body is the first temporary rival")
+        XCTAssertEqual(care.guestBook.visit, visit, "the visit goes on, same guest")
+        if quit { care.race.abort() }
+        room.run(120) { !care.race.active && care.raceBook.extra.isEmpty && !care.race.trackVisible }
+        XCTAssertFalse(care.race.active)
+        XCTAssertTrue(care.raceBook.extra.isEmpty)
+        room.run(15) { care.guestBook.actor != nil }
+        XCTAssertEqual(care.guestBook.visit, visit, "roster \(n): the same guest after the race")
+        XCTAssertNotNil(care.guestBook.actor, "roster \(n): the guest is at home again")
+        XCTAssertEqual(room.park.count, 1, "roster \(n): only the guest's body is out")
+    }
+
+    func testRosterOfTwoWithAGuestRacesAndKeepsTheGuest() { guestRace(roster: 2, quit: false); }
+    func testRosterOfOneWithAGuestRacesAndKeepsTheGuest() { guestRace(roster: 1, quit: false) }
+    func testGuestStaysAfterQuit() { guestRace(roster: 2, quit: true) }
 }

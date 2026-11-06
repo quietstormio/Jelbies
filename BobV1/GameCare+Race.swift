@@ -99,7 +99,6 @@ extension GameCare {
         if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }
         if raceWait != nil { return "Waking everybody up." }
         if raceBook.returner != nil { return "Welcome him home first." }
-        if guestBook.present, Self.temporaryRivalBodies(roster: max(jellies.count, 1)) > 0 { return "A friend is over. Let him go home first." }          // (the track's extra rivals use the same spare bodies as the guest)
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "He is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "He is not in the room." }
         return nil
@@ -246,10 +245,15 @@ extension GameCare {
     private func raceSpawnExtras(missing: Int, from first: Int) {
         let book = raceBook
         guard missing > 0, book.extra.isEmpty, let spawn = parkBook.spawn, race.rivals.indices.contains(first) else { return }
-        let specs: [ParkVisitor] = (first..<min(first + missing, race.rivals.count)).map { i in
+        let specs: [ParkVisitor] = (first..<min(first + missing, race.rivals.count)).map { i -> ParkVisitor in
             let r = race.rivals[i]
+            if i == first, let g = guestBook.visit, g.arrived, var v = parkBook.visitor(g.visitor) {          // a friend is over: his body is the first temporary rival (his own feature, the rival's name, tint and jersey); he walks in again at home afterwards, the visit untouched
+                v = ParkVisitor(id: 9000 + i, name: r.name, colour: v.colour, signature: v.signature, wear: nil, style: v.style, blurb: "", greeting: "")
+                return v
+            }
             return ParkVisitor(id: 9000 + i, name: r.name, colour: .cream, signature: LocalRivalSource.signature(forTint: r.tint), wear: nil, style: .balanced, blurb: "", greeting: "")
         }
+        if guestBook.actor != nil { guestRemove() }          // (the guest's body is normally gone already: an outing puts it away the moment the race is asked)
         let bodies = spawn(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) })
         guard bodies.count == specs.count, bodies.enumerated().allSatisfy({ $0.element.id == book.actors.count + $0.offset }) else { parkBook.clear?(); return }
         book.extra = bodies; book.extraSpecs = specs
