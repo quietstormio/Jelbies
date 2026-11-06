@@ -140,15 +140,19 @@ nonisolated enum ParkTuning {
     static let poolSeed: UInt64 = 0x9A2B_17C3_5D41
     // Friendship (points per second near each other; a social together is faster). Doubled on 2026-10-25 (friends come in a couple of visits, not ages):
     // a visit of ~5 minutes among the visitors is now worth ~20...40 points with each one met, the friendly socials a good deal more.
+    // Slowed ~1.3x on 2026-11-06 (user: "friendships take a little longer to form, just a little longer more interactions and emotes"): passive proximity x0.6
+    // (0.36 -> 0.216; socialMul stays 4 so the generic social follows), the friendly emotes x0.85 in effective rate (0.216 x 11.3 = 2.44/s vs 2.88/s) and their start lump 2.5 -> 2.1,
+    // so standing about earns clearly less than doing things together. The thresholds (palAt...) are NOT touched: levels are live, so raising them would demote saved friendships.
+    // Home visits: homeMul 0.7 -> 0.5, so a sleepover evening of play stays under "best friend" (ParkFriendSlowTests).
     static let nearRadius: Float = 3.2
-    static let pointsPerSecond: Float = 0.36
+    static let pointsPerSecond: Float = 0.216
     static let socialMul: Float = 4.0
     /// While the two do one of the friendly socials (chest bump, high five, hum, cheek squish, twirl, hop along): the rate multiplier (instead of `socialMul`) and a lump when one starts.
-    static let friendlyMul: Float = 8.0
-    static let friendlyStartBonus: Float = 2.5
+    static let friendlyMul: Float = 11.3
+    static let friendlyStartBonus: Float = 2.1
     static let palAt: Float = 20, friendAt: Float = 45, bestAt: Float = 75
     /// A home visit (a guest over to play): friendship points per second near a housemate, and the same friendly-social boost.
-    static let homeMul: Float = 0.7
+    static let homeMul: Float = 0.5
     // Love (the Love / attention need that petting fills at NeedsTuning.petRate per second): twice that while playing with a friend, a daily cap
     static let loveMul: [Float] = [0.5, 1.0, 2.0, 2.0]          // stranger, pal, friend, best friend (times petRate)
     static let loveDailyCap: Float = 0.8
