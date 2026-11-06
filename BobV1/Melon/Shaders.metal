@@ -578,6 +578,10 @@ fragment float4 fsEyesMatte(MeshOut i [[stage_in]], constant Uniforms& u [[buffe
         float3 lo = float3(0.091, 0.041, 0.027);     // #55392E
         float3 mid = float3(0.138, 0.076, 0.054);    // #684E42
         float3 hi = float3(0.262, 0.150, 0.109);     // #8C6C5D
+        float3 rimC = float3(0.80, 0.60, 0.56);
+        // Panda only (body mode 51, the egg; PandaMarks.h): near-black cool beads that sit in the charcoal patch with no brown halo (user 11-05). Still a bead: the dome keeps
+        // its soft highlight (hi) and the thin edge rim, all in cool greys, so the eye reads against the patch (the beads are darker than the patch, the highlight lighter).
+        if (u.shape.w > 50.5 && u.shape.w < 51.5) { lo = float3(0.0045, 0.0050, 0.0080); mid = float3(0.0090, 0.0100, 0.0160); hi = float3(0.085, 0.092, 0.130); rimC = float3(0.115, 0.125, 0.165); }
         float tl = dot(N, normalize(float3(-0.55, 0.65, 0.52))) * 0.5 + 0.5;
         tl = clamp((tl - 0.76) * 2.6 + 0.47, 0.0, 1.0);
         col = mix(lo, mid, smoothstep(0.12, 0.5, tl));
@@ -589,7 +593,7 @@ fragment float4 fsEyesMatte(MeshOut i [[stage_in]], constant Uniforms& u [[buffe
         col *= 1.0 - 0.30 * rimD;
         float edgeL = 1.0 - smoothstep(0.03, 0.22, NdV);
         float below = smoothstep(-0.25, 0.7, -N.y);
-        col = mix(col, float3(0.80, 0.60, 0.56), edgeL * (0.35 + 0.6 * below));
+        col = mix(col, rimC, edgeL * (0.35 + 0.6 * below));
     } else {
         float3 base = float3(0.133, 0.070, 0.045);   // #664B3C
         float bevel = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
