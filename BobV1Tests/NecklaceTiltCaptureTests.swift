@@ -207,15 +207,16 @@ extension FeatureCaptureTests {
                 if after { setCurrent() } else { WearLevel.useLegacyTilt(); WearLevel.tiltOn = !(look == .bandanaCoral || look == .bandanaMint || look == .bandanaSun); WearMeshes.clearCache() }
                 let front = env["NECK_CAP_FRONT"] == "1"      // (as chain_r2: orbit 3/4 = size 190, dist 2.4, lift 0.4, ty 0.35, whole body; front = necklace_r2_front's size 420 default camera)
                 let im = front ? try neckStill(id: id, outfit: [.neck: look], yaw: 0, walkFrames: frames, size: 420, heading: SIMD2(-1.2, 2.2), motion: "walk")
+                               : env["NECK_CAP_ZOOM"] == "1" ? try neckStill(id: id, outfit: [.neck: look], yaw: yaw, walkFrames: frames, size: 300, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: Float(env["NECK_CAP_DIST"] ?? "") ?? 1.7, lift: Float(env["NECK_CAP_LIFT"] ?? "") ?? 0.3, ty: Float(env["NECK_CAP_TY"] ?? "") ?? 0.0)
                                : try neckStill(id: id, outfit: [.neck: look], yaw: yaw, walkFrames: frames, size: 190, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: 2.4, lift: 0.4, ty: 0.35)
                 let tag = "\(JellyRoster.baseNames[id]) \(look.rawValue) \(pn): \(after ? "AFTER" : "BEFORE")"
-                try writePNG(im, d + "/ship_yaw\(Int(yaw * 100))_\(JellyRoster.baseNames[id])_\(look.rawValue)_\(pn)_\(after ? "after" : "before").png", maxBytes: 12_000_000)
+                try writePNG(im, d + "/ship_\(env["NECK_CAP_ZOOM"] == "1" ? "zoom_" : "")\(front ? "front_" : "")yaw\(Int(yaw * 100))_\(JellyRoster.baseNames[id])_\(look.rawValue)_\(pn)_\(after ? "after" : "before").png", maxBytes: 12_000_000)
                 cells.append(tlabel(im, [tag], bar: 26))
             }
             setCurrent()
             SocialTests.keep.removeAll()
         } }
-        try writePNG(tgrid(cells, cols: 4), d + "/ship_sheet_yaw\(Int(yaw * 100)).png", maxBytes: 14_000_000)
+        try writePNG(tgrid(cells, cols: 4), d + "/ship_sheet_\(env["NECK_CAP_ZOOM"] == "1" ? "zoom_" : "")\(env["NECK_CAP_FRONT"] == "1" ? "front_" : "")yaw\(Int(yaw * 100)).png", maxBytes: 14_000_000)
     }
 
     /// Round 3: the pearl string (never rendered before) on Panda and Teddy, rest and walk, 3/4 (the phone's angle) and front. BEFORE = round-1 values, AFTER = the current defaults.
