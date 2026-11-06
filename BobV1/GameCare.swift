@@ -59,6 +59,9 @@ final class GameCare {
     @ObservationIgnored var eagerWhenFamished = true
     /// The small "Not hungry" / "Not thirsty" label while he refuses (nil = none). `noticeSerial` bumps per refusal.
     var notice: String?
+    /// The label is a tap's answer (over Bob's head) rather than a diner's own refusal.
+    @ObservationIgnored var noticeAtBob = false
+    @ObservationIgnored var gaveUpShown = false
     @ObservationIgnored var noticeSerial = 0
     @ObservationIgnored var noticeAge: Float = 0
     @ObservationIgnored var noticeDone = false
@@ -296,12 +299,13 @@ final class GameCare {
     /// `jelly: nil` = nobody singled out: with several Jellies a GROUP serving (like `drink`).
     func feed(_ id: String, jelly: Int? = nil) {
         guard let c = Consumables.with(id: id), c.kind == .food else { return }
-        if c.stored, store.count(food: c.id) == 0 { return }          // a store food needs one in the bag
+        if c.stored, store.count(food: c.id) == 0 { tapRefused("No \(c.name) left in the bag"); return }          // a store food needs one in the bag
         selectedFoodID = id; servingCharged = false; order(c, jelly: jelly)
     }
     /// `jelly: nil` = nobody singled out: with several Jellies it is a GROUP serving (one drink, a straw each); one Jelly keeps the old flow.
     func drink(_ id: String, jelly: Int? = nil) {
-        guard let c = Consumables.with(id: id), c.kind == .drink, drinkIsAvailable(id) else { return }          // a bought drink needs one in the bag
+        guard let c = Consumables.with(id: id), c.kind == .drink else { return }
+        guard drinkIsAvailable(id) else { tapRefused("No \(c.name) left in the bag"); return }          // a bought drink needs one in the bag
         selectedDrinkID = id; servingCharged = false; order(c, jelly: jelly)
     }
     func water(_ id: String, jelly: Int? = nil) { drink(id, jelly: jelly) }
@@ -475,7 +479,8 @@ final class GameCare {
             release()
             if focus.isActive { afterRelease = c; pendingJelly = jelly; return }
         }
-        guard wanted == nil, meal == nil, dining.phase == .absent, !bath.active, !tripActive, !groupActive else { return }
+        if let why = orderBlocker(c) { tapRefused(why); return }          // (said out loud: GameCare+MealFeedback.swift)
+        if jelly == nil, jellies.count > 1, let full = fullLine(c, jelly: jelly) { tapRefused(full) }          // a group serving has no label of its own: the tray still comes out and they shake their heads, the line says why (a single Jelbie shows "Not hungry" over his head)
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
             mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0
             return

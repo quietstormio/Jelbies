@@ -60,7 +60,10 @@ extension GameCare {
         if let c = groupWanted {
             groupAge += dt
             let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
-            if focus.isActive || bath.active || groupAge > Self.mealTimeout { groupWanted = nil; groupQueueClear(); return }
+            if focus.isActive || bath.active || groupAge > Self.mealTimeout {
+                if groupAge > Self.mealTimeout { noticeAtBob = true; notice = "The table couldn't be set — try again"; noticeSerial += 1; noticeAge = 0 }          // (was silent)
+                groupWanted = nil; groupQueueClear(); return
+            }
             guard ready else { return }
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             // who sits now: the queued ids (a second sitting), else everybody; three at most, the rest wait for the next sitting
@@ -88,6 +91,7 @@ extension GameCare {
             if !group.isActive { groupQueueClear() }
             return
         }
+        if group.gaveUp { if !gaveUpShown { gaveUpShown = true; tapRefused("Couldn't get the food to the table — try again") } } else { gaveUpShown = false }          // (a serving the diners could not reach was given up silently)
         guard group.isActive else {
             // a sitting just ended: the waiting Jellies get theirs next (the tray pops again once this one has gone)
             if let c = groupNext, !groupQueue.isEmpty {

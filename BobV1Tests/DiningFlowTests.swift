@@ -40,7 +40,7 @@ final class MealRun {
     }
 
     let rig: MotionRig
-    let care = GameCare()
+    let care: GameCare = { let c = GameCare(); for it in StoreCatalog.items where it.food != nil && it.kind != .drink { c.store.grant(it.id, 30) }; return c }()          // (store foods are fed from the bag: feed() returns early without one)
     var frames: [Frame] = []
     var lastHold: SIMD3<Float>?
     var lastBite: SIMD3<Float>?
