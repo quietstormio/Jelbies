@@ -70,6 +70,10 @@ struct LobbyJelbiePicker: View {
     var lockedText = "Needs a partner"
     /// Non-nil (the Bag): spare slots are greyed placeholder tiles with a "+" and this accessibility label. Nil (the lobbies): the faint dashed inset, unchanged.
     var emptyLabel: String? = nil
+    /// The largest head, in points (the lobbies keep 140; the Bag in landscape passes a small one).
+    var portraitCap: CGFloat = 140
+    /// false (the Bag): no fixed footnote strip under the row. The lobbies keep it.
+    var showNote = true
     var pick: (Int) -> Void
     @Environment(\.lobbyTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -82,7 +86,7 @@ struct LobbyJelbiePicker: View {
     var body: some View {
         let roster: [JellyProfile] = care.jellies.prefix(Self.slots).map { $0 }
         let segW = max((rowW - 2) / 3, 90)
-        let portrait = min(segW * 0.74, 140)
+        let portrait = min(segW * 0.74, portraitCap)
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {          // the same height on every lobby
@@ -109,7 +113,7 @@ struct LobbyJelbiePicker: View {
             .frame(maxWidth: Self.maxRow)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowW = $0 }
             // one fixed slot under the strip, on every lobby: the hint, or the blocker in its place (with the way out beside it). Nothing below it ever moves.
-            HStack(spacing: 8) {
+            if showNote { HStack(spacing: 8) {
                 Text(blocker ?? footnote ?? " ").font(SK.font(12, .bold)).foregroundStyle(theme.subheading).lineLimit(2).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("\(id)-note")
                 if let b = footnoteButton {
@@ -119,7 +123,7 @@ struct LobbyJelbiePicker: View {
                     }.buttonStyle(.plain).accessibilityIdentifier(b.id)
                 }
             }
-            .padding(.horizontal, 2).frame(height: 28)
+            .padding(.horizontal, 2).frame(height: 28) }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier(id)
     }
@@ -194,7 +198,7 @@ struct LobbyJelbiePicker: View {
                 Image(systemName: "plus").font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.muted.opacity(0.55))
             }
             .padding(6)
-            .frame(maxWidth: .infinity, minHeight: 100)
+            .frame(maxWidth: .infinity, minHeight: min(100, height(portraitCap)))
             .accessibilityElement(children: .ignore).accessibilityLabel(emptyLabel)
             .accessibilityIdentifier("\(id)-empty")
         } else {

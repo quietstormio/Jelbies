@@ -455,7 +455,7 @@ struct BagSheet: View {
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
                 if tab != .wear { boosts }
-                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", pick: { who = $0 })
+                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
                 ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
