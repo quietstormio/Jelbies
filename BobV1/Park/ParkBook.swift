@@ -34,13 +34,34 @@ final class ParkBook {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let reserved = Self.reservedNames()
         if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { let fresh = ParkPool.generate()
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
-            visitors = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x } }
-        else { visitors = ParkPool.generate() }
+            var vs = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
+            // Names (2026-11-05): twins merged, the other doubles and the Jelbie / personality-word names renamed (idempotent), saved right away.
+            if ParkNames.reconcile(&vs, reserved: reserved) {
+                if let d = try? JSONEncoder().encode(vs) { defaults.set(d, forKey: Self.key) }
+            }
+            visitors = vs }
+        else { visitors = ParkPool.generate(reserved: reserved) }
     }
 
-    func visitor(_ id: Int) -> ParkVisitor? { visitors.indices.contains(id) ? visitors[id] : nil }
+    /// The names a visitor may not take: the player's species / roster Jelbies, the personality words, the colours (ParkNames.reserved).
+    static func reservedNames() -> Set<String> { ParkNames.reserved(rosterNames: JellyRoster.baseNames + JellyRoster.names) }
+
+    /// The record for an id; a merged twin answers with the record it was folded into.
+    func visitor(_ id: Int) -> ParkVisitor? {
+        guard visitors.indices.contains(id) else { return nil }
+        if let m = visitors[id].mergedInto, visitors.indices.contains(m) { return visitors[m] }
+        return visitors[id]
+    }
+    private func live(_ id: Int) -> Int? {
+        guard visitors.indices.contains(id) else { return nil }
+        if let m = visitors[id].mergedInto, visitors.indices.contains(m) { return m }
+        return id
+    }
+    /// Capture / test aid: set a name directly (no uniqueness check).
+    func setName(_ id: Int, _ name: String) { guard visitors.indices.contains(id) else { return }; visitors[id].name = name; touch(); save() }
     func save() {
         guard dirty else { return }
         dirty = false
@@ -52,8 +73,8 @@ final class ParkBook {
 
     /// Adds points to a pair; returns the level now when it went up.
     @discardableResult
-    func add(points: Float, visitor id: Int, character: Int) -> ParkFriendLevel? {
-        guard visitors.indices.contains(id) else { return nil }
+    func add(points: Float, visitor rawID: Int, character: Int) -> ParkFriendLevel? {
+        guard let id = live(rawID) else { return nil }
         let before = visitors[id].points(with: character)
         let after = min(before + points, 100)
         guard after != before else { return nil }
@@ -64,7 +85,7 @@ final class ParkBook {
         return nil
     }
     func markSeen(_ ids: [Int], at now: Double) {
-        for id in ids where visitors.indices.contains(id) { visitors[id].lastSeen = now; visitors[id].introduced = true }
+        for id in ids.compactMap({ live($0) }) { visitors[id].lastSeen = now; visitors[id].introduced = true }
         touch(); save()
     }
     /// The line for a level: the cached one, else the hand-written one.
@@ -82,7 +103,7 @@ final class ParkBook {
 
     func chooseCast(count: Int, characters: [Int], now: Double) -> [ParkVisitor] {
         var rng = SystemRandomNumberGenerator()
-        return ParkPool.pickCast(from: visitors, count: count, characters: characters, now: now, using: &rng)
+        return ParkPool.pickCast(from: visitors.filter { $0.mergedInto == nil }, count: count, characters: characters, now: now, using: &rng)
     }
 
     // MARK: the on-device writer (optional)
@@ -99,7 +120,12 @@ final class ParkBook {
                 let t = await ParkText.write(colour: v.colour.title.lowercased(), style: v.style.word.lowercased(), signature: Self.words(v.signature))
                 guard self.visitors.indices.contains(id) else { continue }
                 if let t {
-                    if !self.visitors[id].introduced { self.visitors[id].name = t.name }          // a name never changes once the player has met them
+                    // a name never changes once the player has met them, and it is never one already used, a Jelbie's or a personality word
+                    if !self.visitors[id].introduced {
+                        var taken = Self.reservedNames()
+                        for (j, o) in self.visitors.enumerated() where j != id && o.mergedInto == nil { taken.insert(ParkNames.key(o.name)) }
+                        if ParkNames.isFree(t.name, taken: taken) { self.visitors[id].name = t.name }
+                    }
                     self.visitors[id].blurb = t.blurb; self.visitors[id].greeting = t.greeting
                 }
                 self.visitors[id].written = true          // (once: a failed ask is not repeated this session either)
