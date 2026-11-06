@@ -59,6 +59,8 @@ final class GameCare {
     @ObservationIgnored var eagerWhenFamished = true
     /// The small "Not hungry" / "Not thirsty" label while he refuses (nil = none). `noticeSerial` bumps per refusal.
     var notice: String?
+    /// A Feed / Drink / Play row is unfolded in the care menu (the need bubbles hide while it is).
+    var pickerShowing = false
     /// The label is a tap's answer (over Bob's head) rather than a diner's own refusal.
     @ObservationIgnored var noticeAtBob = false
     @ObservationIgnored var gaveUpShown = false
@@ -596,6 +598,7 @@ final class GameCare {
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
+        focusFrame(dt: dt)
         if focus.phase == .approaching {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]

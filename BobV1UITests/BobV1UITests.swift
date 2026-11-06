@@ -234,6 +234,7 @@ final class BobV1UITests: XCTestCase {
     @MainActor
     func testCareMenuFeedWaterCall() throws {
         let app = XCUIApplication()
+        app.launchArguments += ["-StoreSeed", "1"]          // a bag with foods: the Feed row lists only what is owned
         app.launch()
         let menu = app.buttons["care-menu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 20))
@@ -267,9 +268,10 @@ final class BobV1UITests: XCTestCase {
         XCTAssertTrue(feed.isEnabled && water.isEnabled)
         // Feed opens a tiny picker of the catalogue's foods; choosing one starts it and collapses the menu
         feed.tap()
-        let berries = app.buttons["care-food-berries"], pizza = app.buttons["care-food-pizza"]
+        let berries = app.buttons["care-food-sushi"], pizza = app.buttons["care-food-nuggets"]
         XCTAssertTrue(berries.waitForExistence(timeout: 10), "Feed unfolds the food picker")
         XCTAssertTrue(pizza.exists)
+        XCTAssertFalse(app.buttons["care-food-berries"].exists, "a food the player owns none of is not listed")
         choose(pizza)
         waitFor("exists == false", feed, 10, "menu collapses after choosing a food")
 

@@ -26,7 +26,7 @@ final class FeedCaptureUITests: XCTestCase {
             sleep(5)
             let menu = app.buttons["care-menu"]
             XCTAssertTrue(menu.waitForExistence(timeout: 20))
-            for (button, first, tag) in [("care-feed", "care-food-berries", "feed"), ("care-snacks", "care-snack-sushi", "snacks"), ("care-water", "care-drink-water", "drink")] {
+            for (button, first, tag) in [("care-feed", "care-food-sushi", "feed"), ("care-snacks", "care-snack-sushi", "snacks"), ("care-water", "care-drink-water", "drink")] {
                 if !app.buttons["care-feed"].exists { menu.tap(); sleep(1) }
                 let b = app.buttons[button]
                 guard b.waitForExistence(timeout: 5) else { continue }
