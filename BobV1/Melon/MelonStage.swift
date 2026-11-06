@@ -1194,7 +1194,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         var wt = CACurrentMediaTime()
         if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }
         lapEnd(.shoes, &wt)          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
-        if game { model.care.refreshWear(actors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
+        if game { model.care.refreshWear(actors, extra: parkActors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
         lapEnd(.wear, &wt)
         PerfMeter.end(.wear, pmW2)
         let pmM = PerfMeter.begin()
@@ -1294,6 +1294,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 renderer.setHidden(model.hideJellies || (bathRoom && a.id != washed) || model.care.showHides(a.id) || model.care.parkHides(a.id), body: a.id)
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
+            for a in model.care.raceBook.extra { renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id) }          // the track's temporary rivals
         }
         renderer.resize(width: rw, height: rh)
         lastRW = rw; lastRH = rh
