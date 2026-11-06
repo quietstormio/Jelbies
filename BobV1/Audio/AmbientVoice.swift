@@ -12,7 +12,7 @@ nonisolated enum AmbientVoiceTuning {
     /// Master switch (the soak test turns it off to measure the "before" on the same seeds).
     nonisolated(unsafe) static var enabled = true
     /// Seconds of silence (since any voice of that Jelbie) before the filler speaks; re-rolled after each fire. x(1 + nightExtra * night) in the evening / at night while awake.
-    static let quietFor: ClosedRange<Double> = 22...30          // (the brief said 26...36: that gave only x1.26 on the busy soak, which already voices 3 per Jelbie-minute; the soak needs >= x1.3)
+    static let quietFor: ClosedRange<Double> = 20...28          // (the brief said 26...36: that gave only x1.26 on the busy soak, 22...30 x1.33 with the new voices; the soak needs a safe >= x1.3)
     static let nightExtra: Double = 0.5
     /// Nobody may have voiced in the whole room for this long (two never chirp on top of each other); else retry after `retry`.
     static let roomGap: Double = 3
@@ -23,6 +23,26 @@ nonisolated enum AmbientVoiceTuning {
     static let returnHoldoff: Double = 6
     /// The brain's little mouth-open pulse.
     static let mouthOpen: Float = 0.35, mouthSeconds: Double = 0.25
+}
+
+/// "Play more often" for the context voices (giggle, curious, ooh, hum ...): at home their chance x1.3 (AudioHub.contextVoice). `enabled` is the soak test's before / after switch.
+nonisolated enum HomeVoiceTuning {
+    nonisolated(unsafe) static var enabled = true
+    static let contextChanceMul: Double = 1.3
+}
+
+extension AmbientVoiceTuning {
+    /// What the filler says: chirp / babble stay the most common. By day: happy 3, babble 3, giggle 1.2, curious 1, hum 1, ooh 0.8. Evening / awake at night (night >= 0.3):
+    /// hum 2, yawn 1.5, happy 1.5, babble 1.5 (soft and sleepy). A grumpy one: sad 3, babble 2, hum 1 (no giggles).
+    static func pick(night: Double, grumpy: Bool, random: (ClosedRange<Double>) -> Double) -> JellyVoice {
+        let table: [(JellyVoice, Double)]
+        if grumpy { table = [(.sad, 3), (.babble, 2), (.hum, 1)] }
+        else if night >= 0.3 { table = [(.hum, 2), (.yawn, 1.5), (.happy, 1.5), (.babble, 1.5)] }
+        else { table = [(.happy, 3), (.babble, 3), (.giggle, 1.2), (.curious, 1), (.hum, 1), (.ooh, 0.8)] }
+        var x = random(0...table.reduce(0) { $0 + $1.1 })
+        for (v, w) in table { if x < w { return v }; x -= w }
+        return table[0].0
+    }
 }
 
 nonisolated struct AmbientVoiceScheduler: Sendable {

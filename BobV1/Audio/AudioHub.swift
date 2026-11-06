@@ -335,7 +335,9 @@ final class AudioHub {
             let since = (0..<3).map { secondsSinceVoice(slot: $0) }
             let eligible = (0..<3).map { $0 < ambient.count && ambient[$0] && !($0 < napping.count && napping[$0]) }
             for i in ambientSched.due(eligible: eligible, since: since, now: now, night: night, random: { Double.random(in: $0) }) {
-                chirp(jelly: i, Bool.random() ? .happy : .babble, x: i < xs.count ? xs[i] : 0, src: "ambient")
+                let v = AmbientVoiceTuning.pick(night: night, grumpy: i < moods.count && moods[i] == .grumpy, random: { Double.random(in: $0) })
+                if v.isContext { Self.requestSrcTap?("voice:\(v.rawValue)@ambient", i); contextVoice(jelly: i, v, chance: 1, x: i < xs.count ? xs[i] : 0) }
+                else { chirp(jelly: i, v, x: i < xs.count ? xs[i] : 0, src: "ambient") }
                 onAmbient?(i)
             }
         }
@@ -829,7 +831,8 @@ final class AudioHub {
         if now - lastVoice[i] < 1.0 { diag(what, jelly, "hush lastVoice"); return }
         if now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush context"); return }
         if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
-        guard Double.random(in: 0..<1) < chance else { diag(what, jelly, "chance"); return }
+        let p = atHome && HomeVoiceTuning.enabled ? min(1, chance * HomeVoiceTuning.contextChanceMul) : chance          // (at home every context voice's chance x1.3, one central place)
+        guard Double.random(in: 0..<1) < p else { diag(what, jelly, "chance"); return }
         diag(what, jelly, nil)
         lastContextVoice[i] = now
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))

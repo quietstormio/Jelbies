@@ -8,13 +8,14 @@ final class AmbientVoiceTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
     override func tearDown() {
         AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
+        HomeVoiceTuning.enabled = true; SnoreScheduler.speedUp = 1.35; IdleTuning.treatGap = (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp)
         AudioHub.shared.atHome = false
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
     /// (below 10_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 10_000 and a LATER-than-that gap stamp would hush every sound there)
     nonisolated(unsafe) static var clockBase = 1_000.0
-    struct Result { var played: [String: Int] = [:]; var voices = 0, ambientTags = 0; var minVoiceGap = 999.0; var minutes = 0.0 }
+    struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
 
     /// One soak: `n` Jelbies (features from `chars`), 3 seeds x 3 min, `situation` fed every 6 steps like the stage does (10 Hz).
     func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false) -> Result {
@@ -22,16 +23,22 @@ final class AmbientVoiceTests: XCTestCase {
         hub._openForTest(); AudioHub.dryRun = true
         var simNow = Self.clockBase; AudioHub.clock = { simNow }          // (one shared clock across soaks: the hub's per-sound gaps must see time only move forward)
         defer { Self.clockBase = simNow + 120 }
-        AmbientVoiceTuning.enabled = ambient
+        AmbientVoiceTuning.enabled = ambient; HomeVoiceTuning.enabled = ambient          // (the whole home-voice boost: filler, context chance x1.3, emote treat gap, snore pace)
+        IdleTuning.treatGap = ambient ? (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp) : 200...380
+        SnoreScheduler.speedUp = ambient ? 1.35 : 1
         let seeds = night ? Array(RoomSFXCountTests.seeds.prefix(1)) : Array(RoomSFXCountTests.seeds.prefix(3))          // (3 seeds x 3 min; the night soak 1)
         var res = Result()
-        var lastByChar: [String: Double] = [:]
+        var lastByChar: [String: Double] = [:], lastAnyByChar: [String: Double] = [:]
         AudioHub.firedTap = { name in
             var k = name; if let r = k.range(of: #"_\d+$"#, options: .regularExpression) { k.removeSubrange(r) }
             res.played[k, default: 0] += 1
             let isVoice = name.hasPrefix("chirp_") || name.hasPrefix("babble_")
             let isContext = JellyVoice.allCases.contains { $0.isContext && name.hasPrefix("\($0.rawValue)_jelly") }
             if isVoice || isContext { res.voices += 1 }
+            if ["giggle_", "curious_", "ooh_", "hum_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
+            if isVoice || isContext, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (any voice of one Jelbie: the design floor is the 1.0 s context gap)
+                let who = String(name[r]); if let l = lastAnyByChar[who] { res.minAnyGap = min(res.minAnyGap, simNow - l) }; lastAnyByChar[who] = simNow
+            }
             if isVoice, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (chirp / babble: the 2.2 s per-Jelbie gap is a hard guard)
                 let who = String(name[r]); if let l = lastByChar[who] { res.minVoiceGap = min(res.minVoiceGap, simNow - l) }; lastByChar[who] = simNow
             }
@@ -72,6 +79,11 @@ final class AmbientVoiceTests: XCTestCase {
     func report(_ label: String, n: Int, chars: [Int]?) {
         let before = soak(n: n, chars: chars, ambient: false), after = soak(n: n, chars: chars, ambient: true)
         let perB = Double(before.voices) / Double(n) / before.minutes, perA = Double(after.voices) / Double(n) / after.minutes
+        let nB = Double(before.newVoices), nA = Double(after.newVoices)
+        print("AMBIENT \(label): new-sound voices (giggle+curious+ooh+hum) per 9 sim-min x \(n): before \(before.newVoices) after \(after.newVoices) (x\(String(format: "%.2f", nA / max(nB, 1)))); min gap any voice \(after.minAnyGap)")
+        XCTAssertGreaterThanOrEqual(nA, 1.3 * nB, "\(label): giggle+curious+ooh+hum \(nA) vs \(nB)")
+        // (by the existing design a context voice waits 1.0 s after a chirp, but a chirp waits only 0.5 s after a context voice: the floor for ANY pair is 0.5 s; the filler itself speaks only after 20 s of silence)
+        XCTAssertGreaterThanOrEqual(after.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie closer than the 0.5 s context hush")
         print("AMBIENT \(label): vocals/Jelbie/min before \(String(format: "%.2f", perB)) after \(String(format: "%.2f", perA)) (x\(String(format: "%.2f", perA / max(perB, 0.001)))); ambient requests \(after.ambientTags); min chirp gap \(after.minVoiceGap)")
         var others: [String] = []
         // (single rare kinds are chaotic run to run: wobble 20 vs 13 with the filler off in both; so the 90 % gate is on the sum of every non-voice sound and on the big kinds)
@@ -95,11 +107,31 @@ final class AmbientVoiceTests: XCTestCase {
     /// Night: the sleepers (put to bed at 10 s) never get an ambient chirp; an awake one may.
     func testNoAmbientWhileAsleep() { _ = soak(n: 3, chars: nil, ambient: true, night: true) }
 
+    /// Snores (asleep only): the same napping Jelbies for two simulated hours, old pace vs new, on fresh hubs. Awake Jelbies never snore.
+    func testSnoresMoreOftenAsleepOnly() {
+        func run(speed: Double, napping: Bool) -> Int {
+            SnoreScheduler.speedUp = speed
+            let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+            hub._openForTest(); AudioHub.dryRun = true
+            var now = 30_000.0; AudioHub.clock = { now }
+            var snores = 0
+            AudioHub.firedTap = { if $0.hasPrefix("snore_") { snores += 1 } }
+            for _ in 0..<(7200 * 30) { hub.situation(napping: [napping, napping, napping], playing: false, xs: [-1, 0, 1], moods: [.okay, .okay, .okay]); now += 1.0 / 30 }
+            return snores
+        }
+        defer { SnoreScheduler.speedUp = 1.35 }
+        let before = run(speed: 1, napping: true), after = run(speed: 1.35, napping: true)
+        print("SNORES 3 sleepers 120 sim-min: before \(before) after \(after) (x\(String(format: "%.2f", Double(after) / Double(max(before, 1)))))")
+        XCTAssertGreaterThan(before, 100)
+        XCTAssertGreaterThanOrEqual(Double(after), 1.3 * Double(before), "snores asleep: \(after) vs \(before)")
+        XCTAssertEqual(run(speed: 1.35, napping: false), 0, "no snores while awake")
+    }
+
     /// The scheduler alone: waits for the quiet roll, never two in one pass, retries when the room just voiced, and holds off after being ineligible.
     func testSchedulerRules() {
         var s = AmbientVoiceScheduler()
         let mid: (ClosedRange<Double>) -> Double = { ($0.lowerBound + $0.upperBound) / 2 }
-        XCTAssertEqual(s.due(eligible: [true, true, true], since: [10, 10, 10], now: 100, night: 0, random: mid), [], "not quiet long enough (26 s needed)")
+        XCTAssertEqual(s.due(eligible: [true, true, true], since: [10, 10, 10], now: 100, night: 0, random: mid), [], "not quiet long enough (24 s needed)")
         XCTAssertEqual(s.due(eligible: [true, true, true], since: [40, 40, 40], now: 101, night: 0, random: mid), [0], "one slot per pass, never two at once")
         XCTAssertEqual(s.due(eligible: [true, true, true], since: [40, 40, 40], now: 101.1, night: 0, random: mid), [], "the others retry 1-2 s later, the first waits out afterFire")
         XCTAssertEqual(s.due(eligible: [true, true, true], since: [1, 40, 40], now: 104, night: 0, random: mid), [], "the room voiced 1 s ago: nobody speaks on top of it")
@@ -108,7 +140,7 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertEqual(t.due(eligible: [true, true, true], since: [99, 10, 10], now: 201, night: 0, random: mid), [], "just woke / came home: 6 s hold-off")
         XCTAssertEqual(t.due(eligible: [true, true, true], since: [99, 10, 10], now: 207, night: 0, random: mid), [0])
         var u = AmbientVoiceScheduler()
-        XCTAssertEqual(u.due(eligible: [true], since: [30], now: 300, night: 1, random: mid), [], "night: 26 x 1.5 = 39 s needed")
+        XCTAssertEqual(u.due(eligible: [true], since: [30], now: 300, night: 1, random: mid), [], "night: 24 x 1.5 = 36 s needed")
         XCTAssertEqual(u.due(eligible: [true], since: [40], now: 301, night: 1, random: mid), [0])
     }
 
