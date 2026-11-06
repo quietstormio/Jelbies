@@ -91,7 +91,7 @@ enum GameCamera {
         }
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
-            var p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusSpots)
+            var p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusFramed.count == focusSpots.count ? focusFramed : focusSpots)
             if let f = trainFrame, focusSpots.count <= 1 {          // the Train card is up: frame the whole Jelbie in the free area beside / above it
                 let k = trainBlend(), tp = focusTrainPose(aspect: aspect, frame: f, spot: focusSpots.first ?? callSpot)
                 p = (p.eye + (tp.eye - p.eye) * k, p.target + (tp.target - p.target) * k)
@@ -264,8 +264,12 @@ enum GameCamera {
     /// The spots (x, z) of every focused Jelly while the close-up frames more than one; empty = the one-Jelly close-up on `callSpot`.
     /// Set by GameCare when the focus begins and cleared when the camera is home (the hearts / bubbles project through `camera`, so it is global like `aspect`).
     nonisolated(unsafe) static var focusSpots: [SIMD2<Float>] = []
-    /// Share of the screen width the row of Jellies fills in the wide close-up (a little looser than the single one).
-    static let focusRowFill: Float = 0.90
+    /// Where the focused Jellies REALLY stand while the group close-up is on (GameCare eases it toward their floor positions): the camera frames these, not the line-up slots,
+    /// so a body that stopped off its slot (or was pushed apart by the skin wall) is still inside the picture. Same count as `focusSpots`, or empty = frame the slots.
+    nonisolated(unsafe) static var focusFramed: [SIMD2<Float>] = []
+    /// Share of the screen width the row of Jellies fills in the wide close-up (a little looser than the single one), and how many body widths (2R) the outermost
+    /// centres get as room each side (a wide body: ears, limbs, a necklace, a hat) so the whole body is inside with a margin.
+    static let focusRowFill: Float = 0.88, focusRowBodyRoom: Float = 1.2
     /// Where the row's middle sits on screen (0 top ... 1 bottom): lower than the single close-up so the pulled-back camera does not see past the room's near edge.
     static let focusRowScreenY: Float = 0.46
     /// Distance between neighbouring Jellies' centres in the "everyone" row (body width 2R plus a gap).
@@ -289,7 +293,7 @@ enum GameCamera {
         var lo = spots[0], hi = spots[0]
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
-        let visW = (hi.x - lo.x + 2 * BobShape.R) / focusRowFill
+        let visW = (hi.x - lo.x + 2 * BobShape.R * focusRowBodyRoom) / focusRowFill
         let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH

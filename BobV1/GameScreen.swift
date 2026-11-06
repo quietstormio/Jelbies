@@ -508,6 +508,13 @@ struct GameScreen: View {
                 care.rosterPick(0)
             }
         }
+        // capture aid: -FocusGroupDemo 1 calls everyone (the pair / trio close-up) after 4 s and stays there
+        if d.integer(forKey: "FocusGroupDemo") > 0 {
+            await sleep(4)
+            care.comeHereEveryone()
+            for _ in 0..<1200 where !care.focus.isFocused { await sleep(0.1) }
+            NSLog("[hudfix] group focused: %@", String(describing: care.focus.phase))
+        }
         // perf capture aid: -FocusCycles <n> enters focus (call) and lets Bob go n times (3 s each way); logs show GPU time / memory per cycle
         if d.integer(forKey: "FocusCycles") > 0 {
             await sleep(4)

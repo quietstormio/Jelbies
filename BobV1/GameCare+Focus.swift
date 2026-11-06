@@ -74,7 +74,7 @@ final class FocusGroup {
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
         ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
-        spots = [:]
+        spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
             let row = GameCamera.focusRowSpots(count: new.count, anchor: FreeFloor.nearest(to: GameCamera.callSpot, all: offs))
@@ -125,7 +125,7 @@ final class FocusGroup {
 
     func clear() {
         ids = []; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; trainPending = false; training = false; rowOpen = false; touchAnchor = nil; touchID = 0
-        GameCamera.focusSpots = []
+        GameCamera.focusSpots = []; GameCamera.focusFramed = []
     }
 }
 
@@ -184,6 +184,16 @@ extension GameCare {
                 b.requestNow(.come(to: g.spot(of: id)))
             }
         }
+    }
+
+    /// The group close-up frames the bodies where they REALLY stand (eased, so a sway or a settle never jitters the camera), not the slots they were sent to.
+    func focusFrame(dt: Float) {
+        let g = focusGroup
+        guard g.ids.count > 1, focus.phase == .focused else { return }          // (frozen while leaving: the camera eases out on the last frame)
+        let now = g.ids.map { floorOf($0) ?? g.spot(of: $0) }
+        if GameCamera.focusFramed.count != now.count { GameCamera.focusFramed = g.ids.map { g.spot(of: $0) } }
+        let k = 1 - expf(-dt * 2.5)
+        for i in now.indices { GameCamera.focusFramed[i] += (now[i] - GameCamera.focusFramed[i]) * k }
     }
 
     /// Distance of the middle Jelly from his spot (nil = he is the asker or gone).

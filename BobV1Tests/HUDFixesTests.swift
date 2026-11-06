@@ -4,6 +4,7 @@
 //
 
 import XCTest
+import simd
 @testable import BobV1
 
 @MainActor
@@ -43,5 +44,29 @@ final class HUDFixesTests: XCTestCase {
         XCTAssertEqual(c.cuddleNotices.count, 1)
         c.focus.force(.roaming)
         XCTAssertEqual(c.cuddleNotices, [], "no notice outside the close-up")
+    }
+
+    /// The group close-up frames where the bodies really stand (wider than the slots), every body fully inside with a margin, portrait and landscape.
+    func testGroupCloseUpFramesEveryBodyPortraitAndLandscape() {
+        let saved = (GameCamera.focusSpots, GameCamera.focusFramed, GameCamera.aspect)
+        defer { GameCamera.focusSpots = saved.0; GameCamera.focusFramed = saved.1; GameCamera.aspect = saved.2 }
+        for n in [2, 3] {
+            let slots = GameCamera.focusRowSpots(count: n)
+            GameCamera.focusSpots = slots
+            let bodies = slots.map { SIMD2<Float>($0.x * 1.4 - 0.3, $0.y + 0.2) }          // they stopped off their slots, further out
+            GameCamera.focusFramed = bodies
+            for aspect in [Float(0.46), 2.16] {
+                let vp = GameCamera.camera(aspect: aspect, focus: 1).viewProj
+                for b in bodies { for dx in [-BobShape.R, BobShape.R] { for y in [Float(0), Float(BobShape.H)] {
+                    let q = vp * SIMD4<Float>(b.x + dx, y, b.y, 1)
+                    XCTAssertLessThan(abs(q.x / q.w), 0.94, "n=\(n) aspect \(aspect): body edge inside the width with a margin")
+                    XCTAssertLessThan(abs(q.y / q.w), 0.94, "n=\(n) aspect \(aspect): body inside the height")
+                } } }
+            }
+        }
+        // one Jelbie keeps today's single close-up exactly
+        GameCamera.focusSpots = [GameCamera.callSpot]; GameCamera.focusFramed = []
+        let one = GameCamera.camera(aspect: 0.46, focus: 1).pos, ref = GameCamera.focusPose(aspect: 0.46).eye
+        XCTAssertEqual(simd_distance(one, ref), 0, accuracy: 1e-4)
     }
 }

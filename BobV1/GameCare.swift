@@ -598,6 +598,7 @@ final class GameCare {
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
+        focusFrame(dt: dt)
         if focus.phase == .approaching {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
