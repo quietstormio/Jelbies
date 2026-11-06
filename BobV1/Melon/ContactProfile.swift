@@ -33,13 +33,6 @@ nonisolated enum ContactField {
     nonisolated(unsafe) static let tailBuf: UnsafeMutablePointer<Float> = {
         let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 3 * K); p.initialize(repeating: -1, count: capacity * 3 * K); return p
     }()
-    /// The REST outline per body (r2, x, z per bin, like the body polygon): the profile without the arm capsules (see `build`); restValid = 1 once built.
-    nonisolated(unsafe) static let restStore: UnsafeMutablePointer<Float> = {
-        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 3 * K); p.initialize(repeating: -1, count: capacity * 3 * K); return p
-    }()
-    nonisolated(unsafe) static let restValid: UnsafeMutablePointer<Float> = {
-        let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity); p.initialize(repeating: 0, count: capacity); return p
-    }()
     nonisolated(unsafe) static let tailState: UnsafeMutablePointer<Float> = {          // per body: 1 = the tail is drawn and in tailBuf, 2 = a feature mesh owns the feature bins (the tail is merged after it)
         let p = UnsafeMutablePointer<Float>.allocate(capacity: capacity); p.initialize(repeating: 0, count: capacity); return p
     }()
@@ -98,7 +91,7 @@ nonisolated enum ContactField {
     @inline(__always) private static func base(_ id: Int) -> UnsafeMutablePointer<Float> { store + id * stride }
 
     /// Forget every profile (tests, a scene change).
-    static func reset() { store.initialize(repeating: 0, count: capacity * stride); restStore.initialize(repeating: -1, count: capacity * 3 * K); restValid.initialize(repeating: 0, count: capacity); tailBuf.initialize(repeating: -1, count: capacity * 3 * K); tailState.initialize(repeating: 0, count: capacity); tailDrawn.initialize(repeating: 0, count: capacity); gapStamp = [Int](repeating: -1, count: capacity * capacity) }
+    static func reset() { store.initialize(repeating: 0, count: capacity * stride); tailBuf.initialize(repeating: -1, count: capacity * 3 * K); tailState.initialize(repeating: 0, count: capacity); tailDrawn.initialize(repeating: 0, count: capacity); gapStamp = [Int](repeating: -1, count: capacity * capacity) }
     static func invalidate(_ id: Int) { if id >= 0, id < capacity { base(id)[oMeta + 2] = 0; base(id)[oMeta + 3] = 0 } }
     static func isValid(_ id: Int) -> Bool { id >= 0 && id < capacity && base(id)[oMeta + 2] > 0.5 }
     /// How many times body `id`'s profile was built (a controller acts once per fresh profile).
@@ -162,16 +155,15 @@ nonisolated enum ContactField {
             var i = 0
             while i < lim { add(i); i += eggStride }
             // the limb / ear blocks that are DRAWN (an inactive block is parked out of sight: it must not count; `blocks` nil = everything after the egg)
-            func addBlock(_ r: Range<Int>) {
-                var i = max(r.lowerBound, lim)
+            for r in blocks ?? [lim..<count] {
+                i = max(r.lowerBound, lim)
                 let hi = min(r.upperBound, count)
                 while i < hi {
                     if i >= tailLo, i < tailHi { i = tailHi; continue }          // (the tail is a feature)
                     add(i); i += limbStride
                 }
             }
-            func refine() {
-                guard passes > 0, let ns = nbrStart, let nb = nbr else { return }
+            if passes > 0, let ns = nbrStart, let nb = nbr {
                 for k in 0..<K { cur[k] = r2[k] > 0 ? 1 : 0 }          // round 1: every filled bin; later rounds: only the bins a neighbour improved
                 for _ in 0..<passes {
                     for k in 0..<K { nxt[k] = 0 }
@@ -193,15 +185,6 @@ nonisolated enum ContactField {
                     for k in 0..<K { cur[k] = nxt[k] }
                 }
             }
-            // THE REST OUTLINE (2026-11-05, r4-engine-arrival): the same polygon WITHOUT the arm capsules (the egg, the feet, Teddy's ears): when a body stands, the arms are the stubs of the egg, the capsules are drawn
-            // only while they are lifted for the walk. The stance's meeting distance is derived from it (a destination from the walking outline stops the pair 6 - 12 cm short).
-            var armBlocks: [Range<Int>] = []
-            for r in blocks ?? [lim..<count] { if r.count == ArmCapsule.vertexCount { armBlocks.append(r) } else { addBlock(r) } }
-            refine()
-            let rs = restStore + id * 3 * K
-            for k in 0..<K { rs[k] = r2[k]; rs[K + k] = px[k]; rs[2 * K + k] = pz[k] }
-            restValid[id] = 1
-            if !armBlocks.isEmpty { for r in armBlocks { addBlock(r) }; refine() }
         }
         }
         // the tail (a feature): its farthest vertex per bin, when the tail block is drawn
@@ -393,14 +376,6 @@ nonisolated enum ContactField {
         let b = base(id)
         var best = -Float.infinity
         for k in 0..<K where b[oBR + k] > 0 { best = max(best, b[oBX + k] * dir.x + b[oBZ + k] * dir.y) }
-        return best.isFinite ? best : nil
-    }
-    /// The support reach of body `id`'s REST outline (no arm capsules) along `dir`: how far he reaches toward the partner once he stands with his arms down. nil = no profile.
-    static func restSupportExt(_ id: Int, _ dir: SIMD2<Float>) -> Float? {
-        guard enabled, isValid(id), id < capacity, restValid[id] > 0.5 else { return nil }
-        let rs = restStore + id * 3 * K
-        var best = -Float.infinity
-        for k in 0..<K where rs[k] > 0 { best = max(best, rs[K + k] * dir.x + rs[2 * K + k] * dir.y) }
         return best.isFinite ? best : nil
     }
     /// The catalogue's touch distance: extA(u) + extB(-u) along the root axis u (support reaches), metres: the root distance at which the two skins' supports meet.
