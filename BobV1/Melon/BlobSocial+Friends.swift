@@ -24,9 +24,10 @@ extension SocialKind {
 
 enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
-    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 1.8), (.twirl, 2.0), (.hopAlong, 2.0),
+    // 2026-11-06 user: standing hand-holding too often; restore when the hands emotes get their own looks (r4-hands)
+    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 0.9), (.twirl, 2.0), (.hopAlong, 2.0),
                                                       (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.noseBoop, 1.4), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
-                                                      (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 1.3), (.shyWave, 1.2)]
+                                                      (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.65), (.shyWave, 1.2)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
     /// How much a close pair raises the chance that a social starts at all (per unit of closeness above 1).
