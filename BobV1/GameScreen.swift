@@ -168,6 +168,7 @@ struct GameScreen: View {
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     CuddleNoticeRow(care: model.care)          // "Teddy is too hungry to cuddle": under "Let them go" while a need blocks the hearts
+                    CuddleNoticeRow(care: model.care)          // "Teddy is too hungry to cuddle": under "Let them go" while a need blocks the hearts
                     if !focus.isActive, !cleaning, !racing {
                         HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer() }
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudInfoH = $0 }
