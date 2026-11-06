@@ -198,6 +198,7 @@ extension BlobBrain {
     /// walker's CURRENT walking outline and pushed every side-by-side destination 6 cm further out (target 1.46 m from the partner for a touch distance of 1.40 + 1.5 cm: the walk stopped 6.4 cm apart, the lean and the
     /// hold's pull closed it a second later). The spot is the touch spot by construction (the stable touch distance of the pair), so the partners are exempt for this one call, exactly as the final step's planning is.
     private func stanceFixed(_ p: SIMD2<Float>) -> SIMD2<Float> {
+        guard social.flatMap({ ContactStance.entry($0.kind)?.facing }) == .camera else { return fixed(p) }          // (face to face the walk is unchanged: hum / boop / bump land within the bar through the wall)
         stanceStepFree = true
         defer { stanceStepFree = false }
         return fixed(p)

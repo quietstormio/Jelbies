@@ -185,9 +185,6 @@ extension BlobBrain {
         case .camera: mine = faceCameraYaw(); his = o.faceCameraYaw()
         }
         let d1 = wrapAngle(mine - yaw), d2 = wrapAngle(his - o.yaw)
-        // Side by side (.camera) the walker ends with his arms DOWN (stanceArmsDown): the meeting distance is that of the REST outline (the arm capsules are drawn only while lifted for the walk: reach 78 - 81 cm
-        // walking, 66 - 70 standing), so the last step lands where he stands. Face to face (.each) the live outline stays (the arms are not lifted in those walks).
-        if f == .camera, let ea = ContactField.restSupportExt(steerID, rotXZ(-u, -d1)), let eb = ContactField.restSupportExt(o.steerID, rotXZ(u, -d2)) { return ea + eb }
         guard let ea = ContactField.supportExt(steerID, rotXZ(-u, -d1)), let eb = ContactField.supportExt(o.steerID, rotXZ(u, -d2)) else { return nil }
         return ea + eb
     }

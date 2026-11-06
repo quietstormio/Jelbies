@@ -389,31 +389,31 @@ final class ContactSettleTests: XCTestCase {
         guard let g = arrival else { return XCTFail("the walk-up ends") }
         MotionLog.write(String(format: "ARRIVAL nuzzle: gap %.3f at the first planted frame of phase 1", g))
         XCTAssertGreaterThan(g, -0.015, "never inside him")
-        // KNOWN OPEN (r4-arrivalA-r2): in this cold-start scene the first planted frame of phase 1 still reads 3.7 cm; the bar is 1.5. Expected to fail until it is closed - remove the expectation then.
-        XCTExpectFailure("nuzzle arrives 3.7 cm apart in the cold-start Duo (bar <= 1.5 cm)", strict: false) { XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar") }
+        XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar")
     }
 
-    /// r4-engine-arrival (2026-11-05): the meeting distance of a side-by-side stance walk is derived from the REST outline (the arm capsules are drawn only while lifted), so it is the reach the pair stands in.
-    /// The rest reach recorded while the walker is still lifting his arms must equal (within 1 cm) the live reach read after the arms dropped and the walk ended.
-    func testRestOutlineReachMatchesTheStandingReachAfterTheArmsDrop() {
-        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33)] as [(SocialKind, UInt64)] {
+    /// r4-engine-arrival (2026-11-05): a side-by-side stance walk lands on the standing touch spot. `fixed` ran the destination through the room's peer wall (the walker's walking outline against the partner), which pushed it
+    /// 6 cm out: the plant frame read 6.4 cm apart. Measured at the first planted frame after the last step: gap in -1 ... +1.5 cm, no touch-and-retreat before the hold (the gap never rebounds past 3 cm).
+    func testSideBySideWalkUpPlantsOnTheTouchSpot() {
+        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33), (.nuzzle, 34)] as [(SocialKind, UInt64)] {
             let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
             d.live = true
             for _ in 0..<3 { d.tick() }
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim))
-            var restWalking: Float?, liveWalking: Float?, lastStep = -1
-            var reachAfter: Float?
+            var lastStep = -1, plant: Float?, rebound: Float = -1
             for f in 0..<(60 * 12) {
                 d.tick()
-                let u = simd_normalize(a.brain.position - b.brain.position + SIMD2(1e-6, 0))
                 let stepping = a.brain.stepLive || a.brain.gait.isBusy || b.brain.stepLive || b.brain.gait.isBusy
-                if stepping { lastStep = f; if simd_distance(a.brain.position, b.brain.position) < 1.8 { restWalking = a.brain.touchRadiusFacing(b.brain, along: u, .camera); liveWalking = a.brain.touchRadius(b.brain, along: u) } }
-                if lastStep >= 0, f == lastStep + 40, !stepping, reachAfter == nil, let live = a.brain.touchRadius(b.brain, along: u) { reachAfter = live }
+                if stepping { lastStep = f; plant = nil }
+                else if lastStep >= 0, plant == nil, let g = ContactField.gap(0, 1) { plant = g }
+                if lastStep >= 0, f > lastStep, f < lastStep + 40, let g = ContactField.gap(0, 1) { rebound = max(rebound, g) }
+                if (a.brain.social?.phase ?? 0) >= 2 { break }
             }
-            MotionLog.write(String(format: "REST OUTLINE %@: last-step live %.3f, rest %.3f, standing live %.3f", kind.rawValue, liveWalking ?? -1, restWalking ?? -1, reachAfter ?? -1))
-            guard let rest = restWalking, let after = reachAfter else { XCTFail("\(kind): no rest/standing sample"); continue }
-            XCTAssertEqual(rest, after, accuracy: 0.01, "\(kind): the rest outline's reach is within 1 cm of the standing reach")
+            guard let g = plant else { XCTFail("\(kind): the walk-up ends"); continue }
+            MotionLog.write(String(format: "SIDE ARRIVAL %@: plant gap %.3f, rebound within 0.65 s %.3f", kind.rawValue, g, rebound))
+            XCTAssertGreaterThan(g, -0.01, "\(kind): never inside him"); XCTAssertLessThan(g, 0.015, "\(kind): plants within the 1.5 cm arrival bar")
+            XCTAssertLessThan(rebound, 0.03, "\(kind): the body does not bounce back past 3 cm after the stop")
         }
     }
 }
