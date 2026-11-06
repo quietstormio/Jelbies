@@ -117,6 +117,8 @@ nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     /// The on-device model has written the text (name stays as shown once the visitor has been introduced).
     var written = false
     var introduced = false
+    /// A true twin (same name AND colour) folded into another record by the 2026-11-05 migration (ParkNames.reconcile): the id of the survivor. nil = a live visitor.
+    var mergedInto: Int? = nil
 
     func points(with character: Int) -> Float { friendship[String(character)] ?? 0 }
     func level(with character: Int) -> ParkFriendLevel { .of(points(with: character)) }
@@ -225,7 +227,7 @@ nonisolated enum ParkPool {
     }
 
     /// The whole pool: `ParkTuning.poolSize` visitors, every colour used, signatures and items mixed. The same on every device.
-    static func generate(count: Int = ParkTuning.poolSize, seed: UInt64 = ParkTuning.poolSeed) -> [ParkVisitor] {
+    static func generate(count: Int = ParkTuning.poolSize, seed: UInt64 = ParkTuning.poolSeed, reserved: Set<String> = []) -> [ParkVisitor] {
         var r = ParkRandom(seed)
         var colours = ParkColour.mutations.filter { JellyVariantBook.parkEligible($0) }          // the Spring's exclusive variants never appear here
         for i in stride(from: colours.count - 1, to: 0, by: -1) { colours.swapAt(i, Int(r.next() % UInt64(i + 1))) }
@@ -244,6 +246,8 @@ nonisolated enum ParkPool {
             out.append(ParkVisitor(id: i, name: name, colour: colour, signature: sig, wear: wear, style: style,
                                    blurb: ParkWords.blurb(style, &r), greeting: ParkWords.greeting(name, style, &r)))
         }
+        // never a name the book already forbids (a player Jelbie's, a personality word, a colour) and never twice (a no-op for the stock list)
+        ParkNames.reconcile(&out, reserved: reserved.union(ParkNames.reserved(rosterNames: [])))
         return out
     }
 
@@ -258,7 +262,7 @@ nonisolated enum ParkPool {
 
     /// Who comes this time: `count` visitors drawn without repeats, weighted towards friends of the Jelbies that are coming and towards ones not seen for a while.
     static func pickCast(from pool: [ParkVisitor], count: Int, characters: [Int], now: Double, using rng: inout some RandomNumberGenerator) -> [ParkVisitor] {
-        var left = pool
+        var left = pool.filter { $0.mergedInto == nil }
         var out: [ParkVisitor] = []
         while out.count < count, !left.isEmpty {
             let weights = left.map { weight($0, characters: characters, now: now) }

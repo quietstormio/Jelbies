@@ -1,6 +1,7 @@
 //
 //  FriendsUI.swift
-//  Asking a friend over (2026-10-25): the Town's Friends page (the visitors who are Friends of the Jelbies, each with "Play date" and "Sleepover"), the invite
+//  Asking a friend over (2026-10-25): the Town's Friends page (one card per visitor who is a Friend of the Jelbies: who they are, which of the player's Jelbies
+//  they know and how well, and the two buttons "Play date" and "Sleepover": a sleepover friend comes in the evening and goes home in the morning), the invite
 //  chooser that a visitor's card at the Park shares, and the guest's own card at home (a tap on him). Rules: Park/GameCare+Guest.swift. Views only.
 //
 
@@ -120,11 +121,11 @@ struct FriendsScreen: View {
 
     /// Who is coming or here now (one at a time).
     @ViewBuilder private var status: some View {
-        if let cur = care.guestBook.visit, let v = care.parkBook.visitor(cur.visitor) {
+        if let cur = care.guestBook.visit, let v = care.parkBook.visitor(cur.visitor), let line = care.guestStatusText() {
             HStack(spacing: 12) {
                 Circle().fill(tint(v.colour)).frame(width: 40, height: 40).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(cur.arrived ? "\(v.name) is visiting" : "\(v.name) is on the way").font(SK.font(17, .black)).foregroundStyle(SK.ink)
+                    Text(line).font(SK.font(17, .black)).foregroundStyle(SK.ink)
                     Text(cur.kind.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
                 }
                 Spacer(minLength: 4)
@@ -137,27 +138,31 @@ struct FriendsScreen: View {
             }
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.mint.opacity(0.7)))
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .combine).accessibilityIdentifier("friends-status")
         }
     }
 
+    /// One card per friend: who (colour, name, personality tag), which of the player's Jelbies they know and how well, and the one Invite button.
     private func row(_ v: ParkVisitor) -> some View {
-        let lvl = v.bestLevel(among: care.jellies.map(\.character))
         let free = care.guestBook.visit == nil
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Circle().fill(tint(v.colour)).frame(width: 44, height: 44).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(v.name).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                    Text(v.style.word).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(v.name).font(SK.font(20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    // the personality word is a tag, never a bare word: "Zippy" alone reads like a name
+                    Text("personality: \(v.style.word.lowercased())").font(SK.font(11, .heavy)).foregroundStyle(SK.ink.opacity(0.8))
+                        .padding(.horizontal, 8).frame(minHeight: 20)
+                        .background(Capsule().fill(SK.honey.opacity(0.35)))
+                        .accessibilityLabel("Personality: \(v.style.word.lowercased())")
                 }
                 Spacer(minLength: 4)
-                HStack(spacing: 2) {
-                    ForEach(0..<3, id: \.self) { i in
-                        Image(systemName: i < lvl.hearts ? "heart.fill" : "heart").font(.system(size: 14, weight: .heavy)).foregroundStyle(i < lvl.hearts ? SK.pink : SK.muted.opacity(0.5))
-                    }
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Friends with").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                ChipFlow(spacing: 6, lineSpacing: 6) {
+                    ForEach(care.jellies, id: \.id) { j in chip(j, level: v.level(with: j.character), friend: v.name) }
                 }
-                Text(lvl.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
             }
             HStack(spacing: 8) {
                 ForEach([GuestVisit.Kind.playDate, .sleepover], id: \.self) { kind in
@@ -165,15 +170,70 @@ struct FriendsScreen: View {
                         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
                         if care.inviteFriend(v.id, kind: kind) { goHome() }
                     } label: {
-                        HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }
-                            .font(SK.font(15, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46)
-                            .background(Capsule().fill(SK.honey.opacity(free ? 1 : 0.4)))
+                        VStack(spacing: 1) {
+                            HStack(spacing: 6) { Image(systemName: kind.symbol); Text(kind.title) }.font(SK.font(15, .black))
+                            Text(kind.subtitle).font(SK.font(11, .bold)).opacity(0.8)
+                        }
+                        .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 46).padding(.vertical, 3)
+                        .background(Capsule().fill(SK.honey.opacity(free ? 1 : 0.4)))
                     }
-                    .buttonStyle(.plain).disabled(!free).accessibilityLabel("\(kind.title) with \(v.name)").accessibilityIdentifier("friends-\(kind.rawValue)-\(v.id)")
+                    .buttonStyle(.plain).disabled(!free)
+                    .accessibilityLabel("\(kind.title) with \(v.name)").accessibilityHint(kind.blurb).accessibilityIdentifier("friends-\(kind.rawValue)-\(v.id)")
                 }
             }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card).shadow(color: SK.shadow.opacity(0.10), radius: 5, y: 2))
+        .accessibilityIdentifier("friends-card-\(v.id)")
+    }
+
+    /// One of the player's Jelbies: its colour dot, name and hearts with this friend ("not yet" at Stranger).
+    private func chip(_ j: JellyProfile, level: ParkFriendLevel, friend: String) -> some View {
+        let t = JellyRoster.tint(j.character)
+        return HStack(spacing: 5) {
+            Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 14, height: 14)
+                .overlay(Circle().strokeBorder(j.character == JellyRoster.pandaID ? SK.ink : SK.muted.opacity(0.45), lineWidth: j.character == JellyRoster.pandaID ? 3 : 1.5))
+            Text(j.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
+            if level == .stranger {
+                Text("not yet").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+            } else {
+                HStack(spacing: 1) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Image(systemName: i < level.hearts ? "heart.fill" : "heart").font(.system(size: 10, weight: .heavy)).foregroundStyle(i < level.hearts ? SK.pink : SK.muted.opacity(0.5))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 10).frame(minHeight: 30)
+        .background(Capsule().fill(Color.white.opacity(0.85)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(j.name): \(level == .stranger ? "not yet friends" : level.title) with \(friend)")
+        .accessibilityIdentifier("friends-chip-\(j.id)")
+    }
+}
+
+/// Chips that wrap onto new lines (the roster has up to three Jelbies; long names wrap instead of clipping).
+struct ChipFlow: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxW = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, lineH: CGFloat = 0, width: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > 0, x + s.width > maxW { y += lineH + lineSpacing; x = 0; lineH = 0 }
+            x += s.width + spacing; lineH = max(lineH, s.height); width = max(width, x - spacing)
+        }
+        return CGSize(width: width, height: y + lineH)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, lineH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + s.width > bounds.maxX { y += lineH + lineSpacing; x = bounds.minX; lineH = 0 }
+            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing; lineH = max(lineH, s.height)
+        }
     }
 }

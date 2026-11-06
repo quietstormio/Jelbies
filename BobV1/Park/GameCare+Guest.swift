@@ -4,6 +4,8 @@
 //  renderer slot after the roster's, so the room draws up to four), ticked by the same brain as everybody (variety, socials, the friendly socials, greetings, sleep).
 //    arrive    the invitation is answered the next time the player is home and the room is free: he comes in at the back edge, walks to the front (the adopted
 //              Jelbie's come-to-front walk, a wave to the camera at the end), the others hop and trot over
+//    evening   (2026-11-05) a SLEEPOVER friend only comes from 17:00 on (GuestRules.canArrive); invited earlier he waits for the evening. A play date comes at any hour.
+//              The Jelly Wash is closed while any friend is coming or here.
 //    play      a play date lasts 10...15 minutes; the guest roams and plays with the Jelbies like a housemate (friendship grows a little at home too)
 //    sleepover he goes to bed when the Jelbies do (the usual "goodnight": beside a sleeper, the pair-sleep arms / lean, the sleep fidgets) and wakes with the morning
 //    goodbye   at the end he wakes if asleep, waves to the camera, waves again at the door and walks out
@@ -23,11 +25,25 @@ extension GameCare {
     func friendsToInvite() -> [ParkVisitor] {
         let chars = jellies.map(\.character)
         return parkBook.visitors
-            .filter { $0.introduced && $0.bestLevel(among: chars) >= .friend }
+            .filter { $0.mergedInto == nil && $0.introduced && $0.bestLevel(among: chars) >= .friend }
             .sorted { a, b in
                 let la = a.bestLevel(among: chars), lb = b.bestLevel(among: chars)
-                return la != lb ? la > lb : a.id < b.id
+                if la != lb { return la > lb }
+                let c = a.name.localizedCaseInsensitiveCompare(b.name)
+                return c != .orderedSame ? c == .orderedAscending : a.id < b.id
             }
+    }
+    /// Why the Jelly Wash is closed while a friend is coming or here ("Not while Zippy is visiting"); nil = no friend is over.
+    var groomGuestBlocker: String? {
+        guard let cur = guestBook.visit else { return nil }
+        return "Not while \(parkBook.visitor(cur.visitor)?.name ?? "your friend") is visiting"
+    }
+    /// "Zippy is coming for a sleepover this evening" / "Zippy is on the way" / "Zippy is visiting": the Friends screen's status line.
+    func guestStatusText(hour hourIn: Double? = nil) -> String? {
+        let hour = hourIn ?? DayClock.shared.hour
+        guard let cur = guestBook.visit, let v = parkBook.visitor(cur.visitor) else { return nil }
+        if cur.arrived { return "\(v.name) is visiting" }
+        return GuestRules.canArrive(cur.kind, hour: hour) ? "\(v.name) is on the way" : "\(v.name) is coming for a sleepover \(GuestRules.when(hour: hour))"
     }
     func canInvite(_ vid: Int) -> Bool {
         guard guestBook.visit == nil, let v = parkBook.visitor(vid) else { return false }
@@ -49,7 +65,13 @@ extension GameCare {
         park.card = nil
         AudioHub.shared.play(.uiconfirm)
         AudioHub.shared.chirp(jelly: 0, .happy)
-        park.say(park.inScene ? "\(v.name) will come over when you get home!" : (kind == .sleepover ? "\(v.name) is coming for a sleepover!" : "\(v.name) is coming over to play!"))
+        let hour = DayClock.shared.hour
+        let when = GuestRules.when(hour: hour)
+        if kind == .sleepover {
+            park.say(park.inScene ? "\(v.name) is coming for a sleepover \(when), once you are home!" : "\(v.name) is coming for a sleepover \(when)!")
+        } else {
+            park.say(park.inScene ? "\(v.name) will come over when you get home!" : "\(v.name) is coming over to play!")
+        }
         return true
     }
     func cancelInvite() {
@@ -77,13 +99,13 @@ extension GameCare {
 
     /// The room is free for the body to be there: no outing, no veil, no curtain.
     private var guestOuting: Bool {
-        if race.active || raceWait != nil || show.active || cafe.active || volley.active || volleyWork.wait != nil { return true }          // (the beach: the guest's body is put away, 4 bodies at most; he walks in again after)
+        if race.active || raceWait != nil || show.active || cafe.active || volley.active || volleyWork.wait != nil || groom.active { return true }          // (the beach: the guest's body is put away, 4 bodies at most; he walks in again after)
         if park.active, !park.picking, !(park.phase == .goOut && park.wipe < 0.8) { return true }
         return false
     }
     /// A quiet moment for the knock: nothing is being fed, washed or arranged and no close-up is open.
     private var guestRoomQuiet: Bool {
-        !LaunchGate.shared.visible && !greetBlocked && !bath.active && !arranging && !park.active && !raceBusy && !select.isSelecting
+        !LaunchGate.shared.visible && !greetBlocked && !bath.active && !arranging && !park.active && !raceBusy && !select.isSelecting && !groom.picking
     }
 
     func tickGuest(_ actors: [JellyActor], dt: Float) {
@@ -91,10 +113,12 @@ extension GameCare {
         if g.visit == nil, g.actor == nil { return }
         guard let visit = g.visit else { guestRemove(); return }
         guard let v = parkBook.visitor(visit.visitor) else { guestRemove(); g.finish(); return }
+        if v.id != visit.visitor { g.repoint(to: v.id) }          // (a merged duplicate record: the visit follows the survivor)
         let now = Date().timeIntervalSince1970
+        let gameNow = DayClock.shared.gameNow
 
-        // the wall clock decides whether the visit is over (also across a closed app)
-        switch GuestRules.verdict(visit, now: now) {
+        // the game clock (the wall clock when it follows the phone) decides whether the visit is over, also across a closed app
+        switch GuestRules.verdict(visit, now: now, gameNow: gameNow) {
         case .dropped: guestRemove(); g.finish(); return
         case .wentHome where g.actor == nil && g.phase != .leaving:
             guestRemove(); g.finish()
@@ -106,6 +130,7 @@ extension GameCare {
 
         // an outing sends the body away (the visit goes on)
         if guestOuting {
+            g.party.cancel()
             if g.arrival.active || g.arrivalCard != .hidden { guestArrivalCancel() }
             if g.actor != nil { guestRemove(); g.phase = .away }
             return
@@ -116,9 +141,10 @@ extension GameCare {
             g.phase = .away
             if g.arrival.active { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment (Park/GuestArrival.swift): the body is made behind the card
             guard guestRoomQuiet, parkBook.spawn != nil else { g.knockT = 0; return }
+            if !visit.arrived, !GuestRules.canArrive(visit.kind, hour: DayClock.shared.hour) { g.knockT = 0; return }          // a sleepover friend only comes in the evening (and the knock waits for the player to be home: the room-quiet guard above)
             g.knockT += dt
             g.spawnFailT = max(0, g.spawnFailT - dt)
-            let overdue = visit.arrived && now >= visit.endsAt
+            let overdue = GuestRules.isOver(visit, now: now, gameNow: gameNow)
             guard g.knockT >= GuestTuning.knock, g.spawnFailT <= 0 else { return }
             if !visit.arrived, guestWalksIn(actors, visit, overdue: overdue), guestArrivalBegin() { return }          // the first arrival: the doorbell, the card, the run-in
             guestSpawn(actors, v, visit, overdue: overdue)
@@ -129,10 +155,11 @@ extension GameCare {
         g.phaseT += dt
         visitorLook(a, v, dt: dt, sleepLocked: false)
         guestFriends(actors, a, v, dt: dt)
+        if g.party.active { guestPartyStep(actors, a, dt: dt) }          // (the welcome party after the hug)
         if g.arrival.active || g.hugWait != nil { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment drives him until it is done
 
         // the end of the visit
-        if g.phase != .leaving, visit.arrived, now >= visit.endsAt { guestBeginLeaving(actors, a, v) }
+        if g.phase != .leaving, GuestRules.isOver(visit, now: now, gameNow: gameNow) { guestBeginLeaving(actors, a, v) }
         switch g.phase {
         case .walkingIn: guestArriving(actors, a, b, v, dt: dt)
         case .here: guestAtPlay(actors, a, b, visit, dt: dt)
@@ -148,6 +175,7 @@ extension GameCare {
         if let a = g.actor { visitorPutAway(a); parkBook.clear?() }
         g.actor = nil
         g.card = false
+        g.party.cancel()
     }
 
     /// True = he comes in through the door (not already inside because the visit is over / the Jelbies are asleep).
@@ -171,7 +199,7 @@ extension GameCare {
         b.sleepLocked = false
         b.idleMood = .happy
         if !visit.arrived {
-            g.markArrived(now: now, sleepoverSeconds: DayClock.shared.secondsToSleepoverEnd)
+            g.markArrived(now: now, sleepoverSeconds: DayClock.shared.secondsToSleepoverEnd, endsGame: DayClock.shared.sleepoverEndGame)
             if !arrival { park.say(visit.kind == .sleepover ? "\(v.name) came over for a sleepover!" : "\(v.name) came over to play!") }
         }
         if arrival {
@@ -297,7 +325,7 @@ extension GameCare {
     private func guestBeginLeaving(_ actors: [JellyActor], _ a: JellyActor, _ v: ParkVisitor) {
         let g = guestBook
         guard g.phase != .leaving else { return }
-        g.phase = .leaving; g.stage = 0; g.phaseT = 0; g.card = false
+        g.phase = .leaving; g.stage = 0; g.phaseT = 0; g.card = false; g.party.cancel()
         a.brain?.abortAll(a.sim, a.skinner)
         a.brain?.autonomy = false
     }

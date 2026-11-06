@@ -1,7 +1,9 @@
 //
 //  GuestBook.swift
-//  A friend over (2026-10-25): from a visitor's card at the Park, or the Town's Friends page, the player invites ONE friend (Friend level or better) to
-//  play at home ("Play date", 10...15 minutes) or to stay the night ("Sleepover", until the next morning). This file is the data and the rules; the
+//  A friend over (2026-10-25): from a visitor's card at the Park, or the Town's Friends page, the player invites ONE friend (Friend level or better).
+//  Two kinds (as before): a Play date (comes at any hour after the knock, stays 10...15 minutes) and a Sleepover. Since 2026-11-05 a Sleepover only COMES in the
+//  evening (17:00 on, GuestRules.canArrive; invited earlier it waits for the evening) and goes home the next morning (7:30, judged on the game clock). While a friend
+//  is coming or here the Jelly Wash is closed. This file is the data and the rules; the
 //  body, the walk-in, the sleep and the goodbye are GameCare+Guest.swift. Everything is saved on the device (UserDefaults) so a visit survives closing the
 //  app; the clock is the wall clock, so time away is handled by the same rules (see `GuestRules.verdict`): a guest whose time ran out while the app was
 //  closed has "gone home" (a short note), unless the app comes back soon enough to see the goodbye.
@@ -14,7 +16,8 @@ nonisolated struct GuestVisit: Codable, Equatable, Sendable {
     enum Kind: String, Codable, Sendable {
         case playDate, sleepover
         var title: String { self == .playDate ? "Play date" : "Sleepover" }
-        var blurb: String { self == .playDate ? "A little while to play" : "Stays the night, leaves in the morning" }
+        var blurb: String { self == .playDate ? "A little while to play" : "Comes in the evening, goes home in the morning" }
+        var subtitle: String { self == .playDate ? "a little while" : "evening \u{2192} morning" }
         var symbol: String { self == .playDate ? "figure.play" : "moon.zzz.fill" }
     }
     /// The visitor's pool id.
@@ -24,12 +27,17 @@ nonisolated struct GuestVisit: Codable, Equatable, Sendable {
     var invitedAt: Double
     var arrivedAt: Double = 0
     var endsAt: Double = 0
+    /// The end on the GAME clock (`DayClock.gameTime`, game hours): the game clock stands still while the app is in the background, so the morning is judged on it
+    /// whenever the game clock runs the day (nil = the wall clock decides: an old save, or "follow real clock").
+    var endsGame: Double? = nil
     var arrived: Bool { arrivedAt > 0 }
 }
 
 nonisolated enum GuestTuning {
     /// A play date lasts this long (seconds), drawn at the arrival.
     static let playDate: ClosedRange<Double> = 600...900
+    /// A sleepover friend never comes before this hour of the day (evening starts at 17:00; the hours up to midnight count, 0...17 wait for the evening).
+    static let eveningHour = 17.0
     /// A sleepover ends at this local time the next morning (the brain's own morning wake is about 07:10).
     static let morningHour = 7, morningMinute = 30
     /// An arrival before this local hour ends the same morning (a late-night invitation).
@@ -37,6 +45,10 @@ nonisolated enum GuestTuning {
     /// The app comes back this long after the end: the goodbye is still shown (the guest is still there, waves and leaves); later he has "gone home".
     static let graceAfterPlayDate: Double = 30 * 60
     static let graceAfterSleepover: Double = 3 * 3600
+    /// The same grace on the game clock (game hours).
+    static let graceGameHours: Double = 3
+    /// A visit whose end is this old on the wall clock is over for good, whatever the game clock says (the app was closed for days).
+    static let staleAfter: Double = 24 * 3600
     /// An invitation nobody came home to answer for this long is dropped quietly.
     static let inviteExpires: Double = 2 * 86_400
     /// Where the guest comes in and goes out (the same back edge the adopted Jelbie walks in from).
@@ -64,15 +76,28 @@ nonisolated enum GuestRules {
         }
     }
 
+    /// A play date comes whenever; a sleepover friend may be at the door from 17:00 until midnight (before 17:00 and after midnight he waits for the evening).
+    static func canArrive(_ kind: GuestVisit.Kind, hour: Double) -> Bool { kind == .playDate || DayMath.wrap(hour) >= GuestTuning.eveningHour }
+    /// "this evening" / "tonight" for the notes and the Friends screen.
+    static func when(hour: Double) -> String { DayMath.wrap(hour) >= 21 ? "tonight" : "this evening" }
+
     enum Verdict: Equatable {
         case stay                  // not over (or not here yet and still wanted)
         case goodbye               // over, but the app is back soon enough to wave him off
         case wentHome              // over a while ago: he has gone (a note)
         case dropped               // an old invitation nobody answered
     }
-    static func verdict(_ v: GuestVisit, now: Double) -> Verdict {
+    /// The visit is over: on the game clock when it was recorded there (`gameNow` = `DayClock.gameNow`), else on the wall clock.
+    static func isOver(_ v: GuestVisit, now: Double, gameNow: Double? = nil) -> Bool {
+        guard v.arrived else { return false }
+        if let g = v.endsGame, let gn = gameNow { return gn >= g }
+        return now >= v.endsAt
+    }
+    static func verdict(_ v: GuestVisit, now: Double, gameNow: Double? = nil) -> Verdict {
         guard v.arrived else { return now - v.invitedAt > GuestTuning.inviteExpires ? .dropped : .stay }
-        if now < v.endsAt { return .stay }
+        if now - v.endsAt > GuestTuning.staleAfter { return .wentHome }
+        if !isOver(v, now: now, gameNow: gameNow) { return .stay }
+        if let g = v.endsGame, let gn = gameNow { return gn - g <= GuestTuning.graceGameHours ? .goodbye : .wentHome }
         let grace = v.kind == .sleepover ? GuestTuning.graceAfterSleepover : GuestTuning.graceAfterPlayDate
         return now - v.endsAt <= grace ? .goodbye : .wentHome
     }
@@ -98,6 +123,8 @@ final class GuestBook {
     var welcomeAt: Double = 0
     @ObservationIgnored var arrival = ArrivalClock()
     @ObservationIgnored var arrivalTarget: SIMD2<Float>?
+    /// The welcome party after the hug (Park/GuestParty.swift).
+    @ObservationIgnored var party = GuestParty()
     /// The hug waits this long (seconds) for a guest still running.
     @ObservationIgnored var hugWait: Float?
     @ObservationIgnored private let defaults: UserDefaults
@@ -149,20 +176,26 @@ final class GuestBook {
         visit = nil; save()
     }
     /// He is at the door: the clock of the visit starts.
-    func markArrived(now: Double, calendar: Calendar = .current, sleepoverSeconds: Double? = nil) {
+    func markArrived(now: Double, calendar: Calendar = .current, sleepoverSeconds: Double? = nil, endsGame: Double? = nil) {
         guard var v = visit, !v.arrived else { return }
         v.arrivedAt = now
         v.endsAt = GuestRules.endsAt(v.kind, arrival: Date(timeIntervalSince1970: now), calendar: calendar, sleepoverSeconds: sleepoverSeconds).timeIntervalSince1970
+        v.endsGame = v.kind == .sleepover ? endsGame : nil
         visit = v; save()
     }
     /// The player says goodbye early: the visit is over now.
     func endNow(now: Double) {
         guard var v = visit, v.arrived else { return }
-        v.endsAt = min(v.endsAt, now)
+        v.endsAt = min(v.endsAt, now); v.endsGame = nil
         visit = v; save()
+    }
+    /// The visitor was merged into another record (ParkBook migration): the visit follows the survivor.
+    func repoint(to id: Int) {
+        guard var v = visit, v.visitor != id else { return }
+        v.visitor = id; visit = v; save()
     }
     /// The visit is over (he has gone).
     func finish() {
-        visit = nil; card = false; arrival.cancel(); arrivalCard = .hidden; arrivalDim = false; hugWait = nil; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
+        visit = nil; card = false; party.cancel(); arrival.cancel(); arrivalCard = .hidden; arrivalDim = false; hugWait = nil; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
     }
 }

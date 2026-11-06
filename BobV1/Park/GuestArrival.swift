@@ -8,6 +8,7 @@
 //    1.8  the card slides away; the guest runs in from the left edge of the room (the run gait); the household turns to look
 //    2.6  the household walks to him and bunches up (the group hug), hearts rise, a "Welcome!" pill fades out
 //    3.4  done: he is a housemate like any other (the old `guestArriving` settle is not used on this path)
+//    then (2026-11-06) the welcome party (Park/GuestParty.swift): after the hug everybody dances in a group emote, a few staggered hops, back to normal
 //  `ArrivalClock` is the pure timeline (tested); `GameCare.guestArrival*` does the work; `GuestArrivalOverlay` draws the dim, the card and the pill.
 //
 
@@ -126,6 +127,7 @@ extension GameCare {
         case .hug:
             g.hugWait = ArrivalTuning.hugWait
             if let a = g.actor, let b = a.brain { guestArrivalCheer(actors, a, b) }
+            g.party.begin()          // after the hug: everybody in a group emote, a few staggered hops, then back to normal (Park/GuestParty.swift)
         case .finished:
             g.arrivalCard = .hidden; g.arrivalDim = false
             if let b = g.actor?.brain { b.autonomy = true; b.hurry = false }
@@ -146,6 +148,17 @@ extension GameCare {
         AudioHub.shared.chirp(jelly: a.id, .happy)
         for r in actors where r.id != a.id && r.id != 0 { AudioHub.shared.contextVoice(jelly: r.id, .hello, chance: 0.8) }
         g.welcomeAt = now
+    }
+
+    /// One step of the welcome party: the home Jelbies and the guest are the cast; the voices go through the existing chirp / context voices.
+    func guestPartyStep(_ actors: [JellyActor], _ guest: JellyActor, dt: Float) {
+        let cast = actors + [guest]
+        let pairs = cast.compactMap { a in a.brain.map { (a, $0) } }
+        guestBook.party.step(brains: pairs.map(\.1), sims: pairs.map { $0.0.sim }, dt: dt) { i, v in
+            guard pairs.indices.contains(i) else { return }
+            let id = pairs[i].0.id
+            if v.isContext { AudioHub.shared.contextVoice(jelly: id, v) } else { AudioHub.shared.chirp(jelly: id, v) }
+        }
     }
 
     /// The group hug (the household walks to him and bunches up). False = not possible just now (fewer than three free, or he is still running).

@@ -459,6 +459,25 @@ struct GameScreen: View {
                 }
             }
         }
+        // capture aid: -SeedFriends N makes the first N visitors friends of the Jelbies (a mix of levels; with -SeedDupSave 1 the save is written with doubled / reserved names BEFORE the book loads, see ParkBook.init), -InviteGuest asks one over,
+        // -OpenTown friends|town opens that Town screen once the room is up (the Friends page / the Groomer tile)
+        if d.integer(forKey: "SeedFriends") > 0 {
+            for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
+            let n = max(care.jellyCount, 1)
+            for vid in 0..<min(d.integer(forKey: "SeedFriends"), 12) {
+                care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
+                for k in 0..<n {
+                    guard let c = care.jelly(k)?.character else { continue }
+                    let pts: Float = k == vid % n ? 100 : [50, 25, 0][(vid + k) % 3]
+                    _ = care.parkBook.add(points: pts, visitor: vid, character: c)
+                }
+            }
+        }
+        if let t = d.string(forKey: "OpenTown") {
+            for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
+            await sleep(d.integer(forKey: "InviteGuest") > 0 ? 6 : 3)
+            care.requestTown(t == "friends" ? .friends : .town)
+        }
         // capture aid: -InviteGuest <n> asks visitor n-1 over (a Friend of everybody) 3 s after the room is on screen: the arrival moment (Park/GuestArrival.swift) follows the knock
         if d.integer(forKey: "InviteGuest") > 0 {
             for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
