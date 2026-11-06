@@ -458,6 +458,26 @@ struct GameScreen: View {
                 }
             }
         }
+        // capture aid: -SeedFriends N makes the first N visitors friends of the Jelbies (a mix of levels; two names shared on purpose), -InviteGuest asks one over,
+        // -OpenTown friends|town opens that Town screen once the room is up (the Friends page / the Groomer tile)
+        if d.integer(forKey: "SeedFriends") > 0 {
+            for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
+            let n = max(care.jellyCount, 1)
+            for vid in 0..<min(d.integer(forKey: "SeedFriends"), 12) {
+                care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
+                for k in 0..<n {
+                    guard let c = care.jelly(k)?.character else { continue }
+                    let pts: Float = k == vid % n ? 100 : [50, 25, 0][(vid + k) % 3]
+                    _ = care.parkBook.add(points: pts, visitor: vid, character: c)
+                }
+            }
+            care.parkBook.setName(1, "Zippy"); care.parkBook.setName(4, "Zippy"); care.parkBook.setName(0, "Pip"); care.parkBook.setName(3, "Pip")
+        }
+        if let t = d.string(forKey: "OpenTown") {
+            for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
+            await sleep(d.integer(forKey: "InviteGuest") > 0 ? 6 : 3)
+            care.requestTown(t == "friends" ? .friends : .town)
+        }
         // capture aid: -InviteGuest <n> asks visitor n-1 over (a Friend of everybody) 3 s after the room is on screen: the arrival moment (Park/GuestArrival.swift) follows the knock
         if d.integer(forKey: "InviteGuest") > 0 {
             for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
@@ -466,7 +486,7 @@ struct GameScreen: View {
             care.parkBook.markSeen([vid], at: Date().timeIntervalSince1970)
             for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
             NSLog("[arrival] invite")
-            care.inviteFriend(vid, kind: .playDate)
+            care.inviteFriend(vid)
         }
         // capture aid: -NeedsDemo bubble (the bubble pops, its tap opens Feed, he eats, it poofs) | roster (open it, tap Bob's card)
         if let demo = d.string(forKey: "NeedsDemo") {

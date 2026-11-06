@@ -168,13 +168,14 @@ struct TownView: View {
     private struct Place: Identifiable {
         let id: String, title: String, sub: String, symbol: String, color: Color
         let cats: Set<TownCategory>
+        var enabled = true
         let action: () -> Void
     }
 
     private var category: TownCategory { TownCategory(rawValue: categoryRaw) ?? .all }
 
     private var places: [Place] {
-        let visit = care.guestBook.visit.map { v in care.parkBook.visitor(v.visitor).map { v.arrived ? "\($0.name) is visiting" : "\($0.name) is coming over" } ?? "Ask a friend over" } ?? "Ask a friend over"
+        let visit = care.guestStatusText() ?? "Ask a friend over"
         let full = JellyRoster.savedIDs().count >= JellyRoster.maxCount
         return [
             Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
@@ -182,7 +183,9 @@ struct TownView: View {
             Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
             Place(id: "town-cafe", title: "Café", sub: care.cafeNobodyHungry ? "Nobody's hungry \u{00B7} drinks only" : "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
             Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
-            Place(id: "town-groom", title: "Groomer", sub: "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops]) { groom() },
+            Place(id: "town-groom", title: "Groomer", sub: care.groomGuestBlocker ?? "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops], enabled: care.groomGuestBlocker == nil) {
+                if care.groomGuestBlocker != nil { AudioHub.shared.play(.notEnough) } else { groom() }          // a friend is coming or here: the Jelly Wash stays closed (the tile says why)
+            },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Beach", sub: "Volleyball fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
             Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends]) { adopt() },
@@ -281,7 +284,8 @@ struct TownView: View {
                 .contentShape(shape)
         }
         .buttonStyle(TownTilePress())
-        .accessibilityElement(children: .ignore).accessibilityLabel("\(p.title), \(p.sub)").accessibilityAddTraits(.isButton)
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(p.title), \(p.sub)").accessibilityAddTraits(.isButton).accessibilityHint(p.enabled ? "" : "Closed for now")
+        .opacity(p.enabled ? 1 : 0.55)
         .accessibilityIdentifier(p.id)
     }
 }

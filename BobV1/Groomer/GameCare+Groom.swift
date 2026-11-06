@@ -25,6 +25,7 @@ extension GameCare {
     /// Why the Jelly Spa cannot be entered now (the friendly line); nil = it can.
     func groomBlocker() -> String? {
         if groom.active { return "Already at the Jelly Spa!" }
+        if let why = groomGuestBlocker { return why }          // a friend is coming or here: the Jelly Wash is closed
         if isBedtimeHours { return "The Jelly Spa is closed at night. Come back in the morning!" }
         if tripActive || raceBusy || raceBook.returner != nil { return "Finish this trip first." }
         if let b = cafeBlocker(), b != .noDrops { return b.message }
@@ -47,6 +48,7 @@ extension GameCare {
     /// The picker's tier button. Short of Drops: the café's line on the card and nothing is charged. Else the fade starts (the Drops go at the swap).
     func startGroom(_ tier: GroomTier) {
         guard groom.picking, !groom.picked.isEmpty else { return }
+        if let why = groomGuestBlocker { groom.closePicker(); groom.say(why); AudioHub.shared.play(.notEnough); return }          // (a friend was invited while the picker was open)
         if let why = GroomTier.refusal(total: tier.total(count: groom.picked.count), wallet: bath.wallet.count) {
             groom.refusal = why
             AudioHub.shared.play(.notEnough)

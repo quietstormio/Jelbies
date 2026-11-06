@@ -205,6 +205,20 @@ final class DayClock {
         return d * GameClockTuning.realSecondsPerGameHour
     }
 
+    /// The game clock's running time (game hours) while the game clock runs the day; nil when following the real clock or forced by `-ClockHour`.
+    var gameNow: Double? {
+        guard !followReal, forcedHour == nil else { return nil }
+        advance()
+        return gameTime
+    }
+    /// The game time of the next 7:30 (a visit that starts now ends there); nil when `gameNow` is.
+    var sleepoverEndGame: Double? {
+        guard let g = gameNow else { return nil }
+        var d = 7.5 - DayMath.wrap(g)
+        if d <= 0 { d += 24 }
+        return g + d
+    }
+
     func setFollowReal(_ on: Bool) {
         guard on != followReal else { return }
         followReal = on; defaults.set(on, forKey: Self.followKey)

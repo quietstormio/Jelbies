@@ -8,11 +8,13 @@ import XCTest
 
 @MainActor
 final class ClearGuestTests: XCTestCase {
-    func testClearsOnlyTheGuestVisit() {
+    func testClearsOnlyTheGuestVisit() throws {
         let name = "ClearGuestTests.\(UUID().uuidString)"
         let d = UserDefaults(suiteName: name)!
         defer { d.removePersistentDomain(forName: name) }
         let guest = Data(#"{"invitedAt":1000,"visitor":2,"kind":"sleepover","arrivedAt":0,"endsAt":0}"#.utf8)
+        let oldPlayDate = Data(#"{"invitedAt":1000,"visitor":2,"kind":"playDate","arrivedAt":0,"endsAt":0}"#.utf8)          // (a save from before the evening visits still decodes)
+        XCTAssertEqual(try JSONDecoder().decode(GuestVisit.self, from: oldPlayDate).visitor, 2)
         let rest: [String: Data] = [
             JellyRoster.rosterKey: Data("[0,5,4]".utf8),
             DropsWallet.key: Data([1, 2, 3, 4]),
