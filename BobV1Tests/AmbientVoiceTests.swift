@@ -111,4 +111,40 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertEqual(u.due(eligible: [true], since: [30], now: 300, night: 1, random: mid), [], "night: 26 x 1.5 = 39 s needed")
         XCTAssertEqual(u.due(eligible: [true], since: [40], now: 301, night: 1, random: mid), [0])
     }
+
+    /// The home room's walking / running sounds play 1.3x (capped at 1); the park, race, cafe (any scene) and trips play the catalog volume; voices never change.
+    func testHomeMoveSoundLevels() {
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub._openForTest(); AudioHub.dryRun = true
+        var now = 70_000.0; AudioHub.clock = { now }
+        var vols: [String: Float] = [:]
+        AudioHub.firedVolumeTap = { n, v in vols[n.replacingOccurrences(of: #"_\d+$"#, with: "", options: .regularExpression)] = v }
+        defer { AudioHub.firedVolumeTap = nil }
+        func play(_ s: SFX, volume: Float = 1) -> Float { vols = [:]; now += 5; hub.play(s, jelly: 0, x: 0, volume: volume); return vols[s.rawValue] ?? -1 }
+        func voice() -> Float { vols = [:]; now += 5; hub.chirp(jelly: 0, .happy); return vols.first { $0.key.hasPrefix("chirp_") }?.value ?? -1 }
+        let moves: [(SFX, Float)] = [(.footstep, 0.8), (.footstep, 1.2), (.zoomies, 1), (.squish, 1), (.wobble, 0.6), (.jump, 1), (.boop, 0.7)]
+        for (s, v) in moves {
+            hub.situation(napping: [], playing: false, xs: [], moods: [], home: false)
+            let away = play(s, volume: v)
+            hub.situation(napping: [], playing: false, xs: [], moods: [], home: true)
+            XCTAssertTrue(hub.atHome)
+            let home = play(s, volume: v)
+            XCTAssertGreaterThan(away, 0)
+            XCTAssertEqual(home, min(1, away * HomeMoveSoundTuning.gainMul), accuracy: 1e-5, "\(s) x\(v): home \(home) vs away \(away)")
+            print("LEVEL \(s.rawValue) volume \(v): away \(away) home \(home)")
+        }
+        hub.situation(napping: [], playing: false, xs: [], moods: [], home: false)
+        let voiceAway = voice()
+        hub.situation(napping: [], playing: false, xs: [], moods: [], home: true)
+        XCTAssertEqual(voice(), voiceAway, "chirps are not boosted")
+        let chompHome = play(.chomp)
+        hub.atHome = false
+        XCTAssertEqual(chompHome, play(.chomp), "a non-movement sound is not boosted")
+        for scene in [MusicScene.park, .cafe, .race, .raceFinal, .shop, .town] {
+            hub.situation(napping: [], playing: false, xs: [], moods: [], scene: scene, home: true)
+            XCTAssertFalse(hub.atHome, "\(scene) is not home")
+        }
+        hub.situation(napping: [], playing: false, xs: [], moods: [], home: false)
+        XCTAssertFalse(hub.atHome, "a trip / bath (the stage passes home: false)")
+    }
 }

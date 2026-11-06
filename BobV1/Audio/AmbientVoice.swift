@@ -62,3 +62,10 @@ extension BlobBrain {
 nonisolated enum AmbientMouthTable {
     nonisolated(unsafe) static var until: [ObjectIdentifier: Double] = [:]
 }
+
+/// The home room's movement sounds are louder (the user: "more sound when they're just walking around and running in the house"). Home only (AudioHub.atHome:
+/// not the park, cafe, groomer, race, volley, show, outing, bath or a town screen); the catalog gains stay as they are for everywhere else.
+nonisolated enum HomeMoveSoundTuning {
+    static let gainMul: Float = 1.3
+    static let sounds: Set<SFX> = [.footstep, .zoomies, .squish, .wobble, .jump, .boop]
+}

@@ -123,10 +123,10 @@ final class AudioHub {
     @ObservationIgnored private var diagCounts: [String: Int] = [:]
     @ObservationIgnored private var diagLastState = -100.0
     /// Logs one request and, when it was dropped, the guard that dropped it (`why` nil = it got past every guard).
-    private func diag(_ what: String, _ jelly: Int?, _ why: String?) {
+    private func diag(_ what: String, _ jelly: Int?, _ why: String?, v: Float? = nil) {
         guard Self.audioLog else { return }
         diagCounts["\(what) \(why ?? "PLAYED")", default: 0] += 1
-        NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? "PLAYED")
+        NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? ("PLAYED" + (v.map { String(format: " v=%.2f", $0) } ?? "")))
         stateLine()
     }
     /// At most once a second: the gates' state and the running per-reason counts.
@@ -565,12 +565,14 @@ final class AudioHub {
     /// `dryRun` = `fire` stops after the tap (a soak must not play real audio at 100x), `_openForTest` = an unmuted, started hub without the audio session.
     nonisolated(unsafe) static var clock: () -> Double = { CACurrentMediaTime() }
     nonisolated(unsafe) static var firedTap: ((String) -> Void)?
+    /// Like firedTap with the volume the clip is fired at (the level tests).
+    nonisolated(unsafe) static var firedVolumeTap: ((String, Float) -> Void)?
     nonisolated(unsafe) static var dryRun = false
     func _openForTest() { muted = false; started = true; active = true }
     nonisolated(unsafe) static var playedTap: ((String) -> Void)?
     func _fire(_ name: String, volume: Float = 0.7) { fire(name, volume: volume, pan: 0) }
     private func fire(_ name: String, volume: Float, pan: Float, rate: Float = 1) {
-        Self.firedTap?(name)
+        Self.firedTap?(name); Self.firedVolumeTap?(name, volume)
         if Self.dryRun { return }
         guard let u = url(name) else { return }
         let q0 = PerfProbe.begin()
@@ -622,10 +624,12 @@ final class AudioHub {
         lastPlay[key] = now
         let n = variants(sfx)
         guard n > 0 else { diag("play:\(sfx.rawValue)", jelly, "novariants"); return }
-        diag("play:\(sfx.rawValue)", jelly, nil)
+        let homeMul: Float = atHome && HomeMoveSoundTuning.sounds.contains(sfx) ? HomeMoveSoundTuning.gainMul : 1          // (the home room's walking / running sounds are louder; everywhere else unchanged)
+        let vol = min(1, sfx.gain * volume * level * AudioMix.sfxMaster * homeMul)
+        diag("play:\(sfx.rawValue)", jelly, nil, v: vol)
         _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
         let v = picker.pick(sfx.rawValue, count: n) + 1
-        fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
+        fire("\(sfx.rawValue)_\(v)", volume: vol, pan: panFor(x: x), rate: rate)
     }
 
     /// A sleeping Jelly's snore, in its own CHARACTER's voice (snore_jelly{c}_{1|2}, like the chirps; ~30% end in a bubble pop).
@@ -804,7 +808,7 @@ final class AudioHub {
         if now - lastContextVoice[i] < 0.5 { diag(what, jelly, "hush context"); return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
-        diag(what, jelly, nil)
+        diag(what, jelly, nil, v: 0.7 * level)
         if Self.audioLog { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
