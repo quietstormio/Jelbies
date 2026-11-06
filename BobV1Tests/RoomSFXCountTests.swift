@@ -6,7 +6,7 @@ import simd
 @MainActor
 final class RoomSFXCountTests: XCTestCase {
     override func setUp() { super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }   // (the goal search stops at a wall-clock budget: a loaded machine would skip runs and lower the counts)
-    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; AudioHub.requestTap = nil; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; AudioHub.requestTap = nil; ContactField.reset(); RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     static let seeds: [UInt64] = [11, 23, 37, 41, 59]
     /// Where the approved build's counts live (`scripts/regression-gate.sh` regenerates them from the approved commit and passes `SFXCOUNT_BASELINE`).
@@ -136,13 +136,37 @@ final class RoomSFXCountTests: XCTestCase {
         XCTAssertEqual(hub._playLog.sorted(), ["boop", "footstep", "jump", "setdown", "squish", "wobble", "zoomies"])
     }
 
-    /// Two Jelbies pressed together must be able to get closer than ContactTuning.contactFrac of the gap, or the contact squish + kick (BlobBrain+Contact) never fires.
-    /// (g-bodysep floored keepApart at the full gap: 0 contacts at home, r1052.)
+    /// Two Jelbies pressed together must be able to touch, and the touch must be announced.
+    /// (a) Without contact profiles (a rig that never skins) the old rule stands: the spring lets a pressed pair get closer than ContactTuning.contactFrac of the gap, so the centre-distance
+    ///     squish + kick fires (g-bodysep floored keepApart at the full gap: 0 contacts at home, r1052).
+    /// (b) With the contact profiles (the stage's rule, 2026-11-03): a social meeting reaches contact (the DRAWN skins' gap <= +1 cm), `contactTick` announces it exactly once (one squish
+    ///     request), and the keepApart wall never puts a pressed pair's root where the skins overlap.
     func testKeepApartStillAllowsContact() {
+        ContactField.reset()
         let peers: [(pos: SIMD2<Float>, walking: Bool)] = [(SIMD2(0, 0), false), (SIMD2(0.3, 0), false)]
         let q = MelonController.keepApart(SIMD3(0.3, 0, 0), id: 1, peers: peers)
         let d = simd_length(SIMD2(q.x, q.z))
         XCTAssertLessThan(d, MelonController.jellyGap * ContactTuning.contactFrac, "pressed pair reaches contact distance (d=\(d))")
+        // (b)
+        var squish = 0
+        AudioHub.requestTap = { if $0 == "squish" { squish += 1 } }
+        let duo = FeatureClipTests.Duo(positions: Array(SocialTests.starts.prefix(2)), features: [.none, .none], seed: 3)
+        duo.live = true
+        let a = duo.lab.rigs[0], b = duo.lab.rigs[1]
+        XCTAssertTrue(a.brain.socialStart(.boop, with: b.brain, a.sim))
+        var minGap: Float = .infinity
+        for _ in 0..<(60 * 25) { duo.tick(); if let g = ContactField.gap(0, 1) { minGap = min(minGap, g) } }
+        MotionLog.write("KEEPAPART contact: boop min skin gap \(minGap), contact events \(a.brain.contactEvents + b.brain.contactEvents), squish requests \(squish)")
+        XCTAssertLessThanOrEqual(minGap, 0.01, "the social meeting reaches contact on the drawn skins")
+        XCTAssertGreaterThanOrEqual(a.brain.contactEvents + b.brain.contactEvents, 1, "and announces it")
+        XCTAssertGreaterThanOrEqual(squish, 1)
+        // the wall: a root put inside the neighbour is pushed out to where the skins just meet
+        let ra = ContactField.root(0), rb = ContactField.root(1)
+        let toward = simd_normalize(ra - rb)
+        let pressed = MelonController.keepApart(SIMD3(rb.x + toward.x * 0.5, 0, rb.y + toward.y * 0.5), id: 0, peers: [(pos: ra, walking: false), (pos: rb, walking: false)])
+        let gapAfter = ContactField.gap(0, at: SIMD2(pressed.x, pressed.z), 1, at: rb) ?? 9
+        XCTAssertGreaterThanOrEqual(gapAfter, -0.01, "keepApart's wall: never inside the neighbour's skin (gap \(gapAfter))")
+        ContactField.reset()
     }
 }
 

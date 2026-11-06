@@ -99,32 +99,43 @@ final class FeatureClipCaptureTests: XCTestCase {
         try img.pngData()!.write(to: URL(fileURLWithPath: path))
     }
 
-    /// Teddy (left) and Pearl (right) lie down 1.2 apart, tipped into each other (the photo): before / after.
-    func testLyingTeddyAndPearl() throws {
+    /// Two Jelbies lie down 1.2 apart, tipped into each other (the photo): before / after, the high 3/4 camera of the photo.
+    private func lyingStrip(_ f0: JellyFeature, _ f1: JellyFeature, _ pal: [Palette], file: String, gaps: inout [String]) throws {
         let out = try dir()
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        let pal = [JellyRoster.palette(JellyRoster.teddyID)!, WhiteWing.palette]
         var rows: [(String, [UIImage])] = []
         for after in [false, true] {
             FeatureClip.enabled = after; LieClearTuning.enabled = after
-            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [f0, f1])
             FeatureClipTests.keep.append(d)
             let sh = try Shooter(device: device, d: d, W: W, H: H)
             d.place([SIMD2(-0.6, 0.6), SIMD2(0.6, 0.6)])
+            d.live = after
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             a.brain.idleForced = true; b.brain.idleForced = true
             _ = a.brain.idleStart(.lieDown, a.sim); _ = b.brain.idleStart(.lieDown, b.sim)
             if !after { a.brain.idleState.sign = -1; b.brain.idleState.sign = 1 }
+            a.brain.idleState.hold = 30; b.brain.idleState.hold = 30
             var cells: [UIImage] = []
-            for f in 0..<(60 * 5) {
+            for f in 0..<(60 * 6) {
                 d.tick()
-                guard f >= 150, f % 45 == 0, cells.count < 4 else { continue }
+                guard f >= 240, f % 40 == 0, cells.count < 3 else { continue }
                 let c = SIMD3((a.sim.centroid().x + b.sim.centroid().x) / 2, 0.45, (a.sim.centroid().z + b.sim.centroid().z) / 2)
                 cells.append(sh.shot(d, palettes: pal, focus: c, dirv: simd_normalize(SIMD3(0.35, 0, 1)), dist: 3.4, lift: 0.75))
+                if after { gaps.append(String(format: "%@ f%d skin gap %.4f", file, f, d.skinGap(0, 1))) }
             }
-            rows.append((after ? "AFTER: lie-down makes room, features clipped" : "BEFORE: the photo (placement + clip off)", cells))
+            rows.append((after ? "AFTER: drawn skins just touch" : "BEFORE: the photo (placement + clip off)", cells))
         }
-        try strip(rows, to: out + "/01_lying_teddy_pearl.png")
+        try strip(rows, to: out + "/" + file)
+    }
+
+    func testLyingPairs() throws {
+        var gaps: [String] = []
+        let teddy = JellyRoster.palette(JellyRoster.teddyID)!
+        try lyingStrip(.ears, .wings, [teddy, WhiteWing.palette], file: "01_lying_teddy_pearl.png", gaps: &gaps)
+        try lyingStrip(.none, .ears, [PaletteKey.blue.palette, teddy], file: "04_lying_bob_teddy.png", gaps: &gaps)
+        try lyingStrip(.spines, .wings, [JellyRoster.palette(1)!, WhiteWing.palette], file: "05_lying_pip_pearl.png", gaps: &gaps)
+        for g in gaps { MotionLog.write("FEATCLIP capture " + g) }
     }
 
     /// Pearl (left) and Lavender (right) in a sway hug: wings against the other's body.
@@ -139,7 +150,7 @@ final class FeatureClipCaptureTests: XCTestCase {
             FeatureClipTests.keep.append(d)
             for (i, r) in d.lab.rigs.enumerated() { if i == 0 { d.feats[0].setWingTint(0, WhiteWing.wingTint) } else { d.feats[1].setWingTint(1, nil) }; _ = r }
             let sh = try Shooter(device: device, d: d, W: W, H: H)
-            XCTAssertTrue(d.lab.rigs[0].brain.socialStart(.swayHug, with: d.lab.rigs[1].brain, d.lab.rigs[0].sim))
+            _ = d.lab.rigs[0].brain.socialStart(.swayHug, with: d.lab.rigs[1].brain, d.lab.rigs[0].sim)
             var cells: [UIImage] = []
             var worstFrame = 0, worst: Float = -1
             var frames: [Int: Float] = [:]

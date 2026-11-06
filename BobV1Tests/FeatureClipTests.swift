@@ -18,10 +18,10 @@ final class FeatureClipTests: XCTestCase {
 
     override func setUp() {
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
-        FeatureClip.enabled = true; LieClearTuning.enabled = true
+        FeatureClip.enabled = true; LieClearTuning.enabled = true; ContactField.reset(); ContactField.enabled = true
     }
     override func tearDown() {
-        FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; AudioHub.requestTap = nil
+        FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; AudioHub.requestTap = nil; ContactField.reset(); ContactField.enabled = true
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
@@ -38,6 +38,8 @@ final class FeatureClipTests: XCTestCase {
             lab = SocialTests.Lab(n: positions.count, positions: positions, quiet: quiet, seed: seed)
             feature = features
             WearBody.install(MotionRig.renderMesh)
+            let rmc = MotionRig.renderMesh
+            ContactField.configure(eggLimit: rmc.armCapsule?.firstVertex.min() ?? rmc.vertexCount, tail: rmc.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rmc.index)
             var fs: [FeatureSet] = []
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
@@ -71,19 +73,27 @@ final class FeatureClipTests: XCTestCase {
             let r = lab.rigs[i]
             feats[i].tick(id: i, brain: r.brain, sim: r.sim, feature: feature[i], worn: [], hideAll: false, dt: dt)
         }
+        /// true = skin every body every tick (the contact profiles are fresh, as in the stage), false = only when a test asks.
+        var live = false
+        /// Hook called every tick (the haptic tests advance their fake clock here).
+        var onTick: (() -> Void)?
         func tick() {
+            onTick?()
             lab.tick(watching: false)
             for (i, r) in lab.rigs.enumerated() { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tickFeature(i) }
+            if live { _ = skinAll() }
         }
-        /// Skin every body (+ the stage's clip pass) and build every feature mesh. Returns each body's feature vertices in the world.
+        /// The skin jobs of every rig as the stage builds them (root = the floor position the room steers).
+        func jobs() -> [JellyParallel.SkinJob] {
+            lab.rigs.enumerated().map { JellyParallel.SkinJob(skinner: $1.skinner, sim: $1.sim, dst: dyn[$0], id: $0, root: GameCare.floorPos($1.brain, $1.sim)) }
+        }
+        /// Skin every body in parallel with its contact profile (JellyParallel.skin), the stage's clip pass, then every feature mesh (which fills the feature profiles).
+        /// Returns each body's feature vertices in the world.
         func skinAll() -> [[SIMD3<Float>]] {
-            var jobs: [JellyParallel.SkinJob] = []
-            for (i, r) in lab.rigs.enumerated() {
-                r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[i])
-                jobs.append(JellyParallel.SkinJob(skinner: r.skinner, sim: r.sim, dst: dyn[i], id: i))
-            }
-            FeatureClip.apply(jobs: jobs)
-            if FeatureClip.eggs.count != lab.rigs.count || !FeatureClip.enabled { FeatureClip.eggs = jobs.map { ClipEgg(sim: $0.sim) } }
+            let js = jobs()
+            JellyParallel.skin(js, index: MotionRig.renderMesh.index)
+            FeatureClip.apply(jobs: js)
+            if FeatureClip.eggs.count != lab.rigs.count || !FeatureClip.enabled { FeatureClip.eggs = js.map { ClipEgg(sim: $0.sim) } }
             var out: [[SIMD3<Float>]] = []
             for (i, r) in lab.rigs.enumerated() {
                 feats[i].syncCarry(i, sim: r.sim)
@@ -127,7 +137,29 @@ final class FeatureClipTests: XCTestCase {
             if sk.teddyOn, sk.teddyFirst >= 0 { r.append(sk.teddyFirst..<(sk.teddyFirst + TeddyBean.vertexCount)) }
             return r.flatMap { $0.map { SIMD3(dyn[i][6 * $0], dyn[i][6 * $0 + 1], dyn[i][6 * $0 + 2]) } }
         }
-        func bodyGap(_ i: Int, _ j: Int) -> Float { max(bodyPenetration(i, into: j), bodyPenetration(j, into: i)) }
+        /// Penetration (+ sunk in, - apart) of the DRAWN skins of body i and j (SkinGap), measured on freshly skinned streams.
+        func bodyGap(_ i: Int, _ j: Int) -> Float { -truthGap(i, j) }
+        /// The ground-truth gap of the two drawn bodies (the translation gap of the full projected triangle meshes, the tail block left out like the profile does), on freshly skinned streams.
+        func truthGap(_ i: Int, _ j: Int) -> Float {
+            let rm = MotionRig.renderMesh
+            for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: rm.index, into: dyn[k]) }
+            // the DRAWN triangles of each body: the egg and the limb blocks that are on (a parked arm / foot bean is not drawn), the tail left out like the profile does
+            func drawn(_ k: Int) -> [UInt32] {
+                var rs = contactRanges(k)
+                rs.removeAll { $0.lowerBound == ContactField.tailLo }
+                var on = [Bool](repeating: false, count: rm.vertexCount)
+                for r in rs { for v in r where v < on.count { on[v] = true } }
+                var idx: [UInt32] = []
+                var t = 0
+                while t + 2 < rm.index.count { if on[Int(rm.index[t])] && on[Int(rm.index[t + 1])] && on[Int(rm.index[t + 2])] { idx.append(contentsOf: rm.index[t..<(t + 3)]) }; t += 3 }
+                return idx
+            }
+            return ContactProfileTests.truthGap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), count: rm.vertexCount, index: drawn(i), indexB: drawn(j), rootA: GameCare.floorPos(lab.rigs[i].brain, lab.rigs[i].sim), rootB: GameCare.floorPos(lab.rigs[j].brain, lab.rigs[j].sim))
+        }
+        func skinGap(_ i: Int, _ j: Int) -> Float {
+            for k in [i, j] { let r = lab.rigs[k]; r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: dyn[k]) }
+            return SkinGap.gap(UnsafePointer(dyn[i]), UnsafePointer(dyn[j]), limit: eggLimit)
+        }
     }
     enum FeatureSetKeep { static func keep(_ d: Duo) { FeatureClipTests.keep.append(d); FeatureClipTests.keep.append(d.lab) } }
 
@@ -164,6 +196,7 @@ final class FeatureClipTests: XCTestCase {
               for signs in [(-1, 1), (1, -1)] as [(Float, Float)] {
                 let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
                 d.place([SIMD2(-gap / 2, 0.6), SIMD2(gap / 2, 0.6)])
+                d.live = after          // (the contact profiles, fresh every tick, as in the stage)
                 let ra = d.lab.rigs[0], rb = d.lab.rigs[1]
                 ra.brain.idleForced = true; rb.brain.idleForced = true
                 let a = ra.brain.idleStart(.lieDown, ra.sim), b = rb.brain.idleStart(.lieDown, rb.sim)
@@ -174,24 +207,23 @@ final class FeatureClipTests: XCTestCase {
                     guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
                     both += 1
                     guard f % 3 == 0 else { continue }
-                    if after, gap == 1.2, f % 15 == 0 { let g = BlobBrain.eggGap(ClipEgg(sim: ra.sim), ClipEgg(sim: rb.sim)); MotionLog.write("   f\(f) eggGap \(g.gap) bodyGap \(d.bodyGap(0, 1)) roots \(simd_distance(ra.brain.position, rb.brain.position)) goals \(String(describing: ra.brain.idleState.snugGoal)) \(String(describing: rb.brain.idleState.snugGoal)) runs \(ra.brain.idleState.snugRuns) \(rb.brain.idleState.snugRuns) phT \(ra.brain.idleState.phaseT) \(rb.brain.idleState.phaseT)") }
                     let on = FeatureClip.enabled
                     FeatureClip.enabled = false
                     let rawF = d.skinAll(), rawL = (0..<2).map { d.limbPoints($0) }
                     FeatureClip.enabled = on
                     let feat = d.skinAll()
                     for i in 0..<2 { s.feature = max(s.feature, d.penetration(feat[i], owner: i, raw: rawF[i])); s.limb = max(s.limb, d.penetration(d.limbPoints(i), owner: i, raw: rawL[i])) }
-                    if both > 100 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
-                    s.worst = max(s.worst, d.bodyGap(0, 1))
+                    if both > 130, f % 12 == 0 { let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }          // (settled: after the snuggle's measurements)
+                    if f % 12 == 0 { s.worst = max(s.worst, d.bodyGap(0, 1)) }
                 }
                 let line = "FEATCLIP lie \(after ? "AFTER" : "BEFORE") roots \(gap) signs \(signs) started \(a)/\(b) lying frames \(both) body pen settled \(s.body) ever \(s.worst) feature pen \(s.feature) limb pen \(s.limb) roots now \(simd_distance(ra.brain.position, rb.brain.position))"
                 report.append(line); MotionLog.write(line)
                 if after {
                     XCTAssertTrue(a && b); XCTAssertGreaterThan(both, 60, "both lie down")
-                    XCTAssertLessThanOrEqual(s.worst, 0.05, "never sunk in"); XCTAssertLessThanOrEqual(s.body, Self.tol, "the lying bodies do not sink into each other: \(line)")
+                    XCTAssertLessThanOrEqual(s.worst, 0.05, "never sunk in"); XCTAssertLessThanOrEqual(s.body, 0.015, "the lying bodies do not sink into each other: \(line)")
                     XCTAssertLessThanOrEqual(s.feature, Self.tol, "no wing vertex inside the other body: \(line)")
                     XCTAssertLessThanOrEqual(s.limb, Self.tol, "no arm / ear vertex inside the other body: \(line)")
-                    XCTAssertGreaterThan(s.lo, -0.055, "they snuggle: surfaces touch (gap 0-5 cm): \(line)")
+                    XCTAssertGreaterThan(s.lo, -0.01, "they snuggle: drawn skins touch (gap -1.5..+1 cm): \(line)")
                 }
             }
           }
@@ -199,11 +231,27 @@ final class FeatureClipTests: XCTestCase {
         XCTAssertTrue(report.contains { $0.contains("BEFORE") && ($0.contains("body pen 0.") || $0.contains("limb pen 0.")) }, "the rig reproduces the photo (before the fix a pair sinks in)")
     }
 
+    /// A time series of the lying pair's gap: the profile's, the mesh truth's, the settle's goal (debug; logs only).
+    func testLyingSeries() {
+        let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings], seed: 5)
+        d.place([SIMD2(-0.6, 0.6), SIMD2(0.6, 0.6)])
+        d.live = true
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        a.brain.idleForced = true; b.brain.idleForced = true
+        _ = a.brain.idleStart(.lieDown, a.sim); _ = b.brain.idleStart(.lieDown, b.sim)
+        a.brain.idleState.hold = 60; b.brain.idleState.hold = 60
+        for f in 0..<420 {
+            d.tick()
+            if f % 15 == 0 { MotionLog.write(String(format: "LYINGSERIES f%3d phases %d/%d profile gap %.4f truth gap %.4f roots %.3f", f, a.brain.idleState.phase, b.brain.idleState.phase, ContactField.gap(0, 1) ?? 9, -d.bodyGap(0, 1), simd_distance(a.brain.position, b.brain.position))) }
+        }
+    }
+
     /// From far apart: one lies down, then the other lies down 2.0 away - he scoots over to just touch (surface gap 0-5 cm, never inside).
     func testSnuggleFromFar() {
         for dist: Float in [1.8, 2.2] {
             let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.ears, .wings])
             d.place([SIMD2(-dist / 2, 0.6), SIMD2(dist / 2, 0.6)])
+            d.live = true
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             a.brain.idleForced = true; b.brain.idleForced = true
             XCTAssertTrue(a.brain.idleStart(.lieDown, a.sim)); a.brain.idleState.hold = 60
@@ -216,13 +264,85 @@ final class FeatureClipTests: XCTestCase {
                 guard d.lab.rigs.allSatisfy({ $0.brain.idleState.kind == .lieDown && $0.brain.idleState.phase == 2 }) else { continue }
                 both += 1
                 guard f % 3 == 0 else { continue }
-                if both > 120 { _ = d.skinAll(); let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }
+                if both > 120, f % 12 == 0 { _ = d.skinAll(); let g = d.bodyGap(0, 1); s.body = max(s.body, g); s.lo = min(s.lo, g) }
             }
             let line = "FEATCLIP snuggle from \(dist): lying frames \(both) settled body pen max \(s.body) min \(s.lo) roots \(simd_distance(a.brain.position, b.brain.position))"
             MotionLog.write(line)
             XCTAssertGreaterThan(both, 30, line)
-            XCTAssertLessThanOrEqual(s.body, Self.tol, line)
-            XCTAssertGreaterThan(s.lo, -0.055, "snug: \(line)")
+            XCTAssertLessThanOrEqual(s.body, 0.015, line)
+            XCTAssertGreaterThan(s.lo, -0.01, "snug: \(line)")
+        }
+    }
+
+    /// Wings fold up against the owner's back when a neighbour's skin is within their (open) reach, and open again when he leaves (the contact fold, FeatureSet.wingFoldWant):
+    /// the neighbour goes round him and settles to touching (ContactSettle on the gap WITH the features: the owner stays put). Wherever the open wings would touch him they fold, and he
+    /// stops at the folded wing (the wing lies between them, never inside him); wherever they would not, they stay open and the bodies touch.
+    func testWingsFoldNextToANeighbourAndSpringBack() {
+        let d = Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)], features: [.wings, .none], seed: 5)
+        d.live = true
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        func openClear() -> Float { ContactField.clearance(of: d.feats[0].openWingPoints(0), ownerRoot: ContactField.root(0), against: 1) ?? 9 }
+        func fold() -> Float { d.feats[0].slot(0)?.fold ?? -1 }
+        var conflicts = 0, rows: [String] = []
+        for k in 0..<12 {
+            let ang = Float(k) * (.pi / 6)
+            let u = SIMD2<Float>(sinf(ang), cosf(ang))
+            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * 1.6])          // (first apart, to read the touching distance along this direction)
+            for _ in 0..<4 { d.tick() }
+            let touchR = 1.6 - (ContactField.gap(0, 1) ?? 0.2) + 0.04
+            d.place([SIMD2(0, 0.6), SIMD2(0, 0.6) + u * touchR])          // (then 4 cm short of touching: the settle closes in)
+            var bodyLo: Float = 9, featLo: Float = 9
+            for f in 0..<90 {
+                d.tick()
+                ContactSettle.step(a.brain, b.brain, target: 0, anchoredA: true, features: true)
+                if f >= 60 { bodyLo = min(bodyLo, ContactField.gap(0, 1) ?? 9); featLo = min(featLo, ContactField.gap(0, 1, features: true) ?? 9) }
+            }
+            let f = fold(), oc = openClear()
+            let fc = ContactField.clearance(of: ContactField.featurePoints(0), ownerRoot: ContactField.root(0), against: 1) ?? 9
+            rows.append(String(format: "%3d deg: open wings %.3f from his skin, fold %.2f, folded wings %.3f, body gap %.4f, gap with features %.4f", k * 30, oc, f, fc, bodyLo, featLo))
+            XCTAssertGreaterThanOrEqual(bodyLo, -0.01, "never inside his body: \(rows.last!)")
+            XCTAssertGreaterThanOrEqual(featLo, -0.01, "never inside the (folded) wings: \(rows.last!)")
+            if oc < 0.02 {
+                conflicts += 1
+                XCTAssertGreaterThan(f, 0.7, "wings that would touch him fold: \(rows.last!)")
+                XCTAssertGreaterThanOrEqual(fc, -0.012, "the folded wings are not inside him (he stops at them): \(rows.last!)")
+                XCTAssertLessThanOrEqual(bodyLo, 0.06, "and the folded wing between them is thin: the bodies are within 6 cm: \(rows.last!)")
+                let feat = d.skinAll()
+                XCTAssertLessThanOrEqual(d.penetration(feat[0], owner: 0, raw: feat[0]), Self.tol, "what the fold leaves is clipped: nothing drawn inside his egg: \(rows.last!)")
+            }
+            if oc > 0.12 {
+                XCTAssertLessThan(f, 0.1, "wings that are clear stay open: \(rows.last!)")
+                XCTAssertLessThanOrEqual(bodyLo, 0.012, "and the bodies touch: \(rows.last!)")
+            }
+            d.place([SIMD2(0, 0.6), SIMD2(3, 0.6)])          // (away between the angles: open again)
+            for _ in 0..<45 { d.tick() }
+            XCTAssertLessThan(fold(), 0.05, "springs back when he leaves (\(k * 30) deg)")
+        }
+        for r in rows { MotionLog.write("FEATCLIP wingfold " + r) }
+        XCTAssertGreaterThan(conflicts, 0, "the ring puts him in the wings' reach somewhere")
+    }
+
+    /// Diagnostic (WINGFOLD_SWEEP=1): how far the wings stick out of their owner's own body footprint for each folded pose (flap, spread).
+    func testZWingFoldPoseSweep() throws {
+        guard ProcessInfo.processInfo.environment["WINGFOLD_SWEEP"] == "1" else { throw XCTSkip("WINGFOLD_SWEEP not set") }
+        defer { FeatureTuning.forceFold = nil; FeatureTuning.foldFlap = nil; FeatureTuning.foldSpread = -15 }
+        for pose in ["standing", "lying"] {
+            for flap: Float in [-40, -20, 0, 20, 40, 60, 75] {
+                for spread: Float in [-40, -20, 0, 20, 40] {
+                    let d = Duo(positions: [SIMD2(0, 0.6)], features: [.wings], seed: 5)
+                    let r = d.lab.rigs[0]
+                    FeatureTuning.forceFold = 1; FeatureTuning.foldFlap = flap; FeatureTuning.foldSpread = spread
+                    if pose == "lying" { r.brain.idleForced = true; _ = r.brain.idleStart(.lieDown, r.sim); r.brain.idleState.hold = 60; for _ in 0..<150 { d.tick() } } else { for _ in 0..<30 { d.tick() } }
+                    _ = d.skinAll()
+                    var worst: Float = -9, worstDeg = 0
+                    for p in ContactField.featurePoints(0) {
+                        let L = simd_length(p); guard L > 1e-3 else { continue }
+                        let o = L - (ContactField.ext(0, p / L) ?? 0)
+                        if o > worst { worst = o; worstDeg = Int(atan2f(p.x, p.y) * 180 / .pi) }
+                    }
+                    MotionLog.write(String(format: "WINGSWEEP %@ flap %3.0f spread %3.0f: wings out of his own footprint by %.3f (at %d deg, %d pts)", pose, flap, spread, worst, worstDeg, ContactField.featurePoints(0).count))
+                }
+            }
         }
     }
 

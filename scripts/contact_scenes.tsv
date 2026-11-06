@@ -1,0 +1,73 @@
+# name<TAB>cast (first one starts it)<TAB>ContactDemo kind (- = none)<TAB>angles<TAB>extra launch args (space separated, - = none)<TAB>secs (the longest a scene may run; default 90, backToBack 200)
+# one row = one launch per angle; output <name>_<angle>.mp4 (angles: perp = side-on tracking camera, top = tracking from above, low = the player's low 3/4 view; perp and top are mandatory for every row)
+lieDown_teddy_pearl	teddy,pearl	lieDown	perp,top,low	-	120
+lieDown_pip_lavender	pip,lavender	lieDown	perp,top,low	-	120
+sleepPile_pearl_pip	pearl,pip	sleepPile	perp,top,low	-ClockHour 23	90
+backToBack_pip_teddy	pip,teddy	backToBack	perp,top,low	-	200
+swayHug_bob_pearl	bob,pearl	swayHug	perp,top,low	-	90
+noseBoop_moss_lavender	moss,lavender	noseBoop	perp,top,low	-	90
+groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	perp,top,low	-	90
+groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	perp,top,low	-	90
+cuddleLean_lavender_pip	lavender,pip	cuddleLean	perp,top,low	-	90
+boop_bob_teddy	bob,teddy	boop	perp,top,low	-	90
+squabble_pip_moss	pip,moss	squabble	perp,top,low	-	90
+bump_moss_pearl	moss,pearl	bump	perp,top,low	-	90
+nuzzle_lavender_teddy	lavender,teddy	nuzzle	perp,top,low	-	90
+sitTogether_pip_pearl	pip,pearl	sitTogether	perp,top,low	-	90
+sneak_pip_lavender	pip,lavender	sneak	perp,top,low	-	90
+chestBump_bob_pip	bob,pip	chestBump	perp,top,low	-	90
+highFive_pearl_teddy	pearl,teddy	highFive	perp,top,low	-	90
+hum_moss_lavender	moss,lavender	hum	perp,top,low	-	90
+cheekSquish_teddy_bob	teddy,bob	cheekSquish	perp,top,low	-	90
+tag_lavender_pip	lavender,pip	tag	perp,top,low	-	90
+bellyBounce_pip_pearl	pip,pearl	bellyBounce	perp,top,low	-	90
+ringAround_teddy_pearl	teddy,pearl	ringAround	perp,top,low	-	90
+whisperGiggle_teddy_moss	teddy,moss	whisperGiggle	perp,top,low	-	90
+spinHug_pearl_pip	pearl,pip	spinHug	perp,top,low	-	90
+circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	perp,top,low	-	90
+leapfrog_moss_teddy	moss,teddy	leapfrog	perp,top,low	-	90
+stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	perp,top,low	-Storm 2 -StormDelay 2	90
+guestHug_bob_teddy_pearl	bob,teddy,pearl	-	perp,top,low	-InviteGuest 1	34
+squabble_bob_teddy	bob,teddy	squabble	perp,top,low	-	90
+bump_bob_teddy	bob,teddy	bump	perp,top,low	-	90
+backToBack_lavender_pip	lavender,pip	backToBack	perp,top,low	-	200
+sneak_bob_pip	bob,pip	sneak	perp,top,low	-	90
+swayHug_lavender_teddy	lavender,teddy	swayHug	perp,top,low	-	90
+cheekSquish_pip_teddy	pip,teddy	cheekSquish	perp,top,low	-	90
+chase_bob_teddy	bob,teddy	chase	perp,top,low	-	120
+flop_teddy_pearl	teddy,pearl	flop	perp,top,low	-	120
+sitTogether_bob_teddy	bob,teddy	sitTogether	perp,top,low	-	90
+spinHug_bob_teddy	bob,teddy	spinHug	perp,top,low	-	90
+hum_bob_teddy	bob,teddy	hum	perp,top,low	-	90
+noseBoop_bob_teddy	bob,teddy	noseBoop	perp,top,low	-	90
+nuzzle_bob_teddy	bob,teddy	nuzzle	perp,top,low	-	90
+sneak_bob_teddy	bob,teddy	sneak	perp,top,low	-	90
+highFive_bob_teddy	bob,teddy	highFive	perp,top,low	-	90
+ringDance_pip_lavender_teddy	pip,lavender,teddy	ringDance	perp,top,low	-	90
+# PARK rows: -StartPark 1 goes to the park, -ContactDemoPark 1 -ContactDemoDiag 1 swaps its random visitors for N chosen ones (-ContactDemoVisitors, -ContactDemoVisitorSpecies wings|daisy|none; there is no tail/yellow pool visitor) and forces the kind between the cast Jelbie and them
+ringAround_park_teddy_v	teddy	ringAround	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+ringAround_park_pip_v	pip	ringAround	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+circleDance_park_pearl_vv	pearl	circleDance	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies wings,daisy	120
+groupHug_park_bob_vv	bob	groupHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies daisy,wings	120
+bump_park_bob_v	bob	bump	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+tag_park_pearl_v	pearl	tag	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+chase_park_teddy_v	teddy	chase	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+highFive_park_moss_v	moss	highFive	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
+spinHug_park_lavender_v	lavender	spinHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
+look_bob_teddy	bob,teddy	look	perp,top	-	90
+follow_teddy_pearl	teddy,pearl	follow	perp,top	-	90
+zoomies_moss_pearl	moss,pearl	zoomies	perp,top	-	90
+greet_bob_pip	bob,pip	greet	perp,top	-	90
+dance_lavender_teddy	lavender,teddy	dance	perp,top	-	90
+keepAway_pip_moss	pip,moss	keepAway	perp,top	-	90
+line_bob_teddy_pearl	bob,teddy,pearl	line	perp,top	-	90
+twirl_pip_teddy	pip,teddy	twirl	perp,top	-	90
+hopAlong_moss_lavender	moss,lavender	hopAlong	perp,top	-	90
+littleRace_bob_pearl	bob,pearl	littleRace	perp,top	-	90
+peekaboo_teddy_pearl	teddy,pearl	peekaboo	perp,top	-	90
+mirrorDance_lavender_pip	lavender,pip	mirrorDance	perp,top	-	90
+danceOff_bob_moss	bob,moss	danceOff	perp,top	-	90
+shyWave_pearl_teddy	pearl,teddy	shyWave	perp,top	-	90
+groupCheer_bob_teddy_pearl	bob,teddy,pearl	groupCheer	perp,top	-	90
+conga_pip_lavender_teddy	pip,lavender,teddy	conga	perp,top	-	90
+congaLine_pip_pearl_moss	pip,pearl,moss	congaLine	perp,top	-	90

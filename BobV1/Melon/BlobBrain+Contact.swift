@@ -13,11 +13,28 @@ import simd
 
 enum ContactTuning {
     nonisolated(unsafe) static var lookAhead = true
+    nonisolated(unsafe) static var leanLimiter = true          // the lean toward a partner never grows past skin contact (ContactSettle.swift: contactApplyLean)
+    static let hopWarpMax: Float = 0.35          // the settle may warp one airborne hop this far in all (the sum of its pushes) (ContactSettle.swift: contactNudge)
     static let lookDistance: Float = 2.4          // how far ahead along the leg a Jelly counts
     static let contactFrac: Float = 0.97          // closer than this fraction of the gap = the bodies touch
     static let cooldown: Float = 1.6
     static let walkerSpeed: Float = 0.8           // what a walker is assumed to cover per second when predicting where two will meet
     static let lookTime: Float = 3.0              // how far ahead (s) the meeting of two walkers is looked for
+    static let leanBudget: Float = 0.11          // rad of lean a planted body spends on a residual gap (~ 2.7 cm at the cheeks, measured: 0.08 rad closed 1.8 cm in the boop trace); beyond it: one shuffle step
+    static let leanPerMetre: Float = 3.2          // rad per metre to close (measured 2026-11-04: a lean of 1 rad moves the skin contact ~ 0.22 m)
+    nonisolated(unsafe) static var finalStepRate: Float = Float(ProcessInfo.processInfo.environment["FINAL_STEP_RATE"] ?? "") ?? 0.6          // the last stride of a stance walk runs at this share of the normal step rate (brakes into the touch)
+    /// The per-tick blend of the live touch distance into the stable one: the outline swings +-8 cm over a stride (arms, legs), so the destination follows its average over about a stride (~0.8 s), not a sample.
+    nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.7
+    /// The destination of a stance walk is locked this close to it (m): late enough that the averaged touch distance has settled, early enough that the last two steps are planned on a fixed spot.
+    nonisolated(unsafe) static var lockDistance: Float = Float(ProcessInfo.processInfo.environment["LOCK_DIST"] ?? "") ?? 0.8
+    nonisolated(unsafe) static var armCalmDistance: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM_DIST"] ?? "") ?? 1.0
+    nonisolated(unsafe) static var armCalmSweep: Float = Float(ProcessInfo.processInfo.environment["ARM_CALM"] ?? "") ?? 0.2
+    /// A stance walk's steps within this distance (m) of the decided spot are planned without the partner wall (the last two strides).
+    nonisolated(unsafe) static var wallExemptDistance: Float = Float(ProcessInfo.processInfo.environment["WALL_EXEMPT"] ?? "") ?? 0.35
+    /// A side-by-side stance walk starts its turn into the pose this many strides before the n it needs (so the body has finished turning - its outline is the final one - before it is within contact range).
+    nonisolated(unsafe) static var finalTurnExtra: Float = Float(ProcessInfo.processInfo.environment["FINAL_TURN_EXTRA"] ?? "") ?? 4
+    static let rearmHold: Float = 0          // seconds apart before the next touch counts
+    static let touchGap: Float = 0.005, rearmGap: Float = 0.03, eventGap: Float = 0.35          // the skin gap that counts as touching (+0.5 cm), the gap that arms the next touch, the least time between two events of one body
     static let yieldMax: Float = 1.2              // the longest a walker with the lower priority waits for a crossing one before going round
 }
 
@@ -120,11 +137,49 @@ extension BlobBrain {
         return true
     }
 
-    /// A soft meeting: the bodies press, a small squish + wobble (once per contact, with a cooldown), nothing while a social drives the pair.
+    /// A soft meeting: the moment the DRAWN skins first meet (the contact profile's skin gap <= +1 cm, ContactProfile.swift) the bodies kick a little (a jelly kick each, the squish sound,
+    /// the contact haptic): once per touch (armed again when the skins part by 3 cm), in a stance as in a brush while roaming; the settle controller's last mm of press never fires again.
+    /// Without profiles (a rig that never skins) the old rule stands: closer than 0.97 x the gap and closing, nothing while a social drives the pair.
     func contactTick(_ dt: Float) {
         socialBook.contactCool -= dt
-        guard social == nil, attached, !held else { return }
+        for (k, v) in socialBook.contactCoolPer where v > 0 { socialBook.contactCoolPer[k] = v - dt }
+        guard attached, !held else { return }
         for o in socialOthers() where o !== self {
+            if var gap = ContactField.gap(steerID, o.steerID, features: social == nil) {          // (inside a session the drawn body decides, as the harness does; wings only count for a roaming / lying brush)
+                if let sg = ContactField.skinGap(steerID, o.steerID) { gap = min(gap, sg) }          // (the support gap of the catalogue: the harness's ground truth for "touching")          // (a wing / tail touched is a touch: the folded wing between two lying backs still squishes)
+                let prev = socialBook.contactArmed[o.steerID]
+                var armed = prev ?? (gap > ContactTuning.rearmGap)          // (touching when first seen: no event, the touch began before)
+                if gap > ContactTuning.rearmGap { let t = (socialBook.contactAwayT[o.steerID] ?? 0) + dt; socialBook.contactAwayT[o.steerID] = t; if t >= ContactTuning.rearmHold || prev == nil { armed = true } }          // (apart by 3 cm for 0.15 s: a one-frame spike of a bounce is not a new touch)
+                else { socialBook.contactAwayT[o.steerID] = 0 }
+                if armed, gap <= ContactTuning.touchGap, (socialBook.contactCoolPer[o.steerID] ?? 0) <= 0 {
+                    armed = false
+                    socialBook.contactCoolPer[o.steerID] = ContactTuning.eventGap
+                    let press = min(1, max(0, -gap) / 0.03 + 0.4)
+                    jellyKick = max(jellyKick, 0.9 + 0.9 * press)
+                    if steerID < o.steerID || !(o.attached && !o.held) {          // (one sound + one haptic a touch, not one a body: the lower id, or whoever is left when he cannot)
+                        // the emote's own contact sound (ContactStance.table: boop, squish, highfive_boop ...) or the default squish; AudioHub.play sends the sound's haptic cue too
+                        // (only while the stance is HOLDING the touch - the press phase; an approach brush or a part is the default squish)
+                        let st = contactStance(with: o).flatMap { st in social.flatMap { st.step(at: $0.phase)?.target == ContactStance.hold ? st : nil } }
+                        AudioHub.shared.play(st?.sound ?? .squish, jelly: steerID, x: px, volume: st?.sound != nil ? st!.volume : 0.25)
+                        if let sess = social { sess.contactTouches += 1 }
+                        if (social?.contactTouches ?? 1) <= 1 {          // (the emote's own haptic: once a session, with its first touch; AudioHub.play already sent the sound's cue)
+                            switch st?.haptic ?? .none {
+                            case .emote(let tag): emoteHaptic(tag, EmoteHaptic.tap)
+                            case .treat(let key): treatHaptic(key)
+                            case .none: break
+                            }
+                        }
+                        if let sess = social, let any = contactStance(with: o), any.cls == .touching {          // the heart / shove event rides on the touch too (it used to fire on the drive's timer)
+                            if sess.kind == .squabble { onSocial?(.shove(partner: o.steerID)); o.onSocial?(.shove(partner: steerID)) }
+                            else if !sess.kind.isGroup { onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID)) }
+                        }
+                        contactEvents += 1
+                    }
+                }
+                socialBook.contactArmed[o.steerID] = armed
+                continue
+            }
+            guard social == nil else { continue }
             let d = simd_distance(o.position, position)
             let prev = socialBook.contactPrev[o.steerID] ?? d
             socialBook.contactPrev[o.steerID] = d
@@ -134,5 +189,15 @@ extension BlobBrain {
             jellyKick = max(jellyKick, 0.9 + 0.9 * press)
             AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
         }
+    }
+}
+
+
+extension BlobBrain {
+    /// A stance that is walking up / pressing owns the squaring-up turn at its spot (the spot was chosen for the posture the pair ends in, ContactStance.facing): the turn happens in place, it does not back the body off (the
+    /// parting retreat of BlobSocial+Part.swift is for walking AWAY - a part, a step apart - and keeps those).
+    var contactStanceOwnsTurns: Bool {
+        guard ContactField.enabled, let s = social, s.end == nil, let st = ContactStance.entry(s.kind), st.cls == .touching, let step = st.step(at: s.phase) else { return false }
+        return step.retargets && socialBook.partFrom < 0
     }
 }

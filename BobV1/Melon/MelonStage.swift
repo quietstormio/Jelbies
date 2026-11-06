@@ -439,7 +439,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let floorRules = b.resolve
         b.resolve = { [weak self, weak b] p, r in
             guard let self, !self.peerSnapshot.isEmpty, b?.socialBook.passThrough != true else { return floorRules(p, r) }          // (a leapfrog hop goes over its partner)
-            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap ?? (b?.inCloseSocial == true ? Self.jellyGap * SocialTuning.closeGapFactor : nil)), r)
+            return floorRules(Self.keepApart(floorRules(p, r), id: id, peers: self.peerSnapshot, gap: self.model.care.groupGap ?? (b?.inCloseSocial == true ? Self.jellyGap * SocialTuning.closeGapFactor : nil), partners: b?.contactPartnerIDs() ?? []), r)
         }
     }
 
@@ -476,16 +476,24 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// overlap (a continuous map: no pop at the edge of the circle, no flip-flopping when two stand close), down to a floor (`softFloor` of the gap) where two
     /// bodies are squashed together and no deeper, so they never sit inside each other even when the planner finds no way around (the soft bodies themselves
     /// do not collide: the contact squish is BlobBrain+Contact).
-    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil) -> SIMD3<Float> {
+    ///
+    /// `partners` (2026-11-04): the ids of the peers this body is in a touching-class SESSION with (`BlobBrain.contactPartnerIDs`). For those, when both bodies have a contact profile, the circle spring is
+    /// skipped and the skin wall alone holds them apart (gap >= 0, features counted): the spring stops two skins that touch at ~0.75 m at ~0.92 m, 16 cm short of any touch. A missing / invalid profile falls
+    /// back to the spring, never to "no floor"; everybody else (third parties, non-session peers) keeps the spring exactly as before.
+    static func keepApart(_ p: SIMD3<Float>, id: Int, peers: [(pos: SIMD2<Float>, walking: Bool)], gap: Float? = nil, partners: Set<Int> = []) -> SIMD3<Float> {
         var q = p
         let g = gap ?? (GameCamera.focusSpots.count > 1 ? GameCamera.focusRowGap : jellyGap)        // the cosy group close-up stands closer; diners round one drink closer still
         for (j, o) in peers.enumerated() where j != id {
+            if !partners.isEmpty, partners.contains(-(j + 1)) { continue }          // (a stance walk's final step: the spot is decided, the wall measures the mid-turn outline - ContactStance.contactPartnerIDs)
             let d = SIMD2(q.x, q.z) - o.pos, L = simd_length(d)
-            if L < g {
-                let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
-                let to = max(L + (g - L) * softPush, g * softFloor)
-                q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to
-            }
+            let u = L > 1e-4 ? d / L : SIMD2<Float>(id < j ? -1 : 1, 0)
+            var to = L
+            let skinOnly = !partners.isEmpty && partners.contains(j) && ContactField.enabled && ContactField.isValid(id) && ContactField.isValid(j)
+            if L < g, !skinOnly { to = max(L + (g - L) * softPush, g * softFloor) }
+            // THE WALL (ContactProfile.swift): never closer than the two DRAWN skins touch (the exact footprint gap of the pair along this axis: lying / leaning / limbs / ears / tail included). A max of two continuous maps: no pop.
+            if ContactField.enabled, L > 1e-4, let est = ContactField.touch(id, j, dir: -u, features: true), L < est + 0.5,
+               let g = ContactField.gap(id, at: SIMD2(q.x, q.z), j, at: o.pos, features: true, support: skinOnly), g < 0 { to = max(to, L - g) }          // (only a pair that is near: the exact footprint gap, 3 us)
+            if to > L { q.x = o.pos.x + u.x * to; q.z = o.pos.y + u.y * to }
         }
         return q
     }
@@ -816,6 +824,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let spots = JellyRoster.spawnSpots(count: count)
         simMesh = sm
         renderMesh = rm
+        ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rm.index)          // the contact profile samples the egg more sparsely than the limb blocks
         embedding = emb
         LaunchTiming.span("WearBody.install") { WearBody.install(rm) }
         actors = LaunchTiming.span("actors") { (0..<count).map {
@@ -1158,11 +1167,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let bathHides = game && (model.care.bath.look.visible || model.care.bath.cameraBlend > 0)
         let washedID = bathHides ? min(model.care.bath.targetID, actors.count - 1) : 0
         for a in actors {
-            if parkOn, model.care.parkHides(a.id) { continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
-            if bathHides, a.id != washedID { continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
-            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id))
+            if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
+            if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
+            skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id)) }
+        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read

@@ -10,7 +10,8 @@ import Foundation
 import simd
 
 enum SpinHugTuning {
-    static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.74...0.80, legs = 8
+    static let gap: Float = 0.84, radius: ClosedRange<Float> = 0.68...0.80, legs = 8
+    static let swayMargin: Float = 0.32
 }
 
 extension BlobBrain {
@@ -29,7 +30,8 @@ extension BlobBrain {
     /// False = the circle is not on the floor (the walls / furniture), so there is no spin.
     private func spinPlan(_ s: SocialSession, _ o: BlobBrain) -> Bool {
         s.home0 = (position + o.position) / 2
-        let r = min(SpinHugTuning.radius.upperBound, max(SpinHugTuning.radius.lowerBound, simd_distance(position, o.position) / 2))
+        let half = ringTouch(o) / 2          // (the ring's diameter is never under the widest touch of the pair)
+        let r = half + SpinHugTuning.swayMargin          // (+ the sway: walking, each body's root swings +-12 cm round its path with the steps; measured gap 21 / -21 cm on a ring of half + 0.10)
         s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))
         let was = socialBook.passThrough
         socialBook.passThrough = true          // (the floor rules only: the partner's own body is not an obstacle for the plan, he moves along the other half)
@@ -65,11 +67,10 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t > 0.7 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, 1.8); o.jellyKick = max(o.jellyKick, 1.8)
-                    onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
-                    AudioHub.shared.play(.emoteSpinHug, jelly: steerID, x: px, volume: 1)
+                    jellyKick = max(jellyKick, impactKick(1.8)); o.jellyKick = max(o.jellyKick, impactKick(1.8))
+                    contactBoopFallback(o)
+                    contactCueFallback(o, .emoteSpinHug, 1, haptic: .treat("spinHug.press"))
                     face(.joyArc, hold: 1.2); o.face(.joyArc, hold: 1.2)
-                    treatHaptic("spinHug.press")
                 }
                 if s.impacted, t > 1.2 {
                     let ok = spinPlan(s, o)
@@ -112,10 +113,11 @@ extension BlobBrain {
                 if t > 1.0, s.slotAng[steerID, default: 0] >= around, s.slotAng[o.steerID, default: 0] >= around, fxFree, o.fxFree { s.setPhase(4) }
                 else if t > 22 { s.setPhase(4) }
                 let beat = Int(t / 2.5)
-                if beat != s.passes, t > 1 { s.passes = beat; treatHaptic("spinHug.step"); jellyKick = max(jellyKick, 0.5); o.jellyKick = max(o.jellyKick, 0.5) }
+                if beat != s.passes, t > 1 { s.passes = beat; treatHaptic("spinHug.step"); jellyKick = max(jellyKick, impactKick(0.5)); o.jellyKick = max(o.jellyKick, impactKick(0.5)) }
             }
         default:   // part: a joy squash, hearts
             s.choreo = false
+            if t < 0.05 { startParting(from: o) }          // (the turn to the camera backs off first: BlobSocial+Part.swift)
             holdFacing(faceCameraYaw())
             socialBook.wantRoll = lean * 0.09 * g * (1 - smooth01(t / 0.35))
             socialBook.wantEyes = 1

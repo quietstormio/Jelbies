@@ -140,7 +140,7 @@ extension BlobBrain {
         switch kind {
         case .groupHug, .circleDance, .groupCheer:
             let packed = kind != .groupCheer
-            guard let plan = groupPlan(crew, chord: peerGap * (packed ? GroupTuning.touch : GroupTuning.loose), packed: packed) else { return false }
+            guard let plan = groupPlan(crew, chord: packed ? ringChord(crew) : peerGap * GroupTuning.loose, packed: packed) else { return false }
             s = newGroupSession(kind, crew: crew, duration: kind == .groupHug ? vDur(5.8) : 0)
             s.home0 = plan.c; s.ringR = plan.r; s.slotAng = plan.ang
             s.slotSpot = plan.spots
@@ -267,13 +267,13 @@ extension BlobBrain {
                         for x in mem where x !== m { m.onSocial?(.boop(partner: x.steerID)); break }
                         for x in mem where x !== m { m.onSocial?(.makeUp(partner: x.steerID)); break }
                     }
-                    AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.7)
+                    contactCueFallback(mem.count > 1 ? mem[1] : self, .squish, 0.7)
                     AudioHub.shared.chirp(jelly: steerID, .happy)
                 }
                 if s.passes == 0, ft > 2.2 {          // a squeeze and an "aww"
                     s.passes = 1
                     for (i, m) in mem.enumerated() { m.jellyKick = max(m.jellyKick, 1.4); if i < 2 { AudioHub.shared.chirp(jelly: m.steerID, i == 0 ? .babble : .happy) } }
-                    AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.45)
+                    contactCueFallback(mem.count > 1 ? mem[1] : self, .squish, 0.45)
                 }
                 if s.passes == 1, ft > s.duration - 1.6 {          // the last heart burst
                     s.passes = 2

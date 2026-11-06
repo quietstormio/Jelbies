@@ -247,6 +247,7 @@ final class BlobBrain {
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
     var trainingLock = false
     var flapHop = FlapHopState()
+    weak var contactSim: SoftBody?          // set every tick: the settle slides this body at once when it warps an airborne one (ContactSettle.swift)
     /// The species flourish's drive of the feature layer (wings / daisy / Teddy's ears; Pip's tail goes through `tailDrive`): BlobBrain+Emotes.swift.
     var sig = SignatureDrive()
     var nameHopping = false
@@ -257,6 +258,8 @@ final class BlobBrain {
     private(set) var flipFaceplants = 0
     /// One-shot extra landing impulse for the jelly wobble (JellyJiggle.tick consumes it): the faceplant's thud.
     var jellyKick: Float = 0
+    /// Touch events this body announced (sound + haptic, once per touch: BlobBrain+Contact).
+    var contactEvents = 0
     /// True while the flip script owns him (the touch get-up must not treat the faceplant as being knocked over).
     var isFlipping: Bool { if case .flipPlay = script { return true }; return false }
     func noteFaceplant() { flipFaceplants += 1 }
@@ -284,6 +287,8 @@ final class BlobBrain {
     var armDirEl: [Float] = [0, 0]
     var armDirSa: [Float] = [0, 0]
     var armDirOut: Float = 0
+    /// 1 while a social hand reach drives the arm override (BlobSocial+Hands.swift): the arm is capped by the wave's thumb (ArmCap.maximum), not by the rest nub of the body-led moves, and the capsule is drawn with the body standing still.
+    var armReachW: Float = 0
     /// Body-led weight 0...1: while a body-led move (jacks, flip, any arm override) runs, the arms stay at or below the rest nub even between their flaps (ArmCap).
     var armShortW: Float = 0
     var job: BlobRequest?           // the request being served (for onFinished)
@@ -352,6 +357,9 @@ final class BlobBrain {
     var stepLive = false             // a step's root / heading interpolation is running
     var stepRoot0 = SIMD2<Float>(0, 0), stepRootD = SIMD2<Float>(0, 0)
     var stepYaw0: Float = 0, stepYawD: Float = 0
+    /// Set only around the planning call of a stance walk's final step: `contactPartnerIDs` then tells the room's peer wall to skip the session partner (encoded as -(id+1)).
+    var stanceStepFree = false
+    var armCalm: Float = 1          // 1 = the walk's full arm swing; less while a stance walker closes the last metre
     var walkFinal = false            // the step in progress squares his feet and ends the walk
     var pivotSide: Int?              // pivot the pose on this foot (wave: its planted spot; gait: its nominal spot under the root)
     var pivotNominal = false
@@ -598,6 +606,7 @@ final class BlobBrain {
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt)
+        contactTick(dt)          // (every tick, whatever he is doing: the touch event of the drawn skins, BlobBrain+Contact.swift)
         HopDiag.lap(.tkPre, &ht)
         reactTick(sim, skinner, dt)
         HopDiag.lap(.tkReact, &ht)
@@ -633,6 +642,9 @@ final class BlobBrain {
         if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
         if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
+        contactSim = sim
+        if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
+        sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
         if flipTick(sim, skinner, dt) { return }
         idleGate(sim, skinner, dt)
         if idleJacksTick(sim, skinner, dt) { return }
@@ -968,6 +980,8 @@ final class BlobBrain {
     func startStep(rootD: SIMD2<Float> = .zero, dyaw: Float = 0, reach: SIMD2<Float> = .zero, peak: Float? = nil,
                            rate: Float? = nil, swingFrac: Float = 0.85, inPlace: Bool = false, outScale: Float = 1) {
         let s = nextSwing
+        var rootD = rootD
+        if !inPlace, rootD == .zero, !contactStanceOwnsTurns, let r = partingRetreat(dyaw: dyaw) { rootD = r }          // (a turn away from a partner at touching distance backs off: BlobSocial+Part.swift)
         stepRoot0 = SIMD2(px, pz); stepRootD = rootD
         stepYaw0 = yaw; stepYawD = dyaw
         let landYaw = yaw + dyaw
@@ -1253,30 +1267,45 @@ final class BlobBrain {
         let u = D > 1e-4 ? d / D : SIMD2<Float>(sinf(yaw), cosf(yaw))
         let stance = 1 - nextSwing
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)    // how far the stance foot leads
-        if D < 0.06 && abs(s) < 0.08 && !intermediate { return 1 }
+        let exact = !intermediate && social != nil && ContactTouchMemory.exact.contains(steerID)          // (a stance walk: the destination is the touch spot, 1 cm)
+        if D < (exact ? 0.01 : 0.06) && abs(s) < 0.08 && !intermediate { return 1 }
         if scriptT > 14 + D / 0.25 { return 1 }
         if stuckT > 1.5 { return 2 }
-        let arc = abs(err) <= 1.2 && D > 0.4 && !intermediate         // turn while moving: a short arc into the new direction
+        // A stance walk that ends in a posture other than 'facing the partner' (side by side, facing the camera) turns into it during the last steps - an arc into the pose - so nobody squares up in place at contact
+        // (the turn on the spot at touching range sweeps the wide axis through the partner, and the wall / the parting retreat pushes the pair apart again).
+        var errF: Float = 0, finalTurn = false
+        if exact, let fy = ContactTouchMemory.finalYaw[steerID] {
+            errF = wrapAngle(fy - yaw)
+            let n = (abs(errF) / max(m, 0.1)).rounded(.up)
+            finalTurn = D <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+        }
+        let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
             let tp = turnPlan(err: err, idle: false)
             startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)
             return 0
         }
         turnHopW = 0
-        let arcK: Float = abs(err) > 0.5 ? 0.6 : 1
+        let arcK: Float = (abs(err) > 0.5 && !finalTurn) ? 0.6 : 1
         let L = stride * runStrideMul * amplitude.clamped(0.6, 1) * arcK
         var a: Float, r: Float
-        if !intermediate && (abs(D - s) < 0.06 || D < s) { a = max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
+        if !intermediate && (abs(D - s) < 0.06 || D < s) { a = exact ? min(D, max(0, s) + 0.06) : max(0, s); r = 0; walkFinal = true }    // final step: root over the stance foot, feet land square
         else if D > s + 1.1 * L || intermediate { r = 0.5 * L; a = s + r }                        // regular step: lands half a step ahead
         else { r = min(0.6 * L, max(0.06, D / 3)); a = max(0, D - r) }            // two-step finish, the second one is final
         var rootD = u * a
         let cand = root + rootD
+        // THE FINAL STEP OF A STANCE WALK lands on the spot the stance decided (the touch distance for the posture the pair ENDS in). The room's peer wall measures the partner at the walker's CURRENT, mid-turn
+        // outline (80 deg off the final yaw: 10 cm wider than the pose he lands in) and used to cut the step 9 cm short, which the lean then closed (stop-turn-lean). So this one planning call does not see the partner.
+        stanceStepFree = exact && (walkFinal || D < ContactTuning.wallExemptDistance)
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
+        stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
-        let wm = abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err))
-        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude)
+        let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
+        // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
+        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate : 1
+        startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
     }
 
@@ -2069,7 +2098,7 @@ final class BlobBrain {
     /// The idle override: the arm axis turned `w` of the way from the walk direction toward (`dirEl`, `dirSa`) (rad), the whole stub nudged `out` outward.
     func armGeometry(S: Float, lift: Float, dirEl: Float, dirSa: Float, w: Float, out: Float) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
         let el0 = ArmPath.armWalkElevation(S), sa0 = S * .pi / 180
-        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w, bodyLed: w)
+        return armGeometry(el: el0 + (dirEl - el0) * w, sa: sa0 + (dirSa - sa0) * w, lift: lift, xShift: out * w, bodyLed: w * (1 - armReachW))
     }
 
     func armGeometry(el: Float, sa: Float, lift: Float, xShift: Float, bodyLed: Float = 0, capped: Bool = true) -> (a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float) {
@@ -2096,13 +2125,13 @@ final class BlobBrain {
     func driveArms(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard beanFirstIdx.count == 2, armFirstIdx.count == 2 else { return }
         // lift axis spring: a smooth lift over ~0.5 s with the sweep at full amplitude from the first step, an under-damped release (2.3 Hz, zeta 0.30)
-        let tgt: Float = armWalkWant > 0 ? 1 : 0
+        let tgt: Float = (armWalkWant > 0 || armReachW > 0) ? 1 : 0
         let om: Float = tgt > 0 ? 9.5 : 2 * .pi * 2.3, ze: Float = tgt > 0 ? 1 : 0.30
         armLiftV += (om * om * (tgt - armLift) - 2 * ze * om * armLiftV) * dt
         armLift += armLiftV * dt
         armLift = min(1.05, max(-0.4, armLift))
         if tgt == 0 && abs(armLift) < 0.004 && abs(armLiftV) < 0.08 { armLift = 0; armLiftV = 0 }
-        let want = armWalkWant > 0 || armLift != 0
+        let want = armWalkWant > 0 || armLift != 0 || armReachW > 0
         if want { if armG <= 0 && armHold <= 0 { armSwapCount += 1 }; armHold = 0.7 } else { armHold = max(0, armHold - dt) }
         let gT: Float = (want || armHold > 0) ? 1 : 0
         armG += max(-dt / 0.12, min(dt / 0.12, gT - armG))
@@ -2112,12 +2141,16 @@ final class BlobBrain {
             return
         }
         guard geom.valid else { return }
-        let shortGoal: Float = (idleState.kind == .jacks || idleState.kind == .zoomies || idleState.kind == .slide || idleState.kind == .scoot || isFlipping || armDirW > 0) ? 1 : 0
+        let shortGoal: Float = (idleState.kind == .jacks || idleState.kind == .zoomies || idleState.kind == .slide || idleState.kind == .scoot || isFlipping || (armDirW > 0 && armReachW == 0)) ? 1 : 0
         armShortW += max(-dt / 0.25, min(dt / 0.15, shortGoal - armShortW))
         prepareArms(skinner)
         let ph = stridePhase
         armGaitW = ArmPath.armShiftStep(shiftW: armGaitW, target: gaitW, phase: ph, dt: dt)
-        let sweep: Float = (armWalkWant >= 1 ? 1 : 0.5) * (1 + Self.runArmGain * runW)
+        // A stance walker's arms quiet down for the last metre (the swing reaches 7 cm toward the partner every stride: it read as the skin sinking -6 cm and made the touch distance a moving target)
+        var calmGoal: Float = 1
+        if social != nil, ContactTouchMemory.exact.contains(steerID), case .walk(let wt, _) = script, simd_distance(position, wt) < ContactTuning.armCalmDistance { calmGoal = ContactTuning.armCalmSweep }
+        armCalm += max(-dt / 0.3, min(dt / 0.3, calmGoal - armCalm))
+        let sweep: Float = (armWalkWant >= 1 ? 1 : 0.5) * (1 + Self.runArmGain * runW) * armCalm
         if armScratch[0].count != ArmCapsule.vertexCount {
             armScratch = [[SIMD3<Float>](repeating: .zero, count: ArmCapsule.vertexCount), [SIMD3<Float>](repeating: .zero, count: ArmCapsule.vertexCount)]
             armStartScratch = armScratch

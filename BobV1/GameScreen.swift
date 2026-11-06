@@ -418,6 +418,7 @@ struct GameScreen: View {
     @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<TownScreen?> = .constant(nil)) async {
         let d = UserDefaults.standard
         let care = model.care
+        if d.string(forKey: "ContactDemo") != nil || d.string(forKey: "ContactCam") != nil { Task { @MainActor in await ContactDemo.run(care: care) } }          // capture aid, see Melon/ContactDemo.swift
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
         func idleWait() async {
             await sleep(1.5)
