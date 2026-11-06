@@ -708,8 +708,9 @@ extension BlobBrain {
     func pickRunGoal(from here: SIMD2<Float>, minD: Float, maxD: Float) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRunGoal", probe) }
         let deadline = CACurrentMediaTime() + Self.pickBudgetSeconds * 2          // (out of time = "no room" this step; the caller tries again later)
+        pickCount += 1
         for k in 0..<160 {
-            if k & 7 == 7, CACurrentMediaTime() > deadline { break }
+            if k & 7 == 7, CACurrentMediaTime() > deadline { pickTimeoutCount += 1; break }
             var cand: SIMD2<Float>
             if let rf = roamProvider?() { cand = rf.sampleArea(rand(), rand(), rand()) }
             else if let r = wanderRect { cand = SIMD2(rand(r.min.x, r.max.x), rand(r.min.y, r.max.y)) }

@@ -9,6 +9,7 @@ final class HapticCueTests: XCTestCase {
     var rec = RecordingHapticSink()
     var d = HapticDriver()
     override func setUp() {
+        super.setUp(); BlobBrain.pickBudgetSeconds = .infinity
         saved = UserDefaults.standard.object(forKey: HapticSettings.key)
         UserDefaults.standard.removeObject(forKey: HapticSettings.key)
         rec = RecordingHapticSink(); d = HapticDriver(sinks: [rec]); now = 1000
@@ -18,6 +19,7 @@ final class HapticCueTests: XCTestCase {
         HapticDriver.room = d; HapticDriver.roomBusy = nil
     }
     override func tearDown() {
+        super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
         HapticDriver.clock = { CACurrentMediaTime() }
         HapticDriver.after = { dl, f in DispatchQueue.main.asyncAfter(deadline: .now() + dl) { MainActor.assumeIsolated { f() } } }
         HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) }
