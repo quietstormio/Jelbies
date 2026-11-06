@@ -52,11 +52,25 @@ extension FeatureCaptureTests {
         let d = try pandaDir() + "/" + (ProcessInfo.processInfo.environment["PANDA_REF"] ?? "ref")
         try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
         DayClock.shared.forcedHour = 12
-        for (name, id) in [("teddy", 4), ("pearl", 5)] {
+        for (name, id) in [("teddy", 4), ("pearl", 5), ("bob", 0), ("pip", 1), ("moss", 2), ("lav", 3)] {
             for (vn, yaw) in [("front", Float(0)), ("q34", 0.75), ("back", .pi)] {
                 let s = try pandaStill(id: id, yaw: yaw, size: 480, dist: 3.9, lookY: 0.5, lift: 0.18)
                 try s.img.uiImage()!.pngData()!.write(to: URL(fileURLWithPath: d + "/\(name)_\(vn).png"))
             }
+        }
+    }
+
+    /// Raw (unlabelled) Panda shots for the look-fix before/after sheet: face close-up, front 3/4, side, back, and the band / arm join from behind and the side.
+    func testPandaZLookShots() throws {
+        let d = try pandaDir() + "/" + (ProcessInfo.processInfo.environment["PANDA_REF"] ?? "look")
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        DayClock.shared.forcedHour = 12
+        let v: [(String, Float, Float, Float, Float, Float)] = [("face", 0, 2.3, 0.3, 0.04, 700), ("face34", 0.6, 2.3, 0.3, 0.04, 700), ("q34", 0.75, 3.9, 0.5, 0.18, 600),
+            ("side", .pi / 2, 3.9, 0.5, 0.18, 600), ("back", .pi, 3.9, 0.5, 0.18, 600), ("back34", 2.4, 3.9, 0.5, 0.18, 600),
+            ("joinside", .pi / 2, 2.2, 0.30, 0.10, 700), ("joinback34", 2.3, 2.2, 0.30, 0.10, 700), ("joinback", .pi * 0.88, 2.2, 0.30, 0.10, 700)]
+        for (n, yaw, dist, ly, lift, size) in v {
+            let s = try pandaStill(id: Self.pandaID, yaw: yaw, size: Int(size), dist: dist, lookY: ly, lift: lift)
+            try s.img.uiImage()!.pngData()!.write(to: URL(fileURLWithPath: d + "/\(n).png"))
         }
     }
 
