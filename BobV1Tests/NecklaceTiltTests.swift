@@ -54,7 +54,7 @@ final class NecklaceTiltTests: XCTestCase {
         var topY: Float = -9                                                        // the highest body-frame y of any chain vertex
         var centreFront: (a: Float, y: Float) = (9, 0), centreBack: (a: Float, y: Float) = (0, 0)      // the link nearest the front / back centre: |azimuth| and body-frame height
         var minEgg: Float = 9                                                                           // the deepest any link's inner edge is below the body skin (owner = the egg; the swinging arm's own crossing is owner arm)
-        var armClear: Float = 9; var whereArm = ""; var whereTop = ""                                                      // the least air (m) between any vertex of the piece and an arm's drawn surface (negative = inside the arm)
+        var dbg = ""; var armClear: Float = 9; var whereArm = ""; var whereTop = ""                                                      // the least air (m) between any vertex of the piece and an arm's drawn surface (negative = inside the arm)
         var where_ = ""; var worstMin: Float = 9; var worstMax: Float = -9; var whereMax = ""
     }
 
@@ -95,7 +95,14 @@ final class NecklaceTiltTests: XCTestCase {
                     let az = atan2(cen.x, cen.z - zc) * 180 / .pi
                     var inner: Float = 9
                     var who = ""
-                    for v in vs { let o = field.sdOwner(verts[v]); if o.d < inner { inner = o.d; who = o.owner } }
+                    var innerV = -1
+                    for v in vs { let o = field.sdOwner(verts[v]); if o.d < inner { inner = o.d; who = o.owner; innerV = v } }
+                    if mname == "rest", ProcessInfo.processInfo.environment["NECK_DBG"] != nil, innerV >= 0, inner < -0.005 {
+                        let bv = body(verts[innerV]), o2 = SIMD2(bv.x, bv.z - zc), rho = simd_length(o2)
+                        let hit = WearBody.shared.radialHit(dir: o2 / rho, y: bv.y)
+                        let bc = cen, oc = SIMD2(bc.x, bc.z - zc), rc = simd_length(oc), hc = WearBody.shared.radialHit(dir: oc / rc, y: bc.y)
+                        res.dbg += String(format: "DBG %@ k=%d az %.0f: inner vertex y %.3f rho %.3f skinRho@sameY %.3f radialGap %.4f sd %.4f | centre y %.3f rho %.3f skinRho@centre %.3f centreGap %.4f | authored centre y %.3f rho0 %.3f excess %.4f clY0 %.3f\n", look.rawValue, k, az, bv.y, rho, hit?.rho ?? -1, rho - (hit?.rho ?? 0), inner, bc.y, rc, hc?.rho ?? -1, rc - (hc?.rho ?? 0), p.clusterCentre.indices.contains(k) ? p.clusterCentre[k].y : -1, p.clusterCentre.indices.contains(k) ? simd_length(SIMD2(p.clusterCentre[k].x, p.clusterCentre[k].z - zc)) : -1, p.clusterExcess.indices.contains(k) ? p.clusterExcess[k] : -9, p.clusterY0.indices.contains(k) ? p.clusterY0[k] : -9)
+                    }
                     if inner > res.worstMax, abs(az) < 125 { res.worstMax = inner; res.whereMax = String(format: "%@ az %.0f y %.3f t=%.2f", who, az, cen.y, t) }
                     if inner < res.worstMin { res.worstMin = inner; res.where_ = String(format: "%@ az %.0f y %.3f t=%.2f", who, az, cen.y, t) }
                     let a = abs(az)
@@ -171,6 +178,7 @@ final class NecklaceTiltTests: XCTestCase {
                     guard let r = m[name] else { continue }
                     let tag = "\(look.rawValue) \(Self.names[id]) \(name)"
                     report += String(format: "%@: front y %.3f (authored %.3f) back y %.3f | gap front %.3f/%.3f side %.3f/%.3f back %.3f/%.3f | min vs egg %.3f | top %.3f (%@) | arm air %.3f (%@)\n", tag, r.centreFront.y, p.tiltFrontY, r.centreBack.y, r.front.minGap, r.front.maxGap, r.side.minGap, r.side.maxGap, r.back.minGap, r.back.maxGap, r.minEgg, r.topY, r.whereTop, r.armClear, r.whereArm)
+                    if !r.dbg.isEmpty { report += r.dbg }
                     if name == "rest" {
                         if abs(r.centreFront.y - p.tiltFrontY) > 0.01 { failures.append("\(tag): front centre moved to \(r.centreFront.y) (authored \(p.tiltFrontY))") }
                         // round 2: air between the loop and the arm roots at rest (measured against the drawn arm capsules; round 1 measures 0.0050 for the pearls, so the floor is 4 mm: it catches a regression, it does not prove the look)

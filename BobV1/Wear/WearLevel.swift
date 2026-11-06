@@ -141,7 +141,9 @@ nonisolated enum WearLevel {
             let r = dirExcess(c, hang: hang, fallback: p.clusterBind[k])
             var excess = r.excess
             if p.tilted {
-                // hug: the rigid part's inner edge (its lowest vertex above the rest skin, radially) is brought to `hugGap` from the skin; it is never pushed further out than authored
+                // hug: the rigid part's inner edge (its lowest vertex above the rest skin, radially) is brought to `hugGap` from the skin, IN or OUT. (Round 3: it used to be capped at the authored
+                // stand-off, which `dirExcess` floors at -4 mm for a part authored inside the skin; at the arm roots the raised pearl / gem is authored inside the shoulder nub, so the cap kept it
+                // 4 mm into the skin with its 4.6 / 4.9 cm half-size sunk 2 / 5 cm deep. The hug now pushes it out by what it needs.)
                 // (measured where the part ends up: raised by the tilt, the part rides the rest skin at its new height - on the sloping shoulder too)
                 let lift = lifted(c, hang: hang)
                 let lc = simd_length(SIMD2(c.x, c.z - zc))
@@ -152,7 +154,7 @@ nonisolated enum WearLevel {
                         guard l > 1e-4, let h = body.radialHit(dir: o / l, y: p.rest[v].y + lift) else { continue }
                         low = min(low, hc.rho + (l - lc) - h.rho)
                     }
-                    if low.isFinite { excess = min(excess, max(hugGap - low, floorOff)) }
+                    if low.isFinite { excess = max(hugGap - low, floorOff) }
                 }
             }
             p.clusterLevel[k] = true; p.clusterDir[k] = r.dir; p.clusterExcess[k] = excess; p.clusterLvBind[k] = r.bind; p.clusterY0[k] = c.y + lifted(c, hang: hang)
