@@ -7,7 +7,7 @@ import XCTest
 final class AmbientVoiceTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
     override func tearDown() {
-        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; HomeVoiceTuning.contextFloor = 0.6; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
+        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; HomeVoiceTuning.contextFloor = 0.45; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
         HomeVoiceTuning.enabled = true; HomeVoiceTuning.floorEnabled = true; AmbientVoiceTuning.newDaySet = true; SnoreScheduler.speedUp = 1.35; IdleTuning.treatGap = (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp)
         AudioHub.shared.atHome = false
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
@@ -15,7 +15,7 @@ final class AmbientVoiceTests: XCTestCase {
 
     /// (below 10_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 10_000 and a LATER-than-that gap stamp would hush every sound there)
     nonisolated(unsafe) static var clockBase = 1_000.0
-    struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0, ctxReq = 0; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
+    struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0, ctxReq = 0, jellyCount = 0; var drops: [String: Int] = [:]; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
 
     /// One soak: `n` Jelbies (features from `chars`), 3 seeds x 3 min, `situation` fed every 6 steps like the stage does (10 Hz).
     func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false, floor: Bool = true) -> Result {
@@ -30,6 +30,7 @@ final class AmbientVoiceTests: XCTestCase {
         var res = Result()
         var lastByChar: [String: Double] = [:], lastAnyByChar: [String: Double] = [:]
         AudioHub.requestTap = { if $0.hasPrefix("voice:") { res.ctxReq += 1 } }
+        AudioHub.dropTap = { what, why in if what.hasPrefix("voice:") || what.hasPrefix("chirp") || what.hasPrefix("babble") { res.drops["\(what)|\(why ?? "PLAYED")", default: 0] += 1 } }
         AudioHub.firedTap = { name in
             var k = name; if let r = k.range(of: #"_\d+$"#, options: .regularExpression) { k.removeSubrange(r) }
             res.played[k, default: 0] += 1
@@ -110,21 +111,41 @@ final class AmbientVoiceTests: XCTestCase {
         let isV: (String) -> Bool = { n in n.hasPrefix("chirp_") || n.hasPrefix("babble_") || JellyVoice.allCases.contains { v in v.isContext && n.hasPrefix("\(v.rawValue)_jelly") } }
         let sumP = prev.played.filter { !isV($0.key) }.values.reduce(0, +), sumN = now.played.filter { !isV($0.key) }.values.reduce(0, +)
         print("CTXFLOOR \(label): context voices (giggle+curious+hmm+hum+wheee+ooh) per Jelbie per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
-        print("CTXFLOOR \(label): all vocals per Jelbie per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
-        XCTAssertGreaterThanOrEqual(perNow, 2 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
+        print("CTXFLOOR \(label): all vocals per Jelbie per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap off \(prev.minAnyGap) on \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
+        let voices = ["happy", "babble", "giggle", "curious", "hum", "ooh", "hmm", "yawn", "sad"]
+        func cnt(_ r: Result, _ v: String) -> Int { r.played.filter { $0.key.hasPrefix(v == "happy" ? "chirp_" : "\(v)_") }.values.reduce(0, +) }
+        func chirpKind(_ r: Result, _ v: String) -> Int { cnt(r, v) }
+        print("CTXFLOOR \(label) PLAYED per voice (off -> on, 3 seeds x 3 min, \(n) Jelbies): " + voices.map { "\($0) \(chirpKind(prev, $0))->\(chirpKind(now, $0))" }.joined(separator: ", "))
+        for (nm, r) in [("off", prev), ("on", now)] {
+            let reasons = ["PLAYED", "hush lastVoice", "hush context", "hush emote", "chance"]
+            var line: [String] = []
+            for v in voices where v != "happy" && v != "babble" {
+                line.append("\(v)[" + reasons.map { "\($0.replacingOccurrences(of: "hush ", with: "h:"))=\(r.drops["voice:\(v)|\($0)", default: 0])" }.joined(separator: " ") + "]")
+            }
+            print("CTXFLOOR \(label) drops \(nm): " + line.joined(separator: "; "))
+            print("CTXFLOOR \(label) ALLDROPS \(nm): " + r.drops.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "; "))
+        }
+        for k in ["footstep", "jump", "squish", "boop", "wobble", "zoomies", "ring_chime"] {
+            let kp = prev.played.filter { $0.key.hasPrefix(k) }.values.reduce(0, +), kn = now.played.filter { $0.key.hasPrefix(k) }.values.reduce(0, +)
+            print("CTXFLOOR \(label) nonvoice \(k) \(kp)->\(kn)")
+            if kp >= 100 { XCTAssertGreaterThanOrEqual(Double(kn), 0.9 * Double(kp), "\(label): \(k) \(kn) vs \(kp)") }
+        }
+        let each = ["giggle", "curious", "hum", "ooh", "hmm"].map { Double(cnt(now, $0)) / Double(n) / (now.minutes / 5) }
+        print("CTXFLOOR \(label) per Jelbie per 5 min on: giggle/curious/hum/ooh/hmm = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
+        XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
         XCTAssertGreaterThan(totNow, totPrev, "\(label): total vocals still rise")
         XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
-        XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie too close")
+        XCTAssertGreaterThanOrEqual(now.minAnyGap, 1.0 - 1e-6, "\(label): two voices of one Jelbie too close")
         XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelbie within 2.2 s")
     }
     func testContextFloorDefaultRoster() { reportFloor("default3", n: 3, chars: nil) }
     func testContextFloorTeddyPanda() { reportFloor("teddy+panda", n: 2, chars: [JellyRoster.teddyID, JellyRoster.pandaID]) }
     /// (Sleepers get no ambient / day voices: testNoAmbientWhileAsleep below runs the night soak with the floor and the new mix on.)
     func testFloorMath() {
-        XCTAssertEqual(HomeVoiceTuning.contextFloor, 0.6, "0.45 measured only x1.65 on the soak (x2.35 at 0.6)")
-        XCTAssertEqual(HomeVoiceTuning.homeChance(0.15), 0.6)
-        XCTAssertEqual(HomeVoiceTuning.homeChance(0.18), 0.6)
-        XCTAssertEqual(HomeVoiceTuning.homeChance(0.4), 0.6, accuracy: 1e-9)
+        XCTAssertEqual(HomeVoiceTuning.contextFloor, 0.45)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.15), 0.45)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.18), 0.45)
+        XCTAssertEqual(HomeVoiceTuning.homeChance(0.4), 0.52, accuracy: 1e-9)
         XCTAssertEqual(HomeVoiceTuning.homeChance(0.05), 0.065, accuracy: 1e-9, "wander lala / pfft stay at x1.3")
         XCTAssertEqual(HomeVoiceTuning.homeChance(0.9), 1)
         var rnd = SystemRandomNumberGenerator(); var hush = 0

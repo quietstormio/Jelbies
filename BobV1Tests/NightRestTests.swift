@@ -22,6 +22,8 @@ final class NightRestTests: XCTestCase {
         NightRestTuning.idleBedtime = 30
     }
     override func tearDown() {
+        NightRestTuning.sleepNow = false
+
         DayClock.shared.forcedHour = 12
         NightRestTuning.idleBedtime = 180
         DecorField.shared.clear()
@@ -61,6 +63,22 @@ final class NightRestTests: XCTestCase {
         for _ in 0..<(85 * 60) { step(); if brains.contains(where: { $0.isSleeping }) { asleep = true; break } }
         XCTAssertFalse(asleep, "23:00 with the player idle until just before the bedtime rule: nobody chose bed by himself")
         XCTAssertTrue(go(60, until: { self.brains.contains { $0.isSleeping } }), "control: the idle rule does send them once it fires")
+    }
+
+    /// 2026-11-06 `-SleepNow 1`: without the flag nothing is ever commanded to bed by day (even idle for minutes); with it everybody goes down at 3 am.
+    func testSleepNowOffNeverCommandsGoodnight() {
+        XCTAssertFalse(NightRestTuning.sleepNow)
+        make(hour: 12)
+        _ = go(240)
+        XCTAssertFalse(care.nightRest.sleepNowDone)
+        XCTAssertTrue(brains.allSatisfy { !$0.commandedGoodnight && !$0.isNapping }, "no flag: nobody sent to bed")
+    }
+    func testSleepNowOnSendsEveryoneToBed() {
+        NightRestTuning.sleepNow = true
+        make(hour: 3)
+        NightRestTuning.idleBedtime = 100_000          // (the idle rule must not be what puts them down)
+        XCTAssertTrue(go(120, until: { self.allNapping }), "everybody asleep: \(brains.map { $0.sleep.stage })")
+        XCTAssertTrue(care.nightRest.sleepNowDone)
     }
 
     func testIdleAtNightPutsAllThreeToBed() {

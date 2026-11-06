@@ -187,6 +187,7 @@ extension GameCare {
             if !isBedtimeHours { book.dayOnce.formUnion(ids) }
             for id in ids { book.nightWoken.remove(id); book.retryT[id] = NightRestTuning.retry }
             NightRestTuning.sendToBed(actors.compactMap(\.brain))
+            NSLog("[nightrest] SleepNow: sent %d to bed", actors.count)
         }
         let night = isBedtimeHours
         if !night {

@@ -123,7 +123,10 @@ final class AudioHub {
     @ObservationIgnored private var diagCounts: [String: Int] = [:]
     @ObservationIgnored private var diagLastState = -100.0
     /// Logs one request and, when it was dropped, the guard that dropped it (`why` nil = it got past every guard).
+    /// Tests: every request with the guard that dropped it (nil = PLAYED), independent of -AudioLog.
+    nonisolated(unsafe) static var dropTap: ((String, String?) -> Void)?
     private func diag(_ what: String, _ jelly: Int?, _ why: String?, v: Float? = nil) {
+        Self.dropTap?(what, why)
         guard Self.audioLog else { return }
         diagCounts["\(what) \(why ?? "PLAYED")", default: 0] += 1
         NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? ("PLAYED" + (v.map { String(format: " v=%.2f", $0) } ?? "")))
@@ -807,7 +810,7 @@ final class AudioHub {
         let now = Self.clock()
         if now - lastVoice[i] < 2.2 { diag(what, jelly, "hush lastVoice"); return }
         if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
-        if now - lastContextVoice[i] < 0.5 { diag(what, jelly, "hush context"); return }
+        if now - lastContextVoice[i] < 1.0 { diag(what, jelly, "hush context"); return }          // (1.0 s like the context voice's own wait after a chirp: any two voices of one Jelbie >= 1.0 s apart; was 0.5)
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
         diag(what, jelly, nil, v: 0.7 * level)

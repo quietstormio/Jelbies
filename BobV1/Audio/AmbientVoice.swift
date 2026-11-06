@@ -31,7 +31,7 @@ nonisolated enum HomeVoiceTuning {
     static let contextChanceMul: Double = 1.3
     /// 2026-11-06: at home a context voice whose base chance is at least `floorFrom` plays with at least `contextFloor` (the wander lala / pfft at 0.05 stay at x1.3 only).
     nonisolated(unsafe) static var floorEnabled = true
-    nonisolated(unsafe) static var contextFloor: Double = 0.6
+    nonisolated(unsafe) static var contextFloor: Double = 0.45
     static let floorFrom: Double = 0.1
     static func homeChance(_ base: Double) -> Double {
         var p = base * contextChanceMul
