@@ -363,4 +363,27 @@ final class SocialTests: XCTestCase {
         for _ in 0..<(60 * 150) { lab.tick(watching: true) }
         for (i, w) in lab.watch.enumerated() { MotionLog.write("SOCIAL CONTROL (no socials) rig\(i): frames \(w.plainFrames), worst foot overlap \(w.plain.overlap) (limit -0.02), worst radius \(w.plain.radius)") }
     }
+
+    /// 2026-11-06 (boop less often): the REAL pick path (socialMaybeStart) drawn N times with a per-draw seed, counting what it picked per kind. The gate
+    /// (pickChance x ...) does not read the weights' total, so lowering one weight only moves the share: boop down, every other kind up.
+    func testSocialPickDistributionPerKind() {
+        let lab = Lab(n: 2, positions: [SIMD2(-1.0, 0.6), SIMD2(1.0, 0.6)], quiet: true, seed: 5)
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        let n = 6000
+        var counts: [SocialKind: Int] = [:], started = 0
+        for i in 0..<n {
+            for x in [a, b] { x.socialAbort(nil); x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
+            a.watching = true
+            a.seed = UInt64(i + 1) &* 0x9E3779B97F4A7C15
+            for _ in 0..<4 { _ = a.rand() }
+            if a.socialMaybeStart(lab.rigs[0].sim) { started += 1; if let k = a.socialBook.lastKind { counts[k, default: 0] += 1 } }
+        }
+        let total = counts.values.reduce(0, +)
+        let table = counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
+        MotionLog.write("SOCIAL PICKS draws \(n) started \(started) picked \(total): \(table)")
+        XCTAssertGreaterThan(started, n * 9 / 10, "the gate passes about as often however the weights are set")
+        XCTAssertGreaterThan(total, 1000)
+        // 2026-11-06: boop (weight 1.5) is picked less than follow (weight 2)
+        XCTAssertLessThan(counts[.boop] ?? 0, counts[.follow] ?? 0, "boop is rarer than follow")
+    }
 }
