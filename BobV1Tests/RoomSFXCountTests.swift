@@ -245,6 +245,18 @@ final class SleepSoundPlayedTests: XCTestCase {
         XCTAssertLessThan(after.giggle, after.murmurs / 4, "the giggle is rare")
     }
 
+    /// The coo is held back by the hub's sleepAny hush when snores come faster; the hush is not ours to change, so the snore boost is the lever. Table of PLAYED per sleeper per minute over 60 simulated minutes.
+    func testSnoreBoostTable() {
+        var rows: [String] = []
+        var base: (Int, Int)?
+        for boost in [1.0, 1.1, 1.15, 1.2, 1.3] {
+            let r = playedRun(minutes: 60, snoreSpeedUp: 1.35 * boost, murmurs: boost > 1.0)
+            if base == nil { base = (r.snores, r.coos) }
+            rows.append(String(format: "boost x%.2f: snores %.2f (%.0f%%) coos %.2f (%.0f%%) murmurs %.2f", boost, Double(r.snores) / 180, 100 * Double(r.snores) / Double(base!.0), Double(r.coos) / 180, 100 * Double(r.coos) / Double(base!.1), Double(r.murmurs) / 180))
+        }
+        print("SLEEPPLAYED-TABLE\n" + rows.joined(separator: "\n"))
+    }
+
     /// One voice per Jelbie: a murmur is never within 2.4 s of the SAME sleeper's snore or coo (the scheduler's `clearBefore` / `clearAfter`).
     func testMurmurNeverLandsInTheSameSleepersSnoreOrCoo() {
         var sn = SnoreScheduler(), co = SleepSoundScheduler(), mu = SleepMurmurScheduler()

@@ -220,7 +220,7 @@ final class SleepCaptureTests: XCTestCase {
         var steps = 0
         var lastStage = 0
         func tick(_ n: Int) { for _ in 0..<n { lab.tick(watching: false); for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }; steps += 1
-            if s.brain.sleep.stage != lastStage || s.brain.idleState.kind != .sleep { lastStage = s.brain.sleep.stage; print("SLEEPROLLSHEET step \(steps): stage \(lastStage) kind \(String(describing: s.brain.idleState.kind)) wakeAsked \(s.brain.sleep.wakeAsked) t \(s.brain.sleep.t) hold \(s.brain.sleep.hold) morning \(s.brain.idleMorning)") } } }
+            if s.brain.sleep.stage != lastStage && s.brain.idleState.kind == .sleep { lastStage = s.brain.sleep.stage; print("SLEEPROLLSHEET step \(steps): stage \(lastStage)") } } }
         while !s.brain.isNapping && steps < 60 * 20 { tick(1) }
         tick(120)
         s.brain.sleep.fid.nextShift = 1e6; s.brain.sleep.fid.nextHalf = 1e6; s.brain.sleep.fid.kind = 0
