@@ -108,9 +108,9 @@ nonisolated enum WearLevel {
         let zc = body.axisZ
         let floorOff: Float = -0.004                                            // (as the old seat: a string may sit 4 mm into the skin)
         /// The stand-off is read at the AUTHORED height (it is the piece's own thickness), the skin point it is bound to at the loop's (tilted) height.
-        func dirExcess(_ r: SIMD3<Float>, hang: Bool, fallback: SurfaceBind) -> (dir: SIMD2<Float>, excess: Float, bind: SurfaceBind) {
+        func dirExcess(_ r: SIMD3<Float>, hang: Bool, fallback: SurfaceBind, lift liftIn: Float? = nil) -> (dir: SIMD2<Float>, excess: Float, bind: SurfaceBind) {
             let o = SIMD2(r.x, r.z - zc), l = max(simd_length(o), 1e-5), d = o / l
-            let lift = lifted(r, hang: hang)
+            let lift = liftIn ?? lifted(r, hang: hang)
             if let h = body.radialHit(dir: d, y: r.y) {
                 if lift != 0, let h2 = body.radialHit(dir: d, y: r.y + lift) { return (d, max(l - h.rho, floorOff), h2.bind) }
                 return (d, max(l - h.rho, floorOff), h.bind)
@@ -126,11 +126,31 @@ nonisolated enum WearLevel {
         }
         /// How far the tilt moves a point authored at `q` (0 for a level piece).
         func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang, side: p.tiltSide) - q.y : 0 }
+        // a bandana's string is a TUBE: every vertex of a cross-section takes the lift of the tube's centreline there (the mean authored height of the string's vertices at that azimuth), so the
+        // sag fade moves the tube as a whole and never flattens its round section into a ribbon / point
+        var vLift = [Float?](repeating: nil, count: p.rest.count), vOut = [Float](repeating: 0, count: p.rest.count)
+        if p.tilted, p.tubeKeep {
+            var byPart: [Int: [Int]] = [:]
+            for i in 0..<p.rest.count where p.lvRing[i] && p.level[i] && p.h[i] == 0 { byPart[Int(p.partOfVertex[i]), default: []].append(i) }
+            for (_, vs) in byPart {
+                let azs = vs.map { atan2(p.rest[$0].x, p.rest[$0].z - zc) }
+                for (a, i) in vs.enumerated() {
+                    var s: Float = 0, c: Float = 0, lo = Float.infinity, hi = -Float.infinity
+                    for (b, j) in vs.enumerated() {
+                        var d = abs(azs[a] - azs[b]); if d > .pi { d = 2 * .pi - d }
+                        if d < 0.05 { s += p.rest[j].y; c += 1; lo = min(lo, p.rest[j].y); hi = max(hi, p.rest[j].y) }
+                    }
+                    let cy = c > 0 ? s / c : p.rest[i].y
+                    vLift[i] = targetY(y0: cy, az: azs[a], yFront: p.tiltFrontY, hanging: false, side: p.tiltSide) - cy
+                    if c > 0 { vOut[i] = (hi - lo) / 2 * tiltWeight(az: azs[a]) }          // (the tube's lower half now follows the rising centreline: stand it off by its radius on the rising part so it does not sink into the shoulder)
+                }
+            }
+        }
         p.lvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         p.clusterLvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.partNames.count)
         for i in 0..<p.rest.count where p.level[i] {
             let hang = p.h[i] > 0
-            let r = dirExcess(p.rest[i], hang: hang, fallback: p.bind[i]); p.lvDir[i] = r.dir; p.lvExcess[i] = r.excess; p.lvBind[i] = r.bind; p.lvY0[i] = p.rest[i].y + lifted(p.rest[i], hang: hang)
+            let r = dirExcess(p.rest[i], hang: hang, fallback: p.bind[i], lift: vLift[i]); p.lvDir[i] = r.dir; p.lvExcess[i] = r.excess + vOut[i]; p.lvBind[i] = r.bind; p.lvY0[i] = p.rest[i].y + (vLift[i] ?? lifted(p.rest[i], hang: hang))
         }
         if p.tilted {
             // a chain link that is levelled per vertex (too big to be a rigid cluster) hugs too: its whole vertex set moves in by what its innermost vertex stands off the skin
@@ -176,7 +196,7 @@ nonisolated enum WearLevel {
             let k = Int(p.partOfVertex[i])
             if p.clusterLevel.indices.contains(k), p.clusterLevel[k] { continue }
             p.lvNode[i] = Int32(p.nodeBind.count)
-            p.nodeVertex.append(Int32(i)); p.nodeCluster.append(-1); p.nodeBind.append(p.lvBind[i]); p.nodeY0.append(p.lvY0[i]); p.nodeDir.append(p.lvDir[i]); pos.append(p.rest[i] + SIMD3(0, lifted(p.rest[i], hang: p.h[i] > 0), 0))
+            p.nodeVertex.append(Int32(i)); p.nodeCluster.append(-1); p.nodeBind.append(p.lvBind[i]); p.nodeY0.append(p.lvY0[i]); p.nodeDir.append(p.lvDir[i]); pos.append(p.rest[i] + SIMD3(0, vLift[i] ?? lifted(p.rest[i], hang: p.h[i] > 0), 0))
         }
         for b in p.nodeBind { let f = body.restFoot(b); p.nodeRho0.append(simd_length(SIMD2(f.x, f.z - zc))) }          // (the rest skin radius under each node)
         // neighbours (a uniform grid on the authored positions)
