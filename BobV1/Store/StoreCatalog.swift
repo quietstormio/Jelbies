@@ -153,7 +153,7 @@ nonisolated enum StoreCatalog {
     /// Every wearable, built from the Blender art table (WearGenerated.swift): shoes keep their original ids, the rest are `wear-<art id>`.
     /// The winner medal is awarded for a first place on the Circuit and never sold.
     /// Looks taken out of the shop (`WearLook.unlisted`) are not sold; a save that owns one is refunded once (StoreBook.refundUnlisted).
-    static let wearItems: [StoreItem] = WearGenerated.rows.filter { !WearLook.unlisted.contains($0.look) }.map { r in
+    static let wearItems: [StoreItem] = WearGenerated.rows.filter { !WearLook.unlisted.contains($0.look) && !WearLook.retired.contains($0.look) }.map { r in
         StoreItem(id: r.storeID, name: r.title, kind: r.slot == .feet ? .shoes : .wear, price: r.price, perk: nil, description: WearInfo.blurb(r),
                   symbol: r.slot.symbol, wear: r.look, awarded: r.look == .medalGold)
     }

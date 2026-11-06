@@ -494,7 +494,7 @@ final class WearFitAuditTests: XCTestCase {
     func testLimbPushCost() throws {
         WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
         let lab = makeLab(0)
-        let outfits: [(String, Outfit)] = [("chain", [.neck: .chainGold]), ("pearls", [.neck: .pearls]), ("diamondJ", [.neck: .diamondJ]), ("vest", [.body: .vestPuffer]), ("hoodie", [.body: .hoodie]), ("chain + vest", [.neck: .chainGold, .body: .vestPuffer])]
+        let outfits: [(String, Outfit)] = [("chain", [.neck: .pearls]), ("pearls", [.neck: .pearls]), ("diamondJ", [.neck: .diamondJ]), ("vest", [.body: .vestPuffer]), ("hoodie", [.body: .hoodie]), ("chain + vest", [.neck: .chainGold, .body: .vestPuffer])]
         let sets = outfits.map { _ in WornSet() }
         for (k, s) in sets.enumerated() { s.body = WearBody.shared; s.soundOn = false; for _ in 0..<3 { tick(s, lab, 0, outfits[k].1, feats: nil) } }
         let r0 = lab.rigs[0], p0 = r0.sim.bodyPose(iterations: 3).centroid

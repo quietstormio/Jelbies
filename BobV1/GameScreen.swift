@@ -853,10 +853,10 @@ struct GameScreen: View {
                 j.stats.learn(.sway, add: 0.4)
                 j.grime.sparkle = 0.6; j.grime.dirt = 0
             }
-            let wear: [WearLook] = WearLook.allCases.filter { $0.tags.contains(theme.main) }
+            let wear: [WearLook] = WearLook.allCases.filter { $0.tags.contains(theme.main) && !WearLook.retired.contains($0) }
             var dressed: Set<WearSlot> = []
             for l in wear where !dressed.contains(l.slot) && l.slot != .face { care.store.wear(l, on: 0); dressed.insert(l.slot) }
-            if !dressed.contains(.neck), let bow = WearLook.allCases.first(where: { $0.slot == .neck && $0.tags.contains(theme.friend) }) { care.store.wear(bow, on: 0) }
+            if !dressed.contains(.neck), let bow = WearLook.allCases.first(where: { $0.slot == .neck && $0.tags.contains(theme.friend) && !WearLook.retired.contains($0) }) { care.store.wear(bow, on: 0) }
             care.bath.wallet.add(max(0, 106 - care.bath.wallet.count), silent: true)
         }
         // capture aid: -WearList "bowtieSky,tutuPink,beanieHoney" -WearWho 0 owns and dresses that Jelbie (only those pieces) in exactly these looks

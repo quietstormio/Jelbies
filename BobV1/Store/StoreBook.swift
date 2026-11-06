@@ -68,6 +68,7 @@ final class StoreBook {
             if noSeats.retiredDecorRefunded != saved.retiredDecorRefunded { saved = noSeats; if seatRefund > 0 { wallet.add(seatRefund, silent: true) }; save() }
             let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
+            let (noChain, chainChanged) = Self.dropRetiredLooks(saved); if chainChanged { saved = noChain; save() }
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
         if persists { defaults.removeObject(forKey: "Garden.v1") }          // the removed Garden's plots

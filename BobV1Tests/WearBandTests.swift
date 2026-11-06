@@ -60,7 +60,7 @@ final class WearBandTests: XCTestCase {
                 }
                 t += 3
             }
-            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov, want: pts.map { WearLevel.tilts(l) ? WearLevel.targetY(y0: $0.y, az: atan2($0.x, $0.z - zc), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false) : $0.y }))
+            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov, want: pts.map { WearLevel.tilts(l) ? WearLevel.targetY(y0: $0.y, az: atan2($0.x, $0.z - zc), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false, side: WearLevel.sideY(l)) : $0.y }))
         }
         return out
     }
@@ -78,7 +78,7 @@ final class WearBandTests: XCTestCase {
             var c = SIMD3<Float>.zero
             for q in pts { c += q }
             c /= Float(pts.count)
-            if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { out.append((base, pts.count, WearLevel.tilts(l) ? WearLevel.targetY(y0: c.y, az: atan2(c.x, c.z - axisZ()), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false) : c.y)) }
+            if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { out.append((base, pts.count, WearLevel.tilts(l) ? WearLevel.targetY(y0: c.y, az: atan2(c.x, c.z - axisZ()), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false, side: WearLevel.sideY(l)) : c.y)) }
         }
         return out
     }
@@ -322,7 +322,7 @@ final class WearBandTests: XCTestCase {
         WearLevel.record = true; defer { WearLevel.record = false }
         var report = ""
         var worst: Float = 0, worstMode = 0
-        for (look, prefix) in [(WearLook.chainGold, "link"), (.diamondJ, "gem"), (.pearls, "pearl")] {
+        for (look, prefix) in [(WearLook.diamondJ, "gem"), (.pearls, "pearl")] {
             guard let a = WearMeshes.art(look) else { continue }
             var parts: [(first: Int, count: Int)] = []
             var base = 0
