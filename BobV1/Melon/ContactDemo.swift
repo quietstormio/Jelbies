@@ -256,13 +256,16 @@ enum ContactDemo {
         DecorField.shared.set(care.store.placedDecor)
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         b.soccerModeForce = 0; b.idleForced = true; b.autonomy = false
-        let ok = b.idleStart(.soccerKick, a.sim)
+        b.abortScript(a.sim, a.skinner); b.pending = nil; b.idleReset(a.skinner)          // (whatever autonomy had begun)
+        var ok = b.idleStart(.soccerKick, a.sim)
+        for _ in 0..<8 where !ok { try? await Task.sleep(nanoseconds: 1_500_000_000); b.abortScript(a.sim, a.skinner); b.pending = nil; b.idleReset(a.skinner); ok = b.idleStart(.soccerKick, a.sim) }
         note(" soccerKick started=%d", ok ? 1 : 0)
         note(" startEpoch=%.3f", Date().timeIntervalSince1970)
         var fired = false, i = 0
         while i < 1000 {
             try? await Task.sleep(nanoseconds: 40_000_000); i += 1
             let now = Date().timeIntervalSince1970
+            if !fired, i % 25 == 0 { note(" wait kind=%@ stage=%d script=%@ pos=(%.2f,%.2f)", "\(String(describing: b.idleState.kind))", b.idleState.soccer.stage, "\(b.script)", b.position.x, b.position.y) }
             if !fired, b.idleState.kind == .soccerKick, b.idleState.soccer.fired { fired = true; note(" fire epoch=%.3f", now) }
             if fired {
                 let e = (0..<2).map { simd_distance(b.feet.pos[$0], SIMD2(b.px, b.pz) + rotXZ(b.geom.off[$0], b.yaw)) }
