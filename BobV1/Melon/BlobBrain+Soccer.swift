@@ -29,6 +29,8 @@ struct SoccerIdle {
     var fumble = false
     var wasStepping = false
     var legs = 0
+    /// The foot that took the stomp (0 / 1): the settle steps THAT foot back under him (the next swing would be the other one, and the kicking foot stayed out).
+    var stompSide = 0
     /// Plain kicks left after this one (he walks after the ball for another go).
     var reps = 0
     /// The field's clock when the shot left the toe (-1 = no shot yet) and its speed.
@@ -258,6 +260,7 @@ extension BlobBrain {
                 }
                 s.stage = 1; s.fired = false; idleState.phaseT = 0
                 idleFootStep(reach: SoccerTuning.stompReach, rate: SoccerTuning.stompRate, peak: SoccerTuning.stompPeak)          // the stomp
+                s.stompSide = feet.side
             }
         case 1:   // the stomp: the ball leaves as the foot comes down; a small dip and lean into it
             let k = sinf(.pi * min(1, t / 0.4))
@@ -266,7 +269,8 @@ extension BlobBrain {
             if !s.fired, feet.stepU > 0.7 || !feet.active { s.fired = true; soccerFire(f, &s) }
             if !feet.active, t > 0.3 { s.stage = 2; idleState.phaseT = 0; idleState.steps = 0 }
         default:  // settle: the foot comes back under him; he watches the ball go
-            if !feet.active, idleState.steps < 1, t > 0.25 { idleFootStep(reach: 0); idleState.steps += 1 }
+            // (the kicking foot, straight away: it used to wait 0.25 s and then step the OTHER foot, so the kicking leg stayed out ahead until the next move)
+            if !feet.active, idleState.steps < 1 { nextSwing = s.stompSide; idleFootStep(reach: 0, rate: SoccerTuning.returnRate, peak: SoccerTuning.returnPeak); idleState.steps += 1 }
             let rolling = field.anim[f.uid]?.moving == true
             if s.mode == .shoot, let lg = SoccerState.shared.lastGoal, lg.ball == f.uid, lg.scorer == steerID, s.shotT >= 0, lg.at >= s.shotT {
                 idleState.soccer = s
