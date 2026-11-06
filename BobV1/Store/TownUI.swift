@@ -454,8 +454,8 @@ struct BagSheet: View {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
-                boosts
-                WhoRow(care: care, who: $who)
+                if tab != .wear { boosts }
+                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
                 ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
@@ -534,7 +534,7 @@ struct BagSheet: View {
             }
             ForEach(rows, id: \.id) { r in
                 HStack(alignment: .top, spacing: 8) {
-                    Text(r.name).font(SK.font(14, .black)).foregroundStyle(SK.ink).frame(width: 42, alignment: .leading)
+                    Text(r.name).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize().frame(minWidth: 42, alignment: .leading)
                     FlowChips(items: r.perks.map { ($0.kind, $0.left) })
                 }
             }
