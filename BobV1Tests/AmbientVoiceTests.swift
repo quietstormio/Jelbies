@@ -130,6 +130,9 @@ final class AmbientVoiceTests: XCTestCase {
             print("CTXFLOOR \(label) nonvoice \(k) \(kp)->\(kn)")
             if kp >= 100 { XCTAssertGreaterThanOrEqual(Double(kn), 0.9 * Double(kp), "\(label): \(k) \(kn) vs \(kp)") }
         }
+        let hbP = cnt(prev, "happy") + cnt(prev, "babble"), hbN = cnt(now, "happy") + cnt(now, "babble")
+        print("CTXFLOOR \(label) happy+babble PLAYED \(hbP)->\(hbN) = \(String(format: "%.3f", Double(hbN) / Double(max(hbP, 1))))")
+        XCTAssertGreaterThanOrEqual(Double(hbN), 0.9 * Double(hbP), "\(label): happy+babble PLAYED \(hbN) vs \(hbP) (add, never displace)")
         let each = ["giggle", "curious", "hum", "ooh", "hmm"].map { Double(cnt(now, $0)) / Double(n) / (now.minutes / 5) }
         print("CTXFLOOR \(label) per Jelbie per 5 min on: giggle/curious/hum/ooh/hmm = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
         XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
