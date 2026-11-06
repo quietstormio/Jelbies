@@ -722,7 +722,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         let moods = actors.indices.map { model.care.jelly($0)?.needs.mood ?? .okay }
         AudioHub.shared.raceCrowd(model.care.race.active && model.care.race.trackVisible && model.care.race.kind == .race)
         let raceScene = model.care.race.musicScene
-        AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene)
+        // the home room only: not a trip (race / show / cafe / park / groomer / volley), not the bath; the silence filler also needs the Jelbie free (AmbientVoice.swift)
+        let c = model.care
+        let home = !c.tripActive && !c.bath.active
+        let freeRoom = home && !model.paused && !c.focus.isActive && c.meal == nil
+        let ambient = actors.indices.map { freeRoom && (brains[$0]?.enabled ?? false) && (brains[$0]?.ambientVoiceOK ?? false) }
+        if AudioHub.shared.onAmbient == nil { AudioHub.shared.onAmbient = { [weak self] i in self?.actors[i].brain?.ambientPulse() } }
+        AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
+                                  home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0))
     }
 
     /// The other Jellies' brain, jelly follow-through and mouth (their needs, mood and greeting are GameCare.tickOthers).
@@ -739,7 +746,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         HopDiag.lap(.otherBrain, &ht)
         a.skinner.jelly.tick(brain: brain, sim: a.sim, dt: a.sim.stepDt)
         HopDiag.lap(.otherJelly, &ht)
-        renderer?.setMouth(brain.mouthOpen, body: a.id)
+        renderer?.setMouth(brain.mouthShown, body: a.id)
         renderer?.setBlush(brain.blushNow, body: a.id)
     }
 
@@ -766,7 +773,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             HopDiag.lap(.bobBrain, &ht)
             skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt)   // jelly follow-through (JellyJiggle.swift)
             HopDiag.lap(.bobJelly, &ht)
-            renderer?.mouthOpen = brain.mouthOpen
+            renderer?.mouthOpen = brain.mouthShown
             renderer?.setBlush(brain.blushNow, body: 0)
             if game { model.care.tick(brain: brain, renderer: renderer, dt: sim.stepDt, sim: sim) }
             HopDiag.lap(.bobCare, &ht)

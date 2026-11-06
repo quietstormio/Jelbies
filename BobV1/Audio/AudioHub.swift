@@ -87,6 +87,16 @@ final class AudioHub {
     @ObservationIgnored private var sleepSounds = SleepSoundScheduler()
     /// Called for the Jelly that snores now (the sleep z's ride it).
     @ObservationIgnored var onSnore: ((Int) -> Void)?
+    /// The silence filler spoke for this slot (the brain opens its mouth a moment): AmbientVoice.swift.
+    @ObservationIgnored var onAmbient: ((Int) -> Void)?
+    /// The stage says the room is the HOME room right now (no trip, no bath); gates the ambient voice and the movement-sound boost.
+    @ObservationIgnored var atHome = false
+    @ObservationIgnored private var ambientSched = AmbientVoiceScheduler()
+    /// Seconds since this slot last voiced anything (chirp / babble, a context voice, an emote voice).
+    func secondsSinceVoice(slot: Int) -> Double {
+        let i = min(max(slot, 0), 2)
+        return Self.clock() - max(lastVoice[i], lastContextVoice[i], lastEmoteVoice[i])
+    }
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
     /// When each Jelbie's own emote voice (hic, achoo, woozy) last played: his ambient chirp / babble waits `emoteVoiceHush` s after it (a nice balance: they do not speak too much).
     @ObservationIgnored private var lastEmoteVoice: [Double] = [-100, -100, -100]
@@ -299,8 +309,9 @@ final class AudioHub {
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
-    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none) {
+    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], night: Double = 0) {
         guard !muted, started else { return }
+        atHome = home && scene == .none && director.scene == .none && townScene == .none
         input.allNapping = !napping.isEmpty && !napping.contains(false)
         input.playing = playing
         raceScene = scene
@@ -319,6 +330,14 @@ final class AudioHub {
                 else if moods[i] == .grumpy { chirp(jelly: i, .sad, x: i < xs.count ? xs[i] : 0) }
             }
             lastMood[i] = moods[i]
+        }
+        if AmbientVoiceTuning.enabled, atHome, !ambient.isEmpty, gateWhy() == nil {
+            let since = (0..<3).map { secondsSinceVoice(slot: $0) }
+            let eligible = (0..<3).map { $0 < ambient.count && ambient[$0] && !($0 < napping.count && napping[$0]) }
+            for i in ambientSched.due(eligible: eligible, since: since, now: now, night: night, random: { Double.random(in: $0) }) {
+                chirp(jelly: i, Bool.random() ? .happy : .babble, x: i < xs.count ? xs[i] : 0, src: "ambient")
+                onAmbient?(i)
+            }
         }
     }
 
