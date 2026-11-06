@@ -64,4 +64,47 @@ final class HandReachTests: XCTestCase {
         XCTAssertEqual(b.armReachW, 0)
         XCTAssertEqual(b.armDirW, 0, "nothing of the hand reach is left on him")
     }
+
+    /// The boop is a repeated tap: the lift is a wind-up that returns to ZERO (= the solved elevation = the skin) at every strike, the hand is on the skin for at least half of every cycle (the hold median stays 0 +- 0.5),
+    /// and the cycle fits the session (3 taps, then the finish).
+    func testBoopTapsStrikeAtTheSkinAndRestOnIt() {
+        typealias T = BlobBrain.TapTuning
+        var onSkin = 0, total = 0, peak: Float = 0, atStrike: Float = 1
+        let dt: Float = 0.01
+        var u: Float = 0
+        while u < T.period {
+            let w = smooth(u / T.windup) * (1 - smooth((u - T.strike) / T.fall))
+            peak = max(peak, T.height * w)
+            if abs(u - (T.strike + T.fall)) < dt / 2 { atStrike = T.height * w }
+            if T.height * w < 0.02 { onSkin += 1 }
+            total += 1; u += dt
+        }
+        XCTAssertEqual(peak, T.height, accuracy: 0.01, "the wind-up reaches its height before the strike")
+        XCTAssertEqual(atStrike, 0, accuracy: 1e-4, "the strike ends EXACTLY on the solved elevation: the skin, never past it")
+        XCTAssertGreaterThanOrEqual(Float(onSkin) / Float(total), 0.5, "the hand rests on the skin for at least half of each cycle")
+        XCTAssertGreaterThan(T.period, T.strike + T.fall + 0.2, "a rest on the skin follows every strike")
+        XCTAssertGreaterThanOrEqual(T.count, 3)
+    }
+    private func smooth(_ x: Float) -> Float { let t = max(0, min(1, x)); return t * t * (3 - 2 * t) }
+
+    /// WHY a cheek / an ear cannot be reached (numbers, round 4): the contact footprint is height-blind, so the walls stop two bodies at ARM-NUB contact (0.70 each, at hand height); at the face's height the egg is
+    /// narrower, so the partner's cheek is further than the stub arm can reach from there, and a head-to-head press (cheek to cheek) leaves the heads apart by twice the difference.
+    func testCheekIsOutOfReachAtTheNubWall() {
+        func eggHalfWidth(_ y: Double) -> Float {
+            var lo = 0.1, hi = 1.0
+            for _ in 0..<40 { let m = 0.5 * (lo + hi); if BobForm.bodySDF(SIMD3(m, y, 0)) < 0 { lo = m } else { hi = m } }
+            return Float(lo)
+        }
+        let yFace: Double = 0.65, yHead: Double = 0.85
+        let L = HandReach.armLength, sh = HandReach.shoulder
+        // the stance distance (centre to centre): the partner's nub + the hand's reach at the nub's height + the stand-off
+        let wall = HandReach.restHalfWidth + HandReach.pole(el: HandReach.elBoop, sa: HandReach.saNub).x + HandReach.stand
+        // the distance at which the hand's pole would stand on the cheek (arm raised to the face's height, straight across)
+        let elFace = asinf(max(-1, min(1, (Float(yFace) - sh.y) / L)))
+        let cheek = eggHalfWidth(yFace) + HandReach.pole(el: elFace, sa: 0).x
+        let headGap = 2 * (HandReach.restHalfWidth - eggHalfWidth(yHead))
+        print("HANDREACH wall=\(wall) cheekDistance=\(cheek) handShortOfCheek=\(wall - cheek) headGapAtNubWall=\(headGap) eggHalfWidthFace=\(eggHalfWidth(yFace)) head=\(eggHalfWidth(yHead))")
+        XCTAssertGreaterThan(wall - cheek, 0.05, "the bodies stand 5+ cm FURTHER apart (nub wall) than a hand on the cheek needs: the cheek is out of reach from the wall")
+        XCTAssertGreaterThan(headGap, 0.05, "and the heads of a pair at the nub wall are apart: cheek to cheek needs a head-height wall")
+    }
 }

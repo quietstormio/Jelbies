@@ -23,6 +23,7 @@ struct HandReach: Sendable {
     var el: Float = HandReach.elBoop        // the elevation (rad) the arm likes (the hover pose, and the seek's first guess)
     var seek = true               // solve the elevation so the pole lands ON the partner's skin
     var partner = -1              // steerID of the one the hand reaches for
+    var lift: Float = 0           // rad added to the solved elevation AFTER the seek: the wind-up of a tap (the hand rises off the skin and strikes back down onto it)
 }
 
 extension HandReach {
@@ -188,6 +189,7 @@ extension BlobBrain {
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
         } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0 }
+        if goal > 0 { elT += q.lift }          // (a tap's wind-up: the hand leaves the skin upward and strikes back down; every tap peaks AT the skin, never past it - the solved elevation is the skin)
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))
         socialBook.handSa[si] += max(-rate, min(rate, saT - socialBook.handSa[si]))
