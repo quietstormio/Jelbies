@@ -189,4 +189,26 @@ extension FeatureCaptureTests {
         } }
         try writePNG(tgrid(cells, cols: 2), d + "/necklace_r2_front.png", maxBytes: 14_000_000)
     }
+
+    /// Round 3: the pearl string (never rendered before) on Panda and Teddy, rest and walk, 3/4 (the phone's angle) and front. BEFORE = round-1 values, AFTER = the current defaults.
+    func testNecklaceR3Pearls() throws {
+        let d = try neckDir(); DayClock.shared.forcedHour = 12
+        let cur = (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt)
+        func setCurrent() { (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt) = cur; WearMeshes.clearCache() }
+        defer { setCurrent() }
+        var cells: [UIImage] = []
+        for id in [6, 4] { for (pn, frames) in [("rest", 0), ("walk", 40)] { for (vn, yaw) in [("3q", Float(0.75)), ("front", Float(0))] {
+            var pair: [UIImage] = []
+            for after in [false, true] {
+                if after { setCurrent() } else { WearLevel.useLegacyTilt(); WearMeshes.clearCache() }
+                let im = try neckStill(id: id, outfit: [.neck: .pearls], yaw: yaw, walkFrames: frames, size: 380, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: Float(ProcessInfo.processInfo.environment["NECK_CAP_DIST"] ?? "") ?? 1.7, lift: Float(ProcessInfo.processInfo.environment["NECK_CAP_LIFT"] ?? "") ?? 0.3, ty: Float(ProcessInfo.processInfo.environment["NECK_CAP_TY"] ?? "") ?? 0.0)
+                try writePNG(im, d + "/frame_pearls_\(JellyRoster.baseNames[id])_\(pn)_\(vn)_\(after ? "after" : "before").png", maxBytes: 12_000_000)
+                pair.append(tlabel(im, ["\(JellyRoster.baseNames[id]) pearls \(pn) \(vn): \(after ? "AFTER" : "BEFORE")"], bar: 26))
+            }
+            setCurrent()
+            cells += pair
+            SocialTests.keep.removeAll()
+        } } }
+        try writePNG(tgrid(cells, cols: 4), d + "/necklace_r3_pearls.png", maxBytes: 14_000_000)
+    }
 }
