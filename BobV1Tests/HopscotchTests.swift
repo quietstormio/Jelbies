@@ -100,7 +100,7 @@ final class HopscotchTests: XCTestCase {
     func testEveryNewParkPieceHasAStandSpot() {
         let lab = parkLab(n: 1)
         let b = lab.rigs[0].brain
-        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit), (.sandbox, .decorSit)] {
+        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit)] {
             let f = DecorField.shared.feet.first { $0.kind == kind }!
             b.decorIgnore = f.uid
             XCTAssertNotNil(b.decorStand(move, f, from: SIMD2(0, 0.5)), "\(kind) has a stand spot in the park")
@@ -114,10 +114,10 @@ final class HopscotchTests: XCTestCase {
         _ = parkLab(n: 1)
         let f = DecorField.shared
         for id in 0..<3 { f.use(uid, by: id); HopscotchLine.shared.enroll(uid, id) }
-        f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.sandUID, seat: 1, by: 7)
+        f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.seesawUID, seat: 1, by: 7)
         XCTAssertTrue(HopscotchLine.shared.active)
         f.set([PlacedDecor(uid: 1, kind: .beanbag, x: 0, z: 0, turns: nil)])          // (the room again)
-        for u in [ParkToys.seesawUID, ParkToys.sandUID, uid, ParkToys.slideUID] {
+        for u in [ParkToys.seesawUID, uid, ParkToys.slideUID] {
             XCTAssertNil(f.occupant[u], "occupant \(u)"); XCTAssertNil(f.coUsers[u], "coUsers \(u)"); XCTAssertNil(f.seatOccupant[u], "seats \(u)")
             XCTAssertNil(f.progress[u], "progress \(u)"); XCTAssertNil(f.tunnelDir[u], "tunnelDir \(u)")
         }
@@ -199,7 +199,7 @@ final class HopscotchTests: XCTestCase {
             let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
             let cam = GameCamera.camera(aspect: aspect)
             let pill = [HUDLayout.parkHomeRect(aspect: aspect)]
-            XCTAssertGreaterThanOrEqual(rf.maxZ, 5.75,  // (the cap is 6.0; the polygon's rows are 0.25 apart and end at 5.78)
+            XCTAssertGreaterThanOrEqual(rf.maxZ, 4.25,  // (the cap is 4.5; the polygon's rows are 0.25 apart and end at 4.28)
                                    "\(label): the floor reaches the front edge")
             var hits = 0, freeFront = 0
             for (i, z) in rf.zs.enumerated() where z >= 4.0 {
@@ -216,11 +216,15 @@ final class HopscotchTests: XCTestCase {
             XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front")
             // the sides of the front row stay reachable
             XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
-            // the slide stands well clear of the sandbox in the world (its back edge against the sandbox's front rim), and the sandbox clears the pond
+            // the slide (where the sandbox was) is off the pond, and the spot behind it where a Jelbie climbs is a body's width off the water
             DecorField.shared.set(ParkToys.placed)
-            let sandF = DecorField.shared.foot(ParkToys.sandUID)!, slideF = DecorField.shared.foot(ParkToys.slideUID)!
-            XCTAssertGreaterThanOrEqual((slideF.centre.y - DecorKind.slide.spec(quarter: slideF.quarter).half.y) - (sandF.centre.y + DecorKind.sandbox.spec(quarter: sandF.quarter).half.y), 1.0, "\(label): the slide's back is at least 1.0 from the sandbox's front rim")
-            XCTAssertGreaterThanOrEqual(simd_distance(sandF.centre, ParkScenery.pondCentre) - 1.0, 0.3, "\(label): the sandbox's centre is off the pond")
+            let slideF = DecorField.shared.foot(ParkToys.slideUID)!, hs = DecorKind.slide.spec(quarter: slideF.quarter).half
+            let nearest = SIMD2(min(max(ParkScenery.pondCentre.x, slideF.centre.x - hs.x), slideF.centre.x + hs.x), min(max(ParkScenery.pondCentre.y, slideF.centre.y - hs.y), slideF.centre.y + hs.y))
+            XCTAssertGreaterThanOrEqual(simd_distance(nearest, ParkScenery.pondCentre) - 1.0, 0.3, "\(label): the slide is at least 0.3 off the pond")
+            let climb = slideF.centre + slideF.turned(SIMD2(0, -DecorKind.slideApproach))
+            XCTAssertGreaterThanOrEqual(simd_distance(climb, ParkScenery.pondCentre), 1.5, "\(label): the climb spot is off the water")
+            XCTAssertTrue(DecorPlacement.isValid(.slide, at: slideF.centre, among: [], quarter: slideF.quarter), "\(label): the placement rules accept the slide")
+            XCTAssertFalse(DecorField.shared.feet.contains { $0.kind == .sandbox }, "\(label): the park has no sandbox")
             // the slide's rider lands inside a free span, with a body clear of the pill
             let sf = DecorField.shared.foot(ParkToys.slideUID)!
             let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))

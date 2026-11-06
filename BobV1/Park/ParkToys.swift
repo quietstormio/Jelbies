@@ -10,13 +10,12 @@ import Foundation
 
 nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
-    static let seesawUID = 9001, sandUID = 9003, hopscotchUID = 9005, slideUID = 9006
+    static let seesawUID = 9001, hopscotchUID = 9005, slideUID = 9006          // (9003, the park sandbox, was removed 2026-11-05: the slide stands in its place)
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
         PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.7, z: -2.3, turns: nil),
-        PlacedDecor(uid: sandUID, kind: .sandbox, x: 3.4, z: -1.9, turns: nil),          // (back 0.4 and right 0.5 from the old spot (2.9, -1.5), to give the slide below it more lawn on screen: its back edge is z -2.8, 0.4 clear of the pond's rim (pond (3.5, -4.2) r 1.0), its front rim z -1.0, x 2.15...4.65),
-        // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right front (no play tunnel in the park: removed 2026-11-05)
+        // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right where the sandbox used to be (the sandbox was removed from the park 2026-11-05, and so was the play tunnel)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
-        PlacedDecor(uid: slideUID, kind: .slide, x: 2.2, z: 2.4, turns: nil)          // (STRAIGHT: the chute points down the screen toward the camera. The park floor reaches z 6.0 (ParkRoom.configurePark; the roam rows end at 5.78); the rider lands at z 4.59 (2.19 in front of the centre), the lowest spot where a body standing there is still above the bottom-centre Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect; at z 2.6 it is inside it). Footprint x 1.4...3.0, z 1.0...3.8: 2.0 of lawn behind it to the sandbox's front rim (z -1.0), off the path (its right edge is x 1.1 at z 2.4), far from the hopscotch court (x -2.1))
+        PlacedDecor(uid: slideUID, kind: .slide, x: 2.9, z: 1.0, turns: nil)          // (STRAIGHT, on the right lawn where the sandbox was: the chute points down the screen toward the camera. Footprint x 2.1...3.7, z -0.4...2.4, whose back edge is 2.8 clear of the pond (pond (3.5, -4.2) r 1.0): the tall ladder posts at its back would overlap the pond on screen if it stood further back (at z -0.3 they did). The climb spot behind it is z -1.17; the rider lands at z 3.19 on open lawn, well off the path (its right edge is x 1.2 there), and a body there is above the Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect). The park floor's front edge is back at z 4.5)
     ]
     static var placed: [PlacedDecor] { layout }
 }

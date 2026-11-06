@@ -34,9 +34,9 @@ extension GameCamera {
         let p = t + SIMD3<Float>(0, sinf(e), cosf(e)) * (L * 1.38)
         eye = p; target = t; roomEye = p; roomTarget = t
         roomWideScale = wideScale(2); roomWideLift = wideLift(2)
-        walkMaxZ = 6.0; arenaCenter = SIMD2(0, 0.2); arenaRadius = 6.5
-        roamRect = (SIMD2(-3.5, -3.4), SIMD2(3.5, 6.0)); roamRectWide = (SIMD2(-4.2, -3.6), SIMD2(4.2, 6.0))
-        parkRoamMaxZ = 6.0
+        walkMaxZ = 4.5; arenaCenter = SIMD2(0, 0.2); arenaRadius = 6.5
+        roamRect = (SIMD2(-3.5, -3.4), SIMD2(3.5, 4.5)); roamRectWide = (SIMD2(-4.2, -3.6), SIMD2(4.2, 4.5))
+        parkRoamMaxZ = 4.5
     }
 
     /// Back to the room's camera and floor for `count` Jelbies (what the stage set up at launch).
