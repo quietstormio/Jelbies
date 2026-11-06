@@ -109,6 +109,11 @@ extension BlobBrain {
         if feet.active { race.jumpQueued = true; return }
         race.jumpQueued = false
         AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.8)
+        if Self.raceHopFeet, let sk = skinnerRef, sk.beansActive, sk.beanPos[0].count == FootBean.vertexCount, sk.beanPos[1].count == FootBean.vertexCount {          // (the drawn beans now: the hop's first frame must not pop them)
+            raceCarryFrom = (0..<2).map { k in sk.beanPos[k].reduce(SIMD2<Float>.zero) { $0 + SIMD2($1.x, $1.z) } / Float(FootBean.vertexCount) }
+            raceCarryT = Self.raceCarryTime
+        }
+        let takeoff = hopTakeoff()          // (before the feet are released: the root that stands him over the soles that are planted now)
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false          // (as startHop: the planted soles are let go before the hop owns the body)
         gait.wander = false
         gait.facingYaw = yaw
@@ -116,7 +121,7 @@ extension BlobBrain {
         gait.hopApex = HurdleTuning.apex; gait.hopDuration = HurdleTuning.airTime
         race.jumping = true
         poseW = 0
-        gait.hop(sim, to: SIMD2(px, pz) + SIMD2(sinf(yaw), cosf(yaw)) * HurdleTuning.hopDistance, reduceMotion: amplitude < 0.7)
+        gait.hop(sim, to: (takeoff ?? SIMD2(px, pz)) + SIMD2(sinf(yaw), cosf(yaw)) * HurdleTuning.hopDistance, reduceMotion: amplitude < 0.7, takeoff: takeoff)
         script = .hopPlay; activity = .playing
     }
 

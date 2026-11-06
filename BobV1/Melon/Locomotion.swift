@@ -86,6 +86,8 @@ struct GaitDriver {
     private var seed: UInt64 = 0x9E3779B97F4A7C15
 
     var isBusy: Bool { phase != .idle }
+    /// A plain hop is running (crouch, air or landing; not a flip or the belly slide, which have their own bean handling).
+    var isHopping: Bool { move == .hop && (phase == .crouch || phase == .air || phase == .land) }
     /// The contact settle moves the root while a hop / slide runs: the move's start and end points slide with it (else the move's own anchor undoes the nudge).
     mutating func nudge(_ d: SIMD2<Float>) { from += d; to += d }
     /// The settle during the CROUCH (soles planted): only the landing spot moves; the take-off stays where the soles are.
@@ -179,11 +181,12 @@ struct GaitDriver {
     }
 
     /// One scripted hop to the ground point `target` (x, z). Ignored while a move is running.
-    mutating func hop(_ sim: SoftBody, to target: SIMD2<Float>, reduceMotion: Bool = false, chained: Bool = false) {
+    /// `takeoff`: the point the crouch rights the body over (the race jump passes the one over its planted soles); nil = over where the centroid is now.
+    mutating func hop(_ sim: SoftBody, to target: SIMD2<Float>, reduceMotion: Bool = false, chained: Bool = false, takeoff: SIMD2<Float>? = nil) {
         guard phase == .idle || phase == .recover || phase == .glide || phase == .land else { return }
         reduce = reduceMotion
         let pose = sim.bodyPose(iterations: 6)
-        from = SIMD2(pose.centroid.x, pose.centroid.z)
+        from = takeoff ?? SIMD2(pose.centroid.x, pose.centroid.z)
         var d = target - from
         let dl = simd_length(d)
         if dl > maxHop { to = from + d / dl * maxHop } else { to = target }
