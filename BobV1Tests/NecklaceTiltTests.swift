@@ -55,7 +55,7 @@ final class NecklaceTiltTests: XCTestCase {
         var topY: Float = -9                                                        // the highest body-frame y of any chain vertex
         var centreFront: (a: Float, y: Float) = (9, 0), centreBack: (a: Float, y: Float) = (0, 0)      // the link nearest the front / back centre: |azimuth| and body-frame height
         var minEgg: Float = 9                                                                           // the deepest any link's inner edge is below the body skin (owner = the egg; the swinging arm's own crossing is owner arm)
-        var armClear: Float = 9; var whereArm = ""; var whereTop = ""                                                      // the least air (m) between any vertex of the piece and an arm's drawn surface (negative = inside the arm)
+        var dbg = ""; var armClear: Float = 9; var whereArm = ""; var whereTop = ""                                                      // the least air (m) between any vertex of the piece and an arm's drawn surface (negative = inside the arm)
         var where_ = ""; var worstMin: Float = 9; var worstMax: Float = -9; var whereMax = ""
     }
 
@@ -96,7 +96,14 @@ final class NecklaceTiltTests: XCTestCase {
                     let az = atan2(cen.x, cen.z - zc) * 180 / .pi
                     var inner: Float = 9
                     var who = ""
-                    for v in vs { let o = field.sdOwner(verts[v]); if o.d < inner { inner = o.d; who = o.owner } }
+                    var innerV = -1
+                    for v in vs { let o = field.sdOwner(verts[v]); if o.d < inner { inner = o.d; who = o.owner; innerV = v } }
+                    if mname == "rest", ProcessInfo.processInfo.environment["NECK_DBG"] != nil, innerV >= 0, inner < -0.005 {
+                        let bv = body(verts[innerV]), o2 = SIMD2(bv.x, bv.z - zc), rho = simd_length(o2)
+                        let hit = WearBody.shared.radialHit(dir: o2 / rho, y: bv.y)
+                        let bc = cen, oc = SIMD2(bc.x, bc.z - zc), rc = simd_length(oc), hc = WearBody.shared.radialHit(dir: oc / rc, y: bc.y)
+                        res.dbg += String(format: "DBG %@ k=%d az %.0f: inner vertex y %.3f rho %.3f skinRho@sameY %.3f radialGap %.4f sd %.4f | centre y %.3f rho %.3f skinRho@centre %.3f centreGap %.4f | authored centre y %.3f rho0 %.3f excess %.4f clY0 %.3f\n", look.rawValue, k, az, bv.y, rho, hit?.rho ?? -1, rho - (hit?.rho ?? 0), inner, bc.y, rc, hc?.rho ?? -1, rc - (hc?.rho ?? 0), p.clusterCentre.indices.contains(k) ? p.clusterCentre[k].y : -1, p.clusterCentre.indices.contains(k) ? simd_length(SIMD2(p.clusterCentre[k].x, p.clusterCentre[k].z - zc)) : -1, p.clusterExcess.indices.contains(k) ? p.clusterExcess[k] : -9, p.clusterY0.indices.contains(k) ? p.clusterY0[k] : -9)
+                    }
                     if inner > res.worstMax, abs(az) < 125 { res.worstMax = inner; res.whereMax = String(format: "%@ az %.0f y %.3f t=%.2f", who, az, cen.y, t) }
                     if inner < res.worstMin { res.worstMin = inner; res.where_ = String(format: "%@ az %.0f y %.3f t=%.2f", who, az, cen.y, t) }
                     let a = abs(az)
@@ -172,6 +179,7 @@ final class NecklaceTiltTests: XCTestCase {
                     guard let r = m[name] else { continue }
                     let tag = "\(look.rawValue) \(Self.names[id]) \(name)"
                     report += String(format: "%@: front y %.3f (authored %.3f) back y %.3f | gap front %.3f/%.3f side %.3f/%.3f back %.3f/%.3f | min vs egg %.3f | top %.3f (%@) | arm air %.3f (%@)\n", tag, r.centreFront.y, p.tiltFrontY, r.centreBack.y, r.front.minGap, r.front.maxGap, r.side.minGap, r.side.maxGap, r.back.minGap, r.back.maxGap, r.minEgg, r.topY, r.whereTop, r.armClear, r.whereArm)
+                    if !r.dbg.isEmpty { report += r.dbg }
                     if name == "rest" {
                         if abs(r.centreFront.y - p.tiltFrontY) > 0.01 { failures.append("\(tag): front centre moved to \(r.centreFront.y) (authored \(p.tiltFrontY))") }
                         // round 2: air between the loop and the arm roots at rest (measured against the drawn arm capsules; round 1 measures 0.0050 for the pearls, so the floor is 4 mm: it catches a regression, it does not prove the look)
@@ -180,8 +188,7 @@ final class NecklaceTiltTests: XCTestCase {
                         if r.centreBack.y - r.centreFront.y < (WearLevel.tiltBackY - p.tiltFrontY) - 0.04 { failures.append("\(tag): back is only \(r.centreBack.y - r.centreFront.y) above the front") }
                         // at the sides the loop is ABOVE the arm: at rest no side link is inside an arm or the body (6 mm of skin relief)
                         // (pearls: a 1.5 cm pearl is a rigid ball on the sloping shoulder, where the rest skin is the arm-root nub: its inner edge dips up to 4 cm into that slope. Measured 3.6 cm.)
-                        let restSink: Float = look == .pearls ? 0.053 : look == .diamondJ ? 0.024 : 0.010   // SHIP 2026-11-06: measured at candidate A; the rigid-piece stand-off fix (chain pass 2) restores 0.72 / -0.010 / -0.040
-                        
+                        let restSink: Float = look == .pearls ? 0.040 : 0.010
                         if r.side.minGap < -restSink { failures.append("\(tag): a side link is \(r.side.minGap) inside the arm / body") }
                         if r.minEgg < -restSink { failures.append("\(tag): sinks \(r.minEgg) into the body skin at rest") }
                     }
@@ -189,8 +196,7 @@ final class NecklaceTiltTests: XCTestCase {
                     // for chains) and the swinging ARM crossing the loop is the arm's own gap (owner arm: it is drawn over the chain, as the band tests document). Bound: 6 cm.
                     if r.minEgg < -0.060 { failures.append("\(tag): sinks \(r.minEgg) into the body skin") }
                     // never in the face: the highest loop point stays under the neck crease
-                    if r.topY > (look == .diamondJ || look == .pearls ? 0.737 : 0.72) {   // SHIP 2026-11-06: measured at candidate A (0.734); the stand-off fix restores 0.72
-                         failures.append("\(tag): the loop reaches y \(r.topY)") }
+                    if r.topY > 0.72 { failures.append("\(tag): the loop reaches y \(r.topY)") }
                     // the swinging / pumping / hopping arm crosses the loop in every pose but rest (walk -0.10 .. -0.125 m at ANY band height up to the 0.72 ceiling, measured 0.645 ... 0.705): the arm air per pose
                     // is recorded in the report (NECKTILT lines, "arm air"), not asserted: a documented limit, no lift, no further rise.
                     // standing off: front and back links (the arms are far away there) within the cap of the skin

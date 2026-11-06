@@ -34,27 +34,32 @@ nonisolated enum WearLevel {
     /// rising part the authored height variation fades out (the art was drawn with its own sag) so every body sees the same clean curve. Bands, scarves, collars and waistbands stay level.
     nonisolated(unsafe) static var tiltOn = ProcessInfo.processInfo.environment["WEARBAND_TILT"] != "off"
     /// Absolute loop heights (m, body frame) at the sides and at the back, and the azimuths (rad off the front) where the rise starts (never lower than 0.44: past the mouth keep-out, the
-    /// pendant does not move) and where it reaches the side height. Round-1 values (bd9be370, on the phone). Round 2 (docs in NecklaceTiltTests / the chain_r2 report) measured that raising the
-    /// SIDE height to ~0.685 (sideAt 1.25, back 0.665) clears the arm roots by eye but pushes the rigid gems / pearls 2 / 5 cm into the shoulder skin and the Diamond J top to 0.734 (bounds: 1 / 4 cm, 0.72),
-    /// so the defaults stay; the whole set is overridable from the environment (WEARBAND_TILT_SIDEY / _BACKY / _FROM / _SIDEAT) for the sweeps and the before / after captures.
+    /// pendant does not move) and where it reaches the side height. Round 3 (candidate A, chosen by eye on the chain_r2 renders): the string runs clearly above the arm tops at rest (side 0.685,
+    /// complete at 1.25 rad), back unchanged at 0.665, front / pendant unchanged. Round 1 (bd9be370) was 0.645 / 0.665 / 0.44 / 1.48 (`useLegacyTilt`). Everything is overridable from the
+    /// environment (WEARBAND_TILT_SIDEY / _BACKY / _FROM / _SIDEAT) for sweeps and before / after captures.
     nonisolated(unsafe) static var tiltSideY: Float = envF("WEARBAND_TILT_SIDEY", 0.685), tiltBackY: Float = envF("WEARBAND_TILT_BACKY", 0.665)
     nonisolated(unsafe) static var tiltFrom: Float = envF("WEARBAND_TILT_FROM", 0.44), tiltSideAt: Float = envF("WEARBAND_TILT_SIDEAT", 1.25)
     static func envF(_ k: String, _ d: Float) -> Float { Float(ProcessInfo.processInfo.environment[k] ?? "") ?? d }
-    static func useLegacyTilt() { tiltSideY = 0.645; tiltBackY = 0.665; tiltFrom = 0.44; tiltSideAt = 1.48 }   // (tiltFrom is const-equal in both rounds)
+    static func useLegacyTilt() { tiltSideY = 0.645; tiltBackY = 0.665; tiltFrom = 0.44; tiltSideAt = 1.48 }   // (tiltFrom is const-equal in all rounds)
     /// The inner edge of a rigid link / gem / pearl is brought to this distance (m) from the skin at rest (the chain hugs the body).
     static let hugGap: Float = 0.002
+    /// The side height is per piece: the chain takes `tiltSideY`; the tall rigid pieces (the Diamond J's gems stand 4.9 cm above their loop point, the pearls 4.6 cm) are capped so their TOP stays under
+    /// the 0.72 neck-crease bound (J 0.670, pearls 0.672; the cap is the bound minus the piece's half-height, not a loosened bound). Never above `tiltSideY`.
+    nonisolated(unsafe) static var capJ: Float = envF("WEARBAND_TILT_CAPJ", 0.670), capPearls: Float = envF("WEARBAND_TILT_CAPPEARLS", 0.672)
+    static func sideY(_ l: WearLook) -> Float { l == .diamondJ ? min(tiltSideY, capJ) : l == .pearls ? min(tiltSideY, capPearls) : tiltSideY }
     static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .diamondJ || l == .pearls || l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun) }
     @inline(__always) private static func smooth(_ x: Float) -> Float { let u = min(max(x, 0), 1); return u * u * (3 - 2 * u) }
     /// 0 at the front (up to `tiltFrom`), 1 from the arm roots round the back.
     static func tiltWeight(az: Float) -> Float { smooth((abs(az) - tiltFrom) / (tiltSideAt - tiltFrom)) }
     /// The height of the tilted loop at azimuth `az` (0 = front centre, +-pi = back centre) for a loop whose front centre is at `yFront`.
-    static func loopY(az: Float, yFront: Float) -> Float {
+    static func loopY(az: Float, yFront: Float, side: Float? = nil) -> Float {
+        let sy = side ?? tiltSideY
         let w1 = tiltWeight(az: az), w2 = smooth((abs(az) - tiltSideAt) / (Float.pi - tiltSideAt))
-        return yFront + (tiltSideY - yFront) * w1 + (tiltBackY - tiltSideY) * w2
+        return yFront + (sy - yFront) * w1 + (tiltBackY - sy) * w2
     }
     /// Where a point authored at height `y0` and azimuth `az` goes: a hanging part (a pendant) keeps its authored offset below the loop point; the loop itself fades its authored sag out.
-    static func targetY(y0: Float, az: Float, yFront: Float, hanging: Bool) -> Float {
-        let rise = loopY(az: az, yFront: yFront) - yFront
+    static func targetY(y0: Float, az: Float, yFront: Float, hanging: Bool, side: Float? = nil) -> Float {
+        let rise = loopY(az: az, yFront: yFront, side: side) - yFront
         return hanging ? y0 + rise : yFront + rise + (y0 - yFront) * (1 - tiltWeight(az: az))
     }
 
@@ -120,7 +125,7 @@ nonisolated enum WearLevel {
             p.tiltFrontY = cnt > 0 ? sum / cnt : p.pivot.y
         }
         /// How far the tilt moves a point authored at `q` (0 for a level piece).
-        func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang) - q.y : 0 }
+        func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang, side: p.tiltSide) - q.y : 0 }
         p.lvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         p.clusterLvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.partNames.count)
         for i in 0..<p.rest.count where p.level[i] {
@@ -141,7 +146,9 @@ nonisolated enum WearLevel {
             let r = dirExcess(c, hang: hang, fallback: p.clusterBind[k])
             var excess = r.excess
             if p.tilted {
-                // hug: the rigid part's inner edge (its lowest vertex above the rest skin, radially) is brought to `hugGap` from the skin; it is never pushed further out than authored
+                // hug: the rigid part's inner edge (its lowest vertex above the rest skin, radially) is brought to `hugGap` from the skin, IN or OUT. (Round 3: it used to be capped at the authored
+                // stand-off, which `dirExcess` floors at -4 mm for a part authored inside the skin; at the arm roots the raised pearl / gem is authored inside the shoulder nub, so the cap kept it
+                // 4 mm into the skin with its 4.6 / 4.9 cm half-size sunk 2 / 5 cm deep. The hug now pushes it out by what it needs.)
                 // (measured where the part ends up: raised by the tilt, the part rides the rest skin at its new height - on the sloping shoulder too)
                 let lift = lifted(c, hang: hang)
                 let lc = simd_length(SIMD2(c.x, c.z - zc))
@@ -152,7 +159,7 @@ nonisolated enum WearLevel {
                         guard l > 1e-4, let h = body.radialHit(dir: o / l, y: p.rest[v].y + lift) else { continue }
                         low = min(low, hc.rho + (l - lc) - h.rho)
                     }
-                    if low.isFinite { excess = min(excess, max(hugGap - low, floorOff)) }
+                    if low.isFinite { excess = max(hugGap - low, floorOff) }
                 }
             }
             p.clusterLevel[k] = true; p.clusterDir[k] = r.dir; p.clusterExcess[k] = excess; p.clusterLvBind[k] = r.bind; p.clusterY0[k] = c.y + lifted(c, hang: hang)
