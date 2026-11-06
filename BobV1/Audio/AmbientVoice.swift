@@ -41,7 +41,7 @@ nonisolated enum HomeVoiceTuning {
 }
 
 extension AmbientVoiceTuning {
-    /// What the filler says: chirp / babble stay the most common. By day: happy 3, babble 3 (as before: add, never displace), then giggle 1.5, curious 1.2, hum 1.2, ooh 1, hmm 0.8. Evening / awake at night (night >= 0.3):
+    /// What the filler says: chirp / babble stay the most common. By day: happy 3, babble 3 (as before: add, never displace), then giggle 1.5, curious 2, hum 1.2, ooh 1. Evening / awake at night (night >= 0.3):
     /// hum 2, yawn 1.5, happy 1.5, babble 1.5 (soft and sleepy). A grumpy one: sad 3, babble 2, hum 1 (no giggles).
     /// (the soak test's "before" switch: false = the 2230db85 day set)
     nonisolated(unsafe) static var newDaySet = true
@@ -49,7 +49,7 @@ extension AmbientVoiceTuning {
         let table: [(JellyVoice, Double)]
         if grumpy { table = [(.sad, 3), (.babble, 2), (.hum, 1)] }
         else if night >= 0.3 { table = [(.hum, 2), (.yawn, 1.5), (.happy, 1.5), (.babble, 1.5)] }
-        else if newDaySet { table = [(.happy, 3), (.babble, 3), (.giggle, 1.5), (.curious, 1.2), (.hum, 1.2), (.ooh, 1), (.hmm, 0.8)] }          // (2026-11-06: happy / babble keep their weight 3; the new voices sit on top)
+        else if newDaySet { table = [(.happy, 3), (.babble, 3), (.giggle, 1.5), (.curious, 2.0), (.hum, 1.2), (.ooh, 1)] }          // (2026-11-06: happy / babble keep their weight 3; the new voices sit on top)
         else { table = [(.happy, 3), (.babble, 3), (.giggle, 1.2), (.curious, 1), (.hum, 1), (.ooh, 0.8)] }
         var x = random(0...table.reduce(0) { $0 + $1.1 })
         for (v, w) in table { if x < w { return v }; x -= w }

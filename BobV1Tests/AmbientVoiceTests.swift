@@ -37,7 +37,7 @@ final class AmbientVoiceTests: XCTestCase {
             let isVoice = name.hasPrefix("chirp_") || name.hasPrefix("babble_")
             let isContext = JellyVoice.allCases.contains { $0.isContext && name.hasPrefix("\($0.rawValue)_jelly") }
             if isVoice || isContext { res.voices += 1 }
-            if ["giggle_", "curious_", "ooh_", "hum_", "hmm_", "wheee_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
+            if ["giggle_", "curious_", "ooh_", "hum_", "wheee_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
             if isVoice || isContext, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (any voice of one Jelbie: the design floor is the 0.5 s chirp-after-context wait)
                 let who = String(name[r]); if let l = lastAnyByChar[who] { res.minAnyGap = min(res.minAnyGap, simNow - l) }; lastAnyByChar[who] = simNow
             }
@@ -110,9 +110,9 @@ final class AmbientVoiceTests: XCTestCase {
         let totPrev = Double(prev.voices) / Double(n) / prev.minutes, totNow = Double(now.voices) / Double(n) / now.minutes
         let isV: (String) -> Bool = { n in n.hasPrefix("chirp_") || n.hasPrefix("babble_") || JellyVoice.allCases.contains { v in v.isContext && n.hasPrefix("\(v.rawValue)_jelly") } }
         let sumP = prev.played.filter { !isV($0.key) }.values.reduce(0, +), sumN = now.played.filter { !isV($0.key) }.values.reduce(0, +)
-        print("CTXFLOOR \(label): context voices (giggle+curious+hmm+hum+wheee+ooh) per Jelbie per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
+        print("CTXFLOOR \(label): context voices (giggle+curious+hum+wheee+ooh) per Jelbie per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
         print("CTXFLOOR \(label): all vocals per Jelbie per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap off \(prev.minAnyGap) on \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
-        let voices = ["happy", "babble", "giggle", "curious", "hum", "ooh", "hmm", "yawn", "sad"]
+        let voices = ["happy", "babble", "giggle", "curious", "hum", "ooh", "yawn", "sad"]
         func cnt(_ r: Result, _ v: String) -> Int { r.played.filter { $0.key.hasPrefix(v == "happy" ? "chirp_" : "\(v)_") }.values.reduce(0, +) }
         func chirpKind(_ r: Result, _ v: String) -> Int { cnt(r, v) }
         print("CTXFLOOR \(label) PLAYED per voice (off -> on, 3 seeds x 3 min, \(n) Jelbies): " + voices.map { "\($0) \(chirpKind(prev, $0))->\(chirpKind(now, $0))" }.joined(separator: ", "))
@@ -133,8 +133,8 @@ final class AmbientVoiceTests: XCTestCase {
         let hbP = cnt(prev, "happy") + cnt(prev, "babble"), hbN = cnt(now, "happy") + cnt(now, "babble")
         print("CTXFLOOR \(label) happy+babble PLAYED \(hbP)->\(hbN) = \(String(format: "%.3f", Double(hbN) / Double(max(hbP, 1))))")
         XCTAssertGreaterThanOrEqual(Double(hbN), 0.9 * Double(hbP), "\(label): happy+babble PLAYED \(hbN) vs \(hbP) (add, never displace)")
-        let each = ["giggle", "curious", "hum", "ooh", "hmm"].map { Double(cnt(now, $0)) / Double(n) / (now.minutes / 5) }
-        print("CTXFLOOR \(label) per Jelbie per 5 min on: giggle/curious/hum/ooh/hmm = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
+        let each = ["giggle", "curious", "hum", "ooh"].map { Double(cnt(now, $0)) / Double(n) / (now.minutes / 5) }
+        print("CTXFLOOR \(label) per Jelbie per 5 min on: giggle/curious/hum/ooh = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
         XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
         XCTAssertGreaterThan(totNow, totPrev, "\(label): total vocals still rise")
         XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
@@ -152,7 +152,7 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertEqual(HomeVoiceTuning.homeChance(0.05), 0.065, accuracy: 1e-9, "wander lala / pfft stay at x1.3")
         XCTAssertEqual(HomeVoiceTuning.homeChance(0.9), 1)
         var rnd = SystemRandomNumberGenerator(); var hush = 0
-        for _ in 0..<2000 { if AmbientVoiceTuning.pick(night: 0, grumpy: false, random: { Double.random(in: $0, using: &rnd) }) == .hmm { hush += 1 } }
+        for _ in 0..<2000 { if AmbientVoiceTuning.pick(night: 0, grumpy: false, random: { Double.random(in: $0, using: &rnd) }) == .curious { hush += 1 } }
         XCTAssertGreaterThan(hush, 0)
         for _ in 0..<500 { XCTAssertNotEqual(AmbientVoiceTuning.pick(night: 0, grumpy: true, random: { Double.random(in: $0, using: &rnd) }), .giggle) }
     }
@@ -234,5 +234,24 @@ final class AmbientVoiceTests: XCTestCase {
         }
         hub.situation(napping: [], playing: false, xs: [], moods: [], home: false)
         XCTAssertFalse(hub.atHome, "a trip / bath (the stage passes home: false)")
+    }
+
+    /// 2026-11-06, "I don't like the HMMM sound ... it sounds like a ghost, remove it": no voice set, filler table or idle context voice can produce an hmm_ clip (mmhmm_ is a different clip and stays).
+    func testNoHmmClipAnywhere() {
+        XCTAssertFalse(JellyVoice.allCases.contains { $0.rawValue == "hmm" })
+        for c in 0..<7 { for v in JellyVoice.allCases { for k in 1...3 { XCTAssertFalse(JellyVoiceSet.file(character: c, v, variant: k).hasPrefix("hmm_")) } } }
+        var rnd = SystemRandomNumberGenerator()
+        for night in [0.0, 0.5] { for grumpy in [false, true] { for _ in 0..<500 {
+            let v = AmbientVoiceTuning.pick(night: night, grumpy: grumpy, random: { Double.random(in: $0, using: &rnd) })
+            XCTAssertFalse(JellyVoiceSet.file(character: 0, v).hasPrefix("hmm_"))
+        } } }
+        for kind in [IdleKind.look, .peek, .decorPeek, .window, .stopLook] {
+            let c = JellyVoiceSet.contextVoice(forIdle: kind)
+            XCTAssertEqual(c?.voice, .curious); XCTAssertEqual(c?.chance, 0.15)
+        }
+        for bundle in [Bundle.main, Bundle(for: AmbientVoiceTests.self)] {
+            let names = (bundle.urls(forResourcesWithExtension: "m4a", subdirectory: nil) ?? []).map { $0.lastPathComponent }
+            XCTAssertFalse(names.contains { $0.hasPrefix("hmm_") }, "a hmm_ clip is still bundled")
+        }
     }
 }

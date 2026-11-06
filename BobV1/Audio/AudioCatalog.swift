@@ -130,11 +130,11 @@ nonisolated enum JellyVoice: String, Sendable, CaseIterable {
     case happy, sad, babble
     /// The context voices (2026-11-05): a short call that fits the moment, <type>_jelly{n}.m4a, rendered by the same synth as the chirps.
     case curious, ooh, hum, giggle, hello, yawn, yay, uhoh
-    /// Round 2, batch B (2026-11-05): hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo. Only the four base voices have them; Teddy / Pearl / Panda borrow the nearest.
-    case hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo
+    /// Round 2, batch B (2026-11-05): wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo. Only the four base voices have them; Teddy / Pearl / Panda borrow the nearest.
+    case wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo
     var isContext: Bool { switch self { case .happy, .sad, .babble: return false; default: return true } }
     /// Batch B: no per-character set for the three newer species, and no _v2 / _v3.
-    var isBatchB: Bool { switch self { case .hmm, .wheee, .tasty, .aww, .huh, .pfft, .lala, .eep, .mmhmm, .nyoo: return true; default: return false } }
+    var isBatchB: Bool { switch self { case .wheee, .tasty, .aww, .huh, .pfft, .lala, .eep, .mmhmm, .nyoo: return true; default: return false } }
     /// Round 1's eight have two more variants (_v2, _v3) for the four base voices, so a repeat differs.
     var hasVariants: Bool { isContext && !isBatchB }
 }
@@ -167,7 +167,7 @@ extension JellyVoiceSet {
     /// The context voice (and the chance of it) for the start of an idle move: look / peek -> curious, sit / lie / sway -> hum, the playful ones -> giggle, the yawn -> yawn, a stumble / startle -> uh-oh.
     static func contextVoice(forIdle kind: IdleKind, mood: IdleMood = .happy) -> (voice: JellyVoice, chance: Double)? {
         switch kind {
-        case .look, .peek, .decorPeek, .window, .stopLook: return (Bool.random() ? .curious : .hmm, 0.15)
+        case .look, .peek, .decorPeek, .window, .stopLook: return (.curious, 0.15)
         case .sit, .decorSit, .lieDown, .sway, .stretch: return (.hum, 0.15)
         case .slump: return (Bool.random() ? .pfft : .nyoo, 0.2)
         case .zoomies, .run: return (Bool.random() ? .wheee : .giggle, 0.18)
