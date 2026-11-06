@@ -68,6 +68,8 @@ struct LobbyJelbiePicker: View {
     /// The first this many spare slots (after the friends) are locked: a lock and `lockedText`.
     var lockedCount = 0
     var lockedText = "Needs a partner"
+    /// Non-nil (the Bag): spare slots are greyed placeholder tiles with a "+" and this accessibility label. Nil (the lobbies): the faint dashed inset, unchanged.
+    var emptyLabel: String? = nil
     var pick: (Int) -> Void
     @Environment(\.lobbyTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -183,12 +185,25 @@ struct LobbyJelbiePicker: View {
         .accessibilityIdentifier("\(id)-locked")
     }
 
-    private func emptySegment() -> some View {
-        RoundedRectangle(cornerRadius: Self.radius - 6, style: .continuous)
-            .strokeBorder(theme.subheading.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+    @ViewBuilder private func emptySegment() -> some View {
+        if let emptyLabel {
+            ZStack {
+                RoundedRectangle(cornerRadius: Self.radius - 6, style: .continuous).fill(SK.muted.opacity(0.14))
+                RoundedRectangle(cornerRadius: Self.radius - 6, style: .continuous)
+                    .strokeBorder(theme.subheading.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                Image(systemName: "plus").font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.muted.opacity(0.55))
+            }
             .padding(6)
             .frame(maxWidth: .infinity, minHeight: 100)
-            .accessibilityHidden(true)
+            .accessibilityElement(children: .ignore).accessibilityLabel(emptyLabel)
+            .accessibilityIdentifier("\(id)-empty")
+        } else {
+            RoundedRectangle(cornerRadius: Self.radius - 6, style: .continuous)
+                .strokeBorder(theme.subheading.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                .padding(6)
+                .frame(maxWidth: .infinity, minHeight: 100)
+                .accessibilityHidden(true)
+        }
     }
 }
 
