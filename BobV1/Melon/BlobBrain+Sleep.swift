@@ -125,6 +125,9 @@ enum SleepTuning {
     /// centroid, and the centroid itself swings up to 0.24 off the spot in the flop and the toss, mostly along the heading (the pitch back). So across the row
     /// the footprint is 0.76 + a little sway, along the heading it is 0.72 + the whole flop swing. No two footprints may intersect (`footMargin` m to spare).
     static let footHalfLen: Float = 0.95, footHalfWid: Float = 0.83, footMargin: Float = 0.03
+    /// (2026-11-06, maxRoll 0.30 -> 0.75: re-measured the same way, Release, three sleepers, 120 s x 3 seeds open + blocked: skin across +-0.74...0.76, along -0.69...0.71, i.e. the SAME as
+    ///  at 0.30: a body rolling about its own head-to-foot axis is nearly round across it, so the roll does not widen the footprint. The constants stay. A roll toward a close neighbour or in a
+    ///  hand-hold is still held to `rollNearMax` (0.30) as a belt-and-braces.)
     /// Hand-holding pairs lie skin to skin on purpose (the stub arms must meet): the measured across-reach 0.76, no margin.
     static let holdHalfWid: Float = 0.77
     static let breathPeriod: Float = 3.6

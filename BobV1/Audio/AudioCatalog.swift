@@ -258,8 +258,8 @@ nonisolated struct Fader: Equatable, Sendable {
 /// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
 nonisolated struct SnoreScheduler: Sendable {
     /// 2026-11-06 "play more often": the snore pace is 13...24 s and 5...12 s first, divided by `speedUp` (a test sets it to 1 for the "before").
-    /// 2026-11-06 (again): x1.3 more on top (user: "little snoring"), so 1.35 * 1.3.
-    nonisolated(unsafe) static var speedUp: Double = 1.35 * 1.3
+    /// 2026-11-06 (again): a little more on top (user: "little snoring"): x1.08 (`SleepMurmurTuning.snoreBoost`), so 1.35 * 1.08.
+    nonisolated(unsafe) static var speedUp: Double = 1.35 * SleepMurmurTuning.snoreBoost
     static var interval: ClosedRange<Double> { (13 / speedUp)...(24 / speedUp) }        // was 6...10, then 20...40 (inaudible), then 13...24
     static var firstDelay: ClosedRange<Double> { (5 / speedUp)...(12 / speedUp) }
     static let hubGap: Double = 3.5
@@ -326,8 +326,11 @@ nonisolated struct SleepSoundScheduler: Sendable {
 nonisolated enum SleepMurmurTuning {
     /// Off = exactly the snores + coos of before (a test turns it off for the "before" numbers).
     nonisolated(unsafe) static var enabled = true
-    /// The snore pace of r1058 was x1.35; 2026-11-06 "a little more snoring": x1.3 more (applied in `SnoreScheduler.speedUp`; a test sets it back for the "before").
-    static let snoreBoost: Double = 1.3
+    /// The snore pace of r1058 was x1.35; 2026-11-06 "a little more snoring": x1.08 more (applied in `SnoreScheduler.speedUp`; a test sets it back for the "before").
+    /// Why not 1.3: the hub's 2.5 s sleep hush (not ours to change) drops a coo that lands within it of any snore, so more snores = fewer PLAYED coos. Measured over 60 simulated
+    /// minutes x 3 sleepers (PLAYED per sleeper per minute): x1.0 snores 2.63 coos 1.88 | x1.1 2.88 (+9 %) 1.71 (91 %) | x1.2 3.10 (+18 %) 1.63 (87 %) | x1.3 3.31 (+26 %) 1.56 (83 %).
+    /// "Add, never displace" (coos keep >= 90 %) caps the boost at about x1.1.
+    static let snoreBoost: Double = 1.08
     /// One murmur per sleeper about every 30...60 s (the first 12...30 s after he falls asleep). Quiet: well under a voice's usual 0.7.
     static let interval: ClosedRange<Double> = 30...60, firstDelay: ClosedRange<Double> = 12...30
     static let gain: Float = 0.3

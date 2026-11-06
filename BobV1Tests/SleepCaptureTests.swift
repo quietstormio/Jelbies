@@ -219,7 +219,8 @@ final class SleepCaptureTests: XCTestCase {
         XCTAssertTrue(s.brain.idleStart(.sleep, s.sim)); s.brain.sleep.hold = 5000
         var steps = 0
         var lastStage = 0
-        func tick(_ n: Int) { for _ in 0..<n { lab.tick(watching: false); for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }; steps += 1
+        func tick(_ n: Int) { for _ in 0..<n { s.brain.sleep.minHold = 1e6          // (the daytime "morning" rule wakes a sleeper after minHold, 12 s: not what this sheet shows)
+            lab.tick(watching: false); for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }; steps += 1
             if s.brain.sleep.stage != lastStage && s.brain.idleState.kind == .sleep { lastStage = s.brain.sleep.stage; print("SLEEPROLLSHEET step \(steps): stage \(lastStage)") } } }
         while !s.brain.isNapping && steps < 60 * 20 { tick(1) }
         tick(120)
