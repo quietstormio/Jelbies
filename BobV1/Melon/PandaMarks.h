@@ -64,8 +64,12 @@ static float pandaBand(float3 Q) {
     // a saddle: low and thin across the chest (under the mouth, between the arms), wider at the sides, swooping up over the shoulders at the back (the pom sits below it, on white)
     float top = mix(0.93, 0.68, smoothstep(-1.0, -0.10, cz));
     float bottom = mix(0.66, 0.40, smoothstep(-1.0, -0.10, cz));
+    // the yoke narrows into the arm: from the saddle's full height (cz -0.10) the top / bottom edges close in to the arm's own height band (y .50 ... .60), and the end (cz +0.09)
+    // lies inside the arm's charcoal (arm centre z ~ .07), so the band runs INTO the shoulder like a real panda's yoke: no white wedge, no separate sharp end beside the arm.
+    float into = smoothstep(-0.10, 0.08, cz);
+    top = mix(top, 0.600, into); bottom = mix(bottom, 0.500, into);
     float edge = smoothstep(bottom - 0.008, bottom + 0.014, Q.y) * (1.0 - smoothstep(top - 0.016, top, Q.y));          // crisp edges: no grey halo on the white body
-    return edge * (1.0 - smoothstep(-0.08, -0.06, cz));          // a crisp end just in front of the arm (user 11-04: the old 5 cm fade left a grey smear beside the arm);  at the front of the arms: the chest / tummy stays white (the saddle joins the arms over the shoulders and back)
+    return edge * (1.0 - smoothstep(0.085, 0.095, cz));          // ends inside the arm (the chest / tummy in front of the arms stays white)
 }
 /// Black arms and feet on the egg (the rest-space arm / foot shapes; soft over their fillet into the body).
 static float pandaLimbs(float3 Q) {
