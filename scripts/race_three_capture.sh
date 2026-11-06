@@ -5,7 +5,7 @@ set -u
 OUT=${1:?out dir}; mkdir -p $OUT; OUT=$(cd $OUT && pwd); SECS=${SECS:-90}; DD=${DD:?derived data}; UDID=${SIM:?sim udid}
 cd "$(dirname "$0")/.."
 setopt nonomatch; rm -f $OUT/race.mark $OUT/race.mov $OUT/s_*.png
-CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_SECS=$SECS TEST_RUNNER_CAPTURE_ROSTER=${ROSTER:-teddy,panda} TEST_RUNNER_CAPTURE_SEED=${SEED:-7} xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration Release -destination "id=$UDID" -derivedDataPath $DD -parallel-testing-enabled NO -only-testing:BobV1UITests/RaceThreeUITests/testThreeRacers </dev/null >$OUT/xcodebuild.log 2>&1 &
+CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_SECS=$SECS TEST_RUNNER_CAPTURE_ROSTER=${ROSTER:-teddy,panda} TEST_RUNNER_CAPTURE_LANDSCAPE=${LANDSCAPE:-0} TEST_RUNNER_CAPTURE_SEED=${SEED:-7} xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration Release -destination "id=$UDID" -derivedDataPath $DD -parallel-testing-enabled NO -only-testing:BobV1UITests/RaceThreeUITests/testThreeRacers </dev/null >$OUT/xcodebuild.log 2>&1 &
 TPID=$!
 xcrun simctl spawn $UDID log stream --style compact --predicate 'eventMessage CONTAINS "[melon]"' </dev/null >$OUT/perf.log 2>&1 &
 LPID=$!
