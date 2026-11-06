@@ -419,7 +419,8 @@ extension BlobBrain {
         guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
-        var w: [(SocialKind, Float)] = [(.boop, 3), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
+        // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
+        var w: [(SocialKind, Float)] = [(.boop, 1.5), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
         varietyScaleSocial(&w, partner: o)
         let total = w.reduce(0) { $0 + $1.1 }

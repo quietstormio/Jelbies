@@ -363,4 +363,54 @@ final class SocialTests: XCTestCase {
         for _ in 0..<(60 * 150) { lab.tick(watching: true) }
         for (i, w) in lab.watch.enumerated() { MotionLog.write("SOCIAL CONTROL (no socials) rig\(i): frames \(w.plainFrames), worst foot overlap \(w.plain.overlap) (limit -0.02), worst radius \(w.plain.radius)") }
     }
+
+    /// 2026-11-06 (boop less often): the REAL pick path (socialMaybeStart) drawn N times with a per-draw seed, counting what it picked per kind. The gate
+    /// (pickChance x ...) does not read the weights' total, so lowering one weight only moves the share: boop down, every other kind up.
+    func testSocialPickDistributionPerKind() {
+        let lab = Lab(n: 2, positions: [SIMD2(-1.0, 0.6), SIMD2(1.0, 0.6)], quiet: true, seed: 5)
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        let n = 6000
+        var counts: [SocialKind: Int] = [:], started = 0
+        for x in [a, b] { x.anticsEnabled = true; x.sleepEnabled = true }          // (as the stage in a room: the play kinds + variety scaling are in the pick)
+        MotionLog.write("SOCIAL PICKS setup: free \(a.socialFree)/\(b.socialFree) deepNight \(a.idleDeepNight) d \(simd_distance(a.position, b.position)) peerGap \(a.peerGap) drought \(a.socialBook.drought) enabled \(a.socialBook.enabled)")
+        for i in 0..<n {
+            for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
+            for x in [a, b] { x.socialAbort(nil); x.idleState.kind = nil; x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
+            a.watching = true
+            a.seed = UInt64(i + 1) &* 0x9E3779B97F4A7C15
+            for _ in 0..<4 { _ = a.rand() }
+            if a.socialMaybeStart(lab.rigs[0].sim) { started += 1 }
+            if let k = a.socialBook.lastKind { counts[k, default: 0] += 1 }          // (the pick itself: set whenever the roll passed, even if the start is then refused on the spot)
+        }
+        let total = counts.values.reduce(0, +)
+        let table = counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
+        MotionLog.write("SOCIAL PICKS draws \(n) started \(started) picked \(total): \(table)")
+        XCTAssertGreaterThan(total, n / 3, "the roll passes about as often however the weights are set (it never reads their total)")
+        // 2026-11-06: boop (weight 1.5) is picked less than follow (weight 2)
+        XCTAssertLessThan(counts[.boop] ?? 0, counts[.follow] ?? 0, "boop is rarer than follow")
+
+        // 2026-11-06 (r4-hands): boop, cheekSquish and whisperGiggle share the side-by-side hand-on-arm staging; their weights are halved together
+        // (3 / 1.8 / 1.3 -> 1.5 / 0.9 / 0.65). Exact per-kind check on the EXPECTED probabilities w/W of the table the pick builds (the same helpers
+        // socialMaybeStart calls, same base literal); the sampled counts above are tied to that table so it cannot drift from the real path.
+        let hands: Set<SocialKind> = [.boop, .cheekSquish, .whisperGiggle]
+        for x in [a, b] { x.socialAbort(nil); x.idleState.kind = nil; x.socialBook.lastKind = nil; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
+        let grumpy = a.idleMood == .grumpy || b.idleMood == .grumpy
+        var w: [(SocialKind, Float)] = [(.boop, 1.5), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
+        w = a.socialPlayWeights(base: w, partner: b, others: [b], grumpy: grumpy)
+        a.varietyScaleSocial(&w, partner: b)
+        let wAfter = Dictionary(w.map { ($0.0, $0.1) }, uniquingKeysWith: +)
+        let wBefore = wAfter.reduce(into: [SocialKind: Float]()) { $0[$1.key] = hands.contains($1.key) ? $1.value * 2 : $1.value }          // (the old weights are exactly 2x)
+        let tA = wAfter.values.reduce(0, +), tB = wBefore.values.reduce(0, +)
+        for h in hands { XCTAssertNotNil(wAfter[h], "\(h) is in the table") }
+        for (k, wa) in wAfter where !hands.contains(k) {
+            XCTAssertGreaterThanOrEqual(wa / tA, (wBefore[k] ?? 0) / tB, "\(k): its pick probability does not fall")
+        }
+        let pHandsBefore = hands.reduce(0) { $0 + (wBefore[$1] ?? 0) } / tB, pHandsAfter = hands.reduce(0) { $0 + (wAfter[$1] ?? 0) } / tA
+        XCTAssertEqual(pHandsAfter / pHandsBefore, 0.5, accuracy: 0.05, "the three hand kinds together drop to about half")
+        let sampled = Float(hands.reduce(0) { $0 + (counts[$1] ?? 0) }) / Float(max(total, 1))
+        let sigma = (pHandsAfter * (1 - pHandsAfter) / Float(max(total, 1))).squareRoot()
+        MotionLog.write("SOCIAL PICKS hands: expected before \(pHandsBefore) after \(pHandsAfter), sampled \(sampled) (sigma \(sigma)); W before \(tB) after \(tA)")
+        XCTAssertEqual(sampled, pHandsAfter, accuracy: 5 * sigma, "the real pick path matches the table above")
+        XCTAssertLessThan(sampled, pHandsBefore * 0.7, "and sits well below the old three-kind share")
+    }
 }
