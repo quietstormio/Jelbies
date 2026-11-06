@@ -199,13 +199,15 @@ extension FeatureCaptureTests {
         let cur = (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt)
         func setCurrent() { (WearLevel.tiltSideY, WearLevel.tiltBackY, WearLevel.tiltFrom, WearLevel.tiltSideAt) = cur; WearLevel.tiltOn = true; WearMeshes.clearCache() }
         defer { setCurrent() }
-        let combos: [(Int, WearLook)] = [(6, .bandanaCoral), (4, .bandanaCoral), (6, .diamondJ), (4, .pearls)]
+        let combos: [(Int, WearLook)] = [(6, .bandanaCoral), (4, .bandanaSun), (6, .diamondJ), (4, .pearls)]
         let poses: [(String, Int)] = [("rest", 0), ("walk", 40)]
         var cells: [UIImage] = []
         for (id, look) in combos { for (pn, frames) in poses {
             for after in [false, true] {
-                if after { setCurrent() } else { WearLevel.useLegacyTilt(); WearLevel.tiltOn = !(look == .bandanaCoral || look == .bandanaMint); WearMeshes.clearCache() }
-                let im = try neckStill(id: id, outfit: [.neck: look], yaw: yaw, walkFrames: frames, size: 300, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: 1.7, lift: 0.4, ty: 0.30)
+                if after { setCurrent() } else { WearLevel.useLegacyTilt(); WearLevel.tiltOn = !(look == .bandanaCoral || look == .bandanaMint || look == .bandanaSun); WearMeshes.clearCache() }
+                let front = env["NECK_CAP_FRONT"] == "1"      // (as chain_r2: orbit 3/4 = size 190, dist 2.4, lift 0.4, ty 0.35, whole body; front = necklace_r2_front's size 420 default camera)
+                let im = front ? try neckStill(id: id, outfit: [.neck: look], yaw: 0, walkFrames: frames, size: 420, heading: SIMD2(-1.2, 2.2), motion: "walk")
+                               : try neckStill(id: id, outfit: [.neck: look], yaw: yaw, walkFrames: frames, size: 190, heading: SIMD2(-1.2, 2.2), motion: "walk", dist: 2.4, lift: 0.4, ty: 0.35)
                 let tag = "\(JellyRoster.baseNames[id]) \(look.rawValue) \(pn): \(after ? "AFTER" : "BEFORE")"
                 try writePNG(im, d + "/ship_yaw\(Int(yaw * 100))_\(JellyRoster.baseNames[id])_\(look.rawValue)_\(pn)_\(after ? "after" : "before").png", maxBytes: 12_000_000)
                 cells.append(tlabel(im, [tag], bar: 26))

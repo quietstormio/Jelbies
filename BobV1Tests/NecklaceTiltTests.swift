@@ -16,7 +16,7 @@ final class NecklaceTiltTests: XCTestCase {
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     static let necklaces: [WearLook] = [.diamondJ, .pearls]      // (SHIP 2026-11-06: the gold chain is removed from the game)
-    static let tiltedPieces: [WearLook] = necklaces + [.bandanaCoral, .bandanaMint]
+    static let tiltedPieces: [WearLook] = necklaces + [.bandanaCoral, .bandanaMint, .bandanaSun]
     static let names = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
 
     private func makeLab(_ id: Int) -> SocialTests.Lab {

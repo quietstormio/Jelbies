@@ -43,7 +43,7 @@ nonisolated enum WearLevel {
     static func useLegacyTilt() { tiltSideY = 0.645; tiltBackY = 0.665; tiltFrom = 0.44; tiltSideAt = 1.48 }   // (tiltFrom is const-equal in both rounds)
     /// The inner edge of a rigid link / gem / pearl is brought to this distance (m) from the skin at rest (the chain hugs the body).
     static let hugGap: Float = 0.002
-    static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .diamondJ || l == .pearls || l == .bandanaCoral || l == .bandanaMint) }
+    static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .diamondJ || l == .pearls || l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun) }
     @inline(__always) private static func smooth(_ x: Float) -> Float { let u = min(max(x, 0), 1); return u * u * (3 - 2 * u) }
     /// 0 at the front (up to `tiltFrom`), 1 from the arm roots round the back.
     static func tiltWeight(az: Float) -> Float { smooth((abs(az) - tiltFrom) / (tiltSideAt - tiltFrom)) }
