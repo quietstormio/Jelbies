@@ -26,9 +26,8 @@ enum ContactTuning {
     /// Side by side (r4-engine-arrival, 2026-11-05): once the walk lands on the standing touch spot, the jelly's momentum carries the body ~2 cm into the partner at the brake and bounces it ~5 cm back (touch, kick, retreat,
     /// a second touch). Measured on nuzzle / swayHug / cuddleLean (Bob+Teddy): final stride at 0.9: retreat 6.2 cm, 0.6: 5.1, 0.5: 4.8, 0.4: 2.4, 0.3 and 0.2: none. The face-to-face stances (hum, noseBoop) keep 0.6: at 0.3 they arrive 3.1 cm apart.
     nonisolated(unsafe) static var sideFinalStepRate: Float = Float(ProcessInfo.processInfo.environment["FINAL_STEP_RATE_SIDE"] ?? "") ?? 0.3
-    /// Set every tick by the session's stance walk (ContactSettle.contactStanceWalk): the walkers in flight stand side by side.
-    nonisolated(unsafe) static var sideFinalActive = false
-    static var finalStepRate: Float { sideFinalActive ? sideFinalStepRate : faceToFaceFinalStepRate }
+    /// The brake for one walker's last stride: `sideBySide` is that brain's own `contactSideFinal` (set and cleared every tick by ContactSettle.contactStanceWalk; no process-wide state).
+    static func finalStepRate(sideBySide: Bool) -> Float { sideBySide ? sideFinalStepRate : faceToFaceFinalStepRate }
     /// The per-tick blend of the live touch distance into the stable one: the outline swings +-8 cm over a stride (arms, legs), so the destination follows its average over about a stride (~0.8 s), not a sample.
     nonisolated(unsafe) static var stableTouchAlpha: Float = Float(ProcessInfo.processInfo.environment["STABLE_ALPHA"] ?? "") ?? 0.7
     /// The destination of a stance walk is locked this close to it (m): late enough that the averaged touch distance has settled, early enough that the last two steps are planned on a fixed spot.

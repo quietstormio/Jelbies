@@ -240,6 +240,7 @@ final class BlobBrain {
     /// A voice lesson is on (GameCare+Features sets it): the wing flap bursts stay small, as in a race.
     var trainingLock = false
     var flapHop = FlapHopState()
+    var contactSideFinal = false          // this walker's stance walk is side by side (slower last stride); written only by contactStanceWalk, every tick
     weak var contactSim: SoftBody?          // set every tick: the settle slides this body at once when it warps an airborne one (ContactSettle.swift)
     /// The species flourish's drive of the feature layer (wings / daisy / Teddy's ears; Pip's tail goes through `tailDrive`): BlobBrain+Emotes.swift.
     var sig = SignatureDrive()
@@ -1291,7 +1292,7 @@ final class BlobBrain {
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
         // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
-        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate : 1
+        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate(sideBySide: contactSideFinal) : 1
         startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
     }

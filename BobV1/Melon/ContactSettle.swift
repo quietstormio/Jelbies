@@ -217,7 +217,7 @@ extension BlobBrain {
     /// every walk alone: it must not be rewritten to the touch point.
     func contactStanceWalk(partner p: BlobBrain, gapWanted: Float, features: Bool = true, retarget: Bool = true) {
         guard let sim = contactSim else { return }
-        if retarget, case .walk = script { ContactTuning.sideFinalActive = social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera }          // (the last stride's brake: side by side it is slower, see ContactTuning.sideFinalStepRate)
+        if retarget, case .walk = script { contactSideFinal = social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera } else { contactSideFinal = false }          // (the last stride's brake: side by side it is slower, see ContactTuning.sideFinalStepRate; per brain, cleared on any tick that is not a retargeted walk)
         if ContactTrace.on {
             var w = "noWalk", tg = "-"
             if case .walk(let t, _) = script {
