@@ -59,6 +59,8 @@ final class GameCare {
     @ObservationIgnored var eagerWhenFamished = true
     /// The small "Not hungry" / "Not thirsty" label while he refuses (nil = none). `noticeSerial` bumps per refusal.
     var notice: String?
+    /// A Feed / Drink / Play row is unfolded in the care menu (the need bubbles hide while it is).
+    var pickerShowing = false
     /// The label is a tap's answer (over Bob's head) rather than a diner's own refusal.
     @ObservationIgnored var noticeAtBob = false
     @ObservationIgnored var gaveUpShown = false

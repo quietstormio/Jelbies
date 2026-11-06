@@ -114,7 +114,7 @@ struct GameScreen: View {
                 case .drink: withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink }
                 case .comeHere, .clean: break            // GameCare.tapBubble already called him / started the clean-up
                 }
-            }.photoHidden().opacity(model.care.play.active ? 0 : 1)          // (no needs bubbles over the ball game)
+            }.photoHidden().opacity(model.care.play.active || model.care.pickerShowing ? 0 : 1).allowsHitTesting(!model.care.pickerShowing)          // (no needs bubbles over the ball game, nor under an open Feed / Drink row)
 
             CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
 
@@ -167,6 +167,7 @@ struct GameScreen: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 }
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
+                    CuddleNoticeRow(care: model.care)          // "Teddy is too hungry to cuddle": under "Let them go" while a need blocks the hearts
                     if !focus.isActive, !cleaning, !racing {
                         HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer() }
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudInfoH = $0 }
@@ -1006,6 +1007,7 @@ struct CareMenu: View {
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
         .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false } }
+        .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
@@ -1025,6 +1027,17 @@ struct CareMenu: View {
                            removal: .scale(scale: 0.9, anchor: .trailing).combined(with: .opacity).animation(Self.fadeOut))
     }
 
+    /// The Feed row lists only foods the player owns (a food at 0 is not shown at all).
+    static func foodIsListed(count: Int) -> Bool { count > 0 }
+    /// The ids the Feed row lists for a bag (shop order), and the line shown when that is empty.
+    static func feedRowIDs(bag: [String: Int]) -> [String] {
+        StoreCatalog.items.compactMap { it in
+            guard it.food != nil, it.kind != .drink, foodIsListed(count: bag[it.id] ?? 0) else { return nil }
+            return it.id
+        }
+    }
+    static let noFoodLine = "No food. Visit the store."
+
     /// One entry of the Feed / Drink row.
     private struct PickEntry: Identifiable {
         let id: String
@@ -1035,7 +1048,7 @@ struct CareMenu: View {
         let run: () -> Void
         var out: Bool { count == 0 }
     }
-    /// Feed: every food in the bag in shop order (foods, then treats), with berries and pizza always shown (dimmed at 0). Drink: water, soda, then the bought drinks.
+    /// Feed: every food in the bag in shop order (foods, then treats), owned foods only. Drink: water, soda, then the bought drinks.
     private func pickEntries(_ kind: ConsumableKind) -> [PickEntry] {
         let jelly = care.singledOutForFood
         if kind == .toy {
@@ -1054,7 +1067,7 @@ struct CareMenu: View {
         return StoreCatalog.items.compactMap { it in
             guard it.food != nil, it.kind != .drink else { return nil }
             let n = care.store.count(it.id)
-            guard n > 0 || it.id == "berries" || it.id == "pizza" else { return nil }
+            guard Self.foodIsListed(count: n) else { return nil }
             return PickEntry(id: it.id, name: it.name, art: AnyView(ItemArt(item: it, size: 50)), count: n, ident: "care-food-\(it.id)") { care.feedSnack(it.id, jelly: jelly) }
         }
     }
@@ -1063,10 +1076,10 @@ struct CareMenu: View {
     private func pickerRow(kind: ConsumableKind) -> some View {
         let entries = pickEntries(kind)
         let cap = max(160, UIScreen.main.bounds.width - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
-        let noFood = kind == .food && entries.allSatisfy { $0.out }          // an empty bag: say where food comes from
+        let noFood = kind == .food && entries.isEmpty          // an empty bag: say where food comes from
         let noToys = kind == .toy && entries.isEmpty          // no toy bought yet: the button goes to the Shop's Toys tab
         return VStack(spacing: 2) {
-        ScrollView(.horizontal, showsIndicators: false) {
+        if !noFood { ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
                     Button {
@@ -1098,6 +1111,7 @@ struct CareMenu: View {
         }
         .frame(width: min(max(pickerWidth, 1), cap))
         .padding(.trailing, 0)
+        }
             if noToys {
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
@@ -1119,10 +1133,10 @@ struct CareMenu: View {
                 .accessibilityLabel("No toys yet. Open the Shop's toys")
             }
             if noFood {
-                Text("No food yet. Buy some in the Shop (Go out).").jFont(12, .bold).foregroundStyle(Self.brown)
+                Text(Self.noFoodLine).jFont(12, .bold).foregroundStyle(Self.brown)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 16).fill(Self.cream))
-                    .frame(width: min(max(pickerWidth, 1), cap))
+                    .frame(maxWidth: cap)
                     .accessibilityIdentifier("care-feed-empty-hint")
             }
         }
