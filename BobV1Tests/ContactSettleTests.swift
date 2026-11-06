@@ -402,17 +402,16 @@ final class ContactSettleTests: XCTestCase {
             for _ in 0..<3 { d.tick() }
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim))
-            var restWalking: Float?, liveWalking: Float?, lastStep = -1, armsLifted = false
+            var restWalking: Float?, liveWalking: Float?, lastStep = -1
             var reachAfter: Float?
             for f in 0..<(60 * 12) {
                 d.tick()
                 let u = simd_normalize(a.brain.position - b.brain.position + SIMD2(1e-6, 0))
                 let stepping = a.brain.stepLive || a.brain.gait.isBusy || b.brain.stepLive || b.brain.gait.isBusy
-                if stepping { lastStep = f }
-                if a.brain.armWalkWant > 0, a.skinner.armCapsulesActive { armsLifted = true; if let r = a.brain.touchRadiusFacing(b.brain, along: u, .camera) { restWalking = r }; liveWalking = a.brain.touchRadius(b.brain, along: u) }
+                if stepping { lastStep = f; if simd_distance(a.brain.position, b.brain.position) < 1.8 { restWalking = a.brain.touchRadiusFacing(b.brain, along: u, .camera); liveWalking = a.brain.touchRadius(b.brain, along: u) } }
                 if lastStep >= 0, f == lastStep + 40, !stepping, reachAfter == nil, let live = a.brain.touchRadius(b.brain, along: u) { reachAfter = live }
             }
-            MotionLog.write(String(format: "REST OUTLINE %@: walking live %.3f, rest %.3f, standing live %.3f (armsLifted %d)", kind.rawValue, liveWalking ?? -1, restWalking ?? -1, reachAfter ?? -1, armsLifted ? 1 : 0))
+            MotionLog.write(String(format: "REST OUTLINE %@: last-step live %.3f, rest %.3f, standing live %.3f", kind.rawValue, liveWalking ?? -1, restWalking ?? -1, reachAfter ?? -1))
             guard let rest = restWalking, let after = reachAfter else { XCTFail("\(kind): no rest/standing sample"); continue }
             XCTAssertEqual(rest, after, accuracy: 0.01, "\(kind): the rest outline's reach is within 1 cm of the standing reach")
         }
