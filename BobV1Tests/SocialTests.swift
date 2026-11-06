@@ -371,6 +371,8 @@ final class SocialTests: XCTestCase {
         let a = lab.rigs[0].brain, b = lab.rigs[1].brain
         let n = 6000
         var counts: [SocialKind: Int] = [:], started = 0
+        for x in [a, b] { x.anticsEnabled = true; x.sleepEnabled = true }          // (as the stage in a room: the play kinds + variety scaling are in the pick)
+        MotionLog.write("SOCIAL PICKS setup: free \(a.socialFree)/\(b.socialFree) deepNight \(a.idleDeepNight) d \(simd_distance(a.position, b.position)) peerGap \(a.peerGap) drought \(a.socialBook.drought) enabled \(a.socialBook.enabled)")
         for i in 0..<n {
             for x in [a, b] { x.socialAbort(nil); x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
             a.watching = true
