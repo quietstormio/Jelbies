@@ -82,7 +82,6 @@ nonisolated enum SoundCaptions {
         case .yawn: return "\(name) yawns"
         case .yay: return "\(name) cheers"
         case .uhoh: return "\(name) says uh-oh"
-        case .hmm: return "\(name) hums, thinking"
         case .wheee: return "\(name) squeals wheee"
         case .tasty: return "\(name) hums, tasty"
         case .aww: return "\(name) says aww"
