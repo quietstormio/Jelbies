@@ -1,10 +1,11 @@
 #!/bin/zsh
-# Real-app video of a hurdle jump (RaceLegsUITests). Usage: scripts/race_legs_capture.sh <out dir>   Env: SIM (udid), DD (derived data), SECS (70), CONFIG (Debug: the UI-test target does not build in Release).
+# Real-app video of a hurdle jump (RaceLegsUITests). Usage: scripts/race_legs_capture.sh <out dir>   Env: SIM (udid), DD (derived data), SECS (70), CONFIG (Release with ENABLE_TESTABILITY=YES: the Debug sim steps at ~270 ms per frame, too slow to race).
 set -u
-OUT=${1:?out dir}; mkdir -p $OUT; OUT=$(cd $OUT && pwd); SECS=${SECS:-70}; CONFIG=${CONFIG:-Debug}; DD=${DD:?derived data}; UDID=${SIM:?sim udid}
+OUT=${1:?out dir}; mkdir -p $OUT; OUT=$(cd $OUT && pwd); SECS=${SECS:-70}; CONFIG=${CONFIG:-Release}; DD=${DD:?derived data}; UDID=${SIM:?sim udid}
 cd "$(dirname "$0")/.."
+xcodebuild build-for-testing -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG -destination "id=$UDID" -derivedDataPath $DD ENABLE_TESTABILITY=YES -quiet || exit 1
 rm -f $OUT/hurdle.mark $OUT/hurdle.mov
-CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_SECS=$SECS xcodebuild test -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG -destination "id=$UDID" -derivedDataPath $DD -parallel-testing-enabled NO -only-testing:BobV1UITests/RaceLegsUITests/testHurdleJump </dev/null >$OUT/xcodebuild.log 2>&1 &
+CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_OUT=$OUT TEST_RUNNER_CAPTURE_SECS=$SECS xcodebuild test-without-building -project BobV1.xcodeproj -scheme BobV1 -configuration $CONFIG -destination "id=$UDID" -derivedDataPath $DD -parallel-testing-enabled NO -only-testing:BobV1UITests/RaceLegsUITests/testHurdleJump </dev/null >$OUT/xcodebuild.log 2>&1 &
 TPID=$!
 for i in {1..2400}; do [ -f $OUT/hurdle.mark ] && break; kill -0 $TPID 2>/dev/null || break; sleep 0.5; done
 RPID=""
