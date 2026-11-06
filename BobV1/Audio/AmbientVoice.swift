@@ -29,15 +29,27 @@ nonisolated enum AmbientVoiceTuning {
 nonisolated enum HomeVoiceTuning {
     nonisolated(unsafe) static var enabled = true
     static let contextChanceMul: Double = 1.3
+    /// 2026-11-06: at home a context voice whose base chance is at least `floorFrom` plays with at least `contextFloor` (the wander lala / pfft at 0.05 stay at x1.3 only).
+    nonisolated(unsafe) static var floorEnabled = true
+    nonisolated(unsafe) static var contextFloor: Double = 0.45
+    static let floorFrom: Double = 0.1
+    static func homeChance(_ base: Double) -> Double {
+        var p = base * contextChanceMul
+        if floorEnabled, base >= floorFrom { p = max(p, contextFloor) }
+        return min(1, p)
+    }
 }
 
 extension AmbientVoiceTuning {
-    /// What the filler says: chirp / babble stay the most common. By day: happy 3, babble 3, giggle 1.2, curious 1, hum 1, ooh 0.8. Evening / awake at night (night >= 0.3):
+    /// What the filler says: chirp / babble stay the most common. By day: happy 2, babble 2, giggle 1.5, curious 1.2, hum 1.2, ooh 1, hmm 0.8. Evening / awake at night (night >= 0.3):
     /// hum 2, yawn 1.5, happy 1.5, babble 1.5 (soft and sleepy). A grumpy one: sad 3, babble 2, hum 1 (no giggles).
+    /// (the soak test's "before" switch: false = the 2230db85 day set)
+    nonisolated(unsafe) static var newDaySet = true
     static func pick(night: Double, grumpy: Bool, random: (ClosedRange<Double>) -> Double) -> JellyVoice {
         let table: [(JellyVoice, Double)]
         if grumpy { table = [(.sad, 3), (.babble, 2), (.hum, 1)] }
         else if night >= 0.3 { table = [(.hum, 2), (.yawn, 1.5), (.happy, 1.5), (.babble, 1.5)] }
+        else if newDaySet { table = [(.happy, 2), (.babble, 2), (.giggle, 1.5), (.curious, 1.2), (.hum, 1.2), (.ooh, 1), (.hmm, 0.8)] }          // (2026-11-06: the new voices about 50 % of the picks)
         else { table = [(.happy, 3), (.babble, 3), (.giggle, 1.2), (.curious, 1), (.hum, 1), (.ooh, 0.8)] }
         var x = random(0...table.reduce(0) { $0 + $1.1 })
         for (v, w) in table { if x < w { return v }; x -= w }

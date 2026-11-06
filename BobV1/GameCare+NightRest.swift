@@ -25,6 +25,11 @@ enum NightRestTuning {
     /// Sleep hold for a bedtime sleep (the stage-3 morning rule ends it).
     static let untilMorning: Float = 36_000
     nonisolated(unsafe) static var debugLoaded = false
+    /// `-SleepNow 1` (works in Release): once the room is ready every home Jelbie is sent to bed through the normal bedtime (the group Bedtime button's path:
+    /// registered as wanted, `commandedGoodnight`, retried until down). Use with `-ClockHour 3` so they stay down. Read once; tests set it directly.
+    nonisolated(unsafe) static var sleepNow: Bool = UserDefaults.standard.integer(forKey: "SleepNow") == 1
+    /// The order itself: every brain gets the goodnight (the same flag the Bedtime button sets).
+    @MainActor static func sendToBed(_ brains: [BlobBrain]) { for b in brains { b.commandedGoodnight = true } }
 }
 
 struct NightRestBook {
@@ -39,6 +44,7 @@ struct NightRestBook {
     var lastSelected: Int?
     var autoFired = false                      // the idle rule fired for this stretch (re-arms on interaction)
     var debugRead = false
+    var sleepNowDone = false                   // -SleepNow 1 fired
 }
 
 extension GameCare {
@@ -173,6 +179,15 @@ extension GameCare {
         if !book.arrivalIDs.isEmpty {          // the curtain waits for the instant sleepers to settle
             let done = book.arrivalIDs.allSatisfy { id in actors.first { $0.id == id }.map { ($0.brain?.isNapping ?? true) && $0.sim.isSettled } ?? true }
             if done { book.arrivalIDs = []; LaunchGate.shared.settled(true) }
+        }
+        if NightRestTuning.sleepNow, !book.sleepNowDone, !actors.isEmpty, canBedtime, book.arrivalIDs.isEmpty,
+           actors.allSatisfy({ $0.sim.isSettled && $0.brain?.sleepEnabled == true }) {
+            book.sleepNowDone = true
+            book.wanted.formUnion(ids)
+            if !isBedtimeHours { book.dayOnce.formUnion(ids) }
+            for id in ids { book.nightWoken.remove(id); book.retryT[id] = NightRestTuning.retry }
+            NightRestTuning.sendToBed(actors.compactMap(\.brain))
+            NSLog("[nightrest] SleepNow: sent %d to bed", actors.count)
         }
         let night = isBedtimeHours
         if !night {
