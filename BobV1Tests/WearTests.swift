@@ -75,8 +75,8 @@ final class WearTests: XCTestCase {
     }
 
     func testCatalogHasEveryLookAndTheMedalIsNotSold() {
-        for l in WearLook.allCases where !WearLook.unlisted.contains(l) { XCTAssertNotNil(StoreCatalog.item(wearing: l), "\(l)") }
-        for l in WearLook.unlisted { XCTAssertNil(StoreCatalog.item(wearing: l), "\(l) is out of the shop") }
+        for l in WearLook.allCases where !WearLook.unlisted.contains(l) && !WearLook.retired.contains(l) { XCTAssertNotNil(StoreCatalog.item(wearing: l), "\(l)") }
+        for l in WearLook.unlisted.union(WearLook.retired) { XCTAssertNil(StoreCatalog.item(wearing: l), "\(l) is out of the shop") }
         let medal = StoreCatalog.item(wearing: .medalGold)!
         XCTAssertTrue(medal.awarded)
         XCTAssertFalse(ShopTab.wear.items.contains { $0.awarded })
@@ -130,6 +130,22 @@ final class WearTests: XCTestCase {
         XCTAssertNil(b.saved.worn["0"]?["body"]); XCTAssertEqual(b.saved.worn["0"]?["head"], WearLook.beret.rawValue)
         let b2 = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b2)
         XCTAssertEqual(w.count - before, 65 + 60, "a second load never pays twice")
+    }
+
+    /// SHIP 2026-11-06: the gold chain is removed; a save that owns / wears it loads, unowns and unequips it silently (no refund).
+    func testRetiredGoldChainIsDroppedSilently() throws {
+        let suite = "WearTests.chain.\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
+        var saved = StoreBook.Saved()
+        saved.wearables = [WearLook.chainGold.rawValue, WearLook.chainGold.row.storeID, WearLook.beret.rawValue]
+        saved.worn = ["0": ["neck": WearLook.chainGold.rawValue, "head": WearLook.beret.rawValue]]
+        d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
+        let w = DropsWallet(persists: false); let before = w.count
+        let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
+        XCTAssertFalse(b.ownsLook(.chainGold)); XCTAssertTrue(b.ownsLook(.beret))
+        XCTAssertNil(b.saved.worn["0"]?["neck"]); XCTAssertEqual(b.saved.worn["0"]?["head"], WearLook.beret.rawValue)
+        XCTAssertEqual(w.count, before, "no refund")
+        XCTAssertFalse(WearLook.pieces.contains(.chainGold)); XCTAssertNil(StoreCatalog.item(wearing: .chainGold))
     }
 
     // MARK: art

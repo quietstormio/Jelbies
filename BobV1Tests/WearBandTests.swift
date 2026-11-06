@@ -322,7 +322,7 @@ final class WearBandTests: XCTestCase {
         WearLevel.record = true; defer { WearLevel.record = false }
         var report = ""
         var worst: Float = 0, worstMode = 0
-        for (look, prefix) in [(WearLook.chainGold, "link"), (.diamondJ, "gem"), (.pearls, "pearl")] {
+        for (look, prefix) in [(WearLook.diamondJ, "gem"), (.pearls, "pearl")] {
             guard let a = WearMeshes.art(look) else { continue }
             var parts: [(first: Int, count: Int)] = []
             var base = 0

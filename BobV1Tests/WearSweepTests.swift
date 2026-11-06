@@ -345,7 +345,7 @@ final class WearSweepTests: XCTestCase {
     /// The held-back pieces at about the game camera's distance (a whole Jelbie in a small frame), front and 3/4 on all four: wear4_five_game_distance.png.
     func testHeldBackPiecesAtGameDistance() throws {
         let d = try dir()
-        let looks: [WearLook] = [.cardiganCable, .vestPuffer, .scarfSilk, .chainGold, .diamondJ]
+        let looks: [WearLook] = [.cardiganCable, .vestPuffer, .scarfSilk, .diamondJ]
         var rows: [[UIImage]] = []
         for l in looks { rows.append([]) }
         for id in 0..<4 {
