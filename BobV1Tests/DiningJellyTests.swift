@@ -21,10 +21,10 @@ final class DiningJellyTests: XCTestCase {
         var snapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
         var t: Float = 0
         var sawEating: [Bool] = [false, false, false]
-        init(count: Int = 3, wander: Bool = false) {
+        init(count: Int = 3, wander: Bool = false, roster: [Int]? = nil) {
             sawEating = [Bool](repeating: false, count: count)
             let suite = UserDefaults(suiteName: "DiningJelly.\(UUID().uuidString)")!
-            care = GameCare(jellyCount: count, persistent: false, defaults: suite)
+            care = GameCare(jellyCount: count, roster: roster, persistent: false, defaults: suite)
             let sm = buildSimMesh(), rm = buildRenderMesh()
             let emb = embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest)
             let spots = JellyRoster.spawnSpots(count: count)
@@ -52,6 +52,7 @@ final class DiningJellyTests: XCTestCase {
             for a in actors { for _ in 0..<240 { a.sim.step() }; a.brain?.currentPose(a.sim) }
             for a in actors { a.profile?.needs.set(.hunger, 0.1); a.profile?.needs.set(.thirst, 0.9); a.profile?.needs.set(.attention, 0.9) }
             care.eagerWhenFamished = false
+            for it in StoreCatalog.items where it.food != nil && it.kind != .drink { care.store.grant(it.id, 30) }          // (store foods are fed from the bag: feed() returns early without one)
         }
         /// MelonStage only calls tickOthers with more than one Jelbie.
         var stageGate = false

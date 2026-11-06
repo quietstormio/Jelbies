@@ -60,7 +60,10 @@ extension GameCare {
         if let c = groupWanted {
             groupAge += dt
             let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
-            if focus.isActive || bath.active || groupAge > Self.mealTimeout { groupWanted = nil; groupQueueClear(); return }
+            if focus.isActive || bath.active || groupAge > Self.mealTimeout {
+                if groupAge > Self.mealTimeout { noticeAtBob = true; notice = "The table couldn't be set — try again"; noticeSerial += 1; noticeAge = 0 }          // (was silent)
+                groupWanted = nil; groupQueueClear(); return
+            }
             guard ready else { return }
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             // who sits now: the queued ids (a second sitting), else everybody; three at most, the rest wait for the next sitting

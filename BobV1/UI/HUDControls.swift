@@ -96,7 +96,7 @@ enum HUDMenu {
     static func enabled(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> Bool {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
-        case .feed, .drink: return !care.trayOut && !care.bath.active
+        case .feed, .drink: return !care.trayOut && !care.bath.active && !care.tripActive
         case .clean: return care.canClean(jelly: id)
         case .train: return !care.focus.isActive && !care.bath.active && !care.tripActive
         case .callAll: return callAllAvailable(care)
@@ -112,7 +112,7 @@ enum HUDMenu {
         guard !enabled(i, mode, care: care) else { return nil }
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
         switch i {
-        case .feed, .drink: return care.trayOut ? "Food is already out" : "Not while cleaning"
+        case .feed, .drink: return care.trayOut ? "Food is already out" : care.tripActive ? "Not while racing" : "Not while cleaning"
         case .clean:
             if care.bath.active { return "Already cleaning" }
             if care.trayOut { return "Not while food is out" }

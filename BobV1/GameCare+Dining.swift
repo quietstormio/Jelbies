@@ -16,7 +16,7 @@ extension GameCare {
     /// The Jelly the tray / meal is for (0 when none).
     var diningJelly: Int { mealJelly }
     /// Where the refusal label anchors: over the head of the Jelly that is refusing.
-    var noticeHeadWorld: SIMD3<Float> { mealJelly == 0 ? headWorld : mealHead }
+    var noticeHeadWorld: SIMD3<Float> { mealJelly == 0 || noticeAtBob ? headWorld : mealHead }
 
     /// One fixed step of the meal flow for Jelly `id` (a no-op unless the tray is for him): the walk to his place, the tray pop-in, the pieces
     /// paid as eaten, the refusal label, the re-serve loop. Jelly 0 keeps the Call / queued-request gating it always had.
@@ -54,7 +54,7 @@ extension GameCare {
         if let c = meal {
             payPieces()
             if brain.isRefusing, !noticeDone {
-                noticeDone = true
+                noticeDone = true; noticeAtBob = false
                 notice = MealAppetite.refusalText(c.kind == .food ? .hunger : .thirst); noticeSerial += 1; noticeAge = 0
             }
             mealAge += dt
