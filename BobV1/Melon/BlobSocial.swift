@@ -736,9 +736,9 @@ extension BlobBrain {
 
     /// The boop's tap cycle (seconds): after `start` the hand winds up over `windup`, strikes at `strike` (falls over `fall`), rests on the skin until `period`.
     enum TapTuning {
-        static let start: Float = 0.45, period: Float = 0.9, windup: Float = 0.22, strike: Float = 0.30, fall: Float = 0.07
+        static let start: Float = 0.45, period: Float = 1.0, windup: Float = 0.20, strike: Float = 0.26, fall: Float = 0.06
         static let count = 3
-        static let height: Float = 0.5
+        static let height: Float = 0.4
     }
 
     private func driveBoop(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
@@ -751,8 +751,8 @@ extension BlobBrain {
         }
         let t = s.phaseT
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
-        // THE BOOP IS A TAP, REPEATED (round 4: the hold used to be one static pose, a hand resting on the partner's arm): the hand rests on the skin, winds up (rises 0.5 rad off it in 0.2 s), and strikes back down
-        // onto the skin - the solved elevation IS the skin, so each tap peaks at contact, never past it. 3 taps, 0.9 s each, the hand is on the skin for ~60 % of every cycle (the hold median stays 0).
+        // THE BOOP IS A TAP, REPEATED (round 4: the hold used to be one static pose, a hand resting on the partner's arm): the hand rests on the skin, winds up (rises 0.4 rad off it in 0.2 s), and strikes back down
+        // onto the skin - the solved elevation IS the skin, so each tap peaks at contact, never past it. 3 taps, 1.0 s each, the hand is on the skin for ~65 % of every cycle (the hold median stays 0).
         let cycle = TapTuning.period, start = TapTuning.start
         let u = t >= start ? (t - start).truncatingRemainder(dividingBy: cycle) : -1
         let n = t >= start ? Int((t - start) / cycle) : -1
@@ -765,7 +765,7 @@ extension BlobBrain {
             // the strike: one soft kick, one sound, every tap (the first tap is the touch itself at the start of the hold)
             if n >= 0, n < TapTuning.count, u >= TapTuning.strike + 0.04, s.bumps <= n {
                 s.bumps = n + 1
-                jellyKick = max(jellyKick, 0.7); o.jellyKick = max(o.jellyKick, 0.9)          // (softer than the old bump: the booped one is an arm's length away and a hard kick swings his arm nub into the hand)
+                jellyKick = max(jellyKick, 0.45); o.jellyKick = max(o.jellyKick, 0.6)          // (softer than the old bump: the booped one is an arm's length away and a hard kick swings his arm nub into the hand)
                 contactCueFallback(o, .squish, 0.5)          // (boop had no contact sound: the default squish, at the touch via contactTick, here only where no profile exists)
                 contactBoopFallback(o)
             }
