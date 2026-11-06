@@ -145,7 +145,6 @@ struct FriendsScreen: View {
     /// One card per friend: who (colour, name, personality tag), which of the player's Jelbies they know and how well, and the one Invite button.
     private func row(_ v: ParkVisitor) -> some View {
         let free = care.guestBook.visit == nil
-        let lvl = v.bestLevel(among: care.jellies.map(\.character))
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Circle().fill(tint(v.colour)).frame(width: 44, height: 44).overlay(Circle().strokeBorder(Color.white.opacity(0.8), lineWidth: 2))
@@ -158,7 +157,6 @@ struct FriendsScreen: View {
                         .accessibilityLabel("Personality: \(v.style.word.lowercased())")
                 }
                 Spacer(minLength: 4)
-                Text(lvl.title).font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
             }
             VStack(alignment: .leading, spacing: 5) {
                 Text("Friends with").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
@@ -194,7 +192,7 @@ struct FriendsScreen: View {
         let t = JellyRoster.tint(j.character)
         return HStack(spacing: 5) {
             Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 14, height: 14)
-                .overlay(Circle().strokeBorder(SK.muted.opacity(0.45), lineWidth: 1.5))
+                .overlay(Circle().strokeBorder(j.character == JellyRoster.pandaID ? SK.ink : SK.muted.opacity(0.45), lineWidth: j.character == JellyRoster.pandaID ? 3 : 1.5))
             Text(j.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
             if level == .stranger {
                 Text("not yet").font(SK.font(11, .bold)).foregroundStyle(SK.muted)

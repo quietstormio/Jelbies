@@ -35,6 +35,9 @@ final class ParkBook {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let reserved = Self.reservedNames()
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.integer(forKey: "SeedDupSave") != 0 { Self.writeDuplicateSave(defaults) }          // capture aid: an old save with doubled names, loaded through the real path below
+        #endif
         if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { let fresh = ParkPool.generate()
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
             var vs = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
@@ -61,7 +64,25 @@ final class ParkBook {
         return id
     }
     /// Capture / test aid: set a name directly (no uniqueness check).
-    func setName(_ id: Int, _ name: String) { guard visitors.indices.contains(id) else { return }; visitors[id].name = name; touch(); save() }
+    func setName(_ id: Int, _ name: String) {
+        guard visitors.indices.contains(id) else { return }
+        visitors[id].name = name
+        ParkNames.reconcile(&visitors, reserved: Self.reservedNames())          // any way of putting a name in the book ends reconciled
+        touch(); save()
+    }
+
+    #if targetEnvironment(simulator)
+    /// Capture aid (`-SeedDupSave 1`): writes a pre-fix save: two different-colour visitors named "Zippy", one "Pip", personality words, a "Luma" pair; friends of every character.
+    static func writeDuplicateSave(_ defaults: UserDefaults) {
+        var vs = ParkPool.generate()
+        let names = ["Zippy", "Zippy", "Pip", "Mellow", "Silly", "Luma", "Luma"]
+        for (i, n) in names.enumerated() {
+            vs[i].name = n; vs[i].introduced = true; vs[i].lastSeen = 1
+            for c in 0..<7 { vs[i].friendship[String(c)] = [100, 60, 30, 0][(i + c) % 4] }
+        }
+        if let d = try? JSONEncoder().encode(vs) { defaults.set(d, forKey: key) }
+    }
+    #endif
     func save() {
         guard dirty else { return }
         dirty = false

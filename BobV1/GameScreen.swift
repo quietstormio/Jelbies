@@ -458,7 +458,7 @@ struct GameScreen: View {
                 }
             }
         }
-        // capture aid: -SeedFriends N makes the first N visitors friends of the Jelbies (a mix of levels; two names shared on purpose), -InviteGuest asks one over,
+        // capture aid: -SeedFriends N makes the first N visitors friends of the Jelbies (a mix of levels; with -SeedDupSave 1 the save is written with doubled / reserved names BEFORE the book loads, see ParkBook.init), -InviteGuest asks one over,
         // -OpenTown friends|town opens that Town screen once the room is up (the Friends page / the Groomer tile)
         if d.integer(forKey: "SeedFriends") > 0 {
             for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
@@ -471,7 +471,6 @@ struct GameScreen: View {
                     _ = care.parkBook.add(points: pts, visitor: vid, character: c)
                 }
             }
-            care.parkBook.setName(1, "Zippy"); care.parkBook.setName(4, "Zippy"); care.parkBook.setName(0, "Pip"); care.parkBook.setName(3, "Pip")
         }
         if let t = d.string(forKey: "OpenTown") {
             for _ in 0..<300 where LaunchGate.shared.visible { await sleep(0.1) }
