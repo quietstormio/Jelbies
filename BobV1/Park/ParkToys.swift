@@ -13,10 +13,10 @@ nonisolated enum ParkToys {
     static let seesawUID = 9001, sandUID = 9003, hopscotchUID = 9005, slideUID = 9006
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
         PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.7, z: -2.3, turns: nil),
-        PlacedDecor(uid: sandUID, kind: .sandbox, x: 2.9, z: -1.5, turns: nil),
+        PlacedDecor(uid: sandUID, kind: .sandbox, x: 3.4, z: -1.9, turns: nil),          // (back 0.4 and right 0.5 from the old spot (2.9, -1.5), to give the slide below it more lawn on screen: its back edge is z -2.8, 0.4 clear of the pond's rim (pond (3.5, -4.2) r 1.0), its front rim z -1.0, x 2.15...4.65),
         // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right front (no play tunnel in the park: removed 2026-11-05)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
-        PlacedDecor(uid: slideUID, kind: .slide, x: 2.2, z: 2.2, turns: nil)          // (STRAIGHT: the chute points down the screen toward the camera. The park floor reaches z 6.0 (ParkRoom.configurePark; the roam rows end at 5.78), the rider lands at z 4.39 (2.19 in front of the centre), high enough that a body standing there is above the bottom-centre Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect); the footprint spans x 1.4...3.0, z 0.8...3.6: 1.4 clear of the sandbox's front edge (z -0.6), off the path (its right edge is x 1.1 at z 2.2) and far from the hopscotch court (x -2.1))
+        PlacedDecor(uid: slideUID, kind: .slide, x: 2.2, z: 2.4, turns: nil)          // (STRAIGHT: the chute points down the screen toward the camera. The park floor reaches z 6.0 (ParkRoom.configurePark; the roam rows end at 5.78); the rider lands at z 4.59 (2.19 in front of the centre), the lowest spot where a body standing there is still above the bottom-centre Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect; at z 2.6 it is inside it). Footprint x 1.4...3.0, z 1.0...3.8: 2.0 of lawn behind it to the sandbox's front rim (z -1.0), off the path (its right edge is x 1.1 at z 2.4), far from the hopscotch court (x -2.1))
     ]
     static var placed: [PlacedDecor] { layout }
 }

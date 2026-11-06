@@ -216,8 +216,12 @@ final class HopscotchTests: XCTestCase {
             XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front")
             // the sides of the front row stay reachable
             XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
-            // the slide's rider lands inside a free span, with a body clear of the pill
+            // the slide stands well clear of the sandbox in the world (its back edge against the sandbox's front rim), and the sandbox clears the pond
             DecorField.shared.set(ParkToys.placed)
+            let sandF = DecorField.shared.foot(ParkToys.sandUID)!, slideF = DecorField.shared.foot(ParkToys.slideUID)!
+            XCTAssertGreaterThanOrEqual((slideF.centre.y - DecorKind.slide.spec(quarter: slideF.quarter).half.y) - (sandF.centre.y + DecorKind.sandbox.spec(quarter: sandF.quarter).half.y), 1.0, "\(label): the slide's back is at least 1.0 from the sandbox's front rim")
+            XCTAssertGreaterThanOrEqual(simd_distance(sandF.centre, ParkScenery.pondCentre) - 1.0, 0.3, "\(label): the sandbox's centre is off the pond")
+            // the slide's rider lands inside a free span, with a body clear of the pill
             let sf = DecorField.shared.foot(ParkToys.slideUID)!
             let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))
             let row = rf.zs.indices.min { abs(rf.zs[$0] - landing.y) < abs(rf.zs[$1] - landing.y) }!
