@@ -18,7 +18,9 @@ final class WearBandTests: XCTestCase {
     override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
-    struct Loop { var look: WearLook; var part: String; var verts: [Int]; var y0: [Float]; var edges: [(Int, Int, Float)]; var coverage: Float }
+    struct Loop { var look: WearLook; var part: String; var verts: [Int]; var y0: [Float]; var edges: [(Int, Int, Float)]; var coverage: Float
+        /// The height each vertex must hold: the authored one, plus the necklace tilt (WearLevel.tilt) for a necklace-class piece (chain, pearls, Diamond J); bands, scarves and waistbands stay level.
+        var want: [Float] }
 
     static func axisZ() -> Float {
         let b = WearBody.shared
@@ -58,13 +60,13 @@ final class WearBandTests: XCTestCase {
                 }
                 t += 3
             }
-            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov))
+            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov, want: pts.map { WearLevel.tilts(l) ? WearLevel.targetY(y0: $0.y, az: atan2($0.x, $0.z - zc), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false) : $0.y }))
         }
         return out
     }
 
     /// The small rigid parts of a piece with an encircling loop or a chain of them (pearls, links, gems, flowers, dots, a knot): (first vertex, count, authored mean height).
-    static func smallParts(_ l: WearLook) -> [(first: Int, count: Int, y: Float)] {
+    static func smallParts(_ l: WearLook) -> [(first: Int, count: Int, y: Float)] {          // (y = the height the part's centre must hold: authored + the necklace tilt)
         guard l.slot != .hands, l.slot != .feet, let a = WearMeshes.art(l) else { return [] }
         var out: [(Int, Int, Float)] = []
         var base = 0
@@ -76,7 +78,7 @@ final class WearBandTests: XCTestCase {
             var c = SIMD3<Float>.zero
             for q in pts { c += q }
             c /= Float(pts.count)
-            if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { out.append((base, pts.count, c.y)) }
+            if pts.allSatisfy({ simd_distance($0, c) <= 0.07 }) { out.append((base, pts.count, WearLevel.tilts(l) ? WearLevel.targetY(y0: c.y, az: atan2(c.x, c.z - axisZ()), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false) : c.y)) }
         }
         return out
     }
@@ -207,7 +209,7 @@ final class WearBandTests: XCTestCase {
                             defer { loopEdgeBase += lp.edges.count }
                             for (k, vi) in lp.verts.enumerated() {
                                 let b = Minv * (verts[vi] - c.centroid) + c.restCentroid
-                                let dy = abs(b.y - lp.y0[k])
+                                let dy = abs(b.y - lp.want[k])
                                 if dy > w.dy { w.dy = dy; w.dyWhere = "\(tag) \(lp.part) v\(vi)" }
                                 let (d, owner) = field.sdOwner(verts[vi])
                                 if owner.hasPrefix("egg") { if -d > w.inside { w.inside = -d; w.insideWhere = "\(tag) \(lp.part) v\(vi)" } }
