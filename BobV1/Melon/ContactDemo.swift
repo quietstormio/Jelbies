@@ -181,6 +181,7 @@ enum ContactDemo {
             let ids = d.string(forKey: "ContactDemoIds").map { $0.split(separator: ",").compactMap { Int($0) } } ?? Array(actors.indices)
             cast = ids.compactMap { actors.indices.contains($0) ? actors[$0] : nil }.filter { $0.brain != nil }
         }
+        if name == "soccerKick" { await soccerKickScene(care: care, cast: cast); return }          // (capture aid: ONE Jelbie, a ball, one kick)
         guard cast.count >= 2 else { note(" cast too small (%d)", cast.count); return }
         for a in cast { a.brain?.autonomy = false; a.brain?.idleForced = true }
         if name != "lieDown" && name != "flop" && name != "sleepPile" { Task { @MainActor in await keepNeedsFull(cast) } }          // (a full-needs Jelbie may not lie down at all)
@@ -243,5 +244,38 @@ enum ContactDemo {
         let ok = ab.socialStart(kind, with: bb, a.sim)
         note(" %@ started=%d", name, ok ? 1 : 0)
         await logSpan(ok, ab, cast.compactMap(\.brain), kind: kind)
+    }
+
+    /// `-ContactDemo soccerKick` (one Jelbie): places the store's soccer ball, sends him to kick it and logs the wall-clock time of the kick (" fire epoch=") and, every ~40 ms,
+    /// each sole's distance from its stand spot (" leg epoch= ext0= ext1="), so a screen recording can be lined up with the leg.
+    @MainActor static func soccerKickScene(care: GameCare, cast: [JellyActor]) async {
+        guard let a = cast.first, let b = a.brain else { note(" soccerKick: no Jelbie"); return }
+        care.store.grant("decor-soccerball")
+        let placed = care.store.place("decor-soccerball")
+        note(" soccerKick ball placed=%d", placed != nil ? 1 : 0)
+        DecorField.shared.set(care.store.placedDecor)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        b.soccerModeForce = 0; b.idleForced = true; b.autonomy = false
+        let ok = b.idleStart(.soccerKick, a.sim)
+        note(" soccerKick started=%d", ok ? 1 : 0)
+        note(" startEpoch=%.3f", Date().timeIntervalSince1970)
+        var fired = false, i = 0
+        while i < 1000 {
+            try? await Task.sleep(nanoseconds: 40_000_000); i += 1
+            let now = Date().timeIntervalSince1970
+            if !fired, b.idleState.kind == .soccerKick, b.idleState.soccer.fired { fired = true; note(" fire epoch=%.3f", now) }
+            if fired {
+                let e = (0..<2).map { simd_distance(b.feet.pos[$0], SIMD2(b.px, b.pz) + rotXZ(b.geom.off[$0], b.yaw)) }
+                note(" leg epoch=%.3f ext0=%.3f ext1=%.3f", now, e[0], e[1])
+                if i > 0, b.idleState.kind == nil { break }
+            }
+        }
+        // 4 s after the move ends (a later move may re-plant the foot: say so)
+        for _ in 0..<100 {
+            try? await Task.sleep(nanoseconds: 40_000_000)
+            let e = (0..<2).map { simd_distance(b.feet.pos[$0], SIMD2(b.px, b.pz) + rotXZ(b.geom.off[$0], b.yaw)) }
+            note(" leg epoch=%.3f ext0=%.3f ext1=%.3f after-move", Date().timeIntervalSince1970, e[0], e[1])
+        }
+        note(" endEpoch=%.3f", Date().timeIntervalSince1970)
     }
 }

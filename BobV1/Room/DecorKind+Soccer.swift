@@ -26,6 +26,9 @@ nonisolated enum SoccerTuning {
     static let stompReach: Float = 0.27
     static let stompRate: Float = 3.0
     static let stompPeak: Float = 0.07
+    /// The return step: the kicking foot comes back under him right after contact (a quick eased step, ~0.25 s; the swing is 0.8 of it, so the sole is down ~0.2 s after it starts).
+    static let returnRate: Float = 4.0
+    static let returnPeak: Float = 0.045
     /// The toe reaches the ball from this far (root to ball centre).
     static let kickReach: Float = 1.15
     /// Dribble: the ball is kept about this far ahead; a nudge on each footfall aims for `dribbleAhead` plus a stride.

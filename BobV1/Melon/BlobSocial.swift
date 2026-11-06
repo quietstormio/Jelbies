@@ -118,6 +118,8 @@ struct SocialBook {
     var handEl: [Float] = [0.15, 0.15], handSa: [Float] = [0, 0]
     var stopAll = false
     var apartStarted = false, sheepishStarted = false, hopStarted = false, hopStarted2 = false
+    /// The pass kick's stomp foot and whether it has come back under him (BlobSocial+Soccer.swift).
+    var soccerStompSide = 0, soccerReturned = false
     /// ringAround: this one has walked out to his spot on the ring.
     var ringSpread = false
     var started: [SocialKind: Int] = [:]
