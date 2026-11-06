@@ -27,6 +27,32 @@ nonisolated enum WearLevel {
     /// pointing straight out would need a tent as long as the arm): the amount fades smoothly between them.
     static let neighbourhood: Float = 0.06, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
 
+    // MARK: the necklace tilt
+    /// Necklace-class pieces (chains, pearl strings, the Diamond J) are kept on a TILTED loop in the body frame instead of a level one. The front centre keeps its authored height
+    /// (`WearPrepared.tiltFrontY`: the pendant does not move on the chest); from `tiltFrom` rad of azimuth off the front (just past the mouth keep-out) the loop rises smoothly (C1,
+    /// smoothstep) to `tiltSideY` over the arm tops (complete at `tiltSideAt`, the arm roots), and on to `tiltBackY` at the very back (slightly higher than at the sides). Over the
+    /// rising part the authored height variation fades out (the art was drawn with its own sag) so every body sees the same clean curve. Bands, scarves, collars and waistbands stay level.
+    nonisolated(unsafe) static var tiltOn = ProcessInfo.processInfo.environment["WEARBAND_TILT"] != "off"
+    /// Absolute loop heights (m, body frame) at the sides (the arm tops reach ~0.605; a link's radius is ~1.5 cm) and at the back.
+    nonisolated(unsafe) static var tiltSideY: Float = 0.645, tiltBackY: Float = 0.665
+    static let tiltFrom: Float = 0.44, tiltSideAt: Float = 1.48
+    /// The inner edge of a rigid link / gem / pearl is brought to this distance (m) from the skin at rest (the chain hugs the body).
+    static let hugGap: Float = 0.002
+    static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .chainGold || l == .diamondJ || l == .pearls) }
+    @inline(__always) private static func smooth(_ x: Float) -> Float { let u = min(max(x, 0), 1); return u * u * (3 - 2 * u) }
+    /// 0 at the front (up to `tiltFrom`), 1 from the arm roots round the back.
+    static func tiltWeight(az: Float) -> Float { smooth((abs(az) - tiltFrom) / (tiltSideAt - tiltFrom)) }
+    /// The height of the tilted loop at azimuth `az` (0 = front centre, +-pi = back centre) for a loop whose front centre is at `yFront`.
+    static func loopY(az: Float, yFront: Float) -> Float {
+        let w1 = tiltWeight(az: az), w2 = smooth((abs(az) - tiltSideAt) / (Float.pi - tiltSideAt))
+        return yFront + (tiltSideY - yFront) * w1 + (tiltBackY - tiltSideY) * w2
+    }
+    /// Where a point authored at height `y0` and azimuth `az` goes: a hanging part (a pendant) keeps its authored offset below the loop point; the loop itself fades its authored sag out.
+    static func targetY(y0: Float, az: Float, yFront: Float, hanging: Bool) -> Float {
+        let rise = loopY(az: az, yFront: yFront) - yFront
+        return hanging ? y0 + rise : yFront + rise + (y0 - yFront) * (1 - tiltWeight(az: az))
+    }
+
     /// Tests: when set, `emit` records per vertex of the last piece how far the bulge moved it (`recBulge`) and how far the limb would have had to be cleared (`recRaw`; >= `bulgeFull` = an arm swallows it and is drawn over it).
     nonisolated(unsafe) static var record = false
     nonisolated(unsafe) static var recBulge: [Float] = [], recRaw: [Float] = []
@@ -71,21 +97,60 @@ nonisolated enum WearLevel {
         guard p.levelPiece else { return }
         let zc = body.axisZ
         let floorOff: Float = -0.004                                            // (as the old seat: a string may sit 4 mm into the skin)
-        func dirExcess(_ r: SIMD3<Float>, fallback: SurfaceBind) -> (dir: SIMD2<Float>, excess: Float, bind: SurfaceBind) {
+        /// The stand-off is read at the AUTHORED height (it is the piece's own thickness), the skin point it is bound to at the loop's (tilted) height.
+        func dirExcess(_ r: SIMD3<Float>, hang: Bool, fallback: SurfaceBind) -> (dir: SIMD2<Float>, excess: Float, bind: SurfaceBind) {
             let o = SIMD2(r.x, r.z - zc), l = max(simd_length(o), 1e-5), d = o / l
-            if let h = body.radialHit(dir: d, y: r.y) { return (d, max(l - h.rho, floorOff), h.bind) }
+            let lift = lifted(r, hang: hang)
+            if let h = body.radialHit(dir: d, y: r.y) {
+                if lift != 0, let h2 = body.radialHit(dir: d, y: r.y + lift) { return (d, max(l - h.rho, floorOff), h2.bind) }
+                return (d, max(l - h.rho, floorOff), h.bind)
+            }
             let f = body.restFoot(fallback)
             return (d, l - simd_length(SIMD2(f.x, f.z - zc)), fallback)
         }
+        // the tilted loop: where its front centre is (the mean authored height of the loop's own, non-hanging vertices within 0.3 rad of the front)
+        if p.tilted {
+            var sum: Float = 0, cnt: Float = 0
+            for i in 0..<p.rest.count where p.level[i] && p.h[i] == 0 && abs(atan2(p.rest[i].x, p.rest[i].z - zc)) < 0.3 { sum += p.rest[i].y; cnt += 1 }
+            p.tiltFrontY = cnt > 0 ? sum / cnt : p.pivot.y
+        }
+        /// How far the tilt moves a point authored at `q` (0 for a level piece).
+        func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang) - q.y : 0 }
         p.lvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.rest.count)
         p.clusterLvBind = [SurfaceBind](repeating: SurfaceBind(), count: p.partNames.count)
         for i in 0..<p.rest.count where p.level[i] {
-            let r = dirExcess(p.rest[i], fallback: p.bind[i]); p.lvDir[i] = r.dir; p.lvExcess[i] = r.excess; p.lvBind[i] = r.bind; p.lvY0[i] = p.rest[i].y
+            let hang = p.h[i] > 0
+            let r = dirExcess(p.rest[i], hang: hang, fallback: p.bind[i]); p.lvDir[i] = r.dir; p.lvExcess[i] = r.excess; p.lvBind[i] = r.bind; p.lvY0[i] = p.rest[i].y + lifted(p.rest[i], hang: hang)
+        }
+        if p.tilted {
+            // a chain link that is levelled per vertex (too big to be a rigid cluster) hugs too: its whole vertex set moves in by what its innermost vertex stands off the skin
+            for k in p.partNames.indices where p.partNames[k].hasPrefix("link") && !(p.clusterRep.indices.contains(k) && p.clusterRep[k] >= 0) {
+                let vs = (0..<p.rest.count).filter { Int(p.partOfVertex[$0]) == k && p.level[$0] && p.h[$0] == 0 }
+                guard vs.count >= 8, let lo = vs.map({ p.lvExcess[$0] }).min(), lo > hugGap else { continue }
+                for v in vs { p.lvExcess[v] = max(p.lvExcess[v] - (lo - hugGap), floorOff) }
+            }
         }
         for k in p.partNames.indices where p.clusterRep.indices.contains(k) && p.clusterRep[k] >= 0 && p.level[Int(p.clusterRep[k])] {
             let c = p.clusterCentre[k]
-            let r = dirExcess(c, fallback: p.clusterBind[k])
-            p.clusterLevel[k] = true; p.clusterDir[k] = r.dir; p.clusterExcess[k] = r.excess; p.clusterLvBind[k] = r.bind; p.clusterY0[k] = c.y
+            let hang = p.h[Int(p.clusterRep[k])] > 0
+            let r = dirExcess(c, hang: hang, fallback: p.clusterBind[k])
+            var excess = r.excess
+            if p.tilted {
+                // hug: the rigid part's inner edge (its lowest vertex above the rest skin, radially) is brought to `hugGap` from the skin; it is never pushed further out than authored
+                // (measured where the part ends up: raised by the tilt, the part rides the rest skin at its new height - on the sloping shoulder too)
+                let lift = lifted(c, hang: hang)
+                let lc = simd_length(SIMD2(c.x, c.z - zc))
+                if !hang, let hc = body.radialHit(dir: r.dir, y: c.y + lift) {
+                    var low = Float.infinity                                          // (how far the lowest vertex of the part sits outside the skin when the centre stands ON the skin)
+                    for v in 0..<p.rest.count where Int(p.partOfVertex[v]) == k {
+                        let o = SIMD2(p.rest[v].x, p.rest[v].z - zc), l = simd_length(o)
+                        guard l > 1e-4, let h = body.radialHit(dir: o / l, y: p.rest[v].y + lift) else { continue }
+                        low = min(low, hc.rho + (l - lc) - h.rho)
+                    }
+                    if low.isFinite { excess = min(excess, max(hugGap - low, floorOff)) }
+                }
+            }
+            p.clusterLevel[k] = true; p.clusterDir[k] = r.dir; p.clusterExcess[k] = excess; p.clusterLvBind[k] = r.bind; p.clusterY0[k] = c.y + lifted(c, hang: hang)
         }
         // the nodes: levelled vertices outside the rigid small parts, plus each rigid small part's centre
         p.nodeVertex = []; p.nodeCluster = []; p.nodeBind = []; p.nodeY0 = []; p.nodeDir = []; p.nodeRho0 = []
@@ -93,13 +158,13 @@ nonisolated enum WearLevel {
         var pos: [SIMD3<Float>] = []
         for k in p.partNames.indices where p.clusterLevel[k] {
             p.clusterNode[k] = Int32(p.nodeBind.count)
-            p.nodeVertex.append(-1); p.nodeCluster.append(Int32(k)); p.nodeBind.append(p.clusterLvBind[k]); p.nodeY0.append(p.clusterY0[k]); p.nodeDir.append(p.clusterDir[k]); pos.append(p.clusterCentre[k])
+            p.nodeVertex.append(-1); p.nodeCluster.append(Int32(k)); p.nodeBind.append(p.clusterLvBind[k]); p.nodeY0.append(p.clusterY0[k]); p.nodeDir.append(p.clusterDir[k]); pos.append(p.clusterCentre[k] + SIMD3(0, lifted(p.clusterCentre[k], hang: p.h[Int(p.clusterRep[k])] > 0), 0))
         }
         for i in 0..<p.rest.count where p.level[i] {
             let k = Int(p.partOfVertex[i])
             if p.clusterLevel.indices.contains(k), p.clusterLevel[k] { continue }
             p.lvNode[i] = Int32(p.nodeBind.count)
-            p.nodeVertex.append(Int32(i)); p.nodeCluster.append(-1); p.nodeBind.append(p.lvBind[i]); p.nodeY0.append(p.lvY0[i]); p.nodeDir.append(p.lvDir[i]); pos.append(p.rest[i])
+            p.nodeVertex.append(Int32(i)); p.nodeCluster.append(-1); p.nodeBind.append(p.lvBind[i]); p.nodeY0.append(p.lvY0[i]); p.nodeDir.append(p.lvDir[i]); pos.append(p.rest[i] + SIMD3(0, lifted(p.rest[i], hang: p.h[i] > 0), 0))
         }
         for b in p.nodeBind { let f = body.restFoot(b); p.nodeRho0.append(simd_length(SIMD2(f.x, f.z - zc))) }          // (the rest skin radius under each node)
         // neighbours (a uniform grid on the authored positions)
@@ -149,7 +214,8 @@ nonisolated enum WearLevel {
         var delta = raw
         for j in 0..<n { delta[j] = raw[j] - p.nodeRho0[j] }
         var dil = delta
-        for j in 0..<n { var m = delta[j]; for k in p.nodeNbr[j] { m = max(m, delta[Int(k)]) }; dil[j] = m }
+        // (a necklace HUGS the skin: it is only averaged, not dilated to the highest skin bump within reach - the dilation would hold it up to 2 cm off the chest while the belly squashes)
+        if !p.tilted { for j in 0..<n { var m = delta[j]; for k in p.nodeNbr[j] { m = max(m, delta[Int(k)]) }; dil[j] = m } }
         var out = dil
         for j in 0..<n { var s: Float = 0; for k in p.nodeNbr[j] { s += dil[Int(k)] }; out[j] = p.nodeRho0[j] + s / Float(max(p.nodeNbr[j].count, 1)) }
         return out
