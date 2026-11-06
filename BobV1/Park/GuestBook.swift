@@ -123,6 +123,8 @@ final class GuestBook {
     var welcomeAt: Double = 0
     @ObservationIgnored var arrival = ArrivalClock()
     @ObservationIgnored var arrivalTarget: SIMD2<Float>?
+    /// The welcome party after the hug (Park/GuestParty.swift).
+    @ObservationIgnored var party = GuestParty()
     /// The hug waits this long (seconds) for a guest still running.
     @ObservationIgnored var hugWait: Float?
     @ObservationIgnored private let defaults: UserDefaults
@@ -194,6 +196,6 @@ final class GuestBook {
     }
     /// The visit is over (he has gone).
     func finish() {
-        visit = nil; card = false; arrival.cancel(); arrivalCard = .hidden; arrivalDim = false; hugWait = nil; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
+        visit = nil; card = false; party.cancel(); arrival.cancel(); arrivalCard = .hidden; arrivalDim = false; hugWait = nil; phase = .away; stage = 0; phaseT = 0; greeted = false; friendSession = [:]; save()
     }
 }

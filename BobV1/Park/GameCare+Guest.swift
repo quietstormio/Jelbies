@@ -130,6 +130,7 @@ extension GameCare {
 
         // an outing sends the body away (the visit goes on)
         if guestOuting {
+            g.party.cancel()
             if g.arrival.active || g.arrivalCard != .hidden { guestArrivalCancel() }
             if g.actor != nil { guestRemove(); g.phase = .away }
             return
@@ -154,6 +155,7 @@ extension GameCare {
         g.phaseT += dt
         visitorLook(a, v, dt: dt, sleepLocked: false)
         guestFriends(actors, a, v, dt: dt)
+        if g.party.active { guestPartyStep(actors, a, dt: dt) }          // (the welcome party after the hug)
         if g.arrival.active || g.hugWait != nil { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment drives him until it is done
 
         // the end of the visit
@@ -173,6 +175,7 @@ extension GameCare {
         if let a = g.actor { visitorPutAway(a); parkBook.clear?() }
         g.actor = nil
         g.card = false
+        g.party.cancel()
     }
 
     /// True = he comes in through the door (not already inside because the visit is over / the Jelbies are asleep).
@@ -322,7 +325,7 @@ extension GameCare {
     private func guestBeginLeaving(_ actors: [JellyActor], _ a: JellyActor, _ v: ParkVisitor) {
         let g = guestBook
         guard g.phase != .leaving else { return }
-        g.phase = .leaving; g.stage = 0; g.phaseT = 0; g.card = false
+        g.phase = .leaving; g.stage = 0; g.phaseT = 0; g.card = false; g.party.cancel()
         a.brain?.abortAll(a.sim, a.skinner)
         a.brain?.autonomy = false
     }
