@@ -28,6 +28,11 @@ final class RaceBook {
     var parked: [Int] = []
     /// Rival body colours while they race, by actor id.
     var palettes: [Int: Palette] = [:]
+    /// Temporary rival bodies (the stage's `parkActors`, ids after the roster's) while a roster of fewer than three races, with the spec each wears; gone when the trip is over.
+    var extra: [JellyActor] = []
+    var extraSpecs: [ParkVisitor] = []
+    /// Bodies whose jersey the wear refresh has set (so it can clear it once they are gone).
+    var jerseyBodies: Set<Int> = []
     /// The welcome home: who came back, whether he won, and how far it has got.
     var returner: Int?
     var won = false
@@ -94,10 +99,16 @@ extension GameCare {
         if focus.isActive || focus.phase != .roaming { return "He is in the close-up. Let him go first." }
         if raceWait != nil { return "Waking everybody up." }
         if raceBook.returner != nil { return "Welcome him home first." }
+        if guestBook.present, Self.temporaryRivalBodies(roster: max(jellies.count, 1)) > 0 { return "A friend is over. Let him go home first." }          // (the track's extra rivals use the same spare bodies as the guest)
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "He is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "He is not in the room." }
         return nil
     }
+    /// The track meet is always three racers: the player and two rivals, whatever the size of the roster.
+    static let raceRivalCount = 2
+    /// How many temporary rival bodies a roster of `roster` Jelbies needs (the others of the roster race as rivals first).
+    static func temporaryRivalBodies(roster: Int) -> Int { max(raceRivalCount - max(roster - 1, 0), 0) }
+
     /// "Race" is available for this Jelly: nothing else is going on.
     func canRace(jelly id: Int) -> Bool { raceBlocker(jelly: id) == nil }
 
@@ -140,7 +151,7 @@ extension GameCare {
             race.beginDrill(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus), seed: seed ?? Self.raceSeed)
             return
         }
-        let rivals = max(min(raceBook.actors.count, 3) - 1, 0)
+        let rivals = Self.raceRivalCount          // always two rivals: a short roster borrows temporary bodies for them at the track (raceSwap)
         race.stats = prof.stats
         race.playerCharacter = prof.character
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
@@ -170,9 +181,11 @@ extension GameCare {
             guard let sim = race.sim else { return }
             let player = race.playerID
             let others = book.actors.indices.filter { $0 != player }
-            book.racers = ([player] + others).prefix(sim.racers.count).map { $0 }
+            raceSpawnExtras(missing: max(sim.racers.count - 1 - others.count, 0), from: race.rivals.count - max(sim.racers.count - 1 - others.count, 0))
+            book.racers = ([player] + others + book.extra.map(\.id)).prefix(sim.racers.count).map { $0 }
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]
             book.parked = book.actors.indices.filter { !book.racers.contains($0) }
+            let all = book.actors + book.extra          // (bodies are indexed by id: the roster's, then the temporary rivals')
             for aid in book.parked {                 // practising alone: the others wait far off the track, and come back where they stood
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
@@ -185,8 +198,8 @@ extension GameCare {
             }
             let course = sim.course
             book.follow = nil
-            for (k, aid) in book.racers.enumerated() where book.actors.indices.contains(aid) {
-                let a = book.actors[aid]
+            for (k, aid) in book.racers.enumerated() where all.indices.contains(aid) {
+                let a = all[aid]
                 guard let brain = a.brain else { continue }
                 let r = sim.racers[k]
                 book.homes[aid] = a.floor
@@ -200,6 +213,7 @@ extension GameCare {
                 if k > 0, k - 1 < race.rivals.count { book.palettes[aid] = LocalRivalSource.palette(for: race.rivals[k - 1].tint, name: race.rivals[k - 1].name) }
             }
         case .room:
+            raceRemoveExtras()
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
             for aid in book.racers + book.parked where book.actors.indices.contains(aid) {
@@ -227,12 +241,39 @@ extension GameCare {
         }
     }
 
+    /// A short roster races with temporary rival bodies: the park's visitor bodies (the stage's `parkActors`, like the café regulars and the beach opponents), named and tinted from
+    /// the race's rivals `first...` and given the species signature of their colour (purple = wings, yellow = tail + spikes, green = daisy, else none). Removed by `raceRemoveExtras`.
+    private func raceSpawnExtras(missing: Int, from first: Int) {
+        let book = raceBook
+        guard missing > 0, book.extra.isEmpty, let spawn = parkBook.spawn, race.rivals.indices.contains(first) else { return }
+        let specs: [ParkVisitor] = (first..<min(first + missing, race.rivals.count)).map { i in
+            let r = race.rivals[i]
+            return ParkVisitor(id: 9000 + i, name: r.name, colour: .cream, signature: LocalRivalSource.signature(forTint: r.tint), wear: nil, style: .balanced, blurb: "", greeting: "")
+        }
+        let bodies = spawn(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) })
+        guard bodies.count == specs.count, bodies.enumerated().allSatisfy({ $0.element.id == book.actors.count + $0.offset }) else { parkBook.clear?(); return }
+        book.extra = bodies; book.extraSpecs = specs
+        for a in bodies { a.sim.arenaRadius = .infinity }
+    }
+
+    /// The temporary rival bodies go (the swap home, under the white): looks put away, bodies hidden, nothing left at home.
+    func raceRemoveExtras() {
+        let book = raceBook
+        guard !book.extra.isEmpty else { return }
+        for a in book.extra { a.brain?.endRace(); a.brain?.abortScript(a.sim, a.skinner); visitorPutAway(a) }
+        parkBook.clear?()
+        book.racers.removeAll { id in book.extra.contains { $0.id == id } }
+        book.palettes = book.palettes.filter { k, _ in !book.extra.contains { $0.id == k } }
+        book.extra = []; book.extraSpecs = []
+    }
+
     /// The follow camera of a curved course this frame (nil: the Puddle's fixed frame, the drill's own follow, or no race): the leader and the
     /// player framed together from a little way down the track, smoothed by `dt`. See Race/RaceCamera.swift.
     func raceFollow(_ actors: [JellyActor], dt: Float) -> RaceFollowPose? {
         let book = raceBook
         guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight, !A11ySettings.shared.reduceMotion else { book.follow = nil; return nil }          // (Reduce Motion: the wide fixed frame, no banking follow camera)
         var spots: [RaceFollowPose.Racer] = []
+        let actors = book.extra.isEmpty ? actors : actors + book.extra
         for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
             guard let b = actors[aid].brain else { continue }
             spots.append(RaceFollowPose.Racer(pos: SIMD2(b.px, b.pz), s: sim.racers[k].dist, isPlayer: k == 0))
@@ -263,7 +304,9 @@ extension GameCare {
         if !race.active, let l = live, l.raceLive { l.raceFinished(place: 0, drops: 0) }          // a trip that ended without results (abort): the card goes quietly
         guard race.active else { return }
         let book = raceBook
-        func body(_ i: Int) -> JellyActor? { book.racers.indices.contains(i) && actors.indices.contains(book.racers[i]) ? actors[book.racers[i]] : nil }
+        let all = book.extra.isEmpty ? actors : actors + book.extra          // (the temporary rivals' ids continue after the roster's)
+        func body(_ i: Int) -> JellyActor? { book.racers.indices.contains(i) && all.indices.contains(book.racers[i]) ? all[book.racers[i]] : nil }
+        for (a, v) in zip(book.extra, book.extraSpecs) { visitorLook(a, v, dt: dt, role: wearRole(for: a.id)) }          // their species signature and team jersey
         if race.phase == .racing, race.sim != nil {
             for i in book.racers.indices {
                 guard let a = body(i), let b = a.brain else { continue }

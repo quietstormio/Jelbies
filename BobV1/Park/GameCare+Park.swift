@@ -138,14 +138,14 @@ extension GameCare {
     }
 
     /// One visitor's looks for this step (the park's visitors, and the guest at home).
-    func visitorLook(_ a: JellyActor, _ v: ParkVisitor, dt: Float, sleepLocked: Bool = true) {
+    func visitorLook(_ a: JellyActor, _ v: ParkVisitor, dt: Float, sleepLocked: Bool = true, role: WearRaceRole = .none) {
         guard let b = a.brain else { return }
         b.idleMood = .happy
         b.sleepLocked = sleepLocked
         b.feature = v.signature
         var outfit: [WearSlot: WearLook] = [:]
         if let w = v.wear { outfit[w.slot] = w }
-        wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: .none, hideAll: false, dt: dt)
+        wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: role, hideAll: false, dt: dt)
         features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
         if let s = features.slot(a.id) {
             b.wingsFolded = v.signature == .wings && s.fit.folded

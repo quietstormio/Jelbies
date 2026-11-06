@@ -93,8 +93,12 @@ extension GameCare {
     }
 
     /// After the frame's skinning: the wardrobe (carried by the bodies' poses and skins now) goes to the room, the jersey colours to the body renderer.
-    func refreshWear(_ actors: [JellyActor], renderer: MelonRenderer?, time: Float) {
+    func refreshWear(_ actors: [JellyActor], extra: [JellyActor] = [], renderer: MelonRenderer?, time: Float) {
         guard let renderer, let room = renderer.room else { return }
+        let book = raceBook, extraIDs = Set(extra.map(\.id))          // the track's temporary rivals wear their team jersey too; cleared once they are gone
+        if !book.extra.isEmpty { for a in extra where book.extra.contains(where: { $0.id == a.id }) { renderer.setJersey(wardrobe.jersey(a.id), body: a.id) } }
+        for id in book.jerseyBodies.subtracting(book.extra.isEmpty ? [] : extraIDs) { renderer.setJersey(nil, body: id) }
+        book.jerseyBodies = book.extra.isEmpty ? [] : Set(book.extra.map(\.id))
         if wardrobe.body == nil { wardrobe.body = WearBody.shared }
         for a in actors where wardrobe.slot(a.id)?.items.values.contains(where: { $0.scale > 0.001 }) == true || wardrobe.slot(a.id)?.bib != nil { wardrobe.syncCarry(a.id, sim: a.sim) }          // same-frame pose for rigid parts
         for a in actors where wardrobe.shown(a.id, .hands) != nil { wardrobe.setArms(a.id, armFrames(a)) }

@@ -176,6 +176,15 @@ nonisolated struct LocalRivalSource: RivalSource {
         default: return SIMD3(v, p, q)
         }
     }
+    /// The species signature a rival body of this tint wears (the signature rule: purple = wings, yellow = tail + spikes, green = daisy, every other colour none).
+    static func signature(forTint c: SIMD3<Float>) -> JellyFeature {
+        let h = hue(of: c)
+        if h >= 0.60 && h < 0.85 { return .wings }
+        if h >= 0.10 && h < 0.17 { return .spines }
+        if h >= 0.17 && h < 0.45 { return .daisy }
+        return .none
+    }
+
     static func hue(of c: SIMD3<Float>) -> Float {
         let mx = max(c.x, c.y, c.z), mn = min(c.x, c.y, c.z), d = mx - mn
         guard d > 1e-5 else { return 0 }
