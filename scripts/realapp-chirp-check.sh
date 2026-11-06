@@ -66,7 +66,7 @@ for l in lines:
     if x is None or not (lo <= x < hi): continue
     if "[audio] chirp " in l: chirps += 1
     m = re.search(r"\[audio\] req (\S+) slot \S+ -> (.*)$", l)
-    if m: hist[(m.group(1), m.group(2).split(" ")[0] if m.group(2).startswith(("level", "scene")) else m.group(2))] += 1
+    if m: hist[(m.group(1), m.group(2).split(" ")[0] if m.group(2).startswith(("level", "scene", "PLAYED")) else m.group(2))] += 1
     m = re.search(r"(\d+) steps\), skin", l)
     if m: steps += int(m.group(1))
 sim_s = steps / 60.0

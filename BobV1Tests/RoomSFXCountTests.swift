@@ -19,6 +19,8 @@ final class RoomSFXCountTests: XCTestCase {
         return d
     }
 
+    private func lab0Feature(_ chars: [Int]?, _ i: Int) -> String { chars.flatMap { i < $0.count ? JellyRoster.feature($0[i]).rawValue : nil } ?? "none" }
+
     func testCountRoomSoundRequests() {
         var counts: [String: Int] = [:]
         if ProcessInfo.processInfo.environment["SFXCOUNT_NOLOOKAHEAD"] != nil { ContactTuning.lookAhead = false }          // NEWONLY (diagnosis knob)
@@ -29,14 +31,20 @@ final class RoomSFXCountTests: XCTestCase {
         var simNow = 0.0; HapticDriver.clock = { simNow }; HapticDriver.after = { _, f in f() }          // NEWONLY
         defer { HapticDriver.room = nil; HapticDriver.clock = { CACurrentMediaTime() }; HapticDriver.after = { d, f in DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }; HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) } }          // NEWONLY
         var total: [String: Int] = [:]
+        // diagnosis (2026-11-05, "they are almost silent"): per Jelbie slot, who asked for a chirp (the caller tag) and what idle picks started. SOAK_CHARS=4,6,4 gives the three
+        // rigs those characters' features (Teddy 4, Panda 6); the baseline gate is skipped then (a different roster has no baseline).
+        let soakChars = ProcessInfo.processInfo.environment["SOAK_CHARS"].map { $0.split(separator: ",").compactMap { Int($0) } }
+        var perSlot: [[String: Int]] = [[:], [:], [:]]
+        AudioHub.requestSrcTap = { what, slot in perSlot[min(max(slot, 0), 2)][what, default: 0] += 1 }
+        defer { AudioHub.requestSrcTap = nil }
         for seed in Self.seeds {
             counts = [:]
             let lab = SocialTests.Lab(n: 3, quiet: false, seed: seed)
-            for (i, r) in lab.rigs.enumerated() { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i) }
+            for (i, r) in lab.rigs.enumerated() { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i); if let c = soakChars, i < c.count { r.brain.feature = JellyRoster.feature(c[i]) } }
             var lastKind: [IdleKind?] = Array(repeating: nil, count: 3)
             for _ in 0..<(180 * 60) {
                 lab.tick(); simNow += 1.0 / 60          // NEWONLY (simNow)
-                for (i, r) in lab.rigs.enumerated() { let k = r.brain.idleState.kind; if k != lastKind[i] { if let k { counts["idle:\(k)", default: 0] += 1 }; lastKind[i] = k } }
+                for (i, r) in lab.rigs.enumerated() { let k = r.brain.idleState.kind; if k != lastKind[i] { if let k { counts["idle:\(k)", default: 0] += 1; perSlot[i]["pick:\(k)", default: 0] += 1; perSlot[i]["pick:ANY", default: 0] += 1 }; lastKind[i] = k } }
             }
             for ev in lab.events.flatMap({ $0 }) {
                 switch ev {
@@ -51,6 +59,14 @@ final class RoomSFXCountTests: XCTestCase {
         }
         let line = "ROOMSFX " + total.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
         print(line); MotionLog.write(line)
+        let simMinutes = Double(Self.seeds.count) * 3          // (per Jelbie slot: 5 seeds x 3 min)
+        for i in 0..<3 {
+            let d = perSlot[i], chirps = d.filter { $0.key.hasPrefix("chirp:") }.sorted { $0.key < $1.key }.map { "\($0.key)=\(String(format: "%.2f", Double($0.value) / simMinutes))" }.joined(separator: " ")
+            let idleChirp = Double(d["pick:chirp", default: 0]) / simMinutes, any = Double(d["pick:ANY", default: 0]) / simMinutes
+            print("CHIRPSRC slot \(i) feature \(lab0Feature(soakChars, i)) per sim-minute: idleChirpStarts=\(String(format: "%.2f", idleChirp)) idlePicksAny=\(String(format: "%.2f", any)) requests: \(chirps)")
+            print("PICKS slot \(i) per sim-minute: " + d.filter { $0.key.hasPrefix("pick:") }.sorted { $0.key < $1.key }.map { "\($0.key.dropFirst(5))=\(String(format: "%.2f", Double($0.value) / simMinutes))" }.joined(separator: " "))
+        }
+        if soakChars != nil { return }
         try? line.write(toFile: ProcessInfo.processInfo.environment["SFXCOUNT_OUT"] ?? "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/sfx_last.txt", atomically: true, encoding: .utf8)
         XCTAssertGreaterThan(total["jump", default: 0], 0)
         // the new solo emotes are additions on top: they still happen, rarely (about one per 3 Jelbie-minutes)

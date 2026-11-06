@@ -206,8 +206,8 @@ extension GameCare {
         let line = book.line(vid, level)
         let kind = level == .best ? "best friends" : level == .friend ? "friends" : "pals"
         park.say("\(prof.name) and \(v.name) are now \(kind)! \"\(line)\"")
-        AudioHub.shared.chirp(jelly: slot, .happy)
-        AudioHub.shared.chirp(jelly: visitorBody.id, .happy)
+        AudioHub.shared.chirp(jelly: slot, .happy, src: "park")
+        AudioHub.shared.chirp(jelly: visitorBody.id, .happy, src: "park")
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
         for brain in [parkBook.roster[slot].brain, visitorBody.brain] {
             guard let b = brain, b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script else { continue }
@@ -260,7 +260,7 @@ extension GameCare {
         park.showGift(friend: v.name, itemID: item.id)
         A11yAnnounce.say("Gift from \(v.name)! \(item.name). Added to your bag.")
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
-        AudioHub.shared.chirp(jelly: slot, .happy)
+        AudioHub.shared.chirp(jelly: slot, .happy, src: "park")
         if book.actors.indices.contains(gi), let b = book.actors[gi].brain { b.face(.joyArc, hold: 2.5); b.startHopPlay(sim: book.actors[gi].sim, distance: 0.0001) }
         if book.roster.indices.contains(slot), let rb = book.roster[slot].brain {          // the receiver cheers
             rb.face(.joyArc, hold: 2.5)

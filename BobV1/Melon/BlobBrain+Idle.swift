@@ -31,7 +31,9 @@ enum IdleTuning {
     /// Seconds between forced zoomies / runs while awake in the daytime and not grumpy (a visible burst every few minutes). Vars so the suites can shorten it.
     nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 30...55
     /// Seconds between the solo emotes (the treat slot, 2026-11-02): about one per 3 minutes per Jelbie.
-    nonisolated(unsafe) static var treatGap: ClosedRange<Float> = 200...380
+    /// 2026-11-06 "play more often": 200...380 s divided by `treatSpeedUp` (the solo emotes carry vocals: hic, achoo, spin-hug, star-sigh...). A test sets the old range for its "before".
+    static let treatSpeedUp: Float = 1.3
+    nonisolated(unsafe) static var treatGap: ClosedRange<Float> = (200 / treatSpeedUp)...(380 / treatSpeedUp)
     /// The first urge, seconds after he starts roaming (a Jelly that is not first waits longer: `zoomUrge` = this + 35 s per Jelly id once he is wired).
     nonisolated(unsafe) static var zoomUrgeFirst: Float = 10
     /// Room coverage (2026-10-21, "they stay in the centre too much"): the rug-centre circle counted as "the centre", the seconds near it after which the
@@ -938,7 +940,7 @@ extension BlobBrain {
         roll += idleState.sign * 0.10 * k + 0.012 * k * sinf(2 * .pi * t * 0.9)
         pitch += (idleState.kind == .window ? -0.10 : 0.05) * k + 0.02 * k * sinf(2 * .pi * t * 1.3)
         if idleState.kind == .window { roll += 0.03 * k * sinf(2 * .pi * t / 2.4) }
-        if idleState.kind == .window, idleState.reps == 1, idleState.phase == 1, idleState.phaseT > idleState.hold * 0.5 { idleState.reps = 0; AudioHub.shared.chirp(jelly: steerID, .happy, x: px) }
+        if idleState.kind == .window, idleState.reps == 1, idleState.phase == 1, idleState.phaseT > idleState.hold * 0.5 { idleState.reps = 0; AudioHub.shared.chirp(jelly: steerID, .happy, x: px, src: "window") }
         if idleState.kind == .decorBoop || idleState.kind == .decorPeek { decorPose(skinner, k: k) }
     }
 

@@ -87,6 +87,16 @@ final class AudioHub {
     @ObservationIgnored private var sleepSounds = SleepSoundScheduler()
     /// Called for the Jelly that snores now (the sleep z's ride it).
     @ObservationIgnored var onSnore: ((Int) -> Void)?
+    /// The silence filler spoke for this slot (the brain opens its mouth a moment): AmbientVoice.swift.
+    @ObservationIgnored var onAmbient: ((Int) -> Void)?
+    /// The stage says the room is the HOME room right now (no trip, no bath); gates the ambient voice and the movement-sound boost.
+    @ObservationIgnored var atHome = false
+    @ObservationIgnored private var ambientSched = AmbientVoiceScheduler()
+    /// Seconds since this slot last voiced anything (chirp / babble, a context voice, an emote voice).
+    func secondsSinceVoice(slot: Int) -> Double {
+        let i = min(max(slot, 0), 2)
+        return Self.clock() - max(lastVoice[i], lastContextVoice[i], lastEmoteVoice[i])
+    }
     @ObservationIgnored private var lastVoice: [Double] = [0, 0, 0]
     /// When each Jelbie's own emote voice (hic, achoo, woozy) last played: his ambient chirp / babble waits `emoteVoiceHush` s after it (a nice balance: they do not speak too much).
     @ObservationIgnored private var lastEmoteVoice: [Double] = [-100, -100, -100]
@@ -113,10 +123,10 @@ final class AudioHub {
     @ObservationIgnored private var diagCounts: [String: Int] = [:]
     @ObservationIgnored private var diagLastState = -100.0
     /// Logs one request and, when it was dropped, the guard that dropped it (`why` nil = it got past every guard).
-    private func diag(_ what: String, _ jelly: Int?, _ why: String?) {
+    private func diag(_ what: String, _ jelly: Int?, _ why: String?, v: Float? = nil) {
         guard Self.audioLog else { return }
         diagCounts["\(what) \(why ?? "PLAYED")", default: 0] += 1
-        NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? "PLAYED")
+        NSLog("[audio] req %@ slot %@ -> %@", what, jelly.map(String.init) ?? "-", why ?? ("PLAYED" + (v.map { String(format: " v=%.2f", $0) } ?? "")))
         stateLine()
     }
     /// At most once a second: the gates' state and the running per-reason counts.
@@ -299,8 +309,9 @@ final class AudioHub {
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
-    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none) {
+    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], night: Double = 0) {
         guard !muted, started else { return }
+        atHome = home && scene == .none && director.scene == .none && townScene == .none
         input.allNapping = !napping.isEmpty && !napping.contains(false)
         input.playing = playing
         raceScene = scene
@@ -319,6 +330,16 @@ final class AudioHub {
                 else if moods[i] == .grumpy { chirp(jelly: i, .sad, x: i < xs.count ? xs[i] : 0) }
             }
             lastMood[i] = moods[i]
+        }
+        if AmbientVoiceTuning.enabled, atHome, !ambient.isEmpty, gateWhy() == nil {
+            let since = (0..<3).map { secondsSinceVoice(slot: $0) }
+            let eligible = (0..<3).map { $0 < ambient.count && ambient[$0] && !($0 < napping.count && napping[$0]) }
+            for i in ambientSched.due(eligible: eligible, since: since, now: now, night: night, random: { Double.random(in: $0) }) {
+                let v = AmbientVoiceTuning.pick(night: night, grumpy: i < moods.count && moods[i] == .grumpy, random: { Double.random(in: $0) })
+                if v.isContext { Self.requestSrcTap?("voice:\(v.rawValue)@ambient", i); contextVoice(jelly: i, v, chance: 1, x: i < xs.count ? xs[i] : 0) }
+                else { chirp(jelly: i, v, x: i < xs.count ? xs[i] : 0, src: "ambient") }
+                onAmbient?(i)
+            }
         }
     }
 
@@ -546,12 +567,14 @@ final class AudioHub {
     /// `dryRun` = `fire` stops after the tap (a soak must not play real audio at 100x), `_openForTest` = an unmuted, started hub without the audio session.
     nonisolated(unsafe) static var clock: () -> Double = { CACurrentMediaTime() }
     nonisolated(unsafe) static var firedTap: ((String) -> Void)?
+    /// Like firedTap with the volume the clip is fired at (the level tests).
+    nonisolated(unsafe) static var firedVolumeTap: ((String, Float) -> Void)?
     nonisolated(unsafe) static var dryRun = false
     func _openForTest() { muted = false; started = true; active = true }
     nonisolated(unsafe) static var playedTap: ((String) -> Void)?
     func _fire(_ name: String, volume: Float = 0.7) { fire(name, volume: volume, pan: 0) }
     private func fire(_ name: String, volume: Float, pan: Float, rate: Float = 1) {
-        Self.firedTap?(name)
+        Self.firedTap?(name); Self.firedVolumeTap?(name, volume)
         if Self.dryRun { return }
         guard let u = url(name) else { return }
         let q0 = PerfProbe.begin()
@@ -588,6 +611,8 @@ final class AudioHub {
     /// `rate`: playback speed (1 = as recorded; a squeak is a boop at 1.7, a drum thump a boop at 0.55).
     /// Test seam: every request (before the mute / rate guards), e.g. "jump", "chirp:happy". nil in the app.
     nonisolated(unsafe) static var requestTap: ((String) -> Void)?
+    /// Like requestTap but for chirps only, with the caller tag ("chirp:happy@idle") and the slot (diagnosis soak).
+    nonisolated(unsafe) static var requestSrcTap: ((String, Int) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         Self.requestTap?(sfx.rawValue)
         if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
@@ -601,10 +626,12 @@ final class AudioHub {
         lastPlay[key] = now
         let n = variants(sfx)
         guard n > 0 else { diag("play:\(sfx.rawValue)", jelly, "novariants"); return }
-        diag("play:\(sfx.rawValue)", jelly, nil)
+        let homeMul: Float = atHome && HomeMoveSoundTuning.sounds.contains(sfx) ? HomeMoveSoundTuning.gainMul : 1          // (the home room's walking / running sounds are louder; everywhere else unchanged)
+        let vol = min(1, sfx.gain * volume * level * AudioMix.sfxMaster * homeMul)
+        diag("play:\(sfx.rawValue)", jelly, nil, v: vol)
         _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
         let v = picker.pick(sfx.rawValue, count: n) + 1
-        fire("\(sfx.rawValue)_\(v)", volume: min(1, sfx.gain * volume * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: rate)
+        fire("\(sfx.rawValue)_\(v)", volume: vol, pan: panFor(x: x), rate: rate)
     }
 
     /// A sleeping Jelly's snore, in its own CHARACTER's voice (snore_jelly{c}_{1|2}, like the chirps; ~30% end in a bubble pop).
@@ -767,10 +794,13 @@ final class AudioHub {
     @MainActor static func voiceFile(slot: Int, _ v: JellyVoice) -> String { JellyVoiceSet.file(character: JellyRoster.character(slot), v) }
 
     /// The Jelly's own voice (by slot -> character): happy / sad / babble.
-    func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
+    /// `src` names the caller ("idle", "greet", "wave", "cafe", ...; "other" when untagged). It only goes into the diag / AudioLog text and `requestSrcTap`;
+    /// `requestTap` keeps the plain "chirp:<voice>" string.
+    func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0, src: String = "other") {
         Self.requestTap?("chirp:\(v)")
+        Self.requestSrcTap?("chirp:\(v)@\(src)", jelly)
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
-        let what = "chirp:\(v)"
+        let what = "chirp:\(v)@\(src)"
         if let w = gateWhy() { diag(what, jelly, w); return }
         let level = settings.sfxLevel * duck.gain
         let i = min(max(jelly, 0), 2)
@@ -780,7 +810,7 @@ final class AudioHub {
         if now - lastContextVoice[i] < 0.5 { diag(what, jelly, "hush context"); return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
-        diag(what, jelly, nil)
+        diag(what, jelly, nil, v: 0.7 * level)
         if Self.audioLog { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
@@ -801,7 +831,8 @@ final class AudioHub {
         if now - lastVoice[i] < 1.0 { diag(what, jelly, "hush lastVoice"); return }
         if now - lastContextVoice[i] < 2.2 { diag(what, jelly, "hush context"); return }
         if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
-        guard Double.random(in: 0..<1) < chance else { diag(what, jelly, "chance"); return }
+        let p = atHome && HomeVoiceTuning.enabled ? min(1, chance * HomeVoiceTuning.contextChanceMul) : chance          // (at home every context voice's chance x1.3, one central place)
+        guard Double.random(in: 0..<1) < p else { diag(what, jelly, "chance"); return }
         diag(what, jelly, nil)
         lastContextVoice[i] = now
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))

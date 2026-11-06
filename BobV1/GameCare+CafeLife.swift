@@ -28,7 +28,7 @@ extension GameCare {
             if left > 0 { book.replyIn[id] = left; continue }
             book.replyIn[id] = nil
             guard let a = live.first(where: { $0.id == id }), let b = a.brain else { continue }
-            AudioHub.shared.chirp(jelly: id, Bool.random() ? .happy : .babble)
+            AudioHub.shared.chirp(jelly: id, Bool.random() ? .happy : .babble, src: "cafe")
             b.face(.happy, hold: 1.0)
             if cafeIdleNow(b) { b.startHopPlay(sim: a.sim, distance: 0.0001) }
         }
@@ -42,7 +42,7 @@ extension GameCare {
                 rb.face(.excited, hold: 1.2)
             } else if let sp = pool.randomElement(), let sb = sp.brain {
                 book.lastSpeaker = sp.id
-                AudioHub.shared.chirp(jelly: sp.id, Bool.random() ? .babble : .happy)
+                AudioHub.shared.chirp(jelly: sp.id, Bool.random() ? .babble : .happy, src: "cafe")
                 sb.face(.excited, hold: 1.2)
                 if Float.random(in: 0..<1) < 0.3 { sb.blushBump(hold: 1.5, peak: 0.4) }
                 if let li = live.filter({ $0.id != sp.id }).randomElement() { book.replyIn[li.id] = Float.random(in: 0.8...1.4) }

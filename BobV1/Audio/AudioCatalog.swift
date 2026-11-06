@@ -257,8 +257,10 @@ nonisolated struct Fader: Equatable, Sendable {
 /// When the sleeping Jellies snore: one snore per Jelly every 20...40 s, and never two Jellies within `hubGap` of each other
 /// (a later one waits its turn). Pure: the hub feeds it the clock and a random source; tests drive it directly.
 nonisolated struct SnoreScheduler: Sendable {
-    static let interval: ClosedRange<Double> = 13...24        // was 6...10, then 20...40 (inaudible): with the coos a sound every 8-15 s per sleeper
-    static let firstDelay: ClosedRange<Double> = 5...12
+    /// 2026-11-06 "play more often": the snore pace is 13...24 s and 5...12 s first, divided by `speedUp` (a test sets it to 1 for the "before").
+    nonisolated(unsafe) static var speedUp: Double = 1.35
+    static var interval: ClosedRange<Double> { (13 / speedUp)...(24 / speedUp) }        // was 6...10, then 20...40 (inaudible), then 13...24
+    static var firstDelay: ClosedRange<Double> { (5 / speedUp)...(12 / speedUp) }
     static let hubGap: Double = 3.5
     private(set) var next: [Double] = [0, 0, 0]
     private(set) var lastAny: Double = -100

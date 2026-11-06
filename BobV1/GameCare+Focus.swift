@@ -212,7 +212,7 @@ extension GameCare {
                 enterFocus(brain: b)
             } else {
                 g.saved[id] = b.autonomy; b.autonomy = false; b.onFinished = nil
-                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
+                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
             }
             if !focus.isActive { return }
         }
@@ -254,7 +254,7 @@ extension GameCare {
             if simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) < 0.25 { s.onSlot += dt } else { s.onSlot = 0 }
             if s.onSlot > 0.3 {
                 g.saved[id] = brain.autonomy; brain.autonomy = false; brain.onFinished = nil
-                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
+                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
                 return
             }
             let act = brain.activity
@@ -270,7 +270,7 @@ extension GameCare {
                 if simd_length(here - g.spot(of: id)) < 0.5 {
                     g.saved[id] = brain.autonomy; brain.autonomy = false
                     brain.onFinished = nil
-                    if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy) }
+                    if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
                 } else if s.retries < 2 { s.retries += 1; s.age = 0; brain.requestNow(.come(to: g.spot(of: id))) }
                 else { focus.cancelApproach() }
             }

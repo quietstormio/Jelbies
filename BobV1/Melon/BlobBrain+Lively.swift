@@ -95,7 +95,7 @@ extension BlobBrain {
             gaitPose(sway: 0.04, bob: 0, rock: 0.2)
             if turning || feet.active { idleState.phaseT = 0; return }
             idleState.phase = 1; idleState.phaseT = 0
-            AudioHub.shared.chirp(jelly: steerID, .happy, x: px)
+            AudioHub.shared.chirp(jelly: steerID, .happy, x: px, src: "idle")
             face(rand() < 0.5 ? .curious : .happy, hold: 1.0)
         }
         let t = idleState.phaseT
