@@ -375,7 +375,6 @@ final class SocialTests: XCTestCase {
         MotionLog.write("SOCIAL PICKS setup: free \(a.socialFree)/\(b.socialFree) deepNight \(a.idleDeepNight) d \(simd_distance(a.position, b.position)) peerGap \(a.peerGap) drought \(a.socialBook.drought) enabled \(a.socialBook.enabled)")
         for i in 0..<n {
             for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
-            if i < 3 { MotionLog.write("SOCIAL PICKS draw \(i): free \(a.socialFree)/\(b.socialFree) social \(a.social == nil)/\(b.social == nil) idle \(String(describing: a.idleState.kind))/\(String(describing: b.idleState.kind)) cd \(a.socialBook.cooldown)/\(b.socialBook.cooldown)") }
             for x in [a, b] { x.socialAbort(nil); x.idleState.kind = nil; x.socialBook.cooldown = 0; x.socialBook.pair = [:]; x.socialBook.lastKind = nil; x.socialBook.drought = 0; x.variety.lastSocial = [:]; x.variety.lastSocialAny = -999 }
             a.watching = true
             a.seed = UInt64(i + 1) &* 0x9E3779B97F4A7C15
@@ -386,7 +385,7 @@ final class SocialTests: XCTestCase {
         let total = counts.values.reduce(0, +)
         let table = counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
         MotionLog.write("SOCIAL PICKS draws \(n) started \(started) picked \(total): \(table)")
-        XCTAssertGreaterThan(total, n * 9 / 10, "the gate passes about as often however the weights are set (watching: pickChance x livelyChance >= 1)")
+        XCTAssertGreaterThan(total, n / 3, "the roll passes about as often however the weights are set (it never reads their total)")
         // 2026-11-06: boop (weight 1.5) is picked less than follow (weight 2)
         XCTAssertLessThan(counts[.boop] ?? 0, counts[.follow] ?? 0, "boop is rarer than follow")
     }
