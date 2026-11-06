@@ -60,7 +60,17 @@ final class WearBandTests: XCTestCase {
                 }
                 t += 3
             }
-            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov, want: pts.map { WearLevel.tilts(l) ? WearLevel.targetY(y0: $0.y, az: atan2($0.x, $0.z - zc), yFront: WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0, hanging: false, side: WearLevel.sideY(l)) : $0.y }))
+            out.append(Loop(look: l, part: part.name, verts: Array(base..<(base + pts.count)), y0: ys, edges: edges, coverage: cov, want: pts.map { q in
+                guard WearLevel.tilts(l) else { return q.y }
+                let az = atan2(q.x, q.z - zc), front = WearMeshes.prepare(l, body: WearBody.shared)?.tiltFrontY ?? 0
+                if l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun {          // (a bandana's string is a tube: the sag fade moves its CENTRELINE, the section keeps its shape)
+                    var s: Float = 0, n: Float = 0
+                    for o in pts { var d = abs(atan2(o.x, o.z - zc) - az); if d > .pi { d = 2 * .pi - d }; if d < 0.05 { s += o.y; n += 1 } }
+                    let cy = n > 0 ? s / n : q.y
+                    return WearLevel.targetY(y0: cy, az: az, yFront: front, hanging: false, side: WearLevel.sideY(l)) + (q.y - cy)
+                }
+                return WearLevel.targetY(y0: q.y, az: az, yFront: front, hanging: false, side: WearLevel.sideY(l))
+            }))
         }
         return out
     }
