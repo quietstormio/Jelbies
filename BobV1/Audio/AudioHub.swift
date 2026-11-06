@@ -810,7 +810,7 @@ final class AudioHub {
         let now = Self.clock()
         if now - lastVoice[i] < 2.2 { diag(what, jelly, "hush lastVoice"); return }
         if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return }
-        if now - lastContextVoice[i] < 1.0 { diag(what, jelly, "hush context"); return }          // (1.0 s like the context voice's own wait after a chirp: any two voices of one Jelbie >= 1.0 s apart; was 0.5)
+        if now - lastContextVoice[i] < 0.5 { diag(what, jelly, "hush context"); return }
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
         diag(what, jelly, nil, v: 0.7 * level)

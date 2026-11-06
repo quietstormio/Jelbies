@@ -38,7 +38,7 @@ final class AmbientVoiceTests: XCTestCase {
             let isContext = JellyVoice.allCases.contains { $0.isContext && name.hasPrefix("\($0.rawValue)_jelly") }
             if isVoice || isContext { res.voices += 1 }
             if ["giggle_", "curious_", "ooh_", "hum_", "hmm_", "wheee_"].contains(where: { name.hasPrefix($0) }) { res.newVoices += 1 }
-            if isVoice || isContext, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (any voice of one Jelbie: the design floor is the 1.0 s context gap)
+            if isVoice || isContext, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (any voice of one Jelbie: the design floor is the 0.5 s chirp-after-context wait)
                 let who = String(name[r]); if let l = lastAnyByChar[who] { res.minAnyGap = min(res.minAnyGap, simNow - l) }; lastAnyByChar[who] = simNow
             }
             if isVoice, let r = name.range(of: #"jelly\d+"#, options: .regularExpression) {          // (chirp / babble: the 2.2 s per-Jelbie gap is a hard guard)
@@ -135,7 +135,7 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
         XCTAssertGreaterThan(totNow, totPrev, "\(label): total vocals still rise")
         XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
-        XCTAssertGreaterThanOrEqual(now.minAnyGap, 1.0 - 1e-6, "\(label): two voices of one Jelbie too close")
+        XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie too close")
         XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelbie within 2.2 s")
     }
     func testContextFloorDefaultRoster() { reportFloor("default3", n: 3, chars: nil) }
