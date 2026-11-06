@@ -33,9 +33,14 @@ nonisolated enum WearLevel {
     /// smoothstep) to `tiltSideY` over the arm tops (complete at `tiltSideAt`, the arm roots), and on to `tiltBackY` at the very back (slightly higher than at the sides). Over the
     /// rising part the authored height variation fades out (the art was drawn with its own sag) so every body sees the same clean curve. Bands, scarves, collars and waistbands stay level.
     nonisolated(unsafe) static var tiltOn = ProcessInfo.processInfo.environment["WEARBAND_TILT"] != "off"
-    /// Absolute loop heights (m, body frame) at the sides (the arm tops reach ~0.605; a link's radius is ~1.5 cm) and at the back.
-    nonisolated(unsafe) static var tiltSideY: Float = 0.645, tiltBackY: Float = 0.665
-    static let tiltFrom: Float = 0.44, tiltSideAt: Float = 1.48
+    /// Absolute loop heights (m, body frame) at the sides and at the back, and the azimuths (rad off the front) where the rise starts (never lower than 0.44: past the mouth keep-out, the
+    /// pendant does not move) and where it reaches the side height. Round-1 values (bd9be370, on the phone). Round 2 (docs in NecklaceTiltTests / the chain_r2 report) measured that raising the
+    /// SIDE height to ~0.685 (sideAt 1.25, back 0.665) clears the arm roots by eye but pushes the rigid gems / pearls 2 / 5 cm into the shoulder skin and the Diamond J top to 0.734 (bounds: 1 / 4 cm, 0.72),
+    /// so the defaults stay; the whole set is overridable from the environment (WEARBAND_TILT_SIDEY / _BACKY / _FROM / _SIDEAT) for the sweeps and the before / after captures.
+    nonisolated(unsafe) static var tiltSideY: Float = envF("WEARBAND_TILT_SIDEY", 0.645), tiltBackY: Float = envF("WEARBAND_TILT_BACKY", 0.665)
+    nonisolated(unsafe) static var tiltFrom: Float = envF("WEARBAND_TILT_FROM", 0.44), tiltSideAt: Float = envF("WEARBAND_TILT_SIDEAT", 1.48)
+    static func envF(_ k: String, _ d: Float) -> Float { Float(ProcessInfo.processInfo.environment[k] ?? "") ?? d }
+    static func useLegacyTilt() { tiltSideY = 0.645; tiltBackY = 0.665; tiltFrom = 0.44; tiltSideAt = 1.48 }   // (tiltFrom is const-equal in both rounds)
     /// The inner edge of a rigid link / gem / pearl is brought to this distance (m) from the skin at rest (the chain hugs the body).
     static let hugGap: Float = 0.002
     static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .chainGold || l == .diamondJ || l == .pearls) }
