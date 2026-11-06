@@ -35,6 +35,8 @@ enum GroupTuning {
     static let arriveRadius: Float = 0.2
     /// A packed ring is planned this far (skin gap, m) OUTSIDE the touch: the hold's press closes the last millimetres.
     static let ringReady: Float = 0.012
+    /// The walk-in ring is this much (m) wider than the widest compass touch of the crew (see socialStartGroup).
+    static let stageMargin: Float = 0.10
     /// The break-apart hop of a huddle / ring lands this far further out from the middle (m).
     static let breakSpread: Float = 0.3
     static let steps = 12, stepAngle: Float = .pi / 9          // (20 degree hops: one hop pulls neighbours only 1.5% closer in the air; 40 degrees pulled them 6% = 7 cm into each other)
@@ -172,8 +174,10 @@ extension BlobBrain {
         let s: SocialSession
         switch kind {
         case .groupHug, .circleDance, .groupCheer:
-            let packed = kind != .groupCheer
-            guard let plan = groupPlan(crew, chord: packed ? ringChord(crew) : peerGap * GroupTuning.loose, packed: packed) else { return false }
+            // (round 4: the walk-in goes to a STAGING ring at the widest compass touch + 10 cm, where no outline of a walker - side on, arms swinging - reaches a neighbour's skin, so the skin wall (ON the whole
+            //  session, no pass-through) never stalls a walker. At the packed chord the wall measured the side-on outline, cut every step short and the crew stood still for 16 s (room capture r4_round3). The
+            //  tight ring is the phase-1 refinement of `gather`: everybody already FACES the middle, and all walk the short way in together.)
+            guard let plan = groupPlan(crew, chord: kind == .groupCheer ? peerGap * GroupTuning.loose : ringChord(crew, extra: GroupTuning.stageMargin), packed: false) else { return false }
             s = newGroupSession(kind, crew: crew, duration: kind == .groupHug ? vDur(5.8) : 0)
             s.home0 = plan.c; s.ringR = plan.r; s.slotAng = plan.ang
             s.slotSpot = plan.spots
@@ -239,8 +243,8 @@ extension BlobBrain {
                 letGo()
                 if simd_distance(position, spot) > 0.12 { socialWalk(to: spot, sim) }
             }
-            if socialBook.hopStarted, fxFree, simd_distance(position, spot) > 0.15, simd_distance(position, spot) < 1.4, socialBook.hopStarted2 == false {
-                socialBook.hopStarted2 = true          // (the walk stopped short of the place: a small hop to it)
+            if socialBook.hopStarted, fxFree, scriptIsNone, simd_distance(position, spot) > 0.15, simd_distance(position, spot) < 1.4, socialBook.hopStarted2 == false {
+                socialBook.hopStarted2 = true          // (the walk is OVER and stopped short of the place: a small hop to it. 2026-11-05 round 4: without scriptIsNone this fired the moment the walk began - the hop (1 m, resolved through the wall) threw the first walker 1.2 m the wrong way and he never arrived, so the whole session aborted at 16 s)
                 startHopTo(sim, spot)
             }
             if scriptIsNone, idleState.kind == nil { faceCentre(s) }
