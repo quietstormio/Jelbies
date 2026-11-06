@@ -61,6 +61,7 @@ final class GameCare {
     var notice: String?
     /// The label is a tap's answer (over Bob's head) rather than a diner's own refusal.
     @ObservationIgnored var noticeAtBob = false
+    @ObservationIgnored var gaveUpShown = false
     @ObservationIgnored var noticeSerial = 0
     @ObservationIgnored var noticeAge: Float = 0
     @ObservationIgnored var noticeDone = false

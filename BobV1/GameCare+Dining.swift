@@ -58,7 +58,7 @@ extension GameCare {
                 notice = MealAppetite.refusalText(c.kind == .food ? .hunger : .thirst); noticeSerial += 1; noticeAge = 0
             }
             mealAge += dt
-            if mealAge > Self.mealTimeout { endMeal(); retries = 0 }
+            if mealAge > Self.mealTimeout { let ate = mealPaid > 0; endMeal(); retries = 0; if !ate, mealPieces > 0 { tapRefused("Couldn't get the food to the table — try again") } }
             else if free, mealRequested {
                 // the request was cancelled (for example he was grabbed): ask again a couple of times, then give up
                 if act == .idle || act == .lookingAround || act == .steppingInPlace {

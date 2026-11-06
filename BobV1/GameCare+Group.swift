@@ -91,6 +91,7 @@ extension GameCare {
             if !group.isActive { groupQueueClear() }
             return
         }
+        if group.gaveUp { if !gaveUpShown { gaveUpShown = true; tapRefused("Couldn't get the food to the table — try again") } } else { gaveUpShown = false }          // (a serving the diners could not reach was given up silently)
         guard group.isActive else {
             // a sitting just ended: the waiting Jellies get theirs next (the tray pops again once this one has gone)
             if let c = groupNext, !groupQueue.isEmpty {

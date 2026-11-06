@@ -50,6 +50,7 @@ final class MealFeedbackTests: XCTestCase {
         for a in r.actors { a.profile?.needs.set(.hunger, 0.1) }
         c.feed("berries", jelly: nil)
         r.run(25)
+        print("MEALFB dbg wanted=\(c.groupWanted != nil) phase=\(c.dining.phase) gstate=\(c.group.state) gaveUp=\(c.group.gaveUp) bag=\(c.store.count(food: "berries")) acts=\(r.actors.map { String(describing: $0.brain?.activity) }) pos=\(r.actors.map { $0.floor }) call=\(c.callRunning) q=\(c.queued.count) jc=\(c.jellies.count)")
         print("MEALFB hungry: groupActive=\(c.groupActive) tray=\(c.dining.isPresent) levels=\(r.level(0)),\(r.level(1))")
         XCTAssertGreaterThan(r.level(0), 0.3)
         XCTAssertGreaterThan(r.level(1), 0.3)
@@ -89,5 +90,27 @@ final class MealFeedbackTests: XCTestCase {
             XCTAssertEqual(c.notice, "Not while cleaning")
             XCTAssertFalse(c.trayOut)
         }
+    }
+
+    /// The pair is fed again and again from the rest spots: a serving must never end without a tray and without anyone eating (it did, once in a few runs).
+    func testPairIsNeverGivenUpOnSilently() {
+        var bad: [String] = []
+        for rep in 0..<8 {
+            let r = room([4, 6])
+            let c = r.care
+            c.store.grant("berries", 7)
+            for a in r.actors { a.profile?.needs.set(.hunger, 0.1) }
+            c.feed("berries", jelly: nil)
+            var sawTray = false, dbg = ""
+            r.run(30) {
+                if c.dining.isPresent { sawTray = true }
+                if c.group.gaveUp, dbg.isEmpty { dbg = "approach=\((0..<2).map { c.group.approachPoint(blob: $0) }) floors=\(r.actors.map(\.floor)) acts=\(r.actors.map { String(describing: $0.brain?.activity) }) t=\(r.t)" }
+                return false
+            }
+            let ate = r.level(0) > 0.3 && r.level(1) > 0.3
+            if !ate || !sawTray { bad.append("rep \(rep): tray=\(sawTray) ate=\(ate) notice=\(String(describing: c.notice)) \(dbg)") }
+        }
+        print("MEALFB loop bad=\(bad)")
+        XCTAssertTrue(bad.isEmpty, "\(bad)")
     }
 }
