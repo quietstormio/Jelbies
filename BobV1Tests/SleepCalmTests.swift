@@ -103,8 +103,8 @@ final class SleepCalmTests: XCTestCase {
         return stats(recs)
     }
 
-    /// Calm bound. A toss is a smoothstep from one side to the other (at most 2 * maxRoll = 0.60 rad) over at least 1.8 s: peak angular acceleration
-    /// 6 * 0.60 / 1.8^2 = 1.1 rad/s^2 (peak speed 0.5 rad/s = 0.0083 rad/frame). The old pop back to flat was 0.18 rad in one frame = 650 rad/s^2, the old
+    /// Calm bound. A toss is a smoothstep from one side to the other (2026-11-06: up to 2 * maxRoll = 1.5 rad, but never faster than rollRateMax 0.25 rad/s average, so >= 6 s for that
+    /// swing: peak angular acceleration 6 * 1.5 / 6^2 = 0.25 rad/s^2, peak speed 0.375 rad/s = 0.0063 rad/frame; the old toss was 0.60 rad over 1.8 s = 1.1 rad/s^2, 0.0083 rad/frame). The old pop back to flat was 0.18 rad in one frame = 650 rad/s^2, the old
     /// wiggle start 5 rad/s^2. 2 rad/s^2 is ~1.8x over the worst legal toss and 300x under the pop. (The awake idle baseline is ~0: a standing Jelbie is
     /// nearly rigid; the awake WALK is far above this, so the bound is set by the toss design, not by a walk.) This measures the attractor (commanded
     /// rotation); the centroid is the real soft body.

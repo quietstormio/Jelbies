@@ -125,18 +125,28 @@ enum SleepTuning {
     /// centroid, and the centroid itself swings up to 0.24 off the spot in the flop and the toss, mostly along the heading (the pitch back). So across the row
     /// the footprint is 0.76 + a little sway, along the heading it is 0.72 + the whole flop swing. No two footprints may intersect (`footMargin` m to spare).
     static let footHalfLen: Float = 0.95, footHalfWid: Float = 0.83, footMargin: Float = 0.03
+    /// (2026-11-06, maxRoll 0.30 -> 0.75: re-measured the same way, Release, three sleepers, 120 s x 3 seeds open + blocked: skin across +-0.74...0.76, along -0.69...0.71, i.e. the SAME as
+    ///  at 0.30: a body rolling about its own head-to-foot axis is nearly round across it, so the roll does not widen the footprint. The constants stay. A roll toward a close neighbour or in a
+    ///  hand-hold is still held to `rollNearMax` (0.30) as a belt-and-braces.)
     /// Hand-holding pairs lie skin to skin on purpose (the stub arms must meet): the measured across-reach 0.76, no margin.
     static let holdHalfWid: Float = 0.77
     static let breathPeriod: Float = 3.6
     /// The breathing ripple (was 0.5: too faint to read).
     static let breathKick: Float = 0.9
     /// Sleep fidgets: a shift every `shiftEvery` s, a twitch every `twitchEvery`, a half-wake every `halfEvery` (Reduce Motion: smaller and x2.5 rarer).
-    static let shiftEvery: ClosedRange<Float> = 20...45, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
+    static let shiftEvery: ClosedRange<Float> = 9...22, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
     // (2026-11-04: the turn used to wander up to +-0.5 rad at 0.12 rad/s and read as a slow clockwise spin; now small, slow, alternating and always back to centre)
-    static let maxRoll: Float = 0.30, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
+    // (2026-11-06 "rolling over like a kid in bed": maxRoll 0.30 -> `maxRoll` below, shifts about 2.2x as often, and 60 % of them are roll-overs; see `rollRateMax`)
+    static let maxRoll: Float = 0.75, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
     /// A toss / turn eases (smoothstep, so it starts and ends at rest) over this long; nothing a sleeper does is faster. (2026-11-05: they "twitch": the old toss
     /// popped back to flat the frame its constant-rate chase arrived, and there were 0.45 s arm / foot twitches. Both gone.)
     static let tossTime: ClosedRange<Float> = 1.8...3.0
+    /// A roll-over is never faster than this many rad/s of smoothstep-AVERAGE speed (peak = 1.5x): a swing of d rad takes at least d / rollRateMax s, so a big roll
+    /// from one side to the other (up to 2 * maxRoll = 1.5 rad) takes 6 s and a roll from the back onto a side (0.45...0.75 rad) 1.8...3 s. Peak 0.375 rad/s =
+    /// 0.0063 rad per 60 Hz frame, peak angular acceleration 6 * 1.5 / 6^2 = 0.25 rad/s^2: far calmer than the old toss (1.1) and the SleepCalmTests bounds.
+    static let rollRateMax: Float = 0.25
+    /// With a close neighbour on the side he rolls toward (centre distance under `rollNearDist`), or in a hand-hold / cuddle: the old 0.30 (the row spacing was measured at it).
+    static let rollNearMax: Float = 0.30, rollNearDist: Float = 2.3
     static let driftMax: Float = 0.22, driftMaxBed: Float = 0.07
     /// A finger on him for less than this wakes him gently; longer = a real pick up (the sleep is dropped and the touch play takes over).
     static let tapTime: Float = 0.9
@@ -592,6 +602,10 @@ extension BlobBrain {
                 if f.kind == 4 { px = f.to.x; pz = f.to.y; sleep.spot = f.to }
                 f.kind = 0; f.u = 0; f.wigAmp = 0
             }
+        } else if sleep.stage == 3, abs(f.rollOff) > T.rollNearMax + 0.02, abs(sleepRollLimited(f.rollOff)) < abs(f.rollOff) - 0.02 {
+            // a neighbour came close (or a hand-hold began) while he lies rolled far over: ease back to the measured roll at once (the same slow smoothstep)
+            f.kind = 3; f.u = 0; f.rollFrom = f.rollOff; f.rollGoal = sleepRollLimited(f.rollOff)
+            f.dur = max(rand(T.tossTime.lowerBound, T.tossTime.upperBound), abs(f.rollGoal - f.rollFrom) / T.rollRateMax)
         } else {
             f.nextShift -= dt
             if f.nextShift <= 0 {
@@ -619,19 +633,39 @@ extension BlobBrain {
         let T = SleepTuning.self
         let r = rand()
         f.u = 0
-        if r < 0.45 {         // toss: roll over onto the other side (alternating, bounded, slow) and stay there
-            f.kind = 3; f.dur = rand(T.tossTime.lowerBound, T.tossTime.upperBound)
+        if r < 0.6 {          // roll over: from the back onto a random side; from a side back onto the back or over onto the other side (random, then he stays a while)
+            f.kind = 3
             f.rollFrom = f.rollOff
-            let side: Float = f.rollOff > 0.02 ? -1 : (f.rollOff < -0.02 ? 1 : f.rSign)
-            f.rSign = -side
-            f.rollGoal = side * rand(0.6, 1) * T.maxRoll * sc
-        } else if r < 0.7 {   // a slow lean to one side and back
+            let amp = rand(0.6, 1) * T.maxRoll * sc
+            if abs(f.rollOff) < 0.02 {
+                f.rollGoal = (rand() < 0.5 ? -1 : 1) * amp
+            } else {
+                let side: Float = f.rollOff > 0 ? 1 : -1
+                f.rollGoal = rand() < 0.45 ? 0 : -side * amp
+            }
+            f.rollGoal = sleepRollLimited(f.rollGoal)
+            f.dur = max(rand(T.tossTime.lowerBound, T.tossTime.upperBound), abs(f.rollGoal - f.rollFrom) / T.rollRateMax)
+        } else if r < 0.78 {  // a slow lean to one side and back
             f.kind = 1; f.dur = rand(2.6, 3.6); f.wigAmp = (rand() < 0.5 ? -1 : 1) * 0.08 * sc
-        } else if sleep.bed < 0 || r < 0.9 {  // a slight change of where he lies
+        } else if sleep.bed < 0 && r < 0.86 {  // a slight change of where he lies (was 30 % of shifts at 1 per 32 s = 0.55/min on the floor; now 8 % at 1 per 15.5 s = 0.31/min: the slide is NOT more frequent)
             sleepPlanDrift(&f, sc)
         } else {
             f.kind = 1; f.dur = 3.0; f.wigAmp = 0.05 * sc
         }
+    }
+
+    /// The side tilt he may roll to: onto a side with a close neighbour (a snuggle row, a hand-hold pair) only as far as the old `rollNearMax` (the spacing was measured
+    /// at that); the free side, and any roll in the open, the full `maxRoll`. A hand-holding pair keeps both hands met: both sides limited.
+    func sleepRollLimited(_ goal: Float) -> Float {
+        let T = SleepTuning.self
+        if goal == 0 { return 0 }
+        let near = sleep.mode == .hold || sleep.holdForce || sleep.holdW > 0.1 || sleep.leanW > 0.1
+        var cap = near ? T.rollNearMax : T.maxRoll
+        let right = SIMD2(cosf(yaw), -sinf(yaw))
+        for o in sleepMates where simd_distance(o.position, position) < T.rollNearDist {
+            if simd_dot(o.position - position, right) * goal > 0 || abs(simd_dot(o.position - position, right)) < 0.3 { cap = min(cap, T.rollNearMax) }          // (toward him; or in front / behind: either way)
+        }
+        return goal.sign == .minus ? -min(-goal, cap) : min(goal, cap)
     }
 
     private func sleepPlanDrift(_ f: inout SleepFidget, _ sc: Float) {

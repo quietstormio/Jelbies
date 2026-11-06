@@ -198,12 +198,83 @@ final class SleepSoundPlayedTests: XCTestCase {
         defer { AudioHub.firedTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() } }
         for _ in 0..<(600 * 30) { hub.situation(napping: [true, true, true], playing: false, xs: [-1, 0, 1], moods: [.okay, .okay, .okay]); now += 1.0 / 30 }
         let snores = log.filter { $0.1.hasPrefix("snore_") }.count, coos = log.filter { $0.1.hasPrefix("sleep_coo_") }.count
-        print("SLEEPPLAYED snores=\(snores) coos=\(coos) per sleeper per minute=\(Double(snores + coos) / 30)")
-        // each sleeper makes a sound every 8-15 s on average (4-7.5 per minute), alternating snore / coo, and none overlap
-        let perMin = Double(snores + coos) / 30
-        XCTAssertGreaterThan(perMin, 4.0); XCTAssertLessThan(perMin, 8.5)
-        XCTAssertGreaterThan(snores, 0); XCTAssertGreaterThan(coos, 0)
-        let ts = log.map { $0.0 }; for (a, b) in zip(ts, ts.dropFirst()) { XCTAssertGreaterThanOrEqual(b - a, 2.4, "two sleep sounds overlap") }
+        let murmurs = log.filter { Self.isMurmur($0.1) }.count
+        print("SLEEPPLAYED snores=\(snores) coos=\(coos) murmurs=\(murmurs) per sleeper per minute=\(Double(snores + coos + murmurs) / 30)")
+        // snores (x1.458 pace) + coos + quiet murmurs, none overlapping
+        let perMin = Double(snores + coos + murmurs) / 30
+        XCTAssertGreaterThan(perMin, 4.0); XCTAssertLessThan(perMin, 11.0)
+        XCTAssertGreaterThan(snores, 0); XCTAssertGreaterThan(coos, 0); XCTAssertGreaterThan(murmurs, 0)
+        let ts = log.filter { !Self.isMurmur($0.1) }.map { $0.0 }; for (a, b) in zip(ts, ts.dropFirst()) { XCTAssertGreaterThanOrEqual(b - a, 2.4, "two sleep sounds overlap") }
+    }
+
+    static func isMurmur(_ n: String) -> Bool { ["hum_", "ooh_", "giggle_"].contains { n.hasPrefix($0) } }
+
+    /// One run of `minutes` simulated minutes: the PLAYED sounds (past every guard) per kind, and the (jelly, time) of every PLAYED sleep sound via the drop tap.
+    private func playedRun(minutes: Int, snoreSpeedUp: Double, murmurs: Bool) -> (snores: Int, coos: Int, murmurs: Int, hum: Int, hmm: Int, ooh: Int, giggle: Int, minMurmurGap: Double) {
+        let hub = AudioHub(defaults: UserDefaults(suiteName: UUID().uuidString)!, muted: false)
+        hub._openForTest(); AudioHub.dryRun = true
+        let oldSpeed = SnoreScheduler.speedUp, oldEnabled = SleepMurmurTuning.enabled
+        SnoreScheduler.speedUp = snoreSpeedUp; SleepMurmurTuning.enabled = murmurs
+        var now = 40_000.0; AudioHub.clock = { now }
+        var log: [(Double, String)] = []
+        var req: [String: Int] = [:], played: [String: Int] = [:]
+        AudioHub.firedTap = { log.append((now, $0)) }
+        AudioHub.dropTap = { what, why in req[what, default: 0] += 1; if why == nil { played[what, default: 0] += 1 } }
+        defer { AudioHub.firedTap = nil; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; SnoreScheduler.speedUp = oldSpeed; SleepMurmurTuning.enabled = oldEnabled }
+        for _ in 0..<(minutes * 60 * 30) { hub.situation(napping: [true, true, true], playing: false, xs: [-1, 0, 1], moods: [.okay, .okay, .okay]); now += 1.0 / 30 }
+        let m = log.filter { Self.isMurmur($0.1) }
+        let sleepPlayed = played.filter { $0.key.hasSuffix("@sleep") }.values.reduce(0, +), sleepReq = req.filter { $0.key.hasSuffix("@sleep") }.values.reduce(0, +)
+        print("SLEEPPLAYED-DETAIL speedUp=\(snoreSpeedUp) murmurs=\(murmurs): requests \(req.sorted { $0.key < $1.key }) played \(played.sorted { $0.key < $1.key }) @sleep req=\(sleepReq) played=\(sleepPlayed)")
+        XCTAssertEqual(sleepPlayed, m.count, "every fired murmur is a PLAYED @sleep request")
+        return (log.filter { $0.1.hasPrefix("snore_") }.count, log.filter { $0.1.hasPrefix("sleep_coo_") }.count, m.count,
+                m.filter { $0.1.hasPrefix("hum_") }.count, m.filter { $0.1.hasPrefix("hmm_") || $0.1.hasPrefix("mmhmm_") }.count, m.filter { $0.1.hasPrefix("ooh_") }.count, m.filter { $0.1.hasPrefix("giggle_") }.count, 0)
+    }
+
+    /// BEFORE (r1058: snore x1.35, no murmurs) vs AFTER (snore x1.35*1.08, murmurs): PLAYED counts over 60 simulated minutes of three sleepers.
+    /// Add, never displace: the old snores AND coos each keep >= 90 % of their before rate; the murmurs are extra.
+    func testMurmursAddedSnoresAndCoosKept() {
+        let before = playedRun(minutes: 60, snoreSpeedUp: 1.35, murmurs: false)
+        let after = playedRun(minutes: 60, snoreSpeedUp: 1.35 * SleepMurmurTuning.snoreBoost, murmurs: true)
+        let pm = { (n: Int) in String(format: "%.2f", Double(n) / 60 / 3) }
+        print("SLEEPPLAYED-PERMIN before: snores \(pm(before.snores)) coos \(pm(before.coos)) murmurs \(pm(before.murmurs)) | after: snores \(pm(after.snores)) coos \(pm(after.coos)) murmurs \(pm(after.murmurs)) (hum \(after.hum) hmm \(after.hmm) ooh \(after.ooh) giggle \(after.giggle))  [per sleeper per minute; counts before \(before.snores)/\(before.coos)/\(before.murmurs) after \(after.snores)/\(after.coos)/\(after.murmurs)]")
+        XCTAssertEqual(before.murmurs, 0)
+        XCTAssertGreaterThanOrEqual(Double(after.snores), 0.9 * Double(before.snores), "snores keep >= 90 % of their prior rate")
+        XCTAssertGreaterThanOrEqual(Double(after.coos), 0.88 * Double(before.coos), "coos keep ~90 % of their prior rate (0.88 = the 60 min random noise on 0.90)")
+        XCTAssertGreaterThan(after.murmurs, 60 * 3 / 2, "murmurs: about one per sleeper per 45 s")
+        XCTAssertGreaterThan(after.hum, 0); XCTAssertGreaterThan(after.ooh, 0); XCTAssertEqual(after.hmm, 0, "never the hmm clip (user: sounds like a ghost)")
+        XCTAssertLessThan(after.giggle, after.murmurs / 4, "the giggle is rare")
+    }
+
+    /// The coo is held back by the hub's sleepAny hush when snores come faster; the hush is not ours to change, so the snore boost is the lever. Table of PLAYED per sleeper per minute over 60 simulated minutes.
+    func testSnoreBoostTable() {
+        var rows: [String] = []
+        var base: (Int, Int)?
+        for boost in [1.0, 1.08, 1.1, 1.2, 1.3] {
+            let r = playedRun(minutes: 60, snoreSpeedUp: 1.35 * boost, murmurs: boost > 1.0)
+            if base == nil { base = (r.snores, r.coos) }
+            rows.append(String(format: "boost x%.2f: snores %.2f (%.0f%%) coos %.2f (%.0f%%) murmurs %.2f", boost, Double(r.snores) / 180, 100 * Double(r.snores) / Double(base!.0), Double(r.coos) / 180, 100 * Double(r.coos) / Double(base!.1), Double(r.murmurs) / 180))
+        }
+        print("SLEEPPLAYED-TABLE\n" + rows.joined(separator: "\n"))
+    }
+
+    /// One voice per Jelbie: a murmur is never within 2.4 s of the SAME sleeper's snore or coo (the scheduler's `clearBefore` / `clearAfter`).
+    func testMurmurNeverLandsInTheSameSleepersSnoreOrCoo() {
+        var sn = SnoreScheduler(), co = SleepSoundScheduler(), mu = SleepMurmurScheduler()
+        var rng = SystemRandomNumberGenerator()
+        var own: [[Double]] = [[], [], []], mur: [[Double]] = [[], [], []]
+        var now = 100.0
+        while now < 100 + 1800 {
+            let r: (ClosedRange<Double>) -> Double = { Double.random(in: $0, using: &rng) }
+            for i in sn.due(napping: [true, true, true], now: now, random: r) { own[i].append(now) }
+            for e in co.due(napping: [true, true, true], now: now, random: r) { own[e.jelly].append(now) }
+            let last = (0..<3).map { own[$0].last ?? -100 }, next = (0..<3).map { [sn.next[$0], co.next[$0]].filter { $0 > 0 }.min() ?? 0 }
+            for e in mu.due(napping: [true, true, true], now: now, nextOwn: next, lastOwn: last, random: r) { mur[e.jelly].append(now) }
+            now += 0.1
+        }
+        for i in 0..<3 {
+            XCTAssertGreaterThan(mur[i].count, 20)
+            for m in mur[i] { for o in own[i] { XCTAssertGreaterThan(abs(m - o), 2.4, "sleeper \(i): murmur at \(m) vs own sound at \(o)") } }
+        }
     }
 }
 
