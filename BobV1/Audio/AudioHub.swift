@@ -588,6 +588,8 @@ final class AudioHub {
     /// `rate`: playback speed (1 = as recorded; a squeak is a boop at 1.7, a drum thump a boop at 0.55).
     /// Test seam: every request (before the mute / rate guards), e.g. "jump", "chirp:happy". nil in the app.
     nonisolated(unsafe) static var requestTap: ((String) -> Void)?
+    /// Like requestTap but for chirps only, with the caller tag ("chirp:happy@idle") and the slot (diagnosis soak).
+    nonisolated(unsafe) static var requestSrcTap: ((String, Int) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         Self.requestTap?(sfx.rawValue)
         if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
@@ -767,10 +769,13 @@ final class AudioHub {
     @MainActor static func voiceFile(slot: Int, _ v: JellyVoice) -> String { JellyVoiceSet.file(character: JellyRoster.character(slot), v) }
 
     /// The Jelly's own voice (by slot -> character): happy / sad / babble.
-    func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0) {
+    /// `src` names the caller ("idle", "greet", "wave", "cafe", ...; "other" when untagged). It only goes into the diag / AudioLog text and `requestSrcTap`;
+    /// `requestTap` keeps the plain "chirp:<voice>" string.
+    func chirp(jelly: Int, _ v: JellyVoice, x: Float = 0, src: String = "other") {
         Self.requestTap?("chirp:\(v)")
+        Self.requestSrcTap?("chirp:\(v)@\(src)", jelly)
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
-        let what = "chirp:\(v)"
+        let what = "chirp:\(v)@\(src)"
         if let w = gateWhy() { diag(what, jelly, w); return }
         let level = settings.sfxLevel * duck.gain
         let i = min(max(jelly, 0), 2)

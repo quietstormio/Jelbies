@@ -369,7 +369,7 @@ extension GameCare {
                 b.face(.excited, hold: 2)
                 b.blushBump(hold: 2, peak: 0.6)
                 touchPlay?.spawnHeart(now: CACurrentMediaTime())
-                AudioHub.shared.chirp(jelly: a.id, .happy)
+                AudioHub.shared.chirp(jelly: a.id, .happy, src: "cafe")
             } else { book.zoomT[a.id] = left; book.zoomOver[a.id, default: 0] += dt }
         }
         cafe.holdCheer = !book.zoomT.isEmpty
@@ -384,6 +384,6 @@ extension GameCare {
         b.face(.excited, hold: 2.5)
         b.postEvent(.joyJump)
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
-        AudioHub.shared.chirp(jelly: a.id, .happy)
+        AudioHub.shared.chirp(jelly: a.id, .happy, src: "cafe")
     }
 }

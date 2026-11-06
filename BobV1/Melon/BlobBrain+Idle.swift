@@ -937,7 +937,7 @@ extension BlobBrain {
         roll += idleState.sign * 0.10 * k + 0.012 * k * sinf(2 * .pi * t * 0.9)
         pitch += (idleState.kind == .window ? -0.10 : 0.05) * k + 0.02 * k * sinf(2 * .pi * t * 1.3)
         if idleState.kind == .window { roll += 0.03 * k * sinf(2 * .pi * t / 2.4) }
-        if idleState.kind == .window, idleState.reps == 1, idleState.phase == 1, idleState.phaseT > idleState.hold * 0.5 { idleState.reps = 0; AudioHub.shared.chirp(jelly: steerID, .happy, x: px) }
+        if idleState.kind == .window, idleState.reps == 1, idleState.phase == 1, idleState.phaseT > idleState.hold * 0.5 { idleState.reps = 0; AudioHub.shared.chirp(jelly: steerID, .happy, x: px, src: "window") }
         if idleState.kind == .decorBoop || idleState.kind == .decorPeek { decorPose(skinner, k: k) }
     }
 

@@ -338,7 +338,7 @@ final class GameCare {
             case .disappeared(let n):
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: false, silent: bath.active)   // no puff when a clean-up starts
             case .fixed(let n, _):
-                AudioHub.shared.chirp(jelly: id, .happy, x: id == 0 ? bodyFloor.x : 0)
+                AudioHub.shared.chirp(jelly: id, .happy, x: id == 0 ? bodyFloor.x : 0, src: "greet")
                 brainFor(id)?.wantJoy()          // a need fixed: a jump for joy
                 bubbleNeed = nil; bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, need: n, fixed: true)
             }
@@ -438,7 +438,7 @@ final class GameCare {
         greetings += 1
     }
 
-    func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !tripActive { queued = [.wave] } }
+    func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble, src: "wave"); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !tripActive { queued = [.wave] } }
     /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
     var canClean: Bool { canClean(jelly: 0) }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
@@ -586,7 +586,7 @@ final class GameCare {
         if !focusGroup.arrived.contains(0) { savedAutonomy = brain.autonomy }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
         brain.autonomy = false                       // he stays on the front spot until released
         if focusGroup.markArrived(0) { focus.arrive() }
-        AudioHub.shared.chirp(jelly: 0, .happy)
+        AudioHub.shared.chirp(jelly: 0, .happy, src: "greet")
     }
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
@@ -809,7 +809,7 @@ final class GameCare {
         if greeting { greetAge += dt; if greetAge > 25 || greetBlocked { greeting = false } }
         if greetHop {
             greetHop = false
-            if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy) }       // the existing in-place hop (arm / feet caps hold)
+            if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }       // the existing in-place hop (arm / feet caps hold)
         }
         if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
