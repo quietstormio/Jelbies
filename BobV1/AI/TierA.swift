@@ -28,7 +28,10 @@ nonisolated enum SmartVoiceState: Equatable, Sendable {
         switch self {
         case .available: return "Free phrasing is understood on your phone. Nothing leaves it."
         case .deviceNotEligible: return "This phone can't run Apple Intelligence. Simple commands still work."
-        case .notEnabled: return "Turn on Apple Intelligence in Settings for free phrasing. Simple commands still work."
+        case .notEnabled:
+            // Apple Intelligence can't be switched off on iOS 27+, so "turn it on" only makes sense on 26.x
+            if #available(iOS 27.0, *) { return "Apple Intelligence is not ready yet. Simple commands work meanwhile." }
+            return "Turn on Apple Intelligence in Settings for free phrasing. Simple commands still work."
         case .modelNotReady: return "Apple Intelligence is still downloading. Simple commands work meanwhile."
         case .unsupported: return "Simple commands only on this phone."
         }

@@ -285,12 +285,15 @@ nonisolated enum ParkPool {
         return w
     }
 
-    /// A line made safe to show: one short line of plain text.
-    static func clean(_ raw: String, limit: Int) -> String? {
-        var t = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    /// A line made safe to show: one short line of plain text that passes the deny list (ParkTextSafety). Names are letters and spaces only.
+    /// nil means "use the hand-written words".
+    static func clean(_ raw: String, limit: Int, isName: Bool = false) -> String? {
+        var t = raw.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         t = t.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`*"))
         t = t.split(whereSeparator: { $0 == " " }).joined(separator: " ")
-        guard !t.isEmpty, t.count <= limit, !t.lowercased().contains("http") else { return nil }
+        let cap = isName ? min(limit, 12) : min(limit, 60)
+        guard !t.isEmpty, t.count <= cap, !t.lowercased().contains("http"), !t.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+              ParkTextSafety.isSafe(t, isName: isName) else { return nil }
         return t
     }
 }
