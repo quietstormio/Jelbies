@@ -42,7 +42,7 @@ extension BlobBrain {
         sleep.force = true
         let c = chooseSleepSpot()
         var spot = c.spot
-        if !sleepFloorOK(spot, relaxed: true), !c.joined, let f = forceSpot() { spot = f }
+        if (!sleepFloorOK(spot, relaxed: true) && !c.joined) || sleepOverlapsOthers(spot, yaw: c.yaw), let f = forceSpot() { spot = f }
         sim.teleport(toXZ: spot)
         poseW = 0
         currentPose(sim)

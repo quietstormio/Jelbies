@@ -38,6 +38,7 @@ struct SleepState {
     /// The flop's impact (kick + squish) has fired.
     var impacted = false
     var walkTries = 0
+    var clearTries = 0
     /// Put to bed by voice: the room dims and the blanket goes on once everybody is down.
     var tucked = false
     /// Snuggling beside a sleeper (user 2026-10-19): `.hold` = the nearest arm nubs reach a little toward each other and touch while both sleep, `.cuddle` = the joiner
@@ -229,6 +230,14 @@ extension BlobBrain {
         return 1.004 * (2 + SleepTuning.footMargin / SleepTuning.footHalfWid) / max((a * a + b * b).squareRoot(), 1e-4)          // (a hair over, so the spot is never exactly on the clash line)
     }
 
+    /// Would lying at `p` (heading `yaw`) overlap another sleeper's reserved spot, lying body or current position? (The last guard before a lie-down: nothing slides after lying.)
+    func sleepOverlapsOthers(_ p: SIMD2<Float>, yaw: Float) -> Bool {
+        for o in socialOthers() where o !== self && o.idleState.kind == .sleep && o.sleep.stage <= 4 {
+            if Self.lieClash(p - o.sleep.spot, yawA: yaw, yawB: o.sleep.lieYaw) || Self.lieClash(p - o.position, yawA: yaw, yawB: o.sleep.lieYaw) { return true }
+        }
+        return false
+    }
+
     /// The other Jellies that sleep or are on their way to sleep (the pile).
     var sleepMates: [BlobBrain] { socialOthers().filter { $0 !== self && $0.idleState.kind == .sleep && $0.sleep.stage <= 4 } }
 
@@ -360,7 +369,7 @@ extension BlobBrain {
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
         var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot()
-        if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
+        if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) || sleepOverlapsOthers(c.spot, yaw: c.yaw) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
         guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
         sleep = SleepState()
@@ -419,6 +428,18 @@ extension BlobBrain {
             if simd_distance(position, f) > 0.25 {
                 scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
                 script = .walk(target: f, then: .none); activity = .walking
+                return
+            }
+        }
+        if sleep.clearTries < 4, sleepOverlapsOthers(position, yaw: sleep.lieYaw) {          // he stopped short on another sleeper: pick a clear spot and walk there BEFORE lying (never slid after)
+            sleep.clearTries += 1
+            let c = chooseSleepSpot()
+            var s = c.spot
+            if sleepOverlapsOthers(s, yaw: c.yaw), let f = forceSpot() { s = f }
+            sleep.spot = s; sleep.lieYaw = c.yaw; sleep.joined = c.joined
+            if simd_distance(position, s) > 0.25 {
+                scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+                script = .walk(target: s, then: .none); activity = .walking
                 return
             }
         }

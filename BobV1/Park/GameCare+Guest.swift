@@ -172,7 +172,7 @@ extension GameCare {
 
     func guestRemove() {
         let g = guestBook
-        if let a = g.actor { visitorPutAway(a); parkBook.clear?() }
+        if let a = g.actor { a.brain?.hurry = false; visitorPutAway(a); parkBook.clear?() }
         g.actor = nil
         g.card = false
         g.party.cancel()
@@ -197,6 +197,7 @@ extension GameCare {
         g.actor = a
         g.greeted = false; g.settleT = 0; g.stage = 0; g.phaseT = 0; g.bedT = 1.5; g.wakeT = 0; g.friendSession = [:]
         b.sleepLocked = false
+        b.hurry = false
         b.idleMood = .happy
         if !visit.arrived {
             g.markArrived(now: now, sleepoverSeconds: DayClock.shared.secondsToSleepoverEnd, endsGame: DayClock.shared.sleepoverEndGame)
@@ -288,11 +289,11 @@ extension GameCare {
             // he goes to bed a little after the Jelbies do (the usual goodnight: beside a sleeper), retried until he lies down
             g.bedT -= dt
             if g.bedT <= 0 { b.commandedGoodnight = true; g.bedT = NightRestTuning.retry }
-        } else if !rosterSleeping { g.bedT = 1.5 }
+        } else if !rosterSleeping { g.bedT = Float.random(in: 1...4) }          // (staggered: he lies down 1...4 s after the Jelbies, the same sleep path and clearance)
         // everybody else was woken (the player's word): he wakes too, a moment later
         if b.isNapping, !rosterSleeping {
             g.wakeT += dt
-            if g.wakeT > 8 { g.wakeT = 0; b.sleepWake(groggy: false) }
+            if g.wakeT > g.wakeAfter { g.wakeT = 0; g.wakeAfter = Float.random(in: 1...4); b.sleepWake(groggy: false) }          // (he wakes 1...4 s after the household)
         } else { g.wakeT = 0 }
     }
 
@@ -341,11 +342,16 @@ extension GameCare {
             guard g.phaseT > 0.4, b.scriptIsNone, b.idleState.kind == nil || g.phaseT > 8 else { return }
             b.requestNow(.wave)
             AudioHub.shared.chirp(jelly: a.id, .babble)
-            for r in actors { if let rb = r.brain, !rb.isSleeping, rb.scriptIsNone { rb.face(.happy, hold: 2.5) } }
+            for r in actors {          // the awake household waves back at the same time (a Jelbie mid-something just smiles)
+                guard let rb = r.brain, !rb.isSleeping, rb.scriptIsNone else { continue }
+                rb.face(.happy, hold: 2.5)
+                if rb.idleState.kind == nil, !rb.commanded, rb.social == nil, rb.pending == nil { rb.requestNow(.wave) }
+            }
             g.stage = 1; g.phaseT = 0
         case 1:          // the wave to the camera is over: head for the door
             let waving = b.isWaving || b.pending != nil || b.interruptScript
             if (!waving && g.phaseT > 0.8) || g.phaseT > 6 {
+                b.hurry = true          // he RUNS out (the arrival's run gait, in reverse)
                 b.requestNow(.goTo(GuestTuning.door))
                 g.stage = 2; g.phaseT = 0
             }

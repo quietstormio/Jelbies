@@ -93,6 +93,13 @@ extension GameCare {
             b.sleepInstant(a.sim, a.skinner)
             nightRest.wanted.insert(a.id)
         }
+        // a sleepover friend goes down with them (after the roster, so he joins the pile with the usual clearance); a day guest is not put to bed
+        let g = guestBook
+        if let v = guestBook.visit, v.kind == .sleepover, v.arrived, let a = g.actor, let b = a.brain, !b.isSleeping, b.sleepEnabled,
+           g.phase == .here || g.phase == .walkingIn, !g.arrival.active, g.hugWait == nil {
+            b.abortAll(a.sim, a.skinner); b.pending = nil
+            b.sleepInstant(a.sim, a.skinner)
+        }
     }
 
     /// The clock jumps to 7:00 on the next Day, and the night's worth of time catches the needs and dirt up gently.

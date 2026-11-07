@@ -358,7 +358,7 @@ final class AudioHub {
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
-    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], night: Double = 0) {
+    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], night: Double = 0, guest: (slot: Int, napping: Bool, x: Float)? = nil) {
         guard !muted, started else { return }
         atHome = home && scene == .none && director.scene == .none && townScene == .none
         input.allNapping = !napping.isEmpty && !napping.contains(false)
@@ -366,18 +366,26 @@ final class AudioHub {
         raceScene = scene
         input.scene = scene != .none ? scene : townScene
         let now = Self.clock()
-        for i in snores.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
-            snore(jelly: i, x: i < xs.count ? xs[i] : 0)
+        // a sleepover friend at home snores and sleep-talks like the Jelbies (his own slot past the roster; the music's `allNapping` above stays the Jelbies')
+        var sleepers = napping, sleepX = xs
+        if let g = guest, g.slot >= napping.count, g.slot < 4 {
+            while sleepers.count < g.slot { sleepers.append(false) }
+            sleepers.append(g.napping)
+            while sleepX.count < g.slot { sleepX.append(0) }
+            sleepX.append(g.x)
+        }
+        for i in snores.due(napping: sleepers, now: now, random: { Double.random(in: $0) }) {
+            snore(jelly: i, x: i < sleepX.count ? sleepX[i] : 0)
             onSnore?(i)
         }
-        for (i, kind) in sleepSounds.due(napping: napping, now: now, random: { Double.random(in: $0) }) {
-            sleepSound(kind, jelly: i, x: i < xs.count ? xs[i] : 0)
+        for (i, kind) in sleepSounds.due(napping: sleepers, now: now, random: { Double.random(in: $0) }) {
+            sleepSound(kind, jelly: i, x: i < sleepX.count ? sleepX[i] : 0)
         }
         if SleepMurmurTuning.enabled {          // (sleep-talk, sleepers only, ON TOP of the snores / coos: they keep their own schedules and hush)
-            let lastOwn = (0..<3).map { max(lastPlay["snore#\($0)"] ?? -100, lastPlay["sleepsound#\($0)"] ?? -100) }
-            let nextOwn = (0..<3).map { j in [snores.next[j], sleepSounds.next[j]].filter { $0 > 0 }.min() ?? 0 }
-            for (i, v) in murmurs.due(napping: napping, now: now, nextOwn: nextOwn, lastOwn: lastOwn, random: { Double.random(in: $0) }) {
-                sleepMurmur(v, jelly: i, x: i < xs.count ? xs[i] : 0)
+            let lastOwn = (0..<4).map { max(lastPlay["snore#\($0)"] ?? -100, lastPlay["sleepsound#\($0)"] ?? -100) }
+            let nextOwn = (0..<4).map { j in [snores.next[j], sleepSounds.next[j]].filter { $0 > 0 }.min() ?? 0 }
+            for (i, v) in murmurs.due(napping: sleepers, now: now, nextOwn: nextOwn, lastOwn: lastOwn, random: { Double.random(in: $0) }) {
+                sleepMurmur(v, jelly: i, x: i < sleepX.count ? sleepX[i] : 0)
             }
         }
         for i in moods.indices {

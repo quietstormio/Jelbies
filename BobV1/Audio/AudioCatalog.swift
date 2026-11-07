@@ -263,7 +263,7 @@ nonisolated struct SnoreScheduler: Sendable {
     static var interval: ClosedRange<Double> { (13 / speedUp)...(24 / speedUp) }        // was 6...10, then 20...40 (inaudible), then 13...24
     static var firstDelay: ClosedRange<Double> { (5 / speedUp)...(12 / speedUp) }
     static let hubGap: Double = 3.5
-    private(set) var next: [Double] = [0, 0, 0]
+    private(set) var next: [Double] = [0, 0, 0, 0]          // (the three Jelbies + a sleepover friend's slot)
     private(set) var lastAny: Double = -100
 
     /// The Jellies that snore now (`now` seconds; `napping[i]` = asleep).
@@ -303,7 +303,7 @@ nonisolated struct SleepSoundScheduler: Sendable {
     static let softSnoreChance: Double = 0
     static let softSnoreGain: Float = 0.6
     static let cooGain: Float = 0.55
-    private(set) var next: [Double] = [0, 0, 0]
+    private(set) var next: [Double] = [0, 0, 0, 0]          // (the three Jelbies + a sleepover friend's slot)
     private(set) var lastAny: Double = -100
 
     mutating func due(napping: [Bool], now: Double, random: (ClosedRange<Double>) -> Double) -> [(jelly: Int, sound: SleepSound)] {
@@ -349,7 +349,7 @@ nonisolated enum SleepMurmurTuning {
 /// (`nextOwn`, 0 = unknown) and when it last made one (`lastOwn`). A murmur waits (retries in 1...2.5 s) until it is clear of both, so it never lands in the same
 /// Jelbie's snore or coo (one voice per Jelbie). (A global "clear of every sleeper's sound" was tried: three sleepers snore / coo so often it starved the murmurs.)
 nonisolated struct SleepMurmurScheduler: Sendable {
-    private(set) var next: [Double] = [0, 0, 0]
+    private(set) var next: [Double] = [0, 0, 0, 0]          // (the three Jelbies + a sleepover friend's slot)
 
     mutating func due(napping: [Bool], now: Double, nextOwn: [Double], lastOwn: [Double], random: (ClosedRange<Double>) -> Double) -> [(jelly: Int, voice: JellyVoice)] {
         var out: [(jelly: Int, voice: JellyVoice)] = []

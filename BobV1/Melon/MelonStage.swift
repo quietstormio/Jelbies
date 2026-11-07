@@ -733,7 +733,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         let ambient = actors.indices.map { freeRoom && (brains[$0]?.enabled ?? false) && (brains[$0]?.ambientVoiceOK ?? false) }
         if AudioHub.shared.onAmbient == nil { AudioHub.shared.onAmbient = { [weak self] i in self?.actors[i].brain?.ambientPulse() } }
         AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
-                                  home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0))
+                                  home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
+                                  guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isNapping, x: $0.px) } })
     }
 
     /// The other Jellies' brain, jelly follow-through and mouth (their needs, mood and greeting are GameCare.tickOthers).

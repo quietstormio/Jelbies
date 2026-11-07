@@ -137,6 +137,7 @@ final class GuestBook {
     @ObservationIgnored var knockT: Float = 0
     @ObservationIgnored var bedT: Float = 1.5
     @ObservationIgnored var wakeT: Float = 0
+    @ObservationIgnored var wakeAfter: Float = 2
     @ObservationIgnored var greeted = false
     @ObservationIgnored var settleT: Float = 0
     @ObservationIgnored var checkT: Float = 0
