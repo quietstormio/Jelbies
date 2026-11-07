@@ -44,7 +44,6 @@ struct ShopScreen: View {
     private var shown: [StoreItem] { tab == .wear ? tab.items.filter { wearSlot == nil || $0.wear?.slot == wearSlot } : tab.items }
     @State private var selected: StoreItem? = UserDefaults.standard.string(forKey: "StoreOpen") == "item" ? StoreCatalog.item(UserDefaults.standard.string(forKey: "StoreItem") ?? "sushi") : nil
 
-    @State private var scrollTopTick = 0
     @State private var boughtToast: String?
 
     private var book: StoreBook { care.store }
@@ -56,17 +55,13 @@ struct ShopScreen: View {
                 SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in ShopTab.wear.items.contains { $0.wear?.slot == s } }, idPrefix: "shop-slot-")
                     .padding(.horizontal, 16).padding(.top, 8)
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
-                        ForEach(shown) { item in card(item) }
-                    }
-                    .id("shop-grid-top")
-                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
+                    ForEach(shown) { item in card(item) }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .onChange(of: scrollTopTick) { _, _ in withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("shop-grid-top", anchor: .top) } }
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .overlay(alignment: .bottom) {
             if let boughtToast {
@@ -81,7 +76,6 @@ struct ShopScreen: View {
         .sheet(item: $selected) { item in
             ItemSheet(care: care, item: item, who: who, goHome: goHome, close: { selected = nil }, onBought: { msg in
                 selected = ShopSelection.afterBuy(selected, bought: true)
-                scrollTopTick += 1
                 withAnimation(.spring(duration: 0.35)) { boughtToast = msg }
                 Task { try? await Task.sleep(for: .seconds(2.2)); withAnimation { boughtToast = nil } }
             })
