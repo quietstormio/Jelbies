@@ -71,3 +71,15 @@ extension BlobBrain {
         return idleStart(rand() < 0.5 ? .bounce : .skipHop, sim)
     }
 }
+
+extension BlobBrain {
+    /// The deliberate pop: the header hop (a hop on the spot with more air than the happy bounce, `tossApex`; the short stubby arms lift in it like the bounce's, the squash on take-off
+    /// and the stretch at the top are the hop machinery's own). The crown is at the top `tossHeaderLead` s after this call; the wand pops the bubble when it is on the crown.
+    /// False when he cannot hop right now.
+    @discardableResult
+    func bubbleHeaderHop(_ sim: SoftBody) -> Bool {
+        guard idleState.kind == nil, scriptIsNone, !feet.active else { return false }
+        face(.excited, hold: 1.2)
+        return tossHeaderStart(sim)
+    }
+}

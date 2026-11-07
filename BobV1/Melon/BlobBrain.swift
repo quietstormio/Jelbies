@@ -214,6 +214,8 @@ final class BlobBrain {
     var tossFire: ((BlobBrain) -> Void)?
     /// The bubble wand's play area while Play mode with the wand is on (Toys/BubbleWand.swift sets and clears it; BlobBrain+Bubbles.swift acts on it): he stays on his spot in view.
     var bubbleLeash: BubbleLeash?
+    /// While he stands under a bubble he is about to hop at, the leash's small idle moves wait (the wand sets and clears it).
+    var bubbleHold = false
     var waitBounceT: Float = 0
     var held: Bool { idleBlocked || reserved }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
@@ -808,7 +810,7 @@ final class BlobBrain {
         planBudget = 12; defer { planBudget = 99 }          // (the per-step probe budget, not this count, now bounds the cost; 2 left Jelly 0 short of the front in testRoomCoveragePortrait)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
-        if let lz = bubbleLeash, !commanded { bubbleIdle(sim, lz); return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
+        if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         var pt = CACurrentMediaTime()
         if socialMaybeStart(sim) { return }
