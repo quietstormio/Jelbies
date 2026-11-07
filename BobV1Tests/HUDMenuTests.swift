@@ -52,10 +52,8 @@ final class HUDMenuTests: XCTestCase {
         tickSelect(care, 2.5)
         XCTAssertEqual(care.select.highlighted, 1); XCTAssertFalse(care.select.isSelecting)
         XCTAssertEqual(HUDMenu.mode(care), .individual(1))
-        XCTAssertEqual(HUDMenu.items(.individual(1)), [.dress, .clean, .train, .compete, .come])
+        XCTAssertEqual(HUDMenu.items(.individual(1)), [.dress, .clean, .compete, .come])
         XCTAssertEqual(care.targetJelly, 1); XCTAssertEqual(care.singledOutJelly, 1)
-        XCTAssertEqual(HUDMenu.title(.train, .individual(1), care: care), "Train")
-        XCTAssertEqual(HUDMenu.spokenLabel(.train, .individual(1), care: care), "Train \(care.jelly(1)!.name)")
     }
 
     func testGroupMenuHasACallEveryoneRowAtTheEndOnlyWhenNobodyIsHighlighted() {
@@ -133,13 +131,6 @@ final class HUDMenuTests: XCTestCase {
         care.voice.onGoodnight = { ids in got = ids }
         XCTAssertEqual(HUDMenu.perform(.bedtime, .group, care: care), .none)
         XCTAssertEqual(got, [0, 1, 2])
-    }
-
-    func testTrainOpensTheCloseUpForThatJelbie() {
-        let r = room()
-        XCTAssertEqual(HUDMenu.perform(.train, .individual(2), care: r.care), .none)
-        XCTAssertTrue(r.run(20) { r.care.focus.phase == .focused }, "phase \(r.care.focus.phase)")
-        XCTAssertEqual(r.care.focusGroup.ids, [2])
     }
 
     @MainActor func testGoOutOpensTheTownAndTheTownOffersTheCafe() {

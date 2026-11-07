@@ -74,65 +74,8 @@ final class VoiceIntegrationTests: XCTestCase {
         return r
     }
 
-    /// Teaching happens in the Train close-up (TrainSession): the mic opens by itself, three listens teach, then a plain word works from a wander.
-    func testTeachSitInTrainThenCommandFromWander() {
-        let r = make()
-        r.care.beginTraining(0)
-        XCTAssertTrue(r.run(40) { r.voice.train != nil }, "the Train card starts when he arrives")
-        r.voice.trainPick(.sit)
-        for i in 0..<VoiceTuning.repsToLearn {
-            XCTAssertTrue(r.run(8) { r.voice.train?.step == .listen(.sit) && r.voice.isListening }, "rep \(i + 1): the mic opens by itself")
-            r.run(0.4)
-            r.voice.hear("sit")
-            r.run(0.1)
-            XCTAssertEqual(r.voice.training.lesson(.sit).reps, i + 1, "rep \(i + 1) counted")
-        }
-        XCTAssertTrue(r.voice.training.isLearned(.sit), "learned after \(VoiceTuning.repsToLearn) reps over \(VoiceTuning.repsToLearn) listens")
-        XCTAssertEqual(r.voice.training.word(for: .sit), "sit")
-        r.care.release()
-        XCTAssertTrue(r.run(20) { r.care.focus.phase == .roaming && r.voice.train == nil }, "the close-up ends and the session with it")
-        // from a wander
-        r.brain.idleReset(r.rig.skinner)
-        r.brain.requestNow(.goTo(SIMD2(1.5, 0.6)))
-        XCTAssertTrue(r.run(2) { r.brain.activity == .walking }, "he is wandering")
-        r.say("sit", settle: 0)
-        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .sit }, "he sits within 2 s")
-        XCTAssertEqual(r.care.focus.phase, .roaming)
-    }
 
-    /// The user path: tap the Sit row in the trick book (`show`), wait a realistic beat, hold the mic and say a word. Three times, then command it from a wander.
-    /// A daytime sit lasts only 3...6 s on its own; the "say a word" prompt keeps it down until the prompt times out, so a slower player still gets the rep.
-    func testTeachSitFromTheBookRowWithRealTiming() {
-        let r = make()
-        r.brain.idleReset(r.rig.skinner)
-        for i in 0..<VoiceTuning.repsToLearn {
-            r.voice.show(.sit)
-            XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit }, "the row starts the sit (rep \(i + 1))")
-            r.run(6.0)          // longer than a daytime sit's 3...6 s (plus 1.15 s sitting down), still inside the 8 s prompt
-            XCTAssertEqual(r.brain.idleState.kind, .sit, "the taught sit is held while the prompt is up")
-            r.say("sit", settle: 0.1)
-            XCTAssertEqual(r.voice.training.lesson(.sit).reps, i + 1, "rep \(i + 1) counted")
-            r.run(8)            // the prompt is gone: the sit ends on its own
-            if r.brain.idleState.kind == .sit { r.run(8) }
-        }
-        XCTAssertTrue(r.voice.training.isLearned(.sit))
-        XCTAssertNil(r.voice.teachPrompt)
-        r.brain.idleReset(r.rig.skinner)
-        r.brain.requestNow(.goTo(SIMD2(1.5, 0.6)))
-        XCTAssertTrue(r.run(2) { r.brain.activity == .walking })
-        r.say("sit", settle: 0)
-        XCTAssertTrue(r.run(2) { r.brain.idleState.kind == .sit }, "the learned word sits him from a wander")
-    }
 
-    /// An unanswered prompt times out, so the held sit is not stuck forever.
-    func testTeachPromptTimesOutAndReleasesTheSit() {
-        let r = make()
-        r.brain.idleReset(r.rig.skinner)
-        r.voice.show(.sit)
-        XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit })
-        XCTAssertTrue(r.run(30) { r.brain.idleState.kind != .sit }, "after the prompt expires the sit ends")
-        XCTAssertNil(r.voice.teachPrompt)
-    }
 
     func testCommandWorksInFocus() {
         let r = make()
@@ -303,30 +246,7 @@ final class VoiceIntegrationTests: XCTestCase {
         XCTAssertEqual(r.care.focus.phase, .roaming)
     }
 
-    func testTutorialIsRetired() {
-        let r = make()
-        XCTAssertTrue(r.voice.tutorial.isDone)
-        XCTAssertEqual(r.voice.tutorial.phase, .hidden)
-    }
-
     // MARK: feedback events
-
-    func testFeedbackRepThenLearnedShowsHeardPillAndHop() {
-        let r = make()
-        r.care.beginTraining(0)
-        XCTAssertTrue(r.run(40) { r.voice.train != nil })
-        r.voice.trainPick(.sit)
-        for i in 0..<VoiceTuning.repsToLearn {
-            XCTAssertTrue(r.run(8) { r.voice.train?.step == .listen(.sit) && r.voice.isListening })
-            r.run(0.4)
-            r.voice.hear("sit down")
-            r.run(0.1)
-            if i < VoiceTuning.repsToLearn - 1 { XCTAssertEqual(r.voice.feedbackLog.last, .rep(.sit, reps: i + 1)) }
-        }
-        XCTAssertEqual(r.voice.feedbackLog.last, .learned(.sit, word: "sit down"))
-        XCTAssertEqual(r.voice.heard?.text, "\u{201C}sit down\u{201D}", "the heard pill quotes the player's words")
-        XCTAssertEqual(r.voice.toast?.text, "\(r.voice.book.names.displayName(0)) learned Sit! Say \u{201C}sit down\u{201D}")
-    }
 
     func testFeedbackObeyedUnknownNothingGrumpyMissed() {
         let r = make()
@@ -354,16 +274,6 @@ final class VoiceIntegrationTests: XCTestCase {
         r.say("come here", settle: 0.1)
         XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.come), "check bubble before the zoom")
         XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused })
-    }
-
-    func testTrickBookRowShowsPromptAndNoBubble() {
-        let r = make()
-        r.voice.show(.sit)
-        XCTAssertEqual(r.voice.teachPrompt?.trick, .sit)
-        r.run(0.3)
-        XCTAssertTrue(r.voice.feedbackLog.isEmpty, "a demonstration is not a command")
-        r.say("sit", settle: 0.1)
-        XCTAssertNil(r.voice.teachPrompt, "the prompt ends with the word")
     }
 
     func testUnusableMicOpensTheBookInstead() {
@@ -696,15 +606,16 @@ final class AIVoiceIntegrationTests: XCTestCase {
         XCTAssertEqual(r.voice.feedbackLog.last, .answer(.hunger, nil))
     }
 
-    func testDoASpinNeedsTheTrickPageThenRuns() async {
+    func testATrickNeedsToBeBoughtThenRuns() async {
         let r = make()
-        await say(r, "do a spin")
-        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "no spin page bought: the confused look")
-        r.care.store.grant("page-spin")
-        r.voice.training.debugLearn(.spin, word: "twirl")
+        await say(r, "peek")
+        XCTAssertEqual(r.voice.feedbackLog.last, .unknown, "look is not bought: the small don't-know shrug")
+        r.care.store.grantTrickToEveryone(.look)
         r.run(1)
+        await say(r, "peek")
+        XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.look), "bought for everyone: obeyed at once, no lesson")
         await say(r, "do a spin")
-        XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.spin))
+        XCTAssertEqual(r.voice.feedbackLog.last, .obeyed(.spin), "spin is a default")
         XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .tail }, "the spin trick runs")
     }
 

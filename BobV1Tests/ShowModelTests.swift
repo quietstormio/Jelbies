@@ -123,7 +123,7 @@ final class ShowModelTests: XCTestCase {
     func testPerfectShowScoresThreeHundred() {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 1 }
-        p.glow = 1; p.dirt = 0; p.dance = .sway; p.danceSkill = 1; p.tricks = [.flip: 1]; p.care = 1
+        p.glow = 1; p.dirt = 0; p.dance = .sway; p.tricks = [.flip: 1]; p.care = 1
         let theme = ShowTheme.starlightGala
         var s = ShowSim(rank: .puddle, theme: theme, dayKey: 20261021, player: p, rivals: ShowRivalSource.rivals(dayKey: 20261021, rank: .puddle, theme: theme), seed: 1)
         s.setOutfit([.head: [.sparkly], .feet: [.sparkly]])
@@ -217,7 +217,7 @@ final class ShowModelTests: XCTestCase {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.2 }
         p.condition[theme.main] = 0.5; p.condition[theme.friend] = 0.4
-        p.glow = 0.7; p.dirt = 0.1; p.dance = .sway; p.danceSkill = 0.3; p.care = 0.8
+        p.glow = 0.7; p.dirt = 0.1; p.dance = .sway; p.care = 0.8
         p.tricks = [.sit: 0.6, .flip: 0.6, .jacks: 0.6]
         return (p, [.head: [theme.main], .feet: [theme.friend]])
     }
@@ -225,7 +225,7 @@ final class ShowModelTests: XCTestCase {
     private func untrained() -> ShowPlayerInput {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.1 }
-        p.glow = 0.2; p.dirt = 0.5; p.dance = nil; p.danceSkill = 0; p.care = 0.3; p.tricks = [.sit: 0.4]
+        p.glow = 0.2; p.dirt = 0.5; p.dance = nil; p.care = 0.3; p.tricks = [.sit: 0.4]
         return p
     }
 
@@ -344,7 +344,7 @@ final class ShowModelTests: XCTestCase {
         let s = JellyStats(persists: true, defaults: d, key: "S", now: { now })
         XCTAssertEqual(s.condition(.sparkle), 0.5, accuracy: 1e-5); XCTAssertEqual(s.proficiency(.sway), 0.4, accuracy: 1e-5)
         XCTAssertEqual(s.meals, [], "no diary yet")
-        XCTAssertEqual(s.bestDance, .sway); XCTAssertTrue(s.danceOpen(.sway)); XCTAssertFalse(s.danceOpen(.bop))
+        XCTAssertEqual(s.bestDance, .sway)
         // meals: the same food within a minute is one line; eight are kept, newest first
         s.nudge([.sparkle: 0.1, .cute: 0.05], food: "Sushi")
         s.nudge([.sparkle: 0.1], food: "Sushi")
@@ -355,18 +355,6 @@ final class ShowModelTests: XCTestCase {
         let t = JellyStats(persists: true, defaults: d, key: "S", now: { now })
         XCTAssertEqual(t.meals, s.meals); XCTAssertEqual(t.proficiency(.bop), 0.6, accuracy: 1e-5); XCTAssertEqual(t.bestDance, .bop)
         XCTAssertEqual((d.array(forKey: "S.cond") as? [Double])?.count, ConditionKey.allCases.count + 1, "the condition array keeps its old shape")
-        // a dance drill teaches the dance and uses a Pep; a brand-new dance always learns a little
-        var day = 20261021
-        let fresh = JellyStats(persists: false, dayKey: { day })
-        let g = fresh.finishDancePractice(.sway, accuracy: 0.2)
-        XCTAssertGreaterThanOrEqual(g, 0.05); XCTAssertEqual(fresh.sessionsToday, 1); XCTAssertEqual(fresh.pepLeft, 2)
-        var p = fresh.proficiency(.sway); var n = 1
-        while p < 0.5, n < 20 { if fresh.pepLeft == 0 { day += 1 }; fresh.finishDancePractice(.sway, accuracy: 0.85); p = fresh.proficiency(.sway); n += 1 }
-        XCTAssertLessThanOrEqual(n, 6, "half known within a handful of good sessions with Pep (\(n))")
-        let spent = JellyStats(persists: false, dayKey: { 1 })
-        for _ in 0..<3 { spent.finishDancePractice(.sway, accuracy: 1) }
-        let before = spent.proficiency(.sway)
-        XCTAssertLessThan(spent.finishDancePractice(.sway, accuracy: 1), (before - 0) * 0.2, "after the day's Pep a session teaches much less")
     }
 
     // MARK: the dance lane

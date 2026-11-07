@@ -5,7 +5,7 @@
 //            the update budget), ends with the result ("🥇 Bob won! +12 Drops"), dismissed a few minutes later.
 //    nap   - optional, default on: when the Jelbies go to bed (the app leaves the foreground at night, or "Put my Jelbies to bed"),
 //            a gentle "sleeping" card with the wake time (06:00); stale at the wake time; ended when they wake / the app is back by day.
-//    pep   - optional, default off: when training Pep runs out, a countdown to the midnight refill; ends at the refill.
+//    pep   - retired with training (nothing starts it any more); kept so an old card on the Lock Screen is still ended on launch.
 //  Every ActivityKit call goes through `ActivityDriver`, so the decisions are unit-tested against `MockActivityDriver`.
 //  Local updates only (no push). Orphans from a crashed / killed run are ended on launch (`cleanUp`).
 //
@@ -224,7 +224,7 @@ final class LiveActivities {
 
     // MARK: pep
 
-    /// Training Pep ran out: the countdown to the midnight refill (when the setting is on).
+    /// Retired with training (nothing calls it); the card kind stays so an old one can still be adopted and ended.
     func pepDepleted(jellyID: Int, name: String, color: String, refillAt: Date? = nil) {
         guard pepOn, pepID == nil, driver.enabled else { return }
         let refill = refillAt ?? Self.nextMidnight(after: now(), calendar: calendar)

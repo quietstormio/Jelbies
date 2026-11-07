@@ -1,13 +1,13 @@
 //
 //  SceneMusic.swift
-//  The music of the screens (race, final stretch, training, shop, town) with sample-accurate loops.
+//  The music of the screens (race, final stretch, shop, town) with sample-accurate loops.
 //
-//    SceneTrack      which file, its loop points in 44.1 kHz frames (from music_pick/picks.json; bar-aligned, on zero crossings) and whether it starts
-//                    at the loop (training does: its beat grid is the loop's).
+//    SceneTrack      which file, its loop points in 44.1 kHz frames (from music_pick/picks.json; bar-aligned, on zero crossings) and (the intro is
+//                    played once, then the loop).
 //    MusicScene      what the screen wants; MusicDirector turns a change of scene into events.
 //    SceneRender     decodes a track into an intro buffer and a LOOP buffer whose last ~15 ms are crossfaded with the audio just before the loop start,
 //                    so scheduling the loop buffer with `.loops` is gapless and click free.
-//    SceneMusicEngine  one AVAudioEngine with a player node per playing track; fades, volume and the song clock (the drill's beat grid reads it).
+//    SceneMusicEngine  one AVAudioEngine with a player node per playing track; fades, volume and the song clock (the Jelly Show's beat grid reads it).
 //
 //  Only the tracks that are playing are held in memory (a float32 stereo track is ~20-30 MB; a crossfade between two tracks holds both for a second).
 //
@@ -16,7 +16,7 @@ import Foundation
 import AVFoundation
 
 nonisolated enum SceneTrack: String, CaseIterable, Sendable {
-    case circuitRace = "circuit_race_3", circuitFinal = "circuit_final_2", training = "training_1", shop = "shop_2", town = "town_1"
+    case circuitRace = "circuit_race_3", circuitFinal = "circuit_final_2", shop = "shop_2", town = "town_1"
     case studioPractice = "studio_practice_1", contestStage = "contest_stage_2"
     case park1 = "park_1", park2 = "park_2", cafe1 = "cafe_1", cafe2 = "cafe_2", volley1 = "volley_1", volley2 = "volley_2"      // 2026-10-24; loops = the whole file (past a 2000-frame lead-in), seam crossfaded
 
@@ -30,7 +30,6 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         switch self {
         case .circuitRace: return 1_289_559
         case .circuitFinal: return 362_406
-        case .training: return TrainingTuning.loopStartFrame
         case .shop: return 1_205_040
         case .town: return 655_869
         case .studioPractice: return 1_235_736
@@ -42,7 +41,6 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         switch self {
         case .circuitRace: return 3_732_037
         case .circuitFinal: return 1_118_625
-        case .training: return TrainingTuning.loopEndFrame
         case .shop: return 2_898_470
         case .town: return 3_075_098
         case .studioPractice: return 2_646_955
@@ -60,8 +58,6 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .volley2: return 3_307_833
         }
     }
-    /// Starts at the loop start (the intro is skipped): the training drill's beat grid is the loop's, and the drill waits for nothing.
-    var skipsIntro: Bool { self == .training }
     static let sampleRate = 44100.0
     var loopStart: Double { Double(loopStartFrame) / Self.sampleRate }
     var loopEnd: Double { Double(loopEndFrame) / Self.sampleRate }
@@ -77,7 +73,7 @@ nonisolated enum Jingle: String, Sendable {
 
 /// What a screen wants to hear (the director picks the files). `results` = the screen's music stops (a jingle plays) and the room music stays out.
 nonisolated enum MusicScene: Equatable, Sendable {
-    case none, race, raceFinal, training, shop, town, results
+    case none, race, raceFinal, shop, town, results
     /// The Park visit and the café outing: one of two tracks each, picked per visit by the director (`tracks`).
     case park, cafe
     /// The beach volleyball court: one of two tracks per match.
@@ -89,7 +85,6 @@ nonisolated enum MusicScene: Equatable, Sendable {
         switch self {
         case .race: return .circuitRace
         case .raceFinal: return .circuitFinal
-        case .training: return .training
         case .shop: return .shop
         case .town: return .town
         case .studio: return .studioPractice
@@ -163,7 +158,7 @@ nonisolated enum SceneRender {
         // the last x frames of the loop fade into the x frames BEFORE the loop start, so the seam continues the music as it was
         crossfadeTail(loop: loop, pre: pre, x: x)
         var intro: AVAudioPCMBuffer?
-        if !t.skipsIntro, s > 0, let ib = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(s)) {
+        if s > 0, let ib = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(s)) {
             file.framePosition = 0
             do { try file.read(into: ib, frameCount: AVAudioFrameCount(s)); intro = ib } catch { return nil }
         }
@@ -293,11 +288,11 @@ final class SceneMusicEngine {
     }
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its
-    /// start, the loop start + the time played for a track that skips its intro. It keeps counting past the loop (the loop is a whole number of beats).
+    /// start. It keeps counting past the loop (the loop is a whole number of beats).
     func songTime(of t: SceneTrack) -> Double? {
         guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }),
               let nt = v.node.lastRenderTime, nt.isSampleTimeValid, let pt = v.node.playerTime(forNodeTime: nt) else { return nil }
         let played = Double(pt.sampleTime) / pt.sampleRate - AVAudioSession.sharedInstance().outputLatency
-        return (t.skipsIntro ? t.loopStart : 0) + played
+        return played
     }
 }

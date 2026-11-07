@@ -212,6 +212,10 @@ final class Ears {
     @ObservationIgnored var permissionDenied: () -> Bool = { AVAudioApplication.shared.recordPermission == .denied }
     @ObservationIgnored var makeEngine: () -> AVAudioEngine = { AVAudioEngine() }
     @ObservationIgnored var classify = true
+    /// Music Ears is owned (bought in the Shop, or grandfathered); GameCare's store answers once the game screen is up. The default allows it.
+    @ObservationIgnored var owned: () -> Bool = { true }
+    /// Locked until bought: the switch is hidden behind "Get it in the Shop".
+    var isLocked: Bool { !owned() }
     /// Called when the session category is set (true) or Ears lets go of it (false): the hub.
     @ObservationIgnored var sessionHook: (Bool) -> Void = { on in if on { AudioHub.shared.earsSessionBegan() } else { AudioHub.shared.earsSessionEnded() } }
     @ObservationIgnored var danceHook: (Bool) -> Void = { AudioHub.shared.earsDancing($0) }
@@ -230,10 +234,12 @@ final class Ears {
     /// The game screen appeared: pick up a saved ON (permission must still be granted).
     func launch(care: GameCare) {
         self.care = care
+        care.store.grandfatherEars(wasOn: isOn)          // an Ears switch that was already on counts as bought, once
+        owned = { [weak care] in care?.store.hasEars ?? false }
         reactor.comeHere = { [weak care] id in care?.comeHere(jelly: id) }
         reactor.comeEveryone = { [weak care] in care?.comeHereEveryone() }
         guard !inert else { return }
-        if isOn {
+        if isOn, owned() {
             if permissionGranted() { start() } else { state = .denied }
         }
     }
@@ -249,6 +255,7 @@ final class Ears {
             note("off")
             return
         }
+        guard owned() else { note("locked: buy Music Ears in the Shop"); return }
         if inert { defaults.set(true, forKey: Self.key); if state == .off { state = .listening }; return }
         if permissionDenied() { state = .denied; note("denied"); return }
         guard !starting else { return }

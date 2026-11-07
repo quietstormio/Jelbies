@@ -135,7 +135,7 @@ final class StormReactor {
         l.focusApproach = care.focus.isActive && care.focus.phase == .approaching
         l.bath = care.bath.active
         l.voice = care.voice.mode.phase != .idle
-        l.training = care.voice.teachPrompt != nil
+        l.training = false
         l.race = care.race.active || care.raceWait != nil
         l.trip = care.tripActive || care.raceBusy
         locks = l

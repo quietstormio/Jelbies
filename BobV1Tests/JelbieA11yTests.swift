@@ -82,8 +82,8 @@ final class JelbieA11yTests: XCTestCase {
 
     func testActionListPerState() {
         let care = care3("JA11y.list")
-        XCTAssertEqual(JelbieActions.available(care, id: 1, asleep: false), [.highlight, .callOver, .feed, .water, .train, .bed])
-        XCTAssertEqual(JelbieActions.available(care, id: 1, asleep: true), [.highlight, .callOver, .feed, .water, .train, .wake])
+        XCTAssertEqual(JelbieActions.available(care, id: 1, asleep: false), [.highlight, .callOver, .feed, .water, .bed])
+        XCTAssertEqual(JelbieActions.available(care, id: 1, asleep: true), [.highlight, .callOver, .feed, .water, .wake])
         // in a close-up on him: the touches
         care.focusGroup.begin(ids: [1]); care.focus.force(.focused)
         XCTAssertEqual(JelbieActions.available(care, id: 1, asleep: false), [.pet, .patHead, .boopCheek, .pokeBelly, .squishCheeks, .toss, .letGo])
@@ -114,11 +114,6 @@ final class JelbieA11yTests: XCTestCase {
         XCTAssertTrue(JelbieActions.perform(.callOver, id: 1, care: c2))
         XCTAssertEqual(c2.focus.phase, .approaching)
         XCTAssertEqual(c2.focusGroup.ids, [1])
-        // train
-        let c3 = care3("JA11y.train")
-        XCTAssertTrue(JelbieActions.perform(.train, id: 2, care: c3))
-        XCTAssertTrue(c3.focusGroup.trainPending)
-        XCTAssertEqual(c3.focusGroup.ids, [2])
     }
 
     func testBedAndWakeAskTheRightJelbie() {
@@ -283,22 +278,6 @@ final class VoiceTypedTeachTests: XCTestCase {
         }
     }
 
-    func testThreeTypedLessonsTeachATrickAndAreAnnounced() {
-        let r = Run(); Self.keep.append(r)
-        var said: [String] = []
-        A11yAnnounce.sink = { t, _ in said.append(t) }
-        r.run(0.3)
-        for i in 0..<VoiceTuning.repsToLearn {
-            r.care.voice.typed("sit", teaching: .sit)      // the trick-book row's field: the word binds to that row's trick (Train design: nothing binds by itself)
-            r.run(0.3)
-            XCTAssertEqual(r.training.lesson(.sit).reps, i + 1, "typed lesson \(i + 1) counted")
-        }
-        XCTAssertTrue(r.training.isLearned(.sit))
-        XCTAssertEqual(r.training.word(for: .sit), "sit")
-        XCTAssertTrue(said.contains("Bob learned Sit"), "\(said)")
-        XCTAssertTrue(said.contains("Sit: 1 of 3 lessons"), "\(said)")
-    }
-
     func testEmptyTypedWordDoesNothing() {
         let r = Run(); Self.keep.append(r)
         r.care.voice.typed("   ")
@@ -307,19 +286,6 @@ final class VoiceTypedTeachTests: XCTestCase {
         XCTAssertTrue(A11yAnnounce.log.isEmpty)
     }
 
-    /// The UI's real path: the player finds the field and types well after the 8 s prompt, with no show() before each submit.
-    func testTypedLessonsBindToTheRowTrickWithNoTimeout() {
-        let r = Run(); Self.keep.append(r)
-        r.run(0.3)
-        for i in 0..<VoiceTuning.repsToLearn {
-            r.run(9.5)                                 // far past promptTime; the sit is long over
-            XCTAssertGreaterThan(9.5, VoiceCoordinator.promptTime)
-            r.care.voice.typed("sit", teaching: .sit)
-            r.run(0.3)
-            XCTAssertEqual(r.training.lesson(.sit).reps, i + 1, "late typed lesson \(i + 1) counted")
-        }
-        XCTAssertTrue(r.training.isLearned(.sit))
-    }
 
     /// Tap-to-talk after a shown move: the mic opens fine, but (Train design) nothing binds the word to the shown trick by itself.
     func testTapToTalkAfterAShownMoveOpensButTeachesNothingByItself() {
@@ -342,9 +308,9 @@ final class VoiceTypedTeachTests: XCTestCase {
         r.training.debugLearn(.sit, word: "sit", reliability: 1.0)
         r.run(0.3)
         let before = r.training.lesson(.sit).reps
-        r.care.voice.typed("sit", teaching: .sit)
+        r.care.voice.typed("sit")
         r.run(0.6)
-        XCTAssertEqual(r.training.lesson(.sit).reps, before, "a learned trick is commanded, not re-taught")
+        XCTAssertEqual(r.training.lesson(.sit).reps, before, "a known trick is commanded, not re-taught")
         XCTAssertEqual(r.rig.brain.idleState.kind, .sit, "the typed command made him sit")
     }
 

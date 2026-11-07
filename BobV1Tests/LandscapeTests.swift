@@ -213,18 +213,6 @@ final class LandscapeTests: XCTestCase {
         XCTAssertEqual(land.w, 956)
     }
 
-    /// Not a regression test: renders the practice results card at a landscape phone size (compact height) when LAND_CAP_DIR is set; it must fit the 440 pt height.
-    func testCaptureDrillResultCardLandscape() throws {
-        guard let dir = ProcessInfo.processInfo.environment["LAND_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("LAND_CAP_DIR not set") }
-        let care = GameCare(jellyCount: 1, persistent: false)
-        let r = DrillResult(accuracy: 0.8, perfects: 14, goods: 4, misses: 2, bestStreak: 9, waddleBefore: 0.52, waddleAfter: 0.55, focusBefore: 0.5, focusAfter: 0.51, pepLeft: 2, pepSpent: false)
-        let v = ZStack { Color(red: 0.45, green: 0.7, blue: 0.5); DrillResultCard(result: r, care: care) {}.frame(maxWidth: 520) }
-            .frame(width: 956, height: 440).environment(\.verticalSizeClass, .compact)
-        let ir = ImageRenderer(content: v); ir.scale = 2
-        let img = try XCTUnwrap(ir.uiImage)
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try XCTUnwrap(img.pngData()).write(to: URL(fileURLWithPath: dir + "/drill_results_land.png"))
-    }
 
     private struct SameRivals: RivalSource {
         func rivals(count: Int, player: RacerStats, playerTint: SIMD3<Float>, seed: UInt64) -> [Rival] {
@@ -242,16 +230,13 @@ final class LandscapeTests: XCTestCase {
         f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.9, focus: 1), playerTint: JellyRoster.tint(0), rivalCount: 2, seed: 5)
         for _ in 0..<(60 * 80) { _ = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true }); if f.hasResults { break } }
         XCTAssertTrue(f.hasResults)
-        let care = GameCare(jellyCount: 1, persistent: false)
-        let drill = DrillResult(accuracy: 0.8, perfects: 14, goods: 4, misses: 2, bestStreak: 9, waddleBefore: 0.52, waddleAfter: 0.55, focusBefore: 0.5, focusAfter: 0.51, pepLeft: 2, pepSpent: false)
         func height<V: View>(_ v: V) -> CGFloat {
             let h = UIHostingController(rootView: v.environment(\.verticalSizeClass, .compact))
             return h.sizeThatFits(in: CGSize(width: 520, height: CGFloat.infinity)).height
         }
-        let raceH = height(RacePlacingsCard(race: f) {}), drillH = height(DrillResultCard(result: drill, care: care) {})
-        print("LANDSCAPE card heights: race \(raceH), drill \(drillH)")
+        let raceH = height(RacePlacingsCard(race: f) {})
+        print("LANDSCAPE card height: race \(raceH)")
         XCTAssertLessThanOrEqual(raceH, 400, "the placings card fits the landscape height")
-        XCTAssertLessThanOrEqual(drillH, 400, "the practice results card fits the landscape height")
         if let dir = ProcessInfo.processInfo.environment["LAND_CAP_DIR"], !dir.isEmpty {
             let v = ZStack { Color(red: 0.45, green: 0.7, blue: 0.5); RacePlacingsCard(race: f) {}.frame(maxWidth: 520) }
                 .frame(width: 956, height: 440).environment(\.verticalSizeClass, .compact)

@@ -16,9 +16,7 @@ struct RaceChrome: View {
 
     var body: some View {
         ZStack {
-            if race.trackVisible, race.isDrill {
-                DrillChrome(care: care)
-            } else if race.trackVisible {
+            if race.trackVisible {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
@@ -50,7 +48,7 @@ struct RaceChrome: View {
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             if race.ui.stumbling, race.ui.tripped {
-                hint("Whoops! He tripped. Practice helps")
+                hint("Whoops! He tripped")
             } else if race.ui.stumbling {
                 hint("Oops! Left, right, left, right")
             } else if race.ui.stalled {

@@ -1,7 +1,7 @@
 //
 //  ShowUI.swift
 //  The Jelly Show's places (the approved mockups Studio.dc.html, Condition.dc.html, Show.dc.html), reached from the Town:
-//    StudioScreen      the stage card with the Jelbie and his slot chips, the Show-ready bars, Dress up / Practise dance / Enter Jelly Show.
+//    StudioScreen      the stage card with the Jelbie and his slot chips, the Show-ready bars, Dress up / Enter Jelly Show.
 //    ConditionScreen   the "Jelly Jars": five jars of stat-coloured jelly with numbers, a gold next-rank line, a +1 droplet on jars that just
 //                      grew, the Glow pill with a Bath button, Food diary and Trophies as row buttons, "See today's Jelly Show".
 //                      (it also picks the rank and shows the theme, the score estimate and its tip; Enter Jelly Show starts the show: there is no second lobby.)
@@ -337,11 +337,9 @@ struct StudioScreen: View {
     var back: () -> Void
     var card: () -> Void
     var show: () -> Void
-    var practise: (DanceID) -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wardrobeOpen = false
-    @State private var danceOpen = false
     @State private var howOpen = false
     @State private var rankHint: String?
     /// The player has opened Dress up this visit: the button stops asking for attention.
@@ -372,17 +370,13 @@ struct StudioScreen: View {
                 }
                 .padding(.top, compact ? 0 : 12)
             } bar: {
-                let p = care.jelly(who)
-                LobbyBottomBar(pepLeft: p?.stats.pepLeft ?? 0, pepTotal: TrainingTuning.fullSessions, pepID: "studio-pep", trainID: "studio-dance", playID: "studio-show",
-                               playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, trainTitle: "Practice dance", trainIcon: .feet, blocksTrain: false,
-                               train: { danceOpen = true }, play: { show() })
+                LobbyBottomBar(playID: "studio-show", playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, play: { show() })
             }
             .accessibilityHidden(howOpen)
             if howOpen {
                 LobbyHowSheet(rows: [
                     (.hanger, "Dress for the theme", "Pick the rank, then tap Dress up. Things in today\u{2019}s style count most. Gold edge = a match."),
                     (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the show adds Glow."),
-                    (.feet, "Practice dance", "Tap the feet on the beat of the studio music."),
                     (.trophy, "Enter the Jelly Show", "Look, Dance and Trick, each scored out of 100."),
                 ], close: { setHow(false) })
                 .zIndex(1)
@@ -394,10 +388,6 @@ struct StudioScreen: View {
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
                 .presentationDetents(compact ? [.large] : [.medium, .large]).presentationBackground(SK.cream)
-        }
-        .sheet(isPresented: $danceOpen) {
-            DancePicker(care: care, who: who) { danceOpen = false; practise($0) } close: { danceOpen = false }
-                .presentationDetents(compact ? [.large] : [.medium]).presentationBackground(SK.cream)
         }
     }
 
@@ -498,14 +488,11 @@ struct StudioScreen: View {
         let sum = worn.reduce(0) { $0 + theme.match($1.tags) }
         let glow = p?.grime.sparkle ?? 0
         let main = p?.stats.condition(theme.main.condition) ?? 0, friend = p?.stats.condition(theme.friend.condition) ?? 0
-        let dances = p?.stats.knownDances.count ?? 0
-        let skill = p?.stats.bestDance.map { p!.stats.proficiency($0) } ?? 0
         let fc = care.showForecast(jelly: who, rank: rank, theme: theme)
         return LobbyStatsCard(title: "Show ready", groups: [LobbyStatGroup(id: "studio-stats", rows: [
             LobbyStatRow(label: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme"),
             LobbyStatRow(label: "Shine", value: glow, color: SK.sky, note: glow > 0.8 ? "Bathed recently" : glow > 0.3 ? "Glow \(ShowUI.glowOf5(glow)) of 5" : "A Clean would help"),
             LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
-            LobbyStatRow(label: "Dance", value: skill, color: Color(hex: 0xB58BDB), note: dances == 0 ? "No dance yet" : "\(dances) dance\(dances == 1 ? "" : "s") learned"),
             LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nrivals about \(fc.rivals)"),
         ])], id: "studio-ready", trailing: {
             Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
@@ -577,49 +564,6 @@ struct WardrobeSheet: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .accessibilityIdentifier("wardrobe-sheet")
-    }
-}
-
-/// Practise dance: the dances, which are open, how well he knows each; tap one to start the drill.
-struct DancePicker: View {
-    let care: GameCare
-    var who: Int
-    var start: (DanceID) -> Void
-    var close: () -> Void
-    var body: some View {
-        let st = care.jelly(who)?.stats
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Practice dance").font(SK.font(26, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
-                    .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("dance-close")
-            }
-            Text("Tap the feet on the beat of the studio music.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-            ForEach(DanceID.allCases, id: \.rawValue) { d in
-                let open = st?.danceOpen(d) ?? (d == .sway), skill = st?.proficiency(d) ?? 0
-                Button { if open { start(d) } else { AudioHub.shared.play(.notEnough) } } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: open ? "music.note" : "lock.fill").font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink)
-                            .frame(width: 48, height: 48).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(open ? Color(hex: 0xB58BDB) : SK.muted.opacity(0.3)))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(d.title).font(SK.font(18, .black)).foregroundStyle(SK.ink)
-                            Text(open ? d.blurb : "Opens when \(d.opensAfter?.dance.title ?? "") is half learned").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) { Capsule().fill(ShowUI.bar); Capsule().fill(Color(hex: 0xB58BDB)).frame(width: max(4, g.size.width * CGFloat(skill))) }
-                            }.frame(height: 8)
-                        }
-                        Text(skill > 0 ? "\(ShowUI.pts(skill))%" : "new").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                    }
-                    .padding(12).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(open ? 0.85 : 0.5)))
-                }
-                .buttonStyle(.plain).accessibilityIdentifier("dance-\(d.rawValue)").accessibilityLabel("\(d.title), \(open ? "\(ShowUI.pts(skill)) percent" : "locked")")
-            }
-            if let st { Text("Pep left today: \(st.pepLeft) of \(TrainingTuning.fullSessions). Practice after that still helps, just less.").font(SK.font(11, .bold)).foregroundStyle(SK.muted) }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .accessibilityIdentifier("dance-picker")
     }
 }
 

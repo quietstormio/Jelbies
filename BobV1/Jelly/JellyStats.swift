@@ -63,15 +63,9 @@ final class JellyStats {
     private(set) var meals: [MealEntry] = []
     static let mealsKept = 8
     @ObservationIgnored private let now: () -> Date
-    /// The calendar day as one number (DayClock.dayKey): Pep refills when it changes, not after 24 hours.
-    @ObservationIgnored private let dayKey: () -> Int
-    /// Practice sessions finished on `pepDay` (Pep: `TrainingTuning.fullSessions` a day at full value).
-    @ObservationIgnored private var pepDay = 0
-    @ObservationIgnored private var pepSessions = 0
-    /// What he has learned to dance: 0...1 proficiency per dance (the beauty contest reads it).
+    /// What he has learned to dance: 0...1 proficiency per dance (kept as saved; nothing raises it since training was removed).
     private(set) var dances: [DanceID: Float] = [:]
-    private(set) var practices = 0
-    /// Bumped on any training change (UI).
+    /// Bumped on any dance change (UI).
     private(set) var trainingRevision = 0
 
     @ObservationIgnored private let persists: Bool
@@ -81,9 +75,8 @@ final class JellyStats {
     nonisolated deinit {}
 
     /// `seedWaddle` is used only when nothing is saved under `key` yet.
-    init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = StatTuning.defaultsKey, seedWaddle: Float = 0.5, seedFocus: Float = StatTuning.seedFocus, now: @escaping () -> Date = Date.init, dayKey: (() -> Int)? = nil) {
+    init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = StatTuning.defaultsKey, seedWaddle: Float = 0.5, seedFocus: Float = StatTuning.seedFocus, now: @escaping () -> Date = Date.init) {
         self.now = now; condStamp = now()
-        self.dayKey = dayKey ?? { DayClock.shared.dayKey }
         self.persists = persists; self.defaults = defaults; self.key = key
         waddle = min(max(seedWaddle, 0), 1); focus = min(max(seedFocus, 0), 1)
         if persists, let a = defaults.array(forKey: key) as? [Double], a.count >= 4 {
@@ -93,77 +86,26 @@ final class JellyStats {
             cond = c.prefix(ConditionKey.allCases.count).map { min(max(Float($0), 0), 1) }
             condStamp = Date(timeIntervalSince1970: c[ConditionKey.allCases.count])
         }
-        if persists, let t = defaults.array(forKey: key + ".train") as? [Double], t.count >= 3 {
-            pepDay = Int(t[0]); pepSessions = Int(t[1]); practices = Int(t[2])
-        }
         if persists, let dd = defaults.dictionary(forKey: key + ".dances") as? [String: Double] {
             for (k, v) in dd { if let id = DanceID(rawValue: k) { dances[id] = min(max(Float(v), 0), 1) } }
         }
         if persists, let md = defaults.data(forKey: key + ".meals"), let m = try? JSONDecoder().decode([MealEntry].self, from: md) { meals = Array(m.prefix(Self.mealsKept)) }
     }
 
-    // MARK: training (Pep, practice, dances)
-
-    /// Practice sessions finished today (the day changes at midnight, whatever time has gone by).
-    var sessionsToday: Int { dayKey() == pepDay ? pepSessions : 0 }
-    /// Sessions left at full value today (the Pep pips).
-    var pepLeft: Int { TrainingTuning.pepLeft(sessionsToday: sessionsToday) }
-    var pepFactor: Float { TrainingTuning.pepFactor(sessionsToday: sessionsToday) }
-
-    /// What a session of this accuracy / steadiness would add right now: (waddle, focus).
-    func practiceGain(accuracy: Float, steadiness: Float) -> (waddle: Float, focus: Float) {
-        let n = sessionsToday
-        return (TrainingTuning.gain(stat: waddle, accuracy: accuracy, sessionsToday: n),
-                TrainingTuning.gain(stat: focus, accuracy: steadiness * accuracy, sessionsToday: n, share: TrainingTuning.focusShare))
-    }
-
-    /// A drill is over: adds the gain to waddle and focus, uses one Pep. Returns what was added.
-    @discardableResult
-    func finishPractice(accuracy: Float, steadiness: Float) -> (waddle: Float, focus: Float) {
-        let g = practiceGain(accuracy: accuracy, steadiness: steadiness)
-        let (w0, f0) = (waddle, focus)
-        waddle = min(1, waddle + g.waddle); focus = min(1, focus + g.focus)
-        let today = dayKey()
-        if pepDay != today { pepDay = today; pepSessions = 0 }
-        pepSessions += 1; practices += 1
-        trainingRevision += 1
-        save(); saveTraining()
-        return (waddle - w0, focus - f0)
-    }
+    // MARK: dances
 
     func proficiency(_ d: DanceID) -> Float { dances[d] ?? 0 }
     var knownDances: [DanceID] { DanceID.allCases.filter { (dances[$0] ?? 0) > 0 } }
     /// The dance he shows on stage: the one he knows best (nil = none learned, freestyle).
     var bestDance: DanceID? { knownDances.max { proficiency($0) < proficiency($1) } }
-    /// A dance is open in the Studio: the starter always, the others once the one before is half known.
-    func danceOpen(_ d: DanceID) -> Bool { d.opensAfter.map { proficiency($0.dance) >= $0.skill } ?? true }
     /// Learning / practising a dance: raises its proficiency (capped at 1).
     func learn(_ d: DanceID, add: Float) {
         dances[d] = min(max((dances[d] ?? 0) + add, 0), 1)
         trainingRevision += 1
         saveTraining()
     }
-    /// What a dance drill of this accuracy would add now (the Rhythm Steps gain curve, with Pep). A first drill always teaches at least a little.
-    func dancePracticeGain(_ d: DanceID, accuracy: Float) -> Float {
-        let g = TrainingTuning.gain(stat: proficiency(d), accuracy: accuracy, sessionsToday: sessionsToday) * TrainingTuning.danceShare
-        return max(g, proficiency(d) == 0 && accuracy > 0 ? 0.05 : 0)
-    }
-    /// A dance drill is over: the gain goes on the dance, one Pep is used. Returns what was added.
-    @discardableResult
-    func finishDancePractice(_ d: DanceID, accuracy: Float) -> Float {
-        let g = dancePracticeGain(d, accuracy: accuracy)
-        let before = proficiency(d)
-        dances[d] = min(1, before + g)
-        let today = dayKey()
-        if pepDay != today { pepDay = today; pepSessions = 0 }
-        pepSessions += 1; practices += 1
-        trainingRevision += 1
-        saveTraining()
-        return proficiency(d) - before
-    }
     private func saveTraining() {
         guard persists else { return }
-        defaults.set([Double(pepDay), Double(pepSessions), Double(practices)], forKey: key + ".train")
         defaults.set(Dictionary(uniqueKeysWithValues: dances.map { ($0.key.rawValue, Double($0.value)) }), forKey: key + ".dances")
     }
 

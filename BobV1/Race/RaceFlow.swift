@@ -17,13 +17,10 @@ import simd
 @Observable
 final class RaceFlow {
     enum Phase: Equatable { case off, fade, racing }
-    /// A race against rivals, or a practice drill alone on the track (Training/DrillFlow.swift).
-    enum Kind { case race, drill }
     enum Dest { case track, room }
     enum FadeStage { case out, hold, `in` }
 
     private(set) var phase: Phase = .off
-    private(set) var kind: Kind = .race
     /// The course the next race is on (Race/RaceCourse.swift). The Track panel's picker sets it; `progress` says which are open.
     var courseTier: CourseTier {
         get { progress.chosen }
@@ -61,22 +58,8 @@ final class RaceFlow {
     private(set) var playerID = 0
     /// How many races have been started (tests).
     private(set) var started = 0
-    // the practice drill (Training/DrillFlow.swift)
-    @ObservationIgnored var drill: DrillSim?
-    var drillUI = DrillUI()
-    var drillResult: DrillResult?
-    /// 0...1 white dip between laps (the view draws it over the track).
-    var dip: Float = 0
-    @ObservationIgnored var drillState = DrillRun()
-    @ObservationIgnored var drillCue: (DrillCue) -> Void = { AudioHub.shared.drillCue($0) }
-    /// The audio clock of the training music (song seconds), nil = not playing (muted, still decoding): the drill then counts frames.
-    @ObservationIgnored var songClock: () -> Double? = { AudioHub.shared.trainingSongTime() }
-    /// The training music is up (muted = nothing to wait for).
-    @ObservationIgnored var audioReady: () -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying(.training) }
-    /// The body goes back to the start line for the next lap (called with the dip fully white).
-    @ObservationIgnored var onLapReset: () -> Void = {}
-    /// -TrainAuto: the drill is tapped for him (captures / tests).
-    @ObservationIgnored var drillAuto = false
+    /// The win / lose jingle at the results.
+    @ObservationIgnored var jingle: (Bool) -> Void = { AudioHub.shared.playJingle($0 ? .win : .lose) }
 
     @ObservationIgnored private(set) var fadeDest: Dest = .track
     @ObservationIgnored private(set) var fadeStage: FadeStage = .out
@@ -91,8 +74,6 @@ final class RaceFlow {
     @ObservationIgnored var onSwap: (Dest) -> Void = { _ in }
     /// The trip is over and the room is back (`won`: the player placed first): the welcome home.
     @ObservationIgnored var onReturned: (_ playerID: Int, _ won: Bool) -> Void = { _, _ in }
-    /// A drill used up the day's last Pep (`playerID`): the Pep Live Activity (GameCare+Race wires it).
-    @ObservationIgnored var onPepDepleted: (_ playerID: Int) -> Void = { _ in }
     /// Money and stats: set by the care glue (the wallet and the player's JellyStats).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var stats: JellyStats?
@@ -124,8 +105,7 @@ final class RaceFlow {
     /// The track is on screen (or about to be): the renderer draws it and the HUD is the race's.
     var trackVisible: Bool { cameraBlend > 0 }
     var racing: Bool { phase == .racing && wipe == 0 }
-    var isDrill: Bool { kind == .drill }
-    /// Drops this trip has paid (a drill pays none).
+    /// Drops this trip has paid.
     var earnedDropsForTest: Int { earned }
     /// The foot buttons are live.
     var buttonsLive: Bool { racing && ui.live }
@@ -133,13 +113,12 @@ final class RaceFlow {
     var showsGo: Bool { phase == .racing && ui.go }
     var showsCard: Bool { phase == .racing && ui.phase == .results && !leaving && cameraBlend > 0 }
     /// The race has results (the card is up or the way home has started).
-    var hasResults: Bool { kind == .drill ? drillResult != nil : sim?.phase == .results }
+    var hasResults: Bool { sim?.phase == .results }
 
-    /// What the track screens play (Audio/SceneMusic.swift): the race music, the final stretch near the line, the training loop; silence at the results
+    /// What the track screens play (Audio/SceneMusic.swift): the race music, the final stretch near the line; silence at the results
     /// (a jingle plays) and on the way home.
     var musicScene: MusicScene {
         guard phase != .off, cameraBlend > 0, !(phase == .fade && fadeDest == .room) else { return .none }
-        if kind == .drill { return drillResult != nil ? .results : .training }
         guard let s = sim else { return .none }
         if s.phase == .results || s.racers[0].finished { return .results }
         if s.phase == .countdown { return .race }
@@ -155,7 +134,6 @@ final class RaceFlow {
         var t = tier ?? courseTier
         if !progress.unlocked(t) { t = .puddle }
         let rs = rivalSource.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
-        kind = .race; drill = nil; drillResult = nil; drillUI = DrillUI(); dip = 0
         rivals = rs; playerName = name; playerID = id
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
         ui = RaceUI()
@@ -166,20 +144,6 @@ final class RaceFlow {
         started += 1
     }
 
-    /// "Train": Jelly `id` practises alone on the track (Rhythm Steps), always on the Puddle's straight. Ignored while a trip is running.
-    func beginDrill(playerID id: Int, name: String, player: RacerStats, seed: UInt64) {
-        guard phase == .off else { return }
-        kind = .drill; drill = nil; drillResult = nil; drillUI = DrillUI(); drillState = DrillRun(); dip = 0
-        rivals = []; playerName = name; playerID = id
-        sim = RaceSim(player: player, playerName: name, rivals: [], seed: seed)
-        ui = RaceUI()
-        phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0
-        drillState.song = TrainingTuning.loopStart
-        applyAssistAtStart()
-        started += 1
-    }
-
     /// "Back home" on the placings card.
     func goHome() {
         guard phase == .racing, hasResults, !leaving else { return }
@@ -187,17 +151,9 @@ final class RaceFlow {
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
 
-    /// The X on the drill: leaves without settling (no gain, no Pep used).
-    func quitDrill() {
-        guard kind == .drill, phase == .racing, !leaving else { return }
-        leaving = true
-        phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
-    }
-
     /// A tap of the player's foot button (0 left, 1 right).
     @discardableResult
     func tap(foot: Int) -> RaceTapModel.Outcome {
-        if kind == .drill { drillTap(foot: foot); return .ignored }
         guard buttonsLive else { return .ignored }
         let o = sim?.playerTap(foot: foot) ?? .ignored
         refreshUI()
@@ -207,7 +163,7 @@ final class RaceFlow {
     /// The Jump button: the take-off waits for his feet to be planted, and a bar reached in the middle of the flight is cleared (Race/Hurdles.swift).
     @discardableResult
     func jump() -> Bool {
-        guard kind == .race, buttonsLive else { return false }
+        guard buttonsLive else { return false }
         let ok = sim?.playerJump() ?? false
         if ok { refreshUI() }
         return ok
@@ -226,7 +182,6 @@ final class RaceFlow {
         case .racing: break
         }
         guard sim != nil, wipe == 0 else { return [] }
-        if kind == .drill { return tickDrill(dt: dt) }
         if sim!.phase == .countdown, introT < Self.introPause { introT += dt; return [] }
         if let r = autoRate ?? autoAssistRate, buttonsLive {
             autoT += dt
@@ -234,7 +189,7 @@ final class RaceFlow {
         }
         // capture aid: -RaceJumpEvery <seconds of race time> presses the Jump button on its own (a hurdle jump in the first seconds of the run, not after the long walk to the first bar)
         let every = UserDefaults.standard.double(forKey: "RaceJumpEvery")
-        if every > 0, buttonsLive, kind == .race, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
+        if every > 0, buttonsLive, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
         sim!.tick(dt: dt, bodyFree: bodyFree, bodyReady: bodyReady, bodyBetween: bodyBetween)
         let ev = sim!.takeEvents()
         for e in ev { handle(e) }
@@ -249,16 +204,16 @@ final class RaceFlow {
     func refreshUI() {
         guard let s = sim else { if ui != RaceUI() { ui = RaceUI() }; return }
         var u = RaceUI()
-        u.phase = kind == .drill && drill != nil ? (drillResult != nil ? .results : .running) : s.phase
+        u.phase = s.phase
         u.countdown = s.countdownNumber
-        u.go = kind == .drill ? (drill != nil && drillState.goAge < RaceTuning.goFlash) : s.goFlashing
-        u.live = kind == .drill ? (drill != nil && drillResult == nil) : (s.phase == .running || s.phase == .finishing) && !s.racers[0].finished
+        u.go = s.goFlashing
+        u.live = (s.phase == .running || s.phase == .finishing) && !s.racers[0].finished
         u.stalled = s.phase != .countdown && s.racers[0].stalled && u.live && s.clock > 1.2
         u.stumbling = s.racers[0].tap.stumbling
         u.tripped = s.racers[0].tap.tripped
-        u.inTurn = kind == .race && u.live && s.inTurn(0)
+        u.inTurn = u.live && s.inTurn(0)
         u.course = s.course.tier
-        u.hasHurdles = kind == .race && s.course.hasHurdles
+        u.hasHurdles = s.course.hasHurdles
         if u.hasHurdles, u.live {
             let r = s.racers[0]
             u.hurdleAhead = r.nextHurdle < s.course.hurdles.count && s.course.hurdles[r.nextHurdle] - r.dist < HurdleTuning.hintAhead && !r.inJump
@@ -293,7 +248,7 @@ final class RaceFlow {
             progress.record(tier: s.course.tier, place: place)
             awards = trophies.recordRace(character: playerCharacter, tier: s.course.tier, place: place)
             unlockedNow = progress.unlockedTiers.first { !open.contains($0) }
-            drillCue(.jingle(win: place <= 2 || !awards.trophies.isEmpty))
+            jingle(place <= 2 || !awards.trophies.isEmpty)
         }
         announceRaceResult()
         if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
@@ -329,7 +284,7 @@ final class RaceFlow {
     }
 
     private func finishTrip() {
-        let won = kind == .race ? (sim?.playerWon ?? false) : false
+        let won = sim?.playerWon ?? false
         let id = playerID
         phase = .off; leaving = false
         sim = nil
@@ -340,7 +295,7 @@ final class RaceFlow {
     func abort() {
         guard phase != .off else { return }
         if cameraBlend > 0 || swapped && fadeDest == .track { onSwap(.room) }
-        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false; drill = nil; dip = 0
+        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
     }
 }
 

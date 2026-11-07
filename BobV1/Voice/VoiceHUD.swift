@@ -179,13 +179,12 @@ struct VoiceBookButton: View {
 
 // MARK: - Trick book
 
-/// The notebook: Bob's name lesson and one row per trick (our name, the player's bound word or a dash, 3 progress dots, reliability).
-/// Tapping a row has him do the trick now, so the next word said binds to it. "Forget" clears a word.
+/// What this Jelbie knows: his name and nicknames, and one row per trick he can do (icon, name, stars, whose trick it is, the word to say).
+/// Tapping a row has him do it now; "Type a command" sends the word without the microphone. Tricks are bought in the Shop (no teaching).
 struct VoiceTrickBook: View {
     let voice: VoiceCoordinator
     var close: () -> Void
     @State private var drafts: [Int: String] = [:]
-    @State private var typing: VoiceTrick?
     @State private var typedWord = ""
 
     static func symbol(_ t: VoiceTrick) -> String {
@@ -196,6 +195,30 @@ struct VoiceTrickBook: View {
         case .spin: s = "arrow.triangle.2.circlepath"; case .hop: s = "arrow.up.circle.fill"
         }
         return UIImage(systemName: s) != nil ? s : "star.fill"
+    }
+    private var typedSection: some View {
+        HStack(spacing: 8) {
+            TextField("Type a command, like sit or spin", text: $typedWord)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .playFont(15, .medium)
+                .padding(.horizontal, 12).frame(minHeight: 44)
+                .background(Capsule().fill(FocusStyle.cream))
+                .submitLabel(.send).onSubmit { sendTyped() }
+                .accessibilityIdentifier("voice-typed-field")
+            Button { sendTyped() } label: {
+                Image(systemName: "paperplane.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 44, height: 44).background(Circle().fill(FocusStyle.pink))
+            }
+            .buttonStyle(.plain).disabled(VoiceMatcher.normalise(typedWord).isEmpty)
+            .accessibilityIdentifier("voice-typed-send").accessibilityLabel("Send this command")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+    }
+    private func sendTyped() {
+        let w = typedWord
+        typedWord = ""
+        voice.typed(w)          // the same path a spoken command takes
     }
 
     var body: some View {
@@ -218,8 +241,9 @@ struct VoiceTrickBook: View {
             ScrollView {
                 VStack(spacing: 10) {
                     smartVoiceRow
-                    ForEach(voice.care?.isTrainingCloseUp == true ? [subject] : voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
-                    ForEach(VoiceTrick.allCases.filter { tr.unlocked($0) }, id: \.rawValue) { t in trickRow(t, tr) }
+                    ForEach(voice.care?.focus.isActive == true ? [subject] : voice.presentIDs, id: \.self) { nameRow(tr, id: $0) }
+                    typedSection
+                    ForEach(VoiceTrick.allCases.filter { tr.knows($0) }, id: \.rawValue) { t in trickRow(t, tr) }
                 }
                 .padding(.bottom, 6)
             }
@@ -253,14 +277,6 @@ struct VoiceTrickBook: View {
         .accessibilityIdentifier("smart-voice")
         .accessibilityLabel("Smart voice: \(on ? "On, Apple Intelligence" : "Basic")")
         .accessibilityValue(state.detail)
-    }
-
-    private func dots(_ n: Int) -> some View {
-        HStack(spacing: 4) {
-            ForEach(0..<VoiceTuning.repsToLearn, id: \.self) { i in
-                Circle().fill(i < n ? FocusStyle.pink : FocusStyle.brown.opacity(0.15)).frame(width: 9, height: 9)
-            }
-        }
     }
 
     private func nameRow(_ tr: VoiceTraining, id: Int) -> some View {
@@ -322,97 +338,43 @@ struct VoiceTrickBook: View {
     }
 
     private func trickRow(_ t: VoiceTrick, _ tr: VoiceTraining) -> some View {
-        let word = tr.word(for: t)
-        let n = tr.progress(t)
-        let rel = Int((tr.reliability(t) * 100).rounded())
-        return VStack(spacing: 8) {
-        HStack(spacing: 8) {
-            Button {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                if tr.isLearned(t) { voice.show(t) } else { voice.teach(t) }       // a learned row: he does it now; a new one starts a lesson in the close-up
-                close()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: Self.symbol(t)).font(.system(size: 18, weight: .semibold)).foregroundStyle(FocusStyle.brown)
-                        .frame(width: 30)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(t.title).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
-                        HStack(spacing: 8) {
-                            Text(word ?? "\u{2014}")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(FocusStyle.brown)
-                                .padding(.horizontal, 9).padding(.vertical, 2)
-                                .background(Capsule().fill(FocusStyle.brown.opacity(word == nil ? 0.06 : 0.12)))
-                            dots(n)
+        let word = tr.word(for: t) ?? t.suggestion
+        let stars = ShowTrickInfo.difficulty(t)
+        let scope = voice.care.flatMap { c in c.jelly(voice.subjectID).flatMap { c.store.trickScope(t, character: $0.character) } }
+        let who = tr.names.displayName(voice.subjectID)
+        return Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            voice.show(t)          // he does it now
+            close()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: Self.symbol(t)).font(.system(size: 18, weight: .semibold)).foregroundStyle(FocusStyle.brown)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(t.title).font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                    HStack(spacing: 8) {
+                        if t != .come {
+                            HStack(spacing: 2) {
+                                ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : FocusStyle.brown.opacity(0.25)) }
+                            }
                         }
+                        if let scope { Text(scope == .everyone ? "Everyone" : "\(who)'s own").font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.8)) }
                     }
-                    Spacer()
-                    Text(tr.isLearned(t) ? "\(rel)%" : "")
-                        .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(SK.pinkStrong)
                 }
-                .contentShape(Rectangle())
+                Spacer()
+                Text("\u{201C}\(word)\u{201D}")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(FocusStyle.brown)
+                    .padding(.horizontal, 9).padding(.vertical, 2)
+                    .background(Capsule().fill(FocusStyle.brown.opacity(0.12)))
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("voice-trick-\(t.rawValue)")
-            .accessibilityLabel("\(t.title). \(word.map { "Word: \($0)." } ?? "No word yet.") \(n) of \(VoiceTuning.repsToLearn) lessons.\(tr.isLearned(t) ? " Reliability \(rel) percent." : "")")
-            .accessibilityHint(tr.isLearned(t) ? "\(tr.names.displayName(voice.subjectID)) does it now." : "Starts a lesson with \(tr.names.displayName(voice.subjectID)).")
-            if word != nil {
-                Button { withAnimation(CareMenu.spring) { tr.forget(t) } } label: {
-                    Text("Forget").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Capsule().fill(FocusStyle.brown.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("voice-forget-\(t.rawValue)")
-                .accessibilityLabel("Forget the word for \(t.title)")
-            }
+            .padding(.horizontal, 12).padding(.vertical, 10).frame(minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
+            .contentShape(Rectangle())
         }
-        teachTyping(t, tr)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.75)))
-    }
-
-    /// "Teach with typing" (no microphone, no speaking): he does the trick, you type the word, and each submit is one lesson (the same rules as three listens).
-    @ViewBuilder
-    private func teachTyping(_ t: VoiceTrick, _ tr: VoiceTraining) -> some View {
-        if typing == t {
-            HStack(spacing: 8) {
-                TextField(tr.isLearned(t) ? "Type a command for \(t.title)" : "Type a word for \(t.title)", text: $typedWord)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .playFont(15, .medium)
-                    .padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(Capsule().fill(FocusStyle.cream))
-                    .submitLabel(.send).onSubmit { submitTyped(t) }
-                    .accessibilityIdentifier("voice-typed-field-\(t.rawValue)")
-                Button { submitTyped(t) } label: {
-                    Image(systemName: "paperplane.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 44, height: 44).background(Circle().fill(FocusStyle.pink))
-                }
-                .buttonStyle(.plain).disabled(VoiceMatcher.normalise(typedWord).isEmpty)
-                .accessibilityIdentifier("voice-typed-send-\(t.rawValue)").accessibilityLabel(tr.isLearned(t) ? "Send this command" : "Teach this word")
-            }
-        } else {
-            Button {
-                AudioHub.shared.uiTap()
-                if !tr.isLearned(t) { voice.show(t) }         // he does it now; the typed word binds to this trick
-                typedWord = ""; typing = t
-            } label: {
-                Label(tr.isLearned(t) ? "Type a command" : "Teach with typing", systemImage: "keyboard").playFont(14, .bold).foregroundStyle(FocusStyle.brown)
-                    .padding(.horizontal, 14).frame(minHeight: 44)
-                    .background(Capsule().fill(FocusStyle.brown.opacity(0.1)))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("voice-teach-typing-\(t.rawValue)")
-            .accessibilityHint(tr.isLearned(t) ? "Type the word instead of saying it. He may obey, and obeying makes him more reliable." : "Type a word instead of saying it. Each time counts as one lesson.")
-        }
-    }
-
-    private func submitTyped(_ t: VoiceTrick) {
-        let w = typedWord
-        typedWord = ""
-        let wasLearned = voice.book.isLearned(t)
-        voice.typed(w, teaching: t)                           // bound to this row's trick, no timeout
-        if !wasLearned && voice.book.isLearned(t) { typing = nil }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("voice-trick-\(t.rawValue)")
+        .accessibilityLabel("\(t.title). Say \(word).\(scope.map { $0 == .everyone ? " A trick for everyone." : " \(who)'s own trick." } ?? "")")
+        .accessibilityHint("\(who) does it now.")
     }
 }
 

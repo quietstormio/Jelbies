@@ -38,8 +38,6 @@ struct GameScreen: View {
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
-    @State private var trainCardTop: CGFloat?          // the highest top edge the Train card has had this session (its tallest step): the camera frames the Jelbie above it
-    @State private var trainCardLeft: CGFloat?         // landscape: the card's left edge
     private var focus: BlobFocus { model.care.focus }
     /// Out somewhere (a Town screen, a race / show / volleyball, the café, the park, the groomer): the game clock runs faster (DayClock.setOutingRate).
     private var outing: Bool {
@@ -48,19 +46,6 @@ struct GameScreen: View {
     }
     /// Town / Shop / Track, the gear's Settings and the Studio cover the whole game (the sheets leave part of it visible, so they do not count).
     private var covered: Bool { town != nil || settingsOpen || showStudio }
-    /// Tells the close-up camera which part of the screen the Train card leaves free (GameCamera.trainFrame), as fractions of the whole screen.
-    private func frameTrainCamera(card: CGRect, g: GeometryProxy) {
-        guard card.height > 1 else { return }
-        trainCardTop = min(trainCardTop ?? .infinity, card.minY); trainCardLeft = min(trainCardLeft ?? .infinity, card.minX)
-        let W = g.size.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, H = g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom
-        let top = Float((g.safeAreaInsets.top + 8 + hudTopH + 6) / H)
-        let landscape = vsc == .compact
-        let f: GameCamera.TrainFrame = landscape
-            ? .init(minX: Float((g.safeAreaInsets.leading + 72) / W), maxX: Float(((trainCardLeft ?? card.minX) - 8) / W), minY: top, maxY: 0.95)
-            : .init(minX: 0.04, maxX: 0.96, minY: top, maxY: Float((trainCardTop ?? card.minY) / H) - 0.012)
-        GameCamera.trainInstant = a11yMotionReduced
-        if GameCamera.trainFrame != f { GameCamera.trainFrame = f }
-    }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive || model.care.play.active }          // (Play mode hides the HUD like a trip: Done is its way out)
@@ -200,7 +185,7 @@ struct GameScreen: View {
                                         GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
                                     }
                                     Capsule().fill(CareMenu.brown.opacity(0.22)).frame(width: 28, height: 1.5).padding(.vertical, 4)
-                                    VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true }, pulse: model.care.voice.tutorial.isShown && model.care.voice.tutorial.pulsingMic)
+                                    VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true })
                                         .overlay(alignment: .topLeading) {
                                             VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
                                         }
@@ -226,14 +211,6 @@ struct GameScreen: View {
                 .animation(CareMenu.spring, value: focus.phase)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                if model.care.voice.train != nil {          // the close-up's Train card (Voice/TrainCard.swift): bottom, right of the rail; landscape: the right side
-                    TrainCard(voice: model.care.voice, landscape: vsc == .compact, maxHeight: vsc == .compact ? g.size.height - 20 : g.size.height * 0.40)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frameTrainCamera(card: $0, g: g) }          // the close-up keeps the whole Jelbie in the free area
-                        .onDisappear { trainCardTop = nil; trainCardLeft = nil; GameCamera.trainFrame = nil }
-                        .padding(.leading, vsc == .compact ? 0 : 62).padding(.trailing, 12).padding(.bottom, 10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .transition(.opacity)
-                }
             }
             .jHUDCap()
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
@@ -310,11 +287,11 @@ struct GameScreen: View {
             PlayToyRegistry.registerBuiltIns()
             LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
-            let toTrack: (Int) -> Void = { id in                 // Siri "race" / "train": the Track panel for that Jelbie (its Race / Train buttons), like the voice command
+            let toTrack: (Int) -> Void = { id in                 // Siri "race": the Track panel for that Jelbie (its Race button), like the voice command
                 guard !care.raceBusy, !care.cafe.active, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
                 care.rosterPick(id, quietHop: true); care.requestTown(.track)
             }
-            router.onRace = toTrack; router.onTrain = toTrack
+            router.onRace = toTrack
             router.onNoFood = { A11yAnnounce.say(GameRouter.noFoodLine); withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }          // Siri feed with an empty bag: the Feed row, "none left", spoken
             router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
@@ -373,7 +350,6 @@ struct GameScreen: View {
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
         .onChange(of: bookOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen }
-        .onChange(of: bookOpen) { _, on in if !on, model.care.voice.tutorial.phase == .book { model.care.voice.tutorial.finish() } }      // tutorial: the book was read
         .sheet(isPresented: $bookOpen) {
             VoiceTrickBook(voice: model.care.voice) { bookOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
@@ -590,20 +566,13 @@ struct GameScreen: View {
             if let why = care.raceBlocker(jelly: who) { NSLog("[melon] capture aid: -RaceStart blocked: %@", why) }
             care.startRace(jelly: who)
         }
-        // capture aid: -TrainStart 1 sends Jelly 0 (or -RaceJelly n) to practise Rhythm Steps; -TrainAuto 1 plays the drill for him
-        if d.integer(forKey: "TrainStart") != 0 {
-            let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
-            for _ in 0..<100 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
-            await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
-            care.startDrill(jelly: who)
-        }
         // capture aid: -ShowStart 1 sends Jelly 0 (or -RaceJelly n) to the Jelly Show at the chosen rank (-ShowRank) as soon as the room is up; -ShowAuto 1 plays it
-        // for him (dress, dance, tricks, results); -ShowSeed n, -ShowDay yyyymmdd. -PracticeStart sway|bop|twirl runs the Studio's dance drill instead.
-        if d.integer(forKey: "ShowStart") != 0 || d.string(forKey: "PracticeStart") != nil {
+        // for him (dress, dance, tricks, results); -ShowSeed n, -ShowDay yyyymmdd.
+        if d.integer(forKey: "ShowStart") != 0 {
             let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
             for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
-            if let p = d.string(forKey: "PracticeStart") { care.startDancePractice(jelly: who, dance: DanceID(rawValue: p) ?? .sway) } else { care.startShow(jelly: who) }
+            care.startShow(jelly: who)
         }
         // capture aid: -BubbleDemo 1 takes the bubble wand out and plays a simulated blow (pulses); 2 blows without pause (Toys/BubbleWand.swift)
         if d.integer(forKey: "BubbleDemo") != 0 {
@@ -814,14 +783,9 @@ struct GameScreen: View {
                 withAnimation(CareMenu.spring) { care.release() }
             }
         }
-        // capture aid: -VoiceLearned 1 pre-learns his name and every trick; -VoiceSay "<words>" [-VoiceTeach <trick id>] simulates one hold after
-        // ~2 s (the teach move starts first and runs for a second); -VoiceBook 1 opens the trick book after 2 s
+        // capture aid: -VoiceLearned 1 pre-learns his name and every trick; -VoiceSay "<words>" simulates one hold after
+        // ~2 s; -VoiceBook 1 opens the trick book after 2 s
         if d.integer(forKey: "VoiceLearned") != 0 { care.voice.debugLearnAll() }
-        if d.object(forKey: "VoiceTutorialReps") != nil { care.voice.training.debugReps(.come, word: "come here", reps: d.integer(forKey: "VoiceTutorialReps")) }     // tutorial dots
-        if let spec = d.string(forKey: "VoiceReps") {                       // -VoiceReps sit:3 = a half-learned "sit" with 3 reps
-            let parts = spec.split(separator: ":")
-            if parts.count == 2, let t = VoiceTrick(rawValue: String(parts[0])), let n = Int(parts[1]) { care.voice.training.debugReps(t, word: t.suggestion, reps: n) }
-        }
         if d.integer(forKey: "VoiceBook") != 0 { await sleep(2); book.wrappedValue = true }
         // capture aid: -SpreadStart 1 sends Jellies 0, 1, 2 to the back-left, back-right and front-right corners and waits -SpreadWait s (default 9) before the rest of the script
         if d.integer(forKey: "SpreadStart") != 0 {
@@ -834,7 +798,7 @@ struct GameScreen: View {
         }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
-            await care.voice.simulate(words, teach: d.string(forKey: "VoiceTeach").flatMap(VoiceTrick.init(rawValue:)))
+            await care.voice.simulate(words)
         }
         #if DEBUG || SELECT_PREVIEW
         // capture aid: -BlobSelectPreview 3 -BlobSelectScript 1 double-taps Pip, switches to Moss, switches mid-draw back to Pip, then confirms
@@ -906,10 +870,9 @@ struct GameScreen: View {
         if d.integer(forKey: "ShowSeedGoods") != 0 {
             let care = model.care
             let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
-            for id in ["page-spin", "page-hop"] { care.store.grant(id) }
+            for t in VoiceTrick.allCases { care.store.grantTrickToEveryone(t) }
             for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
             for j in care.jellies {
-                j.training.unlocked = { t in care.store.hasPage(t) }
                 for t in VoiceTrick.allCases { j.training.debugLearn(t, word: t.suggestion, reliability: t == .spin ? 0.6 : 0.75) }
                 for t in WearTag.allCases { j.stats.setCondition(t.condition, t == theme.main ? 0.71 : t == theme.friend ? 0.62 : 0.4) }
                 j.stats.nudge([theme.main.condition: 0.08, theme.friend.condition: 0.04], food: "Sushi")
