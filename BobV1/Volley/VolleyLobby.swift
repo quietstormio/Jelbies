@@ -12,13 +12,15 @@ struct VolleyLobby: View {
     var back: () -> Void
     /// "Go to the Park": leaves the lobby for the Park trip (the Town's own path).
     var park: () -> Void = {}
+    /// To the Shop (the Upgrade sheet's "Shop ›").
+    var shop: (() -> Void)? = nil
     var play: (VolleyTier) -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sheet: Sheet?
     @State private var hint = LobbyHint()
-    enum Sheet { case how, options }
+    enum Sheet { case how, options, upgrade }
     private var book: VolleyBook { care.volley.book }
     private var compact: Bool { vsc == .compact }
     private var blocker: String? { care.volleyBlocker(jelly: who, match: true) }
@@ -34,12 +36,18 @@ struct VolleyLobby: View {
                 VolleyTeamCard(care: care, who: $who, compact: compact, park: park)
                     .padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, play: { play(book.chosen) })
+                LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, upgradeID: "volley-upgrade",
+                               upgradePoints: care.jelly(who).map { care.upgrades.points(.volley, character: $0.character) } ?? 0, upgrade: { open(.upgrade) }, play: { play(book.chosen) })
             }
             .accessibilityHidden(sheet != nil)
             if let sheet {
                 Group {
                     switch sheet {
+                    case .upgrade:
+                        if let p = care.jelly(who) {
+                            UpgradeSheet(care: care, who: p.id, config: care.volleyUpgradeConfig(p), buy: { care.volleyBuySkill($0, p) }, pick: { care.volleyPickPower($0, p) },
+                                         shop: shop.map { go in { close(); go() } }, done: { close() })
+                        }
                     case .options:
                         LobbySheet(title: "Options", close: { close() }) { optionsCard.padding(.top, 4) }.accessibilityIdentifier("volley-options-sheet")
                     case .how:

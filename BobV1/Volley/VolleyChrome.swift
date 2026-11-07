@@ -337,6 +337,17 @@ struct VolleyResultsCard: View {
                     JellyCoinIcon(size: 22)
                     Text("+\(volley.earned.coinText) JellyCoins").lineLimit(1).minimumScaleFactor(0.8).playFont(20, .bold).foregroundStyle(CareMenu.brown)
                 }
+                if volley.pointsEarned > 0 {
+                    HStack(spacing: 8) {
+                        Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
+                            Text("\(volley.playerName) now has \(volley.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("volley-points")
+                }
                 if volley.assistFactor < 1 { Text("Auto play pays half").playFont(14, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
                 if !volley.awards.isEmpty {
                     HStack(spacing: 8) {

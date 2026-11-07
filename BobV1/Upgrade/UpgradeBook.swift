@@ -10,9 +10,9 @@ import Foundation
 import Observation
 
 nonisolated enum UpgradeGame: String, Codable, CaseIterable, Sendable {
-    case race
-    /// "Race" / "race": the game word of the sheet.
-    var word: String { "Race" }
+    case race, volley
+    /// "Race" / "Volleyball": the game word of the sheet.
+    var word: String { self == .race ? "Race" : "Volleyball" }
 }
 
 nonisolated enum UpgradeTuning {
@@ -26,6 +26,45 @@ nonisolated enum UpgradeTuning {
     static func stat(level: Int) -> Float { Float(min(max(level, 1), maxLevel)) / Float(maxLevel) }
     /// Race points by finishing place (1-based); 0 = no result (aborted) = nothing.
     static func racePoints(place: Int) -> Int { place <= 0 ? 0 : place == 1 ? 3 : place == 2 ? 2 : 1 }
+    /// Volleyball points by result: a win 3, a close loss 2 (VolleySim.closeLoss), any other loss 1; nil = no result (abandoned) = nothing.
+    static func volleyPoints(win: Bool?, closeLoss: Bool = false) -> Int {
+        guard let win else { return 0 }
+        return win ? 3 : (closeLoss ? 2 : 1)
+    }
+    /// The one-match bump a chosen volleyball power-up food gives to its stat (never saved; the stat stays clamped to 1).
+    static let volleyBump: Float = 0.15
+}
+
+/// The four volleyball skills are the VolleyStatKind stats.
+extension VolleyStatKind {
+    var blurb: String {
+        switch self {
+        case .speed: return "Gets to the ball faster."
+        case .power: return "Harder spikes and serves."
+        case .hops: return "Jumps higher at the net."
+        case .timing: return "Bigger Perfect window."
+        }
+    }
+}
+
+extension VolleyStats {
+    func value(_ k: VolleyStatKind) -> Float {
+        switch k { case .speed: return speed; case .power: return power; case .hops: return hops; case .timing: return timing }
+    }
+    mutating func setValue(_ k: VolleyStatKind, _ v: Float) {
+        let c = min(max(v, 0), 1)
+        switch k { case .speed: speed = c; case .power: power = c; case .hops: hops = c; case .timing: timing = c }
+    }
+    /// The stats for ONE match with a power-up food's perk on: zoomies = Speed, focus = Timing, +volleyBump, clamped to 1. A copy: nothing is saved.
+    func boosted(by perk: PerkKind?) -> VolleyStats {
+        var s = self
+        switch perk {
+        case .zoomies?: s.setValue(.speed, speed + UpgradeTuning.volleyBump)
+        case .focus?: s.setValue(.timing, timing + UpgradeTuning.volleyBump)
+        default: break
+        }
+        return s
+    }
 }
 
 /// The two race skills.
@@ -105,6 +144,18 @@ final class UpgradeBook {
         guard let cost = UpgradeTuning.cost(level: lv), spend(cost, .race, character: c) else { return false }
         let target = UpgradeTuning.stat(level: lv + 1)
         if s == .speed { stats.set(waddle: max(stats.waddle, target)) } else { stats.set(focus: max(stats.focus, target)) }
+        return true
+    }
+
+    // MARK: volleyball skills
+
+    func level(_ k: VolleyStatKind, stats: VolleyStats) -> Int { UpgradeTuning.level(stat: stats.value(k)) }
+    /// Buys the next level of a volleyball skill for `character` (cost = level + 1 points): the saved stat rises to that level's value (never lower); false when short or at the top.
+    @discardableResult
+    func buy(_ k: VolleyStatKind, volley: VolleyBook, character c: Int) -> Bool {
+        let lv = level(k, stats: volley.stats(character: c))
+        guard let cost = UpgradeTuning.cost(level: lv), spend(cost, .volley, character: c) else { return false }
+        volley.raise(k, to: UpgradeTuning.stat(level: lv + 1), character: c)
         return true
     }
 

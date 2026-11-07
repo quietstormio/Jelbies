@@ -47,6 +47,7 @@ extension GameCare {
         volley.onSwap = { [weak self] dest in self?.volleySwap(dest) }
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
+        volley.upgrades = upgrades
         #if targetEnvironment(simulator)
         if UserDefaults.standard.bool(forKey: "VolleyToys"), store.placedDecor.isEmpty {          // capture aid: `-VolleyToys 1` puts a few toys in the room (to see they stay home)
             for k in [DecorKind.soccerball, .drum, .beachball, .plushbear] { store.grant(k.storeID); _ = store.place(k.storeID) }
@@ -136,6 +137,16 @@ extension GameCare {
         beginVolley(jelly: id, mode: mode, seed: s)
     }
 
+    /// The player's stats for the match about to start: the saved ones plus the chosen Upgrade power-up (one Bag food, used up; zoomies foods lift Speed, focus foods Timing, for this match only).
+    /// A chosen food that is no longer in the Bag is quietly dropped (and the choice cleared).
+    func volleyStartStats(_ prof: JellyProfile) -> VolleyStats {
+        let base = volley.book.stats(character: prof.character)
+        guard let id = upgrades.chosen(.volley, character: prof.character) else { return base }
+        if let item = StoreCatalog.item(id), item.perk?.raceOnly == true, store.use(id) { return base.boosted(by: item.perk) }
+        upgrades.choose(nil, .volley, character: prof.character)
+        return base
+    }
+
     private func beginVolley(jelly id: Int, mode: VolleyMode, seed: UInt64) {
         guard let prof = jelly(id) else { return }
         var going = [id]
@@ -146,7 +157,7 @@ extension GameCare {
         var partner: JellyProfile?
         if case .match = mode { partner = volleyPartner(for: id) }
         w.partnerID = partner?.id
-        var mine = [volley.book.stats(character: prof.character)]
+        var mine = [volleyStartStats(prof)]
         if let p = partner { mine.append(volley.book.stats(character: p.character)) }
         var sim = VolleySim(mode: mode, mine: mine, seed: seed, firstServe: 0)
         let assist = A11ySettings.shared.raceAssist

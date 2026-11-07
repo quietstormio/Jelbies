@@ -111,7 +111,7 @@ struct TownFlow: View {
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) })
-            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) })
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) })
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
         }

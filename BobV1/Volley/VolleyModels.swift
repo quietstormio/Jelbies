@@ -150,8 +150,6 @@ nonisolated struct VolleyStats: Codable, Equatable, Sendable {
 
 nonisolated enum VolleyTraining {
     static func diminishing(_ stat: Float) -> Float { powf(max(0, 1 - min(max(stat, 0), 1)), 1.5) }
-    /// A match nudges every stat a little (a win more).
-    static func matchGain(win: Bool) -> Float { win ? 0.02 : 0.01 }
 }
 
 nonisolated enum VolleyStatKind: String, CaseIterable, Sendable {
@@ -211,14 +209,19 @@ final class VolleyBook {
         r.matches += 1
         if win { r.wins += 1 } else if closeLoss { r.close += 1 }
         records[tier.rawValue] = r
-        var s = stats(character: c)
-        let g = VolleyTraining.matchGain(win: win)
-        s.speed = min(1, s.speed + g * VolleyTraining.diminishing(s.speed)); s.power = min(1, s.power + g * VolleyTraining.diminishing(s.power))
-        s.hops = min(1, s.hops + g * VolleyTraining.diminishing(s.hops)); s.timing = min(1, s.timing + g * VolleyTraining.diminishing(s.timing))
+        var s = stats(character: c)          // (no stat creep: skills rise by spending Upgrade points, Upgrade/UpgradeBook.swift)
         s.matches += 1; if win { s.wins += 1 }
         stats["\(c)"] = s
         save()
         return unlockedTiers.first { !before.contains($0) }
+    }
+
+    /// Lifts one saved stat to `value` (never lowers it): the Upgrade menu's purchase.
+    func raise(_ k: VolleyStatKind, to value: Float, character c: Int) {
+        var s = stats(character: c)
+        s.setValue(k, max(s.value(k), value))
+        stats["\(c)"] = s
+        save()
     }
 
     func save() {

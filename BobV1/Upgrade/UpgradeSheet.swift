@@ -43,6 +43,11 @@ struct UpgradeConfig {
     var tiles: [UpgradePowerTile]
     var selectedTile: String
     var powerHeading = "Power-up for the next race"
+    /// The beach picture: a sand band along the bottom and a net post (nil = a plain backdrop, as the Track has).
+    var sand: Color? = nil
+    /// The hero picture's height in portrait; a sheet with many skills compacts it (and its rows).
+    var heroHeight: CGFloat = 232
+    var dense: Bool { skills.count > 2 }
 }
 
 /// What the hero picture is doing.
@@ -84,7 +89,7 @@ struct UpgradeSheet: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
-                        hero.frame(height: 232)
+                        hero.frame(height: config.heroHeight)
                         VStack(alignment: .leading, spacing: 8) { skillsHeader; skillRows }
                         VStack(alignment: .leading, spacing: 8) { powerHeader; tiles }
                         doneButton.padding(.top, 2)
@@ -120,7 +125,7 @@ struct UpgradeSheet: View {
     }
 
     private var skillRows: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: config.dense ? 6 : 8) {
             ForEach(config.skills) { s in skillRow(s) }
         }
     }
@@ -131,7 +136,7 @@ struct UpgradeSheet: View {
         let canBuy = s.cost.map { config.points >= $0 } ?? false
         return HStack(spacing: 12) {
             Image(systemName: symbol(s.symbols)).font(.system(size: 24, weight: .heavy)).foregroundStyle(SK.ink.opacity(0.85))
-                .frame(width: 54, height: 54).background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(s.tint)).accessibilityHidden(true)
+                .frame(width: config.dense ? 46 : 54, height: config.dense ? 46 : 54).background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(s.tint)).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(s.title).font(SK.font(16.5, .black)).foregroundStyle(SK.ink)
@@ -148,7 +153,7 @@ struct UpgradeSheet: View {
             Spacer(minLength: 4)
             buyButton(s, canBuy: canBuy)
         }
-        .padding(10)
+        .padding(config.dense ? 7 : 10)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(theme.card))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("upgrade-skill-\(s.id)")
@@ -271,6 +276,12 @@ private struct UpgradeHero: View {
             let feet = image?.feetFraction ?? HeadPortraitKey.actionFloorFraction
             ZStack {
                 RoundedRectangle(cornerRadius: 26, style: .continuous).fill(config.backdrop)
+                if let sand = config.sand {
+                    Rectangle().fill(sand).frame(height: h * 0.34).frame(maxHeight: .infinity, alignment: .bottom)
+                    // a simple net post at the left, its net running off to the edge
+                    Capsule().fill(SK.ink.opacity(0.55)).frame(width: 5, height: h * 0.55).position(x: g.size.width * 0.12, y: h * 0.58)
+                    RoundedRectangle(cornerRadius: 2).fill(.white.opacity(0.75)).frame(width: g.size.width * 0.12 - 2.5, height: h * 0.16).position(x: (g.size.width * 0.12 - 2.5) / 2 , y: h * 0.40)
+                }
                 Ellipse().fill(config.podium).frame(width: discW, height: discH).position(x: x, y: floorY)
                 Ellipse().strokeBorder(.white.opacity(0.7), lineWidth: 1.2).frame(width: discW, height: discH).position(x: x, y: floorY)
                 Ellipse().fill(RadialGradient(colors: [.black.opacity(0.3), .black.opacity(0)], center: .center, startRadius: 0, endRadius: discW * 0.26))

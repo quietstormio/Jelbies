@@ -54,6 +54,11 @@ final class VolleyFlow {
     private(set) var unlockedNow: VolleyTier?
     private(set) var gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0)
     private(set) var settled = false
+    /// Volleyball Upgrade points this match gave (3 / 2 / 1), and his balance after; 0 until settled.
+    private(set) var pointsEarned = 0
+    private(set) var pointsAfter = 0
+    private var pointsGiven = false
+    @ObservationIgnored var upgrades: UpgradeBook?
     private(set) var cueSerial = 0
     var toast: String?
     @ObservationIgnored var toastT: Float = 0
@@ -87,7 +92,7 @@ final class VolleyFlow {
         guard phase == .off else { return }
         mode = m; playerID = id; playerCharacter = character; playerName = name
         sim = s; ui = VolleyUI()
-        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; cueSerial = 0
+        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; pointsEarned = 0; pointsAfter = 0; pointsGiven = false; cueSerial = 0
         phase = .goOut; wipe = 0; holdFrames = 0; started += 1
     }
 
@@ -142,6 +147,15 @@ final class VolleyFlow {
         if u != ui { ui = u }
     }
 
+    /// Upgrade points for the result, once per match (a second call changes nothing).
+    func awardPoints(win: Bool?, closeLoss: Bool) {
+        guard !pointsGiven, let up = upgrades else { return }
+        pointsGiven = true
+        pointsEarned = UpgradeTuning.volleyPoints(win: win, closeLoss: closeLoss)
+        up.add(pointsEarned, .volley, character: playerCharacter)
+        pointsAfter = up.points(.volley, character: playerCharacter)
+    }
+
     /// The match is over: Drops, unlocks, ribbons and gains, once.
     func settle() {
         guard !settled, let s = sim, s.phase == .over else { return }
@@ -152,6 +166,7 @@ final class VolleyFlow {
             earned = Int((Float(VolleyTuning.drops(win: win, tier: t)) * assistFactor).rounded(.down))
             wallet?.add(earned)
             unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: s.closeLoss)
+            awardPoints(win: win, closeLoss: s.closeLoss)
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
