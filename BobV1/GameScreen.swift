@@ -29,6 +29,10 @@ struct GameScreen: View {
     private var jellyNames: [String] { model.care.jellies.map(\.name) }
     @State private var openPicker: ConsumableKind?
     @Environment(\.scenePhase) private var scenePhase
+    /// "Welcome back" cover (resume after more than 20 s away; never at a cold launch): up the moment the app goes to the background, so the first frame back is never the half-restored room.
+    @State private var welcomeCover = false
+    @State private var welcomeLeftAt: Date?
+    @State private var welcomeTask: Task<Void, Never>?
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
@@ -382,6 +386,35 @@ struct GameScreen: View {
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
+        .overlay {
+            if welcomeCover {
+                LaunchCurtainArt(hour: 12, bounce: true).ignoresSafeArea().transition(.opacity)          // the existing opaque loading art (theme colours + logo + bouncing dots)
+                    .accessibilityElement(children: .ignore).accessibilityLabel("Welcome back")
+            }
+        }
+        .onChange(of: scenePhase) { _, p in
+            switch p {
+            case .background:
+                guard !welcomeCover else { break }
+                welcomeTask?.cancel(); welcomeLeftAt = Date()
+                AudioHub.shared.holdEffects(true)          // effects stay silent under the cover
+                welcomeCover = true
+            case .active:
+                guard let left = welcomeLeftAt else { break }
+                welcomeLeftAt = nil
+                if Date().timeIntervalSince(left) <= 20 { welcomeCover = false; AudioHub.shared.holdEffects(false); break }
+                welcomeTask?.cancel()
+                welcomeTask = Task { @MainActor in
+                    let t0 = Date()
+                    try? await Task.sleep(for: .milliseconds(500))          // min 0.5 s
+                    while !Task.isCancelled, Date().timeIntervalSince(t0) < 1.5, !AudioHub.shared.resumeReady { try? await Task.sleep(for: .milliseconds(50)) }          // max 1.5 s
+                    guard !Task.isCancelled else { return }
+                    AudioHub.shared.holdEffects(false)
+                    withAnimation(.easeOut(duration: 0.35)) { welcomeCover = false }
+                }
+            default: break
+            }
+        }
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
         .overlay { if BubbleWand.shared.active { BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true) } }          // the bubble wand's bubbles (Toys/)
