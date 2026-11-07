@@ -108,7 +108,7 @@ struct TownFlow: View {
             switch screen ?? .town {
             case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
-            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) })
+            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) })
             case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) })
@@ -338,6 +338,8 @@ struct TrackPanel: View {
     let care: GameCare
     @Binding var who: Int
     var back: () -> Void
+    /// To the Shop (the Upgrade sheet's "Shop ›").
+    var shop: (() -> Void)? = nil
     var race: () -> Void
     /// The course picked for the next race (Race/CoursePicker.swift sets it through GameCare.chooseCourse).
     var courseTier: CourseTier { care.race.courseTier }
@@ -345,6 +347,7 @@ struct TrackPanel: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var howOpen = false
+    @State private var upgradeOpen = false
     @State private var hint = LobbyHint()
 
     private var compact: Bool { vsc == .compact }
@@ -359,9 +362,16 @@ struct TrackPanel: View {
             } right: {
                 runnerCard(prof).padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(playID: "track-race", playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, play: race)
+                LobbyBottomBar(playID: "track-race", playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, upgradeID: "track-upgrade",
+                               upgradePoints: prof.map { care.upgrades.points(.race, character: $0.character) } ?? 0, upgrade: { setUpgrade(true) }, play: race)
             }
-            .accessibilityHidden(howOpen)
+            .accessibilityHidden(howOpen || upgradeOpen)
+            if upgradeOpen, let p = prof {
+                UpgradeSheet(care: care, who: p.id, config: upgradeConfig(p), buy: { buySkill($0, p) }, pick: { pickPower($0, p) },
+                             shop: shop.map { go in { setUpgrade(false); go() } }, done: { setUpgrade(false) })
+                    .environment(\.lobbyTheme, .cream)
+                    .zIndex(1)
+            }
             if howOpen {
                 LobbyHowSheet(rows: [
                     (.feet, "Left, right, left", "Tap the two foot buttons in turn. The same foot twice is a stumble."),
@@ -381,6 +391,49 @@ struct TrackPanel: View {
     static func words(_ n: Int) -> String {
         let f = NumberFormatter(); f.numberStyle = .spellOut; f.locale = Locale(identifier: "en_US")
         return f.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
+    private func setUpgrade(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { upgradeOpen = on } }
+
+    // MARK: Upgrade (Upgrade/UpgradeSheet.swift)
+
+    private func upgradeConfig(_ p: JellyProfile) -> UpgradeConfig {
+        let book = care.upgrades
+        _ = book.revision          // (the sheet redraws when points or the choice change)
+        let skills = RaceSkill.allCases.map { s -> UpgradeSkillInfo in
+            let lv = book.level(s, stats: p.stats)
+            return UpgradeSkillInfo(id: s.rawValue, title: s.title, blurb: s.blurb, symbols: s == .speed ? ["shoe.fill", "shoeprints.fill", "figure.run"] : ["scope", "target"],
+                                    tint: s == .speed ? SK.pink.opacity(0.4) : SK.sky.opacity(0.4), level: lv, cost: UpgradeTuning.cost(level: lv))
+        }
+        return UpgradeConfig(gameWord: "Race", heroName: p.name, winLine: "Win = \(UpgradeTuning.racePoints(place: 1)) points", points: book.points(.race, character: p.character),
+                             backdrop: Color(hex: 0xBFE3B4), podium: Color(hex: 0x8FC47F), skills: skills, tiles: powerTiles(), selectedTile: chosenTile(p))
+    }
+
+    /// The race-boost foods the Bag has (the Shop's 3D picture, with how many); with none, Donut and Sandwich greyed.
+    private func powerTiles() -> [UpgradePowerTile] {
+        func tile(_ item: StoreItem, _ n: Int) -> UpgradePowerTile {
+            UpgradePowerTile(id: item.id, name: item.name, tag: n > 0 ? "\(item.perk == .zoomies ? "Faster" : "Steadier") \u{00B7} \u{00D7}\(n)" : "Get in Shop", item: item, count: n)
+        }
+        let owned = StoreCatalog.items.filter { $0.food != nil && ($0.perk == .zoomies || $0.perk == .focus) && care.store.count($0.id) > 0 }
+        let foods = owned.isEmpty ? ["donut", "sandwich"].compactMap { StoreCatalog.item($0) }.map { tile($0, 0) } : owned.map { tile($0, care.store.count($0.id)) }
+        return [UpgradePowerTile(id: UpgradePowerTile.noneID, name: "None", tag: "No boost", item: nil, count: 0)] + foods
+    }
+
+    private func chosenTile(_ p: JellyProfile) -> String {
+        if let c = care.upgrades.chosen(.race, character: p.character), care.store.count(c) > 0 { return c }
+        return UpgradePowerTile.noneID
+    }
+
+    private func buySkill(_ id: String, _ p: JellyProfile) -> Bool {
+        guard let s = RaceSkill(rawValue: id) else { return false }
+        return care.upgrades.buy(s, stats: p.stats, character: p.character)
+    }
+
+    /// True when a food (not None) is now chosen.
+    private func pickPower(_ id: String, _ p: JellyProfile) -> Bool {
+        if id == UpgradePowerTile.noneID { care.upgrades.choose(nil, .race, character: p.character); return false }
+        care.upgrades.choose(id, .race, character: p.character)
+        return true
     }
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }

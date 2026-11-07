@@ -392,26 +392,60 @@ struct WeightedRow: Layout {
     }
 }
 
-/// The lobbies' one big main button (Go race / Enter Jelly Show / Play); a blocker mutes and disables it.
+/// The lobbies' one big main button (Go race / Enter Jelly Show / Play); a blocker mutes and disables it. With `upgrade` set, the secondary Upgrade button sits to its left
+/// (white, ink outline, a star badge with the runner's unspent points); it is never blocked.
 struct LobbyBottomBar: View {
     let playID: String
     let playTitle: String, playIcon: LobbyIcon.Kind
     let blocked: Bool
+    var upgradeID: String = "lobby-upgrade"
+    var upgradePoints = 0
+    var upgrade: (() -> Void)? = nil
     var play: () -> Void
     @Environment(\.lobbyTheme) private var theme
 
-    var body: some View {
-        let minH: CGFloat = 58
+    private var playButton: some View {
         Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play() } label: {
             HStack(spacing: 9) {
                 LobbyIcon(kind: playIcon, color: theme.primaryText)
                 Text(playTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 12)
-            .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: minH)
+            .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: 58)
             .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : theme.primary))
         }
         .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(playID)
+    }
+
+    private func upgradeContent(icon: Bool) -> some View {
+        HStack(spacing: 8) {
+            if icon { Image(systemName: "arrow.up.circle.fill").font(.system(size: 20, weight: .heavy)) }
+            Text("Upgrade").font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
+            if upgradePoints > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "star.fill").font(.system(size: 10, weight: .black))
+                    Text("\(upgradePoints)").font(SK.font(13, .black)).monospacedDigit()
+                }
+                .foregroundStyle(theme.primaryText).padding(.horizontal, 7).frame(minHeight: 22).background(Capsule().fill(theme.primary))
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    var body: some View {
+        if let upgrade {
+            WeightedRow(weights: [1, 1.25], spacing: 12) {
+                Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); upgrade() } label: {
+                    ViewThatFits(in: .horizontal) { upgradeContent(icon: true); upgradeContent(icon: false) }
+                        .foregroundStyle(theme.secondaryText)
+                        .frame(maxWidth: .infinity, minHeight: 58)
+                        .background(Capsule().fill(theme.secondaryFill))
+                        .overlay(Capsule().strokeBorder(theme.secondaryStroke, lineWidth: 3))
+                }
+                .buttonStyle(.plain).accessibilityLabel("Upgrade").accessibilityValue(upgradePoints > 0 ? "\(upgradePoints) points to spend" : "").accessibilityIdentifier(upgradeID)
+                playButton
+            }
+        } else { playButton }
     }
 }
 
