@@ -125,8 +125,6 @@ struct SocialBook {
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
     var lastKind: SocialKind?
-    /// The last few kinds this Jelly did with each partner (by steerID), newest last: a pair does not repeat a kind within `FriendTuning.pairMemory` sessions.
-    var pairRecent: [Int: [SocialKind]] = [:]
     var roundSeen = -1
     /// Seconds since this Jelly's last social (counts only while he is awake and free to join): the floor asks for one past `droughtLimit`.
     var drought: Float = 0
@@ -323,7 +321,6 @@ extension BlobBrain {
         social = s; o.social = s
         if let c = third { s.c = c; s.idC = c.steerID; c.social = s; c.socialBook.glanceDone = false }
         socialBook.started[kind, default: 0] += 1
-        if kind != .look { for (x, y) in [(self, o), (o, self)] { var r = x.socialBook.pairRecent[y.steerID] ?? []; r.append(kind); if r.count > FriendTuning.pairMemory { r.removeFirst(r.count - FriendTuning.pairMemory) }; x.socialBook.pairRecent[y.steerID] = r } }
         socialBook.drought = 0; o.socialBook.drought = 0; socialBook.invite = nil; o.socialBook.invite = nil
         socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1); o.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1)
         socialBook.wakeGreet = -1; o.socialBook.wakeGreet = -1
@@ -425,16 +422,10 @@ extension BlobBrain {
         var w: [(SocialKind, Float)] = [(.boop, 1.5), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
         varietyScaleSocial(&w, partner: o)
-        if anticsEnabled { socialVarietyShape(&w, partner: o) }
-        // (a pick whose start is refused - no free spot, too far - is dropped and re-rolled, so the kinds that are easy to start do not win by default)
-        func roll(_ w: [(SocialKind, Float)]) -> SocialKind {
-            let total = w.reduce(0) { $0 + $1.1 }
-            var x = rand() * total
-            var kind = w[0].0
-            for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-            return kind
-        }
-        var kind = roll(w)
+        let total = w.reduce(0) { $0 + $1.1 }
+        var x = rand() * total
+        var kind = w[0].0
+        for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
         if anticsEnabled { socialBook.lastKind = kind }
         if !o.socialFree {          // he is out on a wander leg: ask him to stop; the social starts when he has (socialInviteTick)
             guard o.socialBeckonStop() else { socialBook.cooldown = max(socialBook.cooldown, 3); return false }
@@ -442,13 +433,7 @@ extension BlobBrain {
             varietyNoteSocial(kind, with: o)
             return true
         }
-        var started = socialStart(kind, with: o, sim)
-        var tries = 0
-        while !started, anticsEnabled, tries < 4, w.count > 1 {
-            w.removeAll { $0.0 == kind }; tries += 1
-            kind = roll(w); socialBook.lastKind = kind
-            started = socialStart(kind, with: o, sim)
-        }
+        let started = socialStart(kind, with: o, sim)
         if started { varietyNoteSocial(kind, with: o) }
         return started
     }

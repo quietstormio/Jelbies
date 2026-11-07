@@ -39,14 +39,6 @@ enum FriendTuning {
         .wings: [.twirl, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
     ]
     static let tasteMul: Float = 1.5
-    /// 2026-11-06 (variety): the kinds that stay reachable at night (back to back, sway hug, twirl, hop along, peekaboo): their fast-move night cut is 30 % instead of 80 % and they get a boost.
-    static let nightCalm: Set<SocialKind> = [.backToBack, .swayHug, .twirl, .hopAlong, .peekaboo]
-    static let nightBoost: Float = 0.8
-    /// The standing hand-on-partner kinds: together they take at most this share of a pick (the user saw the hand-on-arm pose "too often", 2026-11-06).
-    static let handKinds: Set<SocialKind> = [.boop, .cheekSquish, .whisperGiggle, .highFive]
-    static let handShareMax: Float = 0.05
-    /// A pair does not repeat a kind within its last `pairMemory` sessions.
-    static let pairMemory = 3
 }
 
 extension BlobBrain {
@@ -72,22 +64,9 @@ extension BlobBrain {
             var x = base * c
             if k == .highFive { x *= EmoteTuning.fiveWeight / 2.2 * (o.socialWandering ? EmoteTuning.fiveCrossingBoost : 1) }          // (modest; likelier when they cross paths: he is out on a wander leg)
             let tender = k == .cheekSquish || k == .cuddleLean || k == .backToBack
-            if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - (FriendTuning.nightCalm.contains(k) ? 0.3 : 0.8) * night } }
-            if FriendTuning.nightCalm.contains(k) { x *= 1 + FriendTuning.nightBoost * night }          // (2026-11-06 variety: at night the gentle lively ones are the ones that run, not only the hand kinds)
+            if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - 0.8 * night } }
             if taste.contains(k) { x *= FriendTuning.tasteMul }
             w.append((k, x))
-        }
-    }
-
-    /// 2026-11-06 (variety): drop the kinds this pair did in its last few sessions, and cap the hand-on-partner kinds' combined share of the table.
-    func socialVarietyShape(_ w: inout [(SocialKind, Float)], partner o: BlobBrain) {
-        let recent = Set((socialBook.pairRecent[o.steerID] ?? []) + (o.socialBook.pairRecent[steerID] ?? []))
-        let kept = w.filter { !recent.contains($0.0) }
-        if kept.count >= 6 { w = kept }
-        let hand = w.filter { FriendTuning.handKinds.contains($0.0) }.reduce(0) { $0 + $1.1 }, rest = w.reduce(0) { $0 + $1.1 } - hand
-        if hand > 0, hand > FriendTuning.handShareMax / (1 - FriendTuning.handShareMax) * rest {
-            let f = FriendTuning.handShareMax / (1 - FriendTuning.handShareMax) * rest / hand
-            for i in w.indices where FriendTuning.handKinds.contains(w[i].0) { w[i].1 *= f }
         }
     }
 
@@ -266,8 +245,6 @@ extension BlobBrain {
             if isA, s.phaseT > 0.6 { finishHappy(s, o) }
         }
     }
-
-
 
     // MARK: cheek squish
 
