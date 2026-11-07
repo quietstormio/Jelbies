@@ -93,7 +93,7 @@ struct GameScreen: View {
         ZStack {
             MelonStage(model: model)
                 .ignoresSafeArea()
-                .onChange(of: perfOverlayTags, initial: true) { _, tags in PerfOverlay.set(tags) }          // PerfMeter ctx: which overlays are up
+                .onChange(of: perfOverlayTags, initial: true) { _, tags in PerfOverlay.set(tags); HapticDriver.hopOverlayUp = !tags.isEmpty }          // PerfMeter ctx: which overlays are up
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
             Color(red: 0.30, green: 0.20, blue: 0.14)
