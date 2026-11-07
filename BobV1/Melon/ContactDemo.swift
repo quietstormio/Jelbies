@@ -1,7 +1,7 @@
 //
 //  ContactDemo.swift
 //  Capture aid only (launch arguments; nothing happens without them): force one touching emote between chosen Jelbies in the real app.
-//    -ContactDemo <SocialKind raw value (chase too) | lieDown | flop | sleepPile; groupHug, circleDance, groupCheer take the whole cast>   e.g. swayHug, noseBoop, backToBack, cuddleLean, groupHug, lieDown
+//    -ContactDemo <SocialKind raw value (chase too) | lieDown | flop | sleepPile; groupHug, circleDance, groupCheer take the whole cast>   e.g. swayHug, backToBack, cuddleLean, groupHug, lieDown
 //    -ContactDemoIds 0,1[,2]                          roster slots of the cast; the first one starts it (default: everyone, in order)
 //    -ContactCam low|side|perp|top                    camera; works without -ContactDemo. low = the player's 3/4 view, side = steep orbit,
 //                                                     perp = tracks the cast, side-on (perpendicular to the cast's axis, on the room side), near body height;

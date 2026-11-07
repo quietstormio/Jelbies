@@ -89,7 +89,6 @@ struct ContactStance: Sendable {
         // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 3: the arms go down, they part.
         .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
-        .noseBoop: .pressing(from: 1, press: 2, until: 3, sound: .boop, volume: 0.8),
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds

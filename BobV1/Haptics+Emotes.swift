@@ -195,7 +195,6 @@ enum HapticCue: Hashable, Sendable {
         case .peekaboo: return CueSpec(i: 0.12, s: 0.21, n: 2, gap: 0.25, decay: 1.2)
         case .bellyBounce: return CueSpec(i: 0.34, s: 0.11, n: 4, gap: 0.1, decay: 0.7)
         case .mirrorDance: return CueSpec(i: 0.21, s: 0.13, n: 4, gap: 0.14, decay: 0.9)
-        case .noseBoop: return CueSpec(i: 0.17, s: 0.26, n: 1)
         case .backToBack: return CueSpec(i: 0.14, s: 0.09, n: 2, gap: 0.12, decay: 0.7)
         case .cuddleLean: return CueSpec(i: 0.10, s: 0.05, n: 2, gap: 0.2, decay: 0.8)
         case .ringAround: return CueSpec(i: 0.20, s: 0.12, n: 5, gap: 0.12, decay: 0.9)

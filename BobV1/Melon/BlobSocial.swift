@@ -49,7 +49,7 @@ enum SocialKind: String, CaseIterable, Sendable {
     case twirl          // face to face: each spins once, then a bow
     case hopAlong       // side by side: one hops, the other copies half a second later
     // 2026-10-26 (more friends): BlobSocial+Friends2.swift
-    case littleRace, tag, leapfrog, peekaboo, bellyBounce, mirrorDance, noseBoop, backToBack, cuddleLean, ringAround
+    case littleRace, tag, leapfrog, peekaboo, bellyBounce, mirrorDance, backToBack, cuddleLean, ringAround
     /// Pairs (BlobSocial+Friends3): a side hug that sways, a take-turns dance-off, a whisper and a giggle, a shy wave from afar then a run to each other
     case swayHug, danceOff, whisperGiggle, shyWave
     /// Groups of 3...5 (BlobSocial+Group): one session, every free Jelly nearby
@@ -188,7 +188,7 @@ final class SocialSession {
     var fightT: Float = 0
     var contactTouches = 0          // the gate's touches in this session (ContactStance.swift)
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
     var round = 0, roles = 0, fastMoves = 0
     /// Group treats: the leader's planned path (waypoints), whether the crew are choreographed (they do not steer round each other), the time the line started moving.
     var path: [SIMD2<Float>] = [], choreo = false, moveT: Float = 0
@@ -380,7 +380,7 @@ extension BlobBrain {
             return socialStartPlay(kind, with: o, sim)
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong:
             return socialStartFriends(kind, with: o, sim)
-        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround:
+        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround:
             return socialStartMore(kind, with: o, sim)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave:
             return socialStartFriends3(kind, with: o, sim)
@@ -716,7 +716,7 @@ extension BlobBrain {
         case .look: driveLook(s, o, isA, sim, dt)
         case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
         case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
-        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
+        case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)
         case .spinHug: driveSpinHug(s, o, isA, sim, dt)
         case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance: break          // (handled above)

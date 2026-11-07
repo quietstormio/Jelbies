@@ -405,6 +405,20 @@ final class SocialTests: XCTestCase {
         for (k, wa) in wAfter where !hands.contains(k) {
             XCTAssertGreaterThanOrEqual(wa / tA, (wBefore[k] ?? 0) / tB, "\(k): its pick probability does not fall")
         }
+        // 2026-11-06: the nose boop (a face-to-face "kiss" read) is gone for good. Its old share goes back to every remaining kind.
+        // Old weight of noseBoop = 1.4 * what its sibling cuddleLean (base 1.3, same tender + daisy-taste treatment) gets per base unit.
+        guard let cuddle = wAfter[.cuddleLean] else { return XCTFail("cuddleLean is in the table") }
+        let noseOld = cuddle / 1.3 * 1.4
+        let tWithNose = tA + noseOld
+        var lines: [String] = []
+        for (k, wa) in wAfter.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            let before = Float(n) * wa / tWithNose * (Float(total) / Float(n)), after = Float(n) * wa / tA * (Float(total) / Float(n))
+            lines.append("\(k.rawValue): before \(String(format: "%.1f", before)) after \(String(format: "%.1f", after)) (x\(String(format: "%.3f", after / before)))")
+            XCTAssertGreaterThanOrEqual(after, before * 0.9, "\(k): expected picks do not fall below 90% of before")
+            XCTAssertGreaterThan(after, before, "\(k): expected picks rise")
+        }
+        MotionLog.write("SOCIAL PICKS noseBoop removal (expected picks per \(total) rolls): " + lines.joined(separator: " | "))
+        print("NOSEBOOP-REMOVAL-PICKS " + lines.joined(separator: " | "))
         let pHandsBefore = hands.reduce(0) { $0 + (wBefore[$1] ?? 0) } / tB, pHandsAfter = hands.reduce(0) { $0 + (wAfter[$1] ?? 0) } / tA
         XCTAssertEqual(pHandsAfter / pHandsBefore, 0.5, accuracy: 0.05, "the three hand kinds together drop to about half")
         let sampled = Float(hands.reduce(0) { $0 + (counts[$1] ?? 0) }) / Float(max(total, 1))
@@ -412,5 +426,17 @@ final class SocialTests: XCTestCase {
         MotionLog.write("SOCIAL PICKS hands: expected before \(pHandsBefore) after \(pHandsAfter), sampled \(sampled) (sigma \(sigma)); W before \(tB) after \(tA)")
         XCTAssertEqual(sampled, pHandsAfter, accuracy: 5 * sigma, "the real pick path matches the table above")
         XCTAssertLessThan(sampled, pHandsBefore * 0.7, "and sits well below the old three-kind share")
+    }
+
+    /// 2026-11-06 user: "Remove this kiss emote. Don't add it again it's a kids again remove it" (the nose boop). Permanent.
+    func testNoNoseBoopOrKissKindExists() {
+        for k in SocialKind.allCases {
+            let r = k.rawValue.lowercased()
+            XCTAssertFalse(r.contains("noseboop") || r.contains("kiss"), "\(k) must not exist")
+            XCTAssertNil(ContactStance.table.keys.first { $0.rawValue.lowercased().contains("noseboop") || $0.rawValue.lowercased().contains("kiss") })
+        }
+        XCTAssertNil(SocialKind(rawValue: "noseBoop"))
+        let weighted = FriendTuning.base.map { $0.0 } + FriendTuning.taste.values.flatMap { Array($0) }
+        XCTAssertFalse(weighted.contains { $0.rawValue.lowercased().contains("noseboop") || $0.rawValue.lowercased().contains("kiss") })
     }
 }

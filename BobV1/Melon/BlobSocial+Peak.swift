@@ -15,7 +15,7 @@ enum PeakTuning {
     static let log = ProcessInfo.processInfo.environment["PEAK_LOG"] != nil
     nonisolated(unsafe) static var enabled = ProcessInfo.processInfo.environment["PEAK_OFF"] != "1"
     /// The press / strike moves whose lean is the move itself (the hold kinds - sways, cuddles, hugs - close the last centimetres with the engine's own lean, so the guard leaves them alone: measured, it left them 3-4 cm short).
-    static let strikeKinds: Set<SocialKind> = [.bump, .chestBump, .noseBoop, .highFive, .bellyBounce, .squabble, .sneak, .cheekSquish, .whisperGiggle]
+    static let strikeKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .squabble, .sneak, .cheekSquish, .whisperGiggle]
     /// A/B switches of the two mechanisms (env PEAK_NOGUARD / PEAK_NOARM = 1).
     nonisolated(unsafe) static var guardOn = ProcessInfo.processInfo.environment["PEAK_NOGUARD"] != "1"
     nonisolated(unsafe) static var armOn = ProcessInfo.processInfo.environment["PEAK_NOARM"] != "1"
