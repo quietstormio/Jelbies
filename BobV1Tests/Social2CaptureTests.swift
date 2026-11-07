@@ -20,7 +20,7 @@ final class Social2CaptureTests: XCTestCase {
         guard let dir = env["SOCIAL2_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("SOCIAL2_CAP_DIR not set") }
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        let all: [SocialKind] = [.chestBump, .highFive, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround]
+        let all: [SocialKind] = [.chestBump, .highFive, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround]
         let want = (env["SOCIAL2_KINDS"] ?? "").split(separator: ",").map(String.init)
         let kinds = want.isEmpty ? all : all.filter { want.contains($0.rawValue) }
         let nFrames = Int(env["SOCIAL2_FRAMES"] ?? "") ?? 8

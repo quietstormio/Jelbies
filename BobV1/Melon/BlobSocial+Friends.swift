@@ -18,7 +18,7 @@ import simd
 extension SocialKind {
     /// The "we like each other" kinds (the Park gives friendship a bonus while one is on).
     var isFriendly: Bool {
-        switch self { case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .noseBoop, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
+        switch self { case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
     }
 }
 
@@ -26,7 +26,7 @@ enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
     // 2026-11-06 user: standing hand-holding too often; restore when the hands emotes get their own looks (r4-hands)
     static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 0.9), (.twirl, 2.0), (.hopAlong, 2.0),
-                                                      (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.noseBoop, 1.4), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
+                                                      (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
                                                       (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.65), (.shyWave, 1.2)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
@@ -36,7 +36,7 @@ enum FriendTuning {
     static let taste: [JellyFeature: Set<SocialKind>] = [
         .none: [.highFive, .chestBump, .littleRace, .peekaboo],
         .spines: [.chestBump, .highFive, .hopAlong, .tag, .leapfrog, .littleRace],
-        .daisy: [.hum, .cheekSquish, .noseBoop, .cuddleLean, .backToBack],
+        .daisy: [.hum, .cheekSquish, .cuddleLean, .backToBack],
         .wings: [.twirl, .hum, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
     ]
     static let tasteMul: Float = 1.5
@@ -64,7 +64,7 @@ extension BlobBrain {
             if k == .highFive, (socialBook.fiveCool[o.steerID] ?? 0) > 0 || (o.socialBook.fiveCool[steerID] ?? 0) > 0 { continue }          // (a pair high-fives at most once a minute)
             var x = base * c
             if k == .highFive { x *= EmoteTuning.fiveWeight / 2.2 * (o.socialWandering ? EmoteTuning.fiveCrossingBoost : 1) }          // (modest; likelier when they cross paths: he is out on a wander leg)
-            let tender = k == .hum || k == .cheekSquish || k == .cuddleLean || k == .backToBack || k == .noseBoop
+            let tender = k == .hum || k == .cheekSquish || k == .cuddleLean || k == .backToBack
             if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - 0.8 * night } }
             if taste.contains(k) { x *= FriendTuning.tasteMul }
             w.append((k, x))

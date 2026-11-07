@@ -134,7 +134,7 @@ final class ContactPolishTests: XCTestCase {
     static let curatedPairEntries: [ContactEntry] = [
         ContactEntry(name: "boop", scenario: .social(.boop), stance: .touching, momentary: true), e("squabble", .squabble, .touching), e("bump", .bump, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
         e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("hum", .hum, .touching), e("cheekSquish", .cheekSquish, .touching),
-        e("bellyBounce", .bellyBounce, .touching), e("noseBoop", .noseBoop, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
+        e("bellyBounce", .bellyBounce, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
         e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .touching), e("spinHug", .spinHug, .touching),
         ContactEntry(name: "tag", scenario: .social(.tag), stance: .touching, momentary: true), ContactEntry(name: "chase", scenario: .social(.chase), stance: .touching, maxSec: 40, momentary: true),          // (tag / chase: the emote IS a soft bump in a run: its hold step is the chase itself, so a "hold median" read 59-94 cm of running; judged at the touch frames like a boop)
         ContactEntry(name: "greet", scenario: .social(.greet), stance: .proximity, near: true), e("look", .look, .proximity), e("follow", .follow, .proximity), e("zoomies", .zoomies, .proximity, sec: 40), e("dance", .dance, .proximity),

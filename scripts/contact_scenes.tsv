@@ -5,7 +5,6 @@ lieDown_pip_lavender	pip,lavender	lieDown	perp,top,low	-	120
 sleepPile_pearl_pip	pearl,pip	sleepPile	perp,top,low	-ClockHour 23	90
 backToBack_pip_teddy	pip,teddy	backToBack	perp,top,low	-	200
 swayHug_bob_pearl	bob,pearl	swayHug	perp,top,low	-	90
-noseBoop_moss_lavender	moss,lavender	noseBoop	perp,top,low	-	90
 groupHug_bob_teddy_pearl	bob,teddy,pearl	groupHug	perp,top,low	-	90
 groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	perp,top,low	-	90
 cuddleLean_lavender_pip	lavender,pip	cuddleLean	perp,top,low	-	90
@@ -39,7 +38,6 @@ flop_teddy_pearl	teddy,pearl	flop	perp,top,low	-	120
 sitTogether_bob_teddy	bob,teddy	sitTogether	perp,top,low	-	90
 spinHug_bob_teddy	bob,teddy	spinHug	perp,top,low	-	90
 hum_bob_teddy	bob,teddy	hum	perp,top,low	-	90
-noseBoop_bob_teddy	bob,teddy	noseBoop	perp,top,low	-	90
 nuzzle_bob_teddy	bob,teddy	nuzzle	perp,top,low	-	90
 sneak_bob_teddy	bob,teddy	sneak	perp,top,low	-	90
 highFive_bob_teddy	bob,teddy	highFive	perp,top,low	-	90

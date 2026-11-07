@@ -234,7 +234,6 @@ final class SocialFeetTests: XCTestCase {
     func testCheekSquish() { pair("cheekSquish", .cheekSquish) }
     func testTag() { pair("tag", .tag) }
     func testBellyBounce() { pair("bellyBounce", .bellyBounce) }
-    func testNoseBoop() { pair("noseBoop", .noseBoop) }
     func testBackToBack() { pair("backToBack", .backToBack) }
     func testCuddleLean() { pair("cuddleLean", .cuddleLean) }
     func testRingAround() { pair("ringAround", .ringAround) }

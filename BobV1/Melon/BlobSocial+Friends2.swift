@@ -9,7 +9,6 @@
 //    peekaboo     one ducks behind the other (from the camera), peeks out and pops up; the other jumps happily; twice
 //    bellyBounce  side by side: lean into each other, a squish, bounce apart with a jiggle, twice
 //    mirrorDance  face to face: the leader sways and hops, the other copies a beat later
-//    noseBoop     face to face: one leans in and boops the other's face (a blush, a heart), then the other boops back
 //    backToBack   sit back to back (the backs touch) and sway together
 //    cuddleLean   side by side, leaning on each other, eyes closed, a slow sway
 //    ringAround   face to face, close, they spin together, then flop over giggling
@@ -75,9 +74,9 @@ extension BlobBrain {
             s.goal = spot; s.roles = rand() < 0.5 ? 0 : 1
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
-        case .tag, .mirrorDance, .noseBoop, .ringAround:
+        case .tag, .mirrorDance, .ringAround:
             guard d > 0.5, d < 5.5 else { return false }
-            let gapK: Float = kind == .ringAround ? 0.72 : (kind == .noseBoop ? 0.68 : Friends2Tuning.faceGap)
+            let gapK: Float = kind == .ringAround ? 0.72 : Friends2Tuning.faceGap
             let away = (me - you) / max(d, 1e-3)
             let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
@@ -115,7 +114,6 @@ extension BlobBrain {
         case .peekaboo: drivePeekaboo(s, o, isA, sim)
         case .bellyBounce: driveBellyBounce(s, o, isA, sim)
         case .mirrorDance: driveMirror(s, o, isA, sim)
-        case .noseBoop: driveNoseBoop(s, o, isA)
         case .backToBack: driveBackToBack(s, o, isA, sim)
         case .cuddleLean: driveCuddleLean(s, o, isA)
         case .ringAround: driveRing(s, o, isA, sim)
@@ -415,36 +413,6 @@ extension BlobBrain {
         }
     }
 
-    // MARK: nose boop
-
-    private func driveNoseBoop(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
-        if s.phase < 2, openFaceToFace(s, o, isA, settle: 0.5) { return }
-        let t = s.phaseT
-        faceEach(o)
-        // boop 1: a leans in at 0.2; boop 2: b leans in at 1.9
-        func lean(_ m: Float) -> Float { pulse(m, up: 0.30, down: 0.35) }
-        func take(_ m: Float) -> Float { pulse(m, up: 0.10, down: 0.45) }
-        let leaning = isA ? lean(t - 0.2) : lean(t - 1.9)
-        let taking = isA ? take(t - 1.9 - 0.30) : take(t - 0.2 - 0.30)
-        socialBook.wantPitch = 0.24 * leaning - 0.10 * taking
-        socialBook.wantRoll = 0.10 * taking * sinf(2 * .pi * 4.5 * max(0, (isA ? t - 2.2 : t - 0.5)))
-        socialBook.wantSquash = 1 - 0.03 * taking
-        if isA {
-            if s.bumps == 0, t >= 0.5 { s.bumps = 1; noseBoopHit(booped: o) }
-            if s.bumps == 1, t >= 2.2 { s.bumps = 2; noseBoopHit(booped: self) }
-            if t > 3.8 { finishHappy(s, o) }
-        }
-    }
-    private func noseBoopHit(booped: BlobBrain) {
-        let booper = booped === self ? (socialPartner ?? self) : self
-        booper.jellyKick = max(booper.jellyKick, 0.8); booped.jellyKick = max(booped.jellyKick, 2.2)
-        booper.contactBoopFallback(booped)
-        booped.onSocial?(.makeUp(partner: booper.steerID)); onSocial?(.makeUp(partner: booped.steerID))
-        booper.contactCueFallback(booped, .boop, 0.8)
-        AudioHub.shared.chirp(jelly: booped.steerID, .babble)
-        booped.blushBump(hold: 2.0, peak: 0.6)
-    }
-    private var socialPartner: BlobBrain? { guard let s = social else { return nil }; return s.a === self ? s.b : s.a }
 
     // MARK: back to back
 
