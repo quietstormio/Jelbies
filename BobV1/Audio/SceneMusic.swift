@@ -23,6 +23,9 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
     /// The café playlist's other tracks (2026-11-03): the whole file loops like the others.
     case cafe3 = "cafe_3", cafe4 = "cafe_4", cafe5 = "cafe_5", cafe6 = "cafe_6", cafe7 = "cafe_7", cafe8 = "cafe_8"
 
+    /// The park playlist's other tracks (2026-11-06): the whole file loops like the others.
+    case park3 = "park_3", park4 = "park_4", park5 = "park_5", park6 = "park_6"
+
     var loopStartFrame: Int {
         switch self {
         case .circuitRace: return 1_289_559
@@ -32,7 +35,7 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .town: return 655_869
         case .studioPractice: return 1_235_736
         case .contestStage: return 1_511_597
-        case .park1, .park2, .cafe1, .cafe2, .cafe3, .cafe4, .cafe5, .cafe6, .cafe7, .cafe8, .volley1, .volley2: return 2_000
+        case .park1, .park2, .park3, .park4, .park5, .park6, .cafe1, .cafe2, .cafe3, .cafe4, .cafe5, .cafe6, .cafe7, .cafe8, .volley1, .volley2: return 2_000
         }
     }
     var loopEndFrame: Int {
@@ -45,6 +48,10 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .studioPractice: return 2_646_955
         case .contestStage: return 2_922_798
         case .park1, .park2: return 3_970_058
+        case .park3: return 4_632_576
+        case .park4: return 4_632_576
+        case .park5: return 4_632_576
+        case .park6: return 4_632_576
         case .cafe1, .cafe2: return 4_411_412
         case .cafe3, .cafe7: return 4_634_469
         case .cafe4, .cafe5: return 4_632_175
@@ -94,11 +101,11 @@ nonisolated enum MusicScene: Equatable, Sendable {
         }
     }
     /// A playlist scene advances at the end of each track (shuffled, no repeat until the list is through) and has a Skip; the others loop one track.
-    var isPlaylist: Bool { self == .cafe }
+    var isPlaylist: Bool { self == .cafe || self == .park }
     /// The candidates for a visit (the director picks one at random); one entry for the other scenes.
     var tracks: [SceneTrack] {
         switch self {
-        case .park: return [.park1, .park2]
+        case .park: return ParkMusic.tracks.map(\.track)
         case .cafe: return CafeMusic.tracks.map(\.track)
         case .volley: return [.volley1, .volley2]
         default: return track.map { [$0] } ?? []
@@ -110,6 +117,13 @@ nonisolated enum MusicScene: Equatable, Sendable {
 nonisolated enum CafeMusic {
     static let tracks: [(track: SceneTrack, title: String)] = [(.cafe1, "Morning Latte"), (.cafe2, "Rainy Window"), (.cafe3, "Window Seat"), (.cafe4, "Sunny Bossa"),
                                                                 (.cafe5, "Dusty Rhodes"), (.cafe6, "Steamed Milk"), (.cafe7, "Late Library"), (.cafe8, "Golden Hour Café")]
+    static func title(_ t: SceneTrack) -> String? { tracks.first { $0.track == t }?.title }
+}
+
+/// The park's playlist (2026-11-06), data-driven like the café's: a file (a SceneTrack case) and the title the Sound panel shows.
+nonisolated enum ParkMusic {
+    static let tracks: [(track: SceneTrack, title: String)] = [(.park1, "Sunny Lawn"), (.park2, "Picnic Hour"), (.park3, "Dandelion Drift"),
+                                                                (.park4, "Duck Pond"), (.park5, "Swing Set Breeze"), (.park6, "Cloud Watching")]
     static func title(_ t: SceneTrack) -> String? { tracks.first { $0.track == t }?.title }
 }
 

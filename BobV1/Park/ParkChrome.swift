@@ -9,6 +9,7 @@ import SwiftUI
 struct ParkChrome: View {
     let care: GameCare
     @Environment(\.verticalSizeClass) private var vsc
+    @State private var soundOpen = false
     private var park: ParkTrip { care.park }
     private var book: ParkBook { care.parkBook }
 
@@ -35,12 +36,21 @@ struct ParkChrome: View {
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                             .accessibilityElement(children: .ignore).accessibilityLabel("Park").accessibilityIdentifier("park-chip")
                             Spacer()
+                            musicButton
                             DropsPill(wallet: care.bath.wallet)
                         }
                         friends
                         Spacer()
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
+                }
+                if soundOpen, park.inScene {
+                    VStack {
+                        HStack { Spacer(); SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } } }
+                        Spacer()
+                    }
+                    .padding(.top, 60).padding(.trailing, 12)
+                    .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
                 }
                 if park.phase == .playing {
                     if let vid = park.card, let v = book.visitor(vid) {
@@ -97,6 +107,21 @@ struct ParkChrome: View {
             .onChange(of: park.toast) { _, t in if let t { A11yAnnounce.say(t) } }
         }
         .allowsHitTesting(park.active || park.toast != nil || park.gift != nil)
+    }
+
+    /// The same button as the café's (the home HUD's sound look): opens the Sound panel, whose Skip cycles the park playlist.
+    private var musicButton: some View {
+        Button {
+            AudioHub.shared.uiTap()
+            withAnimation(CareMenu.spring) { soundOpen.toggle() }
+        } label: {
+            Image(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2").font(.system(size: 21, weight: .semibold)).foregroundStyle(CareMenu.brown)
+                .frame(width: 48, height: 44)
+                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain).accessibilityLabel("Sound").accessibilityHint("Music and sound settings").accessibilityValue(soundOpen ? "expanded" : "collapsed")
+        .accessibilityIdentifier("park-sound-button")
     }
 
     /// A dot per visitor in the park: tap one for his card (also the way in for VoiceOver).
