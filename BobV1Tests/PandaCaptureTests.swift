@@ -15,6 +15,7 @@ extension FeatureCaptureTests {
     /// Capture hooks (composite reads them): a team jersey / a bath look forced on the one body drawn.
     nonisolated(unsafe) static var forceJersey: WearTeam? = nil
     nonisolated(unsafe) static var forceBath: BathLook? = nil
+    nonisolated(unsafe) static var forceCutout = false
 
     func pandaDir() throws -> String {
         guard let d = ProcessInfo.processInfo.environment["PANDA_DIR"], !d.isEmpty else { throw XCTSkip("PANDA_DIR not set") }
@@ -33,7 +34,7 @@ extension FeatureCaptureTests {
         let r = lab.rigs[0]
         r.brain.autonomy = false; r.brain.expr.enabled = false
         let (ren, target) = try renderer(lab)
-        ren.matteSpec = specialised          // (true = the specialised GfxBodyFast pipelines the game uses; false = Shaders.metal fsSoftMatte)
+        ren.cutout = Self.forceCutout; ren.matteSpec = specialised         // (true = the specialised GfxBodyFast pipelines the game uses; false = Shaders.metal fsSoftMatte)
         let d = dress(lab, [c])
         for _ in 0..<warm { lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tick(d, 0, r, c) }
         if let start { start(r); for _ in 0..<more { lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); tick(d, 0, r, c) } }
