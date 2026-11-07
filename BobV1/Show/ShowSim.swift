@@ -1,7 +1,7 @@
 //
 //  ShowSim.swift
 //  One Jelly Show as a pure model: Look -> Dance -> Trick -> results. The player's inputs are read once at the start (his condition, shine, dance
-//  skill and learned tricks); his outfit changes live in the Look round; the Dance round is a ShowDanceSim on the stage music's beat grid; the
+//  skill and learned tricks); his outfit is chosen in the Studio and judged in the Look round; the Dance round is a ShowDanceSim on the stage music's beat grid; the
 //  Trick round is three turns of (pick a trick, tap when the spotlight ring hugs him). Nothing fails: a flop is cute and still scores.
 //  The rivals' scores are fixed with the rivals (ShowRivalSource). Ties share the place. The flow (ShowFlow) adds time, bodies and sound.
 //
@@ -111,7 +111,7 @@ nonisolated struct ShowSim: Sendable {
     private mutating func recomputeLook() {
         lookScore = ShowScoring.look(outfit: outfitMatch, main: player.stat(theme.main), friend: player.stat(theme.friend), glow: player.glow, dirt: player.dirt)
     }
-    /// "Looks great. On to Dance": the Look score is locked.
+    /// The walk-on is over: the Look score is locked.
     mutating func finishLook() {
         guard round == .look else { return }
         round = .dance

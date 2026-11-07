@@ -2,7 +2,7 @@
 //  ShowFlow.swift
 //  The Jelly Show's whole trip, as one state machine (no bodies of its own; GameCare+Show.swift wires it to the Jelbies):
 //
-//      off -> fade to white -> [swap to the stage] -> fade in -> Look (dress up, live score) -> Dance (3-2-1-GO on the stage music, the prompt
+//      off -> fade to white -> [swap to the stage] -> fade in -> Look (a judged walk-on, auto-advances) -> Dance (3-2-1-GO on the stage music, the prompt
 //      lane) -> Trick (three turns: pick a trick, tap when the spotlight ring hugs him) -> results (podium, Drops, trophies) -> (Done) fade -> room.
 //
 //  The rules are `ShowSim`; this class adds time: the fade, the countdown that waits for the music, the song clock the dance is judged by, the
@@ -74,6 +74,8 @@ final class ShowFlow {
     @ObservationIgnored private var audioWait: Float = 0
     @ObservationIgnored private(set) var song: Double = 0
     @ObservationIgnored private var dancedAge: Float = 0
+    /// Seconds the Look card has been up.
+    @ObservationIgnored private(set) var lookAge: Float = 0
 
     // the Trick round
     private(set) var trickStage: TrickStage = .pick
@@ -136,6 +138,8 @@ final class ShowFlow {
     static let fadeOut: Float = 0.45, fadeHold: Float = 0.3, fadeIn: Float = 0.5
     static let countdownBeat: Float = 0.85
     static let performSeconds: Float = 2.6
+    /// How long the judged walk-on (Look) shows before it moves on by itself.
+    static let lookSeconds: Float = 3
     /// The ring is judged a miss (timing 0) this long after its best moment.
     static let ringGrace: Double = 0.45
 
@@ -205,7 +209,7 @@ final class ShowFlow {
     }
 
     private func resetStage() {
-        beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; danceGoSong = -10
+        beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; danceGoSong = -10
         trickStage = .pick; ringAge = 0; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; ringNowSaid = false; danceCued = 0
@@ -224,13 +228,13 @@ final class ShowFlow {
 
     // MARK: the Look round
 
-    /// The wardrobe changed: the tags worn in the scored slots (the glue reads the real StoreBook).
+    /// The tags worn in the scored slots, read when the show starts (the Studio's Dress up chose them; the stage has no wardrobe).
     func setOutfit(_ o: [WearSlot: [WearTag]]) {
         guard var s = sim, s.round == .look else { return }
         s.setOutfit(o); sim = s
         revision += 1
     }
-    /// "Looks great. On to Dance".
+    /// "Next" (or the walk-on timing out): on to the Dance.
     func finishLook() {
         guard var s = sim, s.round == .look, phase == .stage else { return }
         s.finishLook(); sim = s
@@ -462,7 +466,8 @@ final class ShowFlow {
         guard let s = sim else { return }
         switch s.round {
         case .look:
-            if auto { clock += Double(dt); if clock > 2.5 { clock = 0; finishLook() } }
+            lookAge += dt
+            if lookAge >= Self.lookSeconds { finishLook() }          // the judges have looked: on to the dance (or the Next button)
         case .dance:
             tickDance(dt: dt)
             if auto, beat == .danced, dancedAge > 1.5 { finishDance() }

@@ -344,6 +344,9 @@ struct StudioScreen: View {
     @State private var danceOpen = false
     @State private var howOpen = false
     @State private var rankHint: String?
+    /// The player has opened Dress up this visit: the button stops asking for attention.
+    @State private var dressed = false
+    @State private var pulse = false
     private var compact: Bool { vsc == .compact }
     private var day: Int { GameCare.showDay }
     private var theme: ShowTheme { ShowSchedule.theme(dayKey: day) }
@@ -377,7 +380,7 @@ struct StudioScreen: View {
             .accessibilityHidden(howOpen)
             if howOpen {
                 LobbyHowSheet(rows: [
-                    (.hanger, "Dress for the theme", "Things in today\u{2019}s style count most. Gold edge = a match."),
+                    (.hanger, "Dress for the theme", "Pick the rank, then tap Dress up. Things in today\u{2019}s style count most. Gold edge = a match."),
                     (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the show adds Glow."),
                     (.feet, "Practice dance", "Dance skill is 30% of the Dance round."),
                     (.trophy, "Enter the Jelly Show", "Look, Dance and Trick, each scored out of 100."),
@@ -387,6 +390,7 @@ struct StudioScreen: View {
         }
         .environment(\.lobbyTheme, .studio)
         .accessibilityElement(children: .contain).accessibilityIdentifier("studio-screen")
+        .onChange(of: wardrobeOpen) { _, open in if open { dressed = true } }
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
                 .presentationDetents(compact ? [.large] : [.medium, .large]).presentationBackground(SK.cream)
@@ -419,14 +423,24 @@ struct StudioScreen: View {
                 HStack(spacing: 5) { themeChip(theme.main, ""); themeChip(theme.friend, "+ ") }.padding(.top, 6)
                 Spacer()
                 HStack(alignment: .bottom) {
-                    Text("Gold edge =\nmatches \(theme.main.title)").font(SK.font(12.5, .heavy)).foregroundStyle(ShowUI.gold).lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 104, alignment: .leading)
+                    if dressed {
+                        Text("Gold edge =\nmatches \(theme.main.title)").font(SK.font(12.5, .heavy)).foregroundStyle(ShowUI.gold).lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 104, alignment: .leading)
+                    } else {
+                        Text("Dress for \(theme.main.title) + \(theme.friend.title)").font(SK.font(12.5, .black)).foregroundStyle(ShowUI.gold).lineLimit(2).minimumScaleFactor(0.7).frame(maxWidth: 124, alignment: .leading)
+                            .accessibilityIdentifier("studio-dress-hint")
+                    }
                     Spacer(minLength: 6)
                     Button { AudioHub.shared.uiTap(); wardrobeOpen = true } label: {
-                        Text("Dress up").font(SK.font(14, .black)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 7).background(Capsule().fill(ShowUI.light))
+                        Text("Dress up").font(SK.font(14, .black)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(Capsule().fill(dressed ? ShowUI.light : ShowUI.gold))
+                            .shadow(color: ShowUI.gold.opacity(dressed ? 0 : (pulse ? 0.95 : 0.35)), radius: dressed ? 0 : (pulse ? 10 : 3))
+                            .scaleEffect(dressed || reduceMotion ? 1 : (pulse ? 1.07 : 1))
                             .frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .padding(.vertical, -4)
                     .buttonStyle(.plain).accessibilityIdentifier("studio-dress")
+                    .accessibilityHint(dressed ? "" : "Dress for \(theme.main.title) and \(theme.friend.title) before the show")
+                    .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true } } else { pulse = true } }
                 }
                 .padding(.horizontal, 10)
             }

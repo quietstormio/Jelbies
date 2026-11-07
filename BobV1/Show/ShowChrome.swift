@@ -1,7 +1,7 @@
 //
 //  ShowChrome.swift
 //  The Jelly Show's screen furniture over the 3D stage (the mockups ShowLook / ShowDance / ShowTrick / ShowResults.dc.html): the round header
-//  with its three pips, the Look round's slot chips, wardrobe and live score, the Dance round's Cheer meter, prompt lane, flash and foot buttons,
+//  with its three pips, the Look round's judged walk-on and score card, the Dance round's Cheer meter, prompt lane, flash and foot buttons,
 //  the Trick round's turn chips, spotlight ring, meters, Glow Burst and trick cards, the results' podium, stacked bars, Drops, cup, stickers and
 //  tip, the Studio drill's card, and the white fade. Portrait stacks under the Jelbie; a phone on its side puts the cards beside him.
 //
@@ -134,71 +134,28 @@ struct LookRound: View {
     private var compact: Bool { vsc == .compact }
     private var show: ShowFlow { care.show }
 
+    /// A judged walk-on: he stands in the spotlight in what he wore into the Studio, the judges score it, and the show moves on by itself.
     var body: some View {
         let _ = show.revision
         return GeometryReader { g in
             let size = g.size
-            let frame = ShowFrame.look
-            let body = StageProject.body(ShowStage.playerSpot, frame: frame, size: size)
-            ZStack(alignment: .top) {
-                slots(body: body, size: size)
-                VStack(spacing: 10) {
-                    RoundHeader(care: care, round: 1, title: "Look")
-                    HStack { if !compact { Spacer() }; StagePill(text: "\(show.theme.title): \(show.theme.main.title), friend \(show.theme.friend.title)"); Spacer() }
-                    Spacer(minLength: 0)
-                    if compact {
-                        HStack(alignment: .bottom, spacing: 12) {
-                            Spacer(minLength: 0)
-                            VStack(spacing: 8) { wardrobe; score; cta }.frame(width: min(size.width * 0.52, 520))
-                        }
-                    } else {
-                        Text("Gold glow: matches \(show.theme.main.title) \u{00B7} \(show.rank.slots) slots at \(show.rank.title)").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.mist)
-                        wardrobe
-                        score
-                        cta
+            VStack(spacing: 10) {
+                RoundHeader(care: care, round: 1, title: "Look")
+                HStack { if !compact { Spacer() }; StagePill(text: "\(show.theme.title): \(show.theme.main.title), friend \(show.theme.friend.title)"); Spacer() }
+                Spacer(minLength: 0)
+                if compact {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        Spacer(minLength: 0)
+                        VStack(spacing: 8) { score; cta }.frame(width: min(size.width * 0.52, 520))
                     }
+                } else {
+                    Text("The judges are looking at \(show.playerName)\u{2019}s outfit").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.mist)
+                    score
+                    cta
                 }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
             }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         }
-    }
-
-    /// The scored slots as tap chips either side of him (the rank's slots: left column, then right); a phone on its side keeps both columns on his left.
-    private func slots(body: (centre: CGPoint, radius: CGFloat), size: CGSize) -> some View {
-        let order = show.rank.slotOrder
-        let outfit = care.store.outfit(show.playerID)
-        var left = Array(order.prefix((order.count + 1) / 2)), right = Array(order.dropFirst((order.count + 1) / 2))
-        if compact { left = order; right = [] }
-        let dx = max(body.radius + 74, 96)
-        return ZStack {
-            ForEach(Array(left.enumerated()), id: \.offset) { k, s in
-                SlotChip(slot: s, look: outfit[s], theme: show.theme) { tapSlot(s) }
-                    .position(x: max(44, body.centre.x - dx - (compact && k % 2 == 1 ? 64 : 0)), y: body.centre.y - (compact ? 60 : 30) + CGFloat(compact ? k / 2 : k) * 72 + (compact && k % 2 == 1 ? 36 : 0))
-            }
-            ForEach(Array(right.enumerated()), id: \.offset) { k, s in
-                SlotChip(slot: s, look: outfit[s], theme: show.theme) { tapSlot(s) }
-                    .position(x: min(size.width - 44, body.centre.x + dx), y: body.centre.y - 30 + CGFloat(k) * 72)
-            }
-        }
-    }
-    private func tapSlot(_ s: WearSlot) {
-        // tap a worn slot to take the piece off; an empty slot wears the best match owned for it
-        if let l = care.store.worn(show.playerID, s) { care.store.takeOff(l.slot, from: show.playerID); AudioHub.shared.play(.shoeOn) }
-        else {
-            let owned = StoreCatalog.items.filter { $0.isWearable && care.store.owns($0) }.compactMap(\.wear).filter { $0.slot == s }
-            if let best = owned.max(by: { show.theme.match($0.tags) < show.theme.match($1.tags) }) { care.store.wear(best, on: show.playerID); AudioHub.shared.play(.shoeOn) }
-        }
-        show.setOutfit(care.showOutfitTags(jelly: show.playerID))
-    }
-
-    private var wardrobe: some View {
-        ShowCard(padding: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) { Text("Wardrobe").font(SK.font(16, .black)).foregroundStyle(SK.ink); Spacer(); Text("Tap to wear or swap").font(SK.font(12, .heavy)).foregroundStyle(SK.muted) }
-                WardrobeStrip(care: care, who: show.playerID, theme: show.theme, slots: show.rank.slotOrder) { show.setOutfit(care.showOutfitTags(jelly: show.playerID)) }
-            }
-        }
-        .accessibilityIdentifier("look-wardrobe")
     }
 
     private var score: some View {
@@ -238,7 +195,7 @@ struct LookRound: View {
     }
 
     private var cta: some View {
-        ShowCTA(title: "Looks great. On to Dance", symbol: nil, id: "look-next", height: compact ? 50 : 60) { show.finishLook() }
+        ShowCTA(title: "Next: Dance", symbol: nil, id: "look-next", height: compact ? 50 : 60) { show.finishLook() }
     }
 }
 

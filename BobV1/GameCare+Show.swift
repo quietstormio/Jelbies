@@ -309,6 +309,7 @@ extension GameCare {
             if show.phase == .stage, show.wipe == 0, !book.turned.contains(aid), b.idleState.kind == nil, case .none = b.script {
                 book.turned.insert(aid)
                 if abs(b.yaw) > 0.25 { b.startTurn(to: 0, sim: a.sim) }
+                if k == 0, show.round == .look { b.face(.happy, hold: 2.5) }          // the walk-on: a pleased pose for the judges
             }
             // the dance loops: when the move ends, start it again (after the stagger)
             if let move = book.dancing[aid], b.idleState.kind == nil, b.commandedIdle == nil, case .none = b.script {
