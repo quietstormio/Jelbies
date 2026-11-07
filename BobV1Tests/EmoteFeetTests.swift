@@ -157,6 +157,10 @@ final class EmoteFeetTests: XCTestCase {
     func testFaceplant() throws { try emote("faceplant", "faceplant") }
     func testFlapHop() throws { try emote("flapHop", "idle flapHop") }          // (the winged characters only: Lavender, Pearl)
     func testSkipHop() throws { try emote("skipHop", "idle skipHop") }
+    func testLegSpin() throws { try emote("legSpin", "idle legSpin") }          // (the Jelly Spa exit pool: legSpin, skipHop, bounce, jacks, proudStrut, signatureFlourish)
+    func testBounce() throws { try emote("bounce", "idle bounce") }
+    func testProudStrut() throws { try emote("proudStrut", "idle proudStrut") }
+    func testSignatureFlourish() throws { try emote("signatureFlourish", "idle signatureFlourish") }
     func testRunning() throws { try emote("run", "idle run") }          // (not testRun: XCTestCase has a property of that name)
     func testZoomies() throws { try emote("zoomies", "idle zoomies") }
     func testSit() throws { try emote("sit", "idle sit") }

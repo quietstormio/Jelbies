@@ -36,6 +36,43 @@ final class GroomVarietyTests: XCTestCase {
         XCTAssertFalse(SpaExitEmotes.pool.contains { $0.rawValue.lowercased().contains("boop") || $0.rawValue.lowercased().contains("kiss") })
     }
 
+    /// Each pool emote as the FIRST one out (the longest-running position): every Jelbie is handed back (no emote still running) half a second after the end, and roaming resumes.
+    @MainActor
+    func testEveryPoolEmoteLeavesThemFreeToRoam() throws {
+        defer { SpaExitEmotes.forced = nil; RoomLayout.dynamicBoxes = [] }
+        for lead in SpaExitEmotes.pool {
+            RoomLayout.dynamicBoxes = []
+            let aspect: Float = 603.0 / 1311.0
+            GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: aspect); GameCamera.refreshRoam(aspect: aspect)
+            let r = FocusAnyRun(count: 3, peers: true)
+            W2CaptureTests.keep.append(r.care); W2CaptureTests.keep.append(r)
+            let care = r.care
+            care.bath.wallet.add(500, silent: true)
+            for (i, a) in r.actors.enumerated() { a.brain?.autonomy = true; a.brain?.restTimer = 1e6; r.place(i, at: JellyRoster.spawnSpots(count: 3)[i]) }
+            for _ in 0..<60 { r.tick() }
+            let dt = r.actors[0].sim.stepDt
+            care.groomBook.fixedDt = dt
+            SpaExitEmotes.forced = [lead] + SpaExitEmotes.pool.filter { $0 != lead }.prefix(2)
+            care.groom.openPicker(all: [0, 1, 2]); care.groom.begin(.quick)
+            var t: Float = 0, doneT: Float?, n = 0
+            var walked = Set<Int>(), handedBack = false
+            while n < 60 * 40 {
+                r.tick(); care.tickGroom(r.actors, dt: dt); t += dt; n += 1
+                if doneT == nil, !care.groom.active, n > 60 { doneT = t }
+                if let d = doneT, !handedBack, t - d >= 0.5 {
+                    handedBack = true
+                    for a in r.actors { let b = a.brain!; XCTAssertTrue(b.autonomy && !b.idleBlocked && b.commandedIdle == nil && b.idleState.kind == nil, "\(lead): \(a.id) is free again (no exit emote still running)") }
+                }
+                if let d = doneT, t - d <= 10 { for a in r.actors where a.isWalking { walked.insert(a.id) } }
+                if let d = doneT, t - d > 10 { break }
+            }
+            XCTAssertNotNil(doneT, "\(lead): visit ended")
+            print("POOLEMOTE \(lead) roaming=\(walked.sorted())")
+            XCTAssertTrue(handedBack)
+            XCTAssertGreaterThanOrEqual(walked.count, 2, "\(lead) first out: roaming resumes (autonomy picks the moment) \(walked.sorted())")
+        }
+    }
+
     @MainActor
     func testExitPlaysHarpOnceAndNoCheer() throws {
         RoomLayout.dynamicBoxes = []

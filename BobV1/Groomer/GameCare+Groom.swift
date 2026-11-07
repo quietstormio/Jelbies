@@ -223,7 +223,7 @@ extension GameCare {
         CaptionCenter.shared.post("Sparkle!")
         groom.slogan = SpaSlogans.next()
         var g = SystemRandomNumberGenerator()
-        let set = SpaExitEmotes.assign(count: groom.picked.count, avoiding: SpaExitEmotes.lastSet, using: &g)
+        let set = SpaExitEmotes.forced ?? SpaExitEmotes.assign(count: groom.picked.count, avoiding: SpaExitEmotes.lastSet, using: &g)
         SpaExitEmotes.lastSet = set
         for (k, id) in groom.picked.enumerated() where k < set.count { groomBook.emote[id] = set[k] }
         A11yAnnounce.say(groom.slogan)
