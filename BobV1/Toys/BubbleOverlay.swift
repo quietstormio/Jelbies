@@ -49,15 +49,33 @@ enum BubbleArt {
         c.fillEllipse(in: CGRect(x: r + r * 0.38, y: r + r * 0.40, width: r * 0.12, height: r * 0.12))
     }
 
-    /// The pop: a faint ring and six tiny sparkle dots.
-    static let pop: CGImage = render(size: 128) { c, s in
+    /// The pop burst: a thin iridescent ring and a splash of droplets (twelve, in the bubble's rainbow hues, two sizes) with four tiny glints between them.
+    static let pop: CGImage = render(size: 160) { c, s in
         let r = s / 2, mid = CGPoint(x: r, y: r)
-        c.setStrokeColor(UIColor(white: 1, alpha: 0.55).cgColor); c.setLineWidth(2.2)
-        c.strokeEllipse(in: CGRect(x: r * 0.42, y: r * 0.42, width: r * 1.16, height: r * 1.16))
-        for k in 0..<8 {
-            let a = CGFloat(k) / 8 * 2 * .pi + 0.2, d = r * (k % 2 == 0 ? 0.82 : 0.66), dot = r * (k % 2 == 0 ? 0.075 : 0.05)
-            c.setFillColor(UIColor(hue: CGFloat(k) / 8, saturation: 0.25, brightness: 1, alpha: 0.95).cgColor)
+        // the ring: short arcs in turn through the hues
+        let arcs = 24
+        c.setLineWidth(2.6); c.setLineCap(.round)
+        for i in 0..<arcs {
+            let a0 = CGFloat(i) / CGFloat(arcs) * 2 * .pi, a1 = CGFloat(i + 1) / CGFloat(arcs) * 2 * .pi + 0.03
+            c.setStrokeColor(UIColor(hue: CGFloat(i) / CGFloat(arcs), saturation: 0.45, brightness: 1, alpha: 0.85).cgColor)
+            c.addArc(center: mid, radius: r * 0.50, startAngle: a0, endAngle: a1, clockwise: false); c.strokePath()
+        }
+        // the droplets: alternate big near / small far
+        for k in 0..<12 {
+            let a = CGFloat(k) / 12 * 2 * .pi + 0.13, big = k % 2 == 0
+            let d = r * (big ? 0.74 : 0.90), dot = r * (big ? 0.075 : 0.045)
+            c.setFillColor(UIColor(hue: CGFloat((k * 5) % 12) / 12, saturation: 0.35, brightness: 1, alpha: 0.95).cgColor)
             c.fillEllipse(in: CGRect(x: mid.x + cos(a) * d - dot, y: mid.y + sin(a) * d - dot, width: dot * 2, height: dot * 2))
+            c.setFillColor(UIColor(white: 1, alpha: 0.8).cgColor)
+            c.fillEllipse(in: CGRect(x: mid.x + cos(a) * d - dot * 0.6, y: mid.y + sin(a) * d - dot * 0.1, width: dot * 0.7, height: dot * 0.7))
+        }
+        // glints between
+        c.setStrokeColor(UIColor(white: 1, alpha: 0.9).cgColor); c.setLineWidth(1.6)
+        for k in 0..<4 {
+            let a = CGFloat(k) / 4 * 2 * .pi + .pi / 4 + 0.13, d = r * 0.64, g = r * 0.06
+            let x = mid.x + cos(a) * d, y = mid.y + sin(a) * d
+            c.move(to: CGPoint(x: x - g, y: y)); c.addLine(to: CGPoint(x: x + g, y: y))
+            c.move(to: CGPoint(x: x, y: y - g)); c.addLine(to: CGPoint(x: x, y: y + g)); c.strokePath()
         }
     }
 
@@ -73,6 +91,7 @@ enum BubbleArt {
 final class BubbleLayerView: UIView {
     private var bubbleLayers: [CALayer] = []
     private var fxLayers: [CALayer] = []
+    private var swellLayers: [CALayer] = []
     private var link: CADisplayLink?
     private let wand = BubbleWand.shared
 
@@ -85,6 +104,7 @@ final class BubbleLayerView: UIView {
         }
         for _ in 0..<16 {
             let l = CALayer(); l.contents = BubbleArt.pop; l.isHidden = true; layer.addSublayer(l); fxLayers.append(l)
+            let w = CALayer(); w.contents = BubbleArt.bubble; w.isHidden = true; layer.addSublayer(w); swellLayers.append(w)
         }
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -105,7 +125,7 @@ final class BubbleLayerView: UIView {
         if wand.viewSize != size { wand.viewSize = size }
         let bubbles = wand.field.bubbles, fx = wand.fx
         if bubbles.isEmpty && fx.isEmpty {
-            if !bubbleLayers[0].isHidden || !fxLayers[0].isHidden { hideAll() }
+            if !bubbleLayers[0].isHidden || !fxLayers[0].isHidden || !swellLayers[0].isHidden { hideAll() }
             return
         }
         let t0 = CACurrentMediaTime()
@@ -129,17 +149,29 @@ final class BubbleLayerView: UIView {
             let fadeIn = min(1, b.age / 0.2), fadeOut = min(1, max(0, (b.life - b.age) / 0.35))
             l.opacity = Float(min(fadeIn, fadeOut)) * 0.95
         }
+        // the pop: the bubble swells and brightens for a blink (the first 30 %), then the ring and droplets burst outward and fade (~0.36 s in all)
         for (i, l) in fxLayers.enumerated() {
-            guard i < fx.count else { l.isHidden = true; continue }
+            let w = swellLayers[i]
+            guard i < fx.count else { l.isHidden = true; w.isHidden = true; continue }
             let f = fx[i]
             let c = vp * SIMD4<Float>(f.pos.x, f.pos.y, f.pos.z, 1)
-            guard c.w > 0.1 else { l.isHidden = true; continue }
+            guard c.w > 0.1 else { l.isHidden = true; w.isHidden = true; continue }
             let a = CGFloat(wand.fxAge(f))
-            let rpx = CGFloat(f.size / (c.w * tanHalf) * halfH) * (1.2 + 1.6 * a)
-            l.isHidden = false
-            l.bounds = CGRect(x: 0, y: 0, width: rpx * 2, height: rpx * 2)
-            l.position = CGPoint(x: CGFloat(c.x / c.w * 0.5 + 0.5) * size.width, y: CGFloat(1 - (c.y / c.w * 0.5 + 0.5)) * size.height)
-            l.opacity = Float(1 - a) * 0.9
+            let base = CGFloat(f.size / (c.w * tanHalf) * halfH)
+            let pos = CGPoint(x: CGFloat(c.x / c.w * 0.5 + 0.5) * size.width, y: CGFloat(1 - (c.y / c.w * 0.5 + 0.5)) * size.height)
+            if a < 0.3 {
+                let s = a / 0.3
+                let r = base * (1 + 0.28 * s)
+                w.isHidden = false; w.bounds = CGRect(x: 0, y: 0, width: r * 2, height: r * 2); w.position = pos
+                w.transform = CATransform3DIdentity; w.opacity = Float(1 - s * s) * 0.95
+            } else { w.isHidden = true }
+            if a > 0.12 {
+                let t = (a - 0.12) / 0.88, ease = 1 - (1 - t) * (1 - t)
+                let r = base * (0.85 + 1.9 * ease)
+                l.isHidden = false; l.bounds = CGRect(x: 0, y: 0, width: r * 2, height: r * 2); l.position = pos
+                l.transform = CATransform3DMakeRotation(CGFloat(f.born * 7).truncatingRemainder(dividingBy: 6.28), 0, 0, 1)
+                l.opacity = Float(max(0, 1 - t * t * 1.1)) * 0.95
+            } else { l.isHidden = true }
         }
         CATransaction.commit()
         BubbleWand.drawCostSum += CACurrentMediaTime() - t0; BubbleWand.drawCostN += 1
@@ -149,6 +181,7 @@ final class BubbleLayerView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         for l in bubbleLayers { l.isHidden = true }
         for l in fxLayers { l.isHidden = true }
+        for l in swellLayers { l.isHidden = true }
         CATransaction.commit()
     }
     deinit { link?.invalidate() }

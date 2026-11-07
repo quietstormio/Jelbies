@@ -74,7 +74,10 @@ nonisolated struct BubbleField: Sendable {
             // a soft air drag on the push, a gentle lateral sway, a slow rise that eases
             b.vel.z *= max(0, 1 - 0.25 * dt)
             b.vel.x += sinf(b.age * 1.7 + b.phase) * 0.35 * dt
-            b.vel.y += (0.30 - b.vel.y) * 0.4 * dt
+            // the rise eases to a stop around head height and then settles a hair (2026-11-07: bubbles hover where a hop can reach them, not up at the ceiling)
+            let y = b.pos.y
+            let vyGoal: Float = y < 1.0 ? 0.30 : max(-0.03, 0.30 * (1.5 - y) / 0.5)
+            b.vel.y += (vyGoal - b.vel.y) * (y < 1.0 ? 0.4 : 1.2) * dt
             b.pos += b.vel * dt
             if b.age >= b.life || b.pos.y >= Self.ceiling { gone.append(b); bubbles.remove(at: i); popped += 1 } else { bubbles[i] = b; i += 1 }
         }

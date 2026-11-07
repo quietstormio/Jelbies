@@ -224,7 +224,7 @@ nonisolated struct VolleySim: Sendable {
 
     // MARK: control
 
-    /// The floating stick in court terms: x toward the net (screen up), y across the court (+z, screen right); `VolleyView.stick` maps a thumb to it. Magnitude 0...1.
+    /// The floating stick: x is toward the screen's right (+x on the court), y toward the camera (+z). Magnitude 0...1.
     mutating func setStick(_ s: SIMD2<Float>) {
         let m = simd_length(s)
         stick = m > 1 ? s / m : s
@@ -240,7 +240,7 @@ nonisolated struct VolleySim: Sendable {
         events.append(.switched(to: i, auto: !manual))
     }
 
-    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: across the court, +1 = the screen's right; `VolleyView.aim` maps a swipe to it). nil clears it.
+    /// A swipe on the Hit button: where on the other court the next hit is aimed (x: -1 short ... +1 deep, y: -1 far ... +1 near the camera). nil clears it.
     mutating func setAim(_ a: SIMD2<Float>?) {
         guard players.indices.contains(controlled) else { return }
         players[controlled].aim = a
@@ -890,7 +890,7 @@ nonisolated struct VolleySim: Sendable {
             let assisted = autoMove || autoJump          // (a thumb on the stick keeps his spot; with the move assist he is a computer player)
             let keeper = isHuman(a) && !assisted ? a : isHuman(b) && !assisted ? b : (da <= db ? a : b), mover = keeper == a ? b : a
             var w = SIMD2(players[mover].wantX, players[mover].wantZ)
-            let lane: Float = players[mover].z >= players[keeper].z ? 1 : -1          // (dead on the same spot: step to the side he is already on)
+            let lane = Self.side(team)          // (dead on the same spot: step back, away from the net)
             w = clear(w, of: SIMD2(players[keeper].wantX, players[keeper].wantZ), gap: T.partnerGap, team: team, lane: lane)
             w = clear(w, of: SIMD2(players[keeper].x, players[keeper].z), gap: T.minCentreGap, team: team, lane: lane)
             players[mover].wantX = w.x; players[mover].wantZ = w.y
@@ -907,7 +907,7 @@ nonisolated struct VolleySim: Sendable {
         if simd_distance(w, centre) >= gap - 1e-4 { return w }
         func onCourt(_ p: SIMD2<Float>) -> SIMD2<Float> { SIMD2(clampX(p.x, team: team), min(max(p.y, -T.zLimit), T.zLimit)) }
         var out = w - centre
-        if simd_length(out) < 1e-3 { out = SIMD2(0, lane) }
+        if simd_length(out) < 1e-3 { out = SIMD2(lane, 0) }
         let direct = onCourt(centre + simd_normalize(out) * gap)
         if simd_distance(direct, centre) >= gap - 1e-3 { return direct }
         var best: SIMD2<Float>?

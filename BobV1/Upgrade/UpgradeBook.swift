@@ -110,6 +110,12 @@ final class UpgradeBook {
     init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = UpgradeTuning.defaultsKey) {
         self.persists = persists; self.defaults = defaults; self.key = key
         if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
+        // Dev launch arg `-UpgradePoints N`: tops every game x character balance up to at least N (saved).
+        if persists, let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-UpgradePoints"),
+           i + 1 < ProcessInfo.processInfo.arguments.count, let n = Int(ProcessInfo.processInfo.arguments[i + 1]), n > 0 {
+            for g in UpgradeGame.allCases { for c in 0..<32 { let key = k(g, c); saved.points[key] = max(saved.points[key] ?? 0, n) } }
+            save()
+        }
     }
 
     private func k(_ g: UpgradeGame, _ c: Int) -> String { "\(g.rawValue).\(c)" }

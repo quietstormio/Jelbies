@@ -149,7 +149,7 @@ struct VolleyChrome: View {
                                     let m = hypot(d.width, d.height), R: CGFloat = 54
                                     if m > R { d = CGSize(width: d.width / m * R, height: d.height / m * R) }
                                     stickKnob = d
-                                    care.volleyStick(VolleyView.stick(right: Float(d.width / R), down: Float(d.height / R)))
+                                    care.volleyStick(SIMD2(Float(d.width / R), Float(d.height / R)))
                                 }
                                 .onEnded { _ in stickOrigin = nil; stickKnob = .zero; care.volleyStick(.zero) })
                             .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
@@ -246,7 +246,7 @@ struct VolleyChrome: View {
                     let dx = v.translation.width, dy = v.translation.height
                     if hypot(dx, dy) > 20 {
                         let a = SIMD2<Float>(Float(max(-1, min(1, dx / 52))), Float(max(-1, min(1, dy / 52))))          // (on the screen: right, down)
-                        aimShown = a; care.volleyAim(VolleyView.aim(right: a.x, down: a.y))
+                        aimShown = a; care.volleyAim(a)
                     }
                 }
                 .onEnded { _ in hitDown = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { if !hitDown { aimShown = nil } } })

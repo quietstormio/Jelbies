@@ -37,8 +37,6 @@ final class VolleyWork {
     var captureDone = false
     var gapMin = [Float](repeating: .infinity, count: 2), gapWindow = [Float](repeating: .infinity, count: 2), gapTick = 0
     var gapNote = ["", ""]
-    var overlapFrames = [0, 0, 0, 0]
-    var overlapTick = 0
     nonisolated deinit {}
 }
 
@@ -177,7 +175,7 @@ extension GameCare {
 
     // MARK: input
 
-    /// The floating joystick in court terms (`VolleyView.stick`): x toward the net (screen up), y across the court (+z, screen right), magnitude 0...1.
+    /// The floating joystick: x toward the screen's right (+x on the court), y toward the camera (+z), magnitude 0...1.
     func volleyStick(_ v: SIMD2<Float>) { guard volley.live else { return }; volley.sim?.setStick(v) }
     /// The Hit button went down (serves / tosses on his serve; otherwise bump, set, spike, dig or block by the situation).
     /// `touched`: when the finger landed (the event's own time), so the grade is taken at the touch and not at the next sim step.
@@ -333,9 +331,6 @@ extension GameCare {
             (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.requestGeometryUpdate(.iOS(interfaceOrientations: UserDefaults.standard.bool(forKey: "VolleyLandscape") ? .landscapeRight : .portrait))
         }
         #endif
-        #if targetEnvironment(simulator)
-        volleyOverlapAid(s)
-        #endif
         s.tick(dt: dt)
         let events = s.takeEvents()
         for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].wantX, z: s.players[i].wantZ, speed: s.players[i].stats.speed) }
@@ -351,7 +346,7 @@ extension GameCare {
         else if !w.trail.isEmpty { w.trail.removeFirst() }
         for k in w.puffs.indices { w.puffs[k].age += dt }
         w.puffs.removeAll { $0.age > 0.6 }
-        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.z * 0.12))          // (the screen's right is +z now)
+        let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.pos.x * 0.05))
         w.nudge += (want - w.nudge) * min(1, dt * 1.5)
         GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
@@ -450,7 +445,7 @@ extension GameCare {
 }
 
 extension GameCare {
-    /// Capture aid (the simulator only): `-VolleySlow 0.15` slows the court's time; `-VolleyDemo bonk|spike|dig|serve|cheer` plays one move over and over for the review sheet.
+    /// Capture aid (the simulator only): `-VolleySlow 0.15` slows the court's time; `-VolleyDemo rally|bonk|spike|dig|serve|cheer|sprint` plays one move over and over for the review sheet.
     nonisolated(unsafe) static let volleyTimeScale: Float = { let v = Float(UserDefaults.standard.double(forKey: "VolleySlow")); return v > 0 ? v : 1 }()
     /// The match-point slow beat (0.3 for a moment), multiplied into the court's time.
     nonisolated(unsafe) static var volleySlowScale: Float = 1
@@ -487,18 +482,6 @@ extension GameCare {
         if w.gapTick % 120 == 0 { volleyAidLog("VOLLEYGAP min ours=\(w.gapMin[0]) theirs=\(w.gapMin[1]) (body width 1.1)\n") }
     }
 
-    /// Capture aid: `-VolleyOverlap 1` counts, while a rally is on, the frames where two teammates' screen boxes overlap by more than 30% (per team) and prints the totals every 2 s.
-    func volleyOverlapAid(_ s: VolleySim) {
-        guard UserDefaults.standard.bool(forKey: "VolleyOverlap"), s.phase == .rally, volley.bodyPos.count >= 4 else { return }
-        let w = volleyWork, size = CGSize(width: 1206, height: 2622)
-        for team in 0..<2 {
-            let a = volley.bodyPos[team * 2], b = volley.bodyPos[team * 2 + 1]
-            if let o = VolleyView.overlap(a, b, size: size) { w.overlapFrames[team * 2] += 1; if o > 0.3 { w.overlapFrames[team * 2 + 1] += 1 } }
-        }
-        w.overlapTick += 1
-        if w.overlapTick % 120 == 0 { volleyAidLog("VOLLEYOVERLAP frames=\(w.overlapFrames[0]) over30=\(w.overlapFrames[1]) (our team)  frames=\(w.overlapFrames[2]) over30=\(w.overlapFrames[3]) (theirs)\n") }
-    }
-
     func volleyDemo(_ s: inout VolleySim) {
         guard let k = UserDefaults.standard.string(forKey: "VolleyDemo"), s.players.indices.contains(s.controlled) else { return }
         let w = volleyWork
@@ -513,6 +496,10 @@ extension GameCare {
             let b = s.ball
             s.setStick(SIMD2(max(-1, min(1, (b.pos.x - p.x) / 0.9)), max(-1, min(1, (b.z - p.z) / 0.9))))
             if p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03 { s.tap() }
+        case "sprint":          // the stick toward the next flag
+            guard s.phase == .rally, s.flagIndex < s.flags.count else { return }
+            let f = s.flags[s.flagIndex]
+            s.setStick(SIMD2(max(-1, min(1, (f.x - p.x) * 2)), max(-1, min(1, (f.y - p.z) * 2))))
         case "dig":
             guard s.phase == .rally else { return }
             if !w.ballShown || s.clock - w.demoT > 4.5 { w.demoT = s.clock; w.demoStage = 0 }
