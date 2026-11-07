@@ -44,6 +44,9 @@ struct ShopScreen: View {
     private var shown: [StoreItem] { tab == .wear ? tab.items.filter { wearSlot == nil || $0.wear?.slot == wearSlot } : tab.items }
     @State private var selected: StoreItem? = UserDefaults.standard.string(forKey: "StoreOpen") == "item" ? StoreCatalog.item(UserDefaults.standard.string(forKey: "StoreItem") ?? "sushi") : nil
 
+    @State private var scrollTopTick = 0
+    @State private var boughtToast: String?
+
     private var book: StoreBook { care.store }
 
     var body: some View {
@@ -53,18 +56,35 @@ struct ShopScreen: View {
                 SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in ShopTab.wear.items.contains { $0.wear?.slot == s } }, idPrefix: "shop-slot-")
                     .padding(.horizontal, 16).padding(.top, 8)
             }
-            ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
-                    ForEach(shown) { item in card(item) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
+                        ForEach(shown) { item in card(item) }
+                    }
+                    .id("shop-grid-top")
+                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
                 }
-                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
+                .scrollBounceBehavior(.basedOnSize)
+                .onChange(of: scrollTopTick) { _, _ in withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("shop-grid-top", anchor: .top) } }
             }
-            .scrollBounceBehavior(.basedOnSize)
+        }
+        .overlay(alignment: .bottom) {
+            if let boughtToast {
+                Text(boughtToast).font(SK.font(15, .heavy)).foregroundStyle(SK.cream)
+                    .padding(.horizontal, 18).padding(.vertical, 10).background(Capsule().fill(SK.ink))
+                    .padding(.bottom, 24).transition(.move(edge: .bottom).combined(with: .opacity))
+                    .accessibilityIdentifier("shop-bought-toast")
+            }
         }
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
-            ItemSheet(care: care, item: item, who: who, goHome: goHome) { selected = nil }
+            ItemSheet(care: care, item: item, who: who, goHome: goHome, close: { selected = nil }, onBought: { msg in
+                selected = ShopSelection.afterBuy(selected, bought: true)
+                scrollTopTick += 1
+                withAnimation(.spring(duration: 0.35)) { boughtToast = msg }
+                Task { try? await Task.sleep(for: .seconds(2.2)); withAnimation { boughtToast = nil } }
+            })
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
@@ -146,6 +166,17 @@ struct ShopScreen: View {
     }
 }
 
+/// What the shop's selection does around a purchase: a successful Buy puts the player back on the grid (sheet closed); a failed one keeps the sheet.
+enum ShopSelection {
+    static func afterBuy(_ selected: StoreItem?, bought: Bool) -> StoreItem? { bought ? nil : selected }
+    /// Buys `qty` (1 for once-only goods); returns how many went through.
+    @MainActor static func purchase(_ item: StoreItem, qty: Int, book: StoreBook) -> Int {
+        var ok = 0
+        for _ in 0..<(item.unique ? 1 : qty) where book.buy(item.id) == .bought { ok += 1 }
+        return ok
+    }
+}
+
 /// The bottom sheet of one item.
 struct ItemSheet: View {
     let care: GameCare
@@ -153,6 +184,7 @@ struct ItemSheet: View {
     var who: Int
     var goHome: () -> Void = {}
     var close: () -> Void
+    var onBought: (String) -> Void = { _ in }
     @State private var refusal: String?
     @State private var qty = 1
     @State private var bought = 0
@@ -267,13 +299,12 @@ struct ItemSheet: View {
         let owned = item.unique && book.owns(item)
         let can = !owned && left >= 0
         return Button {
-            var ok = 0
-            for _ in 0..<(item.unique ? 1 : qty) where book.buy(item.id) == .bought { ok += 1 }
+            let ok = ShopSelection.purchase(item, qty: qty, book: book)
             if ok > 0 {
                 AudioHub.shared.play(.unwrap, volume: 0.8)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 bought += ok; qty = 1
-                if item.unique, item.kind != .room { close() }
+                onBought(boughtMessage(ok))
             } else { AudioHub.shared.play(.notEnough) }
         } label: {
             HStack(spacing: 8) {
@@ -301,6 +332,13 @@ struct ItemSheet: View {
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
+    private var boughtMessage: (Int) -> String { { n in
+        let what = n > 1 ? "\(n) \(item.name)" : item.name
+        if item.kind == .room { return "\(what) is yours \u{00B7} live there from Rooms" }
+        if item.kind == .trickPage { return "\(what) unlocked" }
+        return "\(what) added to your Bag"
+    } }
+
     private var conditions: [(ConditionKey, Float)] {
         guard let f = item.food, let c = Consumables.with(id: f) else { return [] }
         return c.condition.sorted { $0.value > $1.value }.map { ($0.key, $0.value) }
@@ -309,6 +347,8 @@ struct ItemSheet: View {
         if let p = item.perk { return p.symbol }
         if item.kind == .decor { return "chair.lounge.fill" }
         if item.kind == .room { return "house.fill" }
+        if item.kind == .toy { return "wand.and.stars" }
+        if item.food != nil { return item.kind == .drink ? "drop.fill" : "fork.knife" }
         return item.wear.map { $0.slot.symbol } ?? "book.fill"
     }
     private var effectTitle: String {
@@ -316,6 +356,8 @@ struct ItemSheet: View {
         if item.isWearable { return "Looks only" }
         if item.kind == .decor { return item.roomUnits == 1 ? "Takes 1 spot" : "Takes \(item.roomUnits) spots" }
         if item.kind == .room { return "A new room to live in" }
+        if item.kind == .toy { return "A toy to play with" }
+        if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches his thirst" : "Fills his tummy" }
         return item.trick.map { "Unlocks \($0.title)" } ?? "Goodies"
     }
     private var effectBlurb: String {
@@ -323,6 +365,8 @@ struct ItemSheet: View {
         if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and on the track." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
         if item.kind == .room { return "Your Jelbies move in and the room keeps its own furniture." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
+        if item.kind == .toy { return "Pick it from Play and the Jelbies join in." }
+        if item.food != nil { return item.description }
         return "Teach it with your own word in the trick book."
     }
     private func durationText(_ p: PerkKind) -> String { SK.timeLeft(p.duration) }
