@@ -6,7 +6,7 @@
 //    ShowTheme       the five daily themes, each a MAIN stat and a FRIEND stat; ShowSchedule picks the day's theme from DayClock.dayKey.
 //    ShowScoring     the three rounds' formulas (Look / Dance / Trick, 100 each), the Cheer meter and the Glow Burst.
 //    ShowTrickInfo   which stat each trick counts as (a starter trick, the flip, also counts as Sparkly).
-//    DanceChart      the four dance songs' note charts (DanceCharts.swift); ShowDanceSim judges one chart (or, for the Studio drill, a beat grid) from the audio clock.
+//    ShowDanceSim    the Dance round's prompt lane on the stage music's beat grid, judged from the audio clock like Rhythm Steps.
 //
 //  Words we do not use (Pokemon's): contest, appeal, hearts, sheen, spectacular, ribbon, and the Normal...Master rank names.
 //
@@ -29,10 +29,8 @@ nonisolated enum ShowRank: String, CaseIterable, Codable, Sendable {
     /// Which slots those are, in order (the first `slots` of these).
     var slotOrder: [WearSlot] { Array(ShowRank.allSlotOrder.prefix(slots)) }
     static let allSlotOrder: [WearSlot] = [.head, .feet, .neck, .face, .body, .hands]
-    /// Seconds a note takes to fall from the top of the highway to the hit line (Puddle slowest).
-    var noteFall: Double { switch self { case .puddle: return 1.4; case .pond: return 1.25; case .lagoon: return 1.1; case .ocean: return 1.0 } }
-    /// Puddle and Pond chart the on-beat notes only; Lagoon and Ocean add the off-beat hits.
-    var maxTier: Int { index < 2 ? 1 : 2 }
+    /// Prompts in the Dance round: one short song at every rank (20 beats at 0.5 s on the 120 BPM grid = about 10 s). Ranks differ in timing, not length.
+    var promptCount: Int { ShowScoring.dancePrompts }
     /// Puddle and Pond judge one notch kinder (Perfect within 80 ms instead of 60).
     var kindTiming: Bool { self == .puddle || self == .pond }
     var timing: ShowTiming { kindTiming ? .kind : .standard }
@@ -256,6 +254,8 @@ nonisolated enum ShowScoring {
     }
 
     // MARK: Dance
+    /// Prompts in every Dance round (about 10 s at 120 BPM).
+    static let dancePrompts = 20
     /// Dance = 100 x accuracy (Perfect 1, Good 0.6, Slip 0).
     static func dance(accuracy: Float) -> Float { 100 * clamp01(accuracy) }
     /// Perfect 1, Good 0.6, Slip 0.
@@ -312,28 +312,6 @@ nonisolated struct ShowBeat: Equatable, Sendable {
     func beat(atOrAfter t: Double) -> Int { Int(((t - firstBeat) / period).rounded(.up)) }
 }
 
-/// One dance song's notes: the Jelly Show plays one of four songs once, notes falling in two lanes (0 = left foot, 1 = right foot).
-nonisolated struct DanceChart: Equatable, Sendable {
-    nonisolated struct Note: Equatable, Sendable { var t: Double; var foot: Int; var tier: Int }
-    var song: Int
-    var title: String
-    var bpm: Double
-    var firstBeat: Double
-    var musicEnd: Double
-    /// Every note, in time order.
-    var notes: [Note]
-    /// Seconds the dance runs on after the last note (the song's final hit is the last note).
-    static let tail = 0.8
-
-    /// The scene track that plays this song (once).
-    var track: SceneTrack { SceneTrack.danceSongs[min(max(song, 1), SceneTrack.danceSongs.count) - 1] }
-    static func chart(song: Int) -> DanceChart { all.first { $0.song == song } ?? all[0] }
-    /// The song for a show's seed (the seeded show RNG picks one).
-    static func pick(seed: UInt64) -> DanceChart { all[Int((seed &* 0x9E3779B97F4A7C15) >> 33) % all.count] }
-    /// The notes a rank plays: Puddle / Pond tier 1 only, Lagoon / Ocean tier 1 + 2.
-    func notes(for rank: ShowRank) -> [Note] { notes.filter { $0.tier <= rank.maxTier } }
-}
-
 /// One dance: `count` L / R prompts on the beat grid, each judged Perfect / Good / Slip from the tap's SONG time. Nothing fails: a Slip is just 0 points.
 nonisolated struct ShowDanceSim: Sendable {
     nonisolated struct Prompt: Equatable, Sendable {
@@ -358,9 +336,6 @@ nonisolated struct ShowDanceSim: Sendable {
     static let leadInBeats = 4
     static let latencyOffset = TrainingTuning.latencyOffset
     static let visibleBeats = 5
-    /// Chart mode (the Jelly Show): seconds a note takes to fall to the hit line, and seconds the dance runs on after the last note. 0 = the beat-grid drill.
-    private(set) var fall: Double = 0
-    private(set) var tail: Double = 0
 
     var total: Int { prompts.count }
     var judged: Int { perfects + goods + misses }
@@ -369,10 +344,7 @@ nonisolated struct ShowDanceSim: Sendable {
         guard total > 0 else { return 0 }
         return min(max((Float(perfects) + 0.6 * Float(goods) - 0.5 * Float(strays)) / Float(total), 0), 1)
     }
-    var endTime: Double { (prompts.last?.time ?? songTime) + max(timing.good, tail) }
-    /// Notes hit (Perfect or Good) so far, and the current combo.
-    var hits: Int { perfects + goods }
-    var combo: Int { streak }
+    var endTime: Double { (prompts.last?.time ?? songTime) + timing.good }
 
     /// `songTime`: song time at GO; the first prompt is `leadInBeats` later, on the grid. Feet alternate from a seeded start.
     init(count: Int, grid: ShowBeat, timing: ShowTiming, seed: UInt64, songTime: Double) {
@@ -384,21 +356,6 @@ nonisolated struct ShowDanceSim: Sendable {
             prompts.append(Prompt(index: i, foot: foot, beat: beat, time: grid.time(ofBeat: beat)))
             foot = 1 - foot; beat += 1
         }
-    }
-
-    /// A chart: each note is a prompt at its song time (`notes` times are seconds from the start of the song, which starts at clock 0; `songTime` is
-    /// the clock now, negative while the notes fall in before the music).
-    init(chart notes: [DanceChart.Note], fall: Double, timing: ShowTiming, songTime: Double) {
-        self.grid = .stage; self.timing = timing.scaled(ShowAssist.windowScale); self.songTime = songTime
-        self.fall = fall; self.tail = DanceChart.tail
-        for (i, n) in notes.enumerated() { prompts.append(Prompt(index: i, foot: n.foot == 0 ? 0 : 1, beat: -1, time: n.t)) }
-    }
-
-    /// Chart mode: the notes on the highway now, (prompt, progress): 0 = at the top, 1 = on the hit line, > 1 = past it.
-    func falling(at t: Double? = nil) -> [(prompt: Prompt, progress: Double)] {
-        guard fall > 0 else { return [] }
-        let now = (t ?? songTime) - Self.latencyOffset
-        return prompts.filter { $0.grade == nil && $0.time - now < fall && $0.time - now > -timing.miss - 0.05 }.map { ($0, 1 - ($0.time - now) / fall) }
     }
 
     mutating func takeEvents() -> [Event] { let e = events; events.removeAll(keepingCapacity: true); return e }
@@ -415,7 +372,7 @@ nonisolated struct ShowDanceSim: Sendable {
         guard !finished else { return }
         songTime = max(songTime, t)
         for i in prompts.indices where prompts[i].grade == nil && judgedTime > prompts[i].time + timing.good { judge(i, .miss) }
-        if !prompts.contains(where: { $0.grade == nil }), !finished, judgedTime >= (prompts.last?.time ?? 0) + tail { finished = true; events.append(.finished) }
+        if !prompts.contains(where: { $0.grade == nil }), !finished { finished = true; events.append(.finished) }
     }
 
     mutating func tap(foot: Int, at t: Double) {
@@ -434,10 +391,7 @@ nonisolated struct ShowDanceSim: Sendable {
             if d <= timing.miss, best == nil || d < abs(prompts[best!].time - now) { best = i }
             if prompts[i].time - now > timing.miss { break }
         }
-        guard let i = best else {
-            if tail > 0, !prompts.contains(where: { $0.grade == nil }) { return }          // the song's last note is judged: a late tap is not a stray
-            strays += 1; events.append(.stray); return
-        }
+        guard let i = best else { strays += 1; events.append(.stray); return }
         let err = abs(prompts[i].time - now)
         if prompts[i].foot != f, !ShowAssist.anyFoot { judge(i, .miss); return }
         if err <= timing.perfect { judge(i, .perfect) } else if err <= timing.good { judge(i, .good) } else { judge(i, .miss) }
@@ -453,6 +407,6 @@ nonisolated struct ShowDanceSim: Sendable {
         bestStreak = max(bestStreak, streak)
         cheer = ShowScoring.cheer(cheer, after: g)
         if g == .miss { events.append(.slip(index: i, foot: prompts[i].foot)) } else { events.append(.hit(index: i, foot: prompts[i].foot, grade: g)) }
-        if judged == total, !finished, tail == 0 { finished = true; events.append(.finished) }
+        if judged == total, !finished { finished = true; events.append(.finished) }
     }
 }

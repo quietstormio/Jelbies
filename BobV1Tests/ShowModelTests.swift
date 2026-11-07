@@ -41,111 +41,16 @@ final class ShowModelTests: XCTestCase {
         for _ in 0..<40 { c = ShowScoring.cheer(c, after: .miss) }; XCTAssertEqual(c, 0)
     }
 
-    // MARK: the rhythm dance (four songs, note charts, falling notes)
-
-    func testEveryDanceSongHasAChartAndAFile() {
-        XCTAssertEqual(DanceChart.all.map(\.song), [1, 2, 3, 4])
-        let bundle = Bundle(for: AudioHub.self)
-        for c in DanceChart.all {
-            XCTAssertGreaterThan(c.notes.count, 15, "song \(c.song)")
-            XCTAssertEqual(c.notes, c.notes.sorted { $0.t < $1.t }, "song \(c.song) is in time order")
-            XCTAssertTrue(c.notes.allSatisfy { ($0.foot == 0 || $0.foot == 1) && ($0.tier == 1 || $0.tier == 2) })
-            XCTAssertTrue(c.track.playsOnce)
-            XCTAssertNotNil(SceneRender.url(c.track, bundle: bundle), "show_dance_\(c.song).m4a is bundled")
-            let frames = SceneRender.fileLength(c.track, bundle: bundle) ?? 0
-            XCTAssertGreaterThan(Double(frames) / SceneTrack.sampleRate, c.notes.last!.t, "the song runs past its last note")
-        }
-        XCTAssertEqual(DanceChart.pick(seed: 3), DanceChart.pick(seed: 3))
-        XCTAssertGreaterThan(Set((0..<40).map { DanceChart.pick(seed: UInt64($0)).song }).count, 1, "the seed picks different songs")
-    }
-
-    func testPuddleAndPondPlayTierOneLagoonAndOceanAddTierTwo() {
-        for c in DanceChart.all {
-            let t1 = c.notes.filter { $0.tier == 1 }
-            XCTAssertEqual(c.notes(for: .puddle), t1); XCTAssertEqual(c.notes(for: .pond), t1)
-            XCTAssertTrue(c.notes(for: .puddle).allSatisfy { $0.tier == 1 })
-            XCTAssertEqual(c.notes(for: .lagoon), c.notes); XCTAssertEqual(c.notes(for: .ocean), c.notes)
-            XCTAssertGreaterThan(c.notes(for: .lagoon).count, t1.count, "song \(c.song) has off-beat hits")
-        }
-        XCTAssertEqual(ShowRank.allCases.map(\.noteFall), [1.4, 1.25, 1.1, 1.0], "faster at higher ranks")
-    }
-
-    func testTheLastNoteIsTheSongsFinalDownbeat() {
-        for c in DanceChart.all {
-            let last = c.notes.last!
-            XCTAssertEqual(last.t, c.musicEnd, accuracy: 1e-6, "song \(c.song)")
-            XCTAssertEqual(last.tier, 1, "the final downbeat is on the beat")
-            let beats = (last.t - c.firstBeat) / (60 / c.bpm)
-            XCTAssertEqual(beats, beats.rounded(), accuracy: 0.02, "song \(c.song): the last note is on the grid")
-            for r in ShowRank.allCases { XCTAssertEqual(c.notes(for: r).last, last, "\(r) ends on it too") }
-        }
-    }
-
-    func testGradingAtKnownOffsets() {
-        let c = DanceChart.all[0]
-        let n = Array(c.notes(for: .puddle).prefix(4))                       // kind timing: Perfect 80, Good 150, miss window 220 ms
-        var d = ShowDanceSim(chart: n, fall: 1.4, timing: .kind, songTime: -2)
-        func tap(_ i: Int, _ off: Double) { d.tap(foot: n[i].foot, at: n[i].t + ShowDanceSim.latencyOffset + off) }
-        tap(0, 0); tap(1, 0.05); tap(2, -0.12); tap(3, 0.19)
-        XCTAssertEqual(d.prompts.map(\.grade), [.perfect, .perfect, .good, .miss])
-        XCTAssertEqual(d.perfects, 2); XCTAssertEqual(d.goods, 1); XCTAssertEqual(d.misses, 1)
-        // the wrong lane is a miss; a tap with no note near is a stray
-        var e = ShowDanceSim(chart: n, fall: 1.4, timing: .kind, songTime: -2)
-        e.tap(foot: 1 - n[0].foot, at: n[0].t + ShowDanceSim.latencyOffset)
-        XCTAssertEqual(e.prompts[0].grade, .miss)
-        e.tap(foot: 0, at: n[1].t + ShowDanceSim.latencyOffset + 0.25)          // between two notes, outside both windows
-        XCTAssertEqual(e.strays, 1)
-        // the combo counts hits in a row
-        XCTAssertEqual(d.bestStreak, 3); XCTAssertEqual(d.combo, 0)
-    }
-
-    private func danceSim(_ c: DanceChart, rank: ShowRank) -> ShowDanceSim {
-        ShowDanceSim(chart: c.notes(for: rank), fall: rank.noteFall, timing: rank.timing, songTime: -2)
-    }
-
-    func testAllPerfectIs100NoTapsIs0AndMashingPaysLittle() {
-        for c in DanceChart.all {
-            for r in ShowRank.allCases {
-                var p = danceSim(c, rank: r)
-                for n in p.prompts { p.tap(foot: n.foot, at: n.time + ShowDanceSim.latencyOffset) }
-                p.tick(songTime: p.endTime + 1)
-                XCTAssertTrue(p.finished); XCTAssertEqual(ShowScoring.dance(accuracy: p.accuracy), 100, accuracy: 1e-4, "song \(c.song) \(r)")
-                XCTAssertEqual(p.combo, p.total)
-
-                var none = danceSim(c, rank: r)
-                none.tick(songTime: none.endTime + 1)
-                XCTAssertTrue(none.finished); XCTAssertEqual(ShowScoring.dance(accuracy: none.accuracy), 0, accuracy: 1e-4)
-
-                // mashing both feet as fast as a thumb goes (20 taps a second) the whole song
-                var mash = danceSim(c, rank: r)
-                var t = -1.0, foot = 0
-                while t < mash.endTime { mash.tap(foot: foot, at: t); foot = 1 - foot; t += 0.05 }
-                mash.tick(songTime: mash.endTime + 1)
-                XCTAssertLessThan(ShowScoring.dance(accuracy: mash.accuracy), 30, "mashing does not pay: song \(c.song) \(r) = \(ShowScoring.dance(accuracy: mash.accuracy))")
+    /// The dance is about 10 s at every rank: 20 prompts on the 120 BPM grid, half a second apart (the stage track and the studio loop).
+    func testDanceIsAboutTenSecondsAtEveryRank() {
+        for r in ShowRank.allCases {
+            for grid in [ShowBeat.stage, .studio] {
+                let d = ShowDanceSim(count: r.promptCount, grid: grid, timing: r.timing, seed: 3, songTime: 0)
+                let span = d.prompts.last!.time - d.prompts.first!.time + grid.period          // first prompt to the end of the last beat
+                XCTAssertEqual(d.total, 20)
+                XCTAssertEqual(span, 10, accuracy: 0.51, "\(r) is about 10 s")
             }
         }
-    }
-
-    func testTheDanceRunsOnAfterTheLastNote() {
-        let c = DanceChart.all[3]
-        var p = danceSim(c, rank: .puddle)
-        for n in p.prompts { p.tap(foot: n.foot, at: n.time + ShowDanceSim.latencyOffset) }
-        p.tick(songTime: p.prompts.last!.time + 0.5)
-        XCTAssertFalse(p.finished, "0.8 s after the last note, not before")
-        p.tick(songTime: p.prompts.last!.time + DanceChart.tail + ShowDanceSim.latencyOffset + 0.01)
-        XCTAssertTrue(p.finished)
-        let before = p.strays; p.tap(foot: 0, at: p.prompts.last!.time + 5)
-        XCTAssertEqual(p.strays, before)
-    }
-
-    func testFallingNotesProgressToTheLine() {
-        let c = DanceChart.all[0]
-        let d = ShowDanceSim(chart: c.notes(for: .puddle), fall: 1.4, timing: .kind, songTime: -2)
-        let first = d.prompts[0]
-        let clock = first.time + ShowDanceSim.latencyOffset
-        XCTAssertTrue(d.falling(at: clock - 1.5).isEmpty, "not yet in view")
-        XCTAssertEqual(d.falling(at: clock - 0.7).first { $0.prompt.index == 0 }?.progress ?? -1, 0.5, accuracy: 1e-6)
-        XCTAssertEqual(d.falling(at: clock).first { $0.prompt.index == 0 }?.progress ?? -1, 1, accuracy: 1e-6)
     }
 
     /// Harder tricks score more: 1 star 12, 2 stars 18, 3 stars 24, + the theme's 6 (main) / 3 (friend); a repeat is worth 2/3; a cute flop is 8; max 30.
@@ -179,7 +84,7 @@ final class ShowModelTests: XCTestCase {
         func sim(care: Float) -> ShowSim {
             var p = ShowPlayerInput(name: "Bob"); p.care = care
             var s = ShowSim(rank: .puddle, theme: .starlightGala, dayKey: 20261021, player: p, rivals: [], seed: 1)
-            s.finishLook(); s.beginDance(chart: DanceChart.all[0], songTime: -2); s.finishDance()
+            s.finishLook(); s.beginDance(grid: .stage, songTime: 0); s.finishDance()
             return s
         }
         var lazy = sim(care: 0), happy = sim(care: 1)
@@ -224,7 +129,7 @@ final class ShowModelTests: XCTestCase {
         s.setOutfit([.head: [.sparkly], .feet: [.sparkly]])
         XCTAssertEqual(s.lookScore, 100, accuracy: 1e-4)
         s.finishLook()
-        s.beginDance(chart: DanceChart.all[0], songTime: -2)
+        s.beginDance(grid: .stage, songTime: 10)
         let prompts = s.dance!.prompts
         for pr in prompts { _ = s.tapDance(foot: pr.foot, at: pr.time + ShowDanceSim.latencyOffset) }
         _ = s.tickDance(songTime: s.dance!.endTime + 1)
@@ -250,7 +155,7 @@ final class ShowModelTests: XCTestCase {
         let want: [ShowRank: [Int]] = [.puddle: [250, 140, 75, 30], .pond: [400, 220, 120, 50], .lagoon: [700, 385, 210, 90], .ocean: [1500, 825, 450, 180]]
         for (r, row) in want { for p in 1...4 { XCTAssertEqual(r.drops(place: p), row[p - 1], "\(r) \(p)") } }
         XCTAssertEqual(ShowRank.ocean.drops(place: 9), 180, "past 4th pays 4th")
-        XCTAssertEqual(ShowRank.allCases.map(\.slots), [2, 3, 4, 6]); XCTAssertEqual(ShowRank.allCases.map(\.maxTier), [1, 1, 2, 2])
+        XCTAssertEqual(ShowRank.allCases.map(\.slots), [2, 3, 4, 6]); XCTAssertEqual(ShowRank.allCases.map(\.promptCount), [20, 20, 20, 20], "one short song at every rank")
         XCTAssertEqual(ShowRank.allCases.map(\.title), ["Puddle", "Pond", "Lagoon", "Ocean"])
         XCTAssertTrue(ShowRank.puddle.kindTiming && ShowRank.pond.kindTiming && !ShowRank.lagoon.kindTiming && !ShowRank.ocean.kindTiming)
     }
@@ -287,7 +192,7 @@ final class ShowModelTests: XCTestCase {
         var g = RaceRNG(seed: seed &* 77 &+ 3)
         s.setOutfit(outfit)
         s.finishLook()
-        s.beginDance(chart: DanceChart.all[1], songTime: -2)
+        s.beginDance(grid: .stage, songTime: 5)
         for pr in s.dance!.prompts {
             let r = g.next()
             let at = pr.time + ShowDanceSim.latencyOffset

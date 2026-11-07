@@ -29,7 +29,7 @@ nonisolated struct NowPlaying: Equatable, Sendable {
         case .cafe: return "Café"
         case .volley: return "Beach"
         case .studio: return "Studio"
-        case .show, .danceSong: return "Show"
+        case .show: return "Show"
         case .results: return "Results"
         default: return "Screen"
         }

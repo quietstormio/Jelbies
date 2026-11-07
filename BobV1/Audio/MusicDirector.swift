@@ -273,7 +273,7 @@ nonisolated struct MusicDirector {
             sceneBag = []; sceneElapsed = 0
             if scene.isPlaylist { sceneTrack = nil; _ = nextSceneTrack() }
             else { sceneTrack = cands.isEmpty ? nil : cands[min(Int(rand() * Double(cands.count)), cands.count - 1)] }
-            if let t = sceneTrack { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : (scene.isDanceSong ? 0.06 : 0.8))) }          // (a dance song comes in at once: its first notes are on the beat)
+            if let t = sceneTrack { ev.append(.sceneOn(t, fade: old == .none ? Self.sceneFade : 0.8)) }
             else if scene == .results { ev.append(.sceneOff(fade: 0.5)) }
             else {                                  // back in the room
                 ev.append(.sceneOff(fade: Self.sceneFade))

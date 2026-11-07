@@ -261,7 +261,6 @@ final class SceneMusicTests: XCTestCase {
     func testLoopPointsInsideTheFiles() {
         for t in SceneTrack.allCases {
             guard let len = SceneRender.fileLength(t, bundle: Bundle(for: AudioHub.self)) else { XCTFail("\(t) is not in the bundle"); continue }
-            if t.playsOnce { XCTAssertGreaterThan(len, 0, "\(t)"); continue }          // (the Jelly Show's dance songs play once, no loop points)
             XCTAssertGreaterThan(t.loopStartFrame, SceneRender.crossfadeFrames, "\(t)")
             XCTAssertLessThan(t.loopStartFrame, t.loopEndFrame, "\(t)")
             XCTAssertLessThanOrEqual(t.loopEndFrame, len, "\(t): loop end \(t.loopEndFrame) past the file's \(len) frames")

@@ -26,15 +26,8 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
     /// The park playlist's other tracks (2026-11-06): the whole file loops like the others.
     case park3 = "park_3", park4 = "park_4", park5 = "park_5", park6 = "park_6"
 
-    /// The Jelly Show's dance songs (2026-11-07): played ONCE from their start (no loop, no intro split) under the dance round (Show/DanceCharts.swift has the notes).
-    case dance1 = "show_dance_1", dance2 = "show_dance_2", dance3 = "show_dance_3", dance4 = "show_dance_4"
-    static let danceSongs: [SceneTrack] = [.dance1, .dance2, .dance3, .dance4]
-    /// Plays once from the first frame to the last (the song clock is the file's own).
-    var playsOnce: Bool { Self.danceSongs.contains(self) }
-
     var loopStartFrame: Int {
         switch self {
-        case .dance1, .dance2, .dance3, .dance4: return 0
         case .circuitRace: return 1_289_559
         case .circuitFinal: return 362_406
         case .training: return TrainingTuning.loopStartFrame
@@ -65,7 +58,6 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .cafe6, .cafe8: return 4_629_882
         case .volley1: return 3_308_105
         case .volley2: return 3_307_833
-        case .dance1, .dance2, .dance3, .dance4: return 0          // (plays once: the whole file, see SceneRender.render)
         }
     }
     /// Starts at the loop start (the intro is skipped): the training drill's beat grid is the loop's, and the drill waits for nothing.
@@ -92,8 +84,6 @@ nonisolated enum MusicScene: Equatable, Sendable {
     case volley
     /// The Jelly Show (Show/): the Studio and its dance drill play studio_practice_1, the stage plays contest_stage_2.
     case studio, show
-    /// The Jelly Show's dance round plays dance song `i` (0...3) once; the stage loop is out while it plays.
-    case danceSong(Int)
 
     var track: SceneTrack? {
         switch self {
@@ -104,7 +94,6 @@ nonisolated enum MusicScene: Equatable, Sendable {
         case .town: return .town
         case .studio: return .studioPractice
         case .show: return .contestStage
-        case .danceSong(let i): return SceneTrack.danceSongs[min(max(i, 0), SceneTrack.danceSongs.count - 1)]
         case .park: return .park1
         case .cafe: return .cafe1
         case .volley: return .volley1
@@ -113,7 +102,6 @@ nonisolated enum MusicScene: Equatable, Sendable {
     }
     /// A playlist scene advances at the end of each track (shuffled, no repeat until the list is through) and has a Skip; the others loop one track.
     var isPlaylist: Bool { self == .cafe || self == .park }
-    var isDanceSong: Bool { if case .danceSong = self { return true }; return false }
     /// The candidates for a visit (the director picks one at random); one entry for the other scenes.
     var tracks: [SceneTrack] {
         switch self {
@@ -163,11 +151,6 @@ nonisolated enum SceneRender {
         guard let u = url(t, bundle: bundle),
               let file = try? AVAudioFile(forReading: u, commonFormat: .pcmFormatFloat32, interleaved: false) else { return nil }
         let fmt = file.processingFormat
-        if t.playsOnce {          // the whole file, scheduled once (its own 0.6 s fade is the ending)
-            guard file.length > 0, fmt.commonFormat == .pcmFormatFloat32, let all = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(file.length)) else { return nil }
-            do { try file.read(into: all) } catch { return nil }
-            return Result(intro: nil, loop: all, format: fmt)
-        }
         let s = t.loopStartFrame, e = t.loopEndFrame, n = e - s, x = crossfadeFrames
         guard e <= Int(file.length), s >= x, n > 2 * x, fmt.channelCount >= 1, fmt.commonFormat == .pcmFormatFloat32,
               let pre = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(x)),
@@ -254,7 +237,7 @@ final class SceneMusicEngine {
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
         if !engine.isRunning { engine.prepare(); do { try engine.start() } catch { drop(v); return } }
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
-        v.node.scheduleBuffer(r.loop, at: nil, options: v.track.playsOnce ? [] : .loops, completionHandler: nil)
+        v.node.scheduleBuffer(r.loop, at: nil, options: .loops, completionHandler: nil)
         if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
