@@ -227,6 +227,26 @@ final class RoomsCaptureTests: XCTestCase {
         }
     }
 
+    /// The park with its toys (no Jelbies) on the default park camera: portrait + landscape, noon + evening. ROOMS_CAP_TAG names the files (capture aid, hopscotch look).
+    func testCaptureParkToysLook() throws {
+        guard dir != nil else { throw XCTSkip("ROOMS_CAP_DIR not set") }
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
+        defer { RoomLayout.apply(RoomCatalog.home); DecorField.shared.clear(); DayClock.shared.forcedHour = 12 }
+        let tag = ProcessInfo.processInfo.environment["ROOMS_CAP_TAG"] ?? "after"
+        let rig = MotionRig(game: true); Self.keep.append(rig); rig.renderSamples = false
+        RoomLayout.apply(RoomCatalog.park)
+        for (label, w, h, hour) in [("portrait_day", 1206, 2622, 12.0), ("landscape_day", 2622, 1206, 12.0), ("portrait_eve", 1206, 2622, 19.5), ("landscape_eve", 2622, 1206, 19.5)] {
+            DayClock.shared.forcedHour = hour
+            let a = Float(w) / Float(h)
+            GameCamera.configurePark(); _ = GameCamera.camera(aspect: a)
+            let (ren, target) = try makeRenderer(device, rig, w: w, h: h)
+            DecorField.shared.set(ParkToys.placed)
+            ren.room!.setDecorStatic(DecorModels.build(feet: DecorField.shared.feet, field: DecorField.shared, time: 0.5))
+            let img = emptyRoom(ren, target, rig: rig, w: w, h: h, aspect: a, hour: hour)
+            try saveRaw(img, "parktoys_\(tag)_\(label)")
+        }
+    }
+
     /// The Park (v2: simple scenery, the three Park toys) with five Jelbies, portrait + landscape at noon.
     func testCaptureParkV2() throws {
         guard let dir else { throw XCTSkip("ROOMS_CAP_DIR not set") }
