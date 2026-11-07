@@ -27,7 +27,7 @@ nonisolated struct ShowRivalStats: Equatable, Codable, Sendable {
     var glow: Float
     /// Dance accuracy and skill (0...1).
     var accuracy: Float, skill: Float
-    /// Trick reliability, ring timing and the chance a turn's trick matches the theme (0...1).
+    /// Trick reliability and timing (no longer used: the Trick menu is stars and care) and the chance a turn's trick matches the theme (0...1).
     var reliability: Float, timing: Float, themePick: Float
 }
 
@@ -121,15 +121,18 @@ nonisolated enum ShowRivalSource {
     static func scores(for r: ShowRival, theme: ShowTheme, rng g: inout RaceRNG) -> ShowScores {
         var sc = ShowScores()
         sc.look = ShowScoring.look(outfit: r.stats.outfit, main: r.stats.main, friend: r.stats.friend, glow: r.stats.glow, dirt: 0)
-        sc.dance = ShowScoring.dance(accuracy: r.stats.accuracy, skill: r.stats.skill)
+        sc.dance = ShowScoring.dance(accuracy: r.stats.accuracy)
         var trick = 0
         for k in 0..<ShowScoring.turns {
-            let success = g.next() < r.stats.reliability
+            // the trick she shows this turn (her plan of three different ones) and its stars; the same miss chance as the player's, at care 0.7
+            let t = k < r.tricks.count ? r.tricks[k] : (r.tricks.first ?? .sit)
+            let d = ShowTrickInfo.difficulty(t)
+            let success = g.next() >= ShowScoring.missChance(difficulty: d, care: ShowTuning.rivalCare)
             // the theme pick: with her theme-pick chance she shows a main-stat trick, else a friend one half the time, else no match
             let roll = g.next()
             let tags: [WearTag] = roll < r.stats.themePick ? [theme.main] : (roll < r.stats.themePick + (1 - r.stats.themePick) * 0.5 ? [theme.friend] : [])
-            let t = min(1, max(0, r.stats.timing + (g.next() * 2 - 1) * 0.1))
-            trick += ShowScoring.turn(success: success, repeated: k >= r.tricks.count, tags: tags, theme: theme, timing: t)
+            _ = g.next()                       // (the old timing roll, kept so the rivals' later draws keep their places)
+            trick += ShowScoring.turn(difficulty: d, success: success, repeated: k >= r.tricks.count, tags: tags, theme: theme)
         }
         sc.trick = Float(min(100, trick))
         return sc

@@ -28,10 +28,11 @@ final class ShowModelTests: XCTestCase {
     }
 
     func testDanceFormulaAndCheer() {
-        XCTAssertEqual(ShowScoring.dance(accuracy: 1, skill: 1), 100, accuracy: 1e-4)
-        XCTAssertEqual(ShowScoring.dance(accuracy: 1, skill: 0), 70, accuracy: 1e-4)
-        XCTAssertEqual(ShowScoring.dance(accuracy: 0, skill: 1), 30, accuracy: 1e-4)
-        XCTAssertEqual(ShowScoring.dance(accuracy: 0.8, skill: 0.4), 100 * (0.56 + 0.12), accuracy: 1e-4)
+        // the dance is 100% accuracy (no dance-skill share any more: nobody is capped at 70)
+        XCTAssertEqual(ShowScoring.dance(accuracy: 1), 100, accuracy: 1e-4)
+        XCTAssertEqual(ShowScoring.dance(accuracy: 0), 0, accuracy: 1e-4)
+        XCTAssertEqual(ShowScoring.dance(accuracy: 0.8), 80, accuracy: 1e-4)
+        XCTAssertEqual(ShowScoring.dance(accuracy: 1.4), 100, accuracy: 1e-4, "clamped")
         var c: Float = 0
         c = ShowScoring.cheer(c, after: .perfect); XCTAssertEqual(c, 0.125, accuracy: 1e-6)
         c = ShowScoring.cheer(c, after: .good); XCTAssertEqual(c, 0.1875, accuracy: 1e-6)
@@ -40,14 +41,71 @@ final class ShowModelTests: XCTestCase {
         for _ in 0..<40 { c = ShowScoring.cheer(c, after: .miss) }; XCTAssertEqual(c, 0)
     }
 
-    func testTrickTurnPoints() {
+    /// The dance is about 10 s at every rank: 20 prompts on the 120 BPM grid, half a second apart (the stage track and the studio loop).
+    func testDanceIsAboutTenSecondsAtEveryRank() {
+        for r in ShowRank.allCases {
+            for grid in [ShowBeat.stage, .studio] {
+                let d = ShowDanceSim(count: r.promptCount, grid: grid, timing: r.timing, seed: 3, songTime: 0)
+                let span = d.prompts.last!.time - d.prompts.first!.time + grid.period          // first prompt to the end of the last beat
+                XCTAssertEqual(d.total, 20)
+                XCTAssertEqual(span, 10, accuracy: 0.51, "\(r) is about 10 s")
+            }
+        }
+    }
+
+    /// Harder tricks score more: 1 star 12, 2 stars 18, 3 stars 24, + the theme's 6 (main) / 3 (friend); a repeat is worth 2/3; a cute flop is 8; max 30.
+    func testTrickTurnPointsByDifficulty() {
         let t = ShowTheme.starlightGala           // sparkly, friend cool
-        XCTAssertEqual(ShowScoring.turn(success: true, repeated: false, tags: [.sparkly], theme: t, timing: 1), 30, "18 + 6 + 6")
-        XCTAssertEqual(ShowScoring.turn(success: true, repeated: true, tags: [.sparkly], theme: t, timing: 1), 24, "a repeat: 12")
-        XCTAssertEqual(ShowScoring.turn(success: false, repeated: false, tags: [.sparkly], theme: t, timing: 1), 20, "a cute flop: 8")
-        XCTAssertEqual(ShowScoring.turn(success: true, repeated: false, tags: [.cool], theme: t, timing: 0.5), 18 + 3 + 3)
-        XCTAssertEqual(ShowScoring.turn(success: true, repeated: false, tags: [.sweet], theme: t, timing: 0), 18)
-        XCTAssertEqual(ShowScoring.timing(error: 0), 1); XCTAssertEqual(ShowScoring.timing(error: 0.15), 0.5, accuracy: 1e-5); XCTAssertEqual(ShowScoring.timing(error: -0.4), 0)
+        XCTAssertEqual([1, 2, 3].map { ShowScoring.turn(difficulty: $0, success: true, repeated: false, tags: [], theme: t) }, [12, 18, 24])
+        XCTAssertEqual(ShowScoring.turn(difficulty: 3, success: true, repeated: false, tags: [.sparkly], theme: t), 30, "24 + 6, the cap")
+        XCTAssertEqual(ShowScoring.turn(difficulty: 2, success: true, repeated: false, tags: [.sparkly], theme: t), 24, "18 + 6")
+        XCTAssertEqual(ShowScoring.turn(difficulty: 2, success: true, repeated: false, tags: [.cool], theme: t), 21, "18 + 3 (friend)")
+        XCTAssertEqual([1, 2, 3].map { ShowScoring.turn(difficulty: $0, success: true, repeated: true, tags: [], theme: t) }, [8, 12, 16], "a repeat is worth less")
+        XCTAssertEqual(ShowScoring.turn(difficulty: 3, success: false, repeated: false, tags: [.sparkly], theme: t), 14, "a cute flop: 8 + 6, whatever the stars")
+        XCTAssertLessThanOrEqual(ShowScoring.turn(difficulty: 3, success: true, repeated: false, tags: [.sparkly, .cool], theme: t), ShowScoring.turnMax)
+        // every stage trick has 1...3 stars; sit/hop/look are easy, jacks/spin medium, the flip is the hardest
+        for tr in ShowTrickInfo.stageTricks { XCTAssertTrue((1...3).contains(ShowTrickInfo.difficulty(tr)), "\(tr)") }
+        XCTAssertEqual([VoiceTrick.sit, .hop, .jacks, .spin, .look, .flip].map(ShowTrickInfo.difficulty), [1, 1, 2, 2, 1, 3])
+    }
+
+    /// The miss chance grows with the stars and drops for a well-cared-for Jelbie (x 0.5 ... x 1.0).
+    func testMissChanceGrowsWithStarsAndDropsWithCare() {
+        XCTAssertEqual([1, 2, 3].map { ShowScoring.missChance(difficulty: $0, care: 0) }, [0.03, 0.08, 0.15])
+        XCTAssertEqual([1, 2, 3].map { ShowScoring.missChance(difficulty: $0, care: 1) }, [0.015, 0.04, 0.075])
+        for d in 1...3 {
+            var prev = ShowScoring.missChance(difficulty: d, care: 0)
+            for c in stride(from: Float(0.2), through: 1, by: 0.2) {
+                let m = ShowScoring.missChance(difficulty: d, care: c)
+                XCTAssertLessThan(m, prev, "more care, fewer slips (\(d) stars at care \(c))"); prev = m
+            }
+        }
+        XCTAssertGreaterThan(ShowScoring.missChance(difficulty: 3, care: 0.5), ShowScoring.missChance(difficulty: 1, care: 0.5))
+        // the sim uses the player's care: a roll between the two chances slips for a neglected Jelbie and lands for a happy one
+        func sim(care: Float) -> ShowSim {
+            var p = ShowPlayerInput(name: "Bob"); p.care = care
+            var s = ShowSim(rank: .puddle, theme: .starlightGala, dayKey: 20261021, player: p, rivals: [], seed: 1)
+            s.finishLook(); s.beginDance(grid: .stage, songTime: 0); s.finishDance()
+            return s
+        }
+        var lazy = sim(care: 0), happy = sim(care: 1)
+        XCTAssertFalse(lazy.perform(.flip, roll: 0.10)!.success, "10% < 15%: a flop for a neglected Jelbie")
+        XCTAssertTrue(happy.perform(.flip, roll: 0.10)!.success, "10% > 7.5%: lands for a well-cared-for one")
+        XCTAssertEqual(lazy.turns[0].points, 8 + ShowTheme.starlightGala.trickBonus(ShowTrickInfo.tags(.flip)), "the flop scores the flop points")
+    }
+
+    /// Every Jelbie has sit, spin, hop and jacks on the menu, whatever he has learned; learned tricks are added in the fixed order.
+    func testDefaultTricksAreAlwaysOnTheMenu() {
+        XCTAssertEqual(ShowTrickInfo.defaults, [.sit, .spin, .hop, .jacks])
+        let bare = ShowSim(rank: .puddle, theme: .bunnyPicnic, dayKey: 1, player: ShowPlayerInput(name: "Bob"), rivals: [], seed: 1)
+        XCTAssertEqual(Set(bare.knownTricks), Set(ShowTrickInfo.defaults))
+        var p = ShowPlayerInput(name: "Bob"); p.tricks = [.flip: 0.9, .look: 0.5]
+        let more = ShowSim(rank: .puddle, theme: .bunnyPicnic, dayKey: 1, player: p, rivals: [], seed: 1)
+        XCTAssertEqual(Set(more.knownTricks), Set(ShowTrickInfo.defaults + [.flip, .look]))
+        XCTAssertFalse(more.knownTricks.contains(.come)); XCTAssertFalse(more.knownTricks.contains(.run))
+        XCTAssertEqual(more.points(.flip), ShowScoring.turn(difficulty: 3, success: true, repeated: false, tags: ShowTrickInfo.tags(.flip), theme: .bunnyPicnic))
+    }
+
+    func testTrickTurnTheme() {
         XCTAssertTrue(ShowScoring.burstReady(cheer: 0.75, glow: 0.5)); XCTAssertFalse(ShowScoring.burstReady(cheer: 0.74, glow: 1)); XCTAssertFalse(ShowScoring.burstReady(cheer: 1, glow: 0.49))
         // the flip, a starter, counts as Sparkly too; spin is Sparkly; hop Sporty; roll Cute
         XCTAssertTrue(ShowTrickInfo.tags(.flip).contains(.sparkly)); XCTAssertEqual(ShowTrickInfo.tags(.spin), [.sparkly])
@@ -61,11 +119,11 @@ final class ShowModelTests: XCTestCase {
         XCTAssertEqual(ShowScoring.places(totals: [100, 200, 200, 200]), [4, 1, 1, 1])
     }
 
-    /// A whole show through the sim: the max score is 300 (3 x 30 + 10 Burst = 100 in the Trick round).
+    /// A whole show through the sim: a flawless one with real tricks (only the flip is 3 stars) is 282; 300 would need three different 3-star main-stat tricks.
     func testPerfectShowScoresThreeHundred() {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 1 }
-        p.glow = 1; p.dirt = 0; p.dance = .sway; p.danceSkill = 1; p.tricks = [.spin: 1, .flip: 1, .hop: 1]
+        p.glow = 1; p.dirt = 0; p.dance = .sway; p.danceSkill = 1; p.tricks = [.flip: 1]; p.care = 1
         let theme = ShowTheme.starlightGala
         var s = ShowSim(rank: .puddle, theme: theme, dayKey: 20261021, player: p, rivals: ShowRivalSource.rivals(dayKey: 20261021, rank: .puddle, theme: theme), seed: 1)
         s.setOutfit([.head: [.sparkly], .feet: [.sparkly]])
@@ -78,16 +136,15 @@ final class ShowModelTests: XCTestCase {
         XCTAssertTrue(s.danceDone); XCTAssertEqual(s.danceScore!, 100, accuracy: 1e-4); XCTAssertEqual(s.cheer, 1)
         s.finishDance()
         XCTAssertTrue(s.burstReady)
-        for (i, t) in [VoiceTrick.spin, .flip, .hop].enumerated() {
+        for (i, t) in [VoiceTrick.spin, .flip, .jacks].enumerated() {
             if i == 2 { s.armBurst() }
-            s.beginTurn(t, at: 100 + Double(i) * 3)
-            let turn = s.tapRing(at: 100 + Double(i) * 3 + ShowScoring.ringSeconds, roll: 0)!
-            XCTAssertTrue(turn.success); XCTAssertEqual(turn.timing, 1)
+            let turn = s.perform(t, roll: 0.99)!
+            XCTAssertTrue(turn.success)
         }
-        XCTAssertEqual(s.turns.map(\.points), [30, 30, 24], "hop is Sporty: no theme points")
-        XCTAssertEqual(s.trickTotal, 94)
+        XCTAssertEqual(s.turns.map(\.points), [24, 30, 18], "spin 2 stars + Sparkly, flip 3 stars + Sparkly (capped), jacks 2 stars (Sporty: no theme points)")
+        XCTAssertEqual(s.trickTotal, 72 + ShowScoring.burstPoints)
         XCTAssertEqual(s.round, .results)
-        XCTAssertEqual(s.playerScores.totalPts, 294)
+        XCTAssertEqual(s.playerScores.totalPts, 100 + 100 + 82)
         XCTAssertEqual(s.playerPlace, 1); XCTAssertEqual(s.playerDrops, 250)
         XCTAssertTrue(s.perfectDance); XCTAssertTrue(s.hatTrick)
     }
@@ -98,7 +155,7 @@ final class ShowModelTests: XCTestCase {
         let want: [ShowRank: [Int]] = [.puddle: [250, 140, 75, 30], .pond: [400, 220, 120, 50], .lagoon: [700, 385, 210, 90], .ocean: [1500, 825, 450, 180]]
         for (r, row) in want { for p in 1...4 { XCTAssertEqual(r.drops(place: p), row[p - 1], "\(r) \(p)") } }
         XCTAssertEqual(ShowRank.ocean.drops(place: 9), 180, "past 4th pays 4th")
-        XCTAssertEqual(ShowRank.allCases.map(\.slots), [2, 3, 4, 6]); XCTAssertEqual(ShowRank.allCases.map(\.promptCount), [16, 20, 24, 28])
+        XCTAssertEqual(ShowRank.allCases.map(\.slots), [2, 3, 4, 6]); XCTAssertEqual(ShowRank.allCases.map(\.promptCount), [20, 20, 20, 20], "one short song at every rank")
         XCTAssertEqual(ShowRank.allCases.map(\.title), ["Puddle", "Pond", "Lagoon", "Ocean"])
         XCTAssertTrue(ShowRank.puddle.kindTiming && ShowRank.pond.kindTiming && !ShowRank.lagoon.kindTiming && !ShowRank.ocean.kindTiming)
     }
@@ -127,9 +184,9 @@ final class ShowModelTests: XCTestCase {
 
     // MARK: rivals
 
-    /// Plays one show for `input` at `rank` on `dayKey`: dance taps with the given Perfect / Good chances, every turn tapped with `timing`.
+    /// Plays one show for `input` at `rank` on `dayKey`: dance taps with the given Perfect / Good chances, every turn picks the next trick on his menu.
     private func play(_ input: ShowPlayerInput, outfit: [WearSlot: [WearTag]], rank: ShowRank, dayKey: Int, firstShow: Bool = false,
-                      perfect pP: Float, good pG: Float, timing: Float, seed: UInt64) -> ShowSim {
+                      perfect pP: Float, good pG: Float, seed: UInt64) -> ShowSim {
         let theme = ShowSchedule.theme(dayKey: dayKey)
         var s = ShowSim(rank: rank, theme: theme, dayKey: dayKey, player: input, rivals: ShowRivalSource.rivals(dayKey: dayKey, rank: rank, theme: theme, firstShow: firstShow), seed: seed)
         var g = RaceRNG(seed: seed &* 77 &+ 3)
@@ -149,8 +206,7 @@ final class ShowModelTests: XCTestCase {
         for k in 0..<ShowScoring.turns {
             let t = known[k % max(known.count, 1)]
             if s.burstReady { s.armBurst() }
-            s.beginTurn(t, at: Double(k) * 5)
-            s.tapRing(at: Double(k) * 5 + ShowScoring.ringSeconds + Double((1 - timing) * 0.3), roll: g.next())
+            s.perform(t, roll: g.next())
         }
         XCTAssertEqual(s.round, .results)
         return s
@@ -161,7 +217,7 @@ final class ShowModelTests: XCTestCase {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.2 }
         p.condition[theme.main] = 0.5; p.condition[theme.friend] = 0.4
-        p.glow = 0.7; p.dirt = 0.1; p.dance = .sway; p.danceSkill = 0.3
+        p.glow = 0.7; p.dirt = 0.1; p.dance = .sway; p.danceSkill = 0.3; p.care = 0.8
         p.tricks = [.sit: 0.6, .flip: 0.6, .jacks: 0.6]
         return (p, [.head: [theme.main], .feet: [theme.friend]])
     }
@@ -169,7 +225,7 @@ final class ShowModelTests: XCTestCase {
     private func untrained() -> ShowPlayerInput {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.1 }
-        p.glow = 0.2; p.dirt = 0.5; p.dance = nil; p.danceSkill = 0; p.tricks = [.sit: 0.4]
+        p.glow = 0.2; p.dirt = 0.5; p.dance = nil; p.danceSkill = 0; p.care = 0.3; p.tricks = [.sit: 0.4]
         return p
     }
 
@@ -179,7 +235,7 @@ final class ShowModelTests: XCTestCase {
         for (i, day) in days.enumerated() {
             let theme = ShowSchedule.theme(dayKey: day)
             let (p, o) = caredFor(theme: theme)
-            let s = play(p, outfit: o, rank: .puddle, dayKey: day, perfect: 0.5, good: 0.3, timing: 0.6, seed: UInt64(i + 1))
+            let s = play(p, outfit: o, rank: .puddle, dayKey: day, perfect: 0.5, good: 0.3, seed: UInt64(i + 1))
             if s.playerPlace == 1 { wins += 1 }
             if (s.playerPlace ?? 9) <= 3 { podium += 1 }
             totals.append(s.playerScores.total)
@@ -193,7 +249,7 @@ final class ShowModelTests: XCTestCase {
         var wins = 0
         let days = (0..<200).map { ShowSchedule.dayKey(ordinal: ShowSchedule.dayOrdinal(20261021) + $0) }
         for (i, day) in days.enumerated() {
-            let s = play(untrained(), outfit: [:], rank: .ocean, dayKey: day, perfect: 0.3, good: 0.3, timing: 0.4, seed: UInt64(i + 1))
+            let s = play(untrained(), outfit: [:], rank: .ocean, dayKey: day, perfect: 0.3, good: 0.3, seed: UInt64(i + 1))
             if s.playerPlace == 1 { wins += 1 }
         }
         print("SHOW ocean untrained: wins \(wins)/\(days.count)")

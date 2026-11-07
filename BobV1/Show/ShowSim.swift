@@ -1,8 +1,8 @@
 //
 //  ShowSim.swift
 //  One Jelly Show as a pure model: Look -> Dance -> Trick -> results. The player's inputs are read once at the start (his condition, shine, dance
-//  skill and learned tricks); his outfit changes live in the Look round; the Dance round is a ShowDanceSim on the stage music's beat grid; the
-//  Trick round is three turns of (pick a trick, tap when the spotlight ring hugs him). Nothing fails: a flop is cute and still scores.
+//  skill and learned tricks); his outfit is chosen in the Studio and judged in the Look round; the Dance round is a ShowDanceSim on the stage music's beat grid; the
+//  Trick round is three turns of picking a trick off his menu (stars = points, and a small chance to slip). Nothing fails: a flop is cute and still scores.
 //  The rivals' scores are fixed with the rivals (ShowRivalSource). Ties share the place. The flow (ShowFlow) adds time, bodies and sound.
 //
 
@@ -25,8 +25,10 @@ nonisolated struct ShowPlayerInput: Equatable, Sendable {
     /// The dance he shows and how well he knows it (0 = freestyle, no dance learned).
     var dance: DanceID? = nil
     var danceSkill: Float = 0
-    /// Learned tricks with their reliability.
+    /// Learned tricks (the value is the old voice reliability, no longer used for scoring; the defaults are always on the menu).
     var tricks: [VoiceTrick: Float] = [:]
+    /// How well cared for he is, 0...1 (needs met and clean): lowers the chance a trick slips.
+    var care: Float = 0.5
     func stat(_ t: WearTag) -> Float { condition[t] ?? 0 }
 }
 
@@ -34,7 +36,6 @@ nonisolated struct ShowTrickTurn: Equatable, Sendable {
     var trick: VoiceTrick
     var success: Bool
     var repeated: Bool
-    var timing: Float
     var points: Int
     var burst: Bool
 }
@@ -73,9 +74,6 @@ nonisolated struct ShowSim: Sendable {
 
     // Trick
     private(set) var turns: [ShowTrickTurn] = []
-    /// The trick picked for the turn under way and when its ring started (song / wall seconds, the flow's clock).
-    private(set) var ringTrick: VoiceTrick?
-    private(set) var ringStart: Double?
     private(set) var burstUsed = false
     /// The Glow Burst is armed for the turn under way.
     private(set) var burstArmed = false
@@ -111,7 +109,7 @@ nonisolated struct ShowSim: Sendable {
     private mutating func recomputeLook() {
         lookScore = ShowScoring.look(outfit: outfitMatch, main: player.stat(theme.main), friend: player.stat(theme.friend), glow: player.glow, dirt: player.dirt)
     }
-    /// "Looks great. On to Dance": the Look score is locked.
+    /// The walk-on is over: the Look score is locked.
     mutating func finishLook() {
         guard round == .look else { return }
         round = .dance
@@ -133,14 +131,14 @@ nonisolated struct ShowSim: Sendable {
         guard round == .dance, dance != nil, danceScore == nil else { return [] }
         dance!.tick(songTime: t)
         let ev = dance!.takeEvents()
-        if dance!.finished { danceScore = ShowScoring.dance(accuracy: dance!.accuracy, skill: player.danceSkill) }
+        if dance!.finished { danceScore = ShowScoring.dance(accuracy: dance!.accuracy) }
         return ev
     }
     var danceDone: Bool { danceScore != nil }
     /// On to the Trick round (after the dance has finished; a dance that never ran scores freestyle 0 accuracy).
     mutating func finishDance() {
         guard round == .dance else { return }
-        if danceScore == nil { danceScore = ShowScoring.dance(accuracy: dance?.accuracy ?? 0, skill: player.danceSkill) }
+        if danceScore == nil { danceScore = ShowScoring.dance(accuracy: dance?.accuracy ?? 0) }
         round = .trick
     }
 
@@ -148,11 +146,16 @@ nonisolated struct ShowSim: Sendable {
 
     var turnIndex: Int { turns.count }
     var tricksDone: Bool { turns.count >= ShowScoring.turns }
-    /// Tricks already shown this show (a repeat scores 12, not 18).
+    /// Tricks already shown this show (a repeat is worth less).
     var usedTricks: [VoiceTrick] { turns.map(\.trick) }
     /// The known tricks he can pick from, in a fixed order.
-    var knownTricks: [VoiceTrick] { ShowTrickInfo.stageTricks.filter { player.tricks[$0] != nil } }
-    func reliability(_ t: VoiceTrick) -> Float { player.tricks[t] ?? 0 }
+    var knownTricks: [VoiceTrick] { ShowTrickInfo.menu(learned: player.tricks.keys) }
+    /// His chance to slip on `t` (stars x care).
+    func missChance(_ t: VoiceTrick) -> Float { ShowScoring.missChance(difficulty: ShowTrickInfo.difficulty(t), care: player.care) }
+    /// What `t` scores if it lands now (stars, theme, a repeat).
+    func points(_ t: VoiceTrick) -> Int {
+        ShowScoring.turn(difficulty: ShowTrickInfo.difficulty(t), success: true, repeated: usedTricks.contains(t), tags: ShowTrickInfo.tags(t), theme: theme)
+    }
     /// The Glow Burst can be armed: once, when the crowd cheers and he is shiny.
     var burstReady: Bool { !burstUsed && ShowScoring.burstReady(cheer: cheer, glow: player.glow) }
     var burstUnlocked: Bool { ShowScoring.burstReady(cheer: cheer, glow: player.glow) }
@@ -162,28 +165,20 @@ nonisolated struct ShowSim: Sendable {
     /// Arms the Burst for the next trick (it fires with that trick's turn).
     mutating func armBurst() { guard burstReady, round == .trick, !tricksDone else { return }; burstArmed = true }
 
-    /// A trick card is tapped: the spotlight ring starts closing at `time`. A trick he has not learned is allowed (a brand-new Jelbie can enter):
-    /// its reliability is 0, so it is always the cute flop, which still scores.
-    mutating func beginTurn(_ t: VoiceTrick, at time: Double) {
-        guard round == .trick, !tricksDone, ringTrick == nil else { return }
-        ringTrick = t; ringStart = time
-    }
-    /// The player taps while the ring closes (or the flow judges a missed ring with `time` = start + ring + 0.3). `roll` decides the success
-    /// (nil = the sim's own seeded roll).
+    /// A menu row is tapped: he performs `t` (a trick off the menu is allowed too). `roll` decides a slip (nil = the sim's own seeded roll):
+    /// below the miss chance he slips into the cute flop, which still scores.
     @discardableResult
-    mutating func tapRing(at time: Double, roll: Float? = nil) -> ShowTrickTurn? {
-        guard round == .trick, let t = ringTrick, let s = ringStart else { return nil }
-        let err = time - s - ShowScoring.ringSeconds
-        let timing = ShowScoring.timing(error: err)
+    mutating func perform(_ t: VoiceTrick, roll: Float? = nil) -> ShowTrickTurn? {
+        guard round == .trick, !tricksDone else { return nil }
         let r = roll ?? rng.next()
-        let success = r < reliability(t)
+        let d = ShowTrickInfo.difficulty(t)
+        let success = r >= missChance(t)
         let repeated = usedTricks.contains(t)
-        let pts = ShowScoring.turn(success: success, repeated: repeated, tags: ShowTrickInfo.tags(t), theme: theme, timing: timing)
+        let pts = ShowScoring.turn(difficulty: d, success: success, repeated: repeated, tags: ShowTrickInfo.tags(t), theme: theme)
         let burst = burstArmed
         if burst { burstUsed = true; burstArmed = false }
-        let turn = ShowTrickTurn(trick: t, success: success, repeated: repeated, timing: timing, points: pts, burst: burst)
+        let turn = ShowTrickTurn(trick: t, success: success, repeated: repeated, points: pts, burst: burst)
         turns.append(turn)
-        ringTrick = nil; ringStart = nil
         if tricksDone { finishTricks() }
         return turn
     }
@@ -204,7 +199,7 @@ nonisolated struct ShowSim: Sendable {
     mutating func settleNow() {
         if round == .look { round = .dance }
         if round == .dance { finishDance() }
-        if round == .trick, !tricksDone { while !tricksDone { turns.append(ShowTrickTurn(trick: .sit, success: false, repeated: true, timing: 0, points: 0, burst: false)) }; finishTricks() }
+        if round == .trick, !tricksDone { while !tricksDone { turns.append(ShowTrickTurn(trick: .sit, success: false, repeated: true, points: 0, burst: false)) }; finishTricks() }
     }
     var playerPlace: Int? { entrants.first(where: \.isPlayer)?.place }
     var playerDrops: Int { playerPlace.map { rank.drops(place: $0) } ?? 0 }
@@ -231,11 +226,9 @@ nonisolated struct ShowSim: Sendable {
             if parts.glow < 12 { return "Look was \(name)'s weakest at \(p.lookPts). A Clean before the show makes him glow, and Glow is 20 of the 100." }
             return "Look was \(name)'s weakest at \(p.lookPts). \(theme.main.title) food fills his \(theme.main.title) jar, which counts 70% of the stats part."
         case .dance:
-            return player.danceSkill < 0.5 ? "Dance was \(name)'s lowest at \(p.dancePts). Practice a dance in the Studio: dance skill is 30% of the round."
-                : "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
+            return "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
         default:
-            return knownTricks.count < 3 ? "Trick was \(name)'s lowest at \(p.trickPts). Teach him more tricks (the Shop has pages): a fresh trick scores 18, a repeat 12."
-                : "Trick was \(name)'s lowest at \(p.trickPts). Practice his tricks by voice so they land more often, and tap when the ring hugs him."
+            return "Trick was \(name)'s lowest at \(p.trickPts). Harder tricks (more stars) score more, a trick that matches \(theme.main.title) adds points, and a happy, clean Jelbie slips less."
         }
     }
 }
