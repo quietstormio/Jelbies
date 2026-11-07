@@ -154,7 +154,7 @@ final class ShowModelTests: XCTestCase {
     private func trickSim(seed: UInt64, day: Int = 20261021, theme: ShowTheme = .starlightGala) -> ShowSim {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.5 }
-        p.glow = 0.4; p.dance = .sway; p.danceSkill = 0.5; p.tricks = [.flip: 1]; p.care = 0.8
+        p.glow = 0.4; p.dance = .sway; p.tricks = [.flip: 1]; p.care = 0.8
         var s = ShowSim(rank: .puddle, theme: theme, dayKey: day, player: p, rivals: ShowRivalSource.rivals(dayKey: day, rank: .puddle, theme: theme), seed: seed)
         s.finishLook(); s.finishDance()
         return s
