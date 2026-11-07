@@ -367,7 +367,7 @@ struct TrackPanel: View {
                     (.feet, "Left, right, left", "Tap the two foot buttons in turn. The same foot twice is a stumble."),
                     (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
                     (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
-                    (.run, "Waddle and Focus", "Waddle: longer steps, quicker feet. Focus: fewer look-arounds."),
+                    (.run, "Speed and Focus", "Speed: longer steps, quicker feet. Focus: fewer look-arounds. Spend race points in Upgrade."),
                     (.trophy, "Win to open the next course", "Or finish in the top two \(Self.words(CourseProgress.topTwoToUnlock)) times."),
                 ], close: { setHow(false) })
                 .zIndex(1)
@@ -391,7 +391,7 @@ struct TrackPanel: View {
             LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker") { who = $0 }
                 .padding(.bottom, 6)
             LobbyStatsCard(title: "Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
-                LobbyStatRow(label: "Waddle", value: prof?.stats.waddle ?? 0, color: SK.pink),
+                LobbyStatRow(label: "Speed", value: prof?.stats.waddle ?? 0, color: SK.pink),
                 LobbyStatRow(label: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky),
             ])], id: "track-runner", trailing: {
                 Text(prof?.name ?? "").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1)

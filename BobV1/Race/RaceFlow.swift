@@ -49,7 +49,9 @@ final class RaceFlow {
     var cardAge: Float = 0
     /// What the player earned and gained, once settled.
     private(set) var earned = 0
-    var waddleGain: Float = 0
+    /// Race points the Upgrade menu gave for this finish (3 / 2 / 1), and his balance after; 0 until settled.
+    private(set) var pointsEarned = 0
+    private(set) var pointsAfter = 0
     /// A course this race opened (the placings card says so), nil when none.
     private(set) var unlockedNow: CourseTier?
     /// Rivals of this race (names / tints / stats), for the lane labels and the body colours.
@@ -77,6 +79,8 @@ final class RaceFlow {
     /// Money and stats: set by the care glue (the wallet and the player's JellyStats).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var stats: JellyStats?
+    /// The Upgrade points book (race points by place); with the player's CHARACTER (`playerCharacter`).
+    @ObservationIgnored var upgrades: UpgradeBook?
     /// The cue hooks (AudioHub names; tests count them).
     @ObservationIgnored var cue: (RaceCue) -> Void = { AudioHub.shared.raceCue($0) }
 
@@ -138,7 +142,7 @@ final class RaceFlow {
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        settled = false; earned = 0; waddleGain = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
+        settled = false; earned = 0; pointsEarned = 0; pointsAfter = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
         sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump          // (the hands-free run clears the hurdles for him)
         started += 1
@@ -220,7 +224,9 @@ final class RaceFlow {
         }
         u.placings = s.placings
         u.earned = earned
-        u.waddleGain = waddleGain
+        u.pointsEarned = pointsEarned
+        u.pointsAfter = pointsAfter
+        u.playerName = playerName
         u.playerPlace = s.playerPlace
         if u != ui { ui = u }
     }
@@ -236,14 +242,19 @@ final class RaceFlow {
         }
     }
 
-    /// The placings are in: Drops by place and the waddle nudge, once.
+    /// The placings are in: Drops and Upgrade points by place, once.
     private func settle() {
         guard !settled, let s = sim else { return }
         settled = true
         earned = assistedDrops(s.playerDrops)
         if let place = s.playerPlace {
             wallet?.add(earned)
-            waddleGain = stats?.afterRace(place: place) ?? 0
+            stats?.afterRace(place: place)
+            if let up = upgrades {          // Upgrade points by place (once: `settled` guards the whole block)
+                pointsEarned = UpgradeTuning.racePoints(place: place)
+                up.add(pointsEarned, .race, character: playerCharacter)
+                pointsAfter = up.points(.race, character: playerCharacter)
+            }
             let open = progress.unlockedTiers
             progress.record(tier: s.course.tier, place: place)
             awards = trophies.recordRace(character: playerCharacter, tier: s.course.tier, place: place)
@@ -319,6 +330,8 @@ struct RaceUI: Equatable {
     var hurdleAhead = false
     var placings: [RacePlacing] = []
     var earned = 0
-    var waddleGain: Float = 0
+    var pointsEarned = 0
+    var pointsAfter = 0
+    var playerName = ""
     var playerPlace: Int?
 }

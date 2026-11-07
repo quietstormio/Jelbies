@@ -127,6 +127,8 @@ final class GameCare {
     let bath: BathFlow
     /// The store: what the player owns (Store/StoreBook.swift, GameCare+Store.swift). Bought with Drops from `bath.wallet`.
     let store: StoreBook
+    /// Upgrade points and the chosen power-ups per game and Jelbie (Upgrade/UpgradeBook.swift).
+    let upgrades: UpgradeBook
     /// The fade between rooms (Room/RoomSwitch.swift, GameCare+Rooms.swift).
     let roomSwitch = RoomSwitch()
     /// "Sleep until morning": the cut-scene's state (GameCare+SkipNight.swift).
@@ -258,6 +260,7 @@ final class GameCare {
         store = StoreBook(wallet: bath.wallet, persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
         let v = voice ?? VoiceCoordinator(training: c0 == 0 ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent))
         self.voice = v
+        upgrades = UpgradeBook(persists: persistent && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, defaults: defaults)
         v.care = self
         bath.wallet.onEarn = { [weak self] _ in self?.brainFor(0)?.wantJoy() }          // drops earned: a jump for joy
         let n = chars.count

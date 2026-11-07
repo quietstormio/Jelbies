@@ -168,16 +168,14 @@ final class RaceModelTests: XCTestCase {
         XCTAssertEqual(StatTuning.seedWaddle(careLevels: [0, 0, 0]), StatTuning.seedBase, accuracy: 1e-6)
         XCTAssertEqual(s.focus, 0.5, accuracy: 1e-6, "focus starts in the middle")
         s.set(waddle: 0.5)
-        let g1 = s.afterRace(place: 1), g2 = s.afterRace(place: 2), g3 = s.afterRace(place: 3)
-        XCTAssertGreaterThan(g1, g2); XCTAssertGreaterThan(g2, g3); XCTAssertGreaterThan(g3, 0, "every race helps a little, a win the most")
-        XCTAssertEqual(s.waddle, 0.5 + g1 + g2 + g3, accuracy: 1e-5)
+        s.afterRace(place: 1); s.afterRace(place: 2); s.afterRace(place: 3)
+        XCTAssertEqual(s.waddle, 0.5, accuracy: 1e-6, "racing no longer raises waddle: Upgrade points do")
         XCTAssertEqual(s.races, 3); XCTAssertEqual(s.wins, 1)
         // persisted under the key; a second instance reads it back and does not re-seed
         let t = JellyStats(persists: true, defaults: d, key: "k", seedWaddle: 0.9)
         XCTAssertEqual(t.waddle, s.waddle, accuracy: 1e-6); XCTAssertEqual(t.races, 3)
-        // capped at 1
         t.set(waddle: 0.995); t.afterRace(place: 1)
-        XCTAssertEqual(t.waddle, 1)
+        XCTAssertEqual(t.waddle, 0.995, accuracy: 1e-6)
         // other keys are separate (Jelly 1 has its own)
         XCTAssertNotEqual(JellyKeys.stats(0), JellyKeys.stats(1))
         // a Jelly's profile carries stats seeded from his care
@@ -275,16 +273,14 @@ final class RaceModelTests: XCTestCase {
         let s = JellyStats(persists: true, defaults: d, key: "k", seedWaddle: 0.5)
         let f = raceToResults(player: RacerStats(waddle: 0.9, focus: 1), rivals: RacerStats(waddle: 0.15, focus: 1), stats: s)
         XCTAssertEqual(f.sim?.playerPlace, 1)
-        XCTAssertEqual(s.waddle, 0.5 + StatTuning.waddleGain(place: 1), accuracy: 1e-5, "a win nudges waddle up the most")
-        XCTAssertEqual(f.waddleGain, StatTuning.waddleGain(place: 1), accuracy: 1e-5)
+        XCTAssertEqual(s.waddle, 0.5, accuracy: 1e-5, "a win no longer nudges waddle")
         XCTAssertEqual(s.races, 1); XCTAssertEqual(s.wins, 1)
         // settled once: more ticks change nothing
         for _ in 0..<120 { _ = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true }) }
         XCTAssertEqual(s.races, 1)
         let s2 = JellyStats(persists: false, seedWaddle: 0.5)
         _ = raceToResults(player: RacerStats(waddle: 0.1, focus: 1), rivals: RacerStats(waddle: 0.95, focus: 1), stats: s2)
-        XCTAssertEqual(s2.waddle, 0.5 + StatTuning.waddleGain(place: 3), accuracy: 1e-5)
-        XCTAssertLessThan(StatTuning.waddleGain(place: 3), StatTuning.waddleGain(place: 1))
+        XCTAssertEqual(s2.waddle, 0.5, accuracy: 1e-5)
     }
 
     func testRaceStateMachine() {

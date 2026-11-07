@@ -3,8 +3,7 @@
 //  What a Jelly is GOOD at, kept per Jelly (persisted under his id, like needs and dirt):
 //    waddle  0...1  how fast he waddles when raced: the stride of each step and the quickest step rate he trains to (RaceTuning).
 //    focus   0...1  how well he keeps his mind on the track: a low focus now and then stops him to look around (player and rivals alike).
-//  `waddle` is seeded from his care the first time he is seen (fed, watered, loved Jellies start a little quicker); every race nudges it up a
-//  little, a win the most. `focus` starts in the middle. Pure model: nothing here knows about bodies or the screen.
+//  `waddle` is seeded from his care the first time he is seen (fed, watered, loved Jellies start a little quicker); it only rises by spending Upgrade points. `focus` starts in the middle. Pure model: nothing here knows about bodies or the screen.
 //
 
 import Foundation
@@ -37,10 +36,6 @@ nonisolated enum StatTuning {
     static let seedFocus: Float = 0.5
     /// First-seen waddle: 0.30 (all needs empty) ... 0.65 (all full).
     static let seedBase: Float = 0.30, seedCare: Float = 0.35
-    /// Waddle gained by a race, by place (1-based); more for winning. Capped at 1.
-    static func waddleGain(place: Int) -> Float {
-        switch place { case ...1: return 0.030; case 2: return 0.018; default: return 0.010 }
-    }
     static func seedWaddle(careLevels: [Float]) -> Float {
         let m = careLevels.isEmpty ? 0.7 : careLevels.reduce(0, +) / Float(careLevels.count)
         return min(max(seedBase + seedCare * min(max(m, 0), 1), 0), 1)
@@ -166,14 +161,10 @@ final class JellyStats {
         save()
     }
 
-    /// A race is over: he placed `place` (1-based). Returns the waddle gained.
-    @discardableResult
-    func afterRace(place: Int) -> Float {
-        let before = waddle
-        waddle = min(1, waddle + StatTuning.waddleGain(place: place))
+    /// A race is over: he placed `place` (1-based). Only the race and win counts move: skills rise by spending Upgrade points (Upgrade/UpgradeBook.swift), no longer by racing.
+    func afterRace(place: Int) {
         races += 1
         if place == 1 { wins += 1 }
         save()
-        return waddle - before
     }
 }

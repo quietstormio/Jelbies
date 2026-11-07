@@ -266,10 +266,16 @@ struct RacePlacingsCard: View {
                     .foregroundStyle(CareMenu.brown.opacity(0.85))
                     .accessibilityIdentifier("race-auto-note")
             }
-            if race.ui.waddleGain > 0.0005 {
-                Text("Waddle got a little quicker")
-                    .playFont(14, .medium)
-                    .foregroundStyle(CareMenu.brown.opacity(0.85))
+            if race.ui.pointsEarned > 0 {
+                HStack(spacing: 8) {
+                    Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
+                        Text("\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("race-points")
             }
             if !race.awards.isEmpty {
                 HStack(spacing: 8) {

@@ -62,6 +62,7 @@ extension GameCare {
 
     func wireRace() {
         race.wallet = bath.wallet
+        race.upgrades = upgrades
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }
         let d = UserDefaults.standard
@@ -139,10 +140,22 @@ extension GameCare {
         race.stats = prof.stats
         race.playerCharacter = prof.character
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
-                   playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
+                   playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: raceStartBoost(prof), course: race.courseTier)
         if race.active {           // the race Live Activity (one sprint: lap 1 of 1)
             live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
         }
+    }
+
+    /// What the race gets at its start: the eaten race perks (used up) together with the chosen Upgrade power-up (one Bag food, used up). The same perk twice is one boost, not two.
+    /// A chosen food that is no longer in the Bag is quietly dropped (and the choice cleared).
+    func raceStartBoost(_ prof: JellyProfile) -> RaceBoost {
+        let eaten = prof.perks.consumeRaceBoost()
+        var power = RaceBoost.none
+        if let id = upgrades.chosen(.race, character: prof.character) {
+            if let item = StoreCatalog.item(id), item.perk?.raceOnly == true, store.use(id) { power = .powerUp(item.perk) }
+            else { upgrades.choose(nil, .race, character: prof.character) }
+        }
+        return eaten.merged(with: power)
     }
 
     /// Picks the course for the next race (the Track panel): only an open one.
