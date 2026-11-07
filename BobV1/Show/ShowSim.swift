@@ -1,7 +1,7 @@
 //
 //  ShowSim.swift
 //  One Jelly Show as a pure model: Look -> Dance -> Trick -> results. The player's inputs are read once at the start (his condition, shine, dance
-//  skill and learned tricks); his outfit is chosen in the Studio and judged in the Look round; the Dance round is a ShowDanceSim on the stage music's beat grid; the
+//  skill and learned tricks); his outfit is chosen in the Studio and judged in the Look round; the Dance round is a ShowDanceSim over one song's note chart; the
 //  Trick round is three turns of picking a trick off his menu (stars = points, and a small chance to slip). Nothing fails: a flop is cute and still scores.
 //  The rivals' scores are fixed with the rivals (ShowRivalSource). Ties share the place. The flow (ShowFlow) adds time, bodies and sound.
 //
@@ -69,6 +69,8 @@ nonisolated struct ShowSim: Sendable {
 
     // Dance
     private(set) var dance: ShowDanceSim?
+    /// The song of the dance (set at GO).
+    private(set) var chart: DanceChart?
     private(set) var danceScore: Float?
     var cheer: Float { dance?.cheer ?? 0 }
 
@@ -117,10 +119,11 @@ nonisolated struct ShowSim: Sendable {
 
     // MARK: Dance
 
-    /// GO: the prompts start `leadInBeats` after `songTime` on `grid`.
-    mutating func beginDance(grid: ShowBeat, songTime: Double) {
+    /// GO: the rank's notes of `chart` fall to the hit line; the song starts at clock 0 (`songTime`, negative, is the clock now).
+    mutating func beginDance(chart: DanceChart, songTime: Double) {
         guard round == .dance, dance == nil else { return }
-        dance = ShowDanceSim(count: rank.promptCount, grid: grid, timing: rank.timing, seed: seed, songTime: songTime)
+        self.chart = chart
+        dance = ShowDanceSim(chart: chart.notes(for: rank), fall: rank.noteFall, timing: rank.timing, songTime: songTime)
     }
     mutating func tapDance(foot: Int, at t: Double) -> [ShowDanceSim.Event] {
         guard round == .dance, dance != nil, danceScore == nil else { return [] }
