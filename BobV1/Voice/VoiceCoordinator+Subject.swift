@@ -48,7 +48,7 @@ extension VoiceCoordinator {
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !focused { b.commandedNameHop = true }
             return true
-        case .puzzled, .ignore:
+        case .puzzled, .ignore, .dontKnow:
             emitFeedback(r, override: kind)
             if Self.running(b) == nil { b.commandedIdle = .look }
             return true

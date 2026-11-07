@@ -69,13 +69,12 @@ final class StoreTests: XCTestCase {
 
     func testPagesAndShoesAreBoughtOnce() {
         let (b, w) = book(500)
-        XCTAssertFalse(b.hasPage(.spin))
-        XCTAssertTrue(VoiceTrick.sit.isStarter)
-        XCTAssertTrue(b.hasPage(.sit), "starter tricks need no page")
-        XCTAssertEqual(b.buy("page-spin"), .bought)
-        XCTAssertTrue(b.hasPage(.spin))
+        XCTAssertFalse(b.knows(.flip, character: 0))
+        XCTAssertTrue(b.knows(.sit, character: 0), "defaults need no purchase")
+        XCTAssertEqual(b.buyTrick(.look, for: nil), .bought, "a for-everyone trick needs no Jelbie")
+        XCTAssertTrue(b.knows(.look, character: 0))
         let after = w.count
-        XCTAssertEqual(b.buy("page-spin"), .alreadyOwned)
+        XCTAssertEqual(b.buyTrick(.look, for: nil), .alreadyOwned)
         XCTAssertEqual(w.count, after, "no second charge")
         XCTAssertEqual(b.buy("shoe-mint"), .bought)
         XCTAssertEqual(b.buy("shoe-mint"), .alreadyOwned)
@@ -99,10 +98,10 @@ final class StoreTests: XCTestCase {
     func testInventoryAndWearPersist() {
         let d = suite("persist")
         let (b, _) = book(500, persists: true, defaults: d)
-        b.buy("nuggets"); b.buy("nuggets"); b.buy("page-hop"); b.buy("shoe-glitter"); b.wear(.glitterShoes, on: 2)
+        b.buy("nuggets"); b.buy("nuggets"); b.buyTrick(.flip, for: 2); b.buy("shoe-glitter"); b.wear(.glitterShoes, on: 2)
         let (c, _) = book(0, persists: true, defaults: d)
         XCTAssertEqual(c.count("nuggets"), 2)
-        XCTAssertTrue(c.hasPage(.hop))
+        XCTAssertTrue(c.knows(.flip, character: 2)); XCTAssertFalse(c.knows(.flip, character: 0))
         XCTAssertEqual(c.worn(2, .feet), .glitterShoes)
         XCTAssertTrue(c.use("nuggets"))
         XCTAssertTrue(c.use("nuggets"))
@@ -122,7 +121,7 @@ final class StoreTests: XCTestCase {
                 XCTAssertTrue(c?.piece != nil || c?.container != nil || c?.serving != nil, "\(i.id) has a 3D piece (a drink: a cup)")
                 XCTAssertEqual(c?.kind == .drink, i.kind == .drink, "\(i.id): drinks are the Drinks tab")
             }
-            if i.kind == .trickPage { XCTAssertNotNil(i.trick); XCTAssertFalse(i.trick!.isStarter) }
+            if i.kind == .trickPage { XCTAssertNotNil(i.trick); XCTAssertFalse(TrickCatalog.isDefault(i.trick!), "defaults are never sold") }
             if i.kind == .shoes { XCTAssertNotNil(i.wear) }
             if i.kind == .supply { XCTAssertNotNil(i.perk) }
         }
@@ -172,12 +171,12 @@ final class StoreTests: XCTestCase {
 
     func testBoughtTrickPageUnlocksTheVoiceTrick() {
         let care = GameCare(jellyCount: 1, persistent: false)
-        XCTAssertFalse(care.voice.training.unlocked(.spin))
+        XCTAssertFalse(care.voice.training.unlocked(.flip))
         XCTAssertTrue(care.voice.training.unlocked(.sit))
-        care.store.grant("page-spin")
-        XCTAssertTrue(care.voice.training.unlocked(.spin), "the page unlocks it in the trick book")
-        XCTAssertFalse(care.voice.training.unlocked(.hop))
-        XCTAssertFalse(care.voice.training.learnedTricks.contains(.hop))
+        care.store.grantTrick(.flip, to: 0)
+        XCTAssertTrue(care.voice.training.unlocked(.flip), "a bought trick is known at once")
+        XCTAssertFalse(care.voice.training.unlocked(.look))
+        XCTAssertFalse(care.voice.training.learnedTricks.contains(.look))
     }
 
     func testASoapGivesItsPerkOnlyWhenTheCleanUpFinishes() {

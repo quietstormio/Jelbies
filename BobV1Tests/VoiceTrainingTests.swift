@@ -1,6 +1,7 @@
 //
 //  VoiceTrainingTests.swift
-//  Teaching and commanding: reps, sessions, the learned threshold, reliability, wrong-trick / ignore split, grumpy, bound words, persistence.
+//  Commanding: the tricks a Jelbie knows (defaults, bought) obey their plain word, a word taught in the old lessons keeps working with its own reliability,
+//  the wrong-trick / ignore split, grumpy, names, persistence. (There is no teaching any more: tricks are bought in the Shop.)
 //
 
 import XCTest
@@ -22,12 +23,9 @@ final class VoiceTrainingTests: XCTestCase {
     private func make(seed: UInt64 = 1, defaults: UserDefaults? = nil) -> VoiceTraining {
         VoiceTraining(defaults: defaults ?? suite(), random: VoiceTraining.seededRoll(seed))
     }
-    /// Teaches `word` for `trick` over the given sessions (one rep each).
-    @discardableResult
-    private func teach(_ v: VoiceTraining, _ word: String, _ trick: VoiceTrick, sessions: [Int]) -> VoiceReaction {
-        var last = VoiceReaction.ignore
-        for s in sessions { last = v.decide(transcript: word, runningMove: trick, mood: .happy, session: s) }
-        return last
+    /// A trick taught the old way (a saved lesson): `word`, learned, at `reliability`.
+    private func legacy(_ v: VoiceTraining, _ word: String, _ trick: VoiceTrick, _ reliability: Float = 0.6) {
+        v.debugLearn(trick, word: word, reliability: reliability)
     }
 
     func testComeIsLearnedOnFreshInstallAndAfterReset() {
@@ -73,43 +71,29 @@ final class VoiceTrainingTests: XCTestCase {
         XCTAssertTrue(v.isLearned(.come), "come is innate")
     }
 
-    func testProgressionAndLearnedThreshold() {
-        XCTAssertEqual(VoiceTuning.repsToLearn, 3)
-        let v = make()
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 1), .learnedStep(.sit, reps: 1))
-        XCTAssertEqual(v.word(for: .sit), "sit")
-        XCTAssertEqual(v.decide(transcript: "sitt", runningMove: .sit, mood: .happy, session: 2), .learnedStep(.sit, reps: 2), "fuzzy repeats count")
-        XCTAssertFalse(v.isLearned(.sit))
-        XCTAssertEqual(v.progress(.sit), 2)
-        XCTAssertEqual(v.decide(transcript: "Sit!", runningMove: .sit, mood: .happy, session: 3), .trickLearned(.sit))
-        XCTAssertTrue(v.isLearned(.sit))
-        XCTAssertEqual(v.reliability(.sit), 0.6, accuracy: 0.0001)
-        XCTAssertEqual(v.progress(.sit), VoiceTuning.repsToLearn)
-    }
 
-    func testOneRepPerListen() {
-        let v = make()
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 7), .learnedStep(.sit, reps: 1))
-        for _ in 0..<5 { XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 7), .learnedStep(.sit, reps: 1)) }
-        XCTAssertFalse(v.isLearned(.sit), "saying it again and again in one listen counts once")
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 8), .learnedStep(.sit, reps: 2))
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 9), .trickLearned(.sit))
-    }
-
-    func testReliabilityAtLearnCappedAndGrows() {
-        let v = make()
-        teach(v, "run", .run, sessions: [1, 2, 3])
-        XCTAssertEqual(v.reliability(.run), 0.6, accuracy: 0.0001)
-        // successes grow it (reliability 0.95 stays at the cap; use a low one)
-        let x = VoiceTraining(defaults: suite(), random: { 0 })      // roll 0 always succeeds
-        teach(x, "run", .run, sessions: [1, 2, 3])
-        var prev = x.reliability(.run)
-        for _ in 0..<5 {
-            XCTAssertEqual(x.decide(transcript: "run", runningMove: nil, mood: .happy, session: 9), .perform(.run))
-            XCTAssertGreaterThan(x.reliability(.run), prev); prev = x.reliability(.run)
+    func testKnownTricksObeyTheirPlainWord() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        for (said, t) in [("sit", VoiceTrick.sit), ("spin", .spin), ("hop", .hop), ("jump", .jacks), ("jumping jacks", .jacks), ("run", .run), ("sit down", .sit), ("Bob spin", .spin)] {
+            XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
         }
-        for _ in 0..<100 { _ = x.decide(transcript: "run", runningMove: nil, mood: .okay, session: 9) }
-        XCTAssertEqual(x.reliability(.run), 0.95, accuracy: 0.0001)
+        XCTAssertEqual(v.reliability(.sit), VoiceTuning.knownReliability, "a trick nobody taught obeys at the known reliability")
+        XCTAssertFalse(v.isLearned(.sit), "and no lesson is invented for it")
+        // places and sentences are not tricks
+        for said in ["sit on the couch", "hop in the bath", "go for a run please now", "have some pizza"] {
+            XCTAssertNotEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(.sit), said)
+            XCTAssertNotEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(.hop), said)
+        }
+    }
+
+    func testAnOldTaughtWordKeepsWorkingWithItsOwnReliability() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        legacy(v, "mochi", .sit, 0.6)
+        XCTAssertEqual(v.decide(transcript: "mochi", runningMove: nil, mood: .happy, session: 1), .perform(.sit))
+        XCTAssertGreaterThan(v.reliability(.sit), 0.6, "a success still nudges a taught word up")
+        XCTAssertEqual(v.word(for: .sit), "mochi")
+        XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 2), .perform(.sit), "the plain word works too")
+        XCTAssertTrue(Set(["bob", "pip", "moss", "mochi", "come here", "spin"]).isSubset(of: Set(v.contextualWords)), "names, taught words, command words")
     }
 
     func testMissSplitsWrongTrickAndIgnore() {
@@ -117,11 +101,8 @@ final class VoiceTrainingTests: XCTestCase {
         let trials = 3000
         let roll = VoiceTraining.seededRoll(42)
         for _ in 0..<trials {
-            // a fresh model each trial so reliability stays at its learn value (0.6): the miss rate is 40 %
             let v = VoiceTraining(defaults: suite(), persists: false, random: roll)
-            teach(v, "sit", .sit, sessions: [1, 2, 3])
-            teach(v, "run", .run, sessions: [1, 2, 3])
-            teach(v, "look", .look, sessions: [1, 2, 3])
+            legacy(v, "sit", .sit, 0.6)          // a fresh model each trial so the reliability stays 0.6: the miss rate is 40 %
             switch v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9) {
             case .perform(.sit): performed += 1
             case .wrongTrick(let said, let did): XCTAssertEqual(said, .sit); XCTAssertNotEqual(did, .sit); wrong += 1
@@ -135,74 +116,37 @@ final class VoiceTrainingTests: XCTestCase {
         XCTAssertEqual(Double(ignored) / miss, 0.5, accuracy: 0.05)
     }
 
-    func testWrongTrickNeedsAnotherLearnedTrick() {
-        let v = VoiceTraining(defaults: suite(), random: { 0.99 })       // always a miss, always the "ignore" half
-        teach(v, "sit", .sit, sessions: [1, 2, 3])
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .ignore)
-        let w = VoiceTraining(defaults: suite(), random: sequence([0.99, 0.1, 0.0]))   // miss, wrong half, first other
-        teach(w, "sit", .sit, sessions: [1, 2, 3])
-        teach(w, "run", .run, sessions: [1, 2, 3])
-        XCTAssertEqual(w.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .wrongTrick(said: .sit, did: .run))
+    func testWrongTrickNeedsAnotherKnownTrick() {
+        let only = VoiceTraining(defaults: suite(), persists: false, random: { 0.99 })       // always a miss, always the "ignore" half
+        only.unlocked = { $0 == .sit }
+        XCTAssertEqual(only.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .ignore)
+        let w = VoiceTraining(defaults: suite(), persists: false, random: sequence([0.99, 0.1, 0.0]))   // miss, wrong half, first other
+        XCTAssertEqual(w.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .wrongTrick(said: .sit, did: .jacks))
     }
 
     func testGrumpyComeIsAlwaysObeyed() {
-        let v = VoiceTraining(defaults: suite(), random: { 0.999 })      // would always miss the roll
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0.999 })      // would always miss the roll
         for _ in 0..<10 { XCTAssertEqual(v.decide(transcript: "come here", runningMove: nil, mood: .grumpy, session: 9), .perform(.come)) }
         XCTAssertEqual(v.decide(transcript: "come", runningMove: nil, mood: .grumpy, session: 9), .perform(.come))
         XCTAssertEqual(v.decide(transcript: "come here", runningMove: nil, mood: .happy, session: 9), .ignore, "happy still rolls")
     }
 
     func testGrumpyIgnoresEveryTrickButCome() {
-        let v = VoiceTraining(defaults: suite(), random: { 0 })          // would always succeed
-        teach(v, "sit", .sit, sessions: [1, 2, 3])
-        for _ in 0..<20 { XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .grumpy, session: 9), .grumpyIgnore) }
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })          // would always succeed
+        legacy(v, "plop", .sit, 0.6)
+        for said in ["sit", "plop", "spin"] { XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .grumpy, session: 9), .grumpyIgnore, said) }
         XCTAssertEqual(v.reliability(.sit), 0.6, accuracy: 0.0001, "no success counted")
     }
 
-    func testPartialWordAndUnknown() {
+    func testUnknownWordAndEmptyTranscript() {
         let v = make()
         XCTAssertEqual(v.decide(transcript: "banana", runningMove: nil, mood: .happy, session: 1), .puzzled)
         XCTAssertEqual(v.decide(transcript: "", runningMove: .sit, mood: .happy, session: 1), .ignore)
-        teach(v, "sit", .sit, sessions: [1, 2])
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 3), .puzzled, "half-learned word, no move: ?")
-        XCTAssertEqual(v.progress(.sit), 2, "and it did not count")
-    }
-
-    func testWordBoundElsewhereIsIgnored() {
-        let v = make()
-        teach(v, "sit", .sit, sessions: [1, 2])
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .run, mood: .happy, session: 3), .ignore, "half-learned, bound to sit")
-        XCTAssertNil(v.word(for: .run))
-        teach(v, "sit", .sit, sessions: [3])
-        XCTAssertTrue(v.isLearned(.sit))
-        // learned word while another move runs is a command, not a rebind
-        let r = VoiceTraining(defaults: suite(), random: { 0 })
-        teach(r, "sit", .sit, sessions: [1, 2, 3])
-        XCTAssertEqual(r.decide(transcript: "sit", runningMove: .run, mood: .happy, session: 5), .perform(.sit))
-        XCTAssertNil(r.word(for: .run))
-        // a new word while a learned move runs: no rebind in v1
-        XCTAssertEqual(r.decide(transcript: "plop", runningMove: .sit, mood: .happy, session: 5), .puzzled)
-        XCTAssertEqual(r.word(for: .sit), "sit")
-    }
-
-    func testDifferentWordRestartsAHalfLearnedTrick() {
-        let v = make()
-        teach(v, "sit", .sit, sessions: [1, 2])
-        XCTAssertEqual(v.decide(transcript: "plop", runningMove: .sit, mood: .happy, session: 4), .learnedStep(.sit, reps: 1))
-        XCTAssertEqual(v.word(for: .sit), "plop")
-    }
-
-    func testPlayerWordsAnyLanguageAndNameStripped() {
-        let v = make()
-        XCTAssertEqual(v.decide(transcript: "Bob, Mochi!", runningMove: .sit, mood: .happy, session: 1), .learnedStep(.sit, reps: 1))
-        XCTAssertEqual(v.word(for: .sit), "mochi", "his name is not part of the bound word")
-        XCTAssertEqual(v.decide(transcript: "mochee", runningMove: .sit, mood: .happy, session: 2), .learnedStep(.sit, reps: 2))
-        XCTAssertEqual(v.decide(transcript: "座って", runningMove: .jacks, mood: .happy, session: 2), .learnedStep(.jacks, reps: 1))
-        XCTAssertTrue(Set(["bob", "pip", "moss", "mochi", "座って", "come here"]).isSubset(of: Set(v.contextualWords)), "names + bound words (come here is innate)")
+        XCTAssertEqual(v.decide(transcript: "banana", runningMove: .sit, mood: .happy, session: 1), .puzzled)
     }
 
     func testNamesAreKnownFromTheStart() {
-        let v = VoiceTraining(defaults: suite(), random: { 0 })
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
         XCTAssertTrue(v.nameLearned)
         XCTAssertTrue(v.book.name.learned)
         XCTAssertEqual(v.decide(transcript: "Bob", runningMove: nil, mood: .happy, session: 1), .nameHeard, "first hearing: no lesson")
@@ -211,7 +155,6 @@ final class VoiceTrainingTests: XCTestCase {
         XCTAssertNil(v.word(for: .sit))
         XCTAssertEqual(v.decide(transcript: "Bob", runningMove: nil, mood: .grumpy, session: 3), .grumpyIgnore)
         // name + trick = the trick
-        teach(v, "sit", .sit, sessions: [1, 2, 3])
         XCTAssertEqual(v.decide(transcript: "sit down bob", runningMove: nil, mood: .happy, session: 5), .perform(.sit))
         XCTAssertEqual(v.decide(transcript: "bob sit", runningMove: nil, mood: .happy, session: 5), .perform(.sit))
     }
@@ -230,33 +173,19 @@ final class VoiceTrainingTests: XCTestCase {
         }
     }
 
-    func testForget() {
-        let v = make()
-        teach(v, "sit", .sit, sessions: [1, 2, 3])
-        v.forget(.sit)
-        XCTAssertFalse(v.isLearned(.sit))
-        XCTAssertNil(v.word(for: .sit))
-        XCTAssertEqual(v.progress(.sit), 0)
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .puzzled)
-        XCTAssertEqual(v.decide(transcript: "sit", runningMove: .sit, mood: .happy, session: 9), .learnedStep(.sit, reps: 1), "can be taught again")
-    }
-
     func testPersistenceRoundTripAndReset() {
         let d = suite()
         let a = make(defaults: d)
         let s1 = a.newSession(), s2 = a.newSession()
         XCTAssertNotEqual(s1, s2)
-        let s3 = a.newSession()
-        teach(a, "mochi", .sit, sessions: [s1, s2, s3])
-        teach(a, "run", .run, sessions: [s1])
-        XCTAssertTrue(a.nameLearned)
+        legacy(a, "mochi", .sit, 0.7)
         let b = make(defaults: d)
         XCTAssertEqual(b.book, a.book)
         XCTAssertTrue(b.isLearned(.sit))
         XCTAssertEqual(b.word(for: .sit), "mochi")
-        XCTAssertEqual(b.progress(.run), 1)
-        XCTAssertTrue(b.nameLearned)
-        XCTAssertEqual(b.newSession(), s3 + 1, "session ids keep counting across launches")
+        XCTAssertEqual(b.newSession(), s2 + 1, "session ids keep counting across launches")
+        let learned = VoiceTraining.savedLearnedTricks(defaults: d, key: VoiceTuning.defaultsKey)
+        XCTAssertTrue(learned.contains(.sit)); XCTAssertTrue(learned.contains(.come))
         d.set(true, forKey: "VoiceReset")
         let c = make(defaults: d)
         XCTAssertEqual(c.book, VoiceBook(name: VoiceTraining.knownName, tricks: ["come": VoiceTraining.innateCome]), "reset leaves the known name and the innate come")
@@ -266,7 +195,8 @@ final class VoiceTrainingTests: XCTestCase {
     func testUnpersistedModelDoesNotWrite() {
         let d = suite()
         let v = VoiceTraining(defaults: d, persists: false)
-        teach(v, "sit", .sit, sessions: [1])
+        legacy(v, "sit", .sit)
+        _ = v.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 1)
         XCTAssertNil(d.data(forKey: VoiceTuning.defaultsKey))
     }
 

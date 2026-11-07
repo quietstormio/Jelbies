@@ -77,7 +77,7 @@ extension GameCare {
         for t in WearTag.allCases { input.condition[t] = p.stats.condition(t.condition) }
         input.glow = p.grime.sparkle; input.dirt = p.grime.dirt
         input.dance = p.stats.bestDance; input.danceSkill = input.dance.map { p.stats.proficiency($0) } ?? 0
-        for t in ShowTrickInfo.stageTricks where p.training.isLearned(t) && store.hasPage(t) { input.tricks[t] = p.training.reliability(t) }
+        for t in ShowTrickInfo.stageTricks where store.knows(t, character: p.character) { input.tricks[t] = 1 }          // what he knows: defaults + bought for him / for everyone
         input.care = showCare(jelly: id)
         return input
     }

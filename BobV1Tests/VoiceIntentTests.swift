@@ -212,16 +212,17 @@ final class VoiceIntentTests: XCTestCase {
         let v = training()
         XCTAssertEqual(decide(v, "good boy", running: .sit).reaction, .social(.praise))
         XCTAssertNil(v.word(for: .sit))
-        XCTAssertEqual(decide(v, "mochi", running: .sit).reaction, .learnedStep(.sit, reps: 1), "a teaching word still binds before the model")
+        XCTAssertTrue(decide(v, "mochi", running: .sit).noMatch, "no word is ever taught by speaking: free phrasing goes to the model")
     }
 
     // MARK: model mapping rules
 
-    func testModelTrickMustAlreadyBeLearned() {
+    func testModelTrickMustBeKnown() {
         let v = training()
-        XCTAssertEqual(v.decide(model: .trick(.flip), target: .selected, mood: .happy).reaction, .puzzled, "not learned: confused")
-        v.debugLearn(.flip, word: "wheee")
-        XCTAssertEqual(v.decide(model: .trick(.flip), target: .selected, mood: .happy).reaction, .perform(.flip), "learned under ANY word")
+        v.unlocked = { $0 != .flip }
+        XCTAssertEqual(v.decide(model: .trick(.flip), target: .selected, mood: .happy).reaction, .dontKnow(.flip), "not known: the don't-know shrug")
+        v.unlocked = { _ in true }
+        XCTAssertEqual(v.decide(model: .trick(.flip), target: .selected, mood: .happy).reaction, .perform(.flip), "known: obeyed whatever the words")
         XCTAssertEqual(v.decide(model: .come, target: .everyone, mood: .grumpy).reaction, .perform(.come))
         XCTAssertEqual(v.decide(model: .social(.praise), target: .jelly(2), mood: .happy).target, .jelly(2))
         XCTAssertEqual(v.decide(model: .none, target: .selected, mood: .happy).reaction, .puzzled)

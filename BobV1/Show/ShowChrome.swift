@@ -504,6 +504,7 @@ struct TrickRound: View {
         let s = show.sim!
         let used = s.usedTricks.contains(t), pts = s.points(t), stars = ShowTrickInfo.difficulty(t)
         let tag = ShowTrickInfo.tags(t).first { $0 == show.theme.main } ?? ShowTrickInfo.tags(t).first { $0 == show.theme.friend }
+        let scope = care.store.trickScope(t, character: show.character)          // nil = a default every Jelbie has
         return Button { if live { AudioHub.shared.uiTap(); show.pick(t) } } label: {
             HStack(spacing: 10) {
                 Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 30)
@@ -512,6 +513,7 @@ struct TrickRound: View {
                     HStack(spacing: 2) {
                         ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
                         if used { Text("shown already").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted).padding(.leading, 4) }
+                        if let scope { Text(scope == .everyone ? "Everyone" : "\(show.playerName)'s own").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).padding(.leading, 4) }
                     }
                 }
                 Spacer(minLength: 4)
@@ -525,7 +527,7 @@ struct TrickRound: View {
         }
         .buttonStyle(.plain).disabled(!live)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")")
+        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")\(scope.map { $0 == .everyone ? ", a trick for everyone" : ", his own trick" } ?? "")")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("trick-\(t.rawValue)")
     }

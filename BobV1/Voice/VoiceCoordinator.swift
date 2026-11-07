@@ -184,7 +184,7 @@ final class VoiceCoordinator {
             case .trickLearned(let t): kind = .learned(t, word: (lastBook ?? training).word(for: t) ?? "")
             case .perform(let t): kind = .obeyed(t)
             case .wrongTrick(let said, _): kind = .missed(said, pct: Int(((lastBook ?? training).reliability(said) * 100).rounded()))
-            case .puzzled, .ignore: kind = .unknown
+            case .puzzled, .ignore, .dontKnow: kind = .unknown
             case .grumpyIgnore: kind = .grumpy
             case .nicknameStep(let n): kind = .nameRep(n)
             case .nicknameLearned: kind = .nameLearned
@@ -855,7 +855,7 @@ final class VoiceCoordinator {
             brain.blinkRequested = true
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !care.focus.isActive { pendingHop = true; hopWait = 0; walkAfterHop = false }      // the happy hop at the lesson's end
-        case .puzzled, .ignore:
+        case .puzzled, .ignore, .dontKnow:
             if !trickRunning { brain.commandedIdle = .look }         // the tilt / shrug: look away briefly and back
         case .grumpyIgnore:
             if !trickRunning { brain.commandedIdle = .slump }

@@ -906,10 +906,9 @@ struct GameScreen: View {
         if d.integer(forKey: "ShowSeedGoods") != 0 {
             let care = model.care
             let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
-            for id in ["page-spin", "page-hop"] { care.store.grant(id) }
+            for t in VoiceTrick.allCases { care.store.grantTrickToEveryone(t) }
             for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
             for j in care.jellies {
-                j.training.unlocked = { t in care.store.hasPage(t) }
                 for t in VoiceTrick.allCases { j.training.debugLearn(t, word: t.suggestion, reliability: t == .spin ? 0.6 : 0.75) }
                 for t in WearTag.allCases { j.stats.setCondition(t.condition, t == theme.main ? 0.71 : t == theme.friend ? 0.62 : 0.4) }
                 j.stats.nudge([theme.main.condition: 0.08, theme.friend.condition: 0.04], food: "Sushi")

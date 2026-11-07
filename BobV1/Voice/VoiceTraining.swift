@@ -28,6 +28,15 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .spin: return "Spin"; case .hop: return "Hop"
         }
     }
+    /// The words that command this trick (exact match, short commands). A trick the Jelbie owns is commanded with these; a word taught in the old
+    /// lessons keeps working too.
+    var commandWords: [String] {
+        switch self {
+        case .sit: return ["sit"]; case .jacks: return ["jump", "jacks", "jumping jacks"]; case .run: return ["run"]
+        case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
+        case .spin: return ["spin"]; case .hop: return ["hop"]
+        }
+    }
     /// A word to suggest, in the tip text only.
     var suggestion: String {
         switch self {
@@ -50,6 +59,8 @@ nonisolated enum VoiceReaction: Equatable, Sendable {
     case wrongTrick(said: VoiceTrick, did: VoiceTrick)
     /// Shrug: look away briefly.
     case ignore
+    /// A trick this Jelbie does not know (not a default, not bought for him or for everyone): the small "don't know that" shrug.
+    case dontKnow(VoiceTrick)
     /// Grumpy: slump turn-away plus the need bubble.
     case grumpyIgnore
     /// Tilt "?" (unknown word, or a half-learned word with no move running).
@@ -98,6 +109,10 @@ nonisolated enum VoiceTuning {
     /// Loose spoken variants of the come command (exact phrases; the stored "come here" also takes the usual fuzzy match). The name is stripped
     /// first, so "come here bob" is "come here".
     static let comeAliases = ["come", "come on", "here boy", "come here boy", "come here now", "come to me"]
+    /// A bought (or default) trick that was never taught a word obeys at this reliability; a taught one keeps its own.
+    static let knownReliability: Float = 0.95
+    /// A short command is a trick only without these ("sit on the couch" is a place, "hop in the bath" a bath).
+    static let placeWords: Set<String> = ["on", "in", "into", "onto", "to", "at", "under", "by", "for", "with", "off"]
 }
 
 /// One lesson (a trick, or the name): the bound word, reps, which listen sessions they came from.
@@ -158,7 +173,7 @@ final class VoiceTraining {
     @ObservationIgnored private var roll: () -> Double
     /// The learned trick whose reliability roll failed in the last `decide` (nil otherwise): the host shows "he knew it but missed".
     @ObservationIgnored private(set) var lastMiss: VoiceTrick?
-    /// Which tricks are usable (starters always; a store page unlocks the rest). The game sets it from the StoreBook; the default allows everything.
+    /// Which tricks THIS Jelbie knows (defaults, bought for him, bought for everyone). GameCare sets it from the StoreBook; the default allows everything.
     @ObservationIgnored var unlocked: (VoiceTrick) -> Bool = { _ in true }
 
     nonisolated deinit {}
@@ -217,11 +232,22 @@ final class VoiceTraining {
     func word(for t: VoiceTrick) -> String? { let w = lesson(t).word; return w.isEmpty ? nil : w }
     /// Dots filled in the book (0...repsToLearn).
     func progress(_ t: VoiceTrick) -> Int { lesson(t).learned ? VoiceTuning.repsToLearn : min(lesson(t).reps, VoiceTuning.repsToLearn) }
-    func reliability(_ t: VoiceTrick) -> Float { lesson(t).learned ? lesson(t).reliability : 0 }
-    var learnedTricks: [VoiceTrick] { VoiceTrick.allCases.filter { unlocked($0) && isLearned($0) } }
+    /// A taught trick keeps the reliability it earned; a known one that was never taught obeys at `knownReliability`; an unknown one at 0.
+    func reliability(_ t: VoiceTrick) -> Float { lesson(t).learned ? lesson(t).reliability : (knows(t) ? VoiceTuning.knownReliability : 0) }
+    /// He can do `t` (come is innate).
+    func knows(_ t: VoiceTrick) -> Bool { t == .come || unlocked(t) }
+    /// Every trick he can do.
+    var learnedTricks: [VoiceTrick] { VoiceTrick.allCases.filter { knows($0) } }
     var nameLearned: Bool { true }
-    /// Words to hand the recogniser as contextual strings: his name plus every bound word.
-    var contextualWords: [String] { names.contextualWords + VoiceTrick.allCases.filter { unlocked($0) }.compactMap(word(for:)) }
+    /// Words to hand the recogniser as contextual strings: his name, every taught word and the command words of his tricks.
+    var contextualWords: [String] { names.contextualWords + VoiceTrick.allCases.filter { unlocked($0) }.compactMap(word(for:)) + VoiceTrick.allCases.filter { unlocked($0) }.flatMap(\.commandWords) }
+
+    /// The known trick a short command names by its plain word, if any (a taught word is matched separately).
+    private func plainTrick(in rest: [String], known: Bool) -> VoiceTrick? {
+        guard rest.count <= 3, Set(rest).isDisjoint(with: VoiceTuning.placeWords) else { return nil }
+        let cands = Set(VoiceMatcher.candidates(rest))
+        return VoiceTrick.allCases.first { $0 != .come && knows($0) == known && $0.commandWords.contains { cands.contains($0) } }
+    }
 
     /// The highest listen-session id this book has handed out (the coordinator keeps ids unique ACROSS books).
     var sessionCounter: Int { book.sessionCounter }
@@ -292,14 +318,12 @@ final class VoiceTraining {
         if rest.isEmpty { return target == .selected ? VoiceDecision(reaction: .puzzled, noMatch: true) : out(mood == .grumpy ? .grumpyIgnore : .nameHeard) }
 
         // Does it match a word he has been taught?
-        let bound = VoiceTrick.allCases.filter { unlocked($0) && lesson($0).started }
-        if let hit = VoiceMatcher.best(in: rest, among: bound.map { lesson($0).word }) {
-            let trick = bound[hit.index]
-            if lesson(trick).learned { return out(command(trick, mood: mood)) }
-            // half-learned word
-            if runningMove == trick { return out(rep(trick, session: session)) }
-            return out(runningMove == nil ? .puzzled : .ignore)       // while he is doing another move the word is "bound elsewhere"
-        }
+        let bound = VoiceTrick.allCases.filter { unlocked($0) && lesson($0).learned }
+        if let hit = VoiceMatcher.best(in: rest, among: bound.map { lesson($0).word }) { return out(command(bound[hit.index], mood: mood)) }
+
+        // The plain word of a trick he knows (sit, spin, hop, ...), or of one he does not know: a small "don't know that" shrug
+        if let t = plainTrick(in: rest, known: true) { return out(command(t, mood: mood)) }
+        if let t = plainTrick(in: rest, known: false) { return out(mood == .grumpy ? .grumpyIgnore : .dontKnow(t)) }
 
         // Loose come variants ("come", "here boy") once come is learned
         if isLearned(.come), rest.count <= 3, VoiceTuning.comeAliases.contains(rest.joined(separator: " ")) { return out(command(.come, mood: mood)) }
@@ -311,12 +335,8 @@ final class VoiceTraining {
             return out(.social(s))
         }
 
-        // A new word: it is taught only while he is doing a move that is not already learned.
-        guard let move = runningMove, unlocked(move), !lesson(move).learned else { return VoiceDecision(reaction: .puzzled, target: target, noMatch: true) }
-        var fresh = VoiceLesson()
-        fresh.word = rest.prefix(VoiceTuning.maxWordTokens).joined(separator: " ")
-        book.tricks[move.rawValue] = fresh                        // starts (or restarts a half-learned different word)
-        return out(rep(move, session: session))
+        // Anything else is free phrasing (no word is ever bound by speaking; tricks are bought in the Shop)
+        return VoiceDecision(reaction: .puzzled, target: target, noMatch: true)
     }
 
     /// What the language model picked, run through the same rules as a spoken command: a trick must already be learned (any word), else puzzled.
@@ -328,8 +348,8 @@ final class VoiceTraining {
         case .come: return VoiceDecision(reaction: command(.come, mood: mood), target: target)
         case .trick(let t):
             guard t != .come else { return VoiceDecision(reaction: command(.come, mood: mood), target: target) }
-            guard unlocked(t) else { return VoiceDecision(reaction: .puzzled, target: target) }
-            return VoiceDecision(reaction: isLearned(t) ? command(t, mood: mood) : .puzzled, target: target)
+            guard unlocked(t) else { return VoiceDecision(reaction: .dontKnow(t), target: target) }
+            return VoiceDecision(reaction: command(t, mood: mood), target: target)
         case .social(let s):
             if mood == .grumpy, s == .play { return VoiceDecision(reaction: .grumpyIgnore, target: target) }
             return VoiceDecision(reaction: .social(s), target: target)
@@ -381,8 +401,8 @@ final class VoiceTraining {
         let (_, rest) = VoicePhrases.everyone(resolved.rest)
         guard !rest.isEmpty else { return nil }
         let learned = VoiceTrick.allCases.filter { unlocked($0) && isLearned($0) && $0 != .come }
-        guard let hit = VoiceMatcher.best(in: rest, among: learned.map { lesson($0).word }) else { return nil }
-        return learned[hit.index]
+        if let hit = VoiceMatcher.best(in: rest, among: learned.map { lesson($0).word }) { return learned[hit.index] }
+        return plainTrick(in: rest, known: true)
     }
 
     /// The try-it step: the learned trick is performed whatever the dice say, and counts as a success.
@@ -407,9 +427,13 @@ final class VoiceTraining {
         let grumpyCome = t == .come && mood == .grumpy
         if mood == .grumpy && t != .come { return .grumpyIgnore }
         var l = lesson(t)
+        let taught = l.learned
+        if !taught { l.reliability = VoiceTuning.knownReliability }
         if grumpyCome || roll() < Double(l.reliability) {
-            l.reliability = min(l.reliability + VoiceTuning.perSuccess, VoiceTuning.maxReliability)
-            book.tricks[t.rawValue] = l
+            if taught {
+                l.reliability = min(l.reliability + VoiceTuning.perSuccess, VoiceTuning.maxReliability)
+                book.tricks[t.rawValue] = l
+            }
             return .perform(t)
         }
         lastMiss = t
@@ -425,6 +449,12 @@ final class VoiceTraining {
     func save() {
         guard persists, let data = try? JSONEncoder().encode(book) else { return }
         defaults.set(data, forKey: key)
+    }
+
+    /// The tricks a saved lesson book has learned (the store-tricks migration reads the books of Jelbies who are not in the room too).
+    static func savedLearnedTricks(defaults: UserDefaults, key: String) -> [VoiceTrick] {
+        guard let data = defaults.data(forKey: key), let b = try? JSONDecoder().decode(VoiceBook.self, from: data) else { return [] }
+        return VoiceTrick.allCases.filter { b.tricks[$0.rawValue]?.learned == true }
     }
 
     func load() {

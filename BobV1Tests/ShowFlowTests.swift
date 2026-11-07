@@ -187,14 +187,14 @@ final class ShowFlowTests: XCTestCase {
         p.stats.setCondition(.sparkle, 0.7); p.stats.setCondition(.cute, 0.3)
         p.grime.sparkle = 0.6; p.grime.dirt = 0.2
         p.stats.learn(.sway, add: 0.4); p.stats.learn(.bop, add: 0.6)
-        p.training.debugLearn(.sit, word: "sit", reliability: 0.8)
-        p.training.debugLearn(.spin, word: "spin", reliability: 0.9)          // a store page he does not own: not on stage
-        care.store.grant("page-hop"); p.training.debugLearn(.hop, word: "hop", reliability: 0.7)
+        care.store.grantTrick(.flip, to: 1)          // bought for another Jelbie: not on his stage
         let i = care.showPlayerInput(jelly: 0)
         XCTAssertEqual(i.stat(.sparkly), 0.7, accuracy: 1e-4); XCTAssertEqual(i.stat(.cute), 0.3, accuracy: 1e-4)
         XCTAssertEqual(i.glow, 0.6, accuracy: 1e-5); XCTAssertEqual(i.dirt, 0.2, accuracy: 1e-5)
         XCTAssertEqual(i.dance, .bop); XCTAssertEqual(i.danceSkill, 0.6, accuracy: 1e-5)
-        XCTAssertEqual(i.tricks, [.sit: 0.8, .hop: 0.7])
+        XCTAssertEqual(Set(i.tricks.keys), Set(ShowTrickInfo.defaults), "what he knows: the defaults (nothing was bought for him)")
+        care.store.grantTrick(.flip, to: 0)
+        XCTAssertNotNil(care.showPlayerInput(jelly: 0).tricks[.flip], "a trick bought for him is on his menu")
         XCTAssertGreaterThan(i.care, 0); XCTAssertLessThanOrEqual(i.care, 1)
         care.store.grant("wear-flower_crown"); care.store.wear(.flowerCrown, on: 0)
         XCTAssertEqual(care.showOutfitTags(jelly: 0)[.head], WearLook.flowerCrown.tags)

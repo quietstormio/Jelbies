@@ -44,6 +44,12 @@ final class StoreBook {
         var retiredDecorRefunded: Bool? = nil
         /// The retired gloves (Pink / Sky mittens, Boxing mitts) were removed and refunded (once; StoreBook+RetiredGloves.swift).
         var glovesRefunded: Bool? = nil
+        /// Tricks owned by ONE Jelbie: character id -> VoiceTrick raw values (never renamed). Optional: older saves decode without it.
+        var ownedTricks: [String: [String]]? = nil
+        /// Tricks and skills bought for EVERYONE (VoiceTrick raw values, "ears"): every Jelbie has them, adopted ones too.
+        var everyone: [String]? = nil
+        /// The store-tricks migration (learned lessons and owned pages) ran.
+        var tricksMigrated: Bool? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -134,7 +140,11 @@ final class StoreBook {
     func count(food id: String) -> Int { StoreCatalog.item(forFood: id).map { count($0.id) } ?? 0 }
     func owns(_ item: StoreItem) -> Bool {
         switch item.kind {
-        case .trickPage: return item.trick.map { saved.pages.contains($0.rawValue) } ?? false
+        case .trickPage:
+            guard let t = item.trick else { return false }
+            if TrickCatalog.def(t)?.scope == .everyone { return (saved.everyone ?? []).contains(t.rawValue) }
+            let r = rosterCharacters()
+            return !r.isEmpty && r.allSatisfy { knows(t, character: $0) }
         case .shoes, .wear: return item.wear.map { saved.wearables.contains($0.rawValue) } ?? false
         case .room: return item.room.map { ownsRoom($0) } ?? false
         default: return count(item.id) > 0
@@ -142,7 +152,62 @@ final class StoreBook {
     }
     /// How many the player has ("owned xN"); 1 for a unique thing they own.
     func owned(_ item: StoreItem) -> Int { item.unique ? (owns(item) ? 1 : 0) : count(item.id) }
-    func hasPage(_ t: VoiceTrick) -> Bool { t.isStarter || saved.pages.contains(t.rawValue) }
+    func hasPage(_ t: VoiceTrick) -> Bool { t.isStarter || saved.pages.contains(t.rawValue) }          // (legacy page ownership; the migration reads it)
+
+    // MARK: tricks (Store/TrickCatalog.swift)
+
+    /// The characters in the room (JellyRoster ids); GameCare sets it. A per-Jelbie trick counts as "owned" in the Shop when all of them have it.
+    @ObservationIgnored var rosterCharacters: () -> [Int] = { [0] }
+    /// Does this CHARACTER know `t`? Defaults, plus owned by him, plus owned for everyone (so a newly adopted Jelbie is covered at once).
+    func knows(_ t: VoiceTrick, character: Int) -> Bool {
+        TrickCatalog.isDefault(t) || (saved.everyone ?? []).contains(t.rawValue) || (saved.ownedTricks?["\(character)"] ?? []).contains(t.rawValue)
+    }
+    /// Where a trick comes from for this character (nil = a default or not known): the show menu's tag.
+    func trickScope(_ t: VoiceTrick, character: Int) -> TrickScope? {
+        if (saved.everyone ?? []).contains(t.rawValue) { return .everyone }
+        if (saved.ownedTricks?["\(character)"] ?? []).contains(t.rawValue) { return .perJelbie }
+        return nil
+    }
+    /// Everything a character can do, in enum order.
+    func knownTricks(character: Int) -> [VoiceTrick] { VoiceTrick.allCases.filter { knows($0, character: character) } }
+    /// Gives a trick to one character (migration, tests, capture aids). No coins.
+    func grantTrick(_ t: VoiceTrick, to character: Int) {
+        var o = saved.ownedTricks ?? [:]
+        var l = o["\(character)"] ?? []
+        guard !l.contains(t.rawValue) else { return }
+        l.append(t.rawValue); o["\(character)"] = l; saved.ownedTricks = o; save()
+    }
+    func grantTrickToEveryone(_ t: VoiceTrick) {
+        var e = saved.everyone ?? []
+        guard !e.contains(t.rawValue) else { return }
+        e.append(t.rawValue); saved.everyone = e; save()
+    }
+    /// Buys a trick from the Shop. A per-Jelbie trick needs the `character` it is for.
+    @discardableResult
+    func buyTrick(_ t: VoiceTrick, for character: Int?) -> BuyResult {
+        guard let def = TrickCatalog.def(t) else { return .unknown }
+        switch def.scope {
+        case .everyone:
+            if (saved.everyone ?? []).contains(t.rawValue) { return .alreadyOwned }
+        case .perJelbie:
+            guard let c = character else { return .unknown }
+            if knows(t, character: c) { return .alreadyOwned }
+        }
+        guard wallet.spend(def.price) else { return .notEnough }
+        if def.scope == .everyone { grantTrickToEveryone(t) } else if let c = character { grantTrick(t, to: c) }
+        saved.newItems += 1
+        save()
+        return .bought
+    }
+    /// The one-time move from the lesson books: every learned trick becomes owned by THAT Jelbie, every owned page by everyone on the roster.
+    /// `learned` lists, per character, the tricks that Jelbie had learned. Idempotent. Coins and the lessons themselves are untouched.
+    func migrateTricks(learned: [Int: [VoiceTrick]], roster: [Int]) {
+        guard saved.tricksMigrated != true else { return }
+        for (c, list) in learned { for t in list where t != .come { grantTrick(t, to: c) } }
+        for p in saved.pages { if let t = VoiceTrick(rawValue: p) { for c in roster { grantTrick(t, to: c) } } }
+        saved.tricksMigrated = true
+        save()
+    }
     func ownsLook(_ l: WearLook) -> Bool { saved.wearables.contains(l.rawValue) }
     /// Foods the player can feed now (count > 0), in catalogue order.
     var snacks: [(item: StoreItem, count: Int)] {
@@ -155,10 +220,11 @@ final class StoreBook {
     func buy(_ id: String) -> BuyResult {
         guard let item = StoreCatalog.item(id) else { return .unknown }
         if item.awarded { return .unknown }               // earned, never sold
+        if item.kind == .trickPage { return item.trick.map { buyTrick($0, for: nil) } ?? .unknown }          // (a per-Jelbie trick needs buyTrick(_:for:))
         if item.unique, owns(item) { return .alreadyOwned }
         guard wallet.spend(item.price) else { return .notEnough }
         switch item.kind {
-        case .trickPage: if let t = item.trick { saved.pages.append(t.rawValue) }
+        case .trickPage: break
         case .shoes, .wear: if let w = item.wear { saved.wearables.append(w.rawValue) }
         case .room: if let r = item.room { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += 1
@@ -181,7 +247,7 @@ final class StoreBook {
     func grant(_ id: String, _ n: Int = 1) {
         guard let item = StoreCatalog.item(id) else { return }
         switch item.kind {
-        case .trickPage: if let t = item.trick, !saved.pages.contains(t.rawValue) { saved.pages.append(t.rawValue) }
+        case .trickPage: if let t = item.trick { if TrickCatalog.def(t)?.scope == .perJelbie { for c in rosterCharacters() { grantTrick(t, to: c) } } else { grantTrickToEveryone(t) } }
         case .shoes, .wear: if let w = item.wear, !saved.wearables.contains(w.rawValue) { saved.wearables.append(w.rawValue) }
         case .room: if let r = item.room, !ownsRoom(r) { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += n

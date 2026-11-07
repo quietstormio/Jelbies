@@ -72,6 +72,8 @@ nonisolated struct StoreItem: Identifiable, Sendable {
     var food: String? = nil
     /// Trick page: the trick it unlocks.
     var trick: VoiceTrick? = nil
+    /// Tricks and skills: for one Jelbie or for everyone.
+    var scope: TrickScope? = nil
     /// Shoes (and later other wearables).
     var wear: WearLook? = nil
     /// Decor (part B): room units it takes.
@@ -88,7 +90,14 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems
+    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems + trickItems
+
+    /// The tricks for sale (Store/TrickCatalog.swift): one card each, with its stars, price and scope.
+    static let trickItems: [StoreItem] = TrickCatalog.forSale.map { d in
+        StoreItem(id: d.id, name: d.name, kind: .trickPage, price: d.price, perk: nil,
+                  description: d.scope == .everyone ? "Every Jelbie learns \(d.name.lowercased()) at once, adopted ones too. Say it or pick it in the show." : "One Jelbie learns \(d.name.lowercased()). Say it or pick it in the show.",
+                  symbol: d.icon, trick: d.trick, scope: d.scope)
+    }
 
     /// Hand-held Play toys (Toys/PlayToy.swift lists them for the picker). The balls are the existing decor toys; the wand is its own item.
     static let playToyItems: [StoreItem] = [
@@ -130,9 +139,6 @@ nonisolated enum StoreCatalog {
         // care supplies (used from Clean)
         StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "The shine after a Clean lasts much longer (12 hours).", symbol: "sparkles"),
         StoreItem(id: "lintguard", name: "Lint-guard spray", kind: .supply, price: 18, perk: .tidy, description: "Lint comes back half as fast for 6 hours.", symbol: "wind"),
-        // trick pages
-        StoreItem(id: "page-spin", name: "Spin page", kind: .trickPage, price: 45, perk: nil, description: "Teach a spin on the spot with your own word.", symbol: "arrow.triangle.2.circlepath", trick: .spin),
-        StoreItem(id: "page-hop", name: "Hop page", kind: .trickPage, price: 45, perk: nil, description: "Teach happy hops with your own word.", symbol: "arrow.up.circle.fill", trick: .hop),
         // decor (placed in the room; Jellies play with it; a big piece takes 2 of the 10 spots)
         StoreItem(id: "decor-cushion", name: "Floor cushion", kind: .decor, price: 25, perk: nil, description: DecorKind.cushion.use, symbol: "square.fill", roomUnits: 1),
         StoreItem(id: "decor-ball", name: "Bouncy ball", kind: .decor, price: 30, perk: nil, description: DecorKind.ball.use, symbol: "circle.fill", roomUnits: 1),

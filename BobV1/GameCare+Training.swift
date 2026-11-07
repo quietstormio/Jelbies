@@ -25,7 +25,6 @@ extension GameCare {
     var isTrainingCloseUp: Bool { focus.isActive && focusGroup.ids.count == 1 && focusGroup.training }
     /// Store-page locks for EVERY Jelly's book (slot 0's was the only one wired).
     func wireTrainingBooks() {
-        for j in jellies { j.training.unlocked = { [weak self] t in self?.store.hasPage(t) ?? t.isStarter } }
         #if DEBUG
         if UserDefaults.standard.object(forKey: "TrainJelly") != nil {          // capture aid: `-TrainJelly 1` trains Jelly 1 a few seconds after launch
             let id = UserDefaults.standard.integer(forKey: "TrainJelly")
