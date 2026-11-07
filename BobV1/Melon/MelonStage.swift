@@ -306,10 +306,6 @@ final class MelonController: NSObject, MTKViewDelegate {
     // drag state
     private var mode: DragMode = .none
     private var dragID: ObjectIdentifier?
-    // Voice v1: double-tap then hold on empty space = listen while the finger stays (VoiceGesture.swift)
-    private var voiceGesture = VoiceGesture()
-    private var voiceTouch: ObjectIdentifier?
-    private var emptyDown: (id: ObjectIdentifier, t: Double, p: CGPoint)?
     private var planeP = SIMD3<Float>(0, 0, 0)
     private var planeN = SIMD3<Float>(0, 0, -1)
     private var twist: Float = 0
@@ -1608,14 +1604,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()
-        } else if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, !model.care.arranging, touchSize.width > 1, pickJelly(p, touchSize) == nil, model.care.select.hit(p) == nil {
-            // a tap on the empty floor (never on a Jelbie) / glass: the nearest free Jelbie may tilt his head toward it (batch-2 emote, BlobBrain+Emotes2.swift)
-            let ray = unproject(ndc: ndc(p, touchSize), invViewProj: lastCam.invViewProj)
-            if abs(ray.d.y) > 1e-4 {
-                let t = (0 - ray.o.y) / ray.d.y
-                if t > 0 { let q = ray.o + ray.d * t; _ = BlobBrain.tapCue(at: SIMD2(q.x, q.z), brains: actors.compactMap(\.brain)) }
-            }
-        }
+        }          // (a tap on empty floor / wall / sky does nothing: no head tilt, no cue)
     }
 
     /// True when a screen point lands on one of the back-wall windows.
@@ -1982,21 +1971,6 @@ final class MelonController: NSObject, MTKViewDelegate {
             return
         }
         if game {
-            // Voice: the second down of a double-tap on EMPTY space (no Blob under it) opens listen mode, in roaming and in focus
-            if voiceTouch == nil, !model.paused {
-                let vnow = time ?? CACurrentMediaTime()       // the touch's own timestamp: delivery lag (the warm-up work on the first tap) must not eat the 0.35 s window
-                let onBlob = pickBody(p, size) != nil || { refreshOutlines(); return model.care.select.hit(p) != nil }() || decorUnderFinger(p) != nil          // (a piece counts: a double tap on it is not a call to listen)
-                let decision = voiceGesture.touchDown(time: vnow, point: p, hitBlob: onBlob)
-                if VoiceTranscriptLog.on { NSLog("[voice] gesture down t=%.3f lag=%.0f ms onBlob=%d -> %@", vnow, (CACurrentMediaTime() - vnow) * 1000, onBlob ? 1 : 0, decision == .beginVoice ? "BEGIN" : "none") }
-                if decision == .beginVoice, mode == .none {
-                    voiceTouch = id; emptyDown = nil
-                    let opened = model.care.voice.begin()
-                    if VoiceTranscriptLog.on { NSLog("[voice] begin() -> %d", opened ? 1 : 0) }
-                    return
-                }
-                emptyDown = onBlob ? nil : (id, vnow, p)
-                if !onBlob { model.care.voice.warmUp() }        // maybe the first tap of a double-tap: bring the mic up early (self-cancels)
-            }
             // touch play only acts inside focus mode (Come here): a roaming Bob is not grabbed, and nothing orbits or zooms.
             // The GESTURE decides the action (pet / tap / pick up / throw / cheeks), never switching mid-gesture.
             let f = model.care.focus
@@ -2039,8 +2013,6 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerMove(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam else { return }
-        if id == voiceTouch { return }
-        if let e = emptyDown, e.id == id, hypot(p.x - e.p.x, p.y - e.p.y) > 20 { emptyDown = nil }       // a drag is not a tap
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
         if game, id == dragID, model.care.bath.acceptsTouch, mode == .pet { petPoint = p; touchSize = size; last = p; return }
         if game, id == dragID {
@@ -2076,13 +2048,6 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     func pointerUp(id: ObjectIdentifier, time: Double? = nil) {
-        if id == voiceTouch { voiceTouch = nil; model.care.voice.release(); return }
-        if let e = emptyDown, e.id == id {
-            emptyDown = nil
-            let vnow = time ?? CACurrentMediaTime()
-            if VoiceTranscriptLog.on { NSLog("[voice] gesture up t=%.3f held=%.0f ms", vnow, (vnow - e.t) * 1000) }
-            voiceGesture.tapUp(time: vnow, downTime: e.t, point: e.p, hitBlob: false)        // a short tap on empty space arms the gesture
-        }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
