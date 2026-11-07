@@ -189,7 +189,7 @@ final class AudioHub {
         let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(plan.category, mode: .default, options: plan.options)
-        do { try s.setActive(true); sessionRetry?.cancel() }
+        do { try s.setActive(true); sessionRetry?.cancel(); sessionRetry = nil }
         catch {
             // right after a return from another app the other app can still hold the session: the old `try?` dropped the failure and the players then ran on a
             // half-reactivated session (quiet / silent until something else poked it). Retry a few times, 0.25 s apart.
@@ -201,8 +201,9 @@ final class AudioHub {
                     let s = AVAudioSession.sharedInstance()
                     let plan = SessionPolicy.plan(musicOn: self.settings.musicOn, otherAudioPlaying: self.otherAudioPlaying, micActive: false)
                     try? s.setCategory(plan.category, mode: .default, options: plan.options)
-                    if (try? s.setActive(true)) != nil { for d in self.decks { d.player.play() }; self.layer?.player.play(); self.ambDay?.player.play(); self.ambEve?.player.play(); self.scene?.resume(); return }
+                    if (try? s.setActive(true)) != nil { for d in self.decks { d.player.play() }; self.layer?.player.play(); self.ambDay?.player.play(); self.ambEve?.player.play(); self.scene?.resume(); self.sessionRetry = nil; return }
                 }
+                self?.sessionRetry = nil
             }
         }
     }
