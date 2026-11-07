@@ -114,7 +114,7 @@ struct LaunchCurtainArt: View {
                     .id(theme.palette.id).transition(.opacity)
                 VStack(spacing: 18 * u) {
                     logo(width: logoW)
-                    SpinningJelbie(still: reduceMotion || A11ySettings.shared.reduceMotion || !bounce, palette: theme.palette).frame(width: 74 * u + 10, height: 74 * u + 10).padding(.top, 4 * u)
+                    HStack(spacing: 12 * u) { ForEach(0..<3, id: \.self) { dot($0, u) } }.padding(.top, 4 * u)
                     Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
@@ -144,36 +144,38 @@ struct LaunchCurtainArt: View {
 /// Counts stage ticks (one per simulated frame of the room); the welcome-back cover waits for two fresh ones after a resume.
 @MainActor enum ResumeFrames { static var ticks: UInt = 0 }
 
-/// The loading Jelbie: the title's Jelbie shape (JelbieArt) turning on its vertical axis, about 1.2 s a turn, with a small hop. Theme colours.
-struct SpinningJelbie: View {
-    let still: Bool
-    let palette: ThemePalette
-    private static let turn = 1.2
-
+/// The welcome-back cover: the title's moving backdrop (no extras), the still logo, a native spinner and a static caption. One flat view tree, always in the
+/// hierarchy and toggled by opacity (GameScreen), so showing it builds nothing.
+struct WelcomeCoverArt: View {
+    /// false while the cover is hidden: the backdrop's timeline pauses (always mounted, no per-frame work).
+    var running: Bool
+    private var theme = ThemeStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    init(running: Bool) { self.running = running }
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: still)) { tl in
-            let ph = still ? 0 : tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.turn) / Self.turn
-            let ang = ph * 2 * .pi
-            let hop = still ? 0 : abs(sin(ph * 2 * .pi)) * 0.10
-            Canvas { c, size in
-                let k = min(size.width, size.height) / 150
-                var cc = c
-                cc.translateBy(x: size.width / 2, y: size.height / 2 + 6 * k - hop * size.height)
-                cc.scaleBy(x: k, y: k)
-                for path in [JelbieArt.body, JelbieArt.circle(-52.5, 14, 10), JelbieArt.circle(52.5, 14, 10)] { cc.fill(path, with: .color(palette.rim)); cc.stroke(path, with: .color(palette.rim), style: StrokeStyle(lineWidth: 13, lineJoin: .round)) }
-                cc.fill(JelbieArt.body, with: .color(.white))
-                cc.fill(JelbieArt.circle(-52.5, 14, 10), with: .color(.white)); cc.fill(JelbieArt.circle(52.5, 14, 10), with: .color(.white))
-                cc.drawLayer { l in
-                    l.clip(to: JelbieArt.body)
-                    l.fill(JelbieArt.body, with: .color(palette.shade))
-                    l.fill(JelbieArt.body.applying(CGAffineTransform(translationX: -5, y: -6)), with: .color(.white))
+        GeometryReader { geo in
+            let u = min(geo.size.width, geo.size.height) / 440
+            ZStack {
+                TitleBackdrop(still: !running || reduceMotion || A11ySettings.shared.reduceMotion, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
+                VStack(spacing: 18 * u) {
+                    Image("JelbiesLogo").resizable().scaledToFit().frame(width: min(geo.size.width * 0.8, 360 * max(u, 0.8)))
+                    ThemedSpinner(palette: theme.palette).padding(.vertical, 8 * u)
+                    Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
+                        .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
-                if cos(ang) > 0 {          // the face is on the front only
-                    for x in [-19.5, 19.5] { cc.fill(JelbieArt.circle(x, -14, 4.8), with: .color(palette.eye)); cc.fill(JelbieArt.circle(x, -16.2, 1.7), with: .color(.white)) }
-                }
+                .position(x: geo.size.width / 2, y: geo.size.height / 2)
             }
-            .rotation3DEffect(.radians(ang), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
         }
-        .accessibilityHidden(true)
+        .ignoresSafeArea()
+    }
+}
+
+/// The plain native circular spinner. It is a Core Animation UIActivityIndicator, so it keeps turning
+/// even while the main thread is busy building the room.
+struct ThemedSpinner: View {
+    let palette: ThemePalette
+    var body: some View {
+        ProgressView().progressViewStyle(.circular).controlSize(.large).tint(.white)          // white reads on every theme colour (the backdrop is the theme colour)
+            .accessibilityLabel("Loading")
     }
 }
