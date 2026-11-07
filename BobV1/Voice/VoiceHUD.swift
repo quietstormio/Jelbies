@@ -266,7 +266,6 @@ struct VoiceTrickBook: View {
     private func nameRow(_ tr: VoiceTraining, id: Int) -> some View {
         let name = tr.names.displayName(id)
         let nicks = tr.names.nicknames(for: id)
-        let lesson = voice.nickLesson?.id == id ? voice.nickLesson : nil
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "heart.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(SK.pinkStrong)
@@ -312,15 +311,6 @@ struct VoiceTrickBook: View {
                 }
                 .buttonStyle(.plain).disabled(VoiceMatcher.normalise(drafts[id] ?? "").isEmpty)
                 .accessibilityIdentifier("voice-nickname-add").accessibilityLabel("Add nickname")
-                Button { voice.startNicknameLesson(for: id); close() } label: {
-                    Image(systemName: "mic.circle.fill").font(.system(size: 24)).foregroundStyle(FocusStyle.brown)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("voice-nickname-say").accessibilityLabel("Teach a nickname by saying it \(VoiceTuning.nicknameReps) times")
-            }
-            if let l = lesson {
-                Text("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))")
-                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)

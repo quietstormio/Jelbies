@@ -83,7 +83,7 @@ struct VoiceFeedbackView: View {
 
     var body: some View {
         // 20 Hz only while something is on screen; otherwise a slow poll (nothing to animate, so the full-screen overlay stays cheap)
-        let busy = voice.feedback != nil || voice.toast != nil || voice.teachPrompt != nil || voice.nickLesson != nil || voice.heard != nil
+        let busy = voice.feedback != nil || voice.toast != nil || voice.teachPrompt != nil || voice.heard != nil
         return TimelineView(.periodic(from: .now, by: busy ? 0.05 : 0.25)) { _ in
             let now = voice.now()
             ZStack {
@@ -104,9 +104,6 @@ struct VoiceFeedbackView: View {
                     }
                     if voice.train == nil, let p = voice.teachPrompt, now < p.until, !voice.isListening {
                         pill("Now hold the mic and say a word for \(p.trick.title)", id: "voice-prompt", fade: 0, life: 99, accent: false)
-                    }
-                    if let l = voice.nickLesson, !voice.isListening {
-                        pill("Hold the mic and say the nickname (\(l.reps) of \(VoiceTuning.nicknameReps))", id: "voice-nick-prompt", fade: 0, life: 99, accent: false)
                     }
                     if let u = voice.understood, now - u.born < Self.understoodLife {
                         understoodPill(u, fade: now - u.born)

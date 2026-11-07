@@ -120,9 +120,6 @@ final class VoiceCoordinator {
     private(set) var intentTask: Task<Void, Never>?
     /// How the last utterance was understood: "det", "model", "timeout", "error", "unavailable" and the ms it took.
     private(set) var lastParse: (path: String, ms: Int)?
-    /// The nickname being taught by voice (3 listens), nil when none.
-    private(set) var nickLesson: NickLesson?
-    struct NickLesson: Equatable { var id: Int; var word = ""; var reps = 0; var sessions: [Int] = [] }
     @ObservationIgnored private var currentIDs: [Int] = []
     @ObservationIgnored var session = 0
     /// The close-up's Train session (TrainSession.swift), nil outside it; the Train card reads it.
@@ -287,7 +284,9 @@ final class VoiceCoordinator {
             self.levelCount += 1; self.levelMin = min(self.levelMin, l); self.levelMax = max(self.levelMax, l)
             self.mode.levelUpdate(l)
         }
-        let words = Array(Set((care?.jellies ?? []).flatMap { $0.training.contextualWords } + training.contextualWords))          // (W2: every Jelly's learned words are listened for)
+        // Every roster name, custom name and nickname FIRST (the recogniser keeps only the first 100 strings), then every Jelly's learned words.
+        var seenWords = Set<String>()
+        let words = (training.names.priorityWords + (care?.jellies ?? []).flatMap { $0.training.contextualWords } + training.contextualWords).filter { seenWords.insert($0).inserted }
         let t0 = downAt
         startTask = Task { [weak self] in
             guard let self else { return }
@@ -385,7 +384,6 @@ final class VoiceCoordinator {
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
         teachPrompt = nil
-        if nickLesson != nil { nicknameListen(transcript); return }
         if trainHandle(transcript) { return }           // a Train session waiting for the word (r1023-train)
         if roomCommand(transcript) { return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()
@@ -548,33 +546,7 @@ final class VoiceCoordinator {
         enqueue(r, kind, ids: ids, target: d.target)
     }
 
-    // MARK: nicknames (taught by voice: say it 3 times while he is selected)
-
-    /// The trick book's "Say it" button: the next listens teach a nickname for Jelly `id`.
-    func startNicknameLesson(for id: Int) { nickLesson = NickLesson(id: id) }
-    func cancelNicknameLesson() { nickLesson = nil }
-
-    private func nicknameListen(_ transcript: String) {
-        guard var l = nickLesson else { return }
-        let toks = VoiceMatcher.tokens(transcript)
-        let word = toks.prefix(2).joined(separator: " ")
-        guard !toks.isEmpty else { enqueue(.ignore, .nothing); return }
-        if let h = training.names.match(token: toks[0]), h.score >= 0.8 || training.names.nicknames(for: h.id).contains(toks[0]) {
-            enqueue(.ignore, .unknown); return                                   // that is already a name
-        }
-        let same = !l.word.isEmpty && (word == l.word || (word.count >= 4 && VoiceMatcher.levenshtein(word, l.word) <= 1)
-                                       || (word.count >= 4 && !word.contains(" ") && !l.word.contains(" ") && VoiceMatcher.soundex(word) == VoiceMatcher.soundex(l.word)))
-        if !same { l.word = word; l.reps = 0; l.sessions = [] }
-        guard !l.sessions.contains(session) else { nickLesson = l; return }       // one rep per listen
-        l.reps += 1; l.sessions.append(session)
-        if l.reps >= VoiceTuning.nicknameReps {
-            if training.names.addNickname(l.word, for: l.id) { enqueue(.nicknameLearned, nil, ids: [l.id]) } else { enqueue(.ignore, .unknown) }
-            nickLesson = nil
-        } else {
-            nickLesson = l
-            enqueue(.nicknameStep(reps: l.reps), nil, ids: [l.id])
-        }
-    }
+    // MARK: nicknames: typed in the Voice book only (matched automatically like custom names); there is no spoken lesson.
 
     /// Typed teaching (accessibility): the same step a heard phrase gets, with no microphone. The rep rules are identical (each submit is one listen of
     /// its own). While a trick-book move is the prompt (`show(_:)`), the word binds to THAT trick even after the move has finished.
@@ -666,7 +638,7 @@ final class VoiceCoordinator {
         if voiceGoing { goAge += dt; if goAge > 15 { voiceGoing = false } }      // a cancelled walk (he was grabbed) never reports back
         if mode.phase == .idle { runningAtOpen = nil }
         if let p = teachPrompt, clock() > p.until, !mode.isListening { teachPrompt = nil }          // the prompt times out (it also lets a held teaching sit finish)
-        brain.trainingLock = nickLesson != nil || teachPrompt != nil          // (same value GameCare.tickFeature gives every actor; set here too for the primary brain)
+        brain.trainingLock = teachPrompt != nil          // (same value GameCare.tickFeature gives every actor; set here too for the primary brain)
 
         // listening pose
         let listening = mode.isListening

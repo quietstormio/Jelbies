@@ -528,27 +528,12 @@ extension VoiceIntegrationTests {
         XCTAssertEqual(r.voice.goodnightLog.last, [0])
     }
 
-    func testNicknameTaughtByVoiceThreeTimesThenUsed() {
+    func testTypedNicknameIsAName() {
         let r = make()
-        r.voice.startNicknameLesson(for: 0)
-        r.say("bubbles", settle: 0.1); XCTAssertEqual(r.voice.nickLesson?.reps, 1)
-        r.say("bubbles", settle: 0.1); XCTAssertEqual(r.voice.nickLesson?.reps, 2)
-        r.say("bubbles", settle: 0.1)
-        XCTAssertNil(r.voice.nickLesson)
-        XCTAssertEqual(r.voice.training.names.nicknames(for: 0), ["bubbles"])
+        XCTAssertTrue(r.voice.training.names.addNickname("bubbles", for: 0))
         r.run(5)
         r.say("bubbles, come here", settle: 0)
         XCTAssertTrue(r.run(40) { r.care.focus.phase == .focused }, "the nickname is a name")
-    }
-
-    func testNicknameLessonRestartsOnADifferentWordAndRejectsNames() {
-        let r = make()
-        r.voice.startNicknameLesson(for: 0)
-        r.say("bubbles", settle: 0.1)
-        r.say("wiggles", settle: 0.1)
-        XCTAssertEqual(r.voice.nickLesson?.reps, 1); XCTAssertEqual(r.voice.nickLesson?.word, "wiggles")
-        r.say("Pip", settle: 0.1)
-        XCTAssertEqual(r.voice.nickLesson?.reps, 1, "an existing name is not a nickname")
     }
 
     // The model fallback

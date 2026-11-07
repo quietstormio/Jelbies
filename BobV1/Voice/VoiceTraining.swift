@@ -91,8 +91,6 @@ nonisolated enum VoiceTuning {
     static let modelMinConfidence = 0.5
     /// Praise gives this much attention (0...1).
     static let praiseAttention: Float = 0.08
-    /// Saying a nickname this many times (one per listen) teaches it.
-    static let nicknameReps = 3
     /// "Come here" is innate: he knows it from the first launch. 0.92 (not the 0.95 cap) so successes still nudge it up, yet a miss is rare
     /// (about 1 in 12); the player never has to teach it, and a miss only shrugs.
     static let comeWord = "come here"

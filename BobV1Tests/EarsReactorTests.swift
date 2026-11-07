@@ -101,13 +101,9 @@ final class EarsReactorTests: XCTestCase {
         reactor.update(care: care2)
         XCTAssertTrue(reactor.locks.focus)
         XCTAssertEqual(reactor.locks.focusApproach, care2.focus.phase == .approaching)
-        // the voice: the mic open, or a lesson
+        // the voice: the mic open
         let care3 = GameCare(jellyCount: 1, persistent: false)
         Self.keep.append(care3)
-        care3.voice.startNicknameLesson(for: 0)
-        reactor.update(care: care3)
-        XCTAssertTrue(reactor.locks.training)
-        care3.voice.cancelNicknameLesson()
         _ = care3.voice.mode.begin()
         reactor.update(care: care3)
         XCTAssertTrue(reactor.locks.voice)

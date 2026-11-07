@@ -1,6 +1,6 @@
 //
 //  VoiceNames.swift
-//  Names every Jelly KNOWS from the start (no lesson): a registry keyed by Jelly id (0 Bob, 1 Pip, 2 Moss), their built-in pet forms and
+//  Names every Jelly KNOWS from the start (no lesson): a registry keyed by Jelly id (0 Bob, 1 Pip, 2 Moss ... every character in JellyRoster.baseNames), their built-in pet forms and
 //  recogniser near-misses, and the player's own nicknames (persisted per Jelly). Pure matching, no audio.
 //
 //  Matching is deliberately NOT generic edit distance for the short base names (a 3-4 letter name within 1 edit hits "bad", "bit", "mass",
@@ -35,16 +35,44 @@ nonisolated struct JellyName: Equatable, Sendable {
 }
 
 nonisolated enum JellyNameRoster {
-    static let all: [JellyName] = [
-        JellyName(id: 0, base: "bob", extraVariants: ["bobbob", "bobbo", "bobs"], nearMisses: ["bab", "bop", "bahb", "baub", "bawb", "bobb"]),
-        JellyName(id: 1, base: "pip", extraVariants: ["pipsqueak", "pipsqueaks", "pippip"], nearMisses: ["pep", "pit", "pipp", "peep", "pib"]),
-        JellyName(id: 2, base: "moss", extraVariants: ["mossmoss", "mossa"], nearMisses: ["moth", "mos", "mauss", "moz", "mawss"]),
-        JellyName(id: 3, base: "lavender", extraVariants: ["lav", "lavvy", "lavi", "lavenda"], nearMisses: ["lavander", "lavendar", "lavinder", "levender"]),
+    /// Hand-curated entries (pet forms + recogniser near-misses). A character with no entry here still gets one built from his name.
+    private static let curated: [Int: JellyName] = [
+        0: JellyName(id: 0, base: "bob", extraVariants: ["bobbob", "bobbo", "bobs"], nearMisses: ["bab", "bop", "bahb", "baub", "bawb", "bobb"]),
+        1: JellyName(id: 1, base: "pip", extraVariants: ["pipsqueak", "pipsqueaks", "pippip"], nearMisses: ["pep", "pit", "pipp", "peep", "pib"]),
+        2: JellyName(id: 2, base: "moss", extraVariants: ["mossmoss", "mossa"], nearMisses: ["moth", "mos", "mauss", "moz", "mawss"]),
+        3: JellyName(id: 3, base: "lavender", extraVariants: ["lav", "lavvy", "lavi", "lavenda"], nearMisses: ["lavander", "lavendar", "lavinder", "levender"]),
+        4: JellyName(id: 4, base: "teddy", extraVariants: ["teddie", "teddo", "ted", "teds", "teddybear"], nearMisses: ["tetty", "tedi", "teddi", "taddy", "teady", "tady", "teddee"]),
+        5: JellyName(id: 5, base: "pearl", extraVariants: ["pearls", "pearly", "pearlie", "purly"], nearMisses: ["purl", "perl", "pearle", "pirl", "burl", "poral", "purrl"]),
+        6: JellyName(id: 6, base: "panda", extraVariants: ["pandy", "pandie", "pandas", "pando"], nearMisses: ["pander", "panta", "pandah", "banda", "pandar", "punda", "pannda"]),
     ]
+    /// One entry for EVERY character `JellyRoster.baseNames` knows (so a new species is callable by name with no extra work).
+    static let all: [JellyName] = JellyRoster.baseNames.enumerated().map { i, raw in
+        let base = VoiceMatcher.normalise(raw).replacingOccurrences(of: " ", with: "")
+        if let c = curated[i], c.base == base { return c }
+        return JellyName(id: i, base: base, nearMisses: generatedNearMisses(base))
+    }
     static func name(_ id: Int) -> JellyName? { all.first { $0.id == id } }
 
+    /// Common mishearings built from the spelling: one swapped voiced/unvoiced consonant (b/p, d/t, g/k), and the vowel family swapped (a/o/e/i/u).
+    static func generatedNearMisses(_ base: String) -> [String] {
+        var out: Set<String> = []
+        let chars = Array(base)
+        let pairs: [Character: Character] = ["b": "p", "p": "b", "d": "t", "t": "d", "g": "k", "k": "g"]
+        for (i, c) in chars.enumerated() {
+            guard let alt = pairs[c] else { continue }
+            var w = chars; w[i] = alt; out.insert(String(w))
+        }
+        if base.count >= 5 {
+            for (i, c) in chars.enumerated() where "aeiou".contains(c) {
+                for v in "aeiou" where v != c { var w = chars; w[i] = v; out.insert(String(w)) }
+            }
+        }
+        out.remove(base)
+        return out.filter { !stoplist.contains($0) && $0.count >= 3 }.sorted()
+    }
+
     /// Real words that share a phonetic key with a name and must never count as it.
-    static let stoplist: Set<String> = ["boob", "boobs", "pipe", "pipes", "mass", "maze", "muse", "mouse", "moose", "mousse", "mess", "miss", "most", "boss", "toss", "loss"]
+    static let stoplist: Set<String> = ["boob", "boobs", "pipe", "pipes", "mass", "maze", "muse", "mouse", "moose", "mousse", "mess", "miss", "most", "boss", "toss", "loss", "tidy", "toady", "tiddy", "paddy", "patty", "panther", "panned", "panted", "pull", "poor"]
 
     /// First letter, then the vowel family (F front i/e/y, B back a/o/u) and folded consonants (b=p, d=t, g=k=c=q, s=z=th), repeats collapsed,
     /// a trailing silent e dropped. "bob" "bop" "bab" "bub" -> bBP; "pip" "pep" "peep" -> pFP; "moss" "mos" "moth" -> mBS.
@@ -139,9 +167,16 @@ final class JellyNames {
         }
     }
     func nicknames(for id: Int) -> [String] { nicknames[character(id)] ?? [] }
-    /// The words to hand the recogniser: every base name, pet form and nickname.
+    /// The words that MUST reach the recogniser: every roster base name, the player's own names and nicknames. Kept ahead of everything else
+    /// so the 100-string cap in SpeechInput can never cut a name.
+    var priorityWords: [String] {
+        var seen = Set<String>(), out: [String] = []
+        for w in JellyNameRoster.all.map(\.base) + customNames.map(\.1) + nicknames.values.flatMap({ $0 }) where seen.insert(w).inserted { out.append(w) }
+        return out
+    }
+    /// The words to hand the recogniser: the priority names first, then pet forms.
     var contextualWords: [String] {
-        JellyNameRoster.all.flatMap { [$0.base] + $0.variants.sorted().prefix(6) } + nicknames.values.flatMap { $0 } + customNames.map(\.1)
+        priorityWords + JellyNameRoster.all.flatMap { Array($0.variants.sorted().prefix(6)) }
     }
 
     /// Adds a nickname for `id`. False = rejected (empty, too long, already a name of any Jelly, or the cap was reached).
@@ -210,7 +245,7 @@ final class JellyNames {
         return best
     }
 
-    /// Two-word nicknames ("mister bob") against a token pair.
+    /// Two-word nicknames ("mister bob") against a token pair, and a long name the recogniser split in two ("pan da", "band a", "pear l").
     private func matchPair(_ a: String, _ b: String) -> NameHit? {
         let pair = a + " " + b
         var books = nicknames
@@ -218,6 +253,12 @@ final class JellyNames {
         for (c, list) in books { for nick in list where nick.contains(" ") {
             if pair == nick || VoiceMatcher.levenshtein(pair, nick) <= (nick.count >= 8 ? 1 : 0) { return NameHit(id: id(ofCharacter: c), score: pair == nick ? 1 : 0.85, width: 2) }
         } }
+        let joined = a + b
+        if joined.count >= 5, a.count >= 2, !JellyNameRoster.stoplist.contains(joined) {
+            for n in JellyNameRoster.all where n.base.count >= 5 && (joined == n.base || n.nearMisses.contains(joined)) {
+                return NameHit(id: id(ofCharacter: n.id), score: 0.8, width: 2)
+            }
+        }
         return nil
     }
 
