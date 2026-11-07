@@ -38,6 +38,8 @@ nonisolated struct EarsDetector {
     private(set) var hearing: EarKind?
     private var hearingAt: Double = -1e9
     private(set) var now: Double = 0
+    /// Seconds of music before it starts (the hold-to-listen path uses a shorter one).
+    var musicHold: Double = EarsTuning.musicHold
 
     init(usesClassifier: Bool = true) { self.usesClassifier = usesClassifier }
 
@@ -62,6 +64,7 @@ nonisolated struct EarsDetector {
         beat = b
         var out: [EarEvent] = []
         if musicPlaying, let b, b != lastBeatSent { lastBeatSent = b; out.append(.musicBeat(b)) }
+        else if musicPlaying, b == nil, lastBeatSent != nil { lastBeatSent = nil; out.append(.musicBeatLost) }
         return out + advance(to: max(now, t))
     }
 
@@ -127,7 +130,7 @@ nonisolated struct EarsDetector {
         // music: hold before start, release (with gap bridging) before stop
         if let since = musicOnSince {
             if now - musicLastSeen > EarsTuning.musicGap && !musicPlaying { musicOnSince = nil }
-            else if !musicPlaying, now - since >= EarsTuning.musicHold {
+            else if !musicPlaying, now - since >= musicHold {
                 musicPlaying = true; lastBeatSent = beat
                 out.append(.musicStarted(beat))
             }

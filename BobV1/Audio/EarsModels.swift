@@ -103,8 +103,17 @@ nonisolated enum EarEvent: Equatable, Sendable {
     case musicStarted(EarBeat?)
     /// A fresh tempo / phase estimate while music plays.
     case musicBeat(EarBeat)
+    /// The tempo tracker lost the beat while the music still plays: the dance falls back to a gentle sway that claims no tempo.
+    case musicBeatLost
     /// The music has been gone for `EarsTuning.musicRelease` seconds.
     case musicStopped
+}
+
+extension EarEvent {
+    /// One of the music events.
+    var isMusic: Bool { switch self { case .musicStarted, .musicBeat, .musicBeatLost, .musicStopped: return true; default: return false } }
+    /// The events that begin or steer a dance (a stop is always allowed).
+    var startsMusic: Bool { switch self { case .musicStarted, .musicBeat, .musicBeatLost: return true; default: return false } }
 }
 
 nonisolated enum EarsTuning {
@@ -123,6 +132,8 @@ nonisolated enum EarsTuning {
     static let clapOnsetLookback: Double = 0.9
     /// Music must hold this long before the dance starts, and be gone this long before it stops (short dips are bridged by `musicGap`).
     static let musicHold: Double = 4
+    /// Hold-to-listen (the mic button is down): the player is waiting for the reaction, so music counts after this long.
+    static let holdMusicHold: Double = 1.5
     static let musicRelease: Double = 3
     static let musicGap: Double = 1.5
     /// App-music exclusion: while the app's own music is audible, a music frame counts only when its confidence beats the learned baseline by

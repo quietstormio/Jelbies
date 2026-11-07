@@ -112,6 +112,8 @@ struct GameScreen: View {
                 }
             }.photoHidden().opacity(model.care.play.active || model.care.pickerShowing ? 0 : 1).allowsHitTesting(!model.care.pickerShowing)          // (no needs bubbles over the ball game, nor under an open Feed / Drink row)
 
+            MusicBubbleView(care: model.care).photoHidden()          // the dancers' music-note thought bubbles (Music Ears, Needs/MusicBubbleView.swift)
+
             CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
 
             RefusalLabel(care: model.care).photoHidden()

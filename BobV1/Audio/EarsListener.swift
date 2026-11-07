@@ -71,17 +71,18 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
     private(set) var buffers = 0
 
     /// `classify`: try the built-in classifier (false = DSP-only, the fallback and the tests).
-    init(format: AVAudioFormat, classify: Bool) {
+    init(format: AVAudioFormat, classify: Bool, musicHold: Double = EarsTuning.musicHold) {
         sampleRate = format.sampleRate
         dsp = EarsDSP(sampleRate: format.sampleRate)
         detector = EarsDetector(usesClassifier: false)
+        detector.musicHold = musicHold
         super.init()
         if classify {
             let an = SNAudioStreamAnalyzer(format: format)
             if let req = try? SNClassifySoundRequest(classifierIdentifier: .version1) {
                 req.windowDuration = CMTime(seconds: 0.5, preferredTimescale: 48_000)
                 req.overlapFactor = 0.5
-                if (try? an.add(req, withObserver: self)) != nil { analyzer = an; detector = EarsDetector(usesClassifier: true) }
+                if (try? an.add(req, withObserver: self)) != nil { analyzer = an; detector = EarsDetector(usesClassifier: true); detector.musicHold = musicHold }
             }
         }
         dsp.onOnset = { [unowned self] o in self.emit(self.detector.onset(o)) }
@@ -164,6 +165,63 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
     }
 }
 
+// MARK: - hold-to-listen tap (audio thread -> analysis queue)
+
+/// Music Ears' share of the VOICE mic. The voice engine's tap (Voice/SpeechInput.swift `installTap`) hands every raw buffer here as well; while the
+/// player HOLDS the mic and Music Ears is owned (`Ears.holdBegan`) the buffers go to an `EarsPipeline` (SoundAnalysis + DSP), otherwise they are
+/// dropped at once (one lock, nothing else). No second engine, no second tap and no session change: the voice mic already owns `.playAndRecord`.
+nonisolated final class EarsHoldTap: @unchecked Sendable {
+    static let shared = EarsHoldTap()
+    private let lock = NSLock()
+    private var on = false
+    private var classify = true
+    private var pipe: EarsPipeline?
+    private var building = false
+    private var generation = 0
+    private var appMusic: Float = 0
+
+    func setOn(_ v: Bool, classify c: Bool = true) {
+        lock.lock(); defer { lock.unlock() }
+        on = v; classify = c; generation += 1
+        if !v { pipe = nil; building = false }
+    }
+    var isOn: Bool { lock.lock(); defer { lock.unlock() }; return on }
+
+    /// The voice tap (audio thread). Cheap when off. The pipeline is built off the audio thread from the first buffer's format.
+    func feed(_ buffer: AVAudioPCMBuffer, hostTime: UInt64) {
+        lock.lock()
+        guard on else { lock.unlock(); return }
+        guard let p = pipe else {
+            if !building {
+                building = true
+                let fmt = buffer.format, gen = generation, cl = classify
+                lock.unlock()
+                DispatchQueue.global(qos: .userInitiated).async { [self] in
+                    let np = EarsPipeline(format: fmt, classify: cl, musicHold: EarsTuning.holdMusicHold)
+                    lock.lock()
+                    if on, generation == gen { pipe = np; np.setAppMusic(appMusic) }
+                    building = false
+                    lock.unlock()
+                }
+                return
+            }
+            lock.unlock(); return
+        }
+        lock.unlock()
+        p.queue.async { p.process(buffer, hostTime: hostTime) }
+    }
+
+    /// Main thread: the pipeline's events since the last drain.
+    func drain() -> [EarEvent] {
+        lock.lock(); let p = pipe; lock.unlock()
+        return p?.drain().events ?? []
+    }
+
+    /// The app's own music level on the speaker (the detector's exclusion: holding the mic with only the game's soundtrack playing must not dance).
+    func setAppMusic(_ l: Float) { lock.lock(); appMusic = l; let p = pipe; lock.unlock(); p?.setAppMusic(l) }
+    func noteAppSound(at media: Double) { lock.lock(); let p = pipe; lock.unlock(); p?.noteAppSound(at: media) }
+}
+
 // MARK: - Ears (main)
 
 @MainActor
@@ -194,6 +252,12 @@ final class Ears {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var foreground = true
     @ObservationIgnored private var voiceHeld = false
+    /// The player holds the mic button and Music Ears is owned: the voice tap feeds the music detector (`EarsHoldTap`).
+    @ObservationIgnored private(set) var holding = false
+    /// A dance that began during a hold (it tails off after the release even while the voice is still processing).
+    @ObservationIgnored private var holdDance = false
+    /// Jelbies that are dancing right now: each shows the music-note thought bubble (Needs/MusicBubbleView.swift).
+    private(set) var dancingIDs: [Int] = []
     @ObservationIgnored private var engine: AVAudioEngine?
     @ObservationIgnored private var pipeline: EarsPipeline?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -212,6 +276,8 @@ final class Ears {
     @ObservationIgnored var permissionDenied: () -> Bool = { AVAudioApplication.shared.recordPermission == .denied }
     @ObservationIgnored var makeEngine: () -> AVAudioEngine = { AVAudioEngine() }
     @ObservationIgnored var classify = true
+    /// Host seconds (tests drive it).
+    @ObservationIgnored var clock: () -> Double = { CACurrentMediaTime() }
     /// Music Ears is owned (bought in the Shop, or grandfathered); GameCare's store answers once the game screen is up. The default allows it.
     @ObservationIgnored var owned: () -> Bool = { true }
     /// Locked until bought: the switch is hidden behind "Get it in the Shop".
@@ -283,6 +349,7 @@ final class Ears {
     func setForeground(_ on: Bool) {
         guard on != foreground else { return }
         foreground = on
+        if !on, holding { holdEnded(); reactor.reset(jellies); publishDancers() }          // backgrounded mid-hold: nothing keeps listening
         guard !inert, wantsEngine, state != .denied else { return }
         if on { start() } else { stopEngine(); if sessionUp { sessionUp = false; sessionHook(false) }; reactor.reset(jellies); state = .paused(.background); hearing = nil; level = 0; note("background") }
     }
@@ -302,6 +369,45 @@ final class Ears {
         voiceHeld = false
         guard !inert, wantsEngine, state != .denied, foreground else { return }
         start()
+    }
+
+    // MARK: hold to listen
+
+    /// The mic button went down (VoiceCoordinator.begin): when Music Ears is owned, the voice mic's buffers also feed the music detector until
+    /// `holdEnded`. Never touches the audio session or starts an engine: it only flips a flag the voice tap reads.
+    func holdBegan() {
+        guard !holding, owned() else { return }
+        holding = true
+        if !inert { EarsHoldTap.shared.setOn(true, classify: classify) }
+        syncExempt()
+        note("hold: listening for music")
+    }
+
+    /// The mic button came up (or the voice listen was cancelled / backgrounded): listening ends, a running dance tails off after `EarsDance.tail`.
+    func holdEnded() {
+        guard holding else { return }
+        holding = false
+        if !inert { EarsHoldTap.shared.setOn(false) }
+        if reactor.isDancing { injected.append(.musicStopped) }
+        syncExempt()
+        note("hold: released")
+    }
+
+    /// A voice command was understood: the command wins, the dance is cut.
+    func commandHeard() {
+        guard reactor.isDancing else { return }
+        reactor.reset(jellies)
+        holdDance = false
+        syncExempt(); publishDancers()
+        note("command: dance cut")
+    }
+
+    /// The voice lock must not stop a dance that the hold started (the mic is "busy" on purpose); an always-on dance still yields to the voice.
+    private func syncExempt() { reactor.voiceExempt = holdDance || (holding && !reactor.isDancing) }
+
+    private func publishDancers() {
+        let ids = reactor.isDancing ? jellies.filter { $0.brain.ears.dancing }.map(\.id) : []
+        if ids != dancingIDs { dancingIDs = ids }
     }
 
     // MARK: engine
@@ -400,9 +506,18 @@ final class Ears {
     /// Once per fixed sim step (MelonStage.hopTick): locks from the game, the detector's events into the reactor, the reactions' frame.
     func tick(actors: [JellyActor], care: GameCare, dt: Float) {
         refreshJellies(actors)
+        step(care: care, dt: dt)
+    }
+
+    /// The tick without the actor list (tests set `debugJellies`).
+    func step(care: GameCare, dt: Float) {
         reactor.update(care: care)
-        let now = CACurrentMediaTime()
+        let now = clock()
         var events = injected; injected.removeAll(keepingCapacity: true)
+        if holding, !inert, !care.voice.isListening { holdEnded() }          // the voice listen ended some other way
+        if holding, !inert { events += EarsHoldTap.shared.drain().filter(\.isMusic) }          // (the hold listens for music only: no claps / barks off the voice)
+        // music starts only while the button is held (or the old always-on switch is on) and Music Ears is owned; a stop always passes
+        if !(holding || isOn) || !owned() { events.removeAll { $0.startsMusic } }
         if let p = pipeline {
             let d = p.drain()
             if isOn { events += d.events }
@@ -414,8 +529,12 @@ final class Ears {
         } else if let (k, until) = demoHearing {
             if now >= until { demoHearing = nil; hearing = nil } else if hearing != k { hearing = k }
         }
+        let wasDancing = reactor.isDancing
         for e in events { reactor.handle(e, jellies: jellies, now: now); note("\(e)") }
+        if !wasDancing, reactor.isDancing, holding { holdDance = true }
         reactor.tick(jellies: jellies, dt: dt, now: now)
+        if !reactor.isDancing { holdDance = false }
+        syncExempt(); publishDancers()
     }
 
     /// The reactor's view of the room, rebuilt only when an actor or a brain changes (no per-step array).
@@ -431,9 +550,9 @@ final class Ears {
     // MARK: hub hooks
 
     /// The app played one of its own effects now (its boops and thumps must not read as claps).
-    func noteAppSound() { pipeline?.noteAppSound(at: CACurrentMediaTime()) }
+    func noteAppSound() { pipeline?.noteAppSound(at: CACurrentMediaTime()); if holding { EarsHoldTap.shared.noteAppSound(at: CACurrentMediaTime()) } }
     /// How loud the app's own music is on the speaker (0 = silent): the music exclusion.
-    func speakerMusicLevel(_ l: Float) { pipeline?.setAppMusic(l) }
+    func speakerMusicLevel(_ l: Float) { pipeline?.setAppMusic(l); EarsHoldTap.shared.setAppMusic(l) }
 
     // MARK: seams (tests, captures)
 
@@ -442,6 +561,7 @@ final class Ears {
     /// The ear button shows this kind for `seconds`.
     func showHearing(_ k: EarKind, seconds: Double = 1.4) { demoHearing = (k, CACurrentMediaTime() + seconds) }
     func debugSetState(_ s: State) { state = s }
+    func debugSetJellies(_ j: [EarsReactor.Jelly]) { jellies = j }
 
     /// `-EarsDemo off|on|hearing:<kind>|denied|paused|dance|clap|double|whistle|bark|laugh` (captures; see GameScreen.runDebugScript).
     private func applyDemo(_ spec: String) {
