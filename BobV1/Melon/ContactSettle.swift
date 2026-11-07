@@ -80,6 +80,7 @@ extension BlobBrain {
         let lying = idleState.kind == .sleep || idleState.kind == .lieDown || idleState.kind == .flop
         guard social != nil, !lying else {
             if ContactTrace.on { ContactTrace.mod(steerID) { $0.nudge = "lying" } }
+            if idleState.kind == .sleep, sleep.stage >= 2 { return }          // (a body that has lain down never moves: user 2026-11-06)
             px += d.x; pz += d.y
             if idleState.kind == .sleep {
                 sleep.spot += d

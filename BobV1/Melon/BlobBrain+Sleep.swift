@@ -158,8 +158,8 @@ enum SleepTuning {
     static let snuggleChanceTired: Float = 0.30, snuggleChanceRare: Float = 0.06
     static let snuggleCool: ClosedRange<Float> = 80...160
     /// A joiner lies flat with a hand-hold, turned toward the other (cuddle), or just lies there. (Vars so the captures can force one.)
-    nonisolated(unsafe) static var holdChance: Float = 0.4
-    nonisolated(unsafe) static var cuddleChance: Float = 0.3
+    nonisolated(unsafe) static var holdChance: Float = 0          // (user 2026-11-06: NO hand-hold when sleeping; a joiner just lies down at a normal spot)
+    nonisolated(unsafe) static var cuddleChance: Float = 0
     /// Hold: the arm points a touch above sideways; the other arm keeps its hanging stub. Cuddle: turn (rad) toward the other, ramp seconds.
     static let holdEl: Float = 0.12
     static let leanAngle: Float = 0.22
@@ -241,26 +241,11 @@ extension BlobBrain {
 
     /// Where he lies down: beside the pile if there is one, else here when this is a good spot, else the nearest good spot on the rug.
     /// `hold`: a row spot beside ONE sleeper at the hand-holding spacing (nil partner = no such spot, the usual choice).
-    func chooseSleepSpot(hold: Bool = false) -> (spot: SIMD2<Float>, yaw: Float, joined: Bool, partner: BlobBrain?) {
+    func chooseSleepSpot() -> (spot: SIMD2<Float>, yaw: Float, joined: Bool, partner: BlobBrain?) {
         let mates = sleepMates
         let here = position
         if let lead = mates.min(by: { $0.steerID < $1.steerID }) {
             let ly = lead.sleep.lieYaw
-            if hold {
-                var bestH: (SIMD2<Float>, BlobBrain, Float)?
-                let sp = handSpacing()
-                for m in mates where m.sleep.partner == nil && m.sleep.mode == .plain && m.sleep.stage <= 3 {
-                    for sgn in [Float(-1), 1] {
-                        let p = m.sleep.spot + SIMD2(cosf(m.sleep.lieYaw), -sinf(m.sleep.lieYaw)) * (sgn * sp)          // (a side-by-side row, along the body's own width)
-                        var clash = false
-                        for o in mates where simd_distance(o.sleep.spot, p) < SleepTuning.minGap || Self.lieClash(p - o.sleep.spot, yawA: m.sleep.lieYaw, yawB: o.sleep.lieYaw, hold: true) { clash = true }
-                        guard !clash, sleepSpotOK(p, mates: mates, hold: true), reachable(here, p) else { continue }
-                        let d = simd_distance(here, p)
-                        if bestH == nil || d < bestH!.2 { bestH = (p, m, d) }
-                    }
-                }
-                if let b = bestH { return (b.0, b.1.sleep.lieYaw, true, b.1) }
-            }
             // a snug place against the sleepers: a ring of spots one footprint round each of them; the side-by-side row (a = 0, pi in the lie frame) is tried
             // first and only when every row spot is taken does he lie in front of / behind a sleeper (at the full footprint length), or in a triangle spot
             var best: (SIMD2<Float>, Float)?
@@ -371,11 +356,10 @@ extension BlobBrain {
 
     /// `idleStart(.sleep)`.
     func sleepBegin(_ sim: SoftBody, night: Bool, force: Bool = false) -> Bool {
-        let wantHold = rand() < SleepTuning.holdChance
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
-        var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot(hold: wantHold)
+        var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot()
         if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
         guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
@@ -383,9 +367,7 @@ extension BlobBrain {
         sleep.force = force
         sleep.spot = c.spot; sleep.lieYaw = c.yaw; sleep.joined = c.joined
         if c.joined {
-            if let p = c.partner { sleep.mode = .hold; sleep.partner = p; p.sleep.mode = .hold; p.sleep.partner = self }
-            else if let lead = sleepMates.min(by: { $0.steerID < $1.steerID }) {
-                if rand() < SleepTuning.cuddleChance / max(1 - SleepTuning.holdChance, 0.1) { sleep.mode = .cuddle }
+            if let lead = sleepMates.min(by: { $0.steerID < $1.steerID }) {
                 sleep.partner = sleepMates.min(by: { simd_distance($0.position, c.spot) < simd_distance($1.position, c.spot) }) ?? lead
             }
         }
@@ -423,9 +405,8 @@ extension BlobBrain {
         if simd_distance(position, sleep.spot) > 0.6, sleep.walkTries < 3 {
             sleep.walkTries += 1
             // re-plan: the pile may have moved on, so choose again
-            let c = chooseSleepSpot(hold: sleep.mode == .hold)
+            let c = chooseSleepSpot()
             sleep.spot = c.spot; sleep.lieYaw = c.yaw; sleep.joined = c.joined
-            if let p = c.partner, sleep.mode == .hold, p !== sleep.partner { sleep.partner?.sleep.mode = .plain; sleep.partner?.sleep.partner = nil; sleep.partner = p; p.sleep.mode = .hold; p.sleep.partner = self }
             if simd_distance(position, c.spot) > 0.25 {
                 scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
                 script = .walk(target: c.spot, then: .none); activity = .walking
@@ -648,8 +629,8 @@ extension BlobBrain {
             f.dur = max(rand(T.tossTime.lowerBound, T.tossTime.upperBound), abs(f.rollGoal - f.rollFrom) / T.rollRateMax)
         } else if r < 0.78 {  // a slow lean to one side and back
             f.kind = 1; f.dur = rand(2.6, 3.6); f.wigAmp = (rand() < 0.5 ? -1 : 1) * 0.08 * sc
-        } else if sleep.bed < 0 && r < 0.86 {  // a slight change of where he lies (was 30 % of shifts at 1 per 32 s = 0.55/min on the floor; now 8 % at 1 per 15.5 s = 0.31/min: the slide is NOT more frequent)
-            sleepPlanDrift(&f, sc)
+        } else if sleep.bed < 0 && r < 0.86 {  // (user 2026-11-06: a sleeper NEVER changes where he lies; the old drift is gone, this slot is a plain slight lean)
+            f.kind = 1; f.dur = 3.0; f.wigAmp = 0.05 * sc
         } else {
             f.kind = 1; f.dur = 3.0; f.wigAmp = 0.05 * sc
         }
@@ -697,7 +678,7 @@ extension BlobBrain {
         // snuggle: ramp the hold arm / the turn toward the other while both sleep, back out when either wakes
         let together = isNapping && !race.active && (sleep.holdForce || (sleep.partner.map { $0.isNapping && simd_distance($0.position, position) < SleepTuning.minGap * 1.5 } ?? false))
         // (in at the snuggle ramp, out fast: the quick roll-up is over in half a second and the arm must be back by then)
-        let holdWant: Float = (together && (sleep.mode == .hold || sleep.holdForce)) ? 1 : 0, leanWant: Float = (together && sleep.mode == .cuddle) ? 1 : 0
+        let holdWant: Float = 0, leanWant: Float = 0          // (no hand-hold / cuddle-lean when sleeping, user 2026-11-06)
         let hUp = dt / SleepTuning.holdRamp, hDown = dt / SleepTuning.holdRampOut
         sleep.holdW += max(-hDown, min(hUp, holdWant - sleep.holdW))
         sleep.leanW += max(-hDown, min(hUp, leanWant - sleep.leanW))

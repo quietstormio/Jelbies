@@ -635,7 +635,7 @@ struct GameScreen: View {
             let n = d.integer(forKey: "HUDSleepDemo")
             await sleep(2.5)
             if care.raceBook.actors.indices.contains(n), let b = care.raceBook.actors[n].brain {
-                b.idleForced = true; _ = b.idleStart(.sleep, care.raceBook.actors[n].sim); b.sleep.hold = 500; b.sleep.holdForce = true
+                b.idleForced = true; _ = b.idleStart(.sleep, care.raceBook.actors[n].sim); b.sleep.hold = 500;
             }
         }
         if let side = d.string(forKey: "HUDFrontPark") {

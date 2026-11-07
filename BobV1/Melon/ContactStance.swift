@@ -262,10 +262,6 @@ extension BlobBrain {
         for o in socialOthers() where o !== self && !o.isNapping && !o.held && o.social == nil && o.idleState.kind != .sleep {          // (a neighbour who is up: the sleeper does not move, the neighbour is kept off)
             ContactSettle.step(self, o, target: ContactStance.near, anchoredA: true, onlySeparate: true, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
         }
-        for o in socialOthers() where o !== self && isNapping && o.isNapping && steerID < o.steerID {
-            let older = o.idleState.t > idleState.t + 0.05 || (abs(o.idleState.t - idleState.t) <= 0.05 && o.steerID < steerID)
-            guard let g = ContactField.gap(steerID, o.steerID, features: true), g < 0.7 else { continue }
-            ContactSettle.step(self, o, target: ContactStance.hold, anchoredA: !older, anchoredB: older, features: true, urgent: ContactSettleTuning.stanceUrgent, support: true)
-        }
+        // (two sleepers are NEVER pulled together: a sleeper's position is fixed once he lies down, user 2026-11-06 "one slid over to hold the other's hand"; this loop used to settle the later one to gap 0)
     }
 }
