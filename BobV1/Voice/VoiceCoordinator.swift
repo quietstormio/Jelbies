@@ -254,6 +254,7 @@ final class VoiceCoordinator {
         intentModel?.prewarm()                         // the first request must not pay the model load
         if let care { ai.router.prewarm(catalog: ai.catalog(care: care)) }      // Apple Intelligence: availability re-read, the next session built now
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
+        Ears.shared.holdBegan()                        // Music Ears (when owned) listens for music on this same mic while the button is held
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
         openCount += 1
         subjectAtOpen = subjectID
@@ -289,6 +290,7 @@ final class VoiceCoordinator {
             catch {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
+                Ears.shared.holdEnded()
                 if self.micUnusable { self.bookRequest += 1 }
             }
         }
@@ -298,6 +300,7 @@ final class VoiceCoordinator {
     /// Release (button up / finger lifted). A hold under 0.25 s is a cancel; otherwise the transcript is collected and `hear` runs.
     func release() {
         guard mode.isListening else { return }
+        Ears.shared.holdEnded()                        // released: Music Ears stops listening, a dance tails off
         if Self.logging {
             NSLog("[voice] level range min %.3f max %.3f over %d updates (off-main %d)", levelCount > 0 ? levelMin : -1, levelMax, levelCount, offMain)
         }
@@ -328,6 +331,7 @@ final class VoiceCoordinator {
     /// Abort (backgrounded): nothing is sent.
     func cancel() {
         let st = startTask
+        Ears.shared.holdEnded()
         if mode.phase != .idle { mode.cancel(); mode.finish(); Task { [input] in await st?.value; await input.abort() } }
     }
 
@@ -364,7 +368,7 @@ final class VoiceCoordinator {
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
-        if roomCommand(transcript) { return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
+        if roomCommand(transcript) { Ears.shared.commandHeard(); return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()
         let who = subject(for: transcript)
         let bk = book(for: who); lastBook = bk
@@ -462,6 +466,7 @@ final class VoiceCoordinator {
     }
 
     func apply(_ c: JellyCommand, deterministic d: VoiceDecision, transcript: String, care: GameCare) {
+        if c.action != .none { Ears.shared.commandHeard() }
         let target: VoiceTarget = c.who.asVoiceTarget
         func mood() -> BlobMood { if let id = target.firstNamed { return care.needs(for: id).mood }; return care.needs(for: care.targetJelly).mood }
         func legacy(_ a: VoiceAction) { let bk = book(for: target.firstNamed ?? subjectID); lastBook = bk; finish(bk.decide(model: a, target: target, mood: mood()), transcript: transcript) }
@@ -495,6 +500,7 @@ final class VoiceCoordinator {
     /// A decision becomes feedback + a queued reaction (with who it is for), and a named Jelly is selected.
     func finish(_ d: VoiceDecision, transcript: String) {
         guard let care else { return }
+        if !d.noMatch { Ears.shared.commandHeard() }          // a command during the hold wins over the dance
         var r = d.reaction
         if r == .perform(.come) { comeCommands += 1 }
         var ids = ids(for: d.target)

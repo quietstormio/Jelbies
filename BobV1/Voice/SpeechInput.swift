@@ -467,8 +467,10 @@ final class DictationSpeechInput: SpeechInput {
         let input = engine.inputNode
         input.removeTap(onBus: 0)
         let fmt = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 2048, format: fmt) { buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 2048, format: fmt) { buffer, when in
             pipe.handle(buffer)
+            // Music Ears shares this tap while the button is held (Audio/EarsListener.swift EarsHoldTap): no second engine, no session change
+            EarsHoldTap.shared.feed(buffer, hostTime: when.isHostTimeValid ? when.hostTime : 0)
         }
     }
 
