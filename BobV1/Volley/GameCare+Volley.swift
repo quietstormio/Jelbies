@@ -224,7 +224,7 @@ extension GameCare {
             if case .match = volley.mode {
                 var rng = ParkRandom(w.pendingSeed &+ 77)
                 let friend = volleyParkFriend()
-                var pool = ParkPool.generate().filter { $0.id != friend?.id }
+                var pool = ParkPool.all(reserved: ParkBook.reservedNames()).filter { $0.id != friend?.id }
                 for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
                 let specs = (w.partnerID == nil ? friend.map { [$0] } ?? [] : []) + Array(pool.prefix(2))
                 let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []

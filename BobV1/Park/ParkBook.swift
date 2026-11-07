@@ -38,17 +38,21 @@ final class ParkBook {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "SeedDupSave") != 0 { Self.writeDuplicateSave(defaults) }          // capture aid: an old save with doubled names, loaded through the real path below
         #endif
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize { let fresh = ParkPool.generate()
+        let full = ParkPool.all(reserved: reserved)
+        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize || v.count == full.count {
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
-            var vs = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
+            var vs = v.map { var x = $0; if full.indices.contains(x.id) { x.colour = full[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
+            // Pool growth (2026-11-07): an old save of the stock 16 gets the extra visitors appended; everything it already holds stays.
+            let grew = vs.count < full.count
+            if grew { vs += full[vs.count...] }
             // Names (2026-11-05): twins merged, the other doubles and the Jelbie / personality-word names renamed (idempotent), saved right away.
             // Safety (2026-11-07): saved model text from earlier builds is checked again; failures fall back to the hand-written words and the save is rewritten.
-            let cleaned = ParkPool.sanitizeSaved(&vs, stock: fresh)
-            if ParkNames.reconcile(&vs, reserved: reserved) || cleaned {
+            let cleaned = ParkPool.sanitizeSaved(&vs, stock: full)
+            if ParkNames.reconcile(&vs, reserved: reserved) || cleaned || grew {
                 if let d = try? JSONEncoder().encode(vs) { defaults.set(d, forKey: Self.key) }
             }
             visitors = vs }
-        else { visitors = ParkPool.generate(reserved: reserved) }
+        else { visitors = full }
     }
 
     /// The names a visitor may not take: the player's species / roster Jelbies, the personality words, the colours (ParkNames.reserved).
@@ -131,14 +135,17 @@ final class ParkBook {
 
     // MARK: the on-device writer (optional)
 
-    /// Asks the on-device model, one visitor at a time in the background, to write the text of every visitor not written yet. Does nothing without the model.
-    func warmUp() {
-        guard !writing, ParkText.available, visitors.contains(where: { !$0.written }) else { return }
+    /// Asks the on-device model, one visitor at a time in the background, to write the text of the visitors in `only` (the ones picked for this visit) that are not
+    /// written yet. Gated on purpose (2026-11-07): with a pool of 48, writing every unwritten visitor would be dozens of model calls; now only who actually visits.
+    /// Does nothing without the model.
+    func warmUp(only ids: [Int]) {
+        let want = Set(ids)
+        guard !writing, ParkText.available, visitors.contains(where: { !$0.written && want.contains($0.id) }) else { return }
         writing = true
         Task { [weak self] in
             guard let self else { return }
             defer { self.writing = false }
-            for id in self.visitors.indices where !self.visitors[id].written {
+            for id in self.visitors.indices where !self.visitors[id].written && want.contains(id) {
                 let v = self.visitors[id]
                 let t = await ParkText.write(colour: v.colour.title.lowercased(), style: v.style.word.lowercased(), signature: Self.words(v.signature))
                 guard self.visitors.indices.contains(id) else { continue }

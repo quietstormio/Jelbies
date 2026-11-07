@@ -68,7 +68,6 @@ extension GameCare {
         }
         select.cancel(); queued.removeAll(); callRunning = false
         voice.cancel()
-        parkBook.warmUp()
         park.openPicker(all: Array(jellies.indices))
     }
 
@@ -314,6 +313,7 @@ extension GameCare {
             if book.actors.count != cast.count { book.cast = Array(book.cast.prefix(book.actors.count)) }
             book.markSeen(book.cast, at: Date().timeIntervalSince1970)
             book.warmLines(book.cast)
+            book.warmUp(only: book.cast)          // the model writes only who actually came (the pool is 48)
             parkPlanGift()
             for (k, slot) in comers.enumerated() where roster.indices.contains(slot) {
                 let a = roster[slot]
