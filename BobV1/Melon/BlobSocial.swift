@@ -125,6 +125,8 @@ struct SocialBook {
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
     var lastKind: SocialKind?
+    /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
+    var recentWith: [Int: [SocialKind]] = [:]
     var roundSeen = -1
     /// Seconds since this Jelly's last social (counts only while he is awake and free to join): the floor asks for one past `droughtLimit`.
     var drought: Float = 0
@@ -419,14 +421,20 @@ extension BlobBrain {
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
-        var w: [(SocialKind, Float)] = [(.boop, 1.5), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
+        var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
+        do {          // pair no-repeat: drop the last 3 kinds this pair did; if fewer than 4 would be left, drop only the most recent
+            let recent = Set((socialBook.recentWith[o.steerID] ?? []) + (o.socialBook.recentWith[steerID] ?? []))
+            let kept = w.filter { !recent.contains($0.0) }
+            if kept.count >= 4 { w = kept } else if let last = socialBook.lastKind { w.removeAll { $0.0 == last } }
+        }
         varietyScaleSocial(&w, partner: o)
         let total = w.reduce(0) { $0 + $1.1 }
         var x = rand() * total
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
         if anticsEnabled { socialBook.lastKind = kind }
+        for (a, b) in [(self, o), (o, self)] { var r = a.socialBook.recentWith[b.steerID] ?? []; r.append(kind); a.socialBook.recentWith[b.steerID] = Array(r.suffix(3)) }
         if !o.socialFree {          // he is out on a wander leg: ask him to stop; the social starts when he has (socialInviteTick)
             guard o.socialBeckonStop() else { socialBook.cooldown = max(socialBook.cooldown, 3); return false }
             socialBook.invite = (kind, o.steerID, 0)
