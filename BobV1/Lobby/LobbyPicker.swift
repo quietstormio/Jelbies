@@ -74,6 +74,8 @@ struct LobbyJelbiePicker: View {
     var portraitCap: CGFloat = 140
     /// false (the Bag): no fixed footnote strip under the row. The lobbies keep it.
     var showNote = true
+    /// Jelbies who already have the thing this picker is for (the Shop's per-Jelbie tricks): a check, and the tile cannot be picked.
+    var checked: Set<Int> = []
     var pick: (Int) -> Void
     @Environment(\.lobbyTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -140,19 +142,23 @@ struct LobbyJelbiePicker: View {
     }
 
     private func segment(_ j: JellyProfile, portrait: CGFloat) -> some View {
-        let on = selected.contains(j.id)
-        return Button { AudioHub.shared.uiTap(); pick(j.id) } label: {
+        let done = checked.contains(j.id)
+        let on = selected.contains(j.id) && !done
+        return Button { if !done { AudioHub.shared.uiTap(); pick(j.id) } } label: {
             VStack(spacing: 0) {
-                JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true).accessibilityHidden(true)
+                JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true).accessibilityHidden(true).opacity(done ? 0.55 : 1)
                 Text(j.name).font(SK.font(15.5, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 6)
             }
             .padding(.top, 6).padding(.bottom, 8)
             .frame(maxWidth: .infinity, minHeight: height(portrait))
             .background(highlight(on))
+            .overlay(alignment: .topTrailing) {
+                if done { Image(systemName: "checkmark.circle.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.ink, SK.mint).padding(8) }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(j.name).accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityLabel(done ? "\(j.name), already knows it" : j.name).accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier(tileID(j))
     }
 

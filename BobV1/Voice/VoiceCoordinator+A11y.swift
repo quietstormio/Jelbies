@@ -36,8 +36,6 @@ extension VoiceCoordinator {
     func announceFeedback(_ kind: VoiceFeedback.Kind) {
         let n = subjectName
         switch kind {
-        case .learned(let t, _): A11yEvents.say(A11yEvents.trickLearned(name: n, trick: t.title), .high)
-        case .rep(let t, let reps): A11yEvents.say("\(t.title): \(reps) of \(VoiceTuning.repsToLearn) lessons", .normal)
         case .unknown: A11yEvents.say("\(n) did not understand", .normal)
         case .nameLearned: A11yEvents.say("\(n) learned the nickname", .high)
         default: break

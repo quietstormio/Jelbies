@@ -1,0 +1,130 @@
+//
+//  TrickStoreTests.swift
+//  Tricks bought in the Shop (Store/TrickCatalog.swift): owned per Jelbie or for everyone, the defaults always known, the one-time migration from
+//  the lesson books, and the voice refusing a trick the Jelbie does not know.
+//
+
+import XCTest
+@testable import BobV1
+
+@MainActor
+final class TrickStoreTests: XCTestCase {
+    nonisolated(unsafe) static var keep: [AnyObject] = []
+    private var suites: [String] = []
+
+    private func suite() -> UserDefaults {
+        let n = "TrickStoreTests.\(UUID().uuidString)"
+        suites.append(n)
+        return UserDefaults(suiteName: n)!
+    }
+    override func tearDown() {
+        for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }
+        suites = []
+    }
+    private func book(_ drops: Int, persists: Bool = false, defaults: UserDefaults? = nil) -> (StoreBook, DropsWallet) {
+        let w = DropsWallet(persists: false)
+        w.add(drops, silent: true)
+        let b = StoreBook(wallet: w, persists: persists, defaults: defaults ?? suite(), key: "TrickStoreTests.book")
+        Self.keep.append(b)
+        return (b, w)
+    }
+
+    func testPerJelbieTrickIsOwnedByThatJelbieOnly() {
+        let (b, w) = book(500)
+        XCTAssertFalse(b.knows(.flip, character: 1))
+        XCTAssertEqual(b.buyTrick(.flip, for: nil), .unknown, "a per-Jelbie trick needs a Jelbie")
+        XCTAssertEqual(b.buyTrick(.flip, for: 1), .bought)
+        XCTAssertEqual(w.count, 500 - TrickCatalog.def(.flip)!.price)
+        XCTAssertTrue(b.knows(.flip, character: 1))
+        XCTAssertFalse(b.knows(.flip, character: 0), "only one Jelbie")
+        XCTAssertFalse(b.knows(.flip, character: 2))
+        XCTAssertEqual(b.trickScope(.flip, character: 1), .perJelbie)
+        let after = w.count
+        XCTAssertEqual(b.buyTrick(.flip, for: 1), .alreadyOwned)
+        XCTAssertEqual(w.count, after, "no second charge")
+        let item = StoreCatalog.item("trick-flip")!
+        XCTAssertFalse(b.owns(item), "the card shows owned only when the whole roster has it")
+        b.rosterCharacters = { [1] }
+        XCTAssertTrue(b.owns(item))
+    }
+
+    func testTrickNeedsEnoughCoins() {
+        let (b, w) = book(10)
+        XCTAssertEqual(b.buyTrick(.flip, for: 0), .notEnough)
+        XCTAssertEqual(w.count, 10)
+        XCTAssertFalse(b.knows(.flip, character: 0))
+    }
+
+    func testEveryoneTrickCoversANewlyAdoptedJelbie() {
+        let (b, w) = book(500)
+        XCTAssertEqual(TrickCatalog.def(.look)?.scope, .everyone)
+        XCTAssertEqual(b.buyTrick(.look, for: nil), .bought)
+        XCTAssertEqual(w.count, 500 - TrickCatalog.def(.look)!.price)
+        for c in 0..<6 { XCTAssertTrue(b.knows(.look, character: c), "character \(c), adopted later too") }
+        XCTAssertEqual(b.trickScope(.look, character: 5), .everyone)
+        XCTAssertEqual(b.buyTrick(.look, for: 3), .alreadyOwned)
+    }
+
+    func testDefaultsAreAlwaysKnownAndNeverSold() {
+        let (b, _) = book(0)
+        for t in [VoiceTrick.sit, .spin, .hop, .jacks, .run, .come] {
+            for c in 0..<6 { XCTAssertTrue(b.knows(t, character: c), "\(t) is a default") }
+            XCTAssertTrue(TrickCatalog.isDefault(t))
+            XCTAssertNil(TrickCatalog.def(t), "\(t) is never sold")
+            XCTAssertNil(b.trickScope(t, character: 0))
+        }
+        XCTAssertEqual(Set(ShowTrickInfo.defaults), [.sit, .spin, .hop, .jacks])
+        for d in TrickCatalog.forSale { XCTAssertFalse(TrickCatalog.isDefault(d.trick)); XCTAssertEqual(d.price, TrickCatalog.price(stars: d.stars)) }
+        XCTAssertEqual(TrickCatalog.price(stars: 3), 110)
+    }
+
+    func testMigrationMakesLearnedTricksPerJelbieAndPagesForEveryone() throws {
+        let d = suite()
+        var s = StoreBook.Saved()
+        s.pages = ["spin", "hop"]
+        d.set(try JSONEncoder().encode(s), forKey: "TrickStoreTests.book")
+        let (b, w) = book(77, persists: true, defaults: d)
+        b.migrateTricks(learned: [0: [.sit, .flip, .come], 1: [.look]], roster: [0, 1])
+        XCTAssertTrue(b.knows(.flip, character: 0)); XCTAssertEqual(b.trickScope(.flip, character: 0), .perJelbie)
+        XCTAssertFalse(b.knows(.flip, character: 1), "flip was Bob's lesson only")
+        XCTAssertTrue(b.knows(.look, character: 1)); XCTAssertFalse(b.knows(.look, character: 0))
+        XCTAssertEqual(b.trickScope(.spin, character: 0), .perJelbie, "an owned page is owned by every current Jelbie")
+        XCTAssertEqual(b.trickScope(.hop, character: 1), .perJelbie)
+        XCTAssertEqual(w.count, 77, "no coins lost or gained")
+        XCTAssertEqual(b.saved.tricksMigrated, true)
+        // once: a second run (different books) changes nothing, also after a relaunch
+        b.migrateTricks(learned: [1: [.flip]], roster: [0, 1])
+        XCTAssertFalse(b.knows(.flip, character: 1))
+        let (again, _) = book(0, persists: true, defaults: d)
+        again.migrateTricks(learned: [1: [.flip]], roster: [0, 1])
+        XCTAssertTrue(again.knows(.flip, character: 0)); XCTAssertFalse(again.knows(.flip, character: 1))
+    }
+
+    func testGameCareWiresEachJelbiesKnowledge() {
+        let care = GameCare(jellyCount: 2, persistent: false)
+        let c1 = care.jelly(1)!.character
+        XCTAssertFalse(care.jelly(0)!.training.unlocked(.flip))
+        XCTAssertFalse(care.jelly(1)!.training.unlocked(.flip))
+        care.store.grantTrick(.flip, to: c1)
+        XCTAssertFalse(care.jelly(0)!.training.unlocked(.flip))
+        XCTAssertTrue(care.jelly(1)!.training.unlocked(.flip), "bought for him")
+        XCTAssertTrue(care.knows(.flip, jelly: 1)); XCTAssertFalse(care.knows(.flip, jelly: 0))
+        care.store.grantTrickToEveryone(.look)
+        XCTAssertTrue(care.jelly(0)!.training.unlocked(.look))
+        XCTAssertTrue(care.jelly(0)!.training.unlocked(.spin), "a default")
+    }
+
+    func testVoiceRefusesATrickTheJelbieDoesNotKnow() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        v.unlocked = { $0 != .flip }
+        let no = v.decideFull(transcript: "flip", runningMove: nil, mood: .happy, session: 1)
+        XCTAssertEqual(no.reaction, .dontKnow(.flip), "the small don't-know-that shrug")
+        XCTAssertFalse(no.noMatch)
+        XCTAssertEqual(v.decideFull(transcript: "sit", runningMove: nil, mood: .happy, session: 2).reaction, .perform(.sit), "a default needs no lesson")
+        XCTAssertEqual(v.decideFull(transcript: "spin", runningMove: nil, mood: .happy, session: 3).reaction, .perform(.spin))
+        XCTAssertEqual(v.decide(model: .trick(.flip), target: .selected, mood: .happy).reaction, .dontKnow(.flip), "the model path obeys the same rule")
+        v.unlocked = { _ in true }
+        XCTAssertEqual(v.decideFull(transcript: "flip", runningMove: nil, mood: .happy, session: 4).reaction, .perform(.flip), "bought: obeyed at once")
+        XCTAssertNotEqual(v.decideFull(transcript: "sit on the couch", runningMove: nil, mood: .happy, session: 5).reaction, .perform(.sit), "a place, not a trick")
+    }
+}

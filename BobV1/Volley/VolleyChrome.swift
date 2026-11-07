@@ -1,7 +1,7 @@
 //
 //  VolleyChrome.swift
 //  Jelly Volleyball's screen furniture while the court is up: the score, the controls (drag the lower area to walk, the left / right buttons, a big Jump
-//  button that serves, jumps, digs at a low ball and spikes when pressed again in the air), drill read-outs, the results card and the white fade.
+//  button that serves, jumps, digs at a low ball and spikes when pressed again in the air), the results card and the white fade.
 //  Portrait: the arrows bottom left, Jump bottom right. Landscape: the same corners, bigger. Everything has VoiceOver labels and keyboard shortcuts.
 //
 
@@ -20,7 +20,6 @@ struct VolleyChrome: View {
     @State private var fxTone = 0
     @State private var fxY: CGFloat = 0
     @State private var fxOpacity: Double = 0
-    @State private var captionOn = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -36,7 +35,7 @@ struct VolleyChrome: View {
                 }
                 .padding(.horizontal, 14).padding(.bottom, compact ? 8 : 14)
                 .animation(CareMenu.spring, value: volley.showsCard)
-                if volley.live, volley.ui.phase == .intro { banner(volley.isDrill ? "Ready?" : "Beach volley!") }
+                if volley.live, volley.ui.phase == .intro { banner("Beach volley!") }
                 Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .heavy, design: .rounded))
                     .foregroundStyle(fxTone == 1 || fxTone == 3 ? Color(red: 1.0, green: 0.85, blue: 0.25) : fxTone == 2 ? Color.white.opacity(0.85) : .white)
                     .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 3)
@@ -52,13 +51,6 @@ struct VolleyChrome: View {
         }
         .allowsHitTesting(volley.active)
         .accessibilityElement(children: .contain)
-        .task(id: volley.live && volley.isDrill) {          // a drill's instruction under the scoreboard for the first few seconds, then it fades
-            guard volley.live, case .drill(let k) = volley.mode else { captionOn = false; return }
-            captionOn = true
-            UIAccessibility.post(notification: .announcement, argument: k.instruction)
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
-            if !Task.isCancelled { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { captionOn = false } }
-        }
     }
 
     // MARK: top
@@ -75,12 +67,8 @@ struct VolleyChrome: View {
                 Spacer()
                 Color.clear.frame(width: 44, height: 44)
             }
-            if volley.live, !volley.isDrill, !volley.ui.touchDots.isEmpty { touchDots }
-            if captionOn, case .drill(let k) = volley.mode {
-                Text(k.instruction).playFont(14, .semibold).foregroundStyle(CareMenu.brown).multilineTextAlignment(.center).padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(CareMenu.cream.opacity(0.95)))
-                    .transition(reduceMotion ? .identity : .opacity).accessibilityIdentifier("volley-drill-caption")
-            } else if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
+            if volley.live, !volley.ui.touchDots.isEmpty { touchDots }
+            if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
             if let t = volley.toast { Text(t).playFont(14, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream)) }
         }
         .padding(.top, 8)
@@ -102,20 +90,7 @@ struct VolleyChrome: View {
     @ViewBuilder
     private var scoreBoard: some View {
         let u = volley.ui
-        if case .drill(let k) = volley.mode {
-            HStack(spacing: 10) {
-                Text(k.title).playFont(15, .heavy)
-                switch k {
-                case .bonk: Text("\(u.drillCount) hits").playFont(17, .bold).monospacedDigit()
-                case .block: Text("Ball \(min(u.drillFeeds, VolleySim.blockFeeds))/\(VolleySim.blockFeeds) · \(u.drillGood) blocked").playFont(15, .bold).monospacedDigit()
-                case .spike: Text("Ball \(min(u.drillFeeds, VolleySim.spikeFeeds))/\(VolleySim.spikeFeeds) · \(u.drillGood) hit").playFont(15, .bold).monospacedDigit()
-                case .sprint: Text("Flags \(u.drillFlags)/\(VolleySim.sprintFlags)").playFont(17, .bold).monospacedDigit()
-                }
-            }
-            .foregroundStyle(CareMenu.brown).padding(.horizontal, 16).padding(.vertical, 8)
-            .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
-            .accessibilityElement(children: .combine).accessibilityIdentifier("volley-score")
-        } else {
+        Group {
             HStack(spacing: 12) {
                 team(volley.playerName.isEmpty ? "You" : volley.playerName, u.score[0], serving: u.serveTeam == 0 && u.phase != .over)
                 Text(":").playFont(20, .black).foregroundStyle(CareMenu.brown.opacity(0.6))
@@ -140,15 +115,6 @@ struct VolleyChrome: View {
     private var hint: String? {
         let u = volley.ui
         guard volley.live else { return nil }
-        if volley.isDrill {
-            if u.phase == .intro { return nil }
-            switch volley.mode {
-            case .drill(.bonk): return "Bump, set, bump! Hit when the ring meets the marker"
-            case .drill(.spike): return "Tap to spike. Swipe the button to aim at the pink cushion"
-            case .drill(.block): return "Tap at the net to block the spike"
-            case .drill(.sprint): return "Run to the pink flag"
-            default: return nil }
-        }
         if u.humanServes { return "Your serve. Tap to toss, tap again at the top" }
         if u.waitingToServe { return "Their serve" }
         return nil
@@ -219,7 +185,7 @@ struct VolleyChrome: View {
 
     /// A double-tap: the nearest of your two Jelbies to the finger takes control.
     private func pick(_ at: CGPoint, _ size: CGSize) {
-        guard volley.live, !volley.isDrill else { return }
+        guard volley.live else { return }
         var best: (Int, CGFloat)?
         for i in 0..<min(2, volley.bodyPos.count) {
             let p = volley.bodyPos[i]
@@ -364,14 +330,7 @@ struct VolleyResultsCard: View {
     var body: some View {
         let s = volley.sim
         VStack(spacing: tight ? 6 : 12) {
-            if case .drill(let k) = volley.mode {
-                Text("\(k.title) done!").playFont(tight ? 22 : 28, .heavy).foregroundStyle(CareMenu.brown)
-                Text(summary(s)).playFont(18, .semibold).foregroundStyle(CareMenu.brown)
-                VStack(spacing: 4) {
-                    gainRow("Speed", volley.gain.speed); gainRow("Power", volley.gain.power); gainRow("Hops", volley.gain.hops); gainRow("Timing", volley.gain.timing)
-                    if volley.gain.speed + volley.gain.power + volley.gain.hops + volley.gain.timing < 0.0005 { Text("Tired legs: a rest helps. Pep comes back tomorrow.").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85)) }
-                }
-            } else {
+            Group {
                 Text(s?.humanTeamWon == true ? "You won!" : "Good game!").playFont(tight ? 24 : 32, .heavy).foregroundStyle(CareMenu.brown)
                 Text("\(s?.score[0] ?? 0)  :  \(s?.score[1] ?? 0)").playFont(30, .heavy).monospacedDigit().foregroundStyle(CareMenu.brown)
                 HStack(spacing: 8) {
@@ -398,16 +357,6 @@ struct VolleyResultsCard: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-card")
     }
 
-    private func summary(_ s: VolleySim?) -> String {
-        guard let s else { return "" }
-        switch s.drillKind {
-        case .bonk?: return "\(s.drillCount) hits, \(s.drillPerfect) Perfect"
-        case .block?: return "\(s.drillGood) of \(VolleySim.blockFeeds) blocked"
-        case .spike?: return "\(s.drillGood) of \(VolleySim.spikeFeeds) on the cushion"
-        case .sprint?: return "\(s.flagIndex) of \(VolleySim.sprintFlags) flags"
-        case nil: return ""
-        }
-    }
     @ViewBuilder
     private func gainRow(_ name: String, _ v: Float) -> some View {
         if v > 0.0005 {

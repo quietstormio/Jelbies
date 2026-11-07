@@ -12,7 +12,7 @@ import QuartzCore
 import simd
 
 /// Race asked while a Jelly is asleep: the trip starts when everybody is upright.
-struct RaceWait { var id: Int; var seed: UInt64?; var age: Float = 0; var drill = false }
+struct RaceWait { var id: Int; var seed: UInt64?; var age: Float = 0 }
 
 /// What GameCare keeps while a race trip is on: the room's Jellies as the stage last gave them, who races in which lane, where everybody was
 /// standing, and the welcome home that follows.
@@ -65,17 +65,11 @@ extension GameCare {
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }
         let d = UserDefaults.standard
-        race.onLapReset = { [weak self] in self?.drillLapReset() }
-        if d.object(forKey: "TrainAuto") != nil { race.drillAuto = true; race.autoReturnAfter = 7 }
         if d.object(forKey: "RaceAuto") != nil { race.autoRate = Float(d.double(forKey: "RaceAuto")) > 0 ? Float(d.double(forKey: "RaceAuto")) : 4; race.autoReturnAfter = 7 }
         // capture aid: -RaceCourse puddle|ripple|splash|wave picks the course for the next race, with every course below it won (open); the ones above stay locked
         if let c = d.string(forKey: "RaceCourse"), let t = CourseTier(rawValue: c.lowercased()) {
             for b in CourseTier.allCases where b.index < t.index { race.progress.records[b] = CourseProgress.Record(races: 1, wins: 1, topTwo: 1) }
             race.courseTier = t
-        }
-        race.onPepDepleted = { [weak self] id in
-            guard let self, let prof = self.jelly(id) else { return }
-            self.live?.pepDepleted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character))
         }
     }
 
@@ -119,43 +113,34 @@ extension GameCare {
     }
 
     /// Takes Jelly `id` to the track.
-    func startRace(jelly id: Int, seed: UInt64? = nil, drill: Bool = false) {
+    func startRace(jelly id: Int, seed: UInt64? = nil) {
         guard canRace(jelly: id) else { return }
         // A Jelly that is asleep (or going to bed) rolls back up first; the trip starts once everybody is on their feet.
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
         if !sleepers.isEmpty {
             for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) }
-            raceWait = RaceWait(id: id, seed: seed, drill: drill)
+            raceWait = RaceWait(id: id, seed: seed)
             for a in raceBook.actors { a.brain?.sleepLocked = true }
             return
         }
-        beginRace(jelly: id, seed: seed, drill: drill)
+        beginRace(jelly: id, seed: seed)
     }
-
-    /// "Train": Jelly `id` practises Rhythm Steps alone on the track.
-    func startDrill(jelly id: Int, seed: UInt64? = nil) { startRace(jelly: id, seed: seed, drill: true) }
 
     /// True from the moment Race is asked (even while a sleeper is still rolling up) until the trip is over: no bedtime, no sleep. The show's trip too.
     var raceBusy: Bool { race.active || raceWait != nil || show.active || volley.active || volleyWork.wait != nil }
 
-    private func beginRace(jelly id: Int, seed: UInt64?, drill: Bool = false) {
+    private func beginRace(jelly id: Int, seed: UInt64?) {
         guard let prof = jelly(id) else { return }
         select.cancel()
         queued.removeAll(); callRunning = false
         voice.cancel()
-        if outingGate([id], again: { [weak self] in self?.beginRace(jelly: id, seed: seed, drill: drill) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
-        if drill {
-            race.stats = prof.stats
-            if let l = live, l.pepLive, prof.stats.pepLeft > 0 { l.pepRefilled() }          // a new day: the Pep is back before he practises
-            race.beginDrill(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus), seed: seed ?? Self.raceSeed)
-            return
-        }
+        if outingGate([id], again: { [weak self] in self?.beginRace(jelly: id, seed: seed) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
         let rivals = Self.raceRivalCount          // always two rivals: a short roster borrows temporary bodies for them at the track (raceSwap)
         race.stats = prof.stats
         race.playerCharacter = prof.character
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
                    playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: prof.perks.consumeRaceBoost(), course: race.courseTier)
-        if race.active, race.kind == .race {           // the race Live Activity (one sprint: lap 1 of 1)
+        if race.active {           // the race Live Activity (one sprint: lap 1 of 1)
             live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
         }
     }
@@ -275,7 +260,7 @@ extension GameCare {
     /// player framed together from a little way down the track, smoothed by `dt`. See Race/RaceCamera.swift.
     func raceFollow(_ actors: [JellyActor], dt: Float) -> RaceFollowPose? {
         let book = raceBook
-        guard race.active, race.trackVisible, race.kind == .race, let sim = race.sim, !sim.course.isStraight, !A11ySettings.shared.reduceMotion else { book.follow = nil; return nil }          // (Reduce Motion: the wide fixed frame, no banking follow camera)
+        guard race.active, race.trackVisible, let sim = race.sim, !sim.course.isStraight, !A11ySettings.shared.reduceMotion else { book.follow = nil; return nil }          // (Reduce Motion: the wide fixed frame, no banking follow camera)
         var spots: [RaceFollowPose.Racer] = []
         let actors = book.extra.isEmpty ? actors : actors + book.extra
         for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
@@ -300,7 +285,7 @@ extension GameCare {
             if w.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }       // gave up waiting: stand him up
             if sleeping.isEmpty || w.age > 8.5 {
                 raceWait = nil
-                beginRace(jelly: w.id, seed: w.seed, drill: w.drill)
+                beginRace(jelly: w.id, seed: w.seed)
             } else { raceWait = w }
         }
         tickNewcomer(actors, dt: dt)
@@ -315,7 +300,7 @@ extension GameCare {
             for i in book.racers.indices {
                 guard let a = body(i), let b = a.brain else { continue }
                 b.raceKeepAlive()
-                if race.kind == .race { race.setMeasured(i, dist: b.raceProgress(sim: a.sim)) }          // his arc length along his lane (pz - startZ on the straight)
+                do { race.setMeasured(i, dist: b.raceProgress(sim: a.sim)) }          // his arc length along his lane (pz - startZ on the straight)
             }
         }
         let events = race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
@@ -327,26 +312,14 @@ extension GameCare {
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
             case .hurdleCleared(let i): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.4, sharpness: 0.7); AudioHub.shared.chirp(jelly: race.playerID, .happy) }
             case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
-            case .results: if race.kind == .race { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
+            case .results: do { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
             default: break
             }
         }
-        if race.kind == .race, race.phase == .racing, let sim = race.sim, sim.phase != .results {
+        if race.phase == .racing, let sim = race.sim, sim.phase != .results {
             let st = sim.playerStanding
             live?.raceProgress(position: st.position, progress: st.progress, lap: 1)          // the policy only publishes a change of place / a quarter of the course
         }
-    }
-
-    /// A new lap of the drill: the Jelly is back square on the start line (the lap dip is fully white).
-    func drillLapReset() {
-        let book = raceBook
-        guard let aid = book.racers.first, book.actors.indices.contains(aid), let brain = book.actors[aid].brain else { return }
-        let a = book.actors[aid]
-        let x = RaceTuning.laneX(RaceTuning.playerLane)
-        brain.endRace()
-        a.sim.teleport(toXZ: SIMD2(x, RaceTuning.startZ))
-        brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: x, course: .puddle, lane: RaceTuning.playerLane)          // the drill is always on the straight
-        a.skinner.jelly.reset()
     }
 
     // MARK: welcome home

@@ -10,7 +10,7 @@ import Foundation
 import CoreGraphics
 
 enum JelbieAction: String, CaseIterable, Sendable {
-    case highlight, callOver, feed, water, train, bed, wake
+    case highlight, callOver, feed, water, bed, wake
     case pet, patHead, boopCheek, pokeBelly, squishCheeks, toss, letGo
 
     func title(_ name: String) -> String {
@@ -19,7 +19,6 @@ enum JelbieAction: String, CaseIterable, Sendable {
         case .callOver: return "Call \(name) over"
         case .feed: return "Feed \(name)"
         case .water: return "Give \(name) water"
-        case .train: return "Train \(name)"
         case .bed: return "Put \(name) to bed"
         case .wake: return "Wake \(name) up"
         case .pet: return "Pet \(name)"
@@ -137,7 +136,7 @@ enum JelbieActions {
             if care.focus.isFocused { return [.pet, .patHead, .boopCheek, .pokeBelly, .squishCheeks, .toss, .letGo] }
             return [.letGo]
         }
-        var out: [JelbieAction] = [.highlight, .callOver, .feed, .water, .train]
+        var out: [JelbieAction] = [.highlight, .callOver, .feed, .water]
         out.append(asleep ? .wake : .bed)
         return out
     }
@@ -177,8 +176,6 @@ enum JelbieActions {
             if care.trayOut { return no("A drink is already out") }
             guard GameRouter.shared.perform(.water(id), care: care) else { return no("\(name) cannot drink right now") }
             return true
-        case .train:
-            care.beginTraining(id); return true
         case .bed:
             if !care.canBedtime { return no("Bedtime is not possible right now") }
             care.bedtime(ids: [id]); return true

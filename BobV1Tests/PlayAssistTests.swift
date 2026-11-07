@@ -1,6 +1,6 @@
 //
 //  PlayAssistTests.swift
-//  The timing assists (round-1023 a11y): forgiving / one-button / auto race, relaxed drill and dance windows, the Show's ring, the bath's "Help me
+//  The timing assists (round-1023 a11y): forgiving / one-button / auto race, relaxed dance windows, the Show's ring, the bath's "Help me
 //  scrub" (it does not press Next), and arranging the room one step at a time.
 //
 
@@ -24,7 +24,7 @@ final class PlayAssistTests: XCTestCase {
     private func startRace(_ assist: RaceAssist, wallet: DropsWallet? = nil) -> RaceFlow {
         A11ySettings.shared.raceAssist = assist
         let f = RaceFlow()
-        f.cue = { _ in }; f.drillCue = { _ in }
+        f.cue = { _ in }; f.jingle = { _ in }
         f.wallet = wallet
         f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.9, focus: 1), playerTint: JellyRoster.tint(0), rivalCount: 2, seed: 5)
         var n = 0
@@ -89,71 +89,7 @@ final class PlayAssistTests: XCTestCase {
         XCTAssertTrue(said.contains { $0.hasPrefix("Bob finished") && $0.hasSuffix("JellyCoins") }, "\(said)")
     }
 
-    // MARK: drill
 
-    func testRelaxedWindowsGradeALateTapGood() {
-        var strict = DrillSim(seed: 3, songTime: 0)
-        let p = strict.prompts[0]
-        strict.tap(foot: p.foot, at: p.time + TrainingTuning.latencyOffset + 0.15)
-        XCTAssertEqual(strict.misses, 1, "150 ms late is a miss as designed")
-        var relaxed = DrillSim(seed: 3, songTime: 0)
-        relaxed.windowScale = A11ySettings.shared.timingScale == 1 ? 2.5 : A11ySettings.shared.timingScale
-        relaxed.tap(foot: p.foot, at: p.time + TrainingTuning.latencyOffset + 0.15)
-        XCTAssertEqual(relaxed.misses, 0)
-        XCTAssertEqual(relaxed.perfects + relaxed.goods, 1, "relaxed windows: a hit")
-    }
-
-    func testOneButtonDrillJudgesTheBeatWhicheverFoot() {
-        var d = DrillSim(seed: 3, songTime: 0)
-        d.anyFoot = true
-        let p = d.prompts[0]
-        d.tap(foot: 1 - p.foot, at: p.time + TrainingTuning.latencyOffset)
-        XCTAssertEqual(d.perfects, 1, "the wrong foot on the beat still counts with one button")
-        var strict = DrillSim(seed: 3, songTime: 0)
-        strict.tap(foot: 1 - p.foot, at: p.time + TrainingTuning.latencyOffset)
-        XCTAssertEqual(strict.misses, 1)
-    }
-
-    func testRelaxedTimingScalesTheSettingsWindow() {
-        A11ySettings.shared.relaxedTiming = true
-        XCTAssertEqual(A11ySettings.shared.timingScale, 2.5)
-        let f = RaceFlow(); f.cue = { _ in }; f.drillCue = { _ in }
-        f.stats = JellyStats(persists: false, seedWaddle: 0.3, seedFocus: 0.3)
-        f.beginDrill(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.3, focus: 0.3), seed: 5)
-        var n = 0
-        while f.drill == nil, n < 60 * 30 { _ = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true }); n += 1 }
-        XCTAssertNotNil(f.drill)
-        XCTAssertEqual(f.drill?.windowScale, 2.5, "the drill is built with wide windows")
-    }
-
-    func testAutoDrillPlaysItselfForHalfTheGain() {
-        A11ySettings.shared.raceAssist = .auto
-        let st = JellyStats(persists: false, seedWaddle: 0.3, seedFocus: 0.3)
-        let f = RaceFlow(); f.cue = { _ in }; f.drillCue = { _ in }; f.stats = st
-        f.beginDrill(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.3, focus: 0.3), seed: 5)
-        var n = 0
-        while f.drillResult == nil, n < 60 * 160 { _ = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true }); n += 1 }
-        let r = f.drillResult
-        XCTAssertNotNil(r, "he practises by himself")
-        XCTAssertEqual(r?.misses, 0, "auto-steps every prompt")
-        let full = st.practiceGain(accuracy: r?.accuracy ?? 0, steadiness: 0).waddle
-        XCTAssertGreaterThan(r?.waddleGain ?? 0, 0)
-        XCTAssertLessThan(r?.waddleGain ?? 1, full, "half the gain of a player who earned the same accuracy")
-    }
-
-    func testPromptsPlayALeftRightCueWhenRelaxed() {
-        A11yEvents.forceActive = true
-        let f = RaceFlow(); f.cue = { _ in }; f.drillCue = { _ in }
-        f.beginDrill(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.3, focus: 0.3), seed: 5)
-        var n = 0
-        while f.drill == nil, n < 60 * 30 { _ = f.tick(dt: 1 / 60, bodyFree: { _ in true }, bodyReady: { _ in true }); n += 1 }
-        let d = f.drill!
-        RaceFlow.cueLog = []
-        f.promptCues(song: d.prompts[2].time + 0.1)
-        XCTAssertEqual(RaceFlow.cueLog, d.prompts.prefix(3).map(\.foot), "each prompt is cued once, on its own side, in order")
-        f.promptCues(song: d.prompts[2].time + 0.1)
-        XCTAssertEqual(RaceFlow.cueLog.count, 3, "never twice")
-    }
 
     // MARK: show
 

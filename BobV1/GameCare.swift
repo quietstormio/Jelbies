@@ -270,7 +270,9 @@ final class GameCare {
         store.characterOf = { [weak self] slot in self?.jelly(slot)?.character ?? slot }       // outfits are saved by character
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
         bath.success = { [weak self] in UINotificationFeedbackGenerator().notificationOccurred(.success); self?.soapFinished() }
-        wireTrainingBooks()          // every Jelly's book (GameCare+Training.swift)
+        store.rosterCharacters = { [weak self] in self?.jellies.map(\.character) ?? [0] }
+        for j in jellies { let c = j.character; j.training.unlocked = { [weak self] t in self?.store.knows(t, character: c) ?? TrickCatalog.isDefault(t) } }          // what each Jelbie knows (Store/TrickCatalog.swift)
+        migrateTricks(defaults: defaults)
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()

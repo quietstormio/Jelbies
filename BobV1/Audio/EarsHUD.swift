@@ -101,11 +101,21 @@ struct EarsSettingsRow: View {
     private var tint: Color { ThemeStore.shared.controlAccent }
 
     static let privacyText = "Your Jelbies listen for claps, whistles, laughter and music while the app is open, and react. Sound is understood right on your phone. Nothing is recorded or sent anywhere."
+    static let lockedText = "Get it in the Shop. They dance to your music and react to claps, whistles and laughs. Uses the microphone while on."
     static let deniedText = "The microphone is turned off for this app. Allow it in Settings to use Ears."
 
     var body: some View {
         let on = Binding<Bool>(get: { ears.state.isOn }, set: { ears.setOn($0) })
         VStack(alignment: .leading, spacing: tight ? 2 : 4) {
+            if ears.isLocked {
+                Label("Music Ears", systemImage: "lock.fill").jFont(15, .semibold).foregroundStyle(ink)
+                    .accessibilityIdentifier("sound-ears-locked")
+                Text(Self.lockedText)
+                    .jFont(tight ? 11 : 12, .regular)
+                    .foregroundStyle(ink.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("sound-ears-locked-text")
+            } else {
             Toggle(isOn: on) {
                 Label("Ears", systemImage: "ear.fill").jFont(15, .semibold).foregroundStyle(ink)
             }
@@ -122,6 +132,7 @@ struct EarsSettingsRow: View {
                     .jFont(13, .semibold)
                     .foregroundStyle(tint)
                     .buttonStyle(.plain)
+            }
             }
         }
     }

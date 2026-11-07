@@ -314,7 +314,7 @@ final class CourseModelTests: XCTestCase {
     func testFinalStretchMusicNearTheFinishOnEveryCourse() {
         for t in Self.tiers {
             let f = RaceFlow()
-            f.cue = { _ in }; f.drillCue = { _ in }; f.autoRate = 6
+            f.cue = { _ in }; f.jingle = { _ in }; f.autoRate = 6
             f.progress.records[.puddle] = CourseProgress.Record(races: 9, wins: 9, topTwo: 9); f.progress.records[.ripple] = f.progress.records[.puddle]; f.progress.records[.splash] = f.progress.records[.puddle]; f.progress.records[.wave] = f.progress.records[.puddle]
             f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.9, focus: 1), playerTint: JellyRoster.tint(0), rivalCount: 2, seed: 3, course: t)
             var sawRace = false, sawFinal = false, finalAt: Float?
@@ -401,7 +401,7 @@ final class CourseProgressionTests: XCTestCase {
             XCTAssertFalse(f.active)
         }
         let w = DropsWallet(persists: false)
-        let f = RaceFlow(); f.rivalSource = Slow(); f.cue = { _ in }; f.drillCue = { _ in }; f.autoRate = 6; f.wallet = w
+        let f = RaceFlow(); f.rivalSource = Slow(); f.cue = { _ in }; f.jingle = { _ in }; f.autoRate = 6; f.wallet = w
         f.courseTier = .wave
         run(f)
         XCTAssertEqual(f.progress.record(.puddle).wins, 1, "Wave was locked: the race ran on the Puddle")

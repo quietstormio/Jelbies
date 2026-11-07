@@ -115,7 +115,7 @@ final class EarsReactor {
         l.focusApproach = care.focus.isActive && care.focus.phase == .approaching
         l.bath = care.bath.active
         l.voice = care.voice.mode.phase != .idle
-        l.training = care.voice.teachPrompt != nil
+        l.training = false
         // Jelly Circuit / Rhythm Steps: from the moment a race or drill is asked (even while he is still rolling up) until the trip is over
         l.race = care.race.active || care.raceWait != nil || extraLock()
         locks = l

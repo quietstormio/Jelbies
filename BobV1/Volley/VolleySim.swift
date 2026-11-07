@@ -3,7 +3,7 @@
 //  The rules and the ball of Jelly Volleyball (v2) as one pure model (no bodies, no screen): a big floaty beach ball (slow gravity, gentle drag) that flies in x, y AND z
 //  (the court has depth now), four players (the human's team of two, two visitors), rally scoring to 11 (win by 2, cap 15), the real three-touch structure (BUMP, SET,
 //  SPIKE, a fourth touch is a fault), the timing ring and its Perfect window, the combo, the body block, control switching (double-tap, auto-switch), the computer
-//  players' decisions (smart teammate, tiered opponents), and the four training drills.
+//  players' decisions (smart teammate, tiered opponents). 
 //
 //  The sim never moves a body. Each step the glue gives it where the bodies ARE (x, z, lift, the surface points of the soft body) and takes back EVENTS to put on them:
 //  jump / spike / dive / block for a body to perform, `contact` when the ball met a body (the glue dents the soft body there), points and the rest.
@@ -33,10 +33,6 @@ nonisolated enum VolleyEvent: Equatable, Sendable {
     case serveReady(player: Int)
     case cheer(team: Int)
     case matchOver(winner: Int)
-    case drillBall(Int)
-    case drillHit(Bool)
-    case flag(Int)
-    case drillOver
     /// Control moved to this player of the human's team (`auto`: the sim did it).
     case switched(to: Int, auto: Bool)
     /// A computer teammate is calling for the ball ("!" and a chirp).
@@ -112,7 +108,7 @@ nonisolated struct VolleyRing: Equatable, Sendable {
 nonisolated struct VolleyTiming: Sendable { var tau: Float, lead: Float, dig: Bool, x: Float, z: Float }
 
 nonisolated enum VolleyPhase: Equatable, Sendable { case intro, serveWait, rally, pointPause, over }
-nonisolated enum VolleyMode: Equatable, Sendable { case match(VolleyTier), drill(VolleyDrillKind) }
+nonisolated enum VolleyMode: Equatable, Sendable { case match(VolleyTier) }
 
 nonisolated struct VolleyRng: Sendable {
     var s: UInt64
@@ -192,22 +188,7 @@ nonisolated struct VolleySim: Sendable {
     private var crossedFor = -1
     private(set) var comboFlash: Float = 0
 
-    // drills
-    private(set) var drillCount = 0, drillGood = 0, drillFeeds = 0, drillPerfect = 0
-    private(set) var cushions: [Float] = []
-    private(set) var targetCushion = 0
-    private(set) var flags: [SIMD2<Float>] = []
-    private(set) var flagIndex = 0
-    private(set) var drillTime: Float = 0
-    private var feedWait: Float = 0
-    private var blockHang: Float = 0
-    private var blockedNow = false
-    private var hangZ: Float = 0
-    static let spikeFeeds = 6, blockFeeds = 6, sprintFlags = 8, sprintTime: Float = 28, bonkCap = 26, bonkTime: Float = 70
-
     var tier: VolleyTier? { if case .match(let t) = mode { return t }; return nil }
-    var isDrill: Bool { if case .drill = mode { return true }; return false }
-    var drillKind: VolleyDrillKind? { if case .drill(let k) = mode { return k }; return nil }
     var human: Int { controlled }
     static func side(_ team: Int) -> Float { team == 0 ? -1 : 1 }
     func isHuman(_ i: Int) -> Bool { players.indices.contains(i) && i == controlled && players[i].team == 0 }
@@ -225,21 +206,6 @@ nonisolated struct VolleySim: Sendable {
                 players.append(VolleyPlayer(team: i / 2, human: i == 0, stats: st[i], skill: skills[i], x: T.startX[i], z: T.startZ[i], wantX: T.startX[i], wantZ: T.startZ[i]))
             }
             server = firstServe
-        case .drill(let k):
-            let m0 = mine.first ?? VolleyStats()
-            let x: Float = k == .block ? -1.2 : -1.5
-            players = [VolleyPlayer(team: 0, human: true, stats: m0, skill: 1, x: x, z: 0, wantX: x, wantZ: 0)]
-            cushions = [0.9, 1.7, 2.4]
-            if k == .sprint {
-                var pts: [SIMD2<Float>] = [], last = SIMD2<Float>(-1.5, 0)
-                for _ in 0..<Self.sprintFlags {
-                    var p = SIMD2<Float>(rng.range(-2.4, -0.55), rng.range(-1.0, 1.0))
-                    var tries = 0
-                    while simd_distance(p, last) < 1.3, tries < 12 { p = SIMD2(rng.range(-2.4, -0.55), rng.range(-1.0, 1.0)); tries += 1 }
-                    pts.append(p); last = p
-                }
-                flags = pts
-            }
         }
         serverIndex = server * 2
     }
@@ -266,7 +232,7 @@ nonisolated struct VolleySim: Sendable {
 
     /// Double-tap on a Jelbie of the human's team: take control of him.
     mutating func switchTo(_ i: Int, manual: Bool = true) {
-        guard !isDrill, players.indices.contains(i), players[i].team == 0, i != controlled else { return }
+        guard players.indices.contains(i), players[i].team == 0, i != controlled else { return }
         controlled = i
         for k in players.indices { players[k].human = (k == i) }
         stick = .zero
@@ -287,14 +253,14 @@ nonisolated struct VolleySim: Sendable {
         guard players.indices.contains(controlled) else { return }
         tapLag = max(-0.1, min(0.1, lag)); defer { tapLag = 0 }
         if phase == .serveWait {
-            if !isDrill, serverIndex == controlled { toss(controlled) }
+            if serverIndex == controlled { toss(controlled) }
             return
         }
-        if phase == .rally, servePending, serverIndex == controlled, lastHit < 0, !isDrill {
+        if phase == .rally, servePending, serverIndex == controlled, lastHit < 0 {
             serveJump(controlled, quality: judge(timing(for: controlled), controlled))
             return
         }
-        guard phase == .rally || (isDrill && phase != .over) else { return }
+        guard phase == .rally else { return }
         action(controlled, ai: false)
     }
 
@@ -438,7 +404,6 @@ nonisolated struct VolleySim: Sendable {
     private mutating func startServe() {
         phase = .serveWait; phaseT = 0
         serverIndex = server * 2 + serveRot[server]
-        if isDrill { serverIndex = 0 }
         touches = [0, 0]; lastHit = -1; possession = -1; touchLog = []; ring = nil; serveMeter = nil; servePending = false
         events.append(.serveReady(player: serverIndex))
         if serverIndex < players.count {
@@ -462,14 +427,7 @@ nonisolated struct VolleySim: Sendable {
         case .intro:
             hover(dt: dt)
             runAI(dt: dt)
-            if phaseT >= T.introSeconds {
-                if case .drill(let k) = mode {
-                    phase = .rally; phaseT = 0; drillTime = 0
-                    if k == .bonk { drop(x: -1.4, y: 3.2) }
-                    if k == .spike { feed() }
-                    if k == .block { feed() }
-                } else { startServe() }
-            }
+            if phaseT >= T.introSeconds { startServe() }
         case .serveWait:
             hover(dt: dt)
             if !isHuman(serverIndex), players[serverIndex].wait > 0 {
@@ -478,10 +436,9 @@ nonisolated struct VolleySim: Sendable {
             }
             runAI(dt: dt)
         case .rally:
-            if let k = drillKind { tickDrill(k, dt: dt); return }
             stepBall(dt: dt)
             // soft-lock guard: a rally that somehow never ends is called for whoever did not touch last
-            if phase == .rally, !isDrill, phaseT > 60 { awardPoint(lastHit >= 0 ? 1 - players[lastHit].team : 1 - server, out: false); return }
+            if phase == .rally, phaseT > 60 { awardPoint(lastHit >= 0 ? 1 - players[lastHit].team : 1 - server, out: false); return }
             if phase == .rally {
                 updateRing()
                 runAI(dt: dt)
@@ -510,14 +467,12 @@ nonisolated struct VolleySim: Sendable {
     }
 
     private mutating func hover(dt: Float) {
-        guard !isDrill, players.indices.contains(serverIndex) else { return }
+        guard players.indices.contains(serverIndex) else { return }
         let p = players[serverIndex]
         ball.pos = SIMD2(p.x + Self.side(p.team) * 0.1, p.top + 0.75 + 0.06 * sinf(clock * 3))
         ball.z = p.z
         ball.vel = .zero; ball.vz = 0
     }
-
-    private mutating func drop(x: Float, y: Float, z: Float = 0) { ball.pos = SIMD2(x, y); ball.z = z; ball.vel = .zero; ball.vz = 0; touches = [0, 0]; lastHit = -1 }
 
     /// Fires the leans: a spike-planned jump tips onto its belly once it is a little way up.
     private mutating func fireSpikes() {
@@ -530,7 +485,7 @@ nonisolated struct VolleySim: Sendable {
     /// The server's jump: the human's second tap does it; with no second tap (or for a computer server) it goes at the ideal moment.
     private mutating func serveJumpTick() {}
     private mutating func serverJump() {
-        guard !isDrill, servePending, lastHit < 0, players.indices.contains(serverIndex) else { serveMeter = nil; return }
+        guard servePending, lastHit < 0, players.indices.contains(serverIndex) else { serveMeter = nil; return }
         let i = serverIndex, p = players[i]
         let apex = T.apex(hops: p.stats.hops), lead = T.crouch + 0.5 * T.airTime(apex: apex)
         let hitH = T.bodyTop + apex * 0.9 + 0.3
@@ -619,25 +574,6 @@ nonisolated struct VolleySim: Sendable {
         if lastHit < 0 { loser = server }
         else if out { loser = players[lastHit].team }
         else { loser = x < 0 ? 0 : 1 }
-        if let k = drillKind {
-            switch k {
-            case .bonk: phase = .over; events.append(.drillOver)
-            case .spike:
-                let good = lastHit >= 0 && abs(x - cushions[min(targetCushion, cushions.count - 1)]) < 0.6 && abs(zb) < 0.95
-                if good { drillGood += 1 }
-                events.append(.drillHit(good))
-                ball.vel = .zero; ball.vz = 0
-                if drillFeeds >= Self.spikeFeeds { phase = .over; events.append(.drillOver) } else { feedWait = 1.0 }
-            case .block:
-                let good = blockedNow && x > 0
-                if good { drillGood += 1 }
-                events.append(.drillHit(good))
-                ball.vel = .zero; ball.vz = 0
-                if drillFeeds >= Self.blockFeeds { phase = .over; events.append(.drillOver) } else { feedWait = 1.0 }
-            case .sprint: break
-            }
-            return
-        }
         awardPoint(1 - loser, out: out)
     }
 
@@ -688,7 +624,7 @@ nonisolated struct VolleySim: Sendable {
         nrm = L > 1e-4 ? nrm / L : SIMD2(0, 1)
         let rel = c.y - (T.bodyTop * 0.5 + p.lift)
         let team = p.team
-        let isServe = lastHit < 0 && i == serverIndex && !isDrill
+        let isServe = lastHit < 0 && i == serverIndex
         let before = touches[team]
         // what kind of hit: the body's move first, then the touch count
         var kind: VolleyHit
@@ -701,25 +637,15 @@ nonisolated struct VolleySim: Sendable {
         if kind == .bump { kind = contextual(i, before: before, human: human) }
         if kind == .dig, before >= T.maxTouches - 1 { kind = .free }
         if isServe { kind = .serve }
-        if let k = drillKind {
-            switch k {
-            case .bonk: kind = drillCount % 2 == 0 ? .bump : .set
-            case .spike: if kind != .spike { kind = .free }
-            case .block: if kind != .block { kind = .dig }
-            case .sprint: break
-            }
-        }
         let fresh = clock - p.tapT < 1.3
         var q: VolleyQuality = fresh ? p.tapQ : .good
         if kind == .block { q = .good }
         // the combo: a Perfect bump, set and spike in one rally
         var combo = false
-        if !isDrill {
-            if q == .perfect, kind == .bump || kind == .dig { chain[team] = 1 }
-            else if q == .perfect, kind == .set, chain[team] == 1 { chain[team] = 2 }
-            else if q == .perfect, kind == .spike, chain[team] == 2 { combo = true; chain[team] = 0 }
-            else if kind != .block { chain[team] = 0 }
-        }
+        if q == .perfect, kind == .bump || kind == .dig { chain[team] = 1 }
+        else if q == .perfect, kind == .set, chain[team] == 1 { chain[team] = 2 }
+        else if q == .perfect, kind == .spike, chain[team] == 2 { combo = true; chain[team] = 0 }
+        else if kind != .block { chain[team] = 0 }
         let v = outgoing(i, kind: kind, quality: q, combo: combo, at: c, normal: nrm)
         ball.vel = SIMD2(v.x, v.y); ball.vz = v.z
         ball.pos = c + nrm * (T.ballR + 0.02)
@@ -747,7 +673,7 @@ nonisolated struct VolleySim: Sendable {
         events.append(.contact(player: i, kind: kind, quality: q, point: c, normal: nrm, speed: simd_length(v)))
         if !isServe, kind != .block { events.append(.touchCount(team: team, count: touches[team])) }
         // feedback text (for the human's team)
-        if team == 0, !isDrill || drillKind == .bonk {
+        if team == 0 {
             if combo { fx("Combo!", 3) }
             else if kind == .block { fx("Block!", 3) }
             else if q == .perfect { fx("Perfect!", 1) }
@@ -757,16 +683,15 @@ nonisolated struct VolleySim: Sendable {
         } else if kind == .block, team == 1 { fx("Blocked!", 2) }
         if combo { comboFlash = 1.2; events.append(.combo(team: team)) }
         // a match-point spike gets the slow beat
-        if kind == .spike, !isDrill, matchPoint(team) { events.append(.slowMo) }
-        if isDrill { drillContact(i, kind, q) }
+        if kind == .spike, matchPoint(team) { events.append(.slowMo) }
         // roll a block for the other side when a set goes up
-        if !isDrill, kind == .set || (kind == .bump && before == 1) {
+        if kind == .set || (kind == .bump && before == 1) {
             blockWanted[1 - team] = rng.next() < params[1 - team].block
         }
         // control follows the ball after a hit by the controlled player
-        if team == 0, !isDrill { autoSwitchNow(reason: .touched) }
+        if team == 0 { autoSwitchNow(reason: .touched) }
         // a fourth touch is a fault
-        if !isDrill, kind != .block, !isServe, touches[team] > T.maxTouches {
+        if kind != .block, !isServe, touches[team] > T.maxTouches {
             events.append(.fault(team: team))
             fx("4 touches", 2)
             awardPoint(1 - team, out: false)
@@ -832,23 +757,7 @@ nonisolated struct VolleySim: Sendable {
         var over = true
         let partner: VolleyPlayer? = players.indices.contains(p.team * 2 + (1 - i % 2)) && p.team * 2 + (1 - i % 2) != i ? players[p.team * 2 + (1 - i % 2)] : nil
         let slow: Float = q == .early || q == .late ? 1.12 : 1
-        if let k = drillKind {
-            switch k {
-            case .bonk:
-                tgt = SIMD2(rng.range(-2.3, -0.7), rng.range(-0.6, 0.6)); tf = kind == .set ? 2.25 : 1.9; over = false
-            case .spike:
-                if kind == .spike {
-                    let cx = cushions[min(targetCushion, cushions.count - 1)]
-                    if let a = p.aim, clock - p.aimT < 1.4 { tgt = aimTarget(a, team: 0) } else { tgt = SIMD2(1.7, 0) }
-                    _ = cx
-                    tf = T.spikeTime(power: p.stats.power) * (q == .perfect ? 0.9 : slow)
-                } else { tgt = SIMD2(-1.2, 0); tf = 1.8; over = false }
-            case .block:
-                tgt = SIMD2(rng.range(0.9, 1.8), ball.z); tf = 0.85
-            case .sprint: tgt = SIMD2(-1.5, 0); tf = 1.8; over = false
-            }
-            err *= 0.6
-        } else {
+        do {
             switch kind {
             case .serve:
                 tgt = chooseTarget(i)
@@ -902,7 +811,7 @@ nonisolated struct VolleySim: Sendable {
     private enum SwitchReason { case crossed, touched }
 
     private mutating func autoSwitchNow(reason: SwitchReason) {
-        guard !isDrill, players.count >= 4, autoSwitch || autoMove, clock - lastManualSwitch > 2.0 || phase == .serveWait else { return }
+        guard players.count >= 4, autoSwitch || autoMove, clock - lastManualSwitch > 2.0 || phase == .serveWait else { return }
         var target = controlled
         switch reason {
         case .touched:
@@ -931,10 +840,9 @@ nonisolated struct VolleySim: Sendable {
     private mutating func updateRing() {
         guard players.indices.contains(controlled), controlled < players.count else { ring = nil; return }
         let p = players[controlled]
-        if isDrill, drillKind == .sprint || drillKind == .block { ring = nil; return }
         // not while the team's three touches are spent
-        if !isDrill, touches[p.team] >= T.maxTouches { ring = nil; return }
-        guard let tm = timing(for: controlled), tm.x * Self.side(p.team) > -0.2 || isDrill else { ring = nil; return }
+        if touches[p.team] >= T.maxTouches { ring = nil; return }
+        guard let tm = timing(for: controlled), tm.x * Self.side(p.team) > -0.2 else { ring = nil; return }
         let pw = T.perfectWindow(timing: p.stats.timing, wide: wideWindow), gw = T.goodWindow(timing: p.stats.timing, wide: wideWindow)
         ring = VolleyRing(x: tm.x, z: tm.z, tau: tm.tau, lead: tm.lead, perfect: pw, good: gw, dig: tm.dig)
     }
@@ -1039,7 +947,7 @@ nonisolated struct VolleySim: Sendable {
             players[i] = p
             return
         }
-        guard phase == .rally, !isDrill || drillKind != .sprint else {
+        guard phase == .rally else {
             if moveToo, phase != .rally { p.wantX = homeX; p.wantZ = homeZ }
             players[i] = p
             return
@@ -1047,7 +955,7 @@ nonisolated struct VolleySim: Sendable {
         // where will the ball be when it comes down to head height (or the sand)?
         guard let tH = timeToHeight(1.55) ?? timeToHeight(T.ballR) else { players[i] = p; return }
         let landX = xAfter(tH), landZ = zAfter(tH)
-        let mine = landX * s > -0.35 && (ballOnMySide(team) || ball.vel.x * s > 0.3 || lastHit < 0 || isDrill)
+        let mine = landX * s > -0.35 && (ballOnMySide(team) || ball.vel.x * s > 0.3 || lastHit < 0)
         if servePending, i == serverIndex {          // the server waits under his toss
             players[i] = p
             return
@@ -1055,7 +963,7 @@ nonisolated struct VolleySim: Sendable {
         guard mine else {
             // the ball is with the others: be ready, and put up a block against a set
             p.wait = pr.react
-            if !isDrill { aiBlock(&p, i: i, pr: pr) }
+            aiBlock(&p, i: i, pr: pr)
             if moveToo, p.act == .stand {
                 let blocking = blockWanted[team] && touches[1 - team] >= 2 && abs(p.x) < 2.2 && (players.indices.contains(team * 2 + 1) ? abs(p.x) <= abs(players[team * 2 + (i % 2 == 0 ? 1 : 0)].x) : true)
                 if !blocking {
@@ -1080,7 +988,7 @@ nonisolated struct VolleySim: Sendable {
                 p.readSerial = touchSerial
                 let slip = (1 - pr.read) * 1.0
                 p.readErr = (rng.next() - 0.5) * 2 * slip
-                if !isDrill, rng.next() < 0.5 { p.readErr *= 0.3 }
+                if rng.next() < 0.5 { p.readErr *= 0.3 }
             }
             var tx = landX + p.readErr
             if t0 >= 2 { tx = landX + s * 0.45 + p.readErr }
@@ -1089,7 +997,7 @@ nonisolated struct VolleySim: Sendable {
                 if p.wait <= 0 { p.wantX = tx; p.wantZ = landZ }
             }
             // a teammate calls for it
-            if team == 0, !isHuman(i), !isDrill, p.calledSerial != touchSerial, tH < 2.4, lastHit >= 0 || tH < 1.6 {
+            if team == 0, !isHuman(i), p.calledSerial != touchSerial, tH < 2.4, lastHit >= 0 || tH < 1.6 {
                 p.calledSerial = touchSerial
                 events.append(.call(player: i))
             }
@@ -1164,79 +1072,6 @@ nonisolated struct VolleySim: Sendable {
             if abs(p.z - p.wantZ) < 0.7 { players[i].act = .block; players[i].actT = 0; p.act = .block
                 players[i].tapQ = .good; players[i].tapT = clock
                 events.append(.jump(player: i, dx: 0, dz: max(-0.5, min(0.5, (p.wantZ - p.z) * 0.9)), apex: T.blockApex(hops: p.stats.hops), block: true)) }
-        }
-    }
-
-    // MARK: drills
-
-    private mutating func feed() {
-        drillFeeds += 1
-        blockedNow = false
-        if drillKind == .block {
-            hangZ = rng.range(-0.7, 0.7)
-            blockHang = 1.1
-            ball.pos = SIMD2(1.25, 2.7); ball.z = hangZ; ball.vel = .zero; ball.vz = 0
-            touches = [0, 2]; lastHit = -1
-            events.append(.drillBall(drillFeeds))
-            return
-        }
-        targetCushion = Int(rng.next() * Float(cushions.count)) % cushions.count
-        ball.pos = SIMD2(-0.55, 3.0); ball.z = rng.range(-0.4, 0.4); ball.vel = SIMD2(-0.15, 0); ball.vz = 0
-        touches = [2, 0]; lastHit = -1
-        events.append(.drillBall(drillFeeds))
-    }
-
-    private mutating func tickDrill(_ k: VolleyDrillKind, dt: Float) {
-        drillTime += dt
-        switch k {
-        case .bonk:
-            stepBall(dt: dt)
-            if drillTime > Self.bonkTime || drillCount >= Self.bonkCap { phase = .over; events.append(.drillOver) }
-        case .spike:
-            if feedWait > 0 { feedWait -= dt; if feedWait <= 0 { feed() }; runAI(dt: dt); updateRing(); return }
-            stepBall(dt: dt)
-            if phase == .rally { updateRing() }
-        case .block:
-            if feedWait > 0 { feedWait -= dt; if feedWait <= 0 { feed() }; runAI(dt: dt); return }
-            if blockHang > 0 {
-                blockHang -= dt
-                ball.pos = SIMD2(1.25, 2.7 + 0.05 * sinf(clock * 6)); ball.z = hangZ; ball.vel = .zero; ball.vz = 0
-                if blockHang <= 0 {
-                    // the spike: a slow lob-spike down toward the player's court
-                    let tx = -rng.range(1.5, 2.1), tz = hangZ + rng.range(-0.25, 0.25), tf: Float = 1.05
-                    ball.vel = SIMD2((tx - 1.25) / (tf * (1 - 0.5 * T.drag * tf)), (T.ballR - 2.7) / tf + 0.5 * T.gravity * tf)
-                    ball.vz = (tz - hangZ) / (tf * (1 - 0.5 * T.drag * tf))
-                    touches = [0, 2]; lastHit = -1
-                }
-            } else { stepBall(dt: dt) }
-        case .sprint:
-            let p = players[0]
-            if flagIndex < flags.count, simd_distance(SIMD2(p.x, p.z), flags[flagIndex]) < 0.28 {
-                events.append(.flag(flagIndex)); flagIndex += 1; drillCount += 1
-            }
-            if flagIndex >= flags.count || drillTime > Self.sprintTime { phase = .over; events.append(.drillOver) }
-        }
-        if phase == .rally { runAI(dt: dt) }
-    }
-
-    private mutating func drillContact(_ i: Int, _ kind: VolleyHit, _ q: VolleyQuality) {
-        switch drillKind {
-        case .bonk?: drillCount += 1; if q == .perfect { drillPerfect += 1 }
-        case .block?: if kind == .block { blockedNow = true }
-        default: break
-        }
-    }
-
-    /// Accuracy of a finished drill, 0...1.
-    var drillAccuracy: Float {
-        switch drillKind {
-        case .bonk?: return min(1, (Float(drillCount) + 1.5 * Float(drillPerfect)) / 22)
-        case .spike?: return min(1, Float(drillGood) / Float(Self.spikeFeeds))
-        case .block?: return min(1, Float(drillGood) / Float(Self.blockFeeds))
-        case .sprint?:
-            let done = Float(flagIndex) / Float(Self.sprintFlags)
-            return done * (flagIndex >= flags.count ? min(1, 0.55 + 0.45 * max(0, (Self.sprintTime - drillTime) / (Self.sprintTime * 0.6))) : 0.8)
-        case nil: return 0
         }
     }
 

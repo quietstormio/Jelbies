@@ -136,7 +136,18 @@ struct ShopScreen: View {
                 if let p = item.perk { PerkChip(kind: p) }
                 else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
-                else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : item.kind == .trickPage ? "New trick" : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
+                else if item.kind == .trickPage {
+                    VStack(spacing: 3) {
+                        if let t = item.trick {
+                            HStack(spacing: 2) {
+                                ForEach(0..<3, id: \.self) { k in Image(systemName: k < ShowTrickInfo.difficulty(t) ? "star.fill" : "star").font(.system(size: 11, weight: .black)).foregroundStyle(k < ShowTrickInfo.difficulty(t) ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                            }
+                        }
+                        Text(item.scope?.tag ?? "New trick").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                            .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(SK.mint.opacity(0.8)))
+                    }
+                }
+                else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
                     HStack(spacing: 4) {
                         JellyCoinIcon(size: 17).opacity(afford ? 1 : 0.5)
@@ -164,7 +175,9 @@ struct ShopScreen: View {
 enum ShopSelection {
     static func afterBuy(_ selected: StoreItem?, bought: Bool) -> StoreItem? { bought ? nil : selected }
     /// Buys `qty` (1 for once-only goods); returns how many went through.
-    @MainActor static func purchase(_ item: StoreItem, qty: Int, book: StoreBook) -> Int {
+    /// A per-Jelbie trick goes to `character` (the one picked in the sheet).
+    @MainActor static func purchase(_ item: StoreItem, qty: Int, book: StoreBook, character: Int? = nil) -> Int {
+        if item.kind == .trickPage, let t = item.trick { return book.buyTrick(t, for: character) == .bought ? 1 : 0 }
         var ok = 0
         for _ in 0..<(item.unique ? 1 : qty) where book.buy(item.id) == .bought { ok += 1 }
         return ok
@@ -186,6 +199,20 @@ struct ItemSheet: View {
 
     private var book: StoreBook { care.store }
     private var wallet: DropsWallet { care.bath.wallet }
+    /// A trick (Store/TrickCatalog.swift): for one Jelbie (pick who) or for everyone.
+    private var isTrick: Bool { item.kind == .trickPage }
+    private var isPerJelbieTrick: Bool { isTrick && item.scope == .perJelbie }
+    @State private var forSlot: Int?
+    /// Jelbies who already know this trick (checked in the picker, not pickable).
+    private var knowers: Set<Int> { guard let t = item.trick else { return [] }; return Set(care.jellies.filter { book.knows(t, character: $0.character) }.map(\.id)) }
+    /// The Jelbie it is for: the one picked, else the selected one if he does not know it yet, else the first who does not.
+    private var targetSlot: Int? {
+        if let f = forSlot, !knowers.contains(f) { return f }
+        if care.jelly(who) != nil, !knowers.contains(who) { return who }
+        return care.jellies.first { !knowers.contains($0.id) }?.id
+    }
+    private var targetCharacter: Int? { targetSlot.flatMap { care.jelly($0)?.character } }
+    private var ownedNow: Bool { isPerJelbieTrick ? targetSlot == nil : item.unique && book.owns(item) }
     private var total: Int { item.price * (item.unique ? 1 : qty) }
     private var left: Int { wallet.count - total }
 
@@ -213,7 +240,7 @@ struct ItemSheet: View {
                 .padding(.horizontal, 20)
             } else {
                 VStack(spacing: 14) {
-                    ItemPicture(care: care, item: item, who: who, size: 230).padding(.top, 14)
+                    ItemPicture(care: care, item: item, who: who, size: isTrick ? 110 : 230).padding(.top, 14)
                     Text(item.name).font(SK.font(26, .black)).foregroundStyle(SK.ink)
                     Text(item.description).font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
                     effectCard.padding(.horizontal, 16)
@@ -260,6 +287,13 @@ struct ItemSheet: View {
                     stepper("plus") { if wallet.count >= item.price * (qty + 1), qty < 9 { qty += 1 } else { AudioHub.shared.play(.notEnough) } }
                 }
             }
+            if isPerJelbieTrick {
+                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: targetSlot.map { [$0] } ?? [], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 84, showNote: false, checked: knowers, pick: { forSlot = $0 })
+                    .padding(.horizontal, vsc == .compact ? 0 : 16)
+            } else if isTrick {
+                Label("For all your Jelbies", systemImage: "person.3.fill").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.mint.opacity(0.8))).accessibilityIdentifier("item-scope-everyone")
+            }
             buyButton.padding(.horizontal, vsc == .compact ? 0 : 16)
             if item.kind == .room, let r = item.room, book.owns(item), book.currentRoom != r {
                 Button {
@@ -290,10 +324,10 @@ struct ItemSheet: View {
     }
 
     private var buyButton: some View {
-        let owned = item.unique && book.owns(item)
+        let owned = ownedNow
         let can = !owned && left >= 0
         return Button {
-            let ok = ShopSelection.purchase(item, qty: qty, book: book)
+            let ok = ShopSelection.purchase(item, qty: qty, book: book, character: targetCharacter)
             if ok > 0 {
                 AudioHub.shared.play(.unwrap, volume: 0.8)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
@@ -320,9 +354,14 @@ struct ItemSheet: View {
 
     private var footer: String {
         if item.kind == .room && book.owns(item) { return "Live there from Rooms" }
+        if item.kind == .trickPage {
+            if ownedNow { return "Yours already" }
+            if left < 0 { return "Win races to earn more JellyCoins" }
+            return "You'll have \(left) JellyCoins left \u{00B7} \(item.scope == .everyone ? "Every Jelbie knows it at once" : "Ready at once")"
+        }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win races to earn more JellyCoins" }
-        let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : item.kind == .trickPage ? "Unlocks in the trick book" : "goes to your Bag"
+        let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
@@ -343,6 +382,7 @@ struct ItemSheet: View {
         if item.kind == .room { return "house.fill" }
         if item.kind == .toy { return "wand.and.stars" }
         if item.food != nil { return item.kind == .drink ? "drop.fill" : "fork.knife" }
+        if item.id == TrickCatalog.earsID { return "ear.fill" }
         return item.wear.map { $0.slot.symbol } ?? "book.fill"
     }
     private var effectTitle: String {
@@ -352,7 +392,9 @@ struct ItemSheet: View {
         if item.kind == .room { return "A new room to live in" }
         if item.kind == .toy { return "A toy to play with" }
         if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches his thirst" : "Fills his tummy" }
-        return item.trick.map { "Unlocks \($0.title)" } ?? "Goodies"
+        if item.id == TrickCatalog.earsID { return "Music Ears \u{00B7} \(TrickScope.everyone.tag)" }
+        if let t = item.trick, let d = TrickCatalog.def(t) { return "\(d.name) \u{00B7} \(String(repeating: "\u{2605}", count: d.stars)) \u{00B7} \(d.scope.tag)" }
+        return "Goodies"
     }
     private var effectBlurb: String {
         if let p = item.perk { return p.blurb }
@@ -361,7 +403,9 @@ struct ItemSheet: View {
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         if item.kind == .toy { return "Pick it from Play and the Jelbies join in." }
         if item.food != nil { return item.description }
-        return "Teach it with your own word in the trick book."
+        if item.id == TrickCatalog.earsID { return "Dancing to your music and hearing claps, whistles and laughs. The microphone is on only while Ears is switched on (Sound panel)." }
+        if item.kind == .trickPage { return item.scope == .everyone ? "Bought once: every Jelbie knows it, adopted ones too. Say it in the room, or pick it in the Jelly Show." : "Only the Jelbie you pick learns it. Say it in the room, or pick it in the Jelly Show." }
+        return item.description
     }
     private func durationText(_ p: PerkKind) -> String { SK.timeLeft(p.duration) }
 }

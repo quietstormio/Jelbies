@@ -1,8 +1,8 @@
 //
 //  VolleyFlow.swift
-//  The whole Jelly Volleyball trip as one state machine (ParkTrip style): the white fade out, the swap to the beach while it is opaque, the fade in, the match (or
-//  a training drill), the results card, and the same fade home. It owns no bodies: GameCare+Volley.swift does the swaps and ticks `sim`.
-//  Also here: the one-time settlement (Drops, the tier unlocks, ribbons and trophies in the TrophyBook, the stat gains of a drill).
+//  The whole Jelly Volleyball trip as one state machine (ParkTrip style): the white fade out, the swap to the beach while it is opaque, the fade in, the match,
+//  the results card, and the same fade home. It owns no bodies: GameCare+Volley.swift does the swaps and ticks `sim`.
+//  Also here: the one-time settlement (Drops, the tier unlocks, ribbons and trophies in the TrophyBook).
 //
 
 import Foundation
@@ -16,9 +16,6 @@ struct VolleyUI: Equatable {
     var serveTeam = 0
     var waitingToServe = false
     var humanServes = false
-    var drillCount = 0, drillGood = 0, drillFeeds = 0, drillFlags = 0
-    var drillTime: Float = 0
-    var targetCushion = 0
     var rally = 0
     var airborne = false
     /// The touch counter: 0 empty, 1 filled, 2 filled by a Perfect touch (your side's possession only).
@@ -81,7 +78,6 @@ final class VolleyFlow {
     }
     var hidesDecor: Bool { inScene }
     var cameraBlend: Float { inScene ? 1 : 0 }
-    var isDrill: Bool { if case .drill = mode { return true }; return false }
     var tier: VolleyTier { if case .match(let t) = mode { return t }; return book.chosen }
     var showsCard: Bool { phase == .playing && sim?.phase == .over }
     var live: Bool { phase == .playing && sim != nil && sim?.phase != .over }
@@ -132,14 +128,12 @@ final class VolleyFlow {
         var u = VolleyUI()
         u.phase = s.phase; u.score = s.score; u.serveTeam = s.server
         u.waitingToServe = s.waitingToServe; u.humanServes = s.waitingToServe && s.servingPlayer == 0
-        u.drillCount = s.drillCount; u.drillGood = s.drillGood; u.drillFeeds = s.drillFeeds; u.drillFlags = s.flagIndex
-        u.drillTime = (s.drillTime * 2).rounded() / 2
-        u.targetCushion = s.targetCushion; u.rally = s.rallyHits
+        u.rally = s.rallyHits
         u.airborne = s.players.indices.contains(s.controlled) ? !s.players[s.controlled].grounded : false
         u.controlled = s.controlled
         u.hitLabel = s.hitLabel
-        if !s.isDrill, s.possession == 0 { u.touchDots = (0..<VolleyTuning.maxTouches).map { $0 < s.touchLog.count ? (s.touchLog[$0] == .perfect ? 2 : 1) : 0 } }
-        else if !s.isDrill { u.touchDots = [] }
+        if s.possession == 0 { u.touchDots = (0..<VolleyTuning.maxTouches).map { $0 < s.touchLog.count ? (s.touchLog[$0] == .perfect ? 2 : 1) : 0 } }
+        else { u.touchDots = [] }
         u.fxSerial = s.fxSerial; u.fxText = s.fxText; u.fxTone = s.fxTone
         if let m = s.serveMeter { u.serveMeter = (m * 200).rounded() / 200; u.serveSweet = s.serveSweet.center; u.serveHalf = s.serveSweet.half } else { u.serveMeter = -1 }
         u.combo = s.comboFlash > 0
@@ -148,7 +142,7 @@ final class VolleyFlow {
         if u != ui { ui = u }
     }
 
-    /// The match or drill is over: Drops, unlocks, ribbons and gains, once.
+    /// The match is over: Drops, unlocks, ribbons and gains, once.
     func settle() {
         guard !settled, let s = sim, s.phase == .over else { return }
         settled = true
@@ -162,9 +156,6 @@ final class VolleyFlow {
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
             for tr in awards.trophies { A11yEvents.say("Trophy! \(tr.title)", .normal) }
-        case .drill(let k):
-            gain = book.finishDrill(character: playerCharacter, kind: k, accuracy: s.drillAccuracy, factor: assistFactor)
-            A11yEvents.say("\(k.title) done", .high)
         }
         cueSerial += 1
     }
