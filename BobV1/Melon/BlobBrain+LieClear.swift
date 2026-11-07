@@ -134,6 +134,7 @@ extension BlobBrain {
     /// While he lies next to a lying neighbour: the settle controller on the DRAWN skin gap (ContactProfile.swift). During the plop (phase 1) it only pushes the bodies out of each other;
     /// lying (phase 2) it eases them until the skins just touch (band -0.5 ... +0.5 cm). The older one stays, the later one scoots in (or away).
     func snuggleTick(_ sim: SoftBody, _ dt: Float) {
+        return          // (user 2026-11-06: nothing slides once it lies; the clear spot is chosen BEFORE the plop by `lieSpot`, this scoot-in is off)
         guard LieClearTuning.enabled, idleState.kind == .lieDown, !idleState.windowGo, idleState.phase >= 1, idleState.phase <= 2 else { return }
         var best: (o: BlobBrain, g: Float)?
         for o in socialOthers() where o !== self && o.enabled && o.idleState.kind == .lieDown && !o.idleState.windowGo && o.idleState.phase >= 1 && o.idleState.phase <= 2 {
