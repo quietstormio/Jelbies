@@ -119,7 +119,7 @@ extension GameCare {
                 touchPlay?.spawnHeart(now: CACurrentMediaTime())
                 let spot = GroomScenery.lineUp(index: k, of: mine.count)
                 b.requestNow(.goTo(b.fixed(spot)))
-                AudioHub.shared.play(.cheerSmall, volume: k == 0 ? 0.7 : 0.4)
+                if k == 0 { AudioHub.shared.playClip(GroomTuning.clipHarp, volume: 0.6) }          // one soft harp flourish when they first walk out (no crowd "yay")
             }
         }
         for (k, a) in mine.enumerated() {
@@ -131,21 +131,15 @@ extension GameCare {
             }
             guard let arrived = book.arrivedAt[a.id] else { continue }
             let t = groom.cheerT - arrived
-            let idle = b.commandedIdle == nil && b.idleState.kind == nil && { if case .none = b.script { return true } else { return false } }()
             if t >= 0, !book.emoted.contains(a.id) {
                 book.emoted.insert(a.id)
                 b.abortAll(a.sim, a.skinner)
-                b.commandedIdle = .joy
+                b.commandedIdle = book.emote[a.id] ?? .joy          // (a DIFFERENT happy emote for each, assigned when the door opens)
                 b.blushBump(hold: 3, peak: 0.8)
                 b.face(.excited, hold: 3)
                 b.postEvent(.joyJump)
                 touchPlay?.spawnHeart(now: CACurrentMediaTime())
                 AudioHub.shared.chirp(jelly: a.id, .happy)
-            } else if t >= GroomTuning.twirlAt, !book.twirled.contains(a.id), idle {
-                book.twirled.insert(a.id)
-                b.commandedIdle = .tail
-                touchPlay?.spawnHeart(now: CACurrentMediaTime())
-                if a.id == mine[0].id { AudioHub.shared.play(.cheerSmall, volume: 0.8) }
             }
         }
     }
@@ -166,7 +160,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]
+        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -199,7 +193,7 @@ extension GameCare {
 
     private func groomToHome() {
         let book = groomBook
-        book.out = []; book.outAt = [:]; book.arrivedAt = [:]
+        book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         RoomLayout.apply(RoomCatalog.def(store.currentRoom))
         GameCamera.endGroom(count: max(jellies.count, 1))
         if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -227,7 +221,12 @@ extension GameCare {
         AudioHub.shared.stopClip(GroomTuning.clipAmbience, fade: 0.3)
         AudioHub.shared.playClip(GroomTuning.clipReveal)
         CaptionCenter.shared.post("Sparkle!")
-        A11yAnnounce.say(groom.tier.banner)
+        groom.slogan = SpaSlogans.next()
+        var g = SystemRandomNumberGenerator()
+        let set = SpaExitEmotes.assign(count: groom.picked.count, avoiding: SpaExitEmotes.lastSet, using: &g)
+        SpaExitEmotes.lastSet = set
+        for (k, id) in groom.picked.enumerated() where k < set.count { groomBook.emote[id] = set[k] }
+        A11yAnnounce.say(groom.slogan)
     }
 
     /// Back to normal life.
@@ -236,11 +235,12 @@ extension GameCare {
         let book = groomBook
         for a in book.actors {
             guard let b = a.brain, book.autonomy[a.id] != nil else { continue }
+            b.abortAll(a.sim, a.skinner)          // (a longer exit emote must not hold him back from roaming)
             b.autonomy = book.autonomy[a.id] ?? true
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits
