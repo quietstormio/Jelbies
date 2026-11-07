@@ -121,26 +121,6 @@ struct StartRaceIntent: AppIntent {
     }
 }
 
-struct TrainJelbieIntent: AppIntent {
-    static let title: LocalizedStringResource = "Train a Jelbie"
-    static let description = IntentDescription("Opens the game on training for that Jelbie.")
-    static let openAppWhenRun = true
-
-    @Parameter(title: "Jelbie")
-    var jelbie: JelbieEntity
-
-    nonisolated init() {}
-    init(jelbie: JelbieEntity) { self.jelbie = jelbie }
-
-    static var parameterSummary: some ParameterSummary { Summary("Train \(\.$jelbie)") }
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        GameRouter.shared.request(.train(jelbie.id))
-        return .result()
-    }
-}
-
 // MARK: - App Shortcuts
 
 /// The phrases Siri listens for without any set-up. `\(.applicationName)` is required by Apple in every phrase; with the display name "Jelbies" they
@@ -202,16 +182,6 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Race",
             systemImageName: "flag.checkered"
-        )
-        AppShortcut(
-            intent: TrainJelbieIntent(),
-            phrases: [
-                "Train \(\.$jelbie) in \(.applicationName)",
-                "Teach \(\.$jelbie) a trick in \(.applicationName)",
-                "Start training in \(.applicationName)",
-            ],
-            shortTitle: "Train",
-            systemImageName: "figure.run"
         )
     }
 
