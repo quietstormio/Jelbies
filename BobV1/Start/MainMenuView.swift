@@ -59,6 +59,7 @@ struct MainMenuView: View {
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
     @State private var visible = true
+    @State private var loading = false          // Continue / New Game tapped: the spinner replaces the buttons until the screen is swapped
     private var theme = ThemeStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
@@ -73,6 +74,8 @@ struct MainMenuView: View {
                 VStack(spacing: 0) {
                     title(width: 364 * m.s).padding(.top, m.titleTop)
                     buttons(k: m.btnScale).frame(width: m.btnWidth).padding(.top, m.buttonsGap)
+                        .opacity(loading ? 0 : 1).disabled(loading)
+                        .overlay { if loading { ThemedSpinner(palette: theme.palette).transition(.identity) } }          // same frame as the tap, no fade
                     Spacer(minLength: 0)
                 }
                 if confirmNew { confirmCard.transition(.opacity) }
@@ -96,6 +99,14 @@ struct MainMenuView: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
+    /// Show the spinner first, let it commit (the room build after Continue runs on the main thread and would otherwise freeze the menu before the spinner is drawn), then go.
+    private func begin(_ go: @escaping @MainActor () -> Void) {
+        guard !loading else { return }
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { loading = true }
+        Task { @MainActor in try? await Task.sleep(for: .milliseconds(120)); go() }
+    }
+
     private func title(width: CGFloat) -> some View {
         // The swing frame is 620x307 with the logo ~96% of its width.
         SpinLogo(still: still, active: visible)
@@ -108,12 +119,12 @@ struct MainMenuView: View {
     private func buttons(k: CGFloat) -> some View {
         VStack(spacing: 20 * k) {
             if hasSave {
-                Button("Continue") { AudioHub.shared.uiTap(); flow.continueGame() }
+                Button("Continue") { AudioHub.shared.uiTap(); begin { flow.continueGame() } }
                     .buttonStyle(TitleButtonStyle(primary: true, k: k, palette: theme.palette)).accessibilityIdentifier("menu-continue")
                 Button("New Game") { AudioHub.shared.uiTap(); confirmNew = true }
                     .buttonStyle(TitleButtonStyle(primary: false, k: k, palette: theme.palette)).accessibilityIdentifier("menu-new")
             } else {
-                Button("New Game") { AudioHub.shared.uiTap(); flow.startOver() }
+                Button("New Game") { AudioHub.shared.uiTap(); begin { flow.startOver() } }
                     .buttonStyle(TitleButtonStyle(primary: true, k: k, palette: theme.palette)).accessibilityIdentifier("menu-start")
             }
         }
@@ -129,7 +140,7 @@ struct MainMenuView: View {
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button("Keep playing") { confirmNew = false }
                     .buttonStyle(JellyButtonStyle(.primary, size: 20, minHeight: 48)).accessibilityIdentifier("menu-keep")
-                Button("Start over") { confirmNew = false; flow.startOver() }
+                Button("Start over") { confirmNew = false; begin { flow.startOver() } }
                     .buttonStyle(JellyButtonStyle(.secondary, size: 18, minHeight: 44)).accessibilityIdentifier("menu-start-over")
             }
             .padding(.horizontal, 22).padding(.vertical, 20)
@@ -235,7 +246,7 @@ private struct TitleButtonStyle: ButtonStyle {
     }
 }
 
-enum JelbieArt {
+private enum JelbieArt {
     /// The mockup's body path in its own unit space (centre 0,0, ~102 wide).
     static let body: Path = {
         var p = Path()

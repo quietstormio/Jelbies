@@ -389,10 +389,10 @@ struct GameScreen: View {
         .onChange(of: bagOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen || bookOpen; if !on { bagTab = nil; bagWho = nil } }
         .overlay { RoomSwitchVeil(care: model.care) }
         .overlay {
-            if welcomeCover {
-                LaunchCurtainArt(hour: 12, bounce: true).ignoresSafeArea().transition(.opacity)          // the existing opaque loading art (theme colours + logo + bouncing dots)
-                    .accessibilityElement(children: .ignore).accessibilityLabel("Welcome back")
-            }
+            WelcomeCoverArt(running: welcomeCover).opacity(welcomeCover ? 1 : 0).allowsHitTesting(welcomeCover)          // always built, only its opacity changes: instant in, 0.25 s out
+                .animation(welcomeCover ? nil : .easeOut(duration: 0.25), value: welcomeCover)
+                .accessibilityHidden(!welcomeCover)
+                .accessibilityElement(children: .ignore).accessibilityLabel("Welcome back")
         }
         .onChange(of: scenePhase) { _, p in
             switch p {
@@ -408,7 +408,7 @@ struct GameScreen: View {
                         try? await Task.sleep(for: .seconds(GameScreen.welcomeMax + 0.1))
                         guard !Task.isCancelled else { return }
                         AudioHub.shared.holdEffects(false)
-                        withAnimation(.easeOut(duration: 0.2)) { welcomeCover = false }
+                        welcomeCover = false
                     }
                 }
                 guard let left = welcomeLeftAt else { break }
@@ -424,7 +424,7 @@ struct GameScreen: View {
                     guard !Task.isCancelled else { return }
                     welcomeSafety?.cancel()
                     AudioHub.shared.holdEffects(false)
-                    withAnimation(.easeOut(duration: 0.35)) { welcomeCover = false }
+                    welcomeCover = false
                 }
             default: break
             }
