@@ -194,3 +194,19 @@ final class StoreTests: XCTestCase {
         perks.clear(.shine)
     }
 }
+
+@MainActor
+final class ShopSelectionTests: XCTestCase {
+    func testSuccessfulBuyClearsSelectionAndFailureKeepsIt() {
+        let w = DropsWallet(persists: false); w.add(40, silent: true)
+        let b = StoreBook(wallet: w, persists: false, defaults: .standard, key: "ShopSelectionTests.book")
+        StoreTests.keep.append(b)
+        let berries = StoreCatalog.item("berries")!
+        XCTAssertEqual(ShopSelection.purchase(berries, qty: 2, book: b), 2)
+        XCTAssertNil(ShopSelection.afterBuy(berries, bought: true))
+        let sushi = StoreCatalog.item("sushi")!
+        XCTAssertTrue(w.spend(w.count))
+        XCTAssertEqual(ShopSelection.purchase(sushi, qty: 1, book: b), 0)
+        XCTAssertEqual(ShopSelection.afterBuy(sushi, bought: false)?.id, "sushi")
+    }
+}
