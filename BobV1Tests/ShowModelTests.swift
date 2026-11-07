@@ -149,6 +149,59 @@ final class ShowModelTests: XCTestCase {
         XCTAssertTrue(s.perfectDance); XCTAssertTrue(s.hatTrick)
     }
 
+    // MARK: the rivals' tricks
+
+    private func trickSim(seed: UInt64, day: Int = 20261021, theme: ShowTheme = .starlightGala) -> ShowSim {
+        var p = ShowPlayerInput(name: "Bob")
+        for t in WearTag.allCases { p.condition[t] = 0.5 }
+        p.glow = 0.4; p.dance = .sway; p.danceSkill = 0.5; p.tricks = [.flip: 1]; p.care = 0.8
+        var s = ShowSim(rank: .puddle, theme: theme, dayKey: day, player: p, rivals: ShowRivalSource.rivals(dayKey: day, rank: .puddle, theme: theme), seed: seed)
+        s.finishLook(); s.finishDance()
+        return s
+    }
+
+    /// Each rival takes a trick per turn, fixed by the day and rank (not the show's seed, nor what the player did), following her archetype and not repeating.
+    func testRivalsPickSeededTricksThatFollowTheirArchetype() {
+        var a = trickSim(seed: 1), b = trickSim(seed: 777)
+        for t in [VoiceTrick.sit, .spin, .flip] { a.perform(t, roll: 0.99) }
+        for t in [VoiceTrick.flip, .hop, .jacks] { b.perform(t, roll: 0.01) }
+        XCTAssertEqual(a.rivalTurns, b.rivalTurns, "same day, same rank: same rivals, same tricks")
+        var c = trickSim(seed: 1, day: 20261022)
+        for t in [VoiceTrick.sit, .spin, .flip] { c.perform(t, roll: 0.99) }
+        XCTAssertNotEqual(a.rivalTurns, c.rivalTurns, "another day, other tricks")
+        let theme = ShowTheme.starlightGala
+        for (i, r) in a.rivals.enumerated() {
+            let turns = a.rivalTurns[i]
+            XCTAssertEqual(turns.count, 3)
+            XCTAssertEqual(Set(turns.map(\.trick)).count, 3, "\(r.name): no repeats while a fresh trick is left")
+            XCTAssertTrue(turns.allSatisfy { !$0.repeated })
+            switch r.persona {
+            case .trickster: XCTAssertEqual(ShowTrickInfo.difficulty(turns[0].trick), 3, "the Trickster opens with the hardest")
+            case .dancer: XCTAssertEqual(ShowTrickInfo.difficulty(turns[0].trick), 2)
+            case .poser:
+                if ShowTrickInfo.stageTricks.contains(where: { ShowTrickInfo.tags($0).contains(theme.main) }) { XCTAssertTrue(ShowTrickInfo.tags(turns[0].trick).contains(theme.main), "the Poser opens with a theme match") }
+            }
+            for t in turns {
+                XCTAssertEqual(t.points, ShowScoring.turn(difficulty: ShowTrickInfo.difficulty(t.trick), success: t.success, repeated: t.repeated, tags: ShowTrickInfo.tags(t.trick), theme: theme), "the player's scoring rule")
+                XCTAssertLessThanOrEqual(t.points, 30)
+            }
+        }
+    }
+
+    /// The rivals' live trick points (plus a Burst) feed the entrants and the places; Look and Dance stay the precomputed ones.
+    func testLiveRivalTotalsFeedThePlaces() {
+        var s = trickSim(seed: 4)
+        for t in [VoiceTrick.sit, .spin, .flip] { s.perform(t, roll: 0.5) }
+        XCTAssertEqual(s.round, .results)
+        for (i, r) in s.rivals.enumerated() {
+            let e = s.entrants[i + 1]
+            let sum = s.rivalTurns[i].reduce(0) { $0 + $1.points } + (r.burst ? ShowScoring.burstPoints : 0)
+            XCTAssertEqual(e.scores.trick, Float(min(100, sum)))
+            XCTAssertEqual(e.scores.look, r.scores.look); XCTAssertEqual(e.scores.dance, r.scores.dance)
+        }
+        XCTAssertEqual(s.entrants.map(\.place), ShowScoring.places(totals: s.entrants.map { Float($0.scores.totalPts) }))
+    }
+
     // MARK: payouts and ranks
 
     func testPayoutTable() {

@@ -32,6 +32,17 @@ final class ShowBook {
     var flopT: Float?
     /// Bodies that have turned to the crowd.
     var turned: Set<Int> = []
+    /// Borrowed rival bodies (the park's visitor bodies, ids after the roster's) for the rivals the roster has no spare Jelbie for; gone when the trip is over.
+    var extra: [JellyActor] = []
+    var extraSpecs: [ParkVisitor] = []
+    /// Rival index -> the actor id that plays her on the stage (the player's spare Jelbies first, then the borrowed bodies). A rival without an entry is a silhouette card.
+    var rivalBody: [Int: Int] = [:]
+    /// Seconds since a rival's flop began, by actor id (the wobble lands a beat later).
+    var flops: [Int: Float] = [:]
+    /// Where each walking body was sent (the player's Jelbie and the rivals), to know when it has arrived.
+    var goals: [Int: SIMD2<Float>] = [:]
+    /// The Trick round's stage is set (rivals at their rest spots).
+    var trickSet = false
     nonisolated deinit {}
 }
 
@@ -45,6 +56,8 @@ extension GameCare {
         show.onHit = { [weak self] g in self?.showHit(g) }
         show.onResults = { [weak self] place in self?.showCelebrate(place: place) }
         show.onBurst = { [weak self] in self?.showBurst() }
+        show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
+        show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
         let d = UserDefaults.standard
         if d.object(forKey: "ShowAuto") != nil { show.auto = true }
         // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it
@@ -158,8 +171,11 @@ extension GameCare {
     func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
     /// The rival bodies are out of the picture in the solo rounds (Look, Trick): they come on for the Dance and the results.
     func showHides(_ id: Int) -> Bool {
-        guard show.onStage, id != show.playerID, showBook.performers.contains(id) else { return false }
-        return !(show.round == .dance || (show.round == .results && show.trickStage != .performing))
+        guard show.onStage, id != show.playerID else { return false }
+        let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)          // (the last turn's rivals play on after the sim has its results)
+        if showBook.extra.contains(where: { $0.id == id }) { return !inTrick }          // the borrowed bodies are on only for the Trick round
+        guard showBook.performers.contains(id) else { return false }
+        return !(show.round == .dance || inTrick || show.round == .results)
     }
 
     // MARK: world swaps (under the white)
@@ -174,6 +190,7 @@ extension GameCare {
             book.performers = Array(([player] + others).prefix(want))
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.dancing = [:]; book.danceRestart = [:]; book.flopT = nil; book.turned = []
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
@@ -191,6 +208,7 @@ extension GameCare {
                 brain.restTimer = 0.4
                 if onStage, k > 0, let s = show.sim, k - 1 < s.rivals.count { book.palettes[aid] = ShowRivalSource.palette(for: s.rivals[k - 1]) }
             }
+            showSpawnExtras()
         case .room:
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
@@ -214,7 +232,128 @@ extension GameCare {
                 brain.restTimer = 2
             }
             book.performers = []; book.parked = []; book.palettes = [:]; book.dancing = [:]
+            showRemoveExtras()
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false
         }
+    }
+
+    // MARK: the rivals' bodies (borrowed like the race's temporary rivals)
+
+    /// Every rival gets a body for the Trick round: the player's spare Jelbies first (tinted, as in the dance), then the park's visitor bodies for the rest, named and
+    /// tinted from the rival and given the species signature of her colour (the race's path, GameCare+Race.swift). They wait far off stage and are hidden until the Trick round.
+    private func showSpawnExtras() {
+        let book = showBook
+        guard let s = show.sim, !book.actors.isEmpty else { return }
+        let spare = max(book.performers.count - 1, 0)
+        for k in 0..<min(spare, s.rivals.count) { book.rivalBody[k] = book.performers[k + 1] }
+        let missing = s.rivals.count - spare
+        guard missing > 0, book.extra.isEmpty, let spawn = parkBook.spawn else { return }
+        let specs: [ParkVisitor] = (spare..<s.rivals.count).map { i in
+            ParkVisitor(id: 9100 + i, name: s.rivals[i].name, colour: .cream, signature: LocalRivalSource.signature(forTint: s.rivals[i].tint), wear: nil, style: .balanced, blurb: "", greeting: "")
+        }
+        if guestBook.actor != nil { guestRemove() }          // (the guest's body is normally gone already: a trip puts it away first)
+        let bodies = spawn(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) })
+        guard bodies.count == specs.count, bodies.enumerated().allSatisfy({ $0.element.id == book.actors.count + $0.offset }) else { parkBook.clear?(); return }
+        book.extra = bodies; book.extraSpecs = specs
+        for (j, a) in bodies.enumerated() {
+            a.sim.arenaRadius = .infinity
+            a.sim.teleport(toXZ: Self.showFarSpot(j))
+            a.brain?.currentPose(a.sim)
+            a.brain?.autonomy = false; a.brain?.idleBlocked = true
+            book.rivalBody[spare + j] = a.id
+            book.palettes[a.id] = ShowRivalSource.palette(for: s.rivals[spare + j])
+        }
+    }
+    /// The borrowed bodies go (the swap home, under the white): looks put away, bodies hidden, nothing left behind.
+    private func showRemoveExtras() {
+        let book = showBook
+        guard !book.extra.isEmpty else { return }
+        for a in book.extra { a.brain?.abortAll(a.sim, a.skinner); visitorPutAway(a) }
+        parkBook.clear?()
+        let ids = Set(book.extra.map(\.id))
+        book.palettes = book.palettes.filter { !ids.contains($0.key) }
+        book.flops = book.flops.filter { !ids.contains($0.key) }
+        book.goals = book.goals.filter { !ids.contains($0.key) }
+        book.extra = []; book.extraSpecs = []
+    }
+    static func showFarSpot(_ j: Int) -> SIMD2<Float> { SIMD2(40 + Float(j) * 3, 2) }
+    /// The stage body of an actor id: the roster's, then the borrowed ones.
+    private func showBody(_ aid: Int) -> JellyActor? {
+        let book = showBook
+        if book.actors.indices.contains(aid) { return book.actors[aid] }
+        return book.extra.first { $0.id == aid }
+    }
+    private func rivalActor(_ i: Int) -> JellyActor? { showBook.rivalBody[i].flatMap { showBody($0) } }
+
+    /// Puts a body at `p` at once (the walk's end, Skip, the Trick round's set), facing the crowd.
+    private func showSnap(_ a: JellyActor, to p: SIMD2<Float>) {
+        guard let b = a.brain else { return }
+        b.abortAll(a.sim, a.skinner)
+        b.commandedIdle = nil; b.commandedFlip = false
+        a.sim.teleport(toXZ: p)
+        b.currentPose(a.sim)
+        a.skinner.jelly.reset()
+        b.restTimer = 0.4
+        if abs(b.yaw) > 0.25 { b.startTurn(to: 0, sim: a.sim) }
+    }
+    /// A walk to `p` (stepping, then a turn to the crowd): the goal is remembered to know when he is there.
+    private func showWalk(_ a: JellyActor, to p: SIMD2<Float>) {
+        guard let b = a.brain else { return }
+        b.abortAll(a.sim, a.skinner)
+        b.commandedIdle = nil; b.commandedFlip = false
+        showBook.flops[a.id] = nil
+        showBook.goals[a.id] = b.fixed(p)
+        b.requestNow(.come(to: p))
+    }
+    /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
+    private func showSetTrick(_ on: Bool) {
+        let book = showBook
+        book.trickSet = on
+        guard let s = show.sim else { return }
+        let row = ShowStage.spots(bodies: book.performers.count)
+        for k in s.rivals.indices {
+            guard let a = rivalActor(k) else { continue }
+            if on { showSnap(a, to: ShowStage.rivalRest(k)) }
+            else if let idx = book.performers.firstIndex(of: a.id) { showSnap(a, to: row[idx]) }
+            else if let j = book.extra.firstIndex(where: { $0.id == a.id }) { showSnap(a, to: Self.showFarSpot(j)) }
+        }
+        if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
+        book.goals = [:]; book.flops = [:]
+    }
+    /// The flow asks for the rivals' turn on the bodies.
+    private func showRivalCue(_ cue: ShowFlow.RivalCue) {
+        let book = showBook
+        switch cue {
+        case .playerAside(let aside):
+            guard let a = stageActor(0) else { return }
+            showWalk(a, to: aside ? ShowStage.playerAside : ShowStage.playerSpot)
+        case .walkIn(let i):
+            guard let a = rivalActor(i) else { return }
+            showWalk(a, to: ShowStage.playerSpot)
+        case .perform(let i, let t, let ok):
+            guard let a = rivalActor(i), let b = a.brain else { return }
+            if let g = book.goals[a.id], simd_distance(SIMD2(b.px, b.pz), g) > 0.8 { showSnap(a, to: g) }          // (a walk that never got there: he is in the middle for his trick)
+            book.goals[a.id] = nil
+            showDoTrick(a, t, success: ok, others: a.id)
+        case .walkOut(let i):
+            guard let a = rivalActor(i) else { return }
+            showWalk(a, to: ShowStage.rivalRest(i))
+        case .snap:
+            guard let s = show.sim else { return }
+            for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k)) } }
+            if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
+            book.goals = [:]; book.flops = [:]
+        }
+    }
+    /// Has the body got where it was sent (nil = the player's Jelbie; `atCentre` is only the flow's wording)? A body with no walk under way is there.
+    private func showArrived(_ who: Int?, atCentre: Bool) -> Bool {
+        let book = showBook
+        let a = who.map { rivalActor($0) } ?? stageActor(0)
+        guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
+        if b.pending != nil { return false }
+        if case .none = b.script {} else { return false }
+        if simd_distance(SIMD2(b.px, b.pz), g) < 0.6 { book.goals[a.id] = nil; return true }
+        return false
     }
 
     // MARK: the bodies' acts
@@ -227,15 +366,23 @@ extension GameCare {
 
     /// The player's Jelbie does the trick (the voice tricks' moves); a flop is the move cut short into a wobble.
     private func showPerform(_ t: VoiceTrick, success: Bool) {
-        guard let a = stageActor(0), let b = a.brain else { return }
+        guard let a = stageActor(0) else { return }
+        showDoTrick(a, t, success: success, others: a.id)
+    }
+    /// A body does `t` (the same moves for the player and the rivals). The others on the stage watch: a giggle at a flop, a happy face at a landing.
+    private func showDoTrick(_ a: JellyActor, _ t: VoiceTrick, success: Bool, others skip: Int) {
+        guard let b = a.brain else { return }
+        let player = a.id == stageActor(0)?.id
         b.abortAll(a.sim, a.skinner)
         if t == .flip { b.commandedFlipFail = !success; b.commandedFlip = true }
         else if let k = VoiceCoordinator.idleKind(for: t) {
-            if success { b.commandedIdle = k } else { b.commandedIdle = k; showBook.flopT = 0 }
+            if success { b.commandedIdle = k } else { b.commandedIdle = k; if player { showBook.flopT = 0 } else { showBook.flops[a.id] = 0 } }
         }
         if success { b.face(.excited, hold: 1.2) } else { b.face(.worried, hold: 1.4) }
-        for k in 1..<max(showBook.performers.count, 1) {                  // the rivals watch: a giggle at a flop, a happy face at a landing
-            guard let r = stageActor(k), let rb = r.brain else { continue }
+        var watchers: [JellyActor] = showBook.performers.compactMap { showBody($0) }
+        watchers += showBook.extra
+        for r in watchers where r.id != skip {
+            guard let rb = r.brain else { continue }
             rb.face(success ? .happy : .oh, hold: 1.2)
         }
     }
@@ -298,6 +445,19 @@ extension GameCare {
         show.tick(dt: dt)
         guard show.active, show.onStage else { return }
         let book = showBook
+        for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
+            guard let b = a.brain else { continue }
+            b.idleBlocked = true; b.autonomy = false
+            visitorLook(a, v, dt: dt)
+        }
+        // the Trick round's stage: the rivals to their rest spots when it begins, back to the row when it is over
+        let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)
+        if inTrick != book.trickSet, show.wipe == 0 { showSetTrick(inTrick) }
+        for (aid, f0) in book.flops {          // a rival's cute flop: the move is cut short after a beat and she wobbles
+            guard let a = showBody(aid), let b = a.brain else { book.flops[aid] = nil; continue }
+            let f = f0 + dt
+            if f > 0.9 { book.flops[aid] = nil; b.abortAll(a.sim, a.skinner); b.jellyKick = max(b.jellyKick, 2.4); b.face(.worried, hold: 1) } else { book.flops[aid] = f }
+        }
         for (k, aid) in book.performers.enumerated() where actors.indices.contains(aid) {
             let a = actors[aid]
             guard let b = a.brain else { continue }

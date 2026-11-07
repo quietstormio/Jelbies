@@ -1285,6 +1285,10 @@ final class MelonController: NSObject, MTKViewDelegate {
                 renderer.setBathLook(model.care.renderLook(for: a.id), body: a.id)
             }
             for a in model.care.raceBook.extra { renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id) }          // the track's temporary rivals
+            for a in model.care.showBook.extra {          // the show's borrowed rival bodies: their tint, and out of the picture except in the Trick round
+                renderer.setRacePalette(model.care.racePalette(for: a.id), own: a.appearance, body: a.id)
+                renderer.setHidden(model.hideJellies || model.care.showHides(a.id), body: a.id)
+            }
         }
         renderer.resize(width: rw, height: rh)
         lastRW = rw; lastRH = rh

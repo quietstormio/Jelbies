@@ -114,6 +114,12 @@ nonisolated enum ShowStage {
             return SIMD2(playerSpot.x + side * rank * 1.35, playerSpot.y - 0.45)
         }
     }
+    /// Where the player's Jelbie waits while a rival performs in the middle, and where the rivals stand during the Trick round (rival k: left front, then back left, back right).
+    static let playerAside = SIMD2<Float>(2.5, 2.2)
+    static func rivalRest(_ k: Int) -> SIMD2<Float> {
+        let fixed = [SIMD2<Float>(-2.5, 2.0), SIMD2(-1.3, 0.6), SIMD2(1.3, 0.6)]
+        return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
+    }
     /// A parked Jelly (a body the show does not need) waits far off to the side, out of every camera.
     static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(40 + Float(id) * 4, 2) }
 }
@@ -131,7 +137,9 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landFill: Float = 0.8
     var landLeft = true
     static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
-    static let trick = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.33, fill: 0.50, landScreenY: 0.52, landFill: 0.78)
+    /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
+    static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
+                                 screenY: 0.33, fill: 0.80, landScreenY: 0.52, landFill: 0.62)
     static func dance(bodies n: Int) -> ShowFrame { ShowFrame(spots: ShowStage.spots(bodies: n), screenY: 0.30, fill: n > 1 ? 0.84 : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false) }
     static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
     static let practice = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.5, landScreenY: 0.3, landFill: 0.6, landLeft: false)

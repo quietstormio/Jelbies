@@ -25,7 +25,12 @@ final class ShowFlow {
     /// The Dance round's clock.
     enum Beat: Equatable { case idle, countdown, dancing, danced }
     /// The Trick round's turn.
-    enum TrickStage: Equatable { case pick, performing }
+    /// `rivals`: the player's trick is over and the rivals take their turn one after another (walk up, perform, step back), then it is his turn again.
+    enum TrickStage: Equatable { case pick, performing, rivals }
+    /// What one rival is doing now (and, last, the player's Jelbie walking back to the centre).
+    enum RivalStep: Equatable { case walkIn, perform, walkOut, playerBack }
+    /// What the bodies are asked to do (GameCare+Show.swift): the player steps aside / back, rival `i` walks up / performs / steps back, everybody snaps home (Skip).
+    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap }
 
     private(set) var phase: Phase = .off
     /// 0...1 white overlay opacity (the view draws it).
@@ -67,6 +72,12 @@ final class ShowFlow {
     private(set) var trickStage: TrickStage = .pick
     @ObservationIgnored private var clock: Double = 0
     private(set) var lastTurn: ShowTrickTurn?
+    /// The rival on the stage now (nil between turns) and what she is doing; `rivalRound` is the turn (0...2) the rivals are on.
+    private(set) var rivalTurn: Int?
+    private(set) var rivalStep: RivalStep = .walkIn
+    private(set) var rivalRound = 0
+    @ObservationIgnored private var rivalQueue: [Int] = []
+    @ObservationIgnored private var rivalT: Float = 0
     @ObservationIgnored private var performLeft: Float = 0
     /// The Glow Burst fired on the last turn (the view throws confetti).
     private(set) var burstFlash = 0
@@ -96,6 +107,9 @@ final class ShowFlow {
     @ObservationIgnored var onHit: (DrillGrade) -> Void = { _ in }
     @ObservationIgnored var onResults: (Int) -> Void = { _ in }
     @ObservationIgnored var onBurst: () -> Void = {}
+    /// The rivals' turn on the stage (bodies) and whether a body has got where it was sent (`who` nil = the player's Jelbie; `atCentre`: at the middle, else at his rest / aside spot).
+    @ObservationIgnored var onRival: (RivalCue) -> Void = { _ in }
+    @ObservationIgnored var rivalReady: (_ who: Int?, _ atCentre: Bool) -> Bool = { _, _ in true }
     /// Money (the care glue sets it).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var cue: (ShowCue) -> Void = { AudioHub.shared.showCue($0) }
@@ -130,7 +144,14 @@ final class ShowFlow {
     @ObservationIgnored private var danceGoSong: Double = -10
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
-    var hasResults: Bool { sim?.round == .results }
+    var hasResults: Bool { sim?.round == .results && trickStage == .pick }
+    /// The rival under the lights and what she shows this turn (her name, trick, stars and points come from this).
+    var rivalNow: (rival: Int, turn: ShowTrickTurn)? {
+        guard trickStage == .rivals, let i = rivalTurn, let s = sim, s.rivalTurns.indices.contains(i), s.rivalTurns[i].indices.contains(rivalRound) else { return nil }
+        return (i, s.rivalTurns[i][rivalRound])
+    }
+    /// Her points are on the screen (she has performed).
+    var rivalScored: Bool { rivalStep == .perform || rivalStep == .walkOut }
     /// The scene track the stage plays now.
     var track: SceneTrack { .contestStage }
     var grid: ShowBeat { ShowBeat.grid(for: track) }
@@ -147,7 +168,7 @@ final class ShowFlow {
         case .look: return .look
         case .dance: return .dance(bodies: bodies)
         case .trick: return .trick
-        case .results: return .results
+        case .results: return trickStage == .pick ? .results : .trick          // (the rivals' last turn still plays on the trick frame)
         }
     }
 
@@ -169,6 +190,7 @@ final class ShowFlow {
     private func resetStage() {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; danceGoSong = -10
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
+        rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
@@ -324,11 +346,83 @@ final class ShowFlow {
         case .performing:
             performLeft -= dt
             if performLeft <= 0 {
-                trickStage = .pick
-                if sim?.round == .results { settle() }
-                revision += 1
+                if let s = sim, !s.rivals.isEmpty { startRivals() }
+                else { trickStage = .pick; if sim?.round == .results { settle() }; revision += 1 }
             }
+        case .rivals: tickRivals(dt: dt)
         }
+    }
+
+    // MARK: the rivals' turns
+
+    /// The player's trick is over: each rival in turn walks up to the middle, shows the trick she rolled for this turn and steps back (his Jelbie waits aside).
+    private func startRivals() {
+        guard let s = sim else { return }
+        rivalRound = max(s.turns.count - 1, 0)
+        rivalQueue = Array(s.rivals.indices)
+        trickStage = .rivals
+        onRival(.playerAside(true))
+        nextRival()
+    }
+    private func nextRival() {
+        rivalT = 0
+        guard !rivalQueue.isEmpty else {
+            rivalTurn = nil; rivalStep = .playerBack
+            onRival(.playerAside(false))
+            revision += 1
+            return
+        }
+        let i = rivalQueue.removeFirst()
+        rivalTurn = i; rivalStep = .walkIn
+        onRival(.walkIn(i))
+        if let s = sim { A11yEvents.say("\(s.rivals[i].name) is up", .normal) }
+        revision += 1
+    }
+    private func tickRivals(dt: Float) {
+        rivalT += dt
+        switch rivalStep {
+        case .walkIn:
+            guard let i = rivalTurn, rivalT >= 0.5, rivalReady(i, true) || rivalT > 4 else { return }
+            startRivalPerform(i)
+        case .perform:
+            guard let i = rivalTurn, rivalT >= Self.performSeconds else { return }
+            rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i)); revision += 1
+        case .walkOut:
+            guard let i = rivalTurn, rivalT >= 0.4, rivalReady(i, false) || rivalT > 3 else { return }
+            nextRival()
+        case .playerBack:
+            guard rivalT >= 0.3, rivalReady(nil, true) || rivalT > 3.5 else { return }
+            endRivals()
+        }
+    }
+    private func startRivalPerform(_ i: Int) {
+        guard let n = rivalNow else { return }
+        rivalStep = .perform; rivalT = 0
+        cue(n.turn.success ? .land : .flop)
+        onRival(.perform(i, n.turn.trick, n.turn.success))
+        if let s = sim {
+            let t = n.turn
+            A11yEvents.say("\(s.rivals[i].name): \(t.trick.title), \(t.success ? "\(t.points) points" : "a cute flop, \(t.points) points")", .normal)
+        }
+        revision += 1
+    }
+    /// The turn is over: his again (or the results, after the third).
+    private func endRivals() {
+        trickStage = .pick; rivalTurn = nil; rivalQueue = []; rivalT = 0
+        if sim?.round == .results { settle() }
+        revision += 1
+    }
+    /// "Skip": the rest of the rivals' tricks of this turn are settled (their points already count), the bodies snap to their spots and it is his turn.
+    func skipRivals() {
+        guard trickStage == .rivals else { return }
+        onRival(.snap)
+        A11yEvents.say("Skipped the rivals' tricks", .normal)
+        endRivals()
+    }
+    /// A tap on the banner: only the rival under the lights is skipped (she steps back at once).
+    func skipCurrentRival() {
+        guard trickStage == .rivals, let i = rivalTurn, rivalStep == .walkIn || rivalStep == .perform else { return }
+        rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i)); revision += 1
     }
 
     // MARK: results
@@ -367,7 +461,7 @@ final class ShowFlow {
             if auto, beat == .danced, dancedAge > 1.5 { finishDance() }
         case .trick: tickTrick(dt: dt)
         case .results:
-            if trickStage == .performing { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }
+            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }          // (the last turn's rivals still perform after the sim has its results)
         }
     }
 
@@ -409,6 +503,7 @@ final class ShowFlow {
         guard phase != .off else { return }
         if cameraBlend > 0 || (swapped && fadeDest == .stage) { onSwap(.room) }
         cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
+        trickStage = .pick; rivalTurn = nil; rivalQueue = []
         onDance(nil, false)
         revision += 1
     }
