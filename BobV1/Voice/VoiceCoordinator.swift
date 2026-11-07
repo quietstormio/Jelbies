@@ -23,8 +23,6 @@ import simd
 final class VoiceCoordinator {
     let training: VoiceTraining
     let mode: VoiceMode
-    /// The first-trick tutorial (teach Bob to come); the card reads it.
-    let tutorial: VoiceTutorial
     /// He is doing the come move right now (a voice walk, or the few seconds after it started): a word said then is a rep.
     private(set) var comingNow = false
     /// How many learned-word "come" commands were carried out (the tutorial's "Try it" ends on the next one).
@@ -122,10 +120,6 @@ final class VoiceCoordinator {
     private(set) var lastParse: (path: String, ms: Int)?
     @ObservationIgnored private var currentIDs: [Int] = []
     @ObservationIgnored var session = 0
-    /// The close-up's Train session (TrainSession.swift), nil outside it; the Train card reads it.
-    var train: TrainSession?
-    /// A trick the next Train close-up starts on (the trick book's "Teach" outside the close-up).
-    @ObservationIgnored var trainPreselect: VoiceTrick?
     @ObservationIgnored private var runningAtOpen: VoiceTrick?
     @ObservationIgnored private weak var brainRef: BlobBrain?
     @ObservationIgnored private var startTask: Task<Void, Never>?
@@ -165,8 +159,6 @@ final class VoiceCoordinator {
     private(set) var feedback: VoiceFeedback?
     /// "Learned “word” -> Trick" toast.
     private(set) var toast: VoiceToast?
-    /// "Now hold the mic and say a word for <Trick>" while a trick-book move runs.
-    private(set) var teachPrompt: TeachPrompt?
     /// Every feedback event in order (tests read it; capped).
     private(set) var feedbackLog: [VoiceFeedback.Kind] = []
     @ObservationIgnored private var heardSeq = 0
@@ -180,8 +172,6 @@ final class VoiceCoordinator {
         if let o = override { kind = o == .silent ? nil : o }          // .silent: a demonstration (trick-book row), not a command
         else {
             switch r {
-            case .learnedStep(let t, let n): kind = .rep(t, reps: n)
-            case .trickLearned(let t): kind = .learned(t, word: (lastBook ?? training).word(for: t) ?? "")
             case .perform(let t): kind = .obeyed(t)
             case .wrongTrick(let said, _): kind = .missed(said, pct: Int(((lastBook ?? training).reliability(said) * 100).rounded()))
             case .puzzled, .ignore, .dontKnow: kind = .unknown
@@ -197,11 +187,7 @@ final class VoiceCoordinator {
         feedback = VoiceFeedback(id: feedbackSeq, kind: kind, born: clock())
         feedbackLog.append(kind); if feedbackLog.count > 60 { feedbackLog.removeFirst() }
         switch kind {
-        case .rep, .nameRep, .nameLearned: perkLeft = 0.6
-        case .learned(let t, let w):
-            perkLeft = 0.6
-            let who = (lastBook ?? training).names.displayName(care?.trainingSubject ?? 0)
-            toast = VoiceToast(id: feedbackSeq, text: "\(who) learned \(t.title)! Say \u{201C}\(w)\u{201D}", born: clock())
+        case .nameRep, .nameLearned: perkLeft = 0.6
         default: break
         }
         announceFeedback(kind)          // a11y: VoiceOver hears "Moss learned Sit" (VoiceCoordinator+A11y.swift)
@@ -222,7 +208,7 @@ final class VoiceCoordinator {
 
     nonisolated deinit {}
 
-    init(training: VoiceTraining? = nil, input: SpeechInput? = nil, tutorial: VoiceTutorial? = nil, intentModel: VoiceIntentModel? = nil,
+    init(training: VoiceTraining? = nil, input: SpeechInput? = nil, intentModel: VoiceIntentModel? = nil,
          ai: AIHub? = nil, now: @escaping () -> Double = { Date.timeIntervalSinceReferenceDate }) {
         // Free phrasing: the legacy model only when injected (tests). The shipped app uses the AI hub's router (Apple Intelligence when the phone has
         // it, the rule parser otherwise; `-VoiceNoModel 1` pins the rules). Unit tests get a hub with no model.
@@ -230,13 +216,11 @@ final class VoiceCoordinator {
         self.intentModel = intentModel
         self.ai = ai ?? AIHub(model: testing ? nil : AIModels.commandModel())
         self.training = training ?? VoiceTraining()
-        self.tutorial = tutorial ?? VoiceTutorial()
         self.clock = now
         self.mode = VoiceMode(now: now)
         self.input = input ?? SpeechInputFactory.make()
         availability = self.input.availability
         mode.onSend = { [weak self] text in self?.process(text) }
-        self.tutorial.voice = self
     }
 
     // MARK: listening
@@ -274,9 +258,6 @@ final class VoiceCoordinator {
         openCount += 1
         subjectAtOpen = subjectID
         runningAtOpen = brainRef.map { subjectBrain($0) }.flatMap(Self.running)
-        // A trick-book prompt still open binds the listen to its trick even after the move has finished (tap-to-talk under VoiceOver /
-        // Switch Control cannot reach the mic inside a daytime sit; assistive play also ignores the 8 s timeout).
-        runningAtOpen = promptBound(runningAtOpen)
         poseDue = true
         input.onLevel = { [weak self] l in
             guard let self else { return }
@@ -308,7 +289,7 @@ final class VoiceCoordinator {
             catch {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
-                if self.micUnusable, self.train == nil { self.bookRequest += 1 }        // (in a Train session the card says the mic is off; the book must not pop over the close-up)
+                if self.micUnusable { self.bookRequest += 1 }
             }
         }
         return true
@@ -373,7 +354,7 @@ final class VoiceCoordinator {
         }
     }
 
-    private func process(_ transcript: String, bindTo: VoiceTrick? = nil) {
+    private func process(_ transcript: String) {
         defer { mode.finish() }
         guard let care else { return }
         // a meal / tray owns him: commands are ignored and nothing is learned
@@ -383,13 +364,11 @@ final class VoiceCoordinator {
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
-        teachPrompt = nil
-        if trainHandle(transcript) { return }           // a Train session waiting for the word (r1023-train)
         if roomCommand(transcript) { return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()
         let who = subject(for: transcript)
         let bk = book(for: who); lastBook = bk
-        let d = bk.decideFull(transcript: transcript, runningMove: bindTo, mood: moodMeant(by: transcript), session: session)
+        let d = bk.decideFull(transcript: transcript, runningMove: nil, mood: moodMeant(by: transcript), session: session)
         // "everyone come eat", "come have a drink", "come get a bath": the loose come rule would win, but the sentence is a meal / nap / bath /
         // question for the natural-command path. Only the rules' confident new-kind verbs override, so taught words and the social phrases stand.
         if !d.noMatch, intentModel == nil, VoiceMatcher.looksLikeCome(VoiceMatcher.tokens(transcript)) {
@@ -548,29 +527,18 @@ final class VoiceCoordinator {
 
     // MARK: nicknames: typed in the Voice book only (matched automatically like custom names); there is no spoken lesson.
 
-    /// Typed teaching (accessibility): the same step a heard phrase gets, with no microphone. The rep rules are identical (each submit is one listen of
-    /// its own). While a trick-book move is the prompt (`show(_:)`), the word binds to THAT trick even after the move has finished.
-    /// `teaching` is the trick-book row the field belongs to: an unlearned one binds the word to it with no timeout (the player may take
-    /// longer than the prompt to find the field); a learned one is a plain typed command.
-    func typed(_ words: String, teaching: VoiceTrick? = nil) {
+    /// Typed commands (accessibility, no microphone): the same path a heard phrase takes.
+    func typed(_ words: String) {
         let text = words.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, mode.phase == .idle, !stopping, care != nil else { return }
-        let prompt: VoiceTrick?
-        if let t = teaching { prompt = book.isLearned(t) ? nil : t }
-        else { prompt = teachPrompt.flatMap { clock() < $0.until ? $0.trick : nil } }
         session = training.newSession()
         subjectAtOpen = subjectID
-        runningAtOpen = prompt ?? brainRef.map { subjectBrain($0) }.flatMap(Self.running)
-        process(text, bindTo: prompt)           // an explicit trick-book row binds the word (typed teaching); the Train session / room never bind by themselves
-        if let t = prompt, !book.isLearned(t) { teachPrompt = TeachPrompt(trick: t, until: clock() + Self.promptTime) }          // the next typed word is the next lesson
+        runningAtOpen = brainRef.map { subjectBrain($0) }.flatMap(Self.running)
+        process(text)
     }
 
-    /// Debug / capture: a listen that "hears" `words` after `hold` seconds. `teach` starts that trick first and waits a second.
-    func simulate(_ words: String, teach: VoiceTrick? = nil, hold: Double = 1.2) async {
-        if let t = teach {
-            enqueue(.perform(t), .silent)
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-        }
+    /// Debug / capture: a listen that "hears" `words` after `hold` seconds.
+    func simulate(_ words: String, hold: Double = 1.2) async {
         guard begin() else { return }
         try? await Task.sleep(nanoseconds: UInt64(hold * 1e9))
         debugTranscript = words
@@ -580,7 +548,6 @@ final class VoiceCoordinator {
     /// Debug / capture (`-VoiceLearned 1`): his name and every trick count as learned with their suggestion words.
     func debugLearnAll() {
                 for t in VoiceTrick.allCases where training.unlocked(t) { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }
-        tutorial.finish()
     }
 
     /// The trick book row: do the trick now (so the next said word binds to it).
@@ -618,11 +585,6 @@ final class VoiceCoordinator {
         if !b.idleState.yielding, let t = trick(for: b.idleState.kind) { return t }
         return nil
     }
-    /// `running`, or (when he is not doing a trick-able move) the trick of the open trick-book prompt.
-    private func promptBound(_ running: VoiceTrick?) -> VoiceTrick? {
-        if running == nil, let p = teachPrompt, clock() < p.until || A11yAssist.active { return p.trick }
-        return running
-    }
     private func runningNow(_ b: BlobBrain) -> VoiceTrick? { Self.running(b) ?? (voiceGoing || clock() < comeUntil ? .come : nil) }
     /// A listen opened while he was coming (the tutorial keeps saying "hold the mic" through a long hold).
     var listeningToCome: Bool { mode.isListening && runningAtOpen == .come }
@@ -633,19 +595,15 @@ final class VoiceCoordinator {
         brainRef = brain
         let coming = voiceGoing || clock() < comeUntil
         if coming != comingNow { comingNow = coming }
-        tutorial.update()
-        trainTick(care: care, brain: brain, dt: dt)
         if voiceGoing { goAge += dt; if goAge > 15 { voiceGoing = false } }      // a cancelled walk (he was grabbed) never reports back
         if mode.phase == .idle { runningAtOpen = nil }
-        if let p = teachPrompt, clock() > p.until, !mode.isListening { teachPrompt = nil }          // the prompt times out (it also lets a held teaching sit finish)
-        brain.trainingLock = teachPrompt != nil          // (same value GameCare.tickFeature gives every actor; set here too for the primary brain)
 
         // listening pose
         let listening = mode.isListening
         if poseDue, listening {
             poseDue = false
             subjectAtOpen = subjectID
-            runningAtOpen = promptBound(runningNow(subjectBrain(brain)))
+            runningAtOpen = runningNow(subjectBrain(brain))
             brain.blinkRequested = true
             let act = brain.activity
             let free = act == .idle || act == .walking || act == .lookingAround || act == .steppingInPlace || act == .turning
@@ -849,12 +807,8 @@ final class VoiceCoordinator {
             doTrick(t, care: care, brain: brain, focused: focused)
         case .acknowledged:
             brain.blinkRequested = true; perkLeft = 0.6                // he heard and is on it: a blink and the small ear-perk tilt
-        case .learnedStep, .nicknameStep:
+        case .nicknameStep:
             brain.blinkRequested = true                              // a nod: he noticed (plus the small ear-perk tilt, see `perkLeft`)
-        case .trickLearned:
-            brain.blinkRequested = true
-            care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
-            if !care.focus.isActive { pendingHop = true; hopWait = 0; walkAfterHop = false }      // the happy hop at the lesson's end
         case .puzzled, .ignore, .dontKnow:
             if !trickRunning { brain.commandedIdle = .look }         // the tilt / shrug: look away briefly and back
         case .grumpyIgnore:

@@ -11,16 +11,11 @@ import simd
 
 nonisolated struct VoiceHeard: Equatable, Sendable { let id: Int; let text: String; let born: Double }
 nonisolated struct VoiceToast: Equatable, Sendable { let id: Int; let text: String; let born: Double }
-nonisolated struct TeachPrompt: Equatable, Sendable { let trick: VoiceTrick; let until: Double }
 /// The understood natural command ("Pip: go to sleep"), or why it could not be done (`ok` false: "No beanbag to go to yet").
 nonisolated struct VoiceUnderstood: Equatable, Sendable { let id: Int; let text: String; let ok: Bool; let born: Double }
 
 nonisolated struct VoiceFeedback: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
-        /// A rep was counted toward a word (dots, the new one pops).
-        case rep(VoiceTrick, reps: Int)
-        /// That rep completed the lesson (sparkles, check, toast).
-        case learned(VoiceTrick, word: String)
         /// A learned word was obeyed (a small check as he starts).
         case obeyed(VoiceTrick)
         /// He knew the word but the reliability roll failed ("?" plus the trick and its reliability).
@@ -45,8 +40,6 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
         /// Accessibility value / log name.
         var name: String {
             switch self {
-            case .rep(let t, let n): return "rep \(t.rawValue) \(n)"
-            case .learned(let t, _): return "learned \(t.rawValue)"
             case .obeyed(let t): return "obeyed \(t.rawValue)"
             case .missed(let t, _): return "missed \(t.rawValue)"
             case .unknown: return "unknown"
@@ -63,8 +56,7 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
         /// Seconds the bubble stays.
         var life: Double {
             switch self {
-            case .learned: return 2.6
-            case .rep, .missed, .nameRep, .nameLearned, .command, .answer: return 2.2
+            case .missed, .nameRep, .nameLearned, .command, .answer: return 2.2
             default: return 1.6
             }
         }
@@ -83,7 +75,7 @@ struct VoiceFeedbackView: View {
 
     var body: some View {
         // 20 Hz only while something is on screen; otherwise a slow poll (nothing to animate, so the full-screen overlay stays cheap)
-        let busy = voice.feedback != nil || voice.toast != nil || voice.teachPrompt != nil || voice.heard != nil
+        let busy = voice.feedback != nil || voice.toast != nil || voice.heard != nil
         return TimelineView(.periodic(from: .now, by: busy ? 0.05 : 0.25)) { _ in
             let now = voice.now()
             ZStack {
@@ -102,13 +94,10 @@ struct VoiceFeedbackView: View {
                     if let t = voice.toast, now - t.born < 2.8 {
                         pill(t.text, id: "voice-toast", fade: now - t.born, life: 2.8, accent: true)
                     }
-                    if voice.train == nil, let p = voice.teachPrompt, now < p.until, !voice.isListening {
-                        pill("Now hold the mic and say a word for \(p.trick.title)", id: "voice-prompt", fade: 0, life: 99, accent: false)
-                    }
                     if let u = voice.understood, now - u.born < Self.understoodLife {
                         understoodPill(u, fade: now - u.born)
                     }
-                    if voice.train == nil, let h = voice.heard, now - h.born < Self.heardLife {
+                    if let h = voice.heard, now - h.born < Self.heardLife {
                         pill(h.text, id: "voice-heard", fade: now - h.born, life: Self.heardLife, accent: false)
                     }
                 }
@@ -197,20 +186,12 @@ struct VoiceBubble: View {
             .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(FocusStyle.cream.opacity(0.97))
                 .shadow(color: FocusStyle.shadow.opacity(0.22), radius: 6, y: 3))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
-            .overlay { if case .learned = kind { sparkles } }
             .scaleEffect(enter * 0.78)
             .opacity(leave)
     }
 
     @ViewBuilder private var content: some View {
         switch kind {
-        case .rep(let t, let n):
-            VStack(spacing: 6) { icon(t); dots(n, popping: true) }
-        case .learned(let t, _):
-            VStack(spacing: 6) {
-                HStack(spacing: 6) { icon(t); sym("checkmark.circle.fill", Color(red: 0.36, green: 0.68, blue: 0.45)) }
-                dots(VoiceTuning.repsToLearn, popping: false)
-            }
         case .obeyed:
             sym("checkmark", Color(red: 0.36, green: 0.68, blue: 0.45), 30)
         case .missed(let t, let pct):

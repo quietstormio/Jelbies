@@ -366,23 +366,6 @@ struct LobbyChips: View {
     }
 }
 
-// MARK: - Pep
-
-/// Three pips: mint = a full-value practice left today, #E6D8C6 = used.
-struct PepDots: View {
-    let left: Int, total: Int
-    var id: String?
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<total, id: \.self) { i in
-                Circle().fill(i < left ? SK.mint : SK.pepEmpty).frame(width: 9, height: 9).overlay(Circle().strokeBorder(SK.ink.opacity(0.12), lineWidth: 1))
-            }
-        }
-        .accessibilityElement(children: .ignore).accessibilityLabel("Pep: \(left) of \(total) full practices left today")
-        .accessibilityIdentifier(id ?? "lobby-pep")
-    }
-}
-
 // MARK: - Bottom bar
 
 /// Children laid out in a row with widths in the ratio of `weights`.
@@ -409,61 +392,26 @@ struct WeightedRow: Layout {
     }
 }
 
-/// Train (white, ink outline, figure, pep pips) and the main button (1.25x as wide). A blocker mutes and disables both (`blocksTrain: false`: only the main one).
-/// The Studio reuses it with "Practise dance" as the left button.
+/// The lobbies' one big main button (Go race / Enter Jelly Show / Play); a blocker mutes and disables it.
 struct LobbyBottomBar: View {
-    let pepLeft: Int, pepTotal: Int
-    let pepID: String
-    let trainID: String, playID: String
+    let playID: String
     let playTitle: String, playIcon: LobbyIcon.Kind
     let blocked: Bool
-    var trainTitle = "Train"
-    var trainIcon: LobbyIcon.Kind = .run
-    var blocksTrain = true
-    /// Overrides when Train is off (Volleyball: the partner rule locks Play, never the solo Train).
-    var trainBlocked: Bool? = nil
-    var train: () -> Void
     var play: () -> Void
     @Environment(\.lobbyTheme) private var theme
 
     var body: some View {
         let minH: CGFloat = 58
-        let trainOff = trainBlocked ?? (blocked && blocksTrain)
-        WeightedRow(weights: [1, 1.25], spacing: 12) {
-            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); train() } label: {
-                ViewThatFits(in: .horizontal) {
-                    trainContent(icon: true, dots: true)
-                    trainContent(icon: false, dots: true)
-                    trainContent(icon: false, dots: false)
-                }
-                .foregroundStyle(trainOff ? SK.muted : theme.secondaryText)
-                .frame(maxWidth: .infinity, minHeight: minH)
-                .background(Capsule().fill(theme.secondaryFill))
-                .overlay(Capsule().strokeBorder(trainOff ? SK.muted.opacity(0.4) : theme.secondaryStroke, lineWidth: 3))
+        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play() } label: {
+            HStack(spacing: 9) {
+                LobbyIcon(kind: playIcon, color: theme.primaryText)
+                Text(playTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
             }
-            .buttonStyle(.plain).disabled(trainOff).accessibilityIdentifier(trainID)
-            .accessibilityLabel(trainTitle).accessibilityValue("Pep: \(pepLeft) of \(pepTotal) full practices left")
-            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play() } label: {
-                HStack(spacing: 9) {
-                    LobbyIcon(kind: playIcon, color: theme.primaryText)
-                    Text(playTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
-                }
-                .padding(.horizontal, 12)
-                .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: minH)
-                .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : theme.primary))
-            }
-            .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(playID)
+            .padding(.horizontal, 12)
+            .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: minH)
+            .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : theme.primary))
         }
-    }
-
-    private func trainContent(icon: Bool, dots: Bool) -> some View {
-        let off = trainBlocked ?? (blocked && blocksTrain)
-        return HStack(spacing: 9) {
-            if icon { LobbyIcon(kind: trainIcon, color: off ? SK.muted : theme.secondaryText) }
-            Text(trainTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
-            if dots { PepDots(left: pepLeft, total: pepTotal, id: pepID).padding(.leading, 2).opacity(off ? 0.6 : 1) }
-        }
-        .padding(.horizontal, 8)
+        .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(playID)
     }
 }
 

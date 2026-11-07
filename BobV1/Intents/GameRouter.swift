@@ -12,7 +12,7 @@
 //    pet     -> Come here: the close-up where petting happens (GameCare.comeHere)
 //    bed     -> the curtains to night (DayClock.skipToNextPhase until night) and the nap Live Activity
 //    race    -> `onRace` (the Track panel; Jelly Circuit worker) - until it is wired, the roster highlight
-//    train   -> `onTrain` (training; its worker) - until it is wired, the roster highlight
+//    train   -> the roster highlight (training is gone; an old Siri shortcut or widget link still lands on the Jelbie)
 //  Food comes from the Bag when there is one: `foodFor` is the hook (default: berries, a store food; with none owned the feed says so and serves nothing).
 //
 
@@ -34,7 +34,6 @@ final class GameRouter {
 
     /// Hooks other features plug into. Nil = the default fallback described above.
     @ObservationIgnored var onRace: ((Int) -> Void)?
-    @ObservationIgnored var onTrain: ((Int) -> Void)?
     @ObservationIgnored var onBed: (() -> Void)?
     /// The food id to serve for a Siri / widget feed (the Bag's pick; default berries, a store food; nothing is served when the bag has none).
     @ObservationIgnored var foodFor: (Int?) -> String = { _ in Consumables.berries.id }
@@ -113,7 +112,7 @@ final class GameRouter {
         case .race(let id):
             if let onRace { onRace(id) } else { care.openJelly(id) }
         case .train(let id):
-            if let onTrain { onTrain(id) } else { care.openJelly(id) }
+            care.openJelly(id)          // (training was removed: an old Siri / widget link just opens the Jelbie)
         }
         applied.append(r)
         return true

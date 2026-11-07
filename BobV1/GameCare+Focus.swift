@@ -49,9 +49,6 @@ final class FocusGroup {
     var koAspect: Float = 0
     var koKey: [Int] = []
     var evictT: [Int: Float] = [:]
-    /// The close-up was asked for by the "Train" button: the trick book opens on arrival (`training` stays true for the rest of that close-up).
-    var trainPending = false
-    var training = false
     /// Seconds since the walk began, the Jelly who stands in the middle (he goes first: nobody has to pass between two standing ones), and Jelly 0's walk held back for him.
     var clock: Float = 0
     var front = 0
@@ -73,7 +70,7 @@ final class FocusGroup {
     }
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
-        ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; trainPending = false; training = false; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
@@ -124,7 +121,7 @@ final class FocusGroup {
     }
 
     func clear() {
-        ids = []; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; trainPending = false; training = false; rowOpen = false; touchAnchor = nil; touchID = 0
+        ids = []; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; rowOpen = false; touchAnchor = nil; touchID = 0
         GameCamera.focusSpots = []; GameCamera.focusFramed = []
     }
 }
@@ -245,7 +242,6 @@ extension GameCare {
             evictFromKeepOut(id: id, brain: brain, dt: dt)
             return
         }
-        if phase == .focused, g.trainPending, g.arrived.contains(id) { g.trainPending = false; g.training = true; voice.startTrain(subject: id) }          // (the "Train" button's close-up: the Train card starts on arrival)
         guard id != 0 else { return }              // Jelly 0's own path is tickFocus
         var s = g.approach[id] ?? FocusGroup.Approach()
         defer { g.approach[id] = s }

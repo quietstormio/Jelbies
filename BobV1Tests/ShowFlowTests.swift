@@ -16,7 +16,7 @@ final class ShowFlowTests: XCTestCase {
     private func input() -> ShowPlayerInput {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.5 }
-        p.glow = 0.8; p.dirt = 0; p.dance = .sway; p.danceSkill = 0.5
+        p.glow = 0.8; p.dirt = 0; p.dance = .sway
         p.tricks = [.sit: 0.9, .jacks: 0.9, .flip: 0.9]; p.care = 1
         return p
     }
@@ -129,27 +129,6 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(g.round, .dance, "Next moves on at once")
     }
 
-    func testPracticeDrillTeachesTheDance() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.auto = true
-        var cues: [ShowCue] = []; f.cue = { cues.append($0) }
-        let st = JellyStats(persists: false, dayKey: { 20261021 })
-        f.beginPractice(playerID: 0, name: "Bob", character: 0, dance: .sway, stats: st, seed: 9)
-        XCTAssertTrue(f.isPractice); XCTAssertEqual(f.track, .studioPractice); XCTAssertEqual(f.grid, .studio)
-        run(f, seconds: 2) { f.phase == .stage }
-        XCTAssertEqual(f.musicScene, .studio)
-        run(f, seconds: 6) { f.beat == .dancing }
-        XCTAssertEqual(f.practice!.total, ShowFlow.practicePrompts)
-        run(f, seconds: 30) { f.practiceResult != nil }
-        let r = f.practiceResult!
-        XCTAssertEqual(r.dance, .sway); XCTAssertGreaterThan(r.accuracy, 0.6); XCTAssertGreaterThan(r.gain, 0.05)
-        XCTAssertEqual(st.proficiency(.sway), r.after, accuracy: 1e-6); XCTAssertEqual(st.sessionsToday, 1)
-        XCTAssertEqual(f.musicScene, .results); XCTAssertTrue(cues.contains(.jingle(win: true)))
-        XCTAssertFalse(f.buttonsLive)
-        f.goHome()
-        run(f, seconds: 3) { !f.active }
-        XCTAssertFalse(f.active)
-    }
-
     /// A brand-new Jelbie (no tricks learned) can enter: the default tricks are on his menu, and the show reaches its results.
     func testNoTricksLearnedStillHasTheDefaultsAndFinishesTheShow() {
         let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
@@ -191,7 +170,7 @@ final class ShowFlowTests: XCTestCase {
         let i = care.showPlayerInput(jelly: 0)
         XCTAssertEqual(i.stat(.sparkly), 0.7, accuracy: 1e-4); XCTAssertEqual(i.stat(.cute), 0.3, accuracy: 1e-4)
         XCTAssertEqual(i.glow, 0.6, accuracy: 1e-5); XCTAssertEqual(i.dirt, 0.2, accuracy: 1e-5)
-        XCTAssertEqual(i.dance, .bop); XCTAssertEqual(i.danceSkill, 0.6, accuracy: 1e-5)
+        XCTAssertEqual(i.dance, .bop)
         XCTAssertEqual(Set(i.tricks.keys), Set(ShowTrickInfo.defaults), "what he knows: the defaults (nothing was bought for him)")
         care.store.grantTrick(.flip, to: 0)
         XCTAssertNotNil(care.showPlayerInput(jelly: 0).tricks[.flip], "a trick bought for him is on his menu")
@@ -262,12 +241,4 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertLessThan(l.centre.x, 956 * 0.42, "a phone on its side: the solo rounds put him on the left")
     }
 
-    /// The show's cards fit a phone on its side (440 pt tall).
-    func testPracticeCardFitsTheLandscapeHeight() {
-        let r = DancePracticeResult(dance: .sway, accuracy: 0.8, perfects: 14, goods: 4, misses: 2, before: 0.3, after: 0.42, pepLeft: 2, pepSpent: false)
-        let h = UIHostingController(rootView: PracticeResultCard(result: r) {}.environment(\.verticalSizeClass, .compact))
-        let height = h.sizeThatFits(in: CGSize(width: 520, height: CGFloat.infinity)).height
-        print("SHOW practice card height \(height)")
-        XCTAssertLessThanOrEqual(height, 400)
-    }
 }

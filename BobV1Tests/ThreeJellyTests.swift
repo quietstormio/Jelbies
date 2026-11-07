@@ -97,7 +97,7 @@ final class ThreeJellyTests: XCTestCase {
         // what the phone has today: the three pre-multi-Jelly keys
         d.set(["levels": [0.4, 0.55, 0.65], "time": t.timeIntervalSince1970] as [String: Any], forKey: "BlobNeeds.v1")
         let g = BlobGrime(persists: true, defaults: d, now: { t }); g.dirt = 0.3; g.save()
-        let w = VoiceTraining(defaults: d, persists: true); w.debugReps(.sit, word: "sit", reps: 3); w.save()
+        let w = VoiceTraining(defaults: d, persists: true); w.debugLearn(.sit, word: "sit"); w.save()
         XCTAssertEqual(JellyKeys.needs(0), "BlobNeeds.v1"); XCTAssertEqual(JellyKeys.grime(0), "BlobGrime.v1"); XCTAssertEqual(JellyKeys.words(0), "BlobWords.v1")
 
         let bob = JellyProfile(id: 0, name: "Bob", persists: true, defaults: d, now: { t })
@@ -127,12 +127,12 @@ final class ThreeJellyTests: XCTestCase {
         let a = (0..<3).map { JellyProfile(id: $0, name: JellyRoster.names[$0], persists: true, defaults: d, now: { t }) }
         a[0].needs.set(.hunger, 0.9); a[1].needs.set(.hunger, 0.5); a[2].needs.set(.hunger, 0.35)
         a[0].grime.dirt = 0.1; a[1].grime.dirt = 0.5; a[2].grime.dirt = 0.9
-        a[1].training.debugReps(.sit, word: "sit", reps: 2)
+        a[1].training.debugLearn(.sit, word: "sit")
         for j in a { j.needs.save(); j.grime.save(); j.training.save() }
         let b = (0..<3).map { JellyProfile(id: $0, name: JellyRoster.names[$0], persists: true, defaults: d, now: { t }) }
         XCTAssertEqual(b.map { $0.needs.level(.hunger) }, [0.9, 0.5, 0.35])
         XCTAssertEqual(b.map { $0.grime.dirt }, [0.1, 0.5, 0.9])
-        XCTAssertEqual(b.map { $0.training.progress(.sit) }, [0, 2, 0])
+        XCTAssertEqual(b.map { $0.training.progress(.sit) }, [0, 3, 0])
         XCTAssertEqual(Set([0, 1, 2].map { JellyKeys.needs($0) }).count, 3)
     }
 

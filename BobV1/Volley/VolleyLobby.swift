@@ -1,7 +1,7 @@
 //
 //  VolleyLobby.swift
 //  The Volleyball lobby (Go out > Beach), rebuilt to the lobby mockups: the four courts in a carousel, the Team card (you and a chosen teammate), the two options, and a pinned
-//  Train / Play bar. Training (the stats and the drills) and How to play are sheets. Shared pieces are in Lobby/LobbyKit.swift.
+//  Play bar. How to play and the options are sheets. Shared pieces are in Lobby/LobbyKit.swift.
 //
 
 import SwiftUI
@@ -13,24 +13,18 @@ struct VolleyLobby: View {
     /// "Go to the Park": leaves the lobby for the Park trip (the Town's own path).
     var park: () -> Void = {}
     var play: (VolleyTier) -> Void
-    /// A drill, for the Jelbie picked on the Training sheet.
-    var drill: (VolleyDrillKind, Int) -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sheet: Sheet?
-    @State private var trainee = 0
     @State private var hint = LobbyHint()
-    enum Sheet { case train, how, options }
+    enum Sheet { case how, options }
     private var book: VolleyBook { care.volley.book }
     private var compact: Bool { vsc == .compact }
     private var blocker: String? { care.volleyBlocker(jelly: who, match: true) }
-    /// Training and drills are solo: they never need a partner.
-    private var drillBlocker: String? { care.volleyBlocker(jelly: who) }
     private var needsPartner: Bool { care.volleyPartnerBlocker(jelly: who) != nil }
 
     var body: some View {
-        let char = care.jelly(who)?.character ?? who
         ZStack {
             LobbyScreen(header: AnyView(LobbyHeader(title: "Volleyball", wallet: care.bath.wallet, backID: "volley-back", helpID: "volley-help", back: back, help: { open(.how) },
                                                  optionsID: "volley-options", options: { open(.options) })),
@@ -40,15 +34,12 @@ struct VolleyLobby: View {
                 VolleyTeamCard(care: care, who: $who, compact: compact, park: park)
                     .padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(pepLeft: book.sessionsLeft(char), pepTotal: VolleyTraining.fullSessions, pepID: "volley-pep", trainID: "volley-train", playID: "volley-play",
-                               playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, trainBlocked: drillBlocker != nil,
-                               train: { trainee = who; open(.train) }, play: { play(book.chosen) })
+                LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, play: { play(book.chosen) })
             }
             .accessibilityHidden(sheet != nil)
             if let sheet {
                 Group {
                     switch sheet {
-                    case .train: trainingSheet
                     case .options:
                         LobbySheet(title: "Options", close: { close() }) { optionsCard.padding(.top, 4) }.accessibilityIdentifier("volley-options-sheet")
                     case .how:
@@ -66,9 +57,7 @@ struct VolleyLobby: View {
         .environment(\.lobbyTheme, .beach)
         .accessibilityElement(children: .contain).accessibilityIdentifier("volley-lobby")
         .onAppear {
-            trainee = who
-            switch UserDefaults.standard.string(forKey: "LobbyAuto") {          // capture aid: -LobbyAuto volleyTrain | volleyHow
-            case "volleyTrain": sheet = .train
+            switch UserDefaults.standard.string(forKey: "LobbyAuto") {          // capture aid: -LobbyAuto volleyHow
             case "volleyHow": sheet = .how
             default: break
             }
@@ -135,85 +124,6 @@ struct VolleyLobby: View {
         }
         .padding(.horizontal, compact ? 12 : 14).padding(.vertical, compact ? 6 : 4).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.card))
-    }
-
-    // MARK: training
-
-    private func statColor(_ k: VolleyStatKind) -> Color {
-        switch k { case .speed: return SK.sky; case .power: return SK.pink; case .hops: return SK.mint; case .timing: return SK.honeyDeep }
-    }
-    private func drillIcon(_ k: VolleyDrillKind) -> LobbyIcon.Kind {
-        switch k { case .bonk: return .dotted; case .spike: return .spike; case .block: return .block; case .sprint: return .run }
-    }
-    private func sectionHead(_ title: String, _ trailing: String? = nil) -> some View {
-        HStack {
-            Text(title.uppercased()).font(SK.font(12.5, .heavy)).tracking(0.6).foregroundStyle(SK.muted).accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            if let trailing { Text(trailing).font(SK.font(12.5, .heavy)).foregroundStyle(SK.muted) }
-        }
-        .padding(.horizontal, 4).padding(.top, 16).padding(.bottom, 8)
-    }
-
-    private var trainingSheet: some View {
-        let prof = care.jelly(trainee) ?? care.jelly(who)
-        let c = prof?.character ?? trainee
-        let st = book.stats(character: c)
-        let left = book.sessionsLeft(c)
-        let name = prof?.name ?? "Bob"
-        return LobbySheet(title: "Training", full: true, close: { close() }) {
-            VStack(alignment: .leading, spacing: 0) {
-                LobbyChips(care: care, selected: trainee) { trainee = $0 }
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 10) {
-                        Text("Pep").font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                        HStack(spacing: 6) { ForEach(0..<VolleyTraining.fullSessions, id: \.self) { i in Capsule().fill(i < left ? SK.mint : SK.pepEmpty).frame(height: 12) } }
-                        Text("\(left) left").font(SK.font(15, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                    }
-                    .accessibilityElement(children: .ignore).accessibilityLabel("Pep: \(left) of \(VolleyTraining.fullSessions) full practices left today")
-                    Text("Each practice uses one Pep. It refills overnight; after that, practice still helps, just less.").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                .lobbyCard(padding: EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)).padding(.top, 14)
-                sectionHead("\(name) on the sand", "\(st.wins) win\(st.wins == 1 ? "" : "s") \u{00B7} \(st.matches) match\(st.matches == 1 ? "" : "es")")
-                VStack(spacing: 11) {
-                    LobbyBigStat(name: "Speed", value: st.speed, color: SK.sky, sub: "Quicker feet, longer steps")
-                    LobbyBigStat(name: "Power", value: st.power, color: SK.pink, sub: "Harder hits and spikes")
-                    LobbyBigStat(name: "Hops", value: st.hops, color: SK.mint, sub: "Higher jumps")
-                    LobbyBigStat(name: "Timing", value: st.timing, color: SK.honeyDeep, sub: "A bigger hit window, a truer aim")
-                }
-                .lobbyCard().accessibilityElement(children: .contain).accessibilityIdentifier("volley-stats")
-                sectionHead("Drills")
-                VStack(spacing: 8) { ForEach(VolleyDrillKind.allCases, id: \.rawValue) { k in drillRow(k) } }
-            }
-            .accessibilityElement(children: .contain).accessibilityIdentifier("volley-training")
-        }
-    }
-
-    private func drillRow(_ k: VolleyDrillKind) -> some View {
-        HStack(spacing: 12) {
-            LobbyIcon(kind: drillIcon(k)).frame(width: 46, height: 46).background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(SK.sky.opacity(0.55)))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(k.title).font(SK.font(16, .black)).foregroundStyle(SK.ink).fixedSize(horizontal: false, vertical: true)
-                FlowLayout(spacing: 5) {
-                    ForEach(k.raises, id: \.rawValue) { s in
-                        Text("+ \(s.title)").font(SK.font(11.5, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 2).background(Capsule().fill(statColor(s).opacity(0x55 / 255.0)))
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm()
-                let id = trainee
-                close(); drill(k, id)
-            } label: {
-                Text("Go").font(SK.font(14.5, .black)).foregroundStyle(.white).padding(.horizontal, 16).frame(minHeight: 36)
-                    .background(Capsule().fill(drillBlocker == nil ? SK.pinkStrong : SK.muted.opacity(0.45)))
-                    .frame(minHeight: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).disabled(drillBlocker != nil)
-            .accessibilityLabel("Go, \(k.title)").accessibilityHint(k.blurb).accessibilityIdentifier("volley-drill-\(k.rawValue)")
-        }
-        .padding(EdgeInsets(top: 9, leading: 9, bottom: 9, trailing: 10))
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white.opacity(0.9)))
     }
 }
 

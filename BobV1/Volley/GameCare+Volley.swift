@@ -96,7 +96,7 @@ extension GameCare {
         volleyPartner(for: id) == nil && volleyParkFriend() == nil ? Self.volleyNeedsPartner : nil
     }
 
-    /// `match`: also the partner rule (drills are solo and need none).
+    /// `match`: also the partner rule.
     func volleyBlocker(jelly id: Int, match: Bool = false) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
@@ -227,8 +227,8 @@ extension GameCare {
             w.players = bodies
             for (i, a) in bodies.enumerated() {
                 let team = i / 2
-                let x = volley.isDrill ? Float(volley.mode == .drill(.block) ? -1.2 : -1.5) : VolleyTuning.startX[min(i, 3)]
-                let z = volley.isDrill ? Float(0) : VolleyTuning.startZ[min(i, 3)]
+                let x = VolleyTuning.startX[min(i, 3)]
+                let z = VolleyTuning.startZ[min(i, 3)]
                 a.sim.arenaRadius = .infinity
                 rehome(a, at: SIMD2(x, z))
                 a.brain?.volleyBegin(sim: a.sim, skinner: a.skinner, x: x, z: z, side: team == 0 ? 1 : -1)
@@ -269,12 +269,11 @@ extension GameCare {
     func tickVolley(_ actors: [JellyActor], dt: Float) {
         let w = volleyWork
         #if targetEnvironment(simulator)
-        if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match, `2` bonk drill, `3` spike drill, `4` sprints
+        if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match
             Self.startVolleyFrames += 1
             if Self.startVolleyFrames > 120 {
                 Self.startVolleyPending = false
-                let k = UserDefaults.standard.integer(forKey: "StartVolley")
-                startVolley(jelly: 0, mode: k == 2 ? .drill(.bonk) : k == 3 ? .drill(.spike) : k == 4 ? .drill(.sprint) : .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+                startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
             }
         }
         #endif
@@ -406,9 +405,6 @@ extension GameCare {
         case .serveReady(let p):
             if p < 2 { A11yEvents.say("Your serve. Tap Hit to toss, tap again at the top", .normal) }
         case .matchOver: AudioHub.shared.play(.cheerSmall)
-        case .drillHit(let good): AudioHub.shared.play(good ? .statUp : .stumble, volume: 0.6)
-        case .flag: AudioHub.shared.play(.goodStep)
-        case .drillBall, .drillOver: break
         }
     }
 
@@ -426,30 +422,13 @@ extension GameCare {
             let off = UInt32(b.mesh.vertices.count)
             b.mesh.vertices.append(contentsOf: m.vertices); b.mesh.indices.append(contentsOf: m.indices.map { $0 + off })
         }
-        if s.drillKind != .sprint {
-            VolleyBallMesh.shadow(x: s.ball.pos.x, z: s.ball.z, height: s.ball.pos.y, into: b)
-            if let r = s.ring, s.phase == .rally { VolleyBallMesh.timingRing(r, time: s.clock, into: b) }
-            add(VolleyBallMesh.build(centre: SIMD3(s.ball.pos.x, s.ball.pos.y, s.ball.z), spin: s.ball.spin))
-            if !w.trail.isEmpty { VolleyBallMesh.trail(w.trail, into: b) }
-        }
-        if s.drillKind == .spike {
-            for (k, x) in s.cushions.enumerated() {
-                let target = k == s.targetCushion
-                b.roundedBox(centre: SIMD3(x, 0.10, 0), half: SIMD3(0.42, 0.10, 0.42), radius: 0.09, segments: 3, aoFloor: false,
-                             color: target ? ParkShapes.srgb(0.98, 0.50, 0.58) : ParkShapes.srgb(0.99, 0.94, 0.82))
-            }
-        }
-        if s.drillKind == .sprint {
-            for (k, pt) in s.flags.enumerated() where k >= s.flagIndex {
-                let cur = k == s.flagIndex
-                let col = cur ? ParkShapes.srgb(0.98, 0.50, 0.58) : ParkShapes.srgb(0.86, 0.90, 0.95)
-                b.roundedBox(centre: SIMD3(pt.x, 0.45, pt.y), half: SIMD3(0.025, 0.45, 0.025), radius: 0.02, segments: 2, aoFloor: false, color: ParkShapes.srgb(0.96, 0.94, 0.88))
-                b.roundedBox(centre: SIMD3(pt.x + 0.17, 0.78, pt.y), half: SIMD3(cur ? 0.19 : 0.13, cur ? 0.1 : 0.07, 0.015), radius: 0.015, segments: 2, aoFloor: false, color: col)
-            }
-        }
+        VolleyBallMesh.shadow(x: s.ball.pos.x, z: s.ball.z, height: s.ball.pos.y, into: b)
+        if let r = s.ring, s.phase == .rally { VolleyBallMesh.timingRing(r, time: s.clock, into: b) }
+        add(VolleyBallMesh.build(centre: SIMD3(s.ball.pos.x, s.ball.pos.y, s.ball.z), spin: s.ball.spin))
+        if !w.trail.isEmpty { VolleyBallMesh.trail(w.trail, into: b) }
         for pf in w.puffs { VolleyBallMesh.puff(x: pf.x, z: pf.z, age: pf.age / 0.6, size: pf.size, into: b) }
         // the control ring under the Jelbie you steer, and an arrow over him
-        if !s.isDrill, s.phase != .over, s.players.indices.contains(s.controlled) {
+        if s.phase != .over, s.players.indices.contains(s.controlled) {
             let p = s.players[s.controlled]
             VolleyBallMesh.controlMark(x: p.x, z: p.z, top: p.top, time: s.clock, into: b)
         }

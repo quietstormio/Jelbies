@@ -97,7 +97,7 @@ extension VoiceCoordinator {
     static func notYetLine(_ c: JellyCommand, names: (Int) -> String) -> String {
         switch c.action {
         case .race: return "The race track isn't open yet"
-        case .train: return "Training comes later"
+        case .train: return "Training is gone: the Shop has power-ups soon"
         default: return "Not yet"
         }
     }

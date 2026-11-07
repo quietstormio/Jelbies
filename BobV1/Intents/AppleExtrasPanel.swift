@@ -34,20 +34,13 @@ struct AppleExtrasPanel: View {
             .tint(tint).accessibilityIdentifier("extras-nap-toggle")
             Text("When the Jelbies sleep (after 9 pm, or “goodnight”), a quiet card on the Lock Screen says when they are up.")
                 .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
-            Toggle(isOn: $live.pepOn) {
-                Label { Text("Pep refill countdown") } icon: { Image(systemName: "bolt.fill") }
-                    .jFont(15, .semibold).foregroundStyle(ink)
-            }
-            .tint(tint).accessibilityIdentifier("extras-pep-toggle")
-            Text("When training Pep runs out, a countdown to the midnight refill.")
-                .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
 
             Divider().overlay(ink.opacity(0.15))
 
             Text("Siri & Shortcuts").jFont(12, .bold).foregroundStyle(ink.opacity(0.6))
             SiriTipView(intent: CheckOnJelbiesIntent(), isVisible: $tipVisible)
                 .siriTipViewStyle(.automatic)
-            Text("Feed, water, goodnight, race and train work too.")
+            Text("Feed, water, goodnight and race work too.")
                 .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
             HStack { Spacer(); ShortcutsLink().shortcutsLinkStyle(.automatic).fixedSize() }
         }

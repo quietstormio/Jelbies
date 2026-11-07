@@ -80,22 +80,6 @@ final class LobbyTests: XCTestCase {
         XCTAssertNil(VolleyBook(persists: true, defaults: d).partner)
     }
 
-    func testDrillsListTheStatsTheyRaise() {
-        XCTAssertEqual(VolleyDrillKind.bonk.raises, [.timing, .hops])
-        XCTAssertEqual(VolleyDrillKind.spike.raises, [.power])
-        XCTAssertEqual(VolleyDrillKind.block.raises, [.hops])
-        XCTAssertEqual(VolleyDrillKind.sprint.raises, [.speed])
-    }
-
-    func testDrillInstructionsDropTheRaisesSentence() {
-        for k in VolleyDrillKind.allCases {
-            XCTAssertFalse(k.instruction.isEmpty)
-            XCTAssertFalse(k.instruction.contains("Raises"), "\(k): the caption is how to play, not what it trains")
-            XCTAssertTrue(k.blurb.hasPrefix(k.instruction))
-        }
-        XCTAssertEqual(VolleyDrillKind.spike.instruction, "Swipe the Hit button to aim the spike at the pink cushion.")
-    }
-
     func testTheDailyFriendHasNoSignatureFeature() {
         let pool = ParkPool.generate()
         for day in 20_000..<20_120 { XCTAssertEqual(ParkPool.dailyFriend(dayKey: day, pool: pool).signature, .none, "day \(day): what the lobby renders is exactly what plays") }

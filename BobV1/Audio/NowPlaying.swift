@@ -22,7 +22,6 @@ nonisolated struct NowPlaying: Equatable, Sendable {
         switch s {
         case .race: return "Track"
         case .raceFinal: return "Final stretch"
-        case .training: return "Training"
         case .shop: return "Shop"
         case .town: return "Town"
         case .park: return "Park"

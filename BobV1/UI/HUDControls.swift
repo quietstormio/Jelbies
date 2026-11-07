@@ -1,7 +1,7 @@
 //
 //  HUDControls.swift
 //  The one main HUD control (the paw, side of the screen) as a pure model: with nobody highlighted it serves the GROUP
-//  (Feed, Drink, Play, Decor, Bedtime / Naptime, Come here for everyone); with a Jelbie highlighted it serves HIM (Dress, Clean, Train, Compete, Come here).
+//  (Feed, Drink, Play, Decor, Bedtime / Naptime, Come here for everyone); with a Jelbie highlighted it serves HIM (Dress, Clean, Compete, Come here).
 //  CareMenu draws it; the tests drive it headless.
 //
 
@@ -11,7 +11,7 @@ enum HUDMode: Equatable { case group, individual(Int) }
 
 enum HUDItem: String, CaseIterable {           // the raw value is the accessibility identifier
     case callAll = "hud-call-all", feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
-    case come = "hud-come", dress = "hud-dress", clean = "care-clean", train = "hud-train", compete = "hud-compete"
+    case come = "hud-come", dress = "hud-dress", clean = "care-clean", compete = "hud-compete"
 }
 
 enum HUDRoute: Equatable {
@@ -37,11 +37,11 @@ enum HUDMenu {
         items(mode).filter { $0 != .callAll || callAllAvailable(care) }
     }
 
-    /// Top to bottom. Six rows in the group menu, five in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
+    /// Top to bottom. Six rows in the group menu, four in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
         case .group: return [.feed, .drink, .play, .decor, .bedtime, .callAll]
-        case .individual: return [.dress, .clean, .train, .compete, .come]
+        case .individual: return [.dress, .clean, .compete, .come]
         }
     }
 
@@ -58,7 +58,6 @@ enum HUDMenu {
         case .bedtime: return bedtimeTitle(phase: DayClock.shared.phase)
         case .dress: return "Dress"
         case .clean: return "Clean"
-        case .train: return "Train"
         case .compete: return "Compete"
         }
     }
@@ -66,12 +65,11 @@ enum HUDMenu {
     /// The sleep button reads Naptime by day (morning, day) and Bedtime in the evening and at night; same icon and action.
     static func bedtimeTitle(phase: DayPhase) -> String { phase == .morning || phase == .day ? "Naptime" : "Bedtime" }
 
-    /// What VoiceOver reads: the visible title, except Come here and Train name who they are for.
+    /// What VoiceOver reads: the visible title, except Come here names who it is for.
     static func spokenLabel(_ i: HUDItem, _ mode: HUDMode, care: GameCare) -> String {
         if i == .callAll { return "Call everyone" }
         if case .individual(let id) = mode, let name = care.jelly(id)?.name {
             if i == .come { return "Call \(name) over" }
-            if i == .train { return "Train \(name)" }
         }
         return title(i, mode, care: care)
     }
@@ -88,7 +86,6 @@ enum HUDMenu {
         case .bedtime: return "moon.zzz.fill"
         case .dress: return "tshirt.fill"
         case .clean: return CareMenu.cleanSymbol
-        case .train: return sym("graduationcap.fill", "star.fill")
         case .compete: return CareMenu.raceSymbol
         }
     }
@@ -98,7 +95,6 @@ enum HUDMenu {
         switch i {
         case .feed, .drink: return !care.trayOut && !care.bath.active && !care.tripActive
         case .clean: return care.canClean(jelly: id)
-        case .train: return !care.focus.isActive && !care.bath.active && !care.tripActive
         case .callAll: return callAllAvailable(care)
         case .come: return care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy
         case .compete: return care.canRace(jelly: id) || care.canShow(jelly: id)
@@ -121,10 +117,6 @@ enum HUDMenu {
             return "Not available right now"
         case .callAll: return "Not right now"
         case .come:
-            if care.focus.isActive { return "Already in the close-up" }
-            if care.bath.active { return "Not while cleaning" }
-            return "Not while racing"
-        case .train:
             if care.focus.isActive { return "Already in the close-up" }
             if care.bath.active { return "Not while cleaning" }
             return "Not while racing"
@@ -152,7 +144,6 @@ enum HUDMenu {
         case .bedtime: care.bedtimeAll(); care.clearHighlight(); return .none
         case .clean: care.clean(jelly: id); return .none
         case .come: care.comeHere(jelly: id); return .none
-        case .train: care.beginTraining(id); return .none
         case .compete: return .competeChips
         }
     }

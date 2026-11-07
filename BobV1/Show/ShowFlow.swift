@@ -6,8 +6,7 @@
 //      lane) -> Trick (three turns: pick a trick off his menu) -> results (podium, Drops, trophies) -> (Done) fade -> room.
 //
 //  The rules are `ShowSim`; this class adds time: the fade, the countdown that waits for the music, the song clock the dance is judged by, the
-//  seconds a trick takes to perform, the one-time settlement at the results, and the cues. `kind == .practice` is the Studio's
-//  dance drill: the same stage and lane, alone, studio music, the dance's skill grows at the end and nothing is paid.
+//  seconds a trick takes to perform, the one-time settlement at the results, and the cues.
 //
 
 import Foundation
@@ -17,22 +16,10 @@ import simd
 /// The show's sound cues (AudioHub.showCue maps them to files; tests count them).
 nonisolated enum ShowCue: Equatable, Sendable { case perfect, good, slip, countdown, go, ring, land, flop, burst, applause, jingle(win: Bool) }
 
-/// What the dance drill in the Studio gave.
-nonisolated struct DancePracticeResult: Equatable, Sendable {
-    var dance: DanceID
-    var accuracy: Float
-    var perfects: Int, goods: Int, misses: Int
-    var before: Float, after: Float
-    var pepLeft: Int
-    var pepSpent: Bool
-    var gain: Float { after - before }
-}
-
 @MainActor
 @Observable
 final class ShowFlow {
     enum Phase: Equatable { case off, fade, stage }
-    enum Kind: Equatable { case show, practice }
     enum Dest { case stage, room }
     enum FadeStage { case out, hold, `in` }
     /// The Dance round's clock.
@@ -41,7 +28,6 @@ final class ShowFlow {
     enum TrickStage: Equatable { case pick, performing }
 
     private(set) var phase: Phase = .off
-    private(set) var kind: Kind = .show
     /// 0...1 white overlay opacity (the view draws it).
     private(set) var wipe: Float = 0
     /// The stage is shown instead of the room (0 / 1: snapped under the white, never blended on screen).
@@ -93,13 +79,6 @@ final class ShowFlow {
     /// "Show again" was tapped: the lobby reopens once the room is back.
     @ObservationIgnored private(set) var againWanted = false
 
-    // the Studio's dance drill
-    @ObservationIgnored private(set) var practice: ShowDanceSim?
-    private(set) var practiceDance: DanceID = .sway
-    private(set) var practiceResult: DancePracticeResult?
-    @ObservationIgnored weak var stats: JellyStats?
-    static let practicePrompts = 24
-
     @ObservationIgnored private(set) var fadeDest: Dest = .stage
     @ObservationIgnored private(set) var fadeStage: FadeStage = .out
     @ObservationIgnored private var holdT: Float = 0
@@ -145,27 +124,25 @@ final class ShowFlow {
 
     var active: Bool { phase != .off }
     var onStage: Bool { cameraBlend > 0 }
-    var isPractice: Bool { kind == .practice }
     var round: ShowRound { sim?.round ?? .look }
     var showsCountdown: Bool { phase == .stage && beat == .countdown && countdown > 0 }
     var showsGo: Bool { phase == .stage && beat == .dancing && song - danceGoSong < 0.6 }
     @ObservationIgnored private var danceGoSong: Double = -10
     /// The foot buttons are live.
-    var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) && practiceResult == nil }
-    var hasResults: Bool { kind == .practice ? practiceResult != nil : sim?.round == .results }
+    var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
+    var hasResults: Bool { sim?.round == .results }
     /// The scene track the stage plays now.
-    var track: SceneTrack { kind == .practice ? .studioPractice : .contestStage }
+    var track: SceneTrack { .contestStage }
     var grid: ShowBeat { ShowBeat.grid(for: track) }
 
-    /// What the stage plays (Audio/SceneMusic.swift): the stage music, the studio loop for a drill; silence at the results (a jingle plays) and on the way home.
+    /// What the stage plays (Audio/SceneMusic.swift): the stage music; silence at the results (a jingle plays) and on the way home.
     var musicScene: MusicScene {
         guard phase != .off, cameraBlend > 0, !(phase == .fade && fadeDest == .room) else { return .none }
         if hasResults { return .results }
-        return kind == .practice ? .studio : .show
+        return .show
     }
     /// How the camera frames the stage this moment (GameCamera.showPose).
     var frame: ShowFrame {
-        if kind == .practice { return .practice }
         switch round {
         case .look: return .look
         case .dance: return .dance(bodies: bodies)
@@ -179,24 +156,10 @@ final class ShowFlow {
     /// "Start show": Jelbie `id` enters at `rank`. Ignored while a trip is running or the rank is locked.
     func begin(playerID id: Int, name: String, character c: Int, input: ShowPlayerInput, rank r: ShowRank, dayKey day: Int, bodies n: Int, seed: UInt64) {
         guard phase == .off, progress.unlocked(r) else { return }
-        kind = .show
         playerID = id; playerName = name; character = c; rank = r; dayKey = day; bodies = max(1, min(n, 4))
         theme = ShowSchedule.theme(dayKey: day)
         let rivals = ShowRivalSource.rivals(dayKey: day, rank: r, theme: theme, firstShow: progress.firstShowEver)
         sim = ShowSim(rank: r, theme: theme, dayKey: day, player: input, rivals: rivals, seed: seed)
-        resetStage()
-        phase = .fade; fadeDest = .stage; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        started += 1
-        revision += 1
-    }
-
-    /// "Practise dance" (the Studio): Jelbie `id` dances `dance` alone to the studio music; its skill grows at the end.
-    func beginPractice(playerID id: Int, name: String, character c: Int, dance: DanceID, stats s: JellyStats, seed: UInt64) {
-        guard phase == .off else { return }
-        kind = .practice
-        playerID = id; playerName = name; character = c; bodies = 1
-        practiceDance = dance; stats = s; practiceResult = nil; practice = nil
-        sim = nil
         resetStage()
         phase = .fade; fadeDest = .stage; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         started += 1
@@ -209,9 +172,7 @@ final class ShowFlow {
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
-        practiceSeed = UInt64(dayKey) &+ UInt64(playerID) &* 977
     }
-    @ObservationIgnored private var practiceSeed: UInt64 = 1
 
     /// "Done" / "Show again" on the results (or the X on a drill): back to the room.
     func goHome(again: Bool = false) {
@@ -260,8 +221,7 @@ final class ShowFlow {
                 if countdown > 0 { countdownLeft = Self.countdownBeat; cueSerial += 1; cue(.countdown) }
                 else {
                     beat = .dancing; danceGoSong = now; cueSerial += 1; cue(.go)
-                    if kind == .practice { practice = ShowDanceSim(count: Self.practicePrompts, grid: grid, timing: .kind, seed: practiceSeed, songTime: now) }
-                    else if var s = sim { s.beginDance(grid: grid, songTime: now); sim = s }
+                    if var s = sim { s.beginDance(grid: grid, songTime: now); sim = s }
                     revision += 1
                 }
             }
@@ -270,19 +230,11 @@ final class ShowFlow {
             if flashAge > 0.7, flash != nil { flash = nil }
             if auto || ShowAssist.autoDance { autoPlay(now) }
             promptCues(now: now)
-            if kind == .practice {
-                guard var p = practice else { return }
-                p.tick(songTime: now)
-                handle(p.takeEvents())
-                practice = p
-                if p.finished { finishPractice(p) }
-            } else {
-                guard var s = sim else { return }
-                let ev = s.tickDance(songTime: now)
-                sim = s
-                handle(ev)
-                if s.danceDone { beat = .danced; dancedAge = 0; cue(.applause); revision += 1 }
-            }
+            guard var s = sim else { return }
+            let ev = s.tickDance(songTime: now)
+            sim = s
+            handle(ev)
+            if s.danceDone { beat = .danced; dancedAge = 0; cue(.applause); revision += 1 }
         }
     }
 
@@ -291,18 +243,10 @@ final class ShowFlow {
         guard buttonsLive else { return }
         let now = songClock(track) ?? song
         song = max(song, now)
-        if kind == .practice {
-            guard var p = practice else { return }
-            p.tap(foot: foot, at: song)
-            handle(p.takeEvents())
-            practice = p
-            if p.finished { finishPractice(p) }
-        } else {
-            guard var s = sim else { return }
-            let ev = s.tapDance(foot: foot, at: song)
-            sim = s
-            handle(ev)
-        }
+        guard var s = sim else { return }
+        let ev = s.tapDance(foot: foot, at: song)
+        sim = s
+        handle(ev)
     }
 
     private func handle(_ events: [ShowDanceSim.Event]) {
@@ -317,7 +261,7 @@ final class ShowFlow {
 
     /// Plays the dance for him: every prompt on the beat, except a few (a late good one, a missed one) so the screen shows all the grades.
     private func autoPlay(_ now: Double) {
-        let prompts = kind == .practice ? (practice?.prompts ?? []) : (sim?.dance?.prompts ?? [])
+        let prompts = sim?.dance?.prompts ?? []
         while autoDone < prompts.count {
             let p = prompts[autoDone]
             let late: Double = ShowAssist.autoDance ? 0.07 : (autoDone % 5 == 3 ? 0.1 : (autoDone % 7 == 4 ? 0.02 : 0))
@@ -326,8 +270,7 @@ final class ShowFlow {
             autoDone += 1
             if autoDone % 11 == 6, !ShowAssist.autoDance { continue }
             song = max(song, at)
-            if kind == .practice { practice?.tap(foot: p.foot, at: at); if let p2 = practice { var q = p2; handle(q.takeEvents()); practice = q } }
-            else if var s = sim { handle(s.tapDance(foot: p.foot, at: at)); sim = s }
+            if var s = sim { handle(s.tapDance(foot: p.foot, at: at)); sim = s }
         }
     }
 
@@ -405,28 +348,6 @@ final class ShowFlow {
         revision += 1
     }
 
-    // MARK: the Studio drill
-
-    private func finishPractice(_ p: ShowDanceSim) {
-        guard practiceResult == nil, let st = stats else { return }
-        let before = st.proficiency(practiceDance)
-        let spent = st.pepFactor < 1
-        let gain = st.finishDancePractice(practiceDance, accuracy: p.accuracy)
-        practiceResult = DancePracticeResult(dance: practiceDance, accuracy: p.accuracy, perfects: p.perfects, goods: p.goods, misses: p.misses,
-                                             before: before, after: before + gain, pepLeft: st.pepLeft, pepSpent: spent)
-        beat = .danced; cardAge = 0
-        onDance(nil, false)
-        cue(p.accuracy >= 0.5 ? .applause : .slip)
-        cue(.jingle(win: p.accuracy >= 0.5))
-        revision += 1
-    }
-    /// The Studio drill starts its countdown as soon as the stage is up.
-    private func practiceStart() {
-        guard kind == .practice, beat == .idle, practice == nil, practiceResult == nil else { return }
-        beat = .countdown; countdown = 3; countdownLeft = Self.countdownBeat; audioWait = 0; cueSerial += 1; cue(.countdown)
-        onDance(practiceDance, true)
-    }
-
     // MARK: per fixed step
 
     func tick(dt: Float) {
@@ -436,12 +357,6 @@ final class ShowFlow {
         case .stage: break
         }
         guard wipe == 0 else { return }
-        if kind == .practice {
-            practiceStart()
-            tickDance(dt: dt)
-            if practiceResult != nil { cardAge += dt }
-            return
-        }
         guard let s = sim else { return }
         switch s.round {
         case .look:
@@ -484,7 +399,7 @@ final class ShowFlow {
         let won = sim?.playerWon ?? false
         let id = playerID, again = againWanted
         phase = .off; leaving = false
-        sim = nil; practice = nil
+        sim = nil
         onReturned(id, won, again)
         revision += 1
     }
@@ -493,7 +408,7 @@ final class ShowFlow {
     func abort() {
         guard phase != .off else { return }
         if cameraBlend > 0 || (swapped && fadeDest == .stage) { onSwap(.room) }
-        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; practice = nil; leaving = false
+        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
         onDance(nil, false)
         revision += 1
     }

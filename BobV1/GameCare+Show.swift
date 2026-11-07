@@ -76,7 +76,7 @@ extension GameCare {
         var input = ShowPlayerInput(name: p.name)
         for t in WearTag.allCases { input.condition[t] = p.stats.condition(t.condition) }
         input.glow = p.grime.sparkle; input.dirt = p.grime.dirt
-        input.dance = p.stats.bestDance; input.danceSkill = input.dance.map { p.stats.proficiency($0) } ?? 0
+        input.dance = p.stats.bestDance
         for t in ShowTrickInfo.stageTricks where store.knows(t, character: p.character) { input.tricks[t] = 1 }          // what he knows: defaults + bought for him / for everyone
         input.care = showCare(jelly: id)
         return input
@@ -138,16 +138,6 @@ extension GameCare {
         show.begin(playerID: id, name: prof.name, character: prof.character, input: showPlayerInput(jelly: id), rank: r, dayKey: Self.showDay, bodies: bodies, seed: seed ?? Self.showSeed)
         show.setOutfit(showOutfitTags(jelly: id))
     }
-    /// "Practise dance" (the Studio): Jelbie `id` dances `dance` alone on the stage.
-    func startDancePractice(jelly id: Int, dance: DanceID, seed: UInt64? = nil) {
-        guard canShow(jelly: id), let prof = jelly(id), prof.stats.danceOpen(dance) else { return }
-        for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
-        select.cancel()
-        queued.removeAll(); callRunning = false
-        voice.cancel()
-        if outingGate([id], again: { [weak self] in self?.startDancePractice(jelly: id, dance: dance, seed: seed) }) { return }
-        show.beginPractice(playerID: id, name: prof.name, character: prof.character, dance: dance, stats: prof.stats, seed: seed ?? Self.showSeed)
-    }
     /// The lobby's rank picker.
     @discardableResult
     func chooseShowRank(_ r: ShowRank) -> Bool {
@@ -169,7 +159,7 @@ extension GameCare {
     /// The rival bodies are out of the picture in the solo rounds (Look, Trick): they come on for the Dance and the results.
     func showHides(_ id: Int) -> Bool {
         guard show.onStage, id != show.playerID, showBook.performers.contains(id) else { return false }
-        return show.isPractice || !(show.round == .dance || (show.round == .results && show.trickStage != .performing))
+        return !(show.round == .dance || (show.round == .results && show.trickStage != .performing))
     }
 
     // MARK: world swaps (under the white)
@@ -180,7 +170,7 @@ extension GameCare {
         case .stage:
             let player = show.playerID
             let others = book.actors.indices.filter { $0 != player }
-            let want = show.isPractice ? 1 : min(book.actors.count, 4)
+            let want = min(book.actors.count, 4)
             book.performers = Array(([player] + others).prefix(want))
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.dancing = [:]; book.danceRestart = [:]; book.flopT = nil; book.turned = []

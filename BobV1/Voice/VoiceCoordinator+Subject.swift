@@ -10,7 +10,7 @@ import simd
 import QuartzCore
 
 extension VoiceCoordinator {
-    var subjectID: Int { care?.trainingSubject ?? 0 }
+    var subjectID: Int { care?.voiceSubject ?? 0 }
     func book(for id: Int) -> VoiceTraining { care?.jelly(id)?.training ?? training }
     var book: VoiceTraining { book(for: subjectID) }
     func subjectBrain(_ fallback: BlobBrain) -> BlobBrain { care?.brainFor(subjectID) ?? fallback }
@@ -38,15 +38,9 @@ extension VoiceCoordinator {
             default: b.commandedIdle = Self.idleKind(for: t)
             }
             return true
-        case .learnedStep, .nicknameStep, .acknowledged:
+        case .nicknameStep, .acknowledged:
             emitFeedback(r, override: kind)
             b.blinkRequested = true; perkLeft = 0.6
-            return true
-        case .trickLearned:
-            emitFeedback(r, override: kind)
-            b.blinkRequested = true
-            care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
-            if !focused { b.commandedNameHop = true }
             return true
         case .puzzled, .ignore, .dontKnow:
             emitFeedback(r, override: kind)

@@ -19,14 +19,11 @@ struct ShowChrome: View {
         let _ = show.revision          // the rules live in the unobserved sim: every step of the show bumps this
         return ZStack {
             if show.onStage {
-                if show.isPractice { PracticeChrome(care: care) }
-                else {
-                    switch show.round {
-                    case .look: LookRound(care: care)
-                    case .dance: DanceRound(care: care)
-                    case .trick: TrickRound(care: care)
-                    case .results: if show.trickStage == .performing { TrickRound(care: care) } else { ResultsScreen(care: care) }
-                    }
+                switch show.round {
+                case .look: LookRound(care: care)
+                case .dance: DanceRound(care: care)
+                case .trick: TrickRound(care: care)
+                case .results: if show.trickStage == .performing { TrickRound(care: care) } else { ResultsScreen(care: care) }
                 }
             }
             Color.white.opacity(Double(show.wipe)).ignoresSafeArea().allowsHitTesting(false)
@@ -343,7 +340,7 @@ struct PromptLane: View {
         let show = care.show
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.songTime(of: show.track) ?? show.song
-            let items = (show.isPractice ? show.practice?.visible(at: song) : show.sim?.dance?.visible(at: song)) ?? []
+            let items = show.sim?.dance?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.6))
                 Circle().strokeBorder(Color(hex: 0xFFF6EC), lineWidth: 4).frame(width: 60, height: 60).padding(.leading, 14)
@@ -740,132 +737,3 @@ struct ResultsScreen: View {
     }
 }
 
-// MARK: - the Studio's dance drill
-
-struct PracticeChrome: View {
-    let care: GameCare
-    @Environment(\.verticalSizeClass) private var vsc
-    private var compact: Bool { vsc == .compact }
-    private var show: ShowFlow { care.show }
-    private let light = UIImpactFeedbackGenerator(style: .light)
-
-    var body: some View {
-        ZStack {
-            VStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    Button { AudioHub.shared.uiTap(); show.goHome() } label: {
-                        Image(systemName: "xmark").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(SK.cream))
-                    }.buttonStyle(.plain).accessibilityLabel("Stop practice").accessibilityIdentifier("practice-quit")
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("STUDIO \u{00B7} PRACTICE").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
-                        Text(show.practiceDance.title).font(SK.font(24, .black)).foregroundStyle(SK.cream)
-                    }
-                    Spacer()
-                    let p = show.practice
-                    Text("Beat \(min((p?.judged ?? 0) + 1, p?.total ?? ShowFlow.practicePrompts)) / \(p?.total ?? ShowFlow.practicePrompts)").font(SK.font(13, .black)).foregroundStyle(SK.ink).monospacedDigit().padding(.horizontal, 12).frame(height: 36).background(Capsule().fill(SK.cream))
-                }
-                Spacer(minLength: 0)
-                if let r = show.practiceResult {
-                    PracticeResultCard(result: r) { show.goHome() }.frame(maxWidth: 520)
-                    Spacer(minLength: 0)
-                } else if compact {
-                    HStack(alignment: .bottom, spacing: 12) {
-                        AssistFoot(side: 0, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
-                        ZStack { flash.padding(.bottom, 58); PromptLane(care: care).padding(.top, 26) }.frame(height: 110)
-                        AssistFoot(side: 1, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
-                    }
-                } else {
-                    stats
-                    ZStack { flash; PromptLane(care: care).padding(.top, 34) }.frame(height: 120)
-                    AssistFeetRow(prefix: "show", live: show.buttonsLive, press: press)
-                        .frame(height: 150)
-                }
-            }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-            .animation(CareMenu.spring, value: show.practiceResult != nil)
-            if show.showsCountdown { numeral("\(show.countdown)") }
-            if show.showsGo { numeral("GO!") }
-        }
-        .accessibilityIdentifier("practice-screen")
-    }
-    private func press(_ foot: Int) { light.impactOccurred(intensity: 0.5); show.tap(foot: foot) }
-
-    private var stats: some View {
-        let p = show.practice
-        return HStack(spacing: 8) {
-            chip("Streak \(p?.streak ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
-            chip("Perfect \(p?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
-            chip("Slip \(p?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
-            Spacer(minLength: 0)
-        }
-        .padding(10).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream.opacity(0.94)))
-        .accessibilityIdentifier("practice-stats")
-    }
-    private func chip(_ s: String, bg: Color, fg: Color) -> some View {
-        Text(s).font(SK.font(13, .black)).foregroundStyle(fg).monospacedDigit().padding(.horizontal, 10).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(bg))
-    }
-    private var flash: some View {
-        VStack {
-            Group {
-                switch show.flash { case .perfect?: Text("Perfect!").foregroundStyle(ShowUI.gold); case .good?: Text("Good").foregroundStyle(.white); case .miss?: Text("Slip").foregroundStyle(ShowUI.mist); case nil: Text(" ") }
-            }
-            .font(SK.font(26, .black)).shadow(color: .black.opacity(0.4), radius: 4, y: 2).id(show.flashSerial).transition(.scale(scale: 1.4).combined(with: .opacity))
-            Spacer()
-        }
-        .animation(.easeOut(duration: 0.12), value: show.flashSerial).allowsHitTesting(false)
-    }
-    private func numeral(_ s: String) -> some View {
-        Text(s).font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-            .id(show.cueSerial).transition(.scale(scale: 1.6).combined(with: .opacity)).allowsHitTesting(false).offset(y: compact ? 20 : 40)
-    }
-}
-
-/// The dance drill's results: the grades, the dance's skill bar filling from before to after, Pep.
-struct PracticeResultCard: View {
-    let result: DancePracticeResult
-    var done: () -> Void
-    @State private var shown = false
-    @Environment(\.verticalSizeClass) private var vsc
-    var body: some View {
-        let r = result
-        VStack(spacing: vsc == .compact ? 6 : 12) {
-            Text(r.accuracy >= 0.75 ? "Great dancing!" : r.accuracy >= 0.45 ? "Nice moves!" : "Keep practicing!").font(SK.font(vsc == .compact ? 22 : 28, .black)).foregroundStyle(SK.ink)
-            HStack(spacing: 8) {
-                chip("Perfect \(r.perfects)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
-                chip("Good \(r.goods)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
-                chip("Slip \(r.misses)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
-            }
-            VStack(spacing: 4) {
-                HStack {
-                    Text(r.dance.title).font(SK.font(16, .black)).foregroundStyle(SK.ink); Spacer()
-                    Text("+\(DrillResultCard.points(r.gain)) \(r.dance.title)").font(SK.font(16, .black)).foregroundStyle(Color(hex: 0xC0603D)).monospacedDigit().accessibilityIdentifier("practice-gain")
-                }
-                GeometryReader { g in
-                    let v = shown ? r.after : r.before
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(ShowUI.bar)
-                        Capsule().fill(Color(hex: 0xB58BDB)).frame(width: max(14, g.size.width * CGFloat(min(max(v, 0), 1))))
-                        Capsule().fill(.white.opacity(0.55)).frame(width: 3, height: 14).offset(x: max(14, g.size.width * CGFloat(r.before)) - 3)
-                    }
-                }.frame(height: 16)
-                Text("Dance skill is 30% of the show's Dance round.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
-            }
-            HStack(spacing: 6) {
-                ForEach(0..<TrainingTuning.fullSessions, id: \.self) { i in Circle().fill(i < r.pepLeft ? SK.honey : SK.ink.opacity(0.12)).frame(width: 14, height: 14) }
-                Text(r.pepLeft > 0 ? "Pep left today" : "Pep used up. Practice still helps, just less.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
-            }
-            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); done() } label: {
-                Text("Done").font(SK.font(20, .black)).foregroundStyle(SK.ink).padding(.horizontal, 44).padding(.vertical, vsc == .compact ? 8 : 12).background(Capsule().fill(ShowUI.gold))
-            }
-            .buttonStyle(.plain).accessibilityIdentifier("practice-done")
-        }
-        .padding(.horizontal, 20).padding(.vertical, vsc == .compact ? 10 : 18)
-        .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(SK.cream).shadow(color: .black.opacity(0.3), radius: 6, y: 3))
-        .accessibilityElement(children: .contain).accessibilityIdentifier("practice-card")
-        .onAppear { withAnimation(.easeOut(duration: 1.3).delay(0.35)) { shown = true } }
-    }
-    private func chip(_ s: String, bg: Color, fg: Color) -> some View {
-        Text(s).font(SK.font(13, .black)).foregroundStyle(fg).padding(.horizontal, 10).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(bg))
-    }
-}

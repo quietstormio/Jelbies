@@ -108,11 +108,10 @@ struct TownFlow: View {
             switch screen ?? .town {
             case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
-            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) }, train: { goHome(); care.startDrill(jelly: who) })
-            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) },
-                                       practise: { d in goHome(); care.startDancePractice(jelly: who, dance: d) })
+            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, race: { goHome(); care.startRace(jelly: who) })
+            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) })
             case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) })
-            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }, drill: { k, id in goHome(); care.startVolley(jelly: id, mode: .drill(k)) })
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) })
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
         }
@@ -340,10 +339,6 @@ struct TrackPanel: View {
     @Binding var who: Int
     var back: () -> Void
     var race: () -> Void
-    /// "Train": the picked Jelly practises Rhythm Steps alone on the track (Training/).
-    var train: () -> Void = {}
-    /// The Train button and the Pep bar show (training exists).
-    static let trainingExists = true
     /// The course picked for the next race (Race/CoursePicker.swift sets it through GameCare.chooseCourse).
     var courseTier: CourseTier { care.race.courseTier }
     @Environment(\.verticalSizeClass) private var vsc
@@ -364,8 +359,7 @@ struct TrackPanel: View {
             } right: {
                 runnerCard(prof).padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(pepLeft: prof?.stats.pepLeft ?? 0, pepTotal: TrainingTuning.fullSessions, pepID: "track-pep", trainID: "track-train", playID: "track-race",
-                               playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, train: train, play: race)
+                LobbyBottomBar(playID: "track-race", playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, play: race)
             }
             .accessibilityHidden(howOpen)
             if howOpen {
@@ -373,7 +367,7 @@ struct TrackPanel: View {
                     (.feet, "Left, right, left", "Tap the two foot buttons in turn. The same foot twice is a stumble."),
                     (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
                     (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
-                    (.run, "Waddle and Focus", "Waddle: longer steps, quicker feet. Focus: fewer look-arounds. Train raises both."),
+                    (.run, "Waddle and Focus", "Waddle: longer steps, quicker feet. Focus: fewer look-arounds."),
                     (.trophy, "Win to open the next course", "Or finish in the top two \(Self.words(CourseProgress.topTwoToUnlock)) times."),
                 ], close: { setHow(false) })
                 .zIndex(1)

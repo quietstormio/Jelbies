@@ -24,7 +24,6 @@ nonisolated struct ShowPlayerInput: Equatable, Sendable {
     var dirt: Float = 0
     /// The dance he shows and how well he knows it (0 = freestyle, no dance learned).
     var dance: DanceID? = nil
-    var danceSkill: Float = 0
     /// Learned tricks (the value is the old voice reliability, no longer used for scoring; the defaults are always on the menu).
     var tricks: [VoiceTrick: Float] = [:]
     /// How well cared for he is, 0...1 (needs met and clean): lowers the chance a trick slips.

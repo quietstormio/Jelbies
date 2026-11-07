@@ -18,6 +18,9 @@ extension GameCare {
         store.migrateTricks(learned: learned, roster: jellies.map(\.character))
     }
 
+    /// The Jelbie the voice and the trick book are about now: the one in a one-Jelbie close-up, else the selected / targeted one.
+    var voiceSubject: Int { (focus.isActive && focusGroup.ids.count == 1) ? focusGroup.ids[0] : targetJelly }
+
     /// Does the Jelbie in room slot `id` know `t`?
     func knows(_ t: VoiceTrick, jelly id: Int) -> Bool { store.knows(t, character: jelly(id)?.character ?? id) }
 }

@@ -298,7 +298,6 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var lastPaused = false
     private var lastCover = false
     var lastCam = CameraState()
-    private var drillFollow: SIMD3<Float>?
     var haveCam = false
     private var aspectChecked = false                 // the drawable-vs-bounds aspect log, once
     private let massG: Float
@@ -724,7 +723,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if model.touch.thrown { playing = true }          // a toy thrown / bounced in the close-up
         let napping = brains.map { $0?.isNapping ?? false }
         let moods = actors.indices.map { model.care.jelly($0)?.needs.mood ?? .okay }
-        AudioHub.shared.raceCrowd(model.care.race.active && model.care.race.trackVisible && model.care.race.kind == .race)
+        AudioHub.shared.raceCrowd(model.care.race.active && model.care.race.trackVisible)
         let raceScene = model.care.race.musicScene
         // the home room only: not a trip (race / show / cafe / park / groomer / volley), not the bath; the silence filler also needs the Jelbie free (AmbientVoice.swift)
         let c = model.care
@@ -1221,12 +1220,6 @@ final class MelonController: NSObject, MTKViewDelegate {
         } else {
             safe = CameraRig.fullSafeRect(pts)
         }
-        // the practice drill follows its Jelly closer (smoothed; snaps when the body goes back to the start line under the fade)
-        var drillAt: SIMD3<Float>?
-        if game, model.care.race.isDrill, model.care.race.cameraBlend > 0 {
-            if let f = drillFollow, simd_distance(f, c) < 3 { drillFollow = f + (c - f) * min(1, dt * 8) } else { drillFollow = c }
-            drillAt = drillFollow
-        } else { drillFollow = nil }
         let raceFollow = game ? model.care.raceFollow(actors, dt: dt) : nil          // a curved course: the follow camera (Race/RaceCamera.swift); nil on the Puddle
         // The projection's aspect is the DRAWABLE's (the pixels actually rendered), never the view's point size: a drawable that lags the bounds
         // (a rotation, a scale change, a new SDK laying the view out differently) would otherwise stretch the Jellies. The two agree whenever
@@ -1240,7 +1233,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                   GameCamera.eye.x, GameCamera.eye.y, GameCamera.eye.z, GameCamera.target.x, GameCamera.target.y, GameCamera.target.z, GameCamera.roomWideScale, GameCamera.roomWideLift, actors.count)
             if abs(drawAspect / ptAspect - 1) > 0.01 { NSLog("[melon] camera: WARNING drawable and bounds aspects differ by %.1f%%", Double(abs(drawAspect / ptAspect - 1) * 100)) }
         }
-        let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, drillAt: drillAt, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
+        let cam = game ? GameCamera.camera(aspect: drawAspect, focus: model.care.focus.blend, bath: model.care.bath.cameraBlend, race: model.care.race.cameraBlend, raceFollow: raceFollow, show: model.care.show.cameraBlend, showFrame: model.care.showFrame) : rig.camera(viewSize: pts, safeRect: safe)
         lastCam = cam
         haveCam = true
         renderer.perfFocus = game && model.care.focus.blend > 0.001      // PerfMeter ctx: GPU time in the close-up

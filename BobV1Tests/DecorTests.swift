@@ -578,10 +578,6 @@ final class TrackPanelTests: XCTestCase {
         XCTAssertTrue((care.raceBlocker(jelly: 0) ?? "").contains("meal"))
     }
 
-    func testTheTrackPanelOffersTheRacerSwitchAndTraining() {
-        XCTAssertTrue(TrackPanel.trainingExists, "Train and the Pep bar are on the Track panel")
-    }
-
     func testARaceReturnNeverPutsAJellyInsideDecor() {
         GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
         defer { DecorField.shared.clear(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }

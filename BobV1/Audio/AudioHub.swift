@@ -406,11 +406,6 @@ final class AudioHub {
         input.scene = raceScene != .none ? raceScene : townScene
     }
 
-    /// Song time (seconds, as heard) of the training music, nil while it is not playing (muted, still decoding): the drill's audio clock.
-    func trainingSongTime() -> Double? {
-        guard !muted, started, active else { return nil }
-        return scene?.songTime(of: .training)
-    }
     /// Song time (seconds, as heard) of a scene track, nil while it is not playing (muted, still decoding): the Jelly Show's dance clock
     /// (contest_stage_2 on stage, studio_practice_1 in the Studio drill).
     func songTime(of t: SceneTrack) -> Double? {
@@ -753,20 +748,6 @@ final class AudioHub {
     func raceStumble() { play(.stumble) }
     func raceCue(_ c: RaceCue) {
         switch c { case .countdownBeep: raceCountdownBeep(); case .go: raceGo(); case .finish: raceFinish() }
-    }
-
-    /// The practice drill's sounds (Training/DrillFlow.swift).
-    func drillCue(_ c: DrillCue) {
-        switch c {
-        case .perfect: play(.tick, volume: 0.9)
-        case .good: play(.goodStep)
-        case .streak: play(.perfectStreak)
-        case .lap: play(.whistle, volume: 0.6)
-        case .go: play(.whistle)
-        case .statUp: play(.statUp); play(.cheerSmall, volume: 0.7)
-        case .tired: play(.tired)
-        case .jingle(let win): playJingle(win ? .win : .lose)
-        }
     }
 
     // MARK: race crowd (quiet loop with a crossfade at the loop point)

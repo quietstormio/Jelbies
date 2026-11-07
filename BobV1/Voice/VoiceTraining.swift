@@ -1,8 +1,7 @@
 //
 //  VoiceTraining.swift
-//  Voice v1: the words the player has taught Bob (his name + six tricks), Nintendogs style. Pure model, persisted to UserDefaults.
-//  Teaching: in the close-up's Train card (TrainSession) the Jelbie does a move and the player says a word; it is bound to that move and counts a rep (`teachRep`). Learned after 3 reps (`VoiceTuning.repsToLearn`), one per listen: saying the word repeatedly in one listen counts once.
-//  (`decide(... runningMove:)` still binds a word to a running move for the model API, but the app passes nil outside a Train session: no accidental lessons.)
+//  Voice v1: what each Jelbie answers to. Tricks are bought in the Shop (Store/TrickCatalog.swift) and obeyed by their plain word; a word taught in the old
+//  lessons (kept in the save) still works with its own reliability. Pure model, persisted to UserDefaults.
 //  Commanding: a learned word makes him do the move with probability `reliability` (0.6 at learn + 0.15 per rep beyond 3, +0.03 per success, cap 0.95).
 //  A miss is half "wrong trick" (another learned trick) and half ignored. Grumpy refuses every trick except come (come is always obeyed).
 //  `decide` is the single entry point: transcript in, a VoiceReaction out (GameCare executes it). The RNG is injectable so tests are deterministic.
@@ -49,10 +48,6 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
 
 /// What the game should do with what was said.
 nonisolated enum VoiceReaction: Equatable, Sendable {
-    /// A rep was counted toward a word (dots filled so far, 1...repsToLearn): he nods / the book fills a dot.
-    case learnedStep(VoiceTrick, reps: Int)
-    /// That rep completed the lesson.
-    case trickLearned(VoiceTrick)
     /// Do the trick.
     case perform(VoiceTrick)
     /// The player asked for `said`, he did `did` instead.
@@ -283,14 +278,6 @@ final class VoiceTraining {
         save()
     }
 
-    /// Debug / capture aid (`-VoiceTutorialReps n`): n reps of a half-learned word on a trick (one listen session, so it never completes).
-    func debugReps(_ t: VoiceTrick, word: String, reps: Int) {
-        var l = VoiceLesson()
-        l.word = VoiceMatcher.normalise(word); l.reps = min(reps, VoiceTuning.repsToLearn); l.sessions = [book.sessionCounter]
-        book.tricks[t.rawValue] = reps > 0 ? l : nil
-        save()
-    }
-
     // MARK: decide
 
     /// `runningMove`: the trick-able move he is DOING right now (nil if none), which a new word gets bound to.
@@ -356,45 +343,6 @@ final class VoiceTraining {
         }
     }
 
-    // MARK: teaching (the Train card)
-
-    /// What a word said during a Train listen for trick `t` did.
-    enum TeachResult: Equatable {
-        case rep(VoiceReaction)          // .learnedStep / .trickLearned
-        case nothing                     // silence / no words
-        case nameOnly                    // only a Jelbie's name (or "everyone")
-        case otherWord(String)           // a different word than the one this lesson is bound to
-        case reserved(String)            // already a command (a social phrase, come, another trick's word)
-    }
-
-    /// Side-effect-light teaching: binds a fresh word to `t` or counts a rep of the bound one. Never silently restarts a half-learned lesson.
-    func teachRep(_ t: VoiceTrick, transcript: String, session: Int) -> TeachResult {
-        let toks = VoiceMatcher.tokens(transcript)
-        guard !toks.isEmpty else { return .nothing }
-        let resolved = names.resolve(tokens: toks)
-        let (_, rest) = VoicePhrases.everyone(resolved.rest)
-        guard !rest.isEmpty else { return .nameOnly }
-        let said = rest.prefix(VoiceTuning.maxWordTokens).joined(separator: " ")
-        let l = lesson(t)
-        if l.started {
-            guard VoiceMatcher.best(in: rest, among: [l.word]) != nil else { return .otherWord(said) }
-            let r = rep(t, session: session); save(); return .rep(r)
-        }
-        let others = VoiceTrick.allCases.filter { $0 != t && unlocked($0) && lesson($0).started }
-        if VoiceMatcher.best(in: rest, among: others.map { lesson($0).word }) != nil
-            || VoiceMatcher.looksLikeCome(rest) || VoiceTuning.comeAliases.contains(rest.joined(separator: " "))
-            || VoicePhrases.social(rest) != nil { return .reserved(said) }
-        var fresh = VoiceLesson(); fresh.word = said
-        book.tricks[t.rawValue] = fresh
-        let r = rep(t, session: session); save(); return .rep(r)
-    }
-
-    /// "Use X instead": the half-learned word is dropped and `transcript` becomes the new word (one rep).
-    func rebind(_ t: VoiceTrick, transcript: String, session: Int) -> TeachResult {
-        book.tricks[t.rawValue] = nil
-        return teachRep(t, transcript: transcript, session: session)
-    }
-
     /// Does `rest` (a transcript's tokens) name a trick this book has LEARNED (side-effect free)? Used by the room command.
     func learnedTrick(in tokens: [String]) -> VoiceTrick? {
         let resolved = names.resolve(tokens: tokens)
@@ -403,22 +351,6 @@ final class VoiceTraining {
         let learned = VoiceTrick.allCases.filter { unlocked($0) && isLearned($0) && $0 != .come }
         if let hit = VoiceMatcher.best(in: rest, among: learned.map { lesson($0).word }) { return learned[hit.index] }
         return plainTrick(in: rest, known: true)
-    }
-
-    /// The try-it step: the learned trick is performed whatever the dice say, and counts as a success.
-    func creditSuccess(_ t: VoiceTrick) {
-        var l = lesson(t)
-        guard l.learned else { return }
-        l.reliability = min(l.reliability + VoiceTuning.perSuccess, VoiceTuning.maxReliability)
-        book.tricks[t.rawValue] = l
-        save()
-    }
-
-    private func rep(_ t: VoiceTrick, session: Int) -> VoiceReaction {
-        var l = lesson(t)
-        let done = l.addRep(session: session)
-        book.tricks[t.rawValue] = l
-        return done ? .trickLearned(t) : .learnedStep(t, reps: l.reps)
     }
 
     private func command(_ t: VoiceTrick, mood: BlobMood) -> VoiceReaction {

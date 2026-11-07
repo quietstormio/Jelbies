@@ -149,14 +149,7 @@ nonisolated struct VolleyStats: Codable, Equatable, Sendable {
 }
 
 nonisolated enum VolleyTraining {
-    static let baseGain: Float = 0.12
-    static let fullSessions = 3
-    static let spentFactor: Float = 0.25
     static func diminishing(_ stat: Float) -> Float { powf(max(0, 1 - min(max(stat, 0), 1)), 1.5) }
-    static func fatigue(sessionsToday: Int) -> Float { sessionsToday < fullSessions ? 1 : spentFactor }
-    static func gain(stat: Float, accuracy: Float, sessionsToday: Int, share: Float = 1) -> Float {
-        baseGain * share * min(max(accuracy, 0), 1) * diminishing(stat) * fatigue(sessionsToday: sessionsToday)
-    }
     /// A match nudges every stat a little (a win more).
     static func matchGain(win: Bool) -> Float { win ? 0.02 : 0.01 }
 }
@@ -164,24 +157,6 @@ nonisolated enum VolleyTraining {
 nonisolated enum VolleyStatKind: String, CaseIterable, Sendable {
     case speed, power, hops, timing
     var title: String { rawValue.capitalized }
-}
-
-nonisolated enum VolleyDrillKind: String, CaseIterable, Sendable {
-    case bonk, spike, block, sprint
-    var title: String { switch self { case .bonk: return "Bump & Set"; case .spike: return "Spike targets"; case .block: return "Block wall"; case .sprint: return "Sand sprints" } }
-    var blurb: String {
-        switch self {
-        case .bonk: return "Bump, set, bump... keep it up with Perfect timing. Raises Timing and Hops."
-        case .spike: return "Swipe the Hit button to aim the spike at the pink cushion. Raises Power."
-        case .block: return "Jump at the net to block their spikes. Raises Hops."
-        case .sprint: return "Dash to the flags with the stick. Raises Speed."
-        }
-    }
-    /// How the drill is played, one sentence or two (the blurb without its "Raises ..." sentence): the caption shown when the drill starts.
-    var instruction: String { blurb.components(separatedBy: " Raises ").first ?? blurb }
-    /// The stats a drill raises (see `VolleyBook.finishDrill`), for the tags on the Training sheet.
-    var raises: [VolleyStatKind] { switch self { case .bonk: return [.timing, .hops]; case .spike: return [.power]; case .block: return [.hops]; case .sprint: return [.speed] } }
-    var symbol: String { switch self { case .bonk: return "circle.dotted"; case .spike: return "arrow.down.right.circle.fill"; case .block: return "rectangle.portrait.arrowtriangle.2.outward"; case .sprint: return "figure.run" } }
 }
 
 /// Wins, close losses and unlocks per tier (a win, or three close losses, opens the next tier; saved).
@@ -227,28 +202,6 @@ final class VolleyBook {
         return r.wins >= 1 || r.close >= 3
     }
     var unlockedTiers: [VolleyTier] { VolleyTier.allCases.filter(unlocked) }
-    func sessionsLeft(_ c: Int) -> Int { max(0, VolleyTraining.fullSessions - stats(character: c).daySessions) }
-
-    /// A drill is over: the gains by accuracy (returns what was added: speed, power, hops, timing).
-    @discardableResult
-    func finishDrill(character c: Int, kind: VolleyDrillKind, accuracy: Float, factor: Float = 1) -> VolleyStats {
-        var s = stats(character: c)
-        let n = s.daySessions
-        var d = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0)
-        switch kind {
-        case .bonk:
-            d.hops = VolleyTraining.gain(stat: s.hops, accuracy: accuracy, sessionsToday: n, share: 0.7) * factor
-            d.timing = VolleyTraining.gain(stat: s.timing, accuracy: accuracy, sessionsToday: n, share: 1.0) * factor
-        case .spike: d.power = VolleyTraining.gain(stat: s.power, accuracy: accuracy, sessionsToday: n) * factor
-        case .block: d.hops = VolleyTraining.gain(stat: s.hops, accuracy: accuracy, sessionsToday: n) * factor
-        case .sprint: d.speed = VolleyTraining.gain(stat: s.speed, accuracy: accuracy, sessionsToday: n) * factor
-        }
-        s.speed = min(1, s.speed + d.speed); s.power = min(1, s.power + d.power); s.hops = min(1, s.hops + d.hops); s.timing = min(1, s.timing + d.timing)
-        s.daySessions += 1; s.sessions += 1
-        stats["\(c)"] = s
-        save()
-        return d
-    }
 
     /// A match is over. Returns whether a new tier opened.
     @discardableResult

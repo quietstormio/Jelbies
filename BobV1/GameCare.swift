@@ -273,7 +273,6 @@ final class GameCare {
         store.rosterCharacters = { [weak self] in self?.jellies.map(\.character) ?? [0] }
         for j in jellies { let c = j.character; j.training.unlocked = { [weak self] t in self?.store.knows(t, character: c) ?? TrickCatalog.isDefault(t) } }          // what each Jelbie knows (Store/TrickCatalog.swift)
         migrateTricks(defaults: defaults)
-        wireTrainingBooks()          // every Jelly's book (GameCare+Training.swift)
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()
