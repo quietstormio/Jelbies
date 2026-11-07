@@ -481,6 +481,7 @@ final class AudioHub {
 
     /// Plays the bundled clip `name` (no _N variants) once at the sound-effects level. Muted / sound effects off = silent (captions are the caller's).
     func playClip(_ name: String, volume: Float = 1, fadeIn: TimeInterval = 0) {
+        Self.requestTap?("clip:\(name)")
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }

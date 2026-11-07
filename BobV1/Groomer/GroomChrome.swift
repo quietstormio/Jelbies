@@ -43,7 +43,7 @@ struct GroomChrome: View {
             if groom.celebrating {
                 let late = groom.cheerT > GroomTuning.cheerSeconds - 0.8
                 VStack {
-                    Text(groom.tier.banner).font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                    Text(groom.slogan.isEmpty ? groom.tier.banner : groom.slogan).font(SK.font(26, .black)).foregroundStyle(SK.ink)
                         .padding(.horizontal, 22).padding(.vertical, 10)
                         .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         .scaleEffect(reduce || groom.cheerT > 0.35 ? 1 : 0.8)

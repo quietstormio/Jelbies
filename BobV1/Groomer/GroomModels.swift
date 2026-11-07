@@ -54,7 +54,7 @@ nonisolated enum GroomTuning {
     static let doorOpen: Float = 0.55, walkOut: Float = 1.4
     static let toastSeconds: Float = 2.5
     static let lineSpacing: Float = 1.5
-    static let clipBell = "groom_bell", clipAmbience = "groom_ambience", clipReveal = "groom_reveal"
+    static let clipBell = "groom_bell", clipAmbience = "groom_ambience", clipReveal = "groom_reveal", clipHarp = "groom_harp"
 }
 
 @MainActor
@@ -65,6 +65,8 @@ final class GroomTrip {
 
     private(set) var phase: Phase = .off
     private(set) var tier: GroomTier = .quick
+    /// The banner line of this visit (a different one each time: SpaSlogans).
+    var slogan = ""
     /// Roster ids who go.
     var picked: [Int] = []
     /// 0...1: the white overlay over the 3D street (the swaps happen at exactly 1).
@@ -156,6 +158,8 @@ final class GroomBook {
     var emoted: Set<Int> = [], twirled: Set<Int> = []
     /// Who has hopped out of the door (the others are not drawn).
     var out: Set<Int> = []
+    /// The emote each one does at the line-up (all different).
+    var emote: [Int: IdleKind] = [:]
     /// The cheer clock (`cheerT`) at which each one stepped out of the door.
     var outAt: [Int: Float] = [:]
     /// ... and at which they reached their spot in the line-up.

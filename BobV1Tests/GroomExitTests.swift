@@ -28,6 +28,7 @@ final class GroomExitTests: XCTestCase {
         var firstSeen: [Int: Float] = [:]
         var doneT: Float?
         var walked = Set<Int>()
+        var emotes: [Int: IdleKind] = [:]
         let outDir = ProcessInfo.processInfo.environment["GROOMEXIT_OUT"].flatMap { $0.isEmpty ? nil : $0 }
         let shot = outDir != nil ? W2CaptureTests.Shot(r, W: 603, H: 1311) : nil
         if let shot { W2CaptureTests.keep.append(shot) }
@@ -37,6 +38,7 @@ final class GroomExitTests: XCTestCase {
         while n < 60 * 40 {
             r.tick(); care.tickGroom(r.actors, dt: dt); t += dt; n += 1
             if care.groom.phase == .reveal {
+                if emotes.isEmpty { emotes = care.groomBook.emote }
                 for a in r.actors where care.groomBook.out.contains(a.id) && firstSeen[a.id] == nil { firstSeen[a.id] = t }
                 let out = r.actors.filter { care.groomBook.out.contains($0.id) }
                 for i in 0..<out.count { for j in (i + 1)..<out.count { minGap = min(minGap, simd_length(at(out[i]) - at(out[j]))) } }
@@ -59,7 +61,7 @@ final class GroomExitTests: XCTestCase {
         let order = firstSeen.sorted { $0.value < $1.value }
         XCTAssertEqual(order.map(\.key), [0, 1, 2], "exit order")
         let gaps = zip(order.dropFirst(), order).map { $0.value - $1.value }
-        print("GROOMEXIT minRootDist=\(minGap) jellyGap=\(MelonController.jellyGap) exitGaps=\(gaps) roaming=\(walked.sorted())")
+        print("GROOMEXIT minRootDist=\(minGap) jellyGap=\(MelonController.jellyGap) exitGaps=\(gaps) roaming=\(walked.sorted()) emotes=\(emotes)")
         XCTAssertTrue(gaps.allSatisfy { $0 >= 0.5 }, "spaced >= 0.5 s: \(gaps)")
         XCTAssertGreaterThanOrEqual(minGap, 0.9 * MelonController.jellyGap, "never overlap while coming out")
         XCTAssertEqual(walked.count, 3, "all roaming within 4 s of the end")
