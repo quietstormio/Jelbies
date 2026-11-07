@@ -36,8 +36,8 @@ nonisolated enum SpaSlogans {
 }
 
 nonisolated enum SpaExitEmotes {
-    /// Approved happy solo emotes (all existing; none touching / partner emotes, no nose boop / kiss).
-    static let pool: [IdleKind] = [.joy, .bounce, .giggle, .tail, .politeBow, .signatureFlourish, .chirp]
+    /// Showy movement emotes (spin, hops, jumping jacks, proud strut, the species flourish; feet-tested in EmoteFeetTests) (all existing; none touching / partner emotes, no nose boop / kiss).
+    static let pool: [IdleKind] = [.legSpin, .skipHop, .bounce, .jacks, .proudStrut, .signatureFlourish]
     /// One emote per Jelbie, all different; avoids last visit's set when the pool allows.
     static func assign<G: RandomNumberGenerator>(count: Int, avoiding last: [IdleKind] = [], using g: inout G) -> [IdleKind] {
         let n = min(count, pool.count)
