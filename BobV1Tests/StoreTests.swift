@@ -121,7 +121,10 @@ final class StoreTests: XCTestCase {
                 XCTAssertTrue(c?.piece != nil || c?.container != nil || c?.serving != nil, "\(i.id) has a 3D piece (a drink: a cup)")
                 XCTAssertEqual(c?.kind == .drink, i.kind == .drink, "\(i.id): drinks are the Drinks tab")
             }
-            if i.kind == .trickPage { XCTAssertNotNil(i.trick); XCTAssertFalse(TrickCatalog.isDefault(i.trick!), "defaults are never sold") }
+            if i.kind == .trickPage {
+                XCTAssertNotNil(i.scope, i.id)
+                if let t = i.trick { XCTAssertFalse(TrickCatalog.isDefault(t), "defaults are never sold") } else { XCTAssertEqual(i.id, TrickCatalog.earsID, "the only skill that is not a trick") }
+            }
             if i.kind == .shoes { XCTAssertNotNil(i.wear) }
             if i.kind == .supply { XCTAssertNotNil(i.perk) }
         }

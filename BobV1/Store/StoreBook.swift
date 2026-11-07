@@ -50,6 +50,8 @@ final class StoreBook {
         var everyone: [String]? = nil
         /// The store-tricks migration (learned lessons and owned pages) ran.
         var tricksMigrated: Bool? = nil
+        /// The Music Ears grandfather check (an Ears switch that was already on) ran once.
+        var earsChecked: Bool? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -141,7 +143,7 @@ final class StoreBook {
     func owns(_ item: StoreItem) -> Bool {
         switch item.kind {
         case .trickPage:
-            guard let t = item.trick else { return false }
+            guard let t = item.trick else { return (saved.everyone ?? []).contains(item.id) }          // a skill for everyone (Music Ears)
             if TrickCatalog.def(t)?.scope == .everyone { return (saved.everyone ?? []).contains(t.rawValue) }
             let r = rosterCharacters()
             return !r.isEmpty && r.allSatisfy { knows(t, character: $0) }
@@ -177,10 +179,22 @@ final class StoreBook {
         guard !l.contains(t.rawValue) else { return }
         l.append(t.rawValue); o["\(character)"] = l; saved.ownedTricks = o; save()
     }
-    func grantTrickToEveryone(_ t: VoiceTrick) {
+    func grantTrickToEveryone(_ t: VoiceTrick) { grantEveryone(t.rawValue) }
+    func grantEveryone(_ key: String) {
         var e = saved.everyone ?? []
-        guard !e.contains(t.rawValue) else { return }
-        e.append(t.rawValue); saved.everyone = e; save()
+        guard !e.contains(key) else { return }
+        e.append(key); saved.everyone = e; save()
+    }
+
+    // MARK: Music Ears (a skill bought once for everyone; Audio/EarsListener.swift)
+
+    var hasEars: Bool { (saved.everyone ?? []).contains(TrickCatalog.earsID) }
+    /// First launch of the build that sells Music Ears: an Ears switch that was already ON counts as owned (once; later switching it off changes nothing).
+    func grandfatherEars(wasOn: Bool) {
+        guard saved.earsChecked != true else { return }
+        saved.earsChecked = true
+        if wasOn, !hasEars { var e = saved.everyone ?? []; e.append(TrickCatalog.earsID); saved.everyone = e }
+        save()
     }
     /// Buys a trick from the Shop. A per-Jelbie trick needs the `character` it is for.
     @discardableResult
@@ -220,7 +234,14 @@ final class StoreBook {
     func buy(_ id: String) -> BuyResult {
         guard let item = StoreCatalog.item(id) else { return .unknown }
         if item.awarded { return .unknown }               // earned, never sold
-        if item.kind == .trickPage { return item.trick.map { buyTrick($0, for: nil) } ?? .unknown }          // (a per-Jelbie trick needs buyTrick(_:for:))
+        if item.kind == .trickPage {          // (a per-Jelbie trick needs buyTrick(_:for:))
+            if let t = item.trick { return buyTrick(t, for: nil) }
+            guard item.scope == .everyone else { return .unknown }
+            if owns(item) { return .alreadyOwned }
+            guard wallet.spend(item.price) else { return .notEnough }
+            grantEveryone(item.id); saved.newItems += 1; save()
+            return .bought
+        }
         if item.unique, owns(item) { return .alreadyOwned }
         guard wallet.spend(item.price) else { return .notEnough }
         switch item.kind {
@@ -247,7 +268,7 @@ final class StoreBook {
     func grant(_ id: String, _ n: Int = 1) {
         guard let item = StoreCatalog.item(id) else { return }
         switch item.kind {
-        case .trickPage: if let t = item.trick { if TrickCatalog.def(t)?.scope == .perJelbie { for c in rosterCharacters() { grantTrick(t, to: c) } } else { grantTrickToEveryone(t) } }
+        case .trickPage: if item.trick == nil { grantEveryone(item.id) } else if let t = item.trick { if TrickCatalog.def(t)?.scope == .perJelbie { for c in rosterCharacters() { grantTrick(t, to: c) } } else { grantTrickToEveryone(t) } }
         case .shoes, .wear: if let w = item.wear, !saved.wearables.contains(w.rawValue) { saved.wearables.append(w.rawValue) }
         case .room: if let r = item.room, !ownsRoom(r) { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += n

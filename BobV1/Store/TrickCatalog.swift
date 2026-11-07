@@ -37,4 +37,7 @@ nonisolated enum TrickCatalog {
         Def(trick: .flip, scope: .perJelbie, price: price(stars: 3)),
     ]
     static func def(_ t: VoiceTrick) -> Def? { forSale.first { $0.trick == t } }
+
+    /// The store id of Music Ears (the Ears feature, a skill bought once for everyone).
+    static let earsID = "music-ears"
 }

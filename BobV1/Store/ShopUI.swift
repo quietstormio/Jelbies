@@ -136,10 +136,12 @@ struct ShopScreen: View {
                 if let p = item.perk { PerkChip(kind: p) }
                 else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
-                else if item.kind == .trickPage, let t = item.trick {
+                else if item.kind == .trickPage {
                     VStack(spacing: 3) {
-                        HStack(spacing: 2) {
-                            ForEach(0..<3, id: \.self) { k in Image(systemName: k < ShowTrickInfo.difficulty(t) ? "star.fill" : "star").font(.system(size: 11, weight: .black)).foregroundStyle(k < ShowTrickInfo.difficulty(t) ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                        if let t = item.trick {
+                            HStack(spacing: 2) {
+                                ForEach(0..<3, id: \.self) { k in Image(systemName: k < ShowTrickInfo.difficulty(t) ? "star.fill" : "star").font(.system(size: 11, weight: .black)).foregroundStyle(k < ShowTrickInfo.difficulty(t) ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                            }
                         }
                         Text(item.scope?.tag ?? "New trick").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(SK.mint.opacity(0.8)))
@@ -198,7 +200,7 @@ struct ItemSheet: View {
     private var book: StoreBook { care.store }
     private var wallet: DropsWallet { care.bath.wallet }
     /// A trick (Store/TrickCatalog.swift): for one Jelbie (pick who) or for everyone.
-    private var isTrick: Bool { item.kind == .trickPage && item.trick != nil }
+    private var isTrick: Bool { item.kind == .trickPage }
     private var isPerJelbieTrick: Bool { isTrick && item.scope == .perJelbie }
     @State private var forSlot: Int?
     /// Jelbies who already know this trick (checked in the picker, not pickable).
@@ -380,6 +382,7 @@ struct ItemSheet: View {
         if item.kind == .room { return "house.fill" }
         if item.kind == .toy { return "wand.and.stars" }
         if item.food != nil { return item.kind == .drink ? "drop.fill" : "fork.knife" }
+        if item.id == TrickCatalog.earsID { return "ear.fill" }
         return item.wear.map { $0.slot.symbol } ?? "book.fill"
     }
     private var effectTitle: String {
@@ -389,6 +392,7 @@ struct ItemSheet: View {
         if item.kind == .room { return "A new room to live in" }
         if item.kind == .toy { return "A toy to play with" }
         if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches his thirst" : "Fills his tummy" }
+        if item.id == TrickCatalog.earsID { return "Music Ears \u{00B7} \(TrickScope.everyone.tag)" }
         if let t = item.trick, let d = TrickCatalog.def(t) { return "\(d.name) \u{00B7} \(String(repeating: "\u{2605}", count: d.stars)) \u{00B7} \(d.scope.tag)" }
         return "Goodies"
     }
@@ -399,6 +403,7 @@ struct ItemSheet: View {
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         if item.kind == .toy { return "Pick it from Play and the Jelbies join in." }
         if item.food != nil { return item.description }
+        if item.id == TrickCatalog.earsID { return "Dancing to your music and hearing claps, whistles and laughs. The microphone is on only while Ears is switched on (Sound panel)." }
         if item.kind == .trickPage { return item.scope == .everyone ? "Bought once: every Jelbie knows it, adopted ones too. Say it in the room, or pick it in the Jelly Show." : "Only the Jelbie you pick learns it. Say it in the room, or pick it in the Jelly Show." }
         return item.description
     }

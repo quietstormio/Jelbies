@@ -90,7 +90,11 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems + trickItems
+    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems + trickItems + [earsItem]
+
+    /// Music Ears: the existing Ears feature, sold once for everyone (Audio/EarsListener.swift).
+    static let earsItem = StoreItem(id: TrickCatalog.earsID, name: "Music Ears", kind: .trickPage, price: 150, perk: nil,
+                                    description: "They dance to your music and react to claps, whistles and laughs. Uses the microphone while on.", symbol: "ear.fill", scope: .everyone)
 
     /// The tricks for sale (Store/TrickCatalog.swift): one card each, with its stars, price and scope.
     static let trickItems: [StoreItem] = TrickCatalog.forSale.map { d in
